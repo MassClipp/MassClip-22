@@ -11,7 +11,6 @@ import { trackFirestoreWrite } from "@/lib/firestore-optimizer"
 import { collection, addDoc, serverTimestamp } from "firebase/firestore"
 import { useToast } from "@/hooks/use-toast"
 import { useUserPlan } from "@/hooks/use-user-plan"
-import { useDownloadLimit } from "@/contexts/download-limit-context"
 
 interface VimeoCardProps {
   video: VimeoVideo
@@ -26,16 +25,29 @@ export default function VimeoCard({ video }: VimeoCardProps) {
   const [isIframeLoaded, setIsIframeLoaded] = useState(false)
   const [thumbnailLoaded, setThumbnailLoaded] = useState(false)
   const [isDownloading, setIsDownloading] = useState(false)
+  // Track local download count to immediately update UI
+  const [localDownloadCount, setLocalDownloadCount] = useState(0)
   const [showConfirmModal, setShowConfirmModal] = useState(false)
 
   const { user } = useAuth()
   const { toast } = useToast()
-  const { isProUser, recordDownload } = useUserPlan()
-  const { hasReachedLimit, refreshLimitStatus, remainingDownloads } = useDownloadLimit()
-
+  const { isProUser, recordDownload, remainingDownloads, planData } = useUserPlan()
   const titleRef = useRef<HTMLDivElement>(null)
   const videoRef = useRef<HTMLIFrameElement>(null)
   const viewTrackedRef = useRef(false)
+
+  // Update local download count when planData changes
+  useEffect(() => {
+    if (planData) {
+      setLocalDownloadCount(planData.downloads)
+    }
+  }, [planData])
+
+  // Calculate remaining downloads based on local state for immediate UI updates
+  const localRemainingDownloads = planData ? Math.max(0, planData.downloadsLimit - localDownloadCount) : 0
+
+  // Check if user has reached download limit based on local state
+  const hasReachedLimit = !isProUser && localRemainingDownloads <= 0
 
   // Extract video ID from URI (format: "/videos/12345678") with null check
   const videoId = video?.uri ? video.uri.split("/").pop() : null
@@ -51,7 +63,7 @@ export default function VimeoCard({ video }: VimeoCardProps) {
     return sortedSizes[0].link
   }
 
-  // Check if title is overflowing
+  // Check if title is overflowing - no longer needed since we're allowing wrapping
   useEffect(() => {
     const checkOverflow = () => {
       if (titleRef.current) {
@@ -125,8 +137,8 @@ export default function VimeoCard({ video }: VimeoCardProps) {
       return
     }
 
-    // Don't allow download if already at limit
-    if (hasReachedLimit) {
+    // Don't allow download if already at limit (based on local state)
+    if (!isProUser && localRemainingDownloads <= 0) {
       toast({
         title: "Download Limit Reached",
         description: "You've reached your monthly download limit. Upgrade to Pro for unlimited downloads.",
@@ -165,24 +177,21 @@ export default function VimeoCard({ video }: VimeoCardProps) {
         return
       }
 
-      // Check if this was the last download
-      const isLastDownload = remainingDownloads <= 1
-
-      // Refresh the download limit status to update UI across components
-      refreshLimitStatus()
+      // Immediately update local download count for UI
+      setLocalDownloadCount((prev) => prev + 1)
 
       // Show appropriate toast based on remaining downloads
-      if (isLastDownload) {
+      if (localRemainingDownloads <= 1) {
         // Last download
         toast({
           title: "Download Successful",
           description: "This was your last download for this month. Upgrade to Pro for unlimited downloads.",
         })
-      } else if (remainingDownloads <= 3) {
+      } else if (localRemainingDownloads <= 3) {
         // Low on downloads
         toast({
           title: "Download Successful",
-          description: `You have ${remainingDownloads - 1} downloads remaining this month.`,
+          description: `You have ${localRemainingDownloads - 1} downloads remaining this month.`,
         })
       }
     }
@@ -388,9 +397,11 @@ export default function VimeoCard({ video }: VimeoCardProps) {
           </div>
         )}
       </div>
+      {/* Updated title div to allow wrapping */}
       <div
         ref={titleRef}
-        className={`mt-1 text-xs text-gray-300 ${isTitleOverflowing ? "auto-scrolling-title" : "truncate"}`}
+        className="mt-1 text-xs text-gray-300 min-h-[2.5rem] line-clamp-2"
+        title={video.name || "Untitled video"}
       >
         {video.name || "Untitled video"}
       </div>
@@ -401,8 +412,8 @@ export default function VimeoCard({ video }: VimeoCardProps) {
           <div className="bg-gray-900 border border-gray-800 rounded-lg p-6 max-w-sm mx-4">
             <h3 className="text-lg font-medium text-white mb-2">Confirm Download</h3>
             <p className="text-gray-300 mb-4">
-              This will count as 1 of your {remainingDownloads === 1 ? "last" : `${remainingDownloads} remaining`}{" "}
-              monthly downloads. Are you sure you want to proceed?
+              This will count as 1 of your 5 monthly downloads. Free users are limited to 5 downloads per month. You
+              have {localRemainingDownloads} downloads remaining.
             </p>
             <div className="flex justify-end gap-3">
               <button
