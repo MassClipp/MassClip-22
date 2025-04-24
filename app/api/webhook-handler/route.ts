@@ -10,11 +10,17 @@ if (!admin.apps.length) {
       credential: admin.credential.cert({
         projectId: process.env.FIREBASE_PROJECT_ID,
         clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-        // Replace escaped newlines with actual newlines
+        // Ensure proper formatting of the private key
         privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n"),
       }),
     })
     console.log(">>> Firebase Admin initialized successfully")
+
+    // Log private key format (first few characters only, for debugging)
+    const privateKeyStart = process.env.FIREBASE_PRIVATE_KEY?.substring(0, 20) || "undefined"
+    console.log(`>>> Private key format check: ${privateKeyStart}...`)
+    console.log(`>>> Private key contains \\n: ${process.env.FIREBASE_PRIVATE_KEY?.includes("\\n")}`)
+    console.log(`>>> Private key contains actual newlines: ${process.env.FIREBASE_PRIVATE_KEY?.includes("\n")}`)
   } catch (error) {
     console.error(">>> Firebase Admin initialization error:", error)
   }
@@ -67,18 +73,26 @@ export async function POST(req: NextRequest) {
     // Handle the event
     if (event.type === "checkout.session.completed") {
       const session = event.data.object as Stripe.Checkout.Session
+
+      // Log the entire session object for debugging
+      console.log(">>> Session object:", JSON.stringify(session, null, 2))
+
+      // Extract userId from metadata
       const userId = session.metadata?.userId
 
       console.log(`>>> Processing checkout.session.completed event`)
       console.log(`>>> Session metadata:`, session.metadata)
+      console.log(`>>> User ID from metadata: ${userId || "NOT FOUND"}`)
 
       if (!userId) {
-        console.error(">>> Missing userId in session metadata")
+        console.error(">>> No userId found in session metadata")
         return NextResponse.json({ error: "Missing userId in session metadata" }, { status: 400 })
       }
 
       try {
         // Update the user's plan in Firestore
+        console.log(`>>> Updating user ${userId} to PRO plan in Firestore`)
+
         const userRef = admin.firestore().collection("users").doc(userId)
 
         await userRef.set(

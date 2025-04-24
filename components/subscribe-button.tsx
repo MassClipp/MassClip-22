@@ -47,6 +47,8 @@ export default function SubscribeButton({
       // Get a fresh ID token
       const idToken = await user.getIdToken(true)
 
+      console.log("Starting subscription process for user:", user.uid)
+
       // Call our API to create a checkout session
       const response = await fetch("/api/create-checkout-session", {
         method: "POST",
@@ -54,6 +56,9 @@ export default function SubscribeButton({
           "Content-Type": "application/json",
           Authorization: `Bearer ${idToken}`,
         },
+        body: JSON.stringify({
+          userId: user.uid, // Explicitly include userId in request body as backup
+        }),
       })
 
       if (!response.ok) {
