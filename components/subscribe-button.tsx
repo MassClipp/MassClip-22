@@ -29,11 +29,6 @@ export default function SubscribeButton({
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       setIsAuthenticated(!!user)
-      if (user) {
-        console.log("User is authenticated:", user.uid)
-      } else {
-        console.log("User is not authenticated")
-      }
     })
 
     return () => unsubscribe()
@@ -69,30 +64,39 @@ export default function SubscribeButton({
 
       // Force refresh the token to ensure it's valid
       const idToken = await user.getIdToken(true)
-      console.log("Got fresh ID token, length:", idToken.length)
+      console.log("Got fresh ID token")
 
       // Call our API to create a checkout session
+      // IMPORTANT: Explicitly set method to POST and include proper headers
       const response = await fetch("/api/create-checkout-session", {
-        method: "POST",
+        method: "POST", // Ensure this is explicitly set to POST
         headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${idToken}`,
+          "Content-Type": "application/json", // Ensure proper content type
+          Authorization: `Bearer ${idToken}`, // Include authorization token
         },
         body: JSON.stringify({
-          userId: user.uid, // Also send userId in body as backup
+          // Properly stringify the body
+          userId: user.uid, // Include userId in the body
         }),
       })
 
-      if (!response.ok) {
-        const errorText = await response.text()
-        console.error("Error response:", errorText)
+      console.log("Response status:", response.status)
 
+      if (!response.ok) {
+        let errorMessage = `Server error: ${response.status}`
         try {
-          const errorData = JSON.parse(errorText)
-          throw new Error(errorData.error || `Server error: ${response.status}`)
+          const errorData = await response.json()
+          errorMessage = errorData.error || errorMessage
         } catch (e) {
-          throw new Error(`Server error: ${response.status}. Response: ${errorText}`)
+          // If response is not JSON, try to get text
+          try {
+            const errorText = await response.text()
+            errorMessage = errorText || errorMessage
+          } catch (textError) {
+            // If we can't get text either, use the default error message
+          }
         }
+        throw new Error(errorMessage)
       }
 
       const data = await response.json()
@@ -102,7 +106,7 @@ export default function SubscribeButton({
       }
 
       // Redirect to Stripe checkout
-      console.log("Redirecting to Stripe checkout:", data.url)
+      console.log("Redirecting to Stripe checkout")
       window.location.href = data.url
     } catch (error) {
       console.error("Error starting subscription:", error)
