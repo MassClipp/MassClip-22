@@ -36,24 +36,16 @@ export default function SubscribeButton({
     setIsLoading(true)
 
     try {
-      // Get the current user
+      // Get the current user and their ID token
       const auth = getAuth()
       const user = auth.currentUser
 
       if (!user) {
-        toast({
-          title: "Authentication Error",
-          description: "You must be logged in to subscribe.",
-          variant: "destructive",
-        })
-        setIsLoading(false)
-        return
+        throw new Error("You must be logged in to subscribe")
       }
 
-      // Get the ID token
-      const idToken = await user.getIdToken(true) // Force refresh the token
-
-      console.log("Got user ID:", user.uid) // Log the user ID for debugging
+      // Get a fresh ID token
+      const idToken = await user.getIdToken(true)
 
       // Call our API to create a checkout session
       const response = await fetch("/api/create-checkout-session", {
@@ -62,27 +54,22 @@ export default function SubscribeButton({
           "Content-Type": "application/json",
           Authorization: `Bearer ${idToken}`,
         },
-        body: JSON.stringify({ userId: user.uid }), // Also send the user ID in the body as a backup
       })
 
       if (!response.ok) {
         const errorData = await response.json()
-        throw new Error(errorData.error || `Server error: ${response.status}`)
+        throw new Error(errorData.error || "Failed to create checkout session")
       }
 
       const data = await response.json()
 
-      // Redirect to Stripe Checkout
-      if (data.url) {
-        window.location.href = data.url
-      } else {
-        throw new Error("No checkout URL returned from server")
-      }
+      // Redirect to Stripe checkout
+      window.location.href = data.url
     } catch (error) {
-      console.error("Error creating checkout session:", error)
+      console.error("Error starting subscription:", error)
       toast({
-        title: "Checkout Error",
-        description: error instanceof Error ? error.message : "Failed to start checkout process",
+        title: "Subscription Error",
+        description: error instanceof Error ? error.message : "Failed to start subscription process",
         variant: "destructive",
       })
       setIsLoading(false)

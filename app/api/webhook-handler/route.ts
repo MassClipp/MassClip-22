@@ -24,10 +24,6 @@ if (!admin.apps.length) {
 const stripeSecretKey = process.env.STRIPE_SECRET_KEY
 const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET
 
-// Log which keys we're using (without exposing the actual keys)
-console.log(`>>> Using Stripe key type: ${stripeSecretKey?.startsWith("sk_test") ? "TEST" : "LIVE"}`)
-console.log(`>>> Webhook secret configured: ${webhookSecret ? "YES" : "NO"}`)
-
 // Initialize Stripe with the secret key
 if (!stripeSecretKey) {
   console.error(">>> STRIPE_SECRET_KEY is not defined in environment variables")
@@ -73,10 +69,11 @@ export async function POST(req: NextRequest) {
       const session = event.data.object as Stripe.Checkout.Session
       const userId = session.metadata?.userId
 
-      console.log(`>>> Processing checkout.session.completed for user: ${userId || "unknown"}`)
+      console.log(`>>> Processing checkout.session.completed event`)
+      console.log(`>>> Session metadata:`, session.metadata)
 
       if (!userId) {
-        console.error(">>> No userId found in session metadata")
+        console.error(">>> Missing userId in session metadata")
         return NextResponse.json({ error: "Missing userId in session metadata" }, { status: 400 })
       }
 
