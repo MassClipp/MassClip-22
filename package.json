@@ -65,8 +65,7 @@
     "firebase": "latest",
     "framer-motion": "latest",
     "firebase-admin": "latest",
-    "dotenv": "latest",
-    "micro": "latest"
+    "dotenv": "latest"
   },
   "devDependencies": {
     "@types/node": "^22",
