@@ -4,6 +4,7 @@ import type React from "react"
 import { useState } from "react"
 import { useUserPlan } from "@/hooks/use-user-plan"
 import { useToast } from "@/hooks/use-toast"
+import { getAuth } from "firebase/auth"
 
 interface SubscribeButtonProps {
   variant?: "default" | "outline" | "ghost"
@@ -35,14 +36,50 @@ export default function SubscribeButton({
     setIsLoading(true)
 
     try {
-      // Just redirect to Stripe checkout without trying to upgrade the plan immediately
-      // The webhook will handle the upgrade after successful payment
-      window.location.href = "https://buy.stripe.com/test_cN27uB5Jb1Bg316bII"
+      // Get the current user
+      const auth = getAuth()
+      const user = auth.currentUser
+
+      if (!user) {
+        toast({
+          title: "Authentication Error",
+          description: "You must be logged in to subscribe.",
+          variant: "destructive",
+        })
+        setIsLoading(false)
+        return
+      }
+
+      // Get the ID token
+      const idToken = await user.getIdToken()
+
+      // Call our API to create a checkout session
+      const response = await fetch("/api/create-checkout-session", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${idToken}`,
+        },
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to create checkout session")
+      }
+
+      // Redirect to Stripe Checkout
+      window.location.href = data.url
     } catch (error) {
-      console.error("Error redirecting to payment page:", error)
+      console.error("Error creating checkout session:", error)
+      toast({
+        title: "Checkout Error",
+        description: error instanceof Error ? error.message : "Failed to start checkout process",
+        variant: "destructive",
+      })
       setIsLoading(false)
     }
-    // No need for finally block as the page will be redirected
+    // No finally block as we're redirecting on success
   }
 
   return (
