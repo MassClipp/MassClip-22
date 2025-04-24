@@ -51,7 +51,9 @@ export default function SubscribeButton({
       }
 
       // Get the ID token
-      const idToken = await user.getIdToken()
+      const idToken = await user.getIdToken(true) // Force refresh the token
+
+      console.log("Got user ID:", user.uid) // Log the user ID for debugging
 
       // Call our API to create a checkout session
       const response = await fetch("/api/create-checkout-session", {
@@ -60,16 +62,22 @@ export default function SubscribeButton({
           "Content-Type": "application/json",
           Authorization: `Bearer ${idToken}`,
         },
+        body: JSON.stringify({ userId: user.uid }), // Also send the user ID in the body as a backup
       })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || `Server error: ${response.status}`)
+      }
 
       const data = await response.json()
 
-      if (!response.ok) {
-        throw new Error(data.error || "Failed to create checkout session")
-      }
-
       // Redirect to Stripe Checkout
-      window.location.href = data.url
+      if (data.url) {
+        window.location.href = data.url
+      } else {
+        throw new Error("No checkout URL returned from server")
+      }
     } catch (error) {
       console.error("Error creating checkout session:", error)
       toast({
@@ -79,7 +87,6 @@ export default function SubscribeButton({
       })
       setIsLoading(false)
     }
-    // No finally block as we're redirecting on success
   }
 
   return (
