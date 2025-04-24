@@ -1,18 +1,36 @@
 console.log(">>> Webhook Handler Initialized - App Router Version")
 import { type NextRequest, NextResponse } from "next/server"
 import Stripe from "stripe"
+import * as admin from "firebase-admin"
+
+// Initialize Firebase Admin if it hasn't been initialized yet
+if (!admin.apps.length) {
+  try {
+    admin.initializeApp({
+      credential: admin.credential.cert({
+        projectId: process.env.FIREBASE_PROJECT_ID,
+        clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+        // Replace escaped newlines with actual newlines
+        privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n"),
+      }),
+    })
+    console.log(">>> Firebase Admin initialized successfully")
+  } catch (error) {
+    console.error(">>> Firebase Admin initialization error:", error)
+  }
+}
 
 // Get Stripe keys from environment variables
 const stripeSecretKey = process.env.STRIPE_SECRET_KEY
 const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET
 
 // Log which keys we're using (without exposing the actual keys)
-console.log(`Using Stripe key type: ${stripeSecretKey?.startsWith("sk_test") ? "TEST" : "LIVE"}`)
-console.log(`Webhook secret configured: ${webhookSecret ? "YES" : "NO"}`)
+console.log(`>>> Using Stripe key type: ${stripeSecretKey?.startsWith("sk_test") ? "TEST" : "LIVE"}`)
+console.log(`>>> Webhook secret configured: ${webhookSecret ? "YES" : "NO"}`)
 
 // Initialize Stripe with the secret key
 if (!stripeSecretKey) {
-  console.error("STRIPE_SECRET_KEY is not defined in environment variables")
+  console.error(">>> STRIPE_SECRET_KEY is not defined in environment variables")
 }
 
 const stripe = new Stripe(stripeSecretKey as string, {
@@ -20,58 +38,75 @@ const stripe = new Stripe(stripeSecretKey as string, {
 })
 
 /**
- * Simplified Stripe Webhook Handler - App Router Version
- * This is a minimal version to confirm the webhook is being hit
- * Last updated: 2025-04-23
+ * Stripe Webhook Handler - App Router Version
+ * Processes Stripe webhook events, particularly checkout.session.completed
+ * Last updated: 2025-04-24
  */
 export async function POST(req: NextRequest) {
   console.log(">>> Webhook received")
 
   try {
     // Get the raw request body
-    // Note: In App Router, we need to use req.text() instead of buffer(req)
     const text = await req.text()
     const rawBody = Buffer.from(text)
     const signature = req.headers.get("stripe-signature") as string
 
-    // Verify webhook signature if secret is available
-    if (webhookSecret) {
-      try {
-        const event = stripe.webhooks.constructEvent(rawBody, signature, webhookSecret)
-        console.log(`>>> Webhook event verified: ${event.type}`)
-
-        // Log the event data for debugging
-        console.log(
-          ">>> Event data:",
-          JSON.stringify({
-            type: event.type,
-            id: event.id,
-            object: event.object,
-            api_version: event.api_version,
-            created: event.created,
-          }),
-        )
-      } catch (err) {
-        console.error(
-          `>>> Webhook signature verification failed: ${err instanceof Error ? err.message : "Unknown error"}`,
-        )
-        // Continue processing even if signature fails - we just want to confirm the endpoint is hit
-      }
+    // Verify webhook signature
+    if (!webhookSecret) {
+      console.error(">>> Webhook secret is not defined")
+      return NextResponse.json({ error: "Webhook secret not configured" }, { status: 500 })
     }
 
-    // Log request headers for debugging
-    console.log(
-      ">>> Request headers:",
-      JSON.stringify({
-        "content-type": req.headers.get("content-type"),
-        "stripe-signature": req.headers.get("stripe-signature") ? "Present" : "Missing",
-        "user-agent": req.headers.get("user-agent"),
-      }),
-    )
+    let event: Stripe.Event
+    try {
+      event = stripe.webhooks.constructEvent(rawBody, signature, webhookSecret)
+      console.log(`>>> Webhook event verified: ${event.type}`)
+    } catch (err) {
+      console.error(
+        `>>> Webhook signature verification failed: ${err instanceof Error ? err.message : "Unknown error"}`,
+      )
+      return NextResponse.json({ error: "Webhook signature verification failed" }, { status: 400 })
+    }
+
+    // Handle the event
+    if (event.type === "checkout.session.completed") {
+      const session = event.data.object as Stripe.Checkout.Session
+      const userId = session.metadata?.userId
+
+      console.log(`>>> Processing checkout.session.completed for user: ${userId || "unknown"}`)
+
+      if (!userId) {
+        console.error(">>> No userId found in session metadata")
+        return NextResponse.json({ error: "Missing userId in session metadata" }, { status: 400 })
+      }
+
+      try {
+        // Update the user's plan in Firestore
+        const userRef = admin.firestore().collection("users").doc(userId)
+
+        await userRef.set(
+          {
+            plan: "pro",
+            planActivatedAt: new Date().toISOString(),
+          },
+          { merge: true },
+        )
+
+        console.log(`>>> User ${userId} upgraded to PRO successfully`)
+      } catch (error) {
+        console.error(
+          `>>> Error updating user in Firestore: ${error instanceof Error ? error.message : "Unknown error"}`,
+        )
+        // We don't want to return an error status here, as Stripe will retry the webhook
+        // Instead, log the error and return a 200 to acknowledge receipt
+      }
+    } else {
+      console.log(`>>> Unhandled event type: ${event.type}`)
+    }
 
     // Return success response
-    console.log(">>> Webhook test passed")
-    return NextResponse.json({ received: true, message: "Webhook test passed" }, { status: 200 })
+    console.log(">>> Webhook processed successfully")
+    return NextResponse.json({ received: true, message: "Webhook processed successfully" }, { status: 200 })
   } catch (err) {
     console.error(`>>> Webhook error: ${err instanceof Error ? err.message : "Unknown error"}`)
     return NextResponse.json({ error: "Webhook handler failed" }, { status: 500 })
