@@ -33,10 +33,35 @@ async function handleCheckoutSessionCompleted(event: Stripe.Event) {
     const session = event.data.object as Stripe.Checkout.Session
     console.log(">>> Processing checkout.session.completed event")
 
+    // Debug: Log the entire session object to see what's coming through
+    console.log(">>> FULL SESSION OBJECT:", JSON.stringify(session, null, 2))
+
+    // Debug: Log specific fields we're interested in
+    console.log(">>> Session ID:", session.id)
+    console.log(">>> Client Reference ID:", session.client_reference_id)
+    console.log(">>> Metadata:", session.metadata)
+
     // Check if userId exists in metadata
     if (!session.metadata || !session.metadata.userId) {
-      console.warn(">>> No userId found in session metadata, skipping user update")
-      return true // Return true to indicate successful handling (even though we didn't update anything)
+      // Check if it might be in client_reference_id as a fallback
+      const fallbackUserId = session.client_reference_id
+
+      if (fallbackUserId) {
+        console.log(`>>> No userId in metadata, but found in client_reference_id: ${fallbackUserId}`)
+
+        // Update the user document using the fallback ID
+        await db.collection("users").doc(fallbackUserId).update({
+          plan: "pro",
+          planActivatedAt: new Date().toISOString(),
+        })
+
+        console.log(`>>> Successfully upgraded user ${fallbackUserId} to Pro plan (using fallback ID)`)
+        return true
+      }
+
+      console.error(">>> CRITICAL: No userId found in session metadata or client_reference_id!")
+      console.error(">>> User upgrade failed - cannot identify which user completed checkout")
+      return true // Return true to indicate we handled it (even though we couldn't update)
     }
 
     const userId = session.metadata.userId
