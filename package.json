@@ -61,11 +61,11 @@
     "@emotion/is-prop-valid": "latest",
     "fs": "latest",
     "path": "latest",
+    "stripe": "latest",
     "firebase": "latest",
     "framer-motion": "latest",
     "firebase-admin": "latest",
-    "dotenv": "latest",
-    "stripe": "latest"
+    "dotenv": "latest"
   },
   "devDependencies": {
     "@types/node": "^22",
