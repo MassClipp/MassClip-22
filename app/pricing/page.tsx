@@ -4,9 +4,11 @@ import { CheckCircle2 } from "lucide-react"
 import DashboardHeader from "@/components/dashboard-header"
 import { SubscribeButton } from "@/components/subscribe-button"
 import { useAuth } from "@/contexts/auth-context"
+import { useUserPlan } from "@/hooks/use-user-plan"
 
 export default function PricingPage() {
   const { user } = useAuth()
+  const { isProUser, loading } = useUserPlan()
   const router = useRouter()
 
   return (
@@ -27,7 +29,14 @@ export default function PricingPage() {
 
           <div className="grid md:grid-cols-2 gap-8 max-w-4xl mx-auto">
             {/* Free Plan */}
-            <div className="bg-black rounded-lg shadow-lg overflow-hidden border border-gray-800">
+            <div
+              className={`bg-black rounded-lg shadow-lg overflow-hidden border ${!isProUser ? "border-crimson" : "border-gray-800"} relative`}
+            >
+              {!isProUser && !loading && (
+                <div className="absolute top-0 right-0 bg-crimson text-white text-xs font-bold px-3 py-1">
+                  CURRENT PLAN
+                </div>
+              )}
               <div className="p-8">
                 <h2 className="text-2xl font-bold text-white mb-4">Free</h2>
                 <p className="text-gray-400 mb-6">Get started with basic features</p>
@@ -56,20 +65,33 @@ export default function PricingPage() {
                   </li>
                 </ul>
 
-                <button
-                  onClick={() => router.push("/dashboard")}
-                  className="w-full py-2 px-4 border border-gray-700 rounded-md text-white hover:bg-gray-800 transition-colors"
-                >
-                  Current Plan
-                </button>
+                {isProUser ? (
+                  <button
+                    onClick={() => router.push("/dashboard")}
+                    className="w-full py-2 px-4 border border-gray-700 rounded-md text-white hover:bg-gray-800 transition-colors"
+                  >
+                    Return to Dashboard
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => router.push("/dashboard")}
+                    className="w-full py-2 px-4 border border-crimson rounded-md text-white bg-black hover:bg-gray-900 transition-colors"
+                  >
+                    Current Plan
+                  </button>
+                )}
               </div>
             </div>
 
             {/* Pro Plan */}
-            <div className="bg-black rounded-lg shadow-lg overflow-hidden border border-red-900 relative">
-              <div className="absolute top-0 right-0 bg-red-600 text-white text-xs font-bold px-3 py-1">
-                RECOMMENDED
-              </div>
+            <div
+              className={`bg-black rounded-lg shadow-lg overflow-hidden border ${isProUser ? "border-crimson" : "border-red-900"} relative`}
+            >
+              {!loading && (
+                <div className="absolute top-0 right-0 bg-red-600 text-white text-xs font-bold px-3 py-1">
+                  {isProUser ? "CURRENT PLAN" : "RECOMMENDED"}
+                </div>
+              )}
               <div className="p-8">
                 <div className="flex items-center mb-4">
                   <h2 className="text-2xl font-bold text-white">Pro</h2>
@@ -102,7 +124,16 @@ export default function PricingPage() {
                   </li>
                 </ul>
 
-                <SubscribeButton className="w-full">Upgrade to Pro</SubscribeButton>
+                {isProUser ? (
+                  <button
+                    onClick={() => router.push("/dashboard/user")}
+                    className="w-full py-2 px-4 border border-crimson rounded-md text-white bg-black hover:bg-gray-900 transition-colors"
+                  >
+                    Manage Subscription
+                  </button>
+                ) : (
+                  <SubscribeButton className="w-full">Upgrade to Pro</SubscribeButton>
+                )}
               </div>
             </div>
           </div>
