@@ -11,6 +11,8 @@ import { trackFirestoreWrite } from "@/lib/firestore-optimizer"
 import { collection, addDoc, serverTimestamp } from "firebase/firestore"
 import { useToast } from "@/hooks/use-toast"
 import { useUserPlan } from "@/hooks/use-user-plan"
+import { useDownloadLimit } from "@/contexts/download-limit-context"
+import { DownloadConfirmationModal } from "./download-confirmation-modal"
 
 interface VimeoCardProps {
   video: VimeoVideo
@@ -32,6 +34,7 @@ export default function VimeoCard({ video }: VimeoCardProps) {
   const { user } = useAuth()
   const { toast } = useToast()
   const { isProUser, recordDownload, remainingDownloads, planData } = useUserPlan()
+  const { hasReachedLimit: hasReachedGlobalLimit, refreshLimitStatus } = useDownloadLimit()
   const titleRef = useRef<HTMLDivElement>(null)
   const videoRef = useRef<HTMLIFrameElement>(null)
   const viewTrackedRef = useRef(false)
@@ -178,10 +181,14 @@ export default function VimeoCard({ video }: VimeoCardProps) {
       }
 
       // Immediately update local download count for UI
-      setLocalDownloadCount((prev) => prev + 1)
+      const newDownloadCount = localDownloadCount + 1
+      setLocalDownloadCount(newDownloadCount)
+
+      // Check if this was the last download
+      const wasLastDownload = planData && newDownloadCount >= planData.downloadsLimit
 
       // Show appropriate toast based on remaining downloads
-      if (localRemainingDownloads <= 1) {
+      if (wasLastDownload) {
         // Last download
         toast({
           title: "Download Successful",
@@ -224,6 +231,27 @@ export default function VimeoCard({ video }: VimeoCardProps) {
       setTimeout(() => {
         document.body.removeChild(a)
       }, 100)
+
+      // Check if this was the last download for a free user
+      const wasLastDownload = !isProUser && planData && localDownloadCount >= planData.downloadsLimit
+
+      // Force page reload if this was the last download for a free user
+      if (wasLastDownload) {
+        // Refresh the download limit status
+        await refreshLimitStatus()
+
+        // Short delay to ensure the download starts before reload
+        setTimeout(() => {
+          // Show a toast notification explaining the reload
+          toast({
+            title: "Refreshing page",
+            description: "Updating your download limit status...",
+          })
+
+          // Reload the page to update UI state
+          window.location.reload()
+        }, 1500)
+      }
     } catch (error) {
       console.error("Download failed:", error)
       setDownloadError(true)
@@ -408,32 +436,15 @@ export default function VimeoCard({ video }: VimeoCardProps) {
 
       {/* Download confirmation modal */}
       {showConfirmModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-gray-900 border border-gray-800 rounded-lg p-6 max-w-sm mx-4">
-            <h3 className="text-lg font-medium text-white mb-2">Confirm Download</h3>
-            <p className="text-gray-300 mb-4">
-              This will count as 1 of your 5 monthly downloads. Free users are limited to 5 downloads per month. You
-              have {localRemainingDownloads} downloads remaining.
-            </p>
-            <div className="flex justify-end gap-3">
-              <button
-                onClick={() => setShowConfirmModal(false)}
-                className="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-white rounded-md"
-              >
-                No
-              </button>
-              <button
-                onClick={() => {
-                  setShowConfirmModal(false)
-                  proceedWithDownload()
-                }}
-                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-md"
-              >
-                Yes
-              </button>
-            </div>
-          </div>
-        </div>
+        <DownloadConfirmationModal
+          isOpen={showConfirmModal}
+          onClose={() => setShowConfirmModal(false)}
+          onConfirm={() => {
+            setShowConfirmModal(false)
+            proceedWithDownload()
+          }}
+          remainingDownloads={localRemainingDownloads}
+        />
       )}
     </div>
   )
