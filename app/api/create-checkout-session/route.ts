@@ -76,14 +76,11 @@ export async function POST(request: Request) {
       cancel_url: `${process.env.NEXT_PUBLIC_SITE_URL}/subscription/cancel?session_id={CHECKOUT_SESSION_ID}`,
       customer_email: customerEmail,
       metadata: metadata,
-      // DIAGNOSTIC: Add subscription_data with metadata to ensure it propagates to the subscription
+      // Add metadata to subscription_data to ensure it propagates to the subscription
       subscription_data: {
         metadata: metadata,
       },
-      // DIAGNOSTIC: Add payment_intent_data with metadata to ensure it propagates to the payment intent
-      payment_intent_data: {
-        metadata: metadata,
-      },
+      // REMOVED: payment_intent_data - not allowed in subscription mode
     }
 
     console.log("Session parameters:", JSON.stringify(sessionParams, null, 2))
@@ -97,7 +94,7 @@ export async function POST(request: Request) {
 
     // DIAGNOSTIC: Verify the session was created with metadata
     const retrievedSession = await stripe.checkout.sessions.retrieve(session.id, {
-      expand: ["subscription", "payment_intent"],
+      expand: ["subscription"],
     })
     console.log("DIAGNOSTIC - Retrieved session metadata:", JSON.stringify(retrievedSession.metadata, null, 2))
 
@@ -107,15 +104,6 @@ export async function POST(request: Request) {
         typeof retrievedSession.subscription === "string"
           ? "Subscription not expanded"
           : JSON.stringify(retrievedSession.subscription.metadata, null, 2),
-      )
-    }
-
-    if (retrievedSession.payment_intent) {
-      console.log(
-        "DIAGNOSTIC - Payment intent metadata:",
-        typeof retrievedSession.payment_intent === "string"
-          ? "Payment intent not expanded"
-          : JSON.stringify(retrievedSession.payment_intent.metadata, null, 2),
       )
     }
 
