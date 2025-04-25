@@ -4,6 +4,8 @@ import type React from "react"
 import { useState } from "react"
 import { useUserPlan } from "@/hooks/use-user-plan"
 import { useToast } from "@/hooks/use-toast"
+import { useAuth } from "@/contexts/auth-context"
+import { useRouter } from "next/navigation"
 
 interface SubscribeButtonProps {
   variant?: "default" | "outline" | "ghost"
@@ -21,8 +23,16 @@ export default function SubscribeButton({
   const [isLoading, setIsLoading] = useState(false)
   const { upgradeToPro, isProUser } = useUserPlan()
   const { toast } = useToast()
+  const { user } = useAuth()
+  const router = useRouter()
 
   const handleSubscribe = async () => {
+    // If user is not logged in, redirect to login
+    if (!user) {
+      router.push("/login?redirect=/pricing")
+      return
+    }
+
     // If already a pro user, show a message
     if (isProUser) {
       toast({
@@ -35,14 +45,42 @@ export default function SubscribeButton({
     setIsLoading(true)
 
     try {
-      // Just redirect to Stripe checkout without trying to upgrade the plan immediately
-      // The webhook will handle the upgrade after successful payment
-      window.location.href = "https://buy.stripe.com/test_cN27uB5Jb1Bg316bII"
+      console.log("Creating checkout session for user:", user.uid, "with email:", user.email)
+
+      // Call our API to create a checkout session
+      const response = await fetch("/api/create-checkout-session", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          userId: user.uid,
+          userEmail: user.email,
+        }),
+      })
+
+      const data = await response.json()
+
+      if (data.url) {
+        window.location.href = data.url
+      } else {
+        console.error("No URL in response:", data)
+        toast({
+          title: "Error",
+          description: "Something went wrong. Please try again.",
+          variant: "destructive",
+        })
+      }
     } catch (error) {
-      console.error("Error redirecting to payment page:", error)
+      console.error("Error creating checkout session:", error)
+      toast({
+        title: "Error",
+        description: "Failed to start checkout process. Please try again.",
+        variant: "destructive",
+      })
+    } finally {
       setIsLoading(false)
     }
-    // No need for finally block as the page will be redirected
   }
 
   return (

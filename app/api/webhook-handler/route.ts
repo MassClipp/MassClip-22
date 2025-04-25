@@ -26,43 +26,82 @@ initializeFirebaseAdmin()
 const db = getFirestore()
 
 /**
+ * Try to find the user by various methods
+ */
+async function findUserByEmail(email: string) {
+  console.log(`>>> Attempting to find user with email: ${email}`)
+  try {
+    // Try case-sensitive search first
+    let usersSnapshot = await db.collection("users").where("email", "==", email).get()
+
+    if (usersSnapshot.empty) {
+      // Try case-insensitive search using lowercase
+      console.log(`>>> No case-sensitive match, trying lowercase comparison`)
+      usersSnapshot = await db.collection("users").where("email", "==", email.toLowerCase()).get()
+    }
+
+    if (usersSnapshot.empty) {
+      console.log(`>>> No user found with email: ${email}`)
+      return null
+    }
+
+    const userDoc = usersSnapshot.docs[0]
+    console.log(`>>> Found user with ID: ${userDoc.id}`)
+    return userDoc
+  } catch (error) {
+    console.error(`>>> Error finding user by email: ${error instanceof Error ? error.message : "Unknown error"}`)
+    return null
+  }
+}
+
+/**
  * Handles checkout.session.completed events by updating the user's plan in Firestore
  */
 async function handleCheckoutSessionCompleted(event: Stripe.Event) {
   try {
     const session = event.data.object as Stripe.Checkout.Session
+    console.log("------------ WEBHOOK SESSION PROCESSING START ------------")
     console.log(">>> Processing checkout.session.completed event")
-
-    // Debug: Log the raw session object
-    console.log(">>> RAW SESSION OBJECT:", JSON.stringify(event.data.object, null, 2))
-
-    // Debug: Log specific fields we're interested in
     console.log(">>> Session ID:", session.id)
-    console.log(">>> Metadata:", session.metadata)
 
-    // Check if email exists in metadata
-    if (!session.metadata || !session.metadata.email) {
-      console.error(">>> CRITICAL: No email found in session metadata!")
-      console.error(">>> User upgrade failed - cannot identify which user completed checkout")
-      return true // Return true to indicate we handled it (even though we couldn't update)
+    // Log ALL session properties to debug
+    console.log(">>> ALL SESSION PROPERTIES:")
+    console.log(JSON.stringify(session, null, 2))
+
+    // Try multiple possible sources for email
+    let customerEmail = null
+
+    // Check metadata
+    if (session.metadata && session.metadata.email) {
+      customerEmail = session.metadata.email
+      console.log(`>>> Found email in metadata: ${customerEmail}`)
+    }
+    // Check customer_email field
+    else if (session.customer_email) {
+      customerEmail = session.customer_email
+      console.log(`>>> Found email in customer_email: ${customerEmail}`)
+    }
+    // Check customer details
+    else if (session.customer_details && session.customer_details.email) {
+      customerEmail = session.customer_details.email
+      console.log(`>>> Found email in customer_details: ${customerEmail}`)
     }
 
-    const email = session.metadata.email
-    console.log(`>>> Looking up user with email: ${email}`)
-
-    // Find the user by email in Firestore
-    const usersSnapshot = await db.collection("users").where("email", "==", email).get()
-
-    if (usersSnapshot.empty) {
-      console.error(`>>> CRITICAL: No user found with email: ${email}`)
+    if (!customerEmail) {
+      console.error(">>> CRITICAL: No email found in session!")
+      console.error(">>> User upgrade failed - cannot identify which user completed checkout")
       return true
     }
 
-    // Get the first matching user (should be only one due to Firebase's unique email constraint)
-    const userDoc = usersSnapshot.docs[0]
-    const userId = userDoc.id
+    // Find the user by email in Firestore
+    const userDoc = await findUserByEmail(customerEmail)
 
-    console.log(`>>> Found user with ID: ${userId}`)
+    if (!userDoc) {
+      console.error(`>>> CRITICAL: Could not find user with email: ${customerEmail}`)
+      return true
+    }
+
+    const userId = userDoc.id
     console.log(`>>> Updating user ${userId} to Pro plan`)
 
     // Update the user document in Firestore
@@ -72,6 +111,7 @@ async function handleCheckoutSessionCompleted(event: Stripe.Event) {
     })
 
     console.log(`>>> Successfully upgraded user ${userId} to Pro plan`)
+    console.log("------------ WEBHOOK SESSION PROCESSING END ------------")
     return true
   } catch (error) {
     console.error(
@@ -95,6 +135,11 @@ export async function POST(req: NextRequest) {
   try {
     // Get the raw request body
     const text = await req.text()
+
+    // Log the first part of the raw webhook payload (truncated for security)
+    const truncatedText = text.length > 500 ? text.substring(0, 500) + "..." : text
+    console.log(`>>> Raw webhook payload (truncated): ${truncatedText}`)
+
     const rawBody = Buffer.from(text)
     const signature = req.headers.get("stripe-signature") as string
 

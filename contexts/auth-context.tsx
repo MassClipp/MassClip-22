@@ -30,3 +30,6 @@ export function useAuth() {
   }
   return context
 }
+
+// Add useAuthContext as an alias for useAuth to fix the missing export
+export const useAuthContext = useAuth
