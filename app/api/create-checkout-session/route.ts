@@ -41,10 +41,26 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Missing email in request body" }, { status: 400 })
     }
 
+    if (!userId) {
+      console.warn("⚠️ WARNING: Missing userId in request body. Metadata will be incomplete.")
+      console.warn("Request body:", JSON.stringify(body))
+    }
+
     console.log(`Creating checkout session for email: ${customerEmail}`)
+    console.log(`User ID for metadata: ${userId || "NOT PROVIDED"}`)
     console.log("Using price ID:", process.env.STRIPE_PRICE_ID)
     console.log("Success URL:", `${process.env.NEXT_PUBLIC_SITE_URL}/subscription/success`)
     console.log("Cancel URL:", `${process.env.NEXT_PUBLIC_SITE_URL}/subscription/cancel`)
+
+    // DIAGNOSTIC: Create metadata object separately for clarity
+    const metadata = {
+      email: customerEmail,
+      firebaseUid: userId || "",
+      plan: "pro",
+      timestamp: new Date().toISOString(), // Add timestamp for debugging
+    }
+
+    console.log("METADATA BEING SENT TO STRIPE:", JSON.stringify(metadata, null, 2))
 
     // Create session parameters
     const sessionParams: Stripe.Checkout.SessionCreateParams = {
@@ -56,24 +72,53 @@ export async function POST(request: Request) {
         },
       ],
       mode: "subscription",
-      success_url: `${process.env.NEXT_PUBLIC_SITE_URL}/subscription/success`,
-      cancel_url: `${process.env.NEXT_PUBLIC_SITE_URL}/subscription/cancel`,
+      success_url: `${process.env.NEXT_PUBLIC_SITE_URL}/subscription/success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${process.env.NEXT_PUBLIC_SITE_URL}/subscription/cancel?session_id={CHECKOUT_SESSION_ID}`,
       customer_email: customerEmail,
-      metadata: {
-        email: customerEmail,
-        firebaseUid: userId || "", // Renamed from userId to firebaseUid for clarity
-        plan: "pro", // Add plan type for tracking
+      metadata: metadata,
+      // DIAGNOSTIC: Add subscription_data with metadata to ensure it propagates to the subscription
+      subscription_data: {
+        metadata: metadata,
+      },
+      // DIAGNOSTIC: Add payment_intent_data with metadata to ensure it propagates to the payment intent
+      payment_intent_data: {
+        metadata: metadata,
       },
     }
 
-    console.log(`Including firebaseUid in metadata: ${userId || "not-provided"}`)
-    console.log(`Including plan type in metadata: pro`)
+    console.log("Session parameters:", JSON.stringify(sessionParams, null, 2))
 
     // Create the checkout session
     const session = await stripe.checkout.sessions.create(sessionParams)
 
     console.log("Session created with ID:", session.id)
+    console.log("DIAGNOSTIC - Session metadata received from Stripe:", JSON.stringify(session.metadata, null, 2))
     console.log("Session URL:", session.url)
+
+    // DIAGNOSTIC: Verify the session was created with metadata
+    const retrievedSession = await stripe.checkout.sessions.retrieve(session.id, {
+      expand: ["subscription", "payment_intent"],
+    })
+    console.log("DIAGNOSTIC - Retrieved session metadata:", JSON.stringify(retrievedSession.metadata, null, 2))
+
+    if (retrievedSession.subscription) {
+      console.log(
+        "DIAGNOSTIC - Subscription metadata:",
+        typeof retrievedSession.subscription === "string"
+          ? "Subscription not expanded"
+          : JSON.stringify(retrievedSession.subscription.metadata, null, 2),
+      )
+    }
+
+    if (retrievedSession.payment_intent) {
+      console.log(
+        "DIAGNOSTIC - Payment intent metadata:",
+        typeof retrievedSession.payment_intent === "string"
+          ? "Payment intent not expanded"
+          : JSON.stringify(retrievedSession.payment_intent.metadata, null, 2),
+      )
+    }
+
     console.log("------------ APP ROUTER CHECKOUT SESSION END ------------")
 
     // Return the session URL
