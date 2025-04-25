@@ -61,11 +61,13 @@ export async function POST(request: Request) {
       customer_email: customerEmail,
       metadata: {
         email: customerEmail,
-        userId: userId || "not-provided",
+        firebaseUid: userId || "", // Renamed from userId to firebaseUid for clarity
+        plan: "pro", // Add plan type for tracking
       },
     }
 
-    console.log(`Including userId in metadata: ${userId || "not-provided"}`)
+    console.log(`Including firebaseUid in metadata: ${userId || "not-provided"}`)
+    console.log(`Including plan type in metadata: pro`)
 
     // Create the checkout session
     const session = await stripe.checkout.sessions.create(sessionParams)

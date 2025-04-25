@@ -89,12 +89,35 @@ async function handleCheckoutSessionCompleted(event: Stripe.Event) {
     console.log(">>> ALL SESSION PROPERTIES:")
     console.log(JSON.stringify(session, null, 2))
 
-    // First try to get userId from metadata
+    // Also update the logging to show the plan from metadata
+    console.log(`Plan from metadata: ${session.metadata?.plan || "not specified"}`)
+
+    // First try to find the user by firebaseUid from metadata
     let userDoc = null
-    if (session.metadata && session.metadata.userId && session.metadata.userId !== "not-provided") {
-      const userId = session.metadata.userId
-      console.log(`>>> Found userId in metadata: ${userId}`)
-      userDoc = await findUserById(userId)
+    const firebaseUid = session.metadata?.firebaseUid
+    if (firebaseUid && firebaseUid !== "not-provided" && firebaseUid !== "") {
+      console.log(`Looking up user by firebaseUid: ${firebaseUid}`)
+      userDoc = await findUserById(firebaseUid)
+
+      if (userDoc) {
+        console.log(`Found user by firebaseUid: ${userDoc.id}`)
+      } else {
+        console.warn(`No user found with firebaseUid: ${firebaseUid}, falling back to email lookup`)
+      }
+    } else {
+      console.warn("No valid firebaseUid in session metadata, falling back to email lookup")
+    }
+
+    // If user not found by firebaseUid, fall back to email
+    if (!userDoc && session.customer_email) {
+      console.log(`Looking up user by email: ${session.customer_email}`)
+      userDoc = await findUserByEmail(session.customer_email)
+
+      if (userDoc) {
+        console.log(`Found user by email: ${userDoc.id}`)
+      } else {
+        console.warn(`No user found with email: ${session.customer_email}`)
+      }
     }
 
     // If no user found by userId, fall back to email lookup
