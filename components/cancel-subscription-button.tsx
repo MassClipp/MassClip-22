@@ -2,7 +2,6 @@
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
-import { Button } from "@/components/ui/button"
 import {
   Dialog,
   DialogContent,
@@ -74,9 +73,11 @@ export default function CancelSubscriptionButton() {
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogTrigger asChild>
-        <Button variant="outline" className="border-gray-600 text-gray-300 hover:bg-gray-800 hover:text-white">
-          Cancel Subscription
-        </Button>
+        <button className="vault-button inline-block">
+          <span className="relative block px-6 py-2 text-white font-light border border-crimson transition-colors duration-300">
+            Cancel Subscription
+          </span>
+        </button>
       </DialogTrigger>
       <DialogContent className="bg-gray-900 border-gray-800 text-white">
         <DialogHeader>
@@ -95,17 +96,16 @@ export default function CancelSubscriptionButton() {
           </ul>
         </div>
         <DialogFooter>
-          <Button variant="ghost" onClick={() => setIsOpen(false)} className="text-gray-300">
-            Keep Subscription
-          </Button>
-          <Button
-            variant="destructive"
-            onClick={handleCancel}
-            disabled={isLoading}
-            className="bg-crimson hover:bg-crimson/80"
-          >
-            {isLoading ? "Canceling..." : "Confirm Cancellation"}
-          </Button>
+          <button onClick={() => setIsOpen(false)} className="vault-button inline-block">
+            <span className="relative block px-6 py-2 text-white font-light border border-gray-700 transition-colors duration-300">
+              Keep Subscription
+            </span>
+          </button>
+          <button onClick={handleCancel} disabled={isLoading} className="vault-button inline-block">
+            <span className="relative block px-6 py-2 text-white font-light border border-crimson transition-colors duration-300">
+              {isLoading ? "Canceling..." : "Confirm Cancellation"}
+            </span>
+          </button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
