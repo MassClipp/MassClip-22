@@ -2,7 +2,7 @@
 import { useRouter } from "next/navigation"
 import { CheckCircle2 } from "lucide-react"
 import DashboardHeader from "@/components/dashboard-header"
-import SubscribeButton from "@/components/subscribe-button"
+import { SubscribeButton } from "@/components/subscribe-button"
 import { useAuth } from "@/contexts/auth-context"
 
 export default function PricingPage() {
