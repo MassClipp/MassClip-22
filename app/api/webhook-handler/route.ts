@@ -33,46 +33,36 @@ async function handleCheckoutSessionCompleted(event: Stripe.Event) {
     const session = event.data.object as Stripe.Checkout.Session
     console.log(">>> Processing checkout.session.completed event")
 
-    // Debug: Log the raw event data
-    console.log(">>> RAW EVENT DATA:", JSON.stringify(event.data, null, 2))
-
     // Debug: Log the raw session object
     console.log(">>> RAW SESSION OBJECT:", JSON.stringify(event.data.object, null, 2))
 
-    // Debug: Log the entire session object to see what's coming through
-    console.log(">>> FULL SESSION OBJECT:", JSON.stringify(session, null, 2))
-
     // Debug: Log specific fields we're interested in
     console.log(">>> Session ID:", session.id)
-    console.log(">>> Client Reference ID:", session.client_reference_id)
     console.log(">>> Metadata:", session.metadata)
-    console.log(">>> Metadata type:", typeof session.metadata)
-    console.log(">>> Metadata keys:", session.metadata ? Object.keys(session.metadata) : "null")
 
-    // Check if userId exists in metadata
-    if (!session.metadata || !session.metadata.userId) {
-      // Check if it might be in client_reference_id as a fallback
-      const fallbackUserId = session.client_reference_id
-
-      if (fallbackUserId) {
-        console.log(`>>> No userId in metadata, but found in client_reference_id: ${fallbackUserId}`)
-
-        // Update the user document using the fallback ID
-        await db.collection("users").doc(fallbackUserId).update({
-          plan: "pro",
-          planActivatedAt: new Date().toISOString(),
-        })
-
-        console.log(`>>> Successfully upgraded user ${fallbackUserId} to Pro plan (using fallback ID)`)
-        return true
-      }
-
-      console.error(">>> CRITICAL: No userId found in session metadata or client_reference_id!")
+    // Check if email exists in metadata
+    if (!session.metadata || !session.metadata.email) {
+      console.error(">>> CRITICAL: No email found in session metadata!")
       console.error(">>> User upgrade failed - cannot identify which user completed checkout")
       return true // Return true to indicate we handled it (even though we couldn't update)
     }
 
-    const userId = session.metadata.userId
+    const email = session.metadata.email
+    console.log(`>>> Looking up user with email: ${email}`)
+
+    // Find the user by email in Firestore
+    const usersSnapshot = await db.collection("users").where("email", "==", email).get()
+
+    if (usersSnapshot.empty) {
+      console.error(`>>> CRITICAL: No user found with email: ${email}`)
+      return true
+    }
+
+    // Get the first matching user (should be only one due to Firebase's unique email constraint)
+    const userDoc = usersSnapshot.docs[0]
+    const userId = userDoc.id
+
+    console.log(`>>> Found user with ID: ${userId}`)
     console.log(`>>> Updating user ${userId} to Pro plan`)
 
     // Update the user document in Firestore
