@@ -65,6 +65,8 @@ export async function POST(request: Request) {
       },
     }
 
+    console.log(`Including userId in metadata: ${userId || "not-provided"}`)
+
     // Create the checkout session
     const session = await stripe.checkout.sessions.create(sessionParams)
 

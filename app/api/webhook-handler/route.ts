@@ -26,6 +26,27 @@ initializeFirebaseAdmin()
 const db = getFirestore()
 
 /**
+ * Find a user by their userId in Firestore
+ */
+async function findUserById(userId: string) {
+  console.log(`>>> Attempting to find user with ID: ${userId}`)
+  try {
+    const userDoc = await db.collection("users").doc(userId).get()
+
+    if (!userDoc.exists) {
+      console.log(`>>> No user found with ID: ${userId}`)
+      return null
+    }
+
+    console.log(`>>> Found user with ID: ${userId}`)
+    return userDoc
+  } catch (error) {
+    console.error(`>>> Error finding user by ID: ${error instanceof Error ? error.message : "Unknown error"}`)
+    return null
+  }
+}
+
+/**
  * Try to find the user by various methods
  */
 async function findUserByEmail(email: string) {
@@ -68,47 +89,80 @@ async function handleCheckoutSessionCompleted(event: Stripe.Event) {
     console.log(">>> ALL SESSION PROPERTIES:")
     console.log(JSON.stringify(session, null, 2))
 
-    // Try multiple possible sources for email
-    let customerEmail = null
-
-    // Check metadata
-    if (session.metadata && session.metadata.email) {
-      customerEmail = session.metadata.email
-      console.log(`>>> Found email in metadata: ${customerEmail}`)
-    }
-    // Check customer_email field
-    else if (session.customer_email) {
-      customerEmail = session.customer_email
-      console.log(`>>> Found email in customer_email: ${customerEmail}`)
-    }
-    // Check customer details
-    else if (session.customer_details && session.customer_details.email) {
-      customerEmail = session.customer_details.email
-      console.log(`>>> Found email in customer_details: ${customerEmail}`)
+    // First try to get userId from metadata
+    let userDoc = null
+    if (session.metadata && session.metadata.userId && session.metadata.userId !== "not-provided") {
+      const userId = session.metadata.userId
+      console.log(`>>> Found userId in metadata: ${userId}`)
+      userDoc = await findUserById(userId)
     }
 
-    if (!customerEmail) {
-      console.error(">>> CRITICAL: No email found in session!")
-      console.error(">>> User upgrade failed - cannot identify which user completed checkout")
-      return true
-    }
+    // If no user found by userId, fall back to email lookup
+    if (!userDoc) {
+      console.log(">>> No user found by userId or userId not provided, falling back to email lookup")
 
-    // Find the user by email in Firestore
-    const userDoc = await findUserByEmail(customerEmail)
+      // Try multiple possible sources for email
+      let customerEmail = null
+
+      // Check metadata
+      if (session.metadata && session.metadata.email) {
+        customerEmail = session.metadata.email
+        console.log(`>>> Found email in metadata: ${customerEmail}`)
+      }
+      // Check customer_email field
+      else if (session.customer_email) {
+        customerEmail = session.customer_email
+        console.log(`>>> Found email in customer_email: ${customerEmail}`)
+      }
+      // Check customer details
+      else if (session.customer_details && session.customer_details.email) {
+        customerEmail = session.customer_details.email
+        console.log(`>>> Found email in customer_details: ${customerEmail}`)
+      }
+
+      if (!customerEmail) {
+        console.error(">>> CRITICAL: No email or userId found in session!")
+        console.error(">>> User upgrade failed - cannot identify which user completed checkout")
+        return true
+      }
+
+      // Find the user by email in Firestore
+      userDoc = await findUserByEmail(customerEmail)
+    }
 
     if (!userDoc) {
-      console.error(`>>> CRITICAL: Could not find user with email: ${customerEmail}`)
+      console.error(`>>> CRITICAL: Could not find user by userId or email in session`)
       return true
     }
 
     const userId = userDoc.id
     console.log(`>>> Updating user ${userId} to Pro plan`)
 
-    // Update the user document in Firestore
-    await db.collection("users").doc(userId).update({
+    // Get the Stripe customer ID if available
+    let stripeCustomerId = null
+    if (session.customer) {
+      stripeCustomerId = typeof session.customer === "string" ? session.customer : session.customer.id
+      console.log(`>>> Found Stripe customer ID: ${stripeCustomerId}`)
+    }
+
+    // Prepare update object
+    const updateData: Record<string, any> = {
       plan: "pro",
       planActivatedAt: new Date().toISOString(),
-    })
+    }
+
+    // Add Stripe customer ID if available
+    if (stripeCustomerId) {
+      updateData.stripeCustomerId = stripeCustomerId
+    }
+
+    // Reset monthly download count if applicable
+    if (userDoc.data()?.downloadCount) {
+      updateData.downloadCount = 0
+    }
+
+    // Update the user document in Firestore
+    await db.collection("users").doc(userId).update(updateData)
 
     console.log(`>>> Successfully upgraded user ${userId} to Pro plan`)
     console.log("------------ WEBHOOK SESSION PROCESSING END ------------")
