@@ -49,8 +49,8 @@ export default function VimeoCard({ video }: VimeoCardProps) {
   // Calculate remaining downloads based on local state for immediate UI updates
   const localRemainingDownloads = planData ? Math.max(0, planData.downloadsLimit - localDownloadCount) : 0
 
-  // Check if user has reached download limit based on local state
-  const hasReachedLimit = !isProUser && localRemainingDownloads <= 0
+  // Check if user has reached download limit based on local state or global state
+  const hasReachedLimit = !isProUser && (localRemainingDownloads <= 0 || hasReachedGlobalLimit)
 
   // Extract video ID from URI (format: "/videos/12345678") with null check
   const videoId = video?.uri ? video.uri.split("/").pop() : null
@@ -140,8 +140,8 @@ export default function VimeoCard({ video }: VimeoCardProps) {
       return
     }
 
-    // Don't allow download if already at limit (based on local state)
-    if (!isProUser && localRemainingDownloads <= 0) {
+    // Don't allow download if already at limit (based on local or global state)
+    if (hasReachedLimit) {
       toast({
         title: "Download Limit Reached",
         description: "You've reached your monthly download limit. Upgrade to Pro for unlimited downloads.",
@@ -233,7 +233,7 @@ export default function VimeoCard({ video }: VimeoCardProps) {
       }, 100)
 
       // Check if this was the last download for a free user
-      const wasLastDownload = !isProUser && planData && localDownloadCount >= planData.downloadsLimit
+      const wasLastDownload = !isProUser && planData && localDownloadCount + 1 >= planData.downloadsLimit
 
       // Force page reload if this was the last download for a free user
       if (wasLastDownload) {
@@ -244,11 +244,14 @@ export default function VimeoCard({ video }: VimeoCardProps) {
         setTimeout(() => {
           // Show a toast notification explaining the reload
           toast({
-            title: "Refreshing page",
-            description: "Updating your download limit status...",
+            title: "Download limit reached",
+            description: "Refreshing page to update your download status...",
           })
 
-          // Reload the page to update UI state
+          // Add a flag to localStorage to indicate we're reloading due to download limit
+          localStorage.setItem("downloadLimitReached", "true")
+
+          // Reload the page to update UI state for ALL videos
           window.location.reload()
         }, 1500)
       }
@@ -268,6 +271,27 @@ export default function VimeoCard({ video }: VimeoCardProps) {
       setIsDownloading(false)
     }
   }
+
+  // Check localStorage on component mount to see if we just reloaded due to download limit
+  useEffect(() => {
+    const limitReached = localStorage.getItem("downloadLimitReached")
+    if (limitReached === "true") {
+      // Clear the flag
+      localStorage.removeItem("downloadLimitReached")
+
+      // Force refresh of download limit status
+      refreshLimitStatus()
+
+      // Show a toast notification
+      if (!isProUser) {
+        toast({
+          title: "Download Limit Reached",
+          description: "You've used all your downloads for this month. Upgrade to Pro for unlimited downloads.",
+          variant: "destructive",
+        })
+      }
+    }
+  }, [])
 
   // Handle iframe load event
   const handleIframeLoad = () => {
