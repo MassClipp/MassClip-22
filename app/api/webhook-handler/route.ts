@@ -76,6 +76,30 @@ async function findUserByEmail(email: string) {
 }
 
 /**
+ * Find a user by their Stripe customer ID in Firestore
+ */
+async function findUserByStripeCustomerId(stripeCustomerId: string) {
+  console.log(`>>> Attempting to find user with Stripe customer ID: ${stripeCustomerId}`)
+  try {
+    const usersSnapshot = await db.collection("users").where("stripeCustomerId", "==", stripeCustomerId).get()
+
+    if (usersSnapshot.empty) {
+      console.log(`>>> No user found with Stripe customer ID: ${stripeCustomerId}`)
+      return null
+    }
+
+    const userDoc = usersSnapshot.docs[0]
+    console.log(`>>> Found user with ID: ${userDoc.id} by Stripe customer ID`)
+    return userDoc
+  } catch (error) {
+    console.error(
+      `>>> Error finding user by Stripe customer ID: ${error instanceof Error ? error.message : "Unknown error"}`,
+    )
+    return null
+  }
+}
+
+/**
  * Handles checkout.session.completed events by updating the user's plan in Firestore
  */
 async function handleCheckoutSessionCompleted(event: Stripe.Event) {
@@ -172,6 +196,8 @@ async function handleCheckoutSessionCompleted(event: Stripe.Event) {
     const updateData: Record<string, any> = {
       plan: "pro",
       planActivatedAt: new Date().toISOString(),
+      subscriptionStatus: "active",
+      hasAccess: true,
     }
 
     // Add Stripe customer ID if available
@@ -193,6 +219,224 @@ async function handleCheckoutSessionCompleted(event: Stripe.Event) {
   } catch (error) {
     console.error(
       ">>> Error handling checkout.session.completed:",
+      error instanceof Error ? error.message : "Unknown error",
+    )
+    // We don't throw here to prevent the webhook from failing
+    return false
+  }
+}
+
+/**
+ * Handles invoice.payment_failed events by downgrading the user's plan in Firestore
+ */
+async function handleInvoicePaymentFailed(event: Stripe.Event) {
+  try {
+    const invoice = event.data.object as Stripe.Invoice
+    console.log("------------ WEBHOOK INVOICE PAYMENT FAILED PROCESSING START ------------")
+    console.log(">>> Processing invoice.payment_failed event")
+    console.log(">>> Invoice ID:", invoice.id)
+
+    // Log key invoice properties for debugging
+    console.log(">>> Key invoice properties:")
+    console.log(`Customer: ${invoice.customer}`)
+    console.log(`Subscription: ${invoice.subscription}`)
+    console.log(`Status: ${invoice.status}`)
+    console.log(`Attempt count: ${invoice.attempt_count}`)
+
+    // Try to get the subscription to access its metadata
+    let firebaseUid = null
+    if (invoice.subscription) {
+      try {
+        const subscriptionId = typeof invoice.subscription === "string" ? invoice.subscription : invoice.subscription.id
+        const subscription = await stripe.subscriptions.retrieve(subscriptionId)
+        console.log(">>> Retrieved subscription:", subscription.id)
+
+        // Check for firebaseUid in subscription metadata
+        if (subscription.metadata && subscription.metadata.firebaseUid) {
+          firebaseUid = subscription.metadata.firebaseUid
+          console.log(`>>> Found firebaseUid in subscription metadata: ${firebaseUid}`)
+        }
+      } catch (err) {
+        console.error(">>> Error retrieving subscription:", err instanceof Error ? err.message : "Unknown error")
+      }
+    }
+
+    // If no firebaseUid found, log error and skip processing
+    if (!firebaseUid) {
+      console.error(">>> CRITICAL: No firebaseUid found in metadata")
+      console.error(">>> User downgrade failed - cannot identify which user to downgrade")
+      return true
+    }
+
+    // Find the user by firebaseUid in Firestore
+    const userDoc = await findUserById(firebaseUid)
+
+    if (!userDoc) {
+      console.error(`>>> CRITICAL: Could not find user with firebaseUid: ${firebaseUid}`)
+      return true
+    }
+
+    const userId = userDoc.id
+    console.log(`>>> Downgrading user ${userId} to free plan due to payment failure`)
+
+    // Update the user document in Firestore
+    await db.collection("users").doc(userId).update({
+      plan: "free",
+      downgradedAt: new Date().toISOString(),
+      subscriptionStatus: "payment_failed",
+      hasAccess: false,
+    })
+
+    console.log(`>>> Successfully downgraded user ${userId} to free plan`)
+    console.log("------------ WEBHOOK INVOICE PAYMENT FAILED PROCESSING END ------------")
+    return true
+  } catch (error) {
+    console.error(
+      ">>> Error handling invoice.payment_failed:",
+      error instanceof Error ? error.message : "Unknown error",
+    )
+    // We don't throw here to prevent the webhook from failing
+    return false
+  }
+}
+
+/**
+ * Handles customer.subscription.deleted events by downgrading the user's plan in Firestore
+ */
+async function handleSubscriptionDeleted(event: Stripe.Event) {
+  try {
+    const subscription = event.data.object as Stripe.Subscription
+    console.log("------------ WEBHOOK SUBSCRIPTION DELETED PROCESSING START ------------")
+    console.log(">>> Processing customer.subscription.deleted event")
+    console.log(">>> Subscription ID:", subscription.id)
+
+    // Log key subscription properties for debugging
+    console.log(">>> Key subscription properties:")
+    console.log(`Customer: ${subscription.customer}`)
+    console.log(`Status: ${subscription.status}`)
+    console.log(`Cancel at: ${subscription.cancel_at}`)
+    console.log(`Canceled at: ${subscription.canceled_at}`)
+
+    // Check for firebaseUid in metadata
+    let firebaseUid = null
+    if (subscription.metadata && subscription.metadata.firebaseUid) {
+      firebaseUid = subscription.metadata.firebaseUid
+      console.log(`>>> Found firebaseUid in metadata: ${firebaseUid}`)
+    }
+
+    // If no firebaseUid found, log error and skip processing
+    if (!firebaseUid) {
+      console.error(">>> CRITICAL: No firebaseUid found in subscription metadata")
+      console.error(">>> User downgrade failed - cannot identify which user to downgrade")
+      return true
+    }
+
+    // Find the user by firebaseUid in Firestore
+    const userDoc = await findUserById(firebaseUid)
+
+    if (!userDoc) {
+      console.error(`>>> CRITICAL: Could not find user with firebaseUid: ${firebaseUid}`)
+      return true
+    }
+
+    const userId = userDoc.id
+    console.log(`>>> Downgrading user ${userId} to free plan due to subscription cancellation`)
+
+    // Update the user document in Firestore
+    await db.collection("users").doc(userId).update({
+      plan: "free",
+      downgradedAt: new Date().toISOString(),
+      subscriptionStatus: "canceled",
+      hasAccess: false,
+    })
+
+    console.log(`>>> Successfully downgraded user ${userId} to free plan`)
+    console.log("------------ WEBHOOK SUBSCRIPTION DELETED PROCESSING END ------------")
+    return true
+  } catch (error) {
+    console.error(
+      ">>> Error handling customer.subscription.deleted:",
+      error instanceof Error ? error.message : "Unknown error",
+    )
+    // We don't throw here to prevent the webhook from failing
+    return false
+  }
+}
+
+/**
+ * Handles customer.subscription.updated events by updating the user's plan in Firestore
+ */
+async function handleSubscriptionUpdated(event: Stripe.Event) {
+  try {
+    const subscription = event.data.object as Stripe.Subscription
+    console.log("------------ WEBHOOK SUBSCRIPTION UPDATED PROCESSING START ------------")
+    console.log(">>> Processing customer.subscription.updated event")
+    console.log(">>> Subscription ID:", subscription.id)
+
+    // Log key subscription properties for debugging
+    console.log(">>> Key subscription properties:")
+    console.log(`Customer: ${subscription.customer}`)
+    console.log(`Status: ${subscription.status}`)
+    console.log(`Cancel at: ${subscription.cancel_at}`)
+    console.log(`Current period end: ${subscription.current_period_end}`)
+
+    // Check for firebaseUid in metadata
+    let firebaseUid = null
+    if (subscription.metadata && subscription.metadata.firebaseUid) {
+      firebaseUid = subscription.metadata.firebaseUid
+      console.log(`>>> Found firebaseUid in metadata: ${firebaseUid}`)
+    }
+
+    // If no firebaseUid found, log error and skip processing
+    if (!firebaseUid) {
+      console.error(">>> CRITICAL: No firebaseUid found in subscription metadata")
+      console.error(">>> User update failed - cannot identify which user to update")
+      return true
+    }
+
+    // Find the user by firebaseUid in Firestore
+    const userDoc = await findUserById(firebaseUid)
+
+    if (!userDoc) {
+      console.error(`>>> CRITICAL: Could not find user with firebaseUid: ${firebaseUid}`)
+      return true
+    }
+
+    const userId = userDoc.id
+    console.log(`>>> Updating subscription status for user ${userId}`)
+
+    // Determine the subscription status and access
+    const subscriptionStatus = subscription.status
+    let hasAccess = true
+    let plan = "pro"
+
+    // Check if subscription is in a state that should revoke access
+    if (["canceled", "unpaid", "incomplete_expired", "past_due"].includes(subscription.status)) {
+      hasAccess = false
+      plan = "free"
+      console.log(`>>> Revoking access for user ${userId} due to subscription status: ${subscription.status}`)
+    }
+
+    // Update the user document in Firestore
+    const updateData: Record<string, any> = {
+      subscriptionStatus,
+      hasAccess,
+    }
+
+    // Only update plan if access is being revoked
+    if (!hasAccess) {
+      updateData.plan = plan
+      updateData.downgradedAt = new Date().toISOString()
+    }
+
+    await db.collection("users").doc(userId).update(updateData)
+
+    console.log(`>>> Successfully updated subscription status for user ${userId}`)
+    console.log("------------ WEBHOOK SUBSCRIPTION UPDATED PROCESSING END ------------")
+    return true
+  } catch (error) {
+    console.error(
+      ">>> Error handling customer.subscription.updated:",
       error instanceof Error ? error.message : "Unknown error",
     )
     // We don't throw here to prevent the webhook from failing
@@ -257,8 +501,15 @@ export async function POST(req: NextRequest) {
         case "checkout.session.completed":
           await handleCheckoutSessionCompleted(event)
           break
-
-        // Add other event types as needed
+        case "invoice.payment_failed":
+          await handleInvoicePaymentFailed(event)
+          break
+        case "customer.subscription.deleted":
+          await handleSubscriptionDeleted(event)
+          break
+        case "customer.subscription.updated":
+          await handleSubscriptionUpdated(event)
+          break
         default:
           console.log(`>>> Unhandled event type: ${event.type}`)
       }

@@ -1,4 +1,5 @@
-import { cert, getApps, initializeApp } from "firebase-admin/app"
+import { initializeApp, getApps } from "firebase-admin/app"
+import { getFirestore } from "firebase-admin/firestore"
 
 /**
  * Initializes Firebase Admin SDK if it hasn't been initialized already
@@ -18,11 +19,11 @@ export function initializeFirebaseAdmin() {
 
     try {
       initializeApp({
-        credential: cert({
+        credential: {
           projectId,
           clientEmail,
           privateKey,
-        }),
+        } as any,
       })
       console.log("Firebase Admin SDK initialized successfully")
     } catch (error) {
@@ -31,3 +32,9 @@ export function initializeFirebaseAdmin() {
     }
   }
 }
+
+// Initialize Firebase Admin if not already initialized
+initializeFirebaseAdmin()
+
+// Export the Firestore database
+export const db = getFirestore()

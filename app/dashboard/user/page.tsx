@@ -9,6 +9,7 @@ import { Edit, Settings, Crown, LogOut, Check } from "lucide-react"
 import UpgradeButton from "@/components/upgrade-button"
 import DownloadStats from "@/components/download-stats"
 import { useUserPlan } from "@/hooks/use-user-plan"
+import CancelSubscriptionButton from "@/components/cancel-subscription-button"
 
 export default function UserDashboardPage() {
   const { user, logOut } = useAuth()
@@ -193,7 +194,7 @@ export default function UserDashboardPage() {
                       )}
                     </div>
                   </CardContent>
-                  <CardFooter>
+                  <CardFooter className="flex justify-between">
                     <Button
                       variant="link"
                       className="text-crimson hover:text-crimson/80 p-0"
@@ -201,6 +202,7 @@ export default function UserDashboardPage() {
                     >
                       View all plan options
                     </Button>
+                    {isProUser && <CancelSubscriptionButton />}
                   </CardFooter>
                 </Card>
 
