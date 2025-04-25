@@ -29,13 +29,20 @@ export function SubscribeButton({ className, children }: { className?: string; c
         },
         body: JSON.stringify({
           userId: user.uid,
-          userEmail: user.email, // Make sure email is passed to the API
+          userEmail: user.email,
         }),
       })
+
+      if (!response.ok) {
+        const errorText = await response.text()
+        console.error("Checkout session error:", response.status, errorText)
+        throw new Error(`Server returned ${response.status}: ${errorText}`)
+      }
 
       const data = await response.json()
 
       if (data.url) {
+        console.log("Redirecting to checkout URL:", data.url)
         window.location.href = data.url
       } else {
         console.error("No URL in response:", data)
@@ -43,7 +50,9 @@ export function SubscribeButton({ className, children }: { className?: string; c
       }
     } catch (error) {
       console.error("Error creating checkout session:", error)
-      alert("Error creating checkout session. Please try again.")
+      alert(
+        `Error creating checkout session: ${error instanceof Error ? error.message : "Unknown error"}. Please try again.`,
+      )
     } finally {
       setIsLoading(false)
     }
