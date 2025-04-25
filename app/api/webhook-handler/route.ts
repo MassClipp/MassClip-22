@@ -33,6 +33,12 @@ async function handleCheckoutSessionCompleted(event: Stripe.Event) {
     const session = event.data.object as Stripe.Checkout.Session
     console.log(">>> Processing checkout.session.completed event")
 
+    // Debug: Log the raw event data
+    console.log(">>> RAW EVENT DATA:", JSON.stringify(event.data, null, 2))
+
+    // Debug: Log the raw session object
+    console.log(">>> RAW SESSION OBJECT:", JSON.stringify(event.data.object, null, 2))
+
     // Debug: Log the entire session object to see what's coming through
     console.log(">>> FULL SESSION OBJECT:", JSON.stringify(session, null, 2))
 
@@ -40,6 +46,8 @@ async function handleCheckoutSessionCompleted(event: Stripe.Event) {
     console.log(">>> Session ID:", session.id)
     console.log(">>> Client Reference ID:", session.client_reference_id)
     console.log(">>> Metadata:", session.metadata)
+    console.log(">>> Metadata type:", typeof session.metadata)
+    console.log(">>> Metadata keys:", session.metadata ? Object.keys(session.metadata) : "null")
 
     // Check if userId exists in metadata
     if (!session.metadata || !session.metadata.userId) {
