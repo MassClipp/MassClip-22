@@ -53,6 +53,9 @@ export default function VimeoCard({ video }: VimeoCardProps) {
   // Check if user has reached download limit based on local or global state
   const hasReachedLimit = !isProUser && (localRemainingDownloads <= 0 || hasReachedGlobalLimit)
 
+  // Check if this will be the user's final download
+  const isLastDownload = !isProUser && localRemainingDownloads === 1
+
   // Extract video ID from URI (format: "/videos/12345678") with null check
   const videoId = video?.uri ? video.uri.split("/").pop() : null
 
@@ -155,12 +158,12 @@ export default function VimeoCard({ video }: VimeoCardProps) {
     }
   }, [])
 
-  // SIMPLIFIED: Handle download button click - only does permission checks
+  // Handle download button click - check permissions and show last download warning if needed
   const handleDownload = (e: React.MouseEvent) => {
     e.preventDefault()
     e.stopPropagation()
 
-    // Basic permission gates - these don't block the download, just show notifications
+    // Basic permission gates
     if (!user) {
       toast({
         title: "Authentication Required",
@@ -170,7 +173,7 @@ export default function VimeoCard({ video }: VimeoCardProps) {
       return
     }
 
-    // Check download limit - don't block, just notify
+    // Check download limit
     if (hasReachedLimit) {
       toast({
         title: "Download Limit Reached",
@@ -183,12 +186,25 @@ export default function VimeoCard({ video }: VimeoCardProps) {
     // Reset error state
     setDownloadError(false)
 
-    // Trigger download immediately - no modal, no confirmation
-    triggerDownload()
+    // Show warning for last download BEFORE starting the download
+    if (isLastDownload) {
+      toast({
+        title: "Last Download",
+        description: "This is your last download for the month.",
+      })
+
+      // Give the toast a moment to appear before starting download
+      setTimeout(() => {
+        triggerDownload(true)
+      }, 100)
+    } else {
+      // Normal download - no toast needed
+      triggerDownload(false)
+    }
   }
 
-  // DECOUPLED: Record download in database - separate from download trigger
-  const recordDownloadInDatabase = async () => {
+  // Record download in database
+  const recordDownloadInDatabase = async (isLastDownload: boolean) => {
     if (isProUser) return { success: true }
 
     try {
@@ -198,24 +214,9 @@ export default function VimeoCard({ video }: VimeoCardProps) {
         // Update local count for UI
         setLocalDownloadCount((prev) => prev + 1)
 
-        // Check if this was the last download
-        const wasLastDownload = planData && localDownloadCount + 1 >= planData.downloadsLimit
-
-        // Show appropriate toast based on remaining downloads
-        if (wasLastDownload) {
-          toast({
-            title: "Download Successful",
-            description: "This was your last download for this month. Upgrade to Pro for unlimited downloads.",
-          })
-
-          // Schedule a delayed reload to update UI state
-          scheduleReloadAfterDownload(wasLastDownload)
-        } else if (localRemainingDownloads <= 3 && !isMobile) {
-          // Low on downloads - only show on desktop
-          toast({
-            title: "Download Successful",
-            description: `You have ${localRemainingDownloads - 1} downloads remaining this month.`,
-          })
+        // If this was the last download, schedule a page reload
+        if (isLastDownload) {
+          schedulePageReload()
         }
       }
 
@@ -226,29 +227,19 @@ export default function VimeoCard({ video }: VimeoCardProps) {
     }
   }
 
-  // CLEAN: Schedule reload after download if needed
-  const scheduleReloadAfterDownload = (wasLastDownload: boolean) => {
-    if (!wasLastDownload) return
+  // Schedule page reload after final download
+  const schedulePageReload = () => {
+    // Set flag for after reload
+    localStorage.setItem("downloadLimitReached", "true")
 
-    // Refresh the download limit status
-    refreshLimitStatus()
-
-    // Use a longer delay for mobile users to ensure download has time to complete
-    // Skip reload on mobile entirely if possible
-    if (isMobile) {
-      // For mobile, we'll set the flag but not force reload
-      localStorage.setItem("downloadLimitReached", "true")
-    } else {
-      // For desktop, schedule a reload after a short delay
-      downloadTimeoutRef.current = setTimeout(() => {
-        localStorage.setItem("downloadLimitReached", "true")
-        window.location.reload()
-      }, 1500)
-    }
+    // Schedule reload after a short delay
+    downloadTimeoutRef.current = setTimeout(() => {
+      window.location.reload()
+    }, 1500)
   }
 
-  // SIMPLIFIED: Trigger the actual download - no permission checks here
-  const triggerDownload = async () => {
+  // Trigger the actual download
+  const triggerDownload = async (isLastDownload: boolean) => {
     setIsDownloading(true)
 
     try {
@@ -271,14 +262,16 @@ export default function VimeoCard({ video }: VimeoCardProps) {
         // Mobile: Open in new tab IMMEDIATELY
         window.open(downloadLink, "_blank")
 
-        // Show mobile-specific toast AFTER opening the tab
-        setTimeout(() => {
-          toast({
-            title: "Video Opened",
-            description: "Your video opened in a new tab. Long-press to download if needed.",
-            duration: 5000,
-          })
-        }, 100)
+        // Only show mobile-specific toast for non-final downloads
+        if (!isLastDownload) {
+          setTimeout(() => {
+            toast({
+              title: "Video Opened",
+              description: "Your video opened in a new tab. Long-press to download if needed.",
+              duration: 5000,
+            })
+          }, 100)
+        }
       } else {
         // Desktop: Use hidden anchor element IMMEDIATELY
         const a = document.createElement("a")
@@ -296,7 +289,7 @@ export default function VimeoCard({ video }: VimeoCardProps) {
       }
 
       // Record the download AFTER triggering it
-      recordDownloadInDatabase().catch((error) => {
+      recordDownloadInDatabase(isLastDownload).catch((error) => {
         console.error("Error recording download:", error)
       })
     } catch (error) {
