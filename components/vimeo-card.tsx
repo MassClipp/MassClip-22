@@ -254,6 +254,18 @@ export default function VimeoCard({ video }: VimeoCardProps) {
         // Refresh the download limit status
         await refreshLimitStatus()
 
+        // Use a longer delay for mobile users to ensure download has time to complete
+        const delay = isMobile ? 8000 : 1500 // 8 seconds for mobile, 1.5 seconds for desktop
+
+        // Show a toast notification explaining the reload
+        toast({
+          title: "Download limit reached",
+          description: isMobile
+            ? "Your download has started. Page will refresh in a few seconds..."
+            : "Refreshing page to update your download status...",
+          duration: delay, // Match the toast duration to the delay
+        })
+
         // Short delay to ensure the download starts before reload
         setTimeout(() => {
           // Add a flag to localStorage to indicate we're reloading due to download limit
@@ -261,7 +273,7 @@ export default function VimeoCard({ video }: VimeoCardProps) {
 
           // Reload the page to update UI state for ALL videos
           window.location.reload()
-        }, 1500)
+        }, delay)
       }
     } catch (error) {
       console.error("Download failed:", error)
