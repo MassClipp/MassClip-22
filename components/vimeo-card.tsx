@@ -39,6 +39,7 @@ export default function VimeoCard({ video }: VimeoCardProps) {
   const videoRef = useRef<HTMLIFrameElement>(null)
   const viewTrackedRef = useRef(false)
   const downloadTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const downloadFrameRef = useRef<HTMLIFrameElement | null>(null)
 
   // Update local download count when planData changes
   useEffect(() => {
@@ -79,6 +80,19 @@ export default function VimeoCard({ video }: VimeoCardProps) {
       setDownloadLink(null)
     }
   }, [video])
+
+  // Clean up any iframe elements on unmount
+  useEffect(() => {
+    return () => {
+      if (downloadFrameRef.current && downloadFrameRef.current.parentNode) {
+        downloadFrameRef.current.parentNode.removeChild(downloadFrameRef.current)
+      }
+
+      if (downloadTimeoutRef.current) {
+        clearTimeout(downloadTimeoutRef.current)
+      }
+    }
+  }, [])
 
   // Check if title is overflowing
   useEffect(() => {
@@ -127,15 +141,6 @@ export default function VimeoCard({ video }: VimeoCardProps) {
 
     trackVideoView()
   }, [user, videoId, video, isActive])
-
-  // Clean up any pending timeouts on unmount
-  useEffect(() => {
-    return () => {
-      if (downloadTimeoutRef.current) {
-        clearTimeout(downloadTimeoutRef.current)
-      }
-    }
-  }, [])
 
   // Check localStorage on component mount to see if we just reloaded due to download limit
   useEffect(() => {
@@ -259,19 +264,32 @@ export default function VimeoCard({ video }: VimeoCardProps) {
 
       // IMMEDIATE DOWNLOAD TRIGGER - different for mobile vs desktop
       if (isMobile) {
-        // Mobile: Open in new tab IMMEDIATELY
-        window.open(downloadLink, "_blank")
+        // MOBILE: Use hidden iframe to prevent tab duplication
+        // This approach downloads the file without creating a new tab
+        const iframe = document.createElement("iframe")
+        iframe.style.display = "none"
+        document.body.appendChild(iframe)
+        downloadFrameRef.current = iframe
 
-        // Only show mobile-specific toast for non-final downloads
-        if (!isLastDownload) {
-          setTimeout(() => {
-            toast({
-              title: "Video Opened",
-              description: "Your video opened in a new tab. Long-press to download if needed.",
-              duration: 5000,
-            })
-          }, 100)
-        }
+        // Set the source to the download link
+        iframe.src = downloadLink
+
+        // Show mobile-specific toast with instructions
+        setTimeout(() => {
+          toast({
+            title: "Download Started",
+            description: "Check your downloads folder or notifications.",
+            duration: 3000,
+          })
+        }, 500)
+
+        // Clean up the iframe after a delay
+        setTimeout(() => {
+          if (iframe.parentNode) {
+            iframe.parentNode.removeChild(iframe)
+          }
+          downloadFrameRef.current = null
+        }, 5000)
       } else {
         // Desktop: Use hidden anchor element IMMEDIATELY
         const a = document.createElement("a")
@@ -296,9 +314,16 @@ export default function VimeoCard({ video }: VimeoCardProps) {
       console.error("Download failed:", error)
       setDownloadError(true)
 
-      // Fallback behavior
+      // Fallback behavior - use direct link as last resort
       if (downloadLink) {
-        window.open(downloadLink, "_blank")
+        const a = document.createElement("a")
+        a.href = downloadLink
+        a.download = `${video?.name?.replace(/[^\w\s]/gi, "") || "video"}.mp4`
+        document.body.appendChild(a)
+        a.click()
+        setTimeout(() => {
+          document.body.removeChild(a)
+        }, 100)
       }
 
       toast({
