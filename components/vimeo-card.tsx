@@ -1,5 +1,19 @@
 "use client"
 
+import { Button } from "@/components/ui/button"
+
+import { DialogFooter } from "@/components/ui/dialog"
+
+import { DialogDescription } from "@/components/ui/dialog"
+
+import { DialogTitle } from "@/components/ui/dialog"
+
+import { DialogHeader } from "@/components/ui/dialog"
+
+import { DialogContent } from "@/components/ui/dialog"
+
+import { Dialog } from "@/components/ui/dialog"
+
 import type React from "react"
 
 import { useState, useRef, useEffect } from "react"
@@ -13,6 +27,7 @@ import { useToast } from "@/hooks/use-toast"
 import { useUserPlan } from "@/hooks/use-user-plan"
 import { useDownloadLimit } from "@/contexts/download-limit-context"
 import { DownloadConfirmationModal } from "./download-confirmation-modal"
+import { useMobile } from "@/hooks/use-mobile"
 
 interface VimeoCardProps {
   video: VimeoVideo
@@ -30,11 +45,13 @@ export default function VimeoCard({ video }: VimeoCardProps) {
   // Track local download count to immediately update UI
   const [localDownloadCount, setLocalDownloadCount] = useState(0)
   const [showConfirmModal, setShowConfirmModal] = useState(false)
+  const [showMobileInstructions, setShowMobileInstructions] = useState(false)
 
   const { user } = useAuth()
   const { toast } = useToast()
   const { isProUser, recordDownload, remainingDownloads, planData } = useUserPlan()
   const { hasReachedLimit: hasReachedGlobalLimit, refreshLimitStatus } = useDownloadLimit()
+  const isMobile = useMobile()
   const titleRef = useRef<HTMLDivElement>(null)
   const videoRef = useRef<HTMLIFrameElement>(null)
   const viewTrackedRef = useRef(false)
@@ -49,7 +66,7 @@ export default function VimeoCard({ video }: VimeoCardProps) {
   // Calculate remaining downloads based on local state for immediate UI updates
   const localRemainingDownloads = planData ? Math.max(0, planData.downloadsLimit - localDownloadCount) : 0
 
-  // Check if user has reached download limit based on local state or global state
+  // Check if user has reached download limit based on local or global state
   const hasReachedLimit = !isProUser && (localRemainingDownloads <= 0 || hasReachedGlobalLimit)
 
   // Extract video ID from URI (format: "/videos/12345678") with null check
@@ -218,19 +235,36 @@ export default function VimeoCard({ video }: VimeoCardProps) {
     }
 
     try {
-      // Create a hidden anchor element for direct download
-      const a = document.createElement("a")
-      a.href = downloadLink
-      a.download = `${video?.name?.replace(/[^\w\s]/gi, "") || "video"}.mp4` // Clean filename
-      a.target = "_blank" // Use _blank for better compatibility
-      a.rel = "noopener noreferrer"
-      document.body.appendChild(a)
-      a.click()
+      // Different download approach for mobile vs desktop
+      if (isMobile) {
+        // For mobile devices, open the link in a new tab
+        // This allows the user to long-press and save the video
+        window.open(downloadLink, "_blank")
 
-      // Clean up
-      setTimeout(() => {
-        document.body.removeChild(a)
-      }, 100)
+        // Show mobile-specific instructions
+        setShowMobileInstructions(true)
+
+        // Show a toast with instructions
+        toast({
+          title: "Download Started",
+          description: "The video is opening in a new tab. Press and hold to save it to your device.",
+          duration: 6000, // Longer duration to give users time to read
+        })
+      } else {
+        // Desktop approach - create a hidden anchor element for direct download
+        const a = document.createElement("a")
+        a.href = downloadLink
+        a.download = `${video?.name?.replace(/[^\w\s]/gi, "") || "video"}.mp4` // Clean filename
+        a.target = "_blank" // Use _blank for better compatibility
+        a.rel = "noopener noreferrer"
+        document.body.appendChild(a)
+        a.click()
+
+        // Clean up
+        setTimeout(() => {
+          document.body.removeChild(a)
+        }, 100)
+      }
 
       // Check if this was the last download for a free user
       const wasLastDownload = !isProUser && planData && localDownloadCount + 1 >= planData.downloadsLimit
@@ -469,6 +503,27 @@ export default function VimeoCard({ video }: VimeoCardProps) {
           }}
           remainingDownloads={localRemainingDownloads}
         />
+      )}
+
+      {/* Mobile download instructions modal */}
+      {showMobileInstructions && (
+        <Dialog open={showMobileInstructions} onOpenChange={setShowMobileInstructions}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>Download Instructions</DialogTitle>
+              <DialogDescription>Follow these steps to save the video to your device</DialogDescription>
+            </DialogHeader>
+            <div className="py-4 space-y-4">
+              <p className="text-sm">1. The video has opened in a new tab</p>
+              <p className="text-sm">2. Press and hold on the video</p>
+              <p className="text-sm">3. Select "Download" or "Save Video" from the menu that appears</p>
+              <p className="text-sm">4. The video will be saved to your device's downloads folder</p>
+            </div>
+            <DialogFooter>
+              <Button onClick={() => setShowMobileInstructions(false)}>Got it</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       )}
     </div>
   )
