@@ -1,19 +1,5 @@
 "use client"
 
-import { Button } from "@/components/ui/button"
-
-import { DialogFooter } from "@/components/ui/dialog"
-
-import { DialogDescription } from "@/components/ui/dialog"
-
-import { DialogTitle } from "@/components/ui/dialog"
-
-import { DialogHeader } from "@/components/ui/dialog"
-
-import { DialogContent } from "@/components/ui/dialog"
-
-import { Dialog } from "@/components/ui/dialog"
-
 import type React from "react"
 
 import { useState, useRef, useEffect } from "react"
@@ -45,7 +31,6 @@ export default function VimeoCard({ video }: VimeoCardProps) {
   // Track local download count to immediately update UI
   const [localDownloadCount, setLocalDownloadCount] = useState(0)
   const [showConfirmModal, setShowConfirmModal] = useState(false)
-  const [showMobileInstructions, setShowMobileInstructions] = useState(false)
 
   const { user } = useAuth()
   const { toast } = useToast()
@@ -204,19 +189,22 @@ export default function VimeoCard({ video }: VimeoCardProps) {
       // Check if this was the last download
       const wasLastDownload = planData && newDownloadCount >= planData.downloadsLimit
 
-      // Show appropriate toast based on remaining downloads
-      if (wasLastDownload) {
-        // Last download
-        toast({
-          title: "Download Successful",
-          description: "This was your last download for this month. Upgrade to Pro for unlimited downloads.",
-        })
-      } else if (localRemainingDownloads <= 3) {
-        // Low on downloads
-        toast({
-          title: "Download Successful",
-          description: `You have ${localRemainingDownloads - 1} downloads remaining this month.`,
-        })
+      // Only show toast for desktop users or if it's the last download
+      if (!isMobile || wasLastDownload) {
+        // Show appropriate toast based on remaining downloads
+        if (wasLastDownload) {
+          // Last download
+          toast({
+            title: "Download Successful",
+            description: "This was your last download for this month. Upgrade to Pro for unlimited downloads.",
+          })
+        } else if (localRemainingDownloads <= 3 && !isMobile) {
+          // Low on downloads - only show on desktop
+          toast({
+            title: "Download Successful",
+            description: `You have ${localRemainingDownloads - 1} downloads remaining this month.`,
+          })
+        }
       }
     }
 
@@ -237,19 +225,11 @@ export default function VimeoCard({ video }: VimeoCardProps) {
     try {
       // Different download approach for mobile vs desktop
       if (isMobile) {
-        // For mobile devices, open the link in a new tab
+        // For mobile devices, simply open the link in a new tab
         // This allows the user to long-press and save the video
         window.open(downloadLink, "_blank")
 
-        // Show mobile-specific instructions
-        setShowMobileInstructions(true)
-
-        // Show a toast with instructions
-        toast({
-          title: "Download Started",
-          description: "The video is opening in a new tab. Press and hold to save it to your device.",
-          duration: 6000, // Longer duration to give users time to read
-        })
+        // No additional popups or toasts for mobile
       } else {
         // Desktop approach - create a hidden anchor element for direct download
         const a = document.createElement("a")
@@ -276,12 +256,6 @@ export default function VimeoCard({ video }: VimeoCardProps) {
 
         // Short delay to ensure the download starts before reload
         setTimeout(() => {
-          // Show a toast notification explaining the reload
-          toast({
-            title: "Download limit reached",
-            description: "Refreshing page to update your download status...",
-          })
-
           // Add a flag to localStorage to indicate we're reloading due to download limit
           localStorage.setItem("downloadLimitReached", "true")
 
@@ -492,7 +466,7 @@ export default function VimeoCard({ video }: VimeoCardProps) {
         {video.name || "Untitled video"}
       </div>
 
-      {/* Download confirmation modal */}
+      {/* Download confirmation modal - update the text for mobile users */}
       {showConfirmModal && (
         <DownloadConfirmationModal
           isOpen={showConfirmModal}
@@ -502,28 +476,8 @@ export default function VimeoCard({ video }: VimeoCardProps) {
             proceedWithDownload()
           }}
           remainingDownloads={localRemainingDownloads}
+          isMobile={isMobile}
         />
-      )}
-
-      {/* Mobile download instructions modal */}
-      {showMobileInstructions && (
-        <Dialog open={showMobileInstructions} onOpenChange={setShowMobileInstructions}>
-          <DialogContent className="sm:max-w-md">
-            <DialogHeader>
-              <DialogTitle>Download Instructions</DialogTitle>
-              <DialogDescription>Follow these steps to save the video to your device</DialogDescription>
-            </DialogHeader>
-            <div className="py-4 space-y-4">
-              <p className="text-sm">1. The video has opened in a new tab</p>
-              <p className="text-sm">2. Press and hold on the video</p>
-              <p className="text-sm">3. Select "Download" or "Save Video" from the menu that appears</p>
-              <p className="text-sm">4. The video will be saved to your device's downloads folder</p>
-            </div>
-            <DialogFooter>
-              <Button onClick={() => setShowMobileInstructions(false)}>Got it</Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
       )}
     </div>
   )
