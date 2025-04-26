@@ -40,6 +40,7 @@ export default function VimeoCard({ video }: VimeoCardProps) {
   const viewTrackedRef = useRef(false)
   const downloadTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const reloadTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const backupReloadTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const downloadFrameRef = useRef<HTMLIFrameElement | null>(null)
 
   // Update local download count when planData changes
@@ -92,6 +93,10 @@ export default function VimeoCard({ video }: VimeoCardProps) {
 
       if (reloadTimeoutRef.current) {
         clearTimeout(reloadTimeoutRef.current)
+      }
+
+      if (backupReloadTimeoutRef.current) {
+        clearTimeout(backupReloadTimeoutRef.current)
       }
     }
   }, [])
@@ -235,7 +240,7 @@ export default function VimeoCard({ video }: VimeoCardProps) {
     }
   }
 
-  // Force page reload after final download - more reliable implementation
+  // Force page reload after final download - guaranteed to work on mobile
   const forcePageReload = () => {
     console.log("Final download detected - scheduling page reload")
 
@@ -246,20 +251,41 @@ export default function VimeoCard({ video }: VimeoCardProps) {
     const reloadAttempts = Number.parseInt(sessionStorage.getItem("reloadAttempts") || "0") + 1
     sessionStorage.setItem("reloadAttempts", reloadAttempts.toString())
 
-    // Schedule reload with multiple fallbacks
-    const scheduleReload = () => {
-      console.log("Executing page reload")
-      window.location.reload()
+    // For mobile users, we want to ensure the reload happens
+    if (isMobile) {
+      console.log("Mobile user - using enhanced reload strategy")
+
+      // Store timestamp to verify reload happened
+      localStorage.setItem("lastReloadAttempt", Date.now().toString())
+
+      // Primary reload after short delay - slightly longer for mobile to ensure download starts
+      reloadTimeoutRef.current = setTimeout(() => {
+        console.log("Executing mobile page reload")
+        window.location.reload()
+      }, 2000)
+
+      // First backup - use location.replace for a forced reload
+      backupReloadTimeoutRef.current = setTimeout(() => {
+        console.log("Executing mobile backup reload")
+        window.location.replace(window.location.href)
+      }, 3000)
+
+      // Second backup - use history API as last resort
+      downloadTimeoutRef.current = setTimeout(() => {
+        console.log("Executing mobile last-resort reload")
+        // Force reload by manipulating history
+        const currentUrl = window.location.href
+        window.history.pushState({}, "", currentUrl + "?reload=true")
+        window.history.pushState({}, "", currentUrl)
+        window.location.reload(true) // Force reload from server
+      }, 4000)
+    } else {
+      // Desktop reload - simpler approach
+      reloadTimeoutRef.current = setTimeout(() => {
+        console.log("Executing desktop page reload")
+        window.location.reload()
+      }, 1500)
     }
-
-    // Primary reload after short delay
-    reloadTimeoutRef.current = setTimeout(scheduleReload, 1500)
-
-    // Backup reload in case the first one fails
-    downloadTimeoutRef.current = setTimeout(() => {
-      console.log("Backup reload triggered")
-      window.location.href = window.location.href
-    }, 2500)
   }
 
   // Trigger the actual download
