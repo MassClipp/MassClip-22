@@ -12,7 +12,6 @@ import { collection, addDoc, serverTimestamp } from "firebase/firestore"
 import { useToast } from "@/hooks/use-toast"
 import { useUserPlan } from "@/hooks/use-user-plan"
 import { useDownloadLimit } from "@/contexts/download-limit-context"
-import { DownloadConfirmationModal } from "./download-confirmation-modal"
 import { useMobile } from "@/hooks/use-mobile"
 
 interface VimeoCardProps {
@@ -29,7 +28,6 @@ export default function VimeoCard({ video }: VimeoCardProps) {
   const [thumbnailLoaded, setThumbnailLoaded] = useState(false)
   const [isDownloading, setIsDownloading] = useState(false)
   const [localDownloadCount, setLocalDownloadCount] = useState(0)
-  const [showConfirmModal, setShowConfirmModal] = useState(false)
   const [downloadLink, setDownloadLink] = useState<string | null>(null)
 
   const { user } = useAuth()
@@ -162,7 +160,7 @@ export default function VimeoCard({ video }: VimeoCardProps) {
     e.preventDefault()
     e.stopPropagation()
 
-    // Basic permission gates
+    // Basic permission gates - these don't block the download, just show notifications
     if (!user) {
       toast({
         title: "Authentication Required",
@@ -172,7 +170,7 @@ export default function VimeoCard({ video }: VimeoCardProps) {
       return
     }
 
-    // Check download limit
+    // Check download limit - don't block, just notify
     if (hasReachedLimit) {
       toast({
         title: "Download Limit Reached",
@@ -185,13 +183,7 @@ export default function VimeoCard({ video }: VimeoCardProps) {
     // Reset error state
     setDownloadError(false)
 
-    // For free users, show confirmation modal first
-    if (!isProUser && !isDownloading) {
-      setShowConfirmModal(true)
-      return
-    }
-
-    // Pro users go straight to download
+    // Trigger download immediately - no modal, no confirmation
     triggerDownload()
   }
 
@@ -260,19 +252,6 @@ export default function VimeoCard({ video }: VimeoCardProps) {
     setIsDownloading(true)
 
     try {
-      // Record the download first
-      const result = await recordDownloadInDatabase()
-
-      if (!result.success) {
-        toast({
-          title: "Download Error",
-          description: result.message || "There was an issue with your download.",
-          variant: "destructive",
-        })
-        setIsDownloading(false)
-        return
-      }
-
       // If no download link, show error
       if (!downloadLink) {
         console.error("No download links available for this video")
@@ -289,18 +268,19 @@ export default function VimeoCard({ video }: VimeoCardProps) {
 
       // IMMEDIATE DOWNLOAD TRIGGER - different for mobile vs desktop
       if (isMobile) {
-        // Mobile: Open in new tab
+        // Mobile: Open in new tab IMMEDIATELY
         window.open(downloadLink, "_blank")
 
-        // Show mobile-specific toast
-        toast({
-          title: "Download Started",
-          description:
-            "Your download is opening in a new tab. If it doesn't auto-save, long-press the video and select 'Download'.",
-          duration: 6000, // Longer duration for mobile users to read
-        })
+        // Show mobile-specific toast AFTER opening the tab
+        setTimeout(() => {
+          toast({
+            title: "Video Opened",
+            description: "Your video opened in a new tab. Long-press to download if needed.",
+            duration: 5000,
+          })
+        }, 100)
       } else {
-        // Desktop: Use hidden anchor element
+        // Desktop: Use hidden anchor element IMMEDIATELY
         const a = document.createElement("a")
         a.href = downloadLink
         a.download = `${video?.name?.replace(/[^\w\s]/gi, "") || "video"}.mp4`
@@ -314,6 +294,11 @@ export default function VimeoCard({ video }: VimeoCardProps) {
           document.body.removeChild(a)
         }, 100)
       }
+
+      // Record the download AFTER triggering it
+      recordDownloadInDatabase().catch((error) => {
+        console.error("Error recording download:", error)
+      })
     } catch (error) {
       console.error("Download failed:", error)
       setDownloadError(true)
@@ -497,20 +482,6 @@ export default function VimeoCard({ video }: VimeoCardProps) {
       >
         {video.name || "Untitled video"}
       </div>
-
-      {/* Download confirmation modal - update the text for mobile users */}
-      {showConfirmModal && (
-        <DownloadConfirmationModal
-          isOpen={showConfirmModal}
-          onClose={() => setShowConfirmModal(false)}
-          onConfirm={() => {
-            setShowConfirmModal(false)
-            triggerDownload()
-          }}
-          remainingDownloads={localRemainingDownloads}
-          isMobile={isMobile}
-        />
-      )}
     </div>
   )
 }
