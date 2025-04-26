@@ -39,8 +39,7 @@ export default function VimeoCard({ video }: VimeoCardProps) {
   const videoRef = useRef<HTMLIFrameElement>(null)
   const viewTrackedRef = useRef(false)
   const downloadTimeoutRef = useRef<NodeJS.Timeout | null>(null)
-  const reloadTimeoutRef = useRef<NodeJS.Timeout | null>(null)
-  const backupReloadTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const redirectTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const downloadFrameRef = useRef<HTMLIFrameElement | null>(null)
 
   // Update local download count when planData changes
@@ -91,12 +90,8 @@ export default function VimeoCard({ video }: VimeoCardProps) {
         clearTimeout(downloadTimeoutRef.current)
       }
 
-      if (reloadTimeoutRef.current) {
-        clearTimeout(reloadTimeoutRef.current)
-      }
-
-      if (backupReloadTimeoutRef.current) {
-        clearTimeout(backupReloadTimeoutRef.current)
+      if (redirectTimeoutRef.current) {
+        clearTimeout(redirectTimeoutRef.current)
       }
     }
   }, [])
@@ -228,8 +223,14 @@ export default function VimeoCard({ video }: VimeoCardProps) {
 
         // Check if this was the final download
         if (newRemainingDownloads === 0) {
-          // This was the final download - force a reload
-          forcePageReload()
+          // This was the final download
+          if (isMobile) {
+            // For mobile users, redirect to dashboard after a delay
+            redirectToDashboard()
+          } else {
+            // For desktop users, reload the page
+            reloadPage()
+          }
         }
       }
 
@@ -240,52 +241,32 @@ export default function VimeoCard({ video }: VimeoCardProps) {
     }
   }
 
-  // Force page reload after final download - guaranteed to work on mobile
-  const forcePageReload = () => {
-    console.log("Final download detected - scheduling page reload")
+  // Redirect mobile users to dashboard after final download
+  const redirectToDashboard = () => {
+    console.log("Final download detected for mobile user - redirecting to dashboard")
+
+    // Set flag for after redirect
+    localStorage.setItem("downloadLimitReached", "true")
+
+    // Schedule redirect after a delay to ensure download starts
+    redirectTimeoutRef.current = setTimeout(() => {
+      console.log("Executing redirect to dashboard")
+      window.location.href = "/dashboard"
+    }, 2500)
+  }
+
+  // Reload page for desktop users after final download
+  const reloadPage = () => {
+    console.log("Final download detected for desktop user - reloading page")
 
     // Set flag for after reload
     localStorage.setItem("downloadLimitReached", "true")
 
-    // Set a flag in sessionStorage to track reload attempts
-    const reloadAttempts = Number.parseInt(sessionStorage.getItem("reloadAttempts") || "0") + 1
-    sessionStorage.setItem("reloadAttempts", reloadAttempts.toString())
-
-    // For mobile users, we want to ensure the reload happens
-    if (isMobile) {
-      console.log("Mobile user - using enhanced reload strategy")
-
-      // Store timestamp to verify reload happened
-      localStorage.setItem("lastReloadAttempt", Date.now().toString())
-
-      // Primary reload after short delay - slightly longer for mobile to ensure download starts
-      reloadTimeoutRef.current = setTimeout(() => {
-        console.log("Executing mobile page reload")
-        window.location.reload()
-      }, 2000)
-
-      // First backup - use location.replace for a forced reload
-      backupReloadTimeoutRef.current = setTimeout(() => {
-        console.log("Executing mobile backup reload")
-        window.location.replace(window.location.href)
-      }, 3000)
-
-      // Second backup - use history API as last resort
-      downloadTimeoutRef.current = setTimeout(() => {
-        console.log("Executing mobile last-resort reload")
-        // Force reload by manipulating history
-        const currentUrl = window.location.href
-        window.history.pushState({}, "", currentUrl + "?reload=true")
-        window.history.pushState({}, "", currentUrl)
-        window.location.reload(true) // Force reload from server
-      }, 4000)
-    } else {
-      // Desktop reload - simpler approach
-      reloadTimeoutRef.current = setTimeout(() => {
-        console.log("Executing desktop page reload")
-        window.location.reload()
-      }, 1500)
-    }
+    // Schedule reload after a delay
+    downloadTimeoutRef.current = setTimeout(() => {
+      console.log("Executing page reload")
+      window.location.reload()
+    }, 1500)
   }
 
   // Trigger the actual download

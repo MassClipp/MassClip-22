@@ -1,6 +1,6 @@
 import type React from "react"
 import { DownloadLimitProvider } from "@/components/providers/download-limit-provider"
-import { MobileReloadEnforcer } from "@/components/mobile-reload-enforcer"
+import { RedirectHelper } from "@/components/redirect-helper"
 
 export default function DashboardLayout({
   children,
@@ -9,7 +9,7 @@ export default function DashboardLayout({
 }) {
   return (
     <DownloadLimitProvider>
-      <MobileReloadEnforcer />
+      <RedirectHelper />
       {children}
     </DownloadLimitProvider>
   )
