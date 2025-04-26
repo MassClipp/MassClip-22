@@ -165,7 +165,7 @@ export default function UserDashboardPage() {
                             </>
                           ) : (
                             <li className="flex items-center text-gray-300">
-                              <Check className="h-4 w-4 mr-2 text-green-500" /> 15 downloads per month
+                              <Check className="h-4 w-4 mr-2 text-green-500" /> 5 downloads per month
                             </li>
                           )}
                         </ul>
