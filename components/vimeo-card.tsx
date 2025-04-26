@@ -39,6 +39,7 @@ export default function VimeoCard({ video }: VimeoCardProps) {
   const videoRef = useRef<HTMLIFrameElement>(null)
   const viewTrackedRef = useRef(false)
   const downloadTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const reloadTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const downloadFrameRef = useRef<HTMLIFrameElement | null>(null)
 
   // Update local download count when planData changes
@@ -53,9 +54,6 @@ export default function VimeoCard({ video }: VimeoCardProps) {
 
   // Check if user has reached download limit based on local or global state
   const hasReachedLimit = !isProUser && (localRemainingDownloads <= 0 || hasReachedGlobalLimit)
-
-  // Check if user has exactly 1 download remaining (after 4th download in a 5-download limit)
-  const hasOneDownloadRemaining = !isProUser && localRemainingDownloads === 1
 
   // Extract video ID from URI (format: "/videos/12345678") with null check
   const videoId = video?.uri ? video.uri.split("/").pop() : null
@@ -81,7 +79,7 @@ export default function VimeoCard({ video }: VimeoCardProps) {
     }
   }, [video])
 
-  // Clean up any iframe elements on unmount
+  // Clean up any iframe elements and timeouts on unmount
   useEffect(() => {
     return () => {
       if (downloadFrameRef.current && downloadFrameRef.current.parentNode) {
@@ -90,6 +88,10 @@ export default function VimeoCard({ video }: VimeoCardProps) {
 
       if (downloadTimeoutRef.current) {
         clearTimeout(downloadTimeoutRef.current)
+      }
+
+      if (reloadTimeoutRef.current) {
+        clearTimeout(reloadTimeoutRef.current)
       }
     }
   }, [])
@@ -191,7 +193,7 @@ export default function VimeoCard({ video }: VimeoCardProps) {
     // Reset error state
     setDownloadError(false)
 
-    // Trigger download immediately - no warnings or toasts before download
+    // Trigger download immediately
     triggerDownload()
   }
 
@@ -221,8 +223,8 @@ export default function VimeoCard({ video }: VimeoCardProps) {
 
         // Check if this was the final download
         if (newRemainingDownloads === 0) {
-          // Schedule a page reload after the final download
-          schedulePageReload()
+          // This was the final download - force a reload
+          forcePageReload()
         }
       }
 
@@ -233,15 +235,31 @@ export default function VimeoCard({ video }: VimeoCardProps) {
     }
   }
 
-  // Schedule page reload after final download
-  const schedulePageReload = () => {
+  // Force page reload after final download - more reliable implementation
+  const forcePageReload = () => {
+    console.log("Final download detected - scheduling page reload")
+
     // Set flag for after reload
     localStorage.setItem("downloadLimitReached", "true")
 
-    // Schedule reload after a short delay
-    downloadTimeoutRef.current = setTimeout(() => {
+    // Set a flag in sessionStorage to track reload attempts
+    const reloadAttempts = Number.parseInt(sessionStorage.getItem("reloadAttempts") || "0") + 1
+    sessionStorage.setItem("reloadAttempts", reloadAttempts.toString())
+
+    // Schedule reload with multiple fallbacks
+    const scheduleReload = () => {
+      console.log("Executing page reload")
       window.location.reload()
-    }, 1500)
+    }
+
+    // Primary reload after short delay
+    reloadTimeoutRef.current = setTimeout(scheduleReload, 1500)
+
+    // Backup reload in case the first one fails
+    downloadTimeoutRef.current = setTimeout(() => {
+      console.log("Backup reload triggered")
+      window.location.href = window.location.href
+    }, 2500)
   }
 
   // Trigger the actual download
