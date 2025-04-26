@@ -38,8 +38,6 @@ export default function VimeoCard({ video }: VimeoCardProps) {
   const titleRef = useRef<HTMLDivElement>(null)
   const videoRef = useRef<HTMLIFrameElement>(null)
   const viewTrackedRef = useRef(false)
-  const downloadTimeoutRef = useRef<NodeJS.Timeout | null>(null)
-  const redirectTimeoutRef = useRef<NodeJS.Timeout | null>(null)
   const downloadFrameRef = useRef<HTMLIFrameElement | null>(null)
 
   // Update local download count when planData changes
@@ -52,8 +50,11 @@ export default function VimeoCard({ video }: VimeoCardProps) {
   // Calculate remaining downloads based on local state for immediate UI updates
   const localRemainingDownloads = planData ? Math.max(0, planData.downloadsLimit - localDownloadCount) : 0
 
-  // Check if user has reached download limit based on local or global state
+  // Check if user has reached download limit based on local state
   const hasReachedLimit = !isProUser && (localRemainingDownloads <= 0 || hasReachedGlobalLimit)
+
+  // Check if this will be the user's final download
+  const isLastDownload = !isProUser && localRemainingDownloads === 1
 
   // Extract video ID from URI (format: "/videos/12345678") with null check
   const videoId = video?.uri ? video.uri.split("/").pop() : null
@@ -79,19 +80,11 @@ export default function VimeoCard({ video }: VimeoCardProps) {
     }
   }, [video])
 
-  // Clean up any iframe elements and timeouts on unmount
+  // Clean up any iframe elements on unmount
   useEffect(() => {
     return () => {
       if (downloadFrameRef.current && downloadFrameRef.current.parentNode) {
         downloadFrameRef.current.parentNode.removeChild(downloadFrameRef.current)
-      }
-
-      if (downloadTimeoutRef.current) {
-        clearTimeout(downloadTimeoutRef.current)
-      }
-
-      if (redirectTimeoutRef.current) {
-        clearTimeout(redirectTimeoutRef.current)
       }
     }
   }, [])
@@ -144,27 +137,6 @@ export default function VimeoCard({ video }: VimeoCardProps) {
     trackVideoView()
   }, [user, videoId, video, isActive])
 
-  // Check localStorage on component mount to see if we just reloaded due to download limit
-  useEffect(() => {
-    const limitReached = localStorage.getItem("downloadLimitReached")
-    if (limitReached === "true") {
-      // Clear the flag
-      localStorage.removeItem("downloadLimitReached")
-
-      // Force refresh of download limit status
-      refreshLimitStatus()
-
-      // Show a toast notification for download limit reached
-      if (!isProUser) {
-        toast({
-          title: "Download Limit Reached",
-          description: "You've used all your downloads for this month. Upgrade to Pro for unlimited downloads.",
-          variant: "destructive",
-        })
-      }
-    }
-  }, [])
-
   // Handle download button click - check permissions and trigger download
   const handleDownload = (e: React.MouseEvent) => {
     e.preventDefault()
@@ -193,11 +165,19 @@ export default function VimeoCard({ video }: VimeoCardProps) {
     // Reset error state
     setDownloadError(false)
 
+    // Show warning for last download BEFORE starting the download
+    if (isLastDownload) {
+      toast({
+        title: "Last Download",
+        description: "This is your last download for the month. Upgrade to Pro for unlimited downloads.",
+      })
+    }
+
     // Trigger download immediately
     triggerDownload()
   }
 
-  // Record download in database and handle post-download actions
+  // Record download in database and update local state
   const recordDownloadInDatabase = async () => {
     if (isProUser) return { success: true }
 
@@ -205,32 +185,16 @@ export default function VimeoCard({ video }: VimeoCardProps) {
       const result = await recordDownload()
 
       if (result.success) {
-        // Update local count for UI
-        const newDownloadCount = localDownloadCount + 1
-        setLocalDownloadCount(newDownloadCount)
+        // If this was the last download, max out the counter to lock UI
+        if (isLastDownload && planData) {
+          // Force the download count to max out
+          setLocalDownloadCount(planData.downloadsLimit)
 
-        // Calculate new remaining downloads
-        const newRemainingDownloads = planData ? Math.max(0, planData.downloadsLimit - newDownloadCount) : 0
-
-        // Check if user now has exactly 1 download remaining (just completed their 4th download)
-        if (newRemainingDownloads === 1) {
-          // Show toast for one remaining download
-          toast({
-            title: "One Download Remaining",
-            description: "You have one more download for this month.",
-          })
-        }
-
-        // Check if this was the final download
-        if (newRemainingDownloads === 0) {
-          // This was the final download
-          if (isMobile) {
-            // For mobile users, redirect to dashboard after a delay
-            redirectToDashboard()
-          } else {
-            // For desktop users, reload the page
-            reloadPage()
-          }
+          // Also refresh the global limit status for other components
+          refreshLimitStatus()
+        } else {
+          // Normal increment for non-final downloads
+          setLocalDownloadCount((prev) => prev + 1)
         }
       }
 
@@ -239,34 +203,6 @@ export default function VimeoCard({ video }: VimeoCardProps) {
       console.error("Error recording download:", error)
       return { success: false, message: "Failed to record download" }
     }
-  }
-
-  // Redirect mobile users to dashboard after final download
-  const redirectToDashboard = () => {
-    console.log("Final download detected for mobile user - redirecting to dashboard")
-
-    // Set flag for after redirect
-    localStorage.setItem("downloadLimitReached", "true")
-
-    // Schedule redirect after a delay to ensure download starts
-    redirectTimeoutRef.current = setTimeout(() => {
-      console.log("Executing redirect to dashboard")
-      window.location.href = "/dashboard"
-    }, 2500)
-  }
-
-  // Reload page for desktop users after final download
-  const reloadPage = () => {
-    console.log("Final download detected for desktop user - reloading page")
-
-    // Set flag for after reload
-    localStorage.setItem("downloadLimitReached", "true")
-
-    // Schedule reload after a delay
-    downloadTimeoutRef.current = setTimeout(() => {
-      console.log("Executing page reload")
-      window.location.reload()
-    }, 1500)
   }
 
   // Trigger the actual download
