@@ -54,8 +54,8 @@ export default function VimeoCard({ video }: VimeoCardProps) {
   // Check if user has reached download limit based on local or global state
   const hasReachedLimit = !isProUser && (localRemainingDownloads <= 0 || hasReachedGlobalLimit)
 
-  // Check if this will be the user's final download
-  const isLastDownload = !isProUser && localRemainingDownloads === 1
+  // Check if user has exactly 1 download remaining (after 4th download in a 5-download limit)
+  const hasOneDownloadRemaining = !isProUser && localRemainingDownloads === 1
 
   // Extract video ID from URI (format: "/videos/12345678") with null check
   const videoId = video?.uri ? video.uri.split("/").pop() : null
@@ -152,7 +152,7 @@ export default function VimeoCard({ video }: VimeoCardProps) {
       // Force refresh of download limit status
       refreshLimitStatus()
 
-      // Show a toast notification
+      // Show a toast notification for download limit reached
       if (!isProUser) {
         toast({
           title: "Download Limit Reached",
@@ -163,7 +163,7 @@ export default function VimeoCard({ video }: VimeoCardProps) {
     }
   }, [])
 
-  // Handle download button click - check permissions and show last download warning if needed
+  // Handle download button click - check permissions and trigger download
   const handleDownload = (e: React.MouseEvent) => {
     e.preventDefault()
     e.stopPropagation()
@@ -191,25 +191,12 @@ export default function VimeoCard({ video }: VimeoCardProps) {
     // Reset error state
     setDownloadError(false)
 
-    // Show warning for last download BEFORE starting the download
-    if (isLastDownload) {
-      toast({
-        title: "Last Download",
-        description: "This is your last download for the month.",
-      })
-
-      // Give the toast a moment to appear before starting download
-      setTimeout(() => {
-        triggerDownload(true)
-      }, 100)
-    } else {
-      // Normal download - no toast needed
-      triggerDownload(false)
-    }
+    // Trigger download immediately - no warnings or toasts before download
+    triggerDownload()
   }
 
-  // Record download in database
-  const recordDownloadInDatabase = async (isLastDownload: boolean) => {
+  // Record download in database and handle post-download actions
+  const recordDownloadInDatabase = async () => {
     if (isProUser) return { success: true }
 
     try {
@@ -217,10 +204,24 @@ export default function VimeoCard({ video }: VimeoCardProps) {
 
       if (result.success) {
         // Update local count for UI
-        setLocalDownloadCount((prev) => prev + 1)
+        const newDownloadCount = localDownloadCount + 1
+        setLocalDownloadCount(newDownloadCount)
 
-        // If this was the last download, schedule a page reload
-        if (isLastDownload) {
+        // Calculate new remaining downloads
+        const newRemainingDownloads = planData ? Math.max(0, planData.downloadsLimit - newDownloadCount) : 0
+
+        // Check if user now has exactly 1 download remaining (just completed their 4th download)
+        if (newRemainingDownloads === 1) {
+          // Show toast for one remaining download
+          toast({
+            title: "One Download Remaining",
+            description: "You have one more download for this month.",
+          })
+        }
+
+        // Check if this was the final download
+        if (newRemainingDownloads === 0) {
+          // Schedule a page reload after the final download
           schedulePageReload()
         }
       }
@@ -244,7 +245,7 @@ export default function VimeoCard({ video }: VimeoCardProps) {
   }
 
   // Trigger the actual download
-  const triggerDownload = async (isLastDownload: boolean) => {
+  const triggerDownload = async () => {
     setIsDownloading(true)
 
     try {
@@ -274,15 +275,6 @@ export default function VimeoCard({ video }: VimeoCardProps) {
         // Set the source to the download link
         iframe.src = downloadLink
 
-        // Show mobile-specific toast with instructions
-        setTimeout(() => {
-          toast({
-            title: "Download Started",
-            description: "Check your downloads folder or notifications.",
-            duration: 3000,
-          })
-        }, 500)
-
         // Clean up the iframe after a delay
         setTimeout(() => {
           if (iframe.parentNode) {
@@ -307,7 +299,7 @@ export default function VimeoCard({ video }: VimeoCardProps) {
       }
 
       // Record the download AFTER triggering it
-      recordDownloadInDatabase(isLastDownload).catch((error) => {
+      recordDownloadInDatabase().catch((error) => {
         console.error("Error recording download:", error)
       })
     } catch (error) {
