@@ -11,9 +11,6 @@ import { trackFirestoreWrite } from "@/lib/firestore-optimizer"
 import { collection, addDoc, serverTimestamp } from "firebase/firestore"
 import { useToast } from "@/hooks/use-toast"
 import { useUserPlan } from "@/hooks/use-user-plan"
-import { useDownloadLimit } from "@/contexts/download-limit-context"
-import { DownloadConfirmationModal } from "./download-confirmation-modal"
-import { useMobile } from "@/hooks/use-mobile"
 
 interface VimeoCardProps {
   video: VimeoVideo
@@ -35,8 +32,6 @@ export default function VimeoCard({ video }: VimeoCardProps) {
   const { user } = useAuth()
   const { toast } = useToast()
   const { isProUser, recordDownload, remainingDownloads, planData } = useUserPlan()
-  const { hasReachedLimit: hasReachedGlobalLimit, refreshLimitStatus } = useDownloadLimit()
-  const isMobile = useMobile()
   const titleRef = useRef<HTMLDivElement>(null)
   const videoRef = useRef<HTMLIFrameElement>(null)
   const viewTrackedRef = useRef(false)
@@ -51,8 +46,8 @@ export default function VimeoCard({ video }: VimeoCardProps) {
   // Calculate remaining downloads based on local state for immediate UI updates
   const localRemainingDownloads = planData ? Math.max(0, planData.downloadsLimit - localDownloadCount) : 0
 
-  // Check if user has reached download limit based on local or global state
-  const hasReachedLimit = !isProUser && (localRemainingDownloads <= 0 || hasReachedGlobalLimit)
+  // Check if user has reached download limit based on local state
+  const hasReachedLimit = !isProUser && localRemainingDownloads <= 0
 
   // Extract video ID from URI (format: "/videos/12345678") with null check
   const videoId = video?.uri ? video.uri.split("/").pop() : null
@@ -142,8 +137,8 @@ export default function VimeoCard({ video }: VimeoCardProps) {
       return
     }
 
-    // Don't allow download if already at limit (based on local or global state)
-    if (hasReachedLimit) {
+    // Don't allow download if already at limit (based on local state)
+    if (!isProUser && localRemainingDownloads <= 0) {
       toast({
         title: "Download Limit Reached",
         description: "You've reached your monthly download limit. Upgrade to Pro for unlimited downloads.",
@@ -183,28 +178,21 @@ export default function VimeoCard({ video }: VimeoCardProps) {
       }
 
       // Immediately update local download count for UI
-      const newDownloadCount = localDownloadCount + 1
-      setLocalDownloadCount(newDownloadCount)
+      setLocalDownloadCount((prev) => prev + 1)
 
-      // Check if this was the last download
-      const wasLastDownload = planData && newDownloadCount >= planData.downloadsLimit
-
-      // Only show toast for desktop users or if it's the last download
-      if (!isMobile || wasLastDownload) {
-        // Show appropriate toast based on remaining downloads
-        if (wasLastDownload) {
-          // Last download
-          toast({
-            title: "Download Successful",
-            description: "This was your last download for this month. Upgrade to Pro for unlimited downloads.",
-          })
-        } else if (localRemainingDownloads <= 3 && !isMobile) {
-          // Low on downloads - only show on desktop
-          toast({
-            title: "Download Successful",
-            description: `You have ${localRemainingDownloads - 1} downloads remaining this month.`,
-          })
-        }
+      // Show appropriate toast based on remaining downloads
+      if (localRemainingDownloads <= 1) {
+        // Last download
+        toast({
+          title: "Download Successful",
+          description: "This was your last download for this month. Upgrade to Pro for unlimited downloads.",
+        })
+      } else if (localRemainingDownloads <= 3) {
+        // Low on downloads
+        toast({
+          title: "Download Successful",
+          description: `You have ${localRemainingDownloads - 1} downloads remaining this month.`,
+        })
       }
     }
 
@@ -223,58 +211,19 @@ export default function VimeoCard({ video }: VimeoCardProps) {
     }
 
     try {
-      // Different download approach for mobile vs desktop
-      if (isMobile) {
-        // For mobile devices, simply open the link in a new tab
-        // This allows the user to long-press and save the video
-        window.open(downloadLink, "_blank")
+      // Create a hidden anchor element for direct download
+      const a = document.createElement("a")
+      a.href = downloadLink
+      a.download = `${video?.name?.replace(/[^\w\s]/gi, "") || "video"}.mp4` // Clean filename
+      a.target = "_blank" // Use _blank for better compatibility
+      a.rel = "noopener noreferrer"
+      document.body.appendChild(a)
+      a.click()
 
-        // No additional popups or toasts for mobile
-      } else {
-        // Desktop approach - create a hidden anchor element for direct download
-        const a = document.createElement("a")
-        a.href = downloadLink
-        a.download = `${video?.name?.replace(/[^\w\s]/gi, "") || "video"}.mp4` // Clean filename
-        a.target = "_blank" // Use _blank for better compatibility
-        a.rel = "noopener noreferrer"
-        document.body.appendChild(a)
-        a.click()
-
-        // Clean up
-        setTimeout(() => {
-          document.body.removeChild(a)
-        }, 100)
-      }
-
-      // Check if this was the last download for a free user
-      const wasLastDownload = !isProUser && planData && localDownloadCount + 1 >= planData.downloadsLimit
-
-      // Force page reload if this was the last download for a free user
-      if (wasLastDownload) {
-        // Refresh the download limit status
-        await refreshLimitStatus()
-
-        // Use a longer delay for mobile users to ensure download has time to complete
-        const delay = isMobile ? 8000 : 1500 // 8 seconds for mobile, 1.5 seconds for desktop
-
-        // Show a toast notification explaining the reload
-        toast({
-          title: "Download limit reached",
-          description: isMobile
-            ? "Your download has started. Page will refresh in a few seconds..."
-            : "Refreshing page to update your download status...",
-          duration: delay, // Match the toast duration to the delay
-        })
-
-        // Short delay to ensure the download starts before reload
-        setTimeout(() => {
-          // Add a flag to localStorage to indicate we're reloading due to download limit
-          localStorage.setItem("downloadLimitReached", "true")
-
-          // Reload the page to update UI state for ALL videos
-          window.location.reload()
-        }, delay)
-      }
+      // Clean up
+      setTimeout(() => {
+        document.body.removeChild(a)
+      }, 100)
     } catch (error) {
       console.error("Download failed:", error)
       setDownloadError(true)
@@ -291,27 +240,6 @@ export default function VimeoCard({ video }: VimeoCardProps) {
       setIsDownloading(false)
     }
   }
-
-  // Check localStorage on component mount to see if we just reloaded due to download limit
-  useEffect(() => {
-    const limitReached = localStorage.getItem("downloadLimitReached")
-    if (limitReached === "true") {
-      // Clear the flag
-      localStorage.removeItem("downloadLimitReached")
-
-      // Force refresh of download limit status
-      refreshLimitStatus()
-
-      // Show a toast notification
-      if (!isProUser) {
-        toast({
-          title: "Download Limit Reached",
-          description: "You've used all your downloads for this month. Upgrade to Pro for unlimited downloads.",
-          variant: "destructive",
-        })
-      }
-    }
-  }, [])
 
   // Handle iframe load event
   const handleIframeLoad = () => {
@@ -478,18 +406,34 @@ export default function VimeoCard({ video }: VimeoCardProps) {
         {video.name || "Untitled video"}
       </div>
 
-      {/* Download confirmation modal - update the text for mobile users */}
+      {/* Download confirmation modal */}
       {showConfirmModal && (
-        <DownloadConfirmationModal
-          isOpen={showConfirmModal}
-          onClose={() => setShowConfirmModal(false)}
-          onConfirm={() => {
-            setShowConfirmModal(false)
-            proceedWithDownload()
-          }}
-          remainingDownloads={localRemainingDownloads}
-          isMobile={isMobile}
-        />
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-gray-900 border border-gray-800 rounded-lg p-6 max-w-sm mx-4">
+            <h3 className="text-lg font-medium text-white mb-2">Confirm Download</h3>
+            <p className="text-gray-300 mb-4">
+              This will count as 1 of your 5 monthly downloads. Free users are limited to 5 downloads per month. You
+              have {localRemainingDownloads} downloads remaining.
+            </p>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setShowConfirmModal(false)}
+                className="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-white rounded-md"
+              >
+                No
+              </button>
+              <button
+                onClick={() => {
+                  setShowConfirmModal(false)
+                  proceedWithDownload()
+                }}
+                className="px-4 py-2 bg-red-600 hover:bg-red-700 text-white rounded-md"
+              >
+                Yes
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )
