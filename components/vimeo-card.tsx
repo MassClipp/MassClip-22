@@ -30,15 +30,12 @@ export default function VimeoCard({ video }: VimeoCardProps) {
 
   const { user } = useAuth()
   const { toast } = useToast()
-  const { isProUser, recordDownload, planData } = useUserPlan()
+  const { isProUser, recordDownload, planData, hasReachedLimit } = useUserPlan()
   const isMobile = useMobile()
   const titleRef = useRef<HTMLDivElement>(null)
   const videoRef = useRef<HTMLIFrameElement>(null)
   const viewTrackedRef = useRef(false)
   const downloadFrameRef = useRef<HTMLIFrameElement | null>(null)
-
-  // Simple download limit check - free users get 5 downloads max
-  const hasReachedLimit = !isProUser && planData && planData.downloads >= (planData?.downloadsLimit || 5)
 
   // Extract video ID from URI (format: "/videos/12345678") with null check
   const videoId = video?.uri ? video.uri.split("/").pop() : null
@@ -121,7 +118,7 @@ export default function VimeoCard({ video }: VimeoCardProps) {
     trackVideoView()
   }, [user, videoId, video, isActive])
 
-  // COMPLETELY REWRITTEN: Handle download with strict permission enforcement
+  // Handle download button click with strict permission enforcement
   const handleDownload = async (e: React.MouseEvent) => {
     e.preventDefault()
     e.stopPropagation()
@@ -145,7 +142,7 @@ export default function VimeoCard({ video }: VimeoCardProps) {
       // 2. Pro users bypass limit checks
       if (!isProUser) {
         // 3. Strict limit check - this is the core permission enforcement
-        if (!planData || planData.downloads >= (planData.downloadsLimit || 5)) {
+        if (hasReachedLimit) {
           toast({
             title: "Download Limit Reached",
             description: "You've reached your monthly download limit. Upgrade to Pro for unlimited downloads.",

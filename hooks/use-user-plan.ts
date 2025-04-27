@@ -84,6 +84,9 @@ export function useUserPlan() {
     fetchUserPlan()
   }, [user])
 
+  // Calculate if user has reached their download limit - this is used by all components
+  const hasReachedLimit = !!(planData && planData.plan === "free" && planData.downloads >= planData.downloadsLimit)
+
   // Function to increment download count and handle resets
   const recordDownload = useCallback(async () => {
     if (!user || !planData) return { success: false, message: "User not authenticated" }
@@ -93,7 +96,6 @@ export function useUserPlan() {
 
     try {
       // CRITICAL: Check if user has reached their limit BEFORE incrementing
-      // This is the most important check to prevent exceeding the limit
       if (planData.downloads >= planData.downloadsLimit) {
         return {
           success: false,
@@ -114,6 +116,7 @@ export function useUserPlan() {
           lastReset: Timestamp.now(),
         })
 
+        // Update local state immediately
         setPlanData((prev) => (prev ? { ...prev, downloads: 1, lastReset: now } : null))
 
         return { success: true }
@@ -125,7 +128,15 @@ export function useUserPlan() {
       })
 
       // Update local state immediately to prevent race conditions
-      setPlanData((prev) => (prev ? { ...prev, downloads: prev.downloads + 1 } : null))
+      setPlanData((prev) => {
+        if (!prev) return null
+
+        const newDownloads = prev.downloads + 1
+        return {
+          ...prev,
+          downloads: newDownloads,
+        }
+      })
 
       return { success: true }
     } catch (err) {
@@ -144,5 +155,6 @@ export function useUserPlan() {
     isProUser: planData?.plan === "pro",
     recordDownload,
     remainingDownloads: planData ? Math.max(0, planData.downloadsLimit - planData.downloads) : 0,
+    hasReachedLimit, // Export this value for all components to use
   }
 }
