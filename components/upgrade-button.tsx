@@ -1,11 +1,8 @@
 "use client"
 
 import type React from "react"
-import { useRouter } from "next/navigation"
+import { useRouter, usePathname } from "next/navigation"
 import { useAuth } from "@/contexts/auth-context"
-
-// Direct Stripe checkout link
-const STRIPE_CHECKOUT_URL = "https://buy.stripe.com/8wMdTW1A64PW1fqfZ0"
 
 interface UpgradeButtonProps {
   className?: string
@@ -14,6 +11,7 @@ interface UpgradeButtonProps {
 
 export default function UpgradeButton({ className = "", children }: UpgradeButtonProps) {
   const router = useRouter()
+  const pathname = usePathname()
   const { user } = useAuth()
 
   const handleSubscribe = () => {
@@ -22,8 +20,17 @@ export default function UpgradeButton({ className = "", children }: UpgradeButto
       return
     }
 
-    // Direct redirect to Stripe checkout
-    window.location.href = STRIPE_CHECKOUT_URL
+    // If we're not already on the pricing page, redirect there first
+    if (pathname !== "/pricing") {
+      router.push("/pricing")
+      return
+    }
+
+    // Only redirect to Stripe checkout if we're already on the pricing page
+    // This should never happen with the current implementation, as the pricing page
+    // uses the SubscribeButton component instead of UpgradeButton
+    // But we'll keep this as a fallback
+    router.push("/pricing")
   }
 
   return (
