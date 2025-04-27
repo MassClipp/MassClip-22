@@ -4,6 +4,8 @@ import { useEffect, useState } from "react"
 import { useSearchParams } from "next/navigation"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/contexts/auth-context"
+import { doc, updateDoc } from "firebase/firestore"
+import { db } from "@/lib/firebase"
 
 export default function SubscriptionSuccessPage() {
   const searchParams = useSearchParams()
@@ -11,14 +13,13 @@ export default function SubscriptionSuccessPage() {
   const { user } = useAuth()
 
   const [status, setStatus] = useState<"loading" | "success" | "error">("loading")
-  const [message, setMessage] = useState("Processing your subscription...")
+  const [message, setMessage] = useState("Verifying your subscription...")
 
   useEffect(() => {
-    async function processSubscription() {
+    async function verifySubscription() {
       try {
-        // Get the session ID and user ID from the URL
+        // Get the session ID from the URL
         const sessionId = searchParams.get("session_id")
-        const userId = searchParams.get("userId") || user?.uid
 
         if (!sessionId) {
           setStatus("error")
@@ -26,32 +27,22 @@ export default function SubscriptionSuccessPage() {
           return
         }
 
-        if (!userId) {
+        if (!user) {
           setStatus("error")
           setMessage("User not authenticated. Please log in and try again.")
           return
         }
 
-        console.log(`Processing subscription for user ${userId} with session ${sessionId}`)
+        console.log(`Verifying subscription for user ${user.uid} with session ${sessionId}`)
 
-        // Call our manual upgrade endpoint
-        const response = await fetch("/api/manual-upgrade", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            userId,
-            sessionId,
-          }),
+        // Update the user document to indicate we've seen this success page
+        await updateDoc(doc(db, "users", user.uid), {
+          lastCheckoutSessionId: sessionId,
+          checkoutCompleted: true,
+          checkoutCompletedAt: new Date().toISOString(),
         })
 
-        const data = await response.json()
-
-        if (!response.ok) {
-          throw new Error(data.error || "Failed to process subscription")
-        }
-
+        // The actual subscription update will be handled by the webhook
         setStatus("success")
         setMessage("Your subscription was successful! You now have access to Pro features.")
 
@@ -60,13 +51,13 @@ export default function SubscriptionSuccessPage() {
           router.push("/dashboard")
         }, 3000)
       } catch (error) {
-        console.error("Error processing subscription:", error)
+        console.error("Error verifying subscription:", error)
         setStatus("error")
-        setMessage("There was an error processing your subscription. Please contact support.")
+        setMessage("There was an error verifying your subscription. Please contact support.")
       }
     }
 
-    processSubscription()
+    verifySubscription()
   }, [searchParams, user, router])
 
   return (

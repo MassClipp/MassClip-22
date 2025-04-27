@@ -31,144 +31,83 @@ export async function POST(request: Request) {
       const session = event.data.object as Stripe.Checkout.Session
       console.log(`Processing checkout session: ${session.id}`)
 
+      // We only process sessions that have metadata with userId
+      if (!session.metadata?.userId) {
+        console.error("Session has no userId metadata, skipping")
+        return NextResponse.json({ error: "Missing metadata" }, { status: 400 })
+      }
+
+      const userId = session.metadata.userId
+      console.log(`Found userId in metadata: ${userId}`)
+
       // Get the customer ID from the session
       const customerId = session.customer as string
       console.log(`Customer ID from session: ${customerId}`)
 
-      // Find the user by Stripe customer ID
-      const usersSnapshot = await getFirestore()
-        .collection("users")
-        .where("stripeCustomerId", "==", customerId)
-        .limit(1)
-        .get()
-
-      if (usersSnapshot.empty) {
-        console.error(`No user found with Stripe customer ID: ${customerId}`)
-
-        // Try to find the session in our database
-        const sessionDoc = await getFirestore().collection("stripeCheckoutSessions").doc(session.id).get()
-
-        if (sessionDoc.exists) {
-          const sessionData = sessionDoc.data()
-          console.log(`Found session in database: ${session.id}, user: ${sessionData?.userId}`)
-
-          // Update the user's subscription status
-          await getFirestore().collection("users").doc(sessionData?.userId).update({
-            plan: "pro",
-            stripeSubscriptionId: session.subscription,
-            stripeCustomerId: customerId,
-            subscriptionUpdatedAt: new Date(),
-            subscriptionStatus: "active",
-          })
-
-          console.log(`Updated user ${sessionData?.userId} to pro plan`)
-
-          // Update the session status
-          await getFirestore().collection("stripeCheckoutSessions").doc(session.id).update({
-            status: "completed",
-            completedAt: new Date(),
-            subscriptionId: session.subscription,
-          })
-
-          return NextResponse.json({ received: true })
-        }
-
-        console.error("Could not find user for checkout session")
-        return NextResponse.json({ error: "User not found" }, { status: 404 })
-      }
-
-      const userDoc = usersSnapshot.docs[0]
-      console.log(`Found user: ${userDoc.id}`)
-
       // Update the user's subscription status
-      await getFirestore().collection("users").doc(userDoc.id).update({
-        plan: "pro",
-        stripeSubscriptionId: session.subscription,
-        subscriptionUpdatedAt: new Date(),
-        subscriptionStatus: "active",
-      })
-
-      console.log(`Updated user ${userDoc.id} to pro plan`)
-
-      // Update the session status if it exists in our database
-      const sessionDoc = await getFirestore().collection("stripeCheckoutSessions").doc(session.id).get()
-      if (sessionDoc.exists) {
-        await getFirestore().collection("stripeCheckoutSessions").doc(session.id).update({
-          status: "completed",
-          completedAt: new Date(),
-          subscriptionId: session.subscription,
+      await getFirestore()
+        .collection("users")
+        .doc(userId)
+        .update({
+          plan: "pro",
+          stripeSubscriptionId: session.subscription,
+          stripeCustomerId: customerId,
+          subscriptionUpdatedAt: new Date(),
+          subscriptionStatus: "active",
+          metadata: {
+            checkoutSessionId: session.id,
+            upgradedAt: new Date().toISOString(),
+          },
         })
-      }
+
+      console.log(`Updated user ${userId} to pro plan`)
+
+      // Log the subscription event
+      await getFirestore().collection("subscriptionEvents").add({
+        userId: userId,
+        eventType: "subscription_created",
+        subscriptionId: session.subscription,
+        checkoutSessionId: session.id,
+        timestamp: new Date().toISOString(),
+        metadata: session.metadata,
+      })
     } else if (event.type === "customer.subscription.deleted") {
       const subscription = event.data.object as Stripe.Subscription
       console.log(`Processing subscription deletion: ${subscription.id}`)
 
-      // Get the customer ID from the subscription
-      const customerId = subscription.customer as string
+      // We only process subscriptions that have metadata with userId
+      if (!subscription.metadata?.userId) {
+        console.error("Subscription has no userId metadata, skipping")
+        return NextResponse.json({ error: "Missing metadata" }, { status: 400 })
+      }
 
-      // Check if this was canceled by the user through our app
-      const metadata = subscription.metadata || {}
-      const canceledByUser = metadata.canceledByUser === "true"
-      const userId = metadata.userId
+      const userId = subscription.metadata.userId
+      console.log(`Found userId in metadata: ${userId}`)
 
-      console.log(`Subscription ${subscription.id} was canceled by user: ${canceledByUser}`)
-
-      // If we have the userId in metadata, use it directly
-      if (userId) {
-        console.log(`Using userId from metadata: ${userId}`)
-
-        // Update the user's subscription status
-        await getFirestore().collection("users").doc(userId).update({
+      // Update the user's subscription status
+      await getFirestore()
+        .collection("users")
+        .doc(userId)
+        .update({
           plan: "free",
           stripeSubscriptionId: null,
           subscriptionUpdatedAt: new Date(),
           subscriptionStatus: "expired",
+          metadata: {
+            subscriptionEndedAt: new Date().toISOString(),
+            previousSubscriptionId: subscription.id,
+          },
         })
 
-        console.log(`Updated user ${userId} to free plan`)
-
-        // Log the event
-        await getFirestore().collection("subscriptionEvents").add({
-          userId: userId,
-          eventType: "subscription_expired",
-          subscriptionId: subscription.id,
-          timestamp: new Date().toISOString(),
-        })
-
-        return NextResponse.json({ received: true })
-      }
-
-      // Find the user by Stripe customer ID
-      const usersSnapshot = await getFirestore()
-        .collection("users")
-        .where("stripeCustomerId", "==", customerId)
-        .limit(1)
-        .get()
-
-      if (usersSnapshot.empty) {
-        console.error(`No user found with Stripe customer ID: ${customerId}`)
-        return NextResponse.json({ error: "User not found" }, { status: 404 })
-      }
-
-      const userDoc = usersSnapshot.docs[0]
-      console.log(`Found user: ${userDoc.id}`)
-
-      // Update the user's subscription status
-      await getFirestore().collection("users").doc(userDoc.id).update({
-        plan: "free",
-        stripeSubscriptionId: null,
-        subscriptionUpdatedAt: new Date(),
-        subscriptionStatus: "expired",
-      })
-
-      console.log(`Updated user ${userDoc.id} to free plan`)
+      console.log(`Updated user ${userId} to free plan`)
 
       // Log the event
       await getFirestore().collection("subscriptionEvents").add({
-        userId: userDoc.id,
+        userId: userId,
         eventType: "subscription_expired",
         subscriptionId: subscription.id,
         timestamp: new Date().toISOString(),
+        metadata: subscription.metadata,
       })
     }
 
