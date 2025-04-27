@@ -1,8 +1,29 @@
 import { NextResponse } from "next/server"
 import Stripe from "stripe"
 
+// Helper function to retry operations with exponential backoff
+async function retryOperation<T>(operation: () => Promise<T>, maxRetries = 3, initialDelay = 300): Promise<T> {
+  let lastError: any
+
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      return await operation()
+    } catch (error) {
+      lastError = error
+      console.log(`Operation failed (attempt ${attempt + 1}/${maxRetries}):`, error)
+
+      // Wait with exponential backoff before retrying
+      const delay = initialDelay * Math.pow(2, attempt)
+      await new Promise((resolve) => setTimeout(resolve, delay))
+    }
+  }
+
+  throw lastError
+}
+
 export async function POST(request: Request) {
   console.log("------------ APP ROUTER CHECKOUT SESSION START ------------")
+  console.log("Request received at:", new Date().toISOString())
 
   // Check for required environment variables
   if (!process.env.STRIPE_SECRET_KEY) {
@@ -31,7 +52,7 @@ export async function POST(request: Request) {
     console.log("Request body:", JSON.stringify(body))
 
     // Get the user email from the request body
-    const { userId, userEmail, email } = body || {}
+    const { userId, userEmail, email, displayName } = body || {}
 
     // Try to get email from different possible properties
     const customerEmail = userEmail || email || body?.user?.email
@@ -59,6 +80,8 @@ export async function POST(request: Request) {
       plan: "pro",
       timestamp: new Date().toISOString(),
       source: "app_checkout", // Add source for tracking
+      displayName: displayName ? displayName.toString() : "",
+      requestId: Math.random().toString(36).substring(2, 15), // Add unique request ID for tracking
     }
 
     console.log("METADATA BEING SENT TO STRIPE:", JSON.stringify(metadata, null, 2))
@@ -67,31 +90,58 @@ export async function POST(request: Request) {
     let customer
     try {
       // Check if customer already exists
-      const customers = await stripe.customers.list({
-        email: customerEmail,
-        limit: 1,
-      })
+      const customers = await retryOperation(() =>
+        stripe.customers.list({
+          email: customerEmail,
+          limit: 1,
+        }),
+      )
 
       if (customers.data.length > 0) {
         customer = customers.data[0]
         console.log(`Found existing customer: ${customer.id}`)
 
-        // Update customer with metadata
-        customer = await stripe.customers.update(customer.id, {
-          metadata: metadata,
-        })
-        console.log(`Updated existing customer with metadata`)
+        // Update customer with metadata - use retry for reliability
+        customer = await retryOperation(() =>
+          stripe.customers.update(customer.id, {
+            metadata: metadata,
+          }),
+        )
+        console.log(`Updated existing customer with metadata:`, JSON.stringify(customer.metadata, null, 2))
       } else {
-        // Create new customer with metadata
-        customer = await stripe.customers.create({
-          email: customerEmail,
-          metadata: metadata,
-        })
-        console.log(`Created new customer: ${customer.id}`)
+        // Create new customer with metadata - use retry for reliability
+        customer = await retryOperation(() =>
+          stripe.customers.create({
+            email: customerEmail,
+            name: displayName || undefined,
+            metadata: metadata,
+          }),
+        )
+        console.log(`Created new customer: ${customer.id} with metadata:`, JSON.stringify(customer.metadata, null, 2))
       }
     } catch (customerError) {
       console.error("Error creating/updating customer:", customerError)
       // Continue without customer if there's an error
+    }
+
+    // Double-check that customer has metadata
+    if (customer) {
+      console.log("VERIFICATION - Customer metadata:", JSON.stringify(customer.metadata, null, 2))
+
+      // If metadata is missing, try updating again
+      if (!customer.metadata?.firebaseUid && userId) {
+        try {
+          console.log("Metadata missing, attempting to update customer again...")
+          customer = await retryOperation(() =>
+            stripe.customers.update(customer.id, {
+              metadata: metadata,
+            }),
+          )
+          console.log("Customer updated again with metadata:", JSON.stringify(customer.metadata, null, 2))
+        } catch (retryError) {
+          console.error("Error in retry update of customer metadata:", retryError)
+        }
+      }
     }
 
     // Create session parameters
@@ -111,6 +161,7 @@ export async function POST(request: Request) {
       subscription_data: {
         metadata: metadata,
       },
+      client_reference_id: userId || undefined, // Add client reference ID for additional tracking
     }
 
     // Use customer if we created/found one
@@ -125,17 +176,20 @@ export async function POST(request: Request) {
 
     console.log("Session parameters:", JSON.stringify(sessionParams, null, 2))
 
-    // Create the checkout session
-    const session = await stripe.checkout.sessions.create(sessionParams)
+    // Create the checkout session with retry for reliability
+    const session = await retryOperation(() => stripe.checkout.sessions.create(sessionParams))
 
     console.log("Session created with ID:", session.id)
     console.log("DIAGNOSTIC - Session metadata received from Stripe:", JSON.stringify(session.metadata, null, 2))
     console.log("Session URL:", session.url)
 
     // DIAGNOSTIC: Verify the session was created with metadata
-    const retrievedSession = await stripe.checkout.sessions.retrieve(session.id, {
-      expand: ["subscription", "customer"],
-    })
+    const retrievedSession = await retryOperation(() =>
+      stripe.checkout.sessions.retrieve(session.id, {
+        expand: ["subscription", "customer"],
+      }),
+    )
+
     console.log("DIAGNOSTIC - Retrieved session metadata:", JSON.stringify(retrievedSession.metadata, null, 2))
 
     if (retrievedSession.subscription) {
@@ -156,6 +210,32 @@ export async function POST(request: Request) {
       )
     }
 
+    // Create a log entry in Firestore for debugging
+    try {
+      const { getFirestore } = await import("firebase-admin/firestore")
+      const { initializeFirebaseAdmin } = await import("@/lib/firebase-admin")
+
+      initializeFirebaseAdmin()
+      const db = getFirestore()
+
+      await db.collection("stripeCheckoutLogs").add({
+        timestamp: new Date(),
+        userId: userId || null,
+        email: customerEmail,
+        sessionId: session.id,
+        customerId: customer?.id || null,
+        requestMetadata: metadata,
+        sessionMetadata: session.metadata || null,
+        customerMetadata: customer?.metadata || null,
+        success: true,
+      })
+
+      console.log("Created checkout log entry in Firestore")
+    } catch (logError) {
+      console.error("Error creating log entry:", logError)
+      // Continue even if logging fails
+    }
+
     console.log("------------ APP ROUTER CHECKOUT SESSION END ------------")
 
     // Return the session URL
@@ -163,6 +243,26 @@ export async function POST(request: Request) {
   } catch (error) {
     console.error("Stripe session error:", error)
     console.error("Error message:", error instanceof Error ? error.message : "Unknown error")
+
+    // Try to log the error to Firestore
+    try {
+      const { getFirestore } = await import("firebase-admin/firestore")
+      const { initializeFirebaseAdmin } = await import("@/lib/firebase-admin")
+
+      initializeFirebaseAdmin()
+      const db = getFirestore()
+
+      await db.collection("stripeCheckoutErrors").add({
+        timestamp: new Date(),
+        error: error instanceof Error ? error.message : "Unknown error",
+        stack: error instanceof Error ? error.stack : null,
+        requestBody: request.body ? await request.clone().text() : null,
+      })
+
+      console.log("Created error log entry in Firestore")
+    } catch (logError) {
+      console.error("Error creating error log entry:", logError)
+    }
 
     return NextResponse.json(
       {
