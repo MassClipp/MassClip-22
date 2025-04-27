@@ -52,15 +52,47 @@ export async function POST(request: Request) {
     console.log("Success URL:", `${process.env.NEXT_PUBLIC_SITE_URL}/subscription/success`)
     console.log("Cancel URL:", `${process.env.NEXT_PUBLIC_SITE_URL}/subscription/cancel`)
 
-    // DIAGNOSTIC: Create metadata object separately for clarity
+    // ENHANCED: Create metadata object with explicit string values
     const metadata = {
-      email: customerEmail,
-      firebaseUid: userId || "",
+      email: customerEmail.toString(),
+      firebaseUid: userId ? userId.toString() : "",
       plan: "pro",
-      timestamp: new Date().toISOString(), // Add timestamp for debugging
+      timestamp: new Date().toISOString(),
+      source: "app_checkout", // Add source for tracking
     }
 
     console.log("METADATA BEING SENT TO STRIPE:", JSON.stringify(metadata, null, 2))
+
+    // Create a customer first to ensure metadata is attached
+    let customer
+    try {
+      // Check if customer already exists
+      const customers = await stripe.customers.list({
+        email: customerEmail,
+        limit: 1,
+      })
+
+      if (customers.data.length > 0) {
+        customer = customers.data[0]
+        console.log(`Found existing customer: ${customer.id}`)
+
+        // Update customer with metadata
+        customer = await stripe.customers.update(customer.id, {
+          metadata: metadata,
+        })
+        console.log(`Updated existing customer with metadata`)
+      } else {
+        // Create new customer with metadata
+        customer = await stripe.customers.create({
+          email: customerEmail,
+          metadata: metadata,
+        })
+        console.log(`Created new customer: ${customer.id}`)
+      }
+    } catch (customerError) {
+      console.error("Error creating/updating customer:", customerError)
+      // Continue without customer if there's an error
+    }
 
     // Create session parameters
     const sessionParams: Stripe.Checkout.SessionCreateParams = {
@@ -74,13 +106,21 @@ export async function POST(request: Request) {
       mode: "subscription",
       success_url: `${process.env.NEXT_PUBLIC_SITE_URL}/subscription/success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url: `${process.env.NEXT_PUBLIC_SITE_URL}/subscription/cancel?session_id={CHECKOUT_SESSION_ID}`,
-      customer_email: customerEmail,
       metadata: metadata,
       // Add metadata to subscription_data to ensure it propagates to the subscription
       subscription_data: {
         metadata: metadata,
       },
-      // REMOVED: payment_intent_data - not allowed in subscription mode
+    }
+
+    // Use customer if we created/found one
+    if (customer) {
+      sessionParams.customer = customer.id
+      console.log(`Using customer ID: ${customer.id} for checkout session`)
+    } else {
+      // Fall back to customer_email if we couldn't create a customer
+      sessionParams.customer_email = customerEmail
+      console.log(`Using customer_email: ${customerEmail} for checkout session`)
     }
 
     console.log("Session parameters:", JSON.stringify(sessionParams, null, 2))
@@ -94,7 +134,7 @@ export async function POST(request: Request) {
 
     // DIAGNOSTIC: Verify the session was created with metadata
     const retrievedSession = await stripe.checkout.sessions.retrieve(session.id, {
-      expand: ["subscription"],
+      expand: ["subscription", "customer"],
     })
     console.log("DIAGNOSTIC - Retrieved session metadata:", JSON.stringify(retrievedSession.metadata, null, 2))
 
@@ -104,6 +144,15 @@ export async function POST(request: Request) {
         typeof retrievedSession.subscription === "string"
           ? "Subscription not expanded"
           : JSON.stringify(retrievedSession.subscription.metadata, null, 2),
+      )
+    }
+
+    if (retrievedSession.customer) {
+      console.log(
+        "DIAGNOSTIC - Customer metadata:",
+        typeof retrievedSession.customer === "string"
+          ? "Customer not expanded"
+          : JSON.stringify(retrievedSession.customer.metadata, null, 2),
       )
     }
 

@@ -22,6 +22,11 @@ export function SubscribeButton({ className, children }: { className?: string; c
       setIsLoading(true)
       console.log("Creating checkout session for user:", user.uid, "with email:", user.email)
 
+      // Ensure we have valid data to send
+      if (!user.uid || !user.email) {
+        throw new Error("Missing user ID or email")
+      }
+
       const response = await fetch("/api/create-checkout-session", {
         method: "POST",
         headers: {
@@ -30,6 +35,9 @@ export function SubscribeButton({ className, children }: { className?: string; c
         body: JSON.stringify({
           userId: user.uid,
           userEmail: user.email,
+          // Add additional fields that might help with debugging
+          displayName: user.displayName || "",
+          timestamp: new Date().toISOString(),
         }),
       })
 
