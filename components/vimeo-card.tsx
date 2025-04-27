@@ -8,10 +8,11 @@ import type { VimeoVideo } from "@/lib/types"
 import { useAuth } from "@/contexts/auth-context"
 import { db } from "@/lib/firebase"
 import { trackFirestoreWrite } from "@/lib/firestore-optimizer"
-import { collection, addDoc, serverTimestamp } from "firebase/firestore"
+import { collection, addDoc, serverTimestamp, doc, updateDoc, increment } from "firebase/firestore"
 import { useToast } from "@/hooks/use-toast"
 import { useUserPlan } from "@/hooks/use-user-plan"
 import { useMobile } from "@/hooks/use-mobile"
+import { useDownloadLimit } from "@/contexts/download-limit-context"
 
 interface VimeoCardProps {
   video: VimeoVideo
@@ -30,7 +31,8 @@ export default function VimeoCard({ video }: VimeoCardProps) {
 
   const { user } = useAuth()
   const { toast } = useToast()
-  const { isProUser, recordDownload, planData, hasReachedLimit } = useUserPlan()
+  const { planData } = useUserPlan()
+  const { hasReachedLimit, isProUser, forceRefresh } = useDownloadLimit()
   const isMobile = useMobile()
   const titleRef = useRef<HTMLDivElement>(null)
   const videoRef = useRef<HTMLIFrameElement>(null)
@@ -118,6 +120,34 @@ export default function VimeoCard({ video }: VimeoCardProps) {
     trackVideoView()
   }, [user, videoId, video, isActive])
 
+  // Record a download directly in Firestore
+  const recordDownload = async () => {
+    if (!user) return { success: false, message: "User not authenticated" }
+
+    // Pro users don't need to track downloads
+    if (isProUser) return { success: true }
+
+    try {
+      const userDocRef = doc(db, "users", user.uid)
+
+      // Increment download count
+      await updateDoc(userDocRef, {
+        downloads: increment(1),
+      })
+
+      // Force refresh the global limit status
+      forceRefresh()
+
+      return { success: true }
+    } catch (err) {
+      console.error("Error recording download:", err)
+      return {
+        success: false,
+        message: "Failed to record download. Please try again.",
+      }
+    }
+  }
+
   // Handle download button click with strict permission enforcement
   const handleDownload = async (e: React.MouseEvent) => {
     e.preventDefault()
@@ -139,29 +169,7 @@ export default function VimeoCard({ video }: VimeoCardProps) {
         return
       }
 
-      // 2. Pro users bypass limit checks
-      if (!isProUser) {
-        // 3. Strict limit check - this is the core permission enforcement
-        if (hasReachedLimit) {
-          toast({
-            title: "Download Limit Reached",
-            description: "You've reached your monthly download limit. Upgrade to Pro for unlimited downloads.",
-            variant: "destructive",
-          })
-          return
-        }
-
-        // 4. Check if this is the last allowed download
-        const isLastAllowedDownload = planData && planData.downloads === (planData.downloadsLimit || 5) - 1
-        if (isLastAllowedDownload) {
-          toast({
-            title: "Last Download",
-            description: "This is your last download for the month. Upgrade to Pro for unlimited downloads.",
-          })
-        }
-      }
-
-      // 5. Check if download link exists
+      // 2. Check if download link exists
       if (!downloadLink) {
         setDownloadError(true)
         toast({
@@ -177,8 +185,19 @@ export default function VimeoCard({ video }: VimeoCardProps) {
         return
       }
 
-      // 6. CRITICAL: Record the download FIRST for free users
+      // 3. Pro users bypass limit checks
       if (!isProUser) {
+        // 4. Strict limit check - this is the core permission enforcement
+        if (hasReachedLimit) {
+          toast({
+            title: "Download Limit Reached",
+            description: "You've reached your monthly download limit. Upgrade to Pro for unlimited downloads.",
+            variant: "destructive",
+          })
+          return
+        }
+
+        // 5. CRITICAL: Record the download FIRST for free users
         const result = await recordDownload()
 
         // If recording failed, abort the download
@@ -192,7 +211,7 @@ export default function VimeoCard({ video }: VimeoCardProps) {
         }
       }
 
-      // 7. Only now, trigger the actual download
+      // 6. Only now, trigger the actual download
       if (isMobile) {
         // Mobile download approach
         const iframe = document.createElement("iframe")
@@ -224,7 +243,7 @@ export default function VimeoCard({ video }: VimeoCardProps) {
         }, 100)
       }
 
-      // 8. If pro user, record the download after (doesn't affect permissions)
+      // 7. If pro user, record the download after (doesn't affect permissions)
       if (isProUser) {
         recordDownload().catch((error) => {
           console.error("Error recording pro user download:", error)

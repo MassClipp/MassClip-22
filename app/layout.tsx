@@ -15,8 +15,7 @@ export const metadata: Metadata = {
     generator: 'v0.dev'
 }
 
-// Inside your RootLayout component, wrap the children with DownloadLimitProvider
-// This is a simplified example - make sure to keep all your existing providers
+// Then in your RootLayout component, wrap your content with it:
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -31,7 +30,7 @@ export default function RootLayout({
       <body className={inter.className}>
         <AuthProvider>
           <DownloadLimitProvider>
-            {/* Your existing layout structure */}
+            {/* Rest of your layout */}
             {children}
           </DownloadLimitProvider>
         </AuthProvider>
