@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server"
 import Stripe from "stripe"
+import { initializeFirebaseAdmin } from "@/lib/firebase-admin"
+import { getFirestore } from "firebase-admin/firestore"
 
 export async function POST(request: Request) {
   console.log("------------ APP ROUTER CHECKOUT SESSION START ------------")
@@ -43,27 +45,33 @@ export async function POST(request: Request) {
     }
 
     if (!userId) {
-      console.warn("⚠️ WARNING: Missing userId in request body. Metadata will be incomplete.")
+      console.warn("⚠️ WARNING: Missing userId in request body.")
       console.warn("Request body:", JSON.stringify(body))
       return NextResponse.json({ error: "Missing userId in request body" }, { status: 400 })
     }
 
     console.log(`Creating checkout session for email: ${customerEmail}`)
-    console.log(`User ID for metadata: ${userId}`)
+    console.log(`User ID for reference: ${userId}`)
     console.log("Using price ID:", process.env.STRIPE_PRICE_ID)
-    console.log("Success URL:", `${process.env.NEXT_PUBLIC_SITE_URL}/subscription/success`)
-    console.log("Cancel URL:", `${process.env.NEXT_PUBLIC_SITE_URL}/subscription/cancel`)
 
-    // Create metadata object - KEEP THIS SIMPLE
-    const metadata = {
-      firebaseUid: userId,
+    // Initialize Firebase Admin
+    initializeFirebaseAdmin()
+    const db = getFirestore()
+
+    // Generate a unique reference ID
+    const referenceId = `${userId}_${Date.now()}`
+
+    // Store the reference in Firestore BEFORE creating the checkout session
+    await db.collection("stripeReferences").doc(referenceId).set({
+      userId: userId,
       email: customerEmail,
-      plan: "pro",
-    }
+      createdAt: new Date(),
+      used: false,
+    })
 
-    console.log("METADATA BEING SENT TO STRIPE:", JSON.stringify(metadata, null, 2))
+    console.log(`Created reference record in Firestore with ID: ${referenceId}`)
 
-    // Create session parameters - FOLLOW THE EXACT PATTERN REQUESTED
+    // Create session parameters
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ["card"],
       line_items: [
@@ -74,45 +82,23 @@ export async function POST(request: Request) {
       ],
       mode: "subscription",
       customer_email: customerEmail,
-      metadata: metadata,
-      subscription_data: {
-        metadata: metadata,
-      },
-      success_url: `${process.env.NEXT_PUBLIC_SITE_URL}/subscription/success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${process.env.NEXT_PUBLIC_SITE_URL}/subscription/cancel?session_id={CHECKOUT_SESSION_ID}`,
+      client_reference_id: referenceId, // Use our reference ID here
+      success_url: `${process.env.NEXT_PUBLIC_SITE_URL}/subscription/success?session_id={CHECKOUT_SESSION_ID}&ref=${referenceId}`,
+      cancel_url: `${process.env.NEXT_PUBLIC_SITE_URL}/subscription/cancel?session_id={CHECKOUT_SESSION_ID}&ref=${referenceId}`,
     })
 
     console.log("Session created with ID:", session.id)
     console.log("Session URL:", session.url)
-
-    // VERIFICATION: Retrieve the session to confirm metadata was attached
-    const retrievedSession = await stripe.checkout.sessions.retrieve(session.id, {
-      expand: ["subscription"],
-    })
-
-    console.log("VERIFICATION - Session metadata:", JSON.stringify(retrievedSession.metadata, null, 2))
-
-    if (retrievedSession.subscription && typeof retrievedSession.subscription !== "string") {
-      console.log(
-        "VERIFICATION - Subscription metadata:",
-        JSON.stringify(retrievedSession.subscription.metadata, null, 2),
-      )
-    }
+    console.log("Reference ID:", referenceId)
 
     // Log to Firestore for audit trail
     try {
-      const { getFirestore } = await import("firebase-admin/firestore")
-      const { initializeFirebaseAdmin } = await import("@/lib/firebase-admin")
-
-      initializeFirebaseAdmin()
-      const db = getFirestore()
-
       await db.collection("stripeCheckoutLogs").add({
         timestamp: new Date(),
         userId: userId,
         email: customerEmail,
         sessionId: session.id,
-        sessionMetadata: retrievedSession.metadata,
+        referenceId: referenceId,
         success: true,
         mode: process.env.STRIPE_SECRET_KEY?.startsWith("sk_test") ? "test" : "live",
       })

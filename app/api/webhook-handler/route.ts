@@ -100,6 +100,48 @@ async function findUserByStripeCustomerId(stripeCustomerId: string) {
 }
 
 /**
+ * Find a user by reference ID
+ */
+async function findUserByReferenceId(referenceId: string) {
+  console.log(`>>> Attempting to find user with reference ID: ${referenceId}`)
+  try {
+    const refDoc = await db.collection("stripeReferences").doc(referenceId).get()
+
+    if (!refDoc.exists) {
+      console.log(`>>> No reference found with ID: ${referenceId}`)
+      return null
+    }
+
+    const refData = refDoc.data()
+    const userId = refData?.userId
+
+    if (!userId) {
+      console.log(`>>> Reference exists but has no userId: ${referenceId}`)
+      return null
+    }
+
+    // Mark the reference as used
+    await db.collection("stripeReferences").doc(referenceId).update({
+      used: true,
+      usedAt: new Date(),
+    })
+
+    // Find the user
+    const userDoc = await findUserById(userId)
+    if (userDoc) {
+      console.log(`>>> Found user with ID: ${userDoc.id} by reference ID`)
+      return userDoc
+    }
+
+    console.log(`>>> No user found with ID from reference: ${userId}`)
+    return null
+  } catch (error) {
+    console.error(`>>> Error finding user by reference ID: ${error instanceof Error ? error.message : "Unknown error"}`)
+    return null
+  }
+}
+
+/**
  * Handles checkout.session.completed events by updating the user's plan in Firestore
  */
 async function handleCheckoutSessionCompleted(event: Stripe.Event) {
@@ -113,28 +155,25 @@ async function handleCheckoutSessionCompleted(event: Stripe.Event) {
     console.log(">>> ALL SESSION PROPERTIES:")
     console.log(JSON.stringify(session, null, 2))
 
-    // Also update the logging to show the plan from metadata
-    console.log(`Plan from metadata: ${session.metadata?.plan || "not specified"}`)
-
-    // ENHANCED USER LOOKUP STRATEGY FOR LIVE MODE
+    // ENHANCED USER LOOKUP STRATEGY
     let userDoc = null
 
-    // 1. First try to find the user by firebaseUid from metadata (works in test mode)
-    const firebaseUid = session.metadata?.firebaseUid
-    if (firebaseUid && firebaseUid !== "not-provided" && firebaseUid !== "") {
-      console.log(`Looking up user by firebaseUid: ${firebaseUid}`)
-      userDoc = await findUserById(firebaseUid)
+    // 1. First try to find the user by client_reference_id (our new approach)
+    const referenceId = session.client_reference_id
+    if (referenceId) {
+      console.log(`Looking up user by reference ID: ${referenceId}`)
+      userDoc = await findUserByReferenceId(referenceId)
 
       if (userDoc) {
-        console.log(`Found user by firebaseUid: ${userDoc.id}`)
+        console.log(`Found user by reference ID: ${userDoc.id}`)
       } else {
-        console.warn(`No user found with firebaseUid: ${firebaseUid}, trying other methods`)
+        console.warn(`No user found with reference ID: ${referenceId}, trying other methods`)
       }
     } else {
-      console.warn("No valid firebaseUid in session metadata, trying other methods")
+      console.warn("No client_reference_id in session, trying other methods")
     }
 
-    // 2. If not found by firebaseUid, try by customer ID (works in both test and live mode)
+    // 2. If not found by reference ID, try by customer ID
     if (!userDoc && session.customer) {
       const stripeCustomerId = typeof session.customer === "string" ? session.customer : session.customer.id
       console.log(`Looking up user by Stripe customer ID: ${stripeCustomerId}`)
@@ -147,7 +186,7 @@ async function handleCheckoutSessionCompleted(event: Stripe.Event) {
       }
     }
 
-    // 3. If still not found, try by email (works in both test and live mode)
+    // 3. If still not found, try by email
     if (!userDoc) {
       // Try multiple possible sources for email
       let customerEmail = null
@@ -156,11 +195,6 @@ async function handleCheckoutSessionCompleted(event: Stripe.Event) {
       if (session.customer_email) {
         customerEmail = session.customer_email
         console.log(`>>> Found email in customer_email: ${customerEmail}`)
-      }
-      // Check metadata
-      else if (session.metadata && session.metadata.email) {
-        customerEmail = session.metadata.email
-        console.log(`>>> Found email in metadata: ${customerEmail}`)
       }
       // Check customer details
       else if (session.customer_details && session.customer_details.email) {
@@ -271,31 +305,8 @@ async function handleInvoicePaymentFailed(event: Stripe.Event) {
     // ENHANCED USER LOOKUP STRATEGY FOR LIVE MODE
     let userDoc = null
 
-    // 1. First try to get the subscription to access its metadata
-    let firebaseUid = null
-    if (invoice.subscription) {
-      try {
-        const subscriptionId = typeof invoice.subscription === "string" ? invoice.subscription : invoice.subscription.id
-        const subscription = await stripe.subscriptions.retrieve(subscriptionId)
-        console.log(">>> Retrieved subscription:", subscription.id)
-
-        // Check for firebaseUid in subscription metadata
-        if (subscription.metadata && subscription.metadata.firebaseUid) {
-          firebaseUid = subscription.metadata.firebaseUid
-          console.log(`>>> Found firebaseUid in subscription metadata: ${firebaseUid}`)
-
-          userDoc = await findUserById(firebaseUid)
-          if (userDoc) {
-            console.log(`Found user by firebaseUid: ${userDoc.id}`)
-          }
-        }
-      } catch (err) {
-        console.error(">>> Error retrieving subscription:", err instanceof Error ? err.message : "Unknown error")
-      }
-    }
-
-    // 2. If not found by firebaseUid, try by customer ID
-    if (!userDoc && invoice.customer) {
+    // 1. First try by customer ID
+    if (invoice.customer) {
       const stripeCustomerId = typeof invoice.customer === "string" ? invoice.customer : invoice.customer.id
       console.log(`Looking up user by Stripe customer ID: ${stripeCustomerId}`)
       userDoc = await findUserByStripeCustomerId(stripeCustomerId)
@@ -305,7 +316,7 @@ async function handleInvoicePaymentFailed(event: Stripe.Event) {
       }
     }
 
-    // 3. If still not found, try to get customer email from Stripe
+    // 2. If still not found, try to get customer email from Stripe
     if (!userDoc && invoice.customer) {
       try {
         const stripeCustomerId = typeof invoice.customer === "string" ? invoice.customer : invoice.customer.id
@@ -376,19 +387,8 @@ async function handleSubscriptionDeleted(event: Stripe.Event) {
     // ENHANCED USER LOOKUP STRATEGY FOR LIVE MODE
     let userDoc = null
 
-    // 1. First check for firebaseUid in metadata
-    if (subscription.metadata && subscription.metadata.firebaseUid) {
-      const firebaseUid = subscription.metadata.firebaseUid
-      console.log(`>>> Found firebaseUid in metadata: ${firebaseUid}`)
-
-      userDoc = await findUserById(firebaseUid)
-      if (userDoc) {
-        console.log(`Found user by firebaseUid: ${userDoc.id}`)
-      }
-    }
-
-    // 2. If not found by firebaseUid, try by customer ID
-    if (!userDoc && subscription.customer) {
+    // 1. Try by customer ID
+    if (subscription.customer) {
       const stripeCustomerId =
         typeof subscription.customer === "string" ? subscription.customer : subscription.customer.id
       console.log(`Looking up user by Stripe customer ID: ${stripeCustomerId}`)
@@ -399,7 +399,7 @@ async function handleSubscriptionDeleted(event: Stripe.Event) {
       }
     }
 
-    // 3. If still not found, try to get customer email from Stripe
+    // 2. If still not found, try to get customer email from Stripe
     if (!userDoc && subscription.customer) {
       try {
         const stripeCustomerId =
@@ -471,19 +471,8 @@ async function handleSubscriptionUpdated(event: Stripe.Event) {
     // ENHANCED USER LOOKUP STRATEGY FOR LIVE MODE
     let userDoc = null
 
-    // 1. First check for firebaseUid in metadata
-    if (subscription.metadata && subscription.metadata.firebaseUid) {
-      const firebaseUid = subscription.metadata.firebaseUid
-      console.log(`>>> Found firebaseUid in metadata: ${firebaseUid}`)
-
-      userDoc = await findUserById(firebaseUid)
-      if (userDoc) {
-        console.log(`Found user by firebaseUid: ${userDoc.id}`)
-      }
-    }
-
-    // 2. If not found by firebaseUid, try by customer ID
-    if (!userDoc && subscription.customer) {
+    // 1. Try by customer ID
+    if (subscription.customer) {
       const stripeCustomerId =
         typeof subscription.customer === "string" ? subscription.customer : subscription.customer.id
       console.log(`Looking up user by Stripe customer ID: ${stripeCustomerId}`)
@@ -494,7 +483,7 @@ async function handleSubscriptionUpdated(event: Stripe.Event) {
       }
     }
 
-    // 3. If still not found, try to get customer email from Stripe
+    // 2. If still not found, try to get customer email from Stripe
     if (!userDoc && subscription.customer) {
       try {
         const stripeCustomerId =
