@@ -132,7 +132,7 @@ export default function PricingPage() {
                     Manage Subscription
                   </button>
                 ) : (
-                  <SubscribeButton className="w-full">Upgrade to Pro</SubscribeButton>
+                  <SubscribeButton>Upgrade to Pro</SubscribeButton>
                 )}
               </div>
             </div>
