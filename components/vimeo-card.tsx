@@ -26,7 +26,6 @@ export default function VimeoCard({ video }: VimeoCardProps) {
   const [isIframeLoaded, setIsIframeLoaded] = useState(false)
   const [thumbnailLoaded, setThumbnailLoaded] = useState(false)
   const [isDownloading, setIsDownloading] = useState(false)
-  const [localDownloadCount, setLocalDownloadCount] = useState(0)
   const [downloadLink, setDownloadLink] = useState<string | null>(null)
 
   const { user } = useAuth()
@@ -38,15 +37,8 @@ export default function VimeoCard({ video }: VimeoCardProps) {
   const viewTrackedRef = useRef(false)
   const downloadFrameRef = useRef<HTMLIFrameElement | null>(null)
 
-  // Update local download count when planData changes
-  useEffect(() => {
-    if (planData) {
-      setLocalDownloadCount(planData.downloads)
-    }
-  }, [planData])
-
   // Simple download limit check - free users get 5 downloads max
-  const hasReachedLimit = !isProUser && localDownloadCount >= (planData?.downloadsLimit || 5)
+  const hasReachedLimit = !isProUser && planData && planData.downloads >= (planData.downloadsLimit || 5)
 
   // Extract video ID from URI (format: "/videos/12345678") with null check
   const videoId = video?.uri ? video.uri.split("/").pop() : null
@@ -129,78 +121,35 @@ export default function VimeoCard({ video }: VimeoCardProps) {
     trackVideoView()
   }, [user, videoId, video, isActive])
 
-  // Handle download button click - simple enforcement of 5 download maximum
-  const handleDownload = (e: React.MouseEvent) => {
+  // Handle download button click - CRITICAL CHANGE: Check permissions BEFORE triggering download
+  const handleDownload = async (e: React.MouseEvent) => {
     e.preventDefault()
     e.stopPropagation()
 
-    // Basic permission gates
-    if (!user) {
-      toast({
-        title: "Authentication Required",
-        description: "Please log in to download videos",
-        variant: "destructive",
-      })
-      return
-    }
-
-    // Simple download limit check - 5 downloads max for free users
-    if (!isProUser && localDownloadCount >= (planData?.downloadsLimit || 5)) {
-      toast({
-        title: "Download Limit Reached",
-        description:
-          "You have reached your free download limit for this month. Upgrade to Pro for unlimited downloads.",
-        variant: "destructive",
-      })
-      return
-    }
-
-    // Reset error state
-    setDownloadError(false)
-
-    // Check if this will be the last allowed download
-    const isLastAllowedDownload = !isProUser && localDownloadCount === (planData?.downloadsLimit || 5) - 1
-
-    // Show warning for last download BEFORE starting the download
-    if (isLastAllowedDownload) {
-      toast({
-        title: "Last Download",
-        description: "This is your last download for the month. Upgrade to Pro for unlimited downloads.",
-      })
-    }
-
-    // Trigger download immediately
-    triggerDownload()
-  }
-
-  // Record download in database and update local state
-  const recordDownloadInDatabase = async () => {
-    if (isProUser) return { success: true }
-
-    try {
-      const result = await recordDownload()
-
-      if (result.success) {
-        // Simply increment the local download count
-        setLocalDownloadCount((prev) => prev + 1)
-      }
-
-      return result
-    } catch (error) {
-      console.error("Error recording download:", error)
-      return { success: false, message: "Failed to record download" }
-    }
-  }
-
-  // Trigger the actual download
-  const triggerDownload = async () => {
+    // Set downloading state to prevent multiple clicks
     setIsDownloading(true)
 
     try {
-      // If no download link, show error
+      // Basic permission gates
+      if (!user) {
+        toast({
+          title: "Authentication Required",
+          description: "Please log in to download videos",
+          variant: "destructive",
+        })
+        setIsDownloading(false)
+        return
+      }
+
+      // CRITICAL: Check if download link exists before proceeding
       if (!downloadLink) {
         console.error("No download links available for this video")
         setDownloadError(true)
+        toast({
+          title: "Download Error",
+          description: "No download links available for this video.",
+          variant: "destructive",
+        })
 
         // Fallback to opening Vimeo page
         if (video?.link) {
@@ -211,10 +160,53 @@ export default function VimeoCard({ video }: VimeoCardProps) {
         return
       }
 
-      // IMMEDIATE DOWNLOAD TRIGGER - different for mobile vs desktop
+      // CRITICAL CHANGE: Record the download FIRST, before triggering the actual download
+      // This ensures we increment the count before allowing the download
+      if (!isProUser) {
+        // Check if this will be the last allowed download
+        const isLastAllowedDownload = planData && planData.downloads === (planData.downloadsLimit || 5) - 1
+
+        // Show warning for last download BEFORE starting the download
+        if (isLastAllowedDownload) {
+          toast({
+            title: "Last Download",
+            description: "This is your last download for the month. Upgrade to Pro for unlimited downloads.",
+          })
+        }
+
+        // CRITICAL: Double-check limit again right before recording
+        if (planData && planData.downloads >= (planData.downloadsLimit || 5)) {
+          toast({
+            title: "Download Limit Reached",
+            description:
+              "You have reached your free download limit for this month. Upgrade to Pro for unlimited downloads.",
+            variant: "destructive",
+          })
+          setIsDownloading(false)
+          return
+        }
+
+        // Record the download BEFORE triggering it
+        const result = await recordDownload()
+
+        // If recording failed, don't proceed with download
+        if (!result.success) {
+          toast({
+            title: "Download Error",
+            description: result.message || "Failed to record download. Please try again.",
+            variant: "destructive",
+          })
+          setIsDownloading(false)
+          return
+        }
+      }
+
+      // Reset error state
+      setDownloadError(false)
+
+      // Only now, after all checks and recording, trigger the actual download
       if (isMobile) {
         // MOBILE: Use hidden iframe to prevent tab duplication
-        // This approach downloads the file without creating a new tab
         const iframe = document.createElement("iframe")
         iframe.style.display = "none"
         document.body.appendChild(iframe)
@@ -231,7 +223,7 @@ export default function VimeoCard({ video }: VimeoCardProps) {
           downloadFrameRef.current = null
         }, 5000)
       } else {
-        // Desktop: Use hidden anchor element IMMEDIATELY
+        // Desktop: Use hidden anchor element
         const a = document.createElement("a")
         a.href = downloadLink
         a.download = `${video?.name?.replace(/[^\w\s]/gi, "") || "video"}.mp4`
@@ -245,26 +237,9 @@ export default function VimeoCard({ video }: VimeoCardProps) {
           document.body.removeChild(a)
         }, 100)
       }
-
-      // Record the download AFTER triggering it
-      recordDownloadInDatabase().catch((error) => {
-        console.error("Error recording download:", error)
-      })
     } catch (error) {
       console.error("Download failed:", error)
       setDownloadError(true)
-
-      // Fallback behavior - use direct link as last resort
-      if (downloadLink) {
-        const a = document.createElement("a")
-        a.href = downloadLink
-        a.download = `${video?.name?.replace(/[^\w\s]/gi, "") || "video"}.mp4`
-        document.body.appendChild(a)
-        a.click()
-        setTimeout(() => {
-          document.body.removeChild(a)
-        }, 100)
-      }
 
       toast({
         title: "Download Error",
