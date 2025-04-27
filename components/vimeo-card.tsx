@@ -51,10 +51,7 @@ export default function VimeoCard({ video }: VimeoCardProps) {
   const localRemainingDownloads = planData ? Math.max(0, planData.downloadsLimit - localDownloadCount) : 0
 
   // Check if user has reached download limit based on local state
-  const hasReachedLimit = !isProUser && (localRemainingDownloads <= 0 || hasReachedGlobalLimit)
-
-  // Check if this will be the user's final download
-  const isLastDownload = !isProUser && localRemainingDownloads === 1
+  const hasReachedLimit = !isProUser && localRemainingDownloads <= 0
 
   // Extract video ID from URI (format: "/videos/12345678") with null check
   const videoId = video?.uri ? video.uri.split("/").pop() : null
@@ -137,7 +134,7 @@ export default function VimeoCard({ video }: VimeoCardProps) {
     trackVideoView()
   }, [user, videoId, video, isActive])
 
-  // Handle download button click - check permissions and trigger download
+  // Handle download button click - enforce download limit strictly at the click level
   const handleDownload = (e: React.MouseEvent) => {
     e.preventDefault()
     e.stopPropagation()
@@ -152,11 +149,12 @@ export default function VimeoCard({ video }: VimeoCardProps) {
       return
     }
 
-    // Check download limit
-    if (hasReachedLimit) {
+    // Strict download limit enforcement - check local state
+    if (!isProUser && localDownloadCount >= (planData?.downloadsLimit || 5)) {
       toast({
         title: "Download Limit Reached",
-        description: "You've reached your monthly download limit. Upgrade to Pro for unlimited downloads.",
+        description:
+          "You have reached your free download limit for this month. Upgrade to Pro for unlimited downloads.",
         variant: "destructive",
       })
       return
@@ -165,8 +163,11 @@ export default function VimeoCard({ video }: VimeoCardProps) {
     // Reset error state
     setDownloadError(false)
 
+    // Check if this will be the last allowed download
+    const isLastAllowedDownload = !isProUser && localDownloadCount === (planData?.downloadsLimit || 5) - 1
+
     // Show warning for last download BEFORE starting the download
-    if (isLastDownload) {
+    if (isLastAllowedDownload) {
       toast({
         title: "Last Download",
         description: "This is your last download for the month. Upgrade to Pro for unlimited downloads.",
@@ -185,17 +186,11 @@ export default function VimeoCard({ video }: VimeoCardProps) {
       const result = await recordDownload()
 
       if (result.success) {
-        // If this was the last download, max out the counter to lock UI
-        if (isLastDownload && planData) {
-          // Force the download count to max out
-          setLocalDownloadCount(planData.downloadsLimit)
+        // Increment local download count
+        setLocalDownloadCount((prev) => prev + 1)
 
-          // Also refresh the global limit status for other components
-          refreshLimitStatus()
-        } else {
-          // Normal increment for non-final downloads
-          setLocalDownloadCount((prev) => prev + 1)
-        }
+        // Also refresh the global limit status for other components
+        refreshLimitStatus()
       }
 
       return result
@@ -356,7 +351,7 @@ export default function VimeoCard({ video }: VimeoCardProps) {
           }}
         ></div>
 
-        {/* Download button */}
+        {/* Download button - visually disabled when limit reached */}
         <button
           className={`absolute bottom-2 left-2 z-20 ${
             hasReachedLimit ? "bg-gray-800/90 cursor-not-allowed" : "bg-black/70 hover:bg-black/90"
