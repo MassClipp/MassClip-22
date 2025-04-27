@@ -1,37 +1,82 @@
 import { NextResponse } from "next/server"
 import Stripe from "stripe"
-import { db } from "@/lib/firebase-admin"
-
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: "2023-10-16",
-})
+import { initializeFirebaseAdmin } from "@/lib/firebase-admin"
+import { getFirestore } from "firebase-admin/firestore"
 
 export async function POST(request: Request) {
-  try {
-    const { userId, priceId } = await request.json()
+  console.log("------------ CREATING CHECKOUT SESSION ------------")
 
-    if (!userId || !priceId) {
-      return NextResponse.json({ error: "Missing required fields" }, { status: 400 })
+  // Initialize Firebase Admin
+  initializeFirebaseAdmin()
+  const db = getFirestore()
+
+  try {
+    // Check for required environment variables
+    if (!process.env.STRIPE_SECRET_KEY) {
+      console.error("Missing STRIPE_SECRET_KEY")
+      return NextResponse.json({ error: "Server configuration error: Missing STRIPE_SECRET_KEY" }, { status: 500 })
     }
 
-    console.log(`Creating checkout session for user ${userId} with price ${priceId}`)
+    if (!process.env.STRIPE_PRICE_ID) {
+      console.error("Missing STRIPE_PRICE_ID")
+      return NextResponse.json({ error: "Server configuration error: Missing STRIPE_PRICE_ID" }, { status: 500 })
+    }
 
-    // Get the user from Firestore
+    if (!process.env.NEXT_PUBLIC_SITE_URL) {
+      console.error("Missing NEXT_PUBLIC_SITE_URL")
+      return NextResponse.json({ error: "Server configuration error: Missing NEXT_PUBLIC_SITE_URL" }, { status: 500 })
+    }
+
+    // Initialize Stripe
+    const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
+      apiVersion: "2023-10-16",
+    })
+
+    // Parse request body
+    const body = await request.json()
+    console.log("Request body:", JSON.stringify(body))
+
+    const { userId, priceId } = body
+
+    if (!userId) {
+      console.error("Missing userId in request body")
+      return NextResponse.json({ error: "Missing required field: userId" }, { status: 400 })
+    }
+
+    if (!priceId) {
+      console.error("Missing priceId in request body")
+      return NextResponse.json({ error: "Missing required field: priceId" }, { status: 400 })
+    }
+
+    console.log(`Creating checkout for user ${userId} with price ${priceId}`)
+
+    // Get user data from Firestore
     const userDoc = await db.collection("users").doc(userId).get()
 
     if (!userDoc.exists) {
+      console.error(`User ${userId} not found in Firestore`)
       return NextResponse.json({ error: "User not found" }, { status: 404 })
     }
 
     const userData = userDoc.data()
-    const email = userData?.email || ""
+    const customerEmail = userData?.email
 
-    // Create a new customer or use existing one
+    if (!customerEmail) {
+      console.error(`User ${userId} has no email in Firestore`)
+      return NextResponse.json({ error: "User email not found" }, { status: 400 })
+    }
+
+    console.log(`User email: ${customerEmail}`)
+
+    // Check if user already has a Stripe customer ID
     let customerId = userData?.stripeCustomerId
 
-    if (!customerId) {
+    if (customerId) {
+      console.log(`User already has Stripe customer ID: ${customerId}`)
+    } else {
+      // Create a new customer
       const customer = await stripe.customers.create({
-        email,
+        email: customerEmail,
         metadata: {
           userId,
           createdAt: new Date().toISOString(),
@@ -45,16 +90,9 @@ export async function POST(request: Request) {
       })
 
       console.log(`Created new Stripe customer: ${customerId}`)
-    } else {
-      console.log(`Using existing Stripe customer: ${customerId}`)
     }
 
-    // Determine success and cancel URLs
-    const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000"
-    const successUrl = `${baseUrl}/subscription/success?session_id={CHECKOUT_SESSION_ID}&userId=${userId}`
-    const cancelUrl = `${baseUrl}/pricing?canceled=true`
-
-    // Create the checkout session
+    // Create a checkout session
     const session = await stripe.checkout.sessions.create({
       customer: customerId,
       payment_method_types: ["card"],
@@ -65,45 +103,50 @@ export async function POST(request: Request) {
         },
       ],
       mode: "subscription",
-      success_url: successUrl,
-      cancel_url: cancelUrl,
+      success_url: `${process.env.NEXT_PUBLIC_SITE_URL}/subscription/success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${process.env.NEXT_PUBLIC_SITE_URL}/subscription/cancel?session_id={CHECKOUT_SESSION_ID}`,
       metadata: {
         userId,
         createdAt: new Date().toISOString(),
-        priceId,
       },
       subscription_data: {
         metadata: {
           userId,
           createdAt: new Date().toISOString(),
-          priceId,
         },
       },
     })
 
-    console.log(`Created checkout session: ${session.id}`)
+    // Log the session
+    console.log("Session created:", session.id)
+    console.log("Success URL:", session.success_url)
 
-    // Store the session in Firestore
+    // Store session info in Firestore
     await db
-      .collection("stripeCheckoutSessions")
+      .collection("checkoutSessions")
       .doc(session.id)
       .set({
         userId,
+        customerEmail,
         sessionId: session.id,
-        status: "created",
         createdAt: new Date(),
-        priceId,
+        status: "created",
         metadata: {
           userId,
           createdAt: new Date().toISOString(),
         },
       })
 
-    return NextResponse.json({ sessionId: session.id, url: session.url })
+    console.log("Session stored in Firestore")
+    console.log("------------ CHECKOUT SESSION CREATED ------------")
+
+    return NextResponse.json({ url: session.url })
   } catch (error) {
     console.error("Error creating checkout session:", error)
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Failed to create checkout session" },
+      {
+        error: error instanceof Error ? error.message : "Failed to create checkout session",
+      },
       { status: 500 },
     )
   }
