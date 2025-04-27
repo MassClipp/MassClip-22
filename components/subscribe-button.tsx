@@ -27,6 +27,8 @@ export function SubscribeButton({ children, className = "" }: SubscribeButtonPro
     setIsLoading(true)
 
     try {
+      console.log("Starting checkout process for user:", user.uid)
+
       const response = await fetch("/api/create-checkout-session", {
         method: "POST",
         headers: {
@@ -38,18 +40,24 @@ export function SubscribeButton({ children, className = "" }: SubscribeButtonPro
         }),
       })
 
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || "Failed to create checkout session")
+      }
+
       const data = await response.json()
 
       if (data.url) {
+        console.log("Redirecting to checkout:", data.url)
         window.location.href = data.url
       } else {
-        throw new Error("Failed to create checkout session")
+        throw new Error("No checkout URL returned")
       }
     } catch (error) {
-      console.error("Error:", error)
+      console.error("Checkout error:", error)
       toast({
-        title: "Error",
-        description: "Failed to start checkout process. Please try again.",
+        title: "Checkout Error",
+        description: error instanceof Error ? error.message : "Failed to start checkout process",
         variant: "destructive",
       })
     } finally {
