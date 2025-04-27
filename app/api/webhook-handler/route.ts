@@ -106,6 +106,38 @@ export async function POST(request: Request) {
       // Get the customer ID from the subscription
       const customerId = subscription.customer as string
 
+      // Check if this was canceled by the user through our app
+      const metadata = subscription.metadata || {}
+      const canceledByUser = metadata.canceledByUser === "true"
+      const userId = metadata.userId
+
+      console.log(`Subscription ${subscription.id} was canceled by user: ${canceledByUser}`)
+
+      // If we have the userId in metadata, use it directly
+      if (userId) {
+        console.log(`Using userId from metadata: ${userId}`)
+
+        // Update the user's subscription status
+        await getFirestore().collection("users").doc(userId).update({
+          plan: "free",
+          stripeSubscriptionId: null,
+          subscriptionUpdatedAt: new Date(),
+          subscriptionStatus: "expired",
+        })
+
+        console.log(`Updated user ${userId} to free plan`)
+
+        // Log the event
+        await getFirestore().collection("subscriptionEvents").add({
+          userId: userId,
+          eventType: "subscription_expired",
+          subscriptionId: subscription.id,
+          timestamp: new Date().toISOString(),
+        })
+
+        return NextResponse.json({ received: true })
+      }
+
       // Find the user by Stripe customer ID
       const usersSnapshot = await getFirestore()
         .collection("users")
@@ -126,10 +158,18 @@ export async function POST(request: Request) {
         plan: "free",
         stripeSubscriptionId: null,
         subscriptionUpdatedAt: new Date(),
-        subscriptionStatus: "canceled",
+        subscriptionStatus: "expired",
       })
 
       console.log(`Updated user ${userDoc.id} to free plan`)
+
+      // Log the event
+      await getFirestore().collection("subscriptionEvents").add({
+        userId: userDoc.id,
+        eventType: "subscription_expired",
+        subscriptionId: subscription.id,
+        timestamp: new Date().toISOString(),
+      })
     }
 
     return NextResponse.json({ received: true })

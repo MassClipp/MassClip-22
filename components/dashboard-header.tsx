@@ -119,6 +119,11 @@ export default function DashboardHeader() {
                   Profile
                 </DropdownMenuItem>
                 <DropdownMenuSeparator className="bg-gray-800" />
+                <DropdownMenuItem asChild>
+                  <Link href="/dashboard/subscription" className="cursor-pointer">
+                    Manage Subscription
+                  </Link>
+                </DropdownMenuItem>
                 <DropdownMenuItem className="hover:bg-gray-800" onClick={handleLogout}>
                   <LogOut className="h-4 w-4 mr-2" />
                   Log out
