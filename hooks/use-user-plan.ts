@@ -92,6 +92,15 @@ export function useUserPlan() {
     if (planData.plan === "pro") return { success: true }
 
     try {
+      // CRITICAL: Check if user has reached their limit BEFORE incrementing
+      // This is the most important check to prevent exceeding the limit
+      if (planData.downloads >= planData.downloadsLimit) {
+        return {
+          success: false,
+          message: "You've reached your monthly download limit. Upgrade to Pro for unlimited downloads.",
+        }
+      }
+
       const userDocRef = doc(db, "users", user.uid)
 
       // Check if we need to reset downloads (new month)
@@ -110,19 +119,12 @@ export function useUserPlan() {
         return { success: true }
       }
 
-      // Check if user has reached their limit
-      if (planData.downloads >= planData.downloadsLimit) {
-        return {
-          success: false,
-          message: "You've reached your monthly download limit. Upgrade to Pro for unlimited downloads.",
-        }
-      }
-
       // Increment download count
       await updateDoc(userDocRef, {
         downloads: increment(1),
       })
 
+      // Update local state immediately to prevent race conditions
       setPlanData((prev) => (prev ? { ...prev, downloads: prev.downloads + 1 } : null))
 
       return { success: true }

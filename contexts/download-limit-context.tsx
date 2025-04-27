@@ -16,7 +16,7 @@ export function DownloadLimitProvider({ children }: { children: ReactNode }) {
   const [remainingDownloads, setRemainingDownloads] = useState(5) // Default to 5 total downloads
   const { isProUser, planData } = useUserPlan()
 
-  // Simple function to refresh the download limit status
+  // Simple function to refresh the download limit status - for UI display only
   const refreshLimitStatus = async () => {
     if (isProUser) {
       setHasReachedLimit(false)
