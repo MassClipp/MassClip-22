@@ -11,7 +11,6 @@ import { trackFirestoreWrite } from "@/lib/firestore-optimizer"
 import { collection, addDoc, serverTimestamp } from "firebase/firestore"
 import { useToast } from "@/hooks/use-toast"
 import { useUserPlan } from "@/hooks/use-user-plan"
-import { useDownloadLimit } from "@/contexts/download-limit-context"
 import { useMobile } from "@/hooks/use-mobile"
 
 interface VimeoCardProps {
@@ -33,7 +32,6 @@ export default function VimeoCard({ video }: VimeoCardProps) {
   const { user } = useAuth()
   const { toast } = useToast()
   const { isProUser, recordDownload, planData } = useUserPlan()
-  const { hasReachedLimit: hasReachedGlobalLimit, refreshLimitStatus } = useDownloadLimit()
   const isMobile = useMobile()
   const titleRef = useRef<HTMLDivElement>(null)
   const videoRef = useRef<HTMLIFrameElement>(null)
@@ -47,11 +45,8 @@ export default function VimeoCard({ video }: VimeoCardProps) {
     }
   }, [planData])
 
-  // Calculate remaining downloads based on local state for immediate UI updates
-  const localRemainingDownloads = planData ? Math.max(0, planData.downloadsLimit - localDownloadCount) : 0
-
-  // Check if user has reached download limit based on local state
-  const hasReachedLimit = !isProUser && localRemainingDownloads <= 0
+  // Simple download limit check - free users get 5 downloads max
+  const hasReachedLimit = !isProUser && localDownloadCount >= (planData?.downloadsLimit || 5)
 
   // Extract video ID from URI (format: "/videos/12345678") with null check
   const videoId = video?.uri ? video.uri.split("/").pop() : null
@@ -134,7 +129,7 @@ export default function VimeoCard({ video }: VimeoCardProps) {
     trackVideoView()
   }, [user, videoId, video, isActive])
 
-  // Handle download button click - enforce download limit strictly at the click level
+  // Handle download button click - simple enforcement of 5 download maximum
   const handleDownload = (e: React.MouseEvent) => {
     e.preventDefault()
     e.stopPropagation()
@@ -149,7 +144,7 @@ export default function VimeoCard({ video }: VimeoCardProps) {
       return
     }
 
-    // Strict download limit enforcement - check local state
+    // Simple download limit check - 5 downloads max for free users
     if (!isProUser && localDownloadCount >= (planData?.downloadsLimit || 5)) {
       toast({
         title: "Download Limit Reached",
@@ -186,11 +181,8 @@ export default function VimeoCard({ video }: VimeoCardProps) {
       const result = await recordDownload()
 
       if (result.success) {
-        // Increment local download count
+        // Simply increment the local download count
         setLocalDownloadCount((prev) => prev + 1)
-
-        // Also refresh the global limit status for other components
-        refreshLimitStatus()
       }
 
       return result
