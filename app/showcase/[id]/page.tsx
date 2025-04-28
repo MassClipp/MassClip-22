@@ -9,6 +9,7 @@ import VimeoCard from "@/components/vimeo-card"
 import VideoSkeleton from "@/components/video-skeleton"
 import { Button } from "@/components/ui/button"
 import type { VimeoApiResponse, VimeoVideo } from "@/lib/types"
+import { shuffleArray } from "@/lib/utils" // Import the shuffleArray utility
 
 export default function ShowcasePage() {
   const params = useParams()
@@ -70,7 +71,9 @@ export default function ShowcasePage() {
           return true
         })
 
-        return [...prev, ...newVideos]
+        // Combine and shuffle videos instead of sorting
+        const combinedVideos = [...prev, ...newVideos]
+        return shuffleArray(combinedVideos)
       })
 
       // Check if there are more videos to load

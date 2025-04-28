@@ -10,6 +10,7 @@ import { useVimeoTagVideos } from "@/hooks/use-vimeo-tag-videos"
 import { useVimeoShowcases } from "@/hooks/use-vimeo-showcases"
 import { Button } from "@/components/ui/button"
 import VideoSkeleton from "@/components/video-skeleton"
+import { shuffleArray } from "@/lib/utils" // Import the shuffleArray utility
 
 export default function CategoryPage() {
   const params = useParams()
@@ -20,6 +21,7 @@ export default function CategoryPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [noContentMessage, setNoContentMessage] = useState<string | null>(null)
   const [redirectInProgress, setRedirectInProgress] = useState(false)
+  const [shuffledVideos, setShuffledVideos] = useState<any[]>([]) // Add state for shuffled videos
 
   // Special case for "browse all"
   useEffect(() => {
@@ -79,6 +81,13 @@ export default function CategoryPage() {
 
   const { videos, loading, error, hasMore, loadMore } = useVimeoTagVideos(tag)
   const observer = useRef<IntersectionObserver | null>(null)
+
+  // Shuffle videos when they change
+  useEffect(() => {
+    if (videos && videos.length > 0) {
+      setShuffledVideos(shuffleArray([...videos]))
+    }
+  }, [videos])
 
   // Reference for infinite scrolling
   const lastVideoElementRef = useCallback(
@@ -179,17 +188,17 @@ export default function CategoryPage() {
 
         {/* Videos grid */}
         <div className="px-6">
-          {videos.length > 0 ? (
+          {shuffledVideos.length > 0 ? (
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
-              {videos.map((video, index) => (
-                <div key={video.uri} ref={index === videos.length - 1 ? lastVideoElementRef : undefined}>
+              {shuffledVideos.map((video, index) => (
+                <div key={video.uri} ref={index === shuffledVideos.length - 1 ? lastVideoElementRef : undefined}>
                   <VimeoCard video={video} />
                 </div>
               ))}
 
               {/* Show skeleton loaders while loading more */}
               {loading &&
-                videos.length > 0 &&
+                shuffledVideos.length > 0 &&
                 Array.from({ length: 6 }).map((_, index) => <VideoSkeleton key={`loading-skeleton-${index}`} />)}
             </div>
           ) : !isLoading ? (
@@ -207,14 +216,14 @@ export default function CategoryPage() {
         </div>
 
         {/* Loading more indicator */}
-        {loading && videos.length > 0 && (
+        {loading && shuffledVideos.length > 0 && (
           <div className="px-6 py-4 text-center">
             <p className="text-gray-400">Loading more videos...</p>
           </div>
         )}
 
         {/* Manual load more button */}
-        {!loading && videos.length > 0 && hasMore && (
+        {!loading && shuffledVideos.length > 0 && hasMore && (
           <div className="px-6 py-4 text-center">
             <Button onClick={loadMore} className="bg-red-600 hover:bg-red-700 text-white">
               Load More Videos

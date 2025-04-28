@@ -8,6 +8,7 @@ import VimeoCard from "@/components/vimeo-card"
 import VideoSkeleton from "@/components/video-skeleton"
 import { Button } from "@/components/ui/button"
 import type { VimeoApiResponse, VimeoVideo } from "@/lib/types"
+import { shuffleArray } from "@/lib/utils" // Import the shuffleArray utility
 
 export default function BrowseAllPage() {
   const [videos, setVideos] = useState<VimeoVideo[]>([])
@@ -54,12 +55,8 @@ export default function BrowseAllPage() {
         // Combine previous and new videos
         const combinedVideos = [...prev, ...newVideos]
 
-        // Sort alphabetically by title
-        return combinedVideos.sort((a, b) => {
-          const nameA = (a.name || "").toLowerCase()
-          const nameB = (b.name || "").toLowerCase()
-          return nameA.localeCompare(nameB)
-        })
+        // Shuffle videos instead of sorting alphabetically
+        return shuffleArray(combinedVideos)
       })
 
       // Check if there are more videos to load

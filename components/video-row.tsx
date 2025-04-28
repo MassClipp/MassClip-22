@@ -6,6 +6,7 @@ import { ChevronRight } from "lucide-react"
 import type { VimeoVideo } from "@/lib/types"
 import VimeoCard from "@/components/vimeo-card"
 import VideoSkeleton from "@/components/video-skeleton"
+import { shuffleArray } from "@/lib/utils" // Import the shuffleArray utility
 
 interface VideoRowProps {
   title: string
@@ -53,17 +54,9 @@ export default function VideoRow({ title, videos, limit = 6, isShowcase = false,
   // Load videos when row becomes visible
   useEffect(() => {
     if (isIntersecting && videos) {
-      // Sort videos alphabetically by title instead of shuffling
-      const sortedVideos = [...videos]
-        .sort((a, b) => {
-          // Sort by name (title) alphabetically
-          const nameA = (a.name || "").toLowerCase()
-          const nameB = (b.name || "").toLowerCase()
-          return nameA.localeCompare(nameB)
-        })
-        .slice(0, limit)
-
-      setVisibleVideos(sortedVideos)
+      // Shuffle videos instead of sorting alphabetically
+      const shuffledVideos = shuffleArray([...videos]).slice(0, limit)
+      setVisibleVideos(shuffledVideos)
     }
   }, [isIntersecting, videos, limit])
 
