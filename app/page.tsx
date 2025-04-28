@@ -13,16 +13,15 @@ export default function LandingPage() {
   const router = useRouter()
   const [searchQuery, setSearchQuery] = useState("")
 
-  // Enhanced search functionality to find relevant categories
+  // Enhanced search functionality to find relevant content
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault()
     if (searchQuery.trim()) {
-      // This will redirect to the dashboard with the search query
-      // The dashboard can then filter content based on the query
-      router.push(`/dashboard?search=${encodeURIComponent(searchQuery)}`)
+      // Store the search query in localStorage so it can be accessed by the dashboard
+      localStorage.setItem("lastSearchQuery", searchQuery.trim())
 
-      // Alternative: If you want to search categories specifically
-      // router.push(`/dashboard/categories?search=${encodeURIComponent(searchQuery)}`)
+      // Redirect to the dashboard with the search query
+      router.push(`/dashboard?search=${encodeURIComponent(searchQuery.trim())}`)
     }
   }
 
@@ -107,8 +106,6 @@ export default function LandingPage() {
                 <p className="text-xl text-white">Upgrade for unlimited access and exclusive features</p>
               </div>
             </div>
-
-            {/* Removed the "Over 500+ creators" line */}
           </section>
         </main>
 
