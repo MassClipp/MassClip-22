@@ -36,14 +36,16 @@ export default function LandingPage() {
       {/* Main Content */}
       <div className="relative z-10 flex flex-col min-h-screen">
         {/* Header */}
-        <LandingHeader />
+        <div className="border-b border-white/10">
+          <LandingHeader />
+        </div>
 
         {/* Main Content Area */}
         <main className="flex-1 flex flex-col">
           {/* Hero Section */}
-          <section className="container mx-auto px-4 py-16 md:py-24 flex flex-col items-center">
-            <h1 className="text-4xl md:text-6xl font-bold text-center text-white mb-8 max-w-4xl">
-              The #1 Marketplace for Viral Clips
+          <section className="container mx-auto px-4 py-12 md:py-16 flex flex-col items-center">
+            <h1 className="text-4xl md:text-6xl font-light text-center text-white mb-8 max-w-4xl">
+              The #1 Platform for Viral Clips
             </h1>
 
             {/* Search Bar */}
@@ -77,10 +79,10 @@ export default function LandingPage() {
             </div>
           </section>
 
-          {/* How It Works Section */}
-          <section className="container mx-auto px-4 py-12 md:py-16">
-            <h2 className="text-3xl md:text-4xl font-bold text-center text-white mb-12">How It Works</h2>
-            <div className="max-w-2xl mx-auto space-y-6">
+          {/* How It Works Section - Moved up and made more compact */}
+          <section className="container mx-auto px-4 py-6">
+            <h2 className="text-3xl md:text-4xl font-light text-center text-white mb-8">How It Works</h2>
+            <div className="max-w-2xl mx-auto space-y-4">
               <div className="flex items-start gap-4">
                 <CheckCircle2 className="text-crimson flex-shrink-0 mt-1" size={24} />
                 <p className="text-xl text-white">Browse trending and niche-specific clips</p>
@@ -96,8 +98,8 @@ export default function LandingPage() {
             </div>
 
             {/* Social Proof */}
-            <div className="max-w-2xl mx-auto mt-16 text-center">
-              <p className="text-xl md:text-2xl text-white/80">
+            <div className="max-w-2xl mx-auto mt-12 text-center">
+              <p className="text-xl md:text-2xl text-white/80 font-light">
                 Over 500+ creators built their pages faster with MassClip.
               </p>
             </div>
@@ -105,7 +107,7 @@ export default function LandingPage() {
         </main>
 
         {/* Footer */}
-        <footer className="relative z-10 border-t border-white/10 py-6">
+        <footer className="relative z-10 border-t border-white/10 py-6 mt-8">
           <div className="container mx-auto px-4">
             <div className="flex flex-col md:flex-row justify-center md:justify-start items-center gap-6 text-white/70">
               <Link href="/about" className="hover:text-white transition-colors">
