@@ -2,16 +2,40 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
-import { Search, CheckCircle2 } from "lucide-react"
+import { Search, CheckCircle2, ArrowRight } from "lucide-react"
 import LandingHeader from "@/components/landing-header"
 import { Button } from "@/components/ui/button"
+import { categories } from "@/lib/data"
 
 export default function LandingPage() {
   const router = useRouter()
   const [searchQuery, setSearchQuery] = useState("")
+  const [randomCategories, setRandomCategories] = useState<string[]>([])
+
+  // Get random categories on page load
+  useEffect(() => {
+    // Extract all unique category names from the data
+    const allCategories = new Set<string>()
+
+    categories.forEach((category) => {
+      allCategories.add(category.name)
+
+      // Also add unique tags from videos
+      category.videos.forEach((video) => {
+        video.tags.forEach((tag) => allCategories.add(tag))
+      })
+    })
+
+    // Convert to array and shuffle
+    const categoryArray = Array.from(allCategories)
+    const shuffled = categoryArray.sort(() => 0.5 - Math.random())
+
+    // Take the first 3 (or fewer if there aren't enough)
+    setRandomCategories(shuffled.slice(0, 3))
+  }, [])
 
   // Enhanced search functionality to find relevant content
   const handleSearch = (e: React.FormEvent) => {
@@ -31,6 +55,10 @@ export default function LandingPage() {
 
   const handleStartFree = () => {
     router.push("/signup")
+  }
+
+  const handleCategoryClick = (category: string) => {
+    router.push(`/category/${encodeURIComponent(category.toLowerCase())}`)
   }
 
   return (
@@ -89,21 +117,49 @@ export default function LandingPage() {
             </div>
           </section>
 
-          {/* How It Works Section - Moved up and made more compact */}
+          {/* Two Column Section - How It Works + Categories */}
           <section className="container mx-auto px-4 py-6">
-            <h2 className="text-3xl md:text-4xl font-light text-center text-white mb-8">How It Works</h2>
-            <div className="max-w-2xl mx-auto space-y-4">
-              <div className="flex items-start gap-4">
-                <CheckCircle2 className="text-crimson flex-shrink-0 mt-1" size={24} />
-                <p className="text-xl text-white">Browse trending and niche-specific clips</p>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-6xl mx-auto">
+              {/* How It Works - Left Column */}
+              <div>
+                <h2 className="text-2xl md:text-3xl font-light text-white mb-6 tracking-wide">How It Works</h2>
+                <div className="space-y-4">
+                  <div className="flex items-start gap-4">
+                    <CheckCircle2 className="text-crimson flex-shrink-0 mt-1" size={24} />
+                    <p className="text-lg text-white font-light tracking-wide">
+                      Browse trending and niche-specific clips
+                    </p>
+                  </div>
+                  <div className="flex items-start gap-4">
+                    <CheckCircle2 className="text-crimson flex-shrink-0 mt-1" size={24} />
+                    <p className="text-lg text-white font-light tracking-wide">Download and post to your brand/page</p>
+                  </div>
+                  <div className="flex items-start gap-4">
+                    <CheckCircle2 className="text-crimson flex-shrink-0 mt-1" size={24} />
+                    <p className="text-lg text-white font-light tracking-wide">
+                      Upgrade for unlimited access and exclusive features
+                    </p>
+                  </div>
+                </div>
               </div>
-              <div className="flex items-start gap-4">
-                <CheckCircle2 className="text-crimson flex-shrink-0 mt-1" size={24} />
-                <p className="text-xl text-white">Download and post to your brand/page</p>
-              </div>
-              <div className="flex items-start gap-4">
-                <CheckCircle2 className="text-crimson flex-shrink-0 mt-1" size={24} />
-                <p className="text-xl text-white">Upgrade for unlimited access and exclusive features</p>
+
+              {/* Start With These Categories - Right Column */}
+              <div>
+                <h2 className="text-2xl md:text-3xl font-light text-white mb-6 tracking-wide">
+                  Start With These Categories
+                </h2>
+                <div className="space-y-3">
+                  {randomCategories.map((category, index) => (
+                    <button
+                      key={index}
+                      onClick={() => handleCategoryClick(category)}
+                      className="w-full flex items-center justify-between bg-white/5 hover:bg-white/10 border border-white/10 rounded-md px-4 py-3 transition-colors group"
+                    >
+                      <span className="text-lg text-white font-light tracking-wide capitalize">{category}</span>
+                      <ArrowRight className="h-5 w-5 text-white/50 group-hover:text-white transition-colors" />
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
           </section>
