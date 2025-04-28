@@ -5,33 +5,31 @@ import { useRouter } from "next/navigation"
 import { motion } from "framer-motion"
 import { ArrowLeft } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { useVimeoVideos } from "@/hooks/use-vimeo-videos"
+import { useVimeoTagVideos } from "@/hooks/use-vimeo-tag-videos"
 import VimeoCard from "@/components/vimeo-card"
 
 export default function HustleMentalityCategory() {
   const router = useRouter()
-  const { videos, loading } = useVimeoVideos()
-  const [hustleVideos, setHustleVideos] = useState<any[]>([])
+  const { videos, loading, hasMore, loadMore } = useVimeoTagVideos("hustle mentality")
+  const [loadingMore, setLoadingMore] = useState(false)
+
+  // Handle infinite scroll
+  const handleScroll = () => {
+    if (
+      window.innerHeight + document.documentElement.scrollTop >= document.documentElement.offsetHeight - 500 &&
+      hasMore &&
+      !loadingMore
+    ) {
+      setLoadingMore(true)
+      loadMore()
+      setTimeout(() => setLoadingMore(false), 1000)
+    }
+  }
 
   useEffect(() => {
-    if (!loading && videos.length > 0) {
-      // Filter videos that might be related to hustle mentality
-      // In a real app, you would have proper tagging or categorization
-      const filtered = videos.filter(
-        (video) =>
-          video.name?.toLowerCase().includes("hustle") ||
-          video.description?.toLowerCase().includes("hustle") ||
-          video.tags?.some(
-            (tag: string) =>
-              tag.toLowerCase().includes("hustle") ||
-              tag.toLowerCase().includes("grind") ||
-              tag.toLowerCase().includes("entrepreneur"),
-          ),
-      )
-
-      setHustleVideos(filtered.length > 0 ? filtered : videos.slice(0, 12))
-    }
-  }, [videos, loading])
+    window.addEventListener("scroll", handleScroll)
+    return () => window.removeEventListener("scroll", handleScroll)
+  }, [hasMore, loadingMore])
 
   // Animation variants
   const containerVariants = {
@@ -87,7 +85,7 @@ export default function HustleMentalityCategory() {
           </p>
         </motion.div>
 
-        {loading ? (
+        {loading && videos.length === 0 ? (
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
             {Array.from({ length: 12 }).map((_, index) => (
               <div key={`skeleton-${index}`} className="aspect-[9/16] bg-zinc-900/50 rounded-md animate-pulse"></div>
@@ -100,7 +98,7 @@ export default function HustleMentalityCategory() {
             initial="hidden"
             animate="visible"
           >
-            {hustleVideos.map((video, index) => (
+            {videos.map((video, index) => (
               <motion.div key={`video-${video.uri || index}`} variants={itemVariants}>
                 <VimeoCard video={video} />
               </motion.div>
@@ -108,9 +106,16 @@ export default function HustleMentalityCategory() {
           </motion.div>
         )}
 
-        {!loading && hustleVideos.length === 0 && (
+        {!loading && videos.length === 0 && (
           <div className="text-center py-20">
             <p className="text-white/60">No hustle mentality videos found. Check back soon for updates.</p>
+          </div>
+        )}
+
+        {/* Loading more indicator */}
+        {loadingMore && (
+          <div className="text-center py-8">
+            <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-current border-r-transparent motion-reduce:animate-[spin_1.5s_linear_infinite] opacity-60"></div>
           </div>
         )}
       </main>

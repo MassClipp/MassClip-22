@@ -114,6 +114,21 @@ export default function Dashboard() {
     },
   }
 
+  // Check if we have the specific showcases
+  const hasIntrospection = showcaseNames.some(
+    (name) =>
+      name.toLowerCase().includes("introspection") ||
+      name.toLowerCase().includes("reflection") ||
+      name.toLowerCase().includes("mindfulness"),
+  )
+
+  const hasHustleMentality = showcaseNames.some(
+    (name) =>
+      name.toLowerCase().includes("hustle") ||
+      name.toLowerCase().includes("grind") ||
+      name.toLowerCase().includes("entrepreneur"),
+  )
+
   return (
     <div className="relative min-h-screen bg-black text-white">
       {/* Premium Gradient Background */}
@@ -187,7 +202,7 @@ export default function Dashboard() {
             </motion.h3>
 
             <motion.div variants={itemVariants} className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              {/* Introspection Category (New) */}
+              {/* Introspection Category */}
               <Button
                 onClick={() => router.push("/category/introspection")}
                 variant="outline"
@@ -197,7 +212,7 @@ export default function Dashboard() {
                 <span className="text-left font-light">Introspection</span>
               </Button>
 
-              {/* Hustle Mentality Category (New) */}
+              {/* Hustle Mentality Category */}
               <Button
                 onClick={() => router.push("/category/hustle-mentality")}
                 variant="outline"
@@ -207,7 +222,7 @@ export default function Dashboard() {
                 <span className="text-left font-light">Hustle Mentality</span>
               </Button>
 
-              {/* Recently Added Category (Kept) */}
+              {/* Recently Added Category */}
               <Button
                 onClick={() => router.push("/category/recently-added")}
                 variant="outline"
@@ -217,7 +232,7 @@ export default function Dashboard() {
                 <span className="text-left font-light">Recently Added</span>
               </Button>
 
-              {/* All Categories (Kept) */}
+              {/* All Categories */}
               <Button
                 onClick={() => router.push("/dashboard/categories")}
                 variant="outline"
