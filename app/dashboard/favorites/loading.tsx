@@ -14,8 +14,8 @@ export default function FavoritesLoading() {
 
       <main className="pt-24 pb-16 relative z-10">
         <div className="px-6 mb-8">
-          <div className="h-10 w-48 bg-gray-800 rounded-md animate-pulse"></div>
-          <div className="h-6 w-64 bg-gray-800 rounded-md mt-2 animate-pulse"></div>
+          <div className="h-10 w-48 bg-gray-800/50 rounded-md animate-pulse"></div>
+          <div className="h-6 w-64 bg-gray-800/50 rounded-md mt-2 animate-pulse"></div>
         </div>
 
         {/* Red accent line */}

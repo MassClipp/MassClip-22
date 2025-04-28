@@ -101,6 +101,11 @@ export default function FavoritesPage() {
     show: { opacity: 1, y: 0, transition: { type: "spring", stiffness: 300, damping: 24 } },
   }
 
+  // If we're in the initial loading state, show the loading component
+  if (initialLoading) {
+    return <FavoritesLoading />
+  }
+
   return (
     <div className="relative min-h-screen bg-black text-white">
       {/* Premium Gradient Background */}
@@ -126,10 +131,10 @@ export default function FavoritesPage() {
           <Button
             variant="outline"
             onClick={refreshData}
-            disabled={initialLoading}
+            disabled={isLoading}
             className="border-gray-800 bg-black/50 text-white hover:bg-gray-900 hover:text-red-500 transition-all duration-300"
           >
-            <RefreshCw className={`h-4 w-4 mr-2 ${initialLoading ? "animate-spin" : ""}`} />
+            <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? "animate-spin" : ""}`} />
             Refresh
           </Button>
         </motion.div>
@@ -146,19 +151,8 @@ export default function FavoritesPage() {
           </motion.div>
         )}
 
-        {/* Initial loading state */}
-        {initialLoading && (
-          <div className="px-6">
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-6">
-              {Array.from({ length: PAGE_SIZE }).map((_, index) => (
-                <VideoSkeletonCard key={`skeleton-${index}`} />
-              ))}
-            </div>
-          </div>
-        )}
-
         {/* Empty state */}
-        {!initialLoading && favorites.length === 0 && (
+        {favorites.length === 0 && (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -181,7 +175,7 @@ export default function FavoritesPage() {
         )}
 
         {/* Favorites grid */}
-        {!initialLoading && favorites.length > 0 && (
+        {favorites.length > 0 && (
           <div className="px-6">
             <motion.div
               variants={containerVariants}
@@ -212,7 +206,7 @@ export default function FavoritesPage() {
               ))}
 
               {/* Loading more indicator */}
-              {isLoading && !initialLoading && hasMore && (
+              {favoritesLoading && !initialLoading && hasMore && (
                 <>
                   {Array.from({ length: 3 }).map((_, index) => (
                     <VideoSkeletonCard key={`loading-more-${index}`} />
@@ -235,6 +229,41 @@ export default function FavoritesPage() {
             )}
           </div>
         )}
+      </main>
+    </div>
+  )
+}
+
+// Create a loading component that matches exactly our design
+function FavoritesLoading() {
+  return (
+    <div className="relative min-h-screen bg-black text-white">
+      {/* Premium Gradient Background */}
+      <div className="fixed inset-0 z-0 bg-gradient-to-br from-black via-black to-gray-900"></div>
+
+      {/* Subtle animated gradient overlay */}
+      <div className="fixed inset-0 z-0 opacity-20 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-red-900 via-transparent to-transparent animate-pulse-slow"></div>
+
+      <DashboardHeader />
+
+      <main className="pt-24 pb-16 relative z-10">
+        <div className="px-6 mb-8">
+          <div className="h-10 w-48 bg-gray-800/50 rounded-md animate-pulse"></div>
+          <div className="h-6 w-64 bg-gray-800/50 rounded-md mt-2 animate-pulse"></div>
+        </div>
+
+        {/* Red accent line */}
+        <div className="relative px-6 mb-8">
+          <div className="h-px bg-gradient-to-r from-transparent via-red-600 to-transparent w-full"></div>
+        </div>
+
+        <div className="px-6">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-6">
+            {Array.from({ length: 12 }).map((_, index) => (
+              <VideoSkeletonCard key={`skeleton-${index}`} />
+            ))}
+          </div>
+        </div>
       </main>
     </div>
   )

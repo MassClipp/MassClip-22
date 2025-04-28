@@ -1,28 +1,26 @@
-import { cn } from "@/lib/utils"
+"use client"
 
-interface VideoSkeletonCardProps {
-  className?: string
-  showViewedDate?: boolean
-}
+import { motion } from "framer-motion"
 
-export default function VideoSkeletonCard({ className, showViewedDate = false }: VideoSkeletonCardProps) {
+export default function VideoSkeletonCard() {
   return (
-    <div className={cn("flex-shrink-0 w-[160px] animate-pulse", className)}>
-      <div
-        className="relative rounded-md overflow-hidden bg-gray-800"
-        style={{
-          paddingBottom: "177.78%", // 9:16 aspect ratio
-        }}
-      >
-        {/* Shimmer effect */}
-        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-gray-700/20 to-transparent shimmer" />
+    <motion.div
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.3 }}
+      className="rounded-lg overflow-hidden bg-gray-900/30 border border-gray-800/50"
+    >
+      <div className="aspect-video bg-gray-800/30 relative overflow-hidden">
+        <div className="absolute inset-0 shimmer"></div>
       </div>
-
-      {/* Title skeleton */}
-      <div className="mt-2 h-3 w-3/4 bg-gray-800 rounded" />
-
-      {/* Viewed date skeleton (optional) */}
-      {showViewedDate && <div className="mt-1 h-2 w-1/2 bg-gray-800 rounded" />}
-    </div>
+      <div className="p-3 space-y-2">
+        <div className="h-4 bg-gray-800/30 rounded relative overflow-hidden">
+          <div className="absolute inset-0 shimmer"></div>
+        </div>
+        <div className="h-3 bg-gray-800/30 rounded w-2/3 relative overflow-hidden">
+          <div className="absolute inset-0 shimmer"></div>
+        </div>
+      </div>
+    </motion.div>
   )
 }

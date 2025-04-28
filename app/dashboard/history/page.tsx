@@ -1,24 +1,22 @@
 "use client"
 
 import { useState, useRef, useCallback } from "react"
-import { useRouter } from "next/navigation"
-import Link from "next/link"
-import { ChevronLeft, Trash2, RefreshCw } from "lucide-react"
 import { useAuth } from "@/contexts/auth-context"
+import { db } from "@/lib/firebase"
+import { doc, deleteDoc, type Timestamp } from "firebase/firestore"
 import DashboardHeader from "@/components/dashboard-header"
 import VimeoCard from "@/components/vimeo-card"
 import { Button } from "@/components/ui/button"
-import { db } from "@/lib/firebase"
-import { deleteDoc, doc, writeBatch } from "firebase/firestore"
+import { Trash2, RefreshCw, Clock } from "lucide-react"
 import type { VimeoVideo } from "@/lib/types"
 import { trackFirestoreWrite } from "@/lib/firestore-optimizer"
 import VideoSkeletonCard from "@/components/video-skeleton-card"
 import { usePaginatedFirestore } from "@/hooks/use-paginated-firestore"
 import { motion } from "framer-motion"
+import { format } from "date-fns"
 
 export default function HistoryPage() {
   const { user } = useAuth()
-  const router = useRouter()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const observerRef = useRef<IntersectionObserver | null>(null)
@@ -26,14 +24,14 @@ export default function HistoryPage() {
 
   // Use the paginated hook for history
   const {
-    data: history,
+    data: historyItems,
     loading: historyLoading,
     initialLoading,
     error: historyError,
     hasMore,
     loadMore,
     refreshData,
-  } = usePaginatedFirestore<{ id: string; video: VimeoVideo; viewedAt: any }>(
+  } = usePaginatedFirestore<{ id: string; video: VimeoVideo; viewedAt: Timestamp }>(
     `users/${user?.uid || "no-user"}/history`,
     PAGE_SIZE,
     "viewedAt",
@@ -42,58 +40,22 @@ export default function HistoryPage() {
     !!user,
   )
 
-  // Format history items with proper dates
-  const formattedHistory = history.map((item) => ({
-    ...item,
-    viewedAt: item.viewedAt?.toDate ? item.viewedAt.toDate() : new Date(item.viewedAt),
-  }))
-
-  const removeHistoryItem = async (itemId: string) => {
+  const removeHistoryItem = async (historyId: string) => {
     if (!user) return
 
     try {
       setLoading(true)
       // Use the user-specific path
-      await deleteDoc(doc(db, `users/${user.uid}/history`, itemId))
+      await deleteDoc(doc(db, `users/${user.uid}/history`, historyId))
 
       // Track the write operation
       trackFirestoreWrite("HistoryPage", 1)
 
-      // Refresh data
+      // Remove from local state
       refreshData()
     } catch (err) {
       console.error("Error removing history item:", err)
-      setError("Failed to remove item from history")
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const clearAllHistory = async () => {
-    if (!user || !window.confirm("Are you sure you want to clear your entire viewing history?")) return
-
-    try {
-      setLoading(true)
-
-      // Use a batch write for better performance
-      const batch = writeBatch(db)
-      let operationCount = 0
-
-      formattedHistory.forEach((item) => {
-        batch.delete(doc(db, `users/${user.uid}/history`, item.id))
-        operationCount++
-      })
-
-      await batch.commit()
-
-      // Track the write operations
-      trackFirestoreWrite("HistoryPage", operationCount)
-
-      // Clear cache and refresh
-      refreshData()
-    } catch (err) {
-      console.error("Error clearing history:", err)
-      setError("Failed to clear viewing history")
+      setError("Failed to remove history item")
     } finally {
       setLoading(false)
     }
@@ -140,6 +102,11 @@ export default function HistoryPage() {
     show: { opacity: 1, y: 0, transition: { type: "spring", stiffness: 300, damping: 24 } },
   }
 
+  // If we're in the initial loading state, show the loading component
+  if (initialLoading) {
+    return <HistoryLoading />
+  }
+
   return (
     <div className="relative min-h-screen bg-black text-white">
       {/* Premium Gradient Background */}
@@ -155,41 +122,22 @@ export default function HistoryPage() {
           initial={{ opacity: 0, y: -10 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.3 }}
-          className="px-6 mb-8 flex flex-col sm:flex-row sm:items-center sm:justify-between"
+          className="px-6 mb-8 flex justify-between items-center"
         >
-          <div className="flex items-center mb-4 sm:mb-0">
-            <Link
-              href="/dashboard/user"
-              className="text-gray-400 hover:text-white flex items-center mr-4 transition-colors duration-300 group"
-            >
-              <ChevronLeft className="h-5 w-5 group-hover:transform group-hover:-translate-x-1 transition-transform duration-300" />
-              <span>Back</span>
-            </Link>
-            <h1 className="text-4xl font-bold text-white tracking-tight">Viewing History</h1>
+          <div>
+            <h1 className="text-4xl font-bold text-white tracking-tight">Watch History</h1>
+            <p className="text-gray-400 mt-2 text-lg">Videos you've recently viewed</p>
           </div>
 
-          <div className="flex gap-3">
-            <Button
-              variant="outline"
-              onClick={refreshData}
-              disabled={initialLoading}
-              className="border-gray-800 bg-black/50 text-white hover:bg-gray-900 hover:text-red-500 transition-all duration-300"
-            >
-              <RefreshCw className={`h-4 w-4 mr-2 ${initialLoading ? "animate-spin" : ""}`} />
-              Refresh
-            </Button>
-
-            {formattedHistory.length > 0 && (
-              <Button
-                variant="destructive"
-                onClick={clearAllHistory}
-                disabled={isLoading}
-                className="bg-red-600/80 hover:bg-red-700 transition-colors duration-300"
-              >
-                <Trash2 className="h-4 w-4 mr-2" /> Clear History
-              </Button>
-            )}
-          </div>
+          <Button
+            variant="outline"
+            onClick={refreshData}
+            disabled={isLoading}
+            className="border-gray-800 bg-black/50 text-white hover:bg-gray-900 hover:text-red-500 transition-all duration-300"
+          >
+            <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? "animate-spin" : ""}`} />
+            Refresh
+          </Button>
         </motion.div>
 
         {/* Red accent line */}
@@ -204,19 +152,8 @@ export default function HistoryPage() {
           </motion.div>
         )}
 
-        {/* Initial loading state */}
-        {initialLoading && (
-          <div className="px-6">
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-6">
-              {Array.from({ length: PAGE_SIZE }).map((_, index) => (
-                <VideoSkeletonCard key={`skeleton-${index}`} showViewedDate={true} />
-              ))}
-            </div>
-          </div>
-        )}
-
         {/* Empty state */}
-        {!initialLoading && formattedHistory.length === 0 && (
+        {historyItems.length === 0 && (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -224,11 +161,11 @@ export default function HistoryPage() {
             className="px-6 py-16 text-center"
           >
             <div className="max-w-md mx-auto bg-gray-900/50 backdrop-blur-sm p-8 rounded-xl border border-gray-800">
-              <p className="text-white text-xl font-medium mb-3">Your viewing history is empty</p>
-              <p className="text-gray-400 mb-6">Videos you watch will appear here for easy access.</p>
+              <p className="text-white text-xl font-medium mb-3">Your watch history is empty</p>
+              <p className="text-gray-400 mb-6">Videos you watch will appear here so you can easily find them again.</p>
               <Button
                 className="bg-red-600 hover:bg-red-700 text-white transition-all duration-300"
-                onClick={() => router.push("/dashboard")}
+                onClick={() => (window.location.href = "/dashboard")}
               >
                 Browse Videos
               </Button>
@@ -237,7 +174,7 @@ export default function HistoryPage() {
         )}
 
         {/* History grid */}
-        {!initialLoading && formattedHistory.length > 0 && (
+        {historyItems.length > 0 && (
           <div className="px-6">
             <motion.div
               variants={containerVariants}
@@ -245,23 +182,19 @@ export default function HistoryPage() {
               animate="show"
               className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-6"
             >
-              {formattedHistory.map((item, index) => (
+              {historyItems.map((item, index) => (
                 <motion.div
                   key={item.id}
                   variants={itemVariants}
                   className="relative group"
-                  ref={index === formattedHistory.length - 1 ? lastElementRef : undefined}
+                  ref={index === historyItems.length - 1 ? lastElementRef : undefined}
                 >
                   <div className="overflow-hidden rounded-lg transition-all duration-300 transform group-hover:scale-[1.02] group-hover:shadow-lg group-hover:shadow-red-900/20">
                     <VimeoCard video={item.video} />
-                  </div>
-                  <div className="mt-2 text-sm text-gray-400 font-medium">
-                    <span className="text-xs text-gray-500">Viewed: </span>
-                    {item.viewedAt.toLocaleDateString(undefined, {
-                      year: "numeric",
-                      month: "short",
-                      day: "numeric",
-                    })}
+                    <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-2 flex items-center text-xs text-gray-300">
+                      <Clock className="h-3 w-3 mr-1" />
+                      {format(item.viewedAt.toDate(), "MMM d, h:mm a")}
+                    </div>
                   </div>
                   <Button
                     variant="destructive"
@@ -276,17 +209,17 @@ export default function HistoryPage() {
               ))}
 
               {/* Loading more indicator */}
-              {isLoading && !initialLoading && hasMore && (
+              {historyLoading && !initialLoading && hasMore && (
                 <>
                   {Array.from({ length: 3 }).map((_, index) => (
-                    <VideoSkeletonCard key={`loading-more-${index}`} showViewedDate={true} />
+                    <VideoSkeletonCard key={`loading-more-${index}`} />
                   ))}
                 </>
               )}
             </motion.div>
 
             {/* End of content message */}
-            {!hasMore && formattedHistory.length > 0 && (
+            {!hasMore && historyItems.length > 0 && (
               <motion.div
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
@@ -294,11 +227,46 @@ export default function HistoryPage() {
                 className="text-center text-gray-500 mt-12 pb-4"
               >
                 <div className="h-px w-32 bg-gradient-to-r from-transparent via-gray-700 to-transparent mx-auto mb-4"></div>
-                <p>You've reached the end of your viewing history</p>
+                <p>You've reached the end of your watch history</p>
               </motion.div>
             )}
           </div>
         )}
+      </main>
+    </div>
+  )
+}
+
+// Create a loading component that matches exactly our design
+function HistoryLoading() {
+  return (
+    <div className="relative min-h-screen bg-black text-white">
+      {/* Premium Gradient Background */}
+      <div className="fixed inset-0 z-0 bg-gradient-to-br from-black via-black to-gray-900"></div>
+
+      {/* Subtle animated gradient overlay */}
+      <div className="fixed inset-0 z-0 opacity-20 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-red-900 via-transparent to-transparent animate-pulse-slow"></div>
+
+      <DashboardHeader />
+
+      <main className="pt-24 pb-16 relative z-10">
+        <div className="px-6 mb-8">
+          <div className="h-10 w-48 bg-gray-800/50 rounded-md animate-pulse"></div>
+          <div className="h-6 w-64 bg-gray-800/50 rounded-md mt-2 animate-pulse"></div>
+        </div>
+
+        {/* Red accent line */}
+        <div className="relative px-6 mb-8">
+          <div className="h-px bg-gradient-to-r from-transparent via-red-600 to-transparent w-full"></div>
+        </div>
+
+        <div className="px-6">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-6">
+            {Array.from({ length: 12 }).map((_, index) => (
+              <VideoSkeletonCard key={`skeleton-${index}`} />
+            ))}
+          </div>
+        </div>
       </main>
     </div>
   )
