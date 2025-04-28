@@ -12,26 +12,28 @@ export default function LandingHeader() {
   return (
     <header className="w-full z-50 bg-transparent">
       <div className="container mx-auto px-4 py-4 flex items-center justify-between">
-        <Logo size="md" />
+        <div className="flex items-center">
+          <Logo size="md" />
 
-        {/* Desktop Navigation */}
-        <nav className="hidden md:flex items-center space-x-8">
-          <Link href="/" className="text-white hover:text-gray-200 transition-colors">
-            Home
-          </Link>
-          <Link href="/dashboard" className="text-white hover:text-gray-200 transition-colors">
-            Explore Clips
-          </Link>
-          <Link href="/membership-plans" className="text-white hover:text-gray-200 transition-colors">
-            Pricing
-          </Link>
-          <Link href="/dashboard/categories" className="text-white hover:text-gray-200 transition-colors">
-            Categories
-          </Link>
-          <Link href="/dashboard" className="text-white hover:text-gray-200 transition-colors">
-            Trending
-          </Link>
-        </nav>
+          {/* Desktop Navigation - Moved closer to logo */}
+          <nav className="hidden md:flex items-center ml-8 space-x-6">
+            <Link href="/" className="text-white hover:text-gray-200 transition-colors">
+              Home
+            </Link>
+            <Link href="/dashboard" className="text-white hover:text-gray-200 transition-colors">
+              Explore Clips
+            </Link>
+            <Link href="/membership-plans" className="text-white hover:text-gray-200 transition-colors">
+              Pricing
+            </Link>
+            <Link href="/dashboard/categories" className="text-white hover:text-gray-200 transition-colors">
+              Categories
+            </Link>
+            <Link href="/dashboard" className="text-white hover:text-gray-200 transition-colors">
+              Trending
+            </Link>
+          </nav>
+        </div>
 
         {/* Mobile Menu Button */}
         <button className="md:hidden text-white" onClick={() => setIsMenuOpen(!isMenuOpen)}>

@@ -13,10 +13,16 @@ export default function LandingPage() {
   const router = useRouter()
   const [searchQuery, setSearchQuery] = useState("")
 
+  // Enhanced search functionality to find relevant categories
   const handleSearch = (e: React.FormEvent) => {
     e.preventDefault()
     if (searchQuery.trim()) {
+      // This will redirect to the dashboard with the search query
+      // The dashboard can then filter content based on the query
       router.push(`/dashboard?search=${encodeURIComponent(searchQuery)}`)
+
+      // Alternative: If you want to search categories specifically
+      // router.push(`/dashboard/categories?search=${encodeURIComponent(searchQuery)}`)
     }
   }
 
@@ -44,9 +50,14 @@ export default function LandingPage() {
         <main className="flex-1 flex flex-col">
           {/* Hero Section */}
           <section className="container mx-auto px-4 py-12 md:py-16 flex flex-col items-center">
-            <h1 className="text-4xl md:text-6xl font-light text-center text-white mb-8 max-w-4xl">
+            <h1 className="text-4xl md:text-6xl font-light text-center text-white mb-3 max-w-4xl">
               The #1 Platform for Viral Clips
             </h1>
+
+            {/* Added subheading */}
+            <p className="text-lg md:text-xl font-light text-gray-200 mb-8">
+              Your time matters. Let&apos;s act like it.
+            </p>
 
             {/* Search Bar */}
             <form onSubmit={handleSearch} className="w-full max-w-2xl mb-8">
@@ -97,19 +108,14 @@ export default function LandingPage() {
               </div>
             </div>
 
-            {/* Social Proof */}
-            <div className="max-w-2xl mx-auto mt-12 text-center">
-              <p className="text-xl md:text-2xl text-white/80 font-light">
-                Over 500+ creators built their pages faster with MassClip.
-              </p>
-            </div>
+            {/* Removed the "Over 500+ creators" line */}
           </section>
         </main>
 
-        {/* Footer */}
-        <footer className="relative z-10 border-t border-white/10 py-6 mt-8">
+        {/* Footer - Made smaller */}
+        <footer className="relative z-10 border-t border-white/10 py-4 mt-8">
           <div className="container mx-auto px-4">
-            <div className="flex flex-col md:flex-row justify-center md:justify-start items-center gap-6 text-white/70">
+            <div className="flex flex-wrap justify-center gap-4 text-sm text-white/60">
               <Link href="/about" className="hover:text-white transition-colors">
                 About
               </Link>
