@@ -3,7 +3,7 @@
 import { useRef, useEffect, useState } from "react"
 import { useSearchParams } from "next/navigation"
 import { motion } from "framer-motion"
-import { Search, TrendingUp, Clock, Zap, ChevronRight } from "lucide-react"
+import { Search, Clock, Zap, ChevronRight } from "lucide-react"
 import DashboardHeader from "@/components/dashboard-header"
 import VideoRow from "@/components/video-row"
 import { useVimeoShowcases } from "@/hooks/use-vimeo-showcases"
@@ -186,15 +186,8 @@ export default function Dashboard() {
               Browse Categories
             </motion.h3>
 
-            <motion.div variants={itemVariants} className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <Button
-                onClick={() => router.push("/category/trending")}
-                variant="outline"
-                className="flex items-center justify-start h-auto py-4 px-5 bg-zinc-900/30 border-zinc-800/50 hover:bg-zinc-900/50 hover:border-zinc-700"
-              >
-                <TrendingUp className="h-5 w-5 mr-3 text-crimson" />
-                <span className="text-left font-light">Trending Now</span>
-              </Button>
+            <motion.div variants={itemVariants} className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              {/* Removed Trending Now button */}
 
               <Button
                 onClick={() => router.push("/category/motivation")}
