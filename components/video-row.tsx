@@ -2,11 +2,13 @@
 
 import { useState, useRef, useEffect } from "react"
 import Link from "next/link"
-import { ChevronRight } from "lucide-react"
+import { motion } from "framer-motion"
+import { ChevronRight, ChevronLeft } from "lucide-react"
 import type { VimeoVideo } from "@/lib/types"
 import VimeoCard from "@/components/vimeo-card"
 import VideoSkeleton from "@/components/video-skeleton"
-import { shuffleArray } from "@/lib/utils" // Import the shuffleArray utility
+import { shuffleArray } from "@/lib/utils"
+import { Button } from "@/components/ui/button"
 
 interface VideoRowProps {
   title: string
@@ -19,7 +21,10 @@ interface VideoRowProps {
 export default function VideoRow({ title, videos, limit = 6, isShowcase = false, showcaseId }: VideoRowProps) {
   const [visibleVideos, setVisibleVideos] = useState<VimeoVideo[]>([])
   const [isIntersecting, setIsIntersecting] = useState(false)
+  const [scrollPosition, setScrollPosition] = useState(0)
+  const [maxScroll, setMaxScroll] = useState(0)
   const rowRef = useRef<HTMLDivElement>(null)
+  const scrollContainerRef = useRef<HTMLDivElement>(null)
 
   // Create a URL-friendly name
   const slug = encodeURIComponent(title.toLowerCase().replace(/\s+/g, "-"))
@@ -60,6 +65,51 @@ export default function VideoRow({ title, videos, limit = 6, isShowcase = false,
     }
   }, [isIntersecting, videos, limit])
 
+  // Calculate max scroll position
+  useEffect(() => {
+    const calculateMaxScroll = () => {
+      if (scrollContainerRef.current) {
+        const containerWidth = scrollContainerRef.current.clientWidth
+        const scrollWidth = scrollContainerRef.current.scrollWidth
+        setMaxScroll(Math.max(0, scrollWidth - containerWidth))
+      }
+    }
+
+    calculateMaxScroll()
+    window.addEventListener("resize", calculateMaxScroll)
+
+    return () => {
+      window.removeEventListener("resize", calculateMaxScroll)
+    }
+  }, [visibleVideos])
+
+  // Handle scroll buttons
+  const handleScroll = (direction: "left" | "right") => {
+    if (scrollContainerRef.current) {
+      const containerWidth = scrollContainerRef.current.clientWidth
+      const scrollAmount = containerWidth * 0.8
+
+      const newPosition =
+        direction === "left"
+          ? Math.max(0, scrollPosition - scrollAmount)
+          : Math.min(maxScroll, scrollPosition + scrollAmount)
+
+      scrollContainerRef.current.scrollTo({
+        left: newPosition,
+        behavior: "smooth",
+      })
+
+      setScrollPosition(newPosition)
+    }
+  }
+
+  // Update scroll position on manual scroll
+  const handleManualScroll = () => {
+    if (scrollContainerRef.current) {
+      setScrollPosition(scrollContainerRef.current.scrollLeft)
+    }
+  }
+
   if (!videos || videos.length === 0) {
     return null
   }
@@ -71,15 +121,53 @@ export default function VideoRow({ title, videos, limit = 6, isShowcase = false,
       <div className="px-6 mb-4 flex items-center justify-between">
         <h2 className="text-2xl font-extralight tracking-wider text-white category-title">{title}</h2>
         {hasMore && (
-          <Link href={linkPath} className="text-gray-400 hover:text-white flex items-center">
-            {buttonText} <ChevronRight className="h-4 w-4 ml-1" />
+          <Link href={linkPath} className="text-zinc-400 hover:text-white flex items-center group">
+            <span className="mr-1">{buttonText}</span>
+            <ChevronRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
           </Link>
         )}
       </div>
       <div className="relative">
-        <div className="flex overflow-x-auto scrollbar-hide gap-4 px-6 pb-4">
+        {/* Left scroll button */}
+        {scrollPosition > 0 && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="absolute left-1 top-1/2 -translate-y-1/2 z-10 bg-black/50 backdrop-blur-sm hover:bg-black/70 rounded-full h-8 w-8"
+            onClick={() => handleScroll("left")}
+          >
+            <ChevronLeft className="h-4 w-4" />
+          </Button>
+        )}
+
+        {/* Right scroll button */}
+        {scrollPosition < maxScroll && maxScroll > 0 && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="absolute right-1 top-1/2 -translate-y-1/2 z-10 bg-black/50 backdrop-blur-sm hover:bg-black/70 rounded-full h-8 w-8"
+            onClick={() => handleScroll("right")}
+          >
+            <ChevronRight className="h-4 w-4" />
+          </Button>
+        )}
+
+        <div
+          ref={scrollContainerRef}
+          className="flex overflow-x-auto scrollbar-hide gap-4 px-6 pb-4"
+          onScroll={handleManualScroll}
+        >
           {isIntersecting
-            ? visibleVideos.map((video) => <VimeoCard key={video.uri} video={video} />)
+            ? visibleVideos.map((video) => (
+                <motion.div
+                  key={video.uri}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.5 }}
+                >
+                  <VimeoCard video={video} />
+                </motion.div>
+              ))
             : // Show skeleton loaders while waiting for intersection
               Array.from({ length: Math.min(limit, 6) }).map((_, index) => <VideoSkeleton key={index} />)}
         </div>

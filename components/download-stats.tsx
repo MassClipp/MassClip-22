@@ -1,6 +1,7 @@
 "use client"
 
 import { useRouter } from "next/navigation"
+import { motion } from "framer-motion"
 import { useUserPlan } from "@/hooks/use-user-plan"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Progress } from "@/components/ui/progress"
@@ -37,12 +38,12 @@ export default function DownloadStats() {
 
   if (loading) {
     return (
-      <Card className="bg-black border-gray-800 h-full">
+      <Card className="bg-zinc-900/30 border-zinc-800/50 backdrop-blur-sm h-full">
         <CardContent className="pt-6">
           <div className="animate-pulse space-y-3">
-            <div className="h-4 bg-gray-800 rounded w-3/4"></div>
-            <div className="h-3 bg-gray-800 rounded w-1/2"></div>
-            <div className="h-6 bg-gray-800 rounded w-full mt-4"></div>
+            <div className="h-4 bg-zinc-800 rounded w-3/4"></div>
+            <div className="h-3 bg-zinc-800 rounded w-1/2"></div>
+            <div className="h-6 bg-zinc-800 rounded w-full mt-4"></div>
           </div>
         </CardContent>
       </Card>
@@ -50,48 +51,57 @@ export default function DownloadStats() {
   }
 
   return (
-    <Card className="bg-black border-gray-800 h-full">
-      <CardHeader>
-        <CardTitle className="flex items-center text-white">
-          <Download className="mr-2 h-5 w-5 text-gray-400" /> Downloads
+    <Card className="bg-zinc-900/30 border-zinc-800/50 backdrop-blur-sm h-full">
+      <CardHeader className="pb-4">
+        <CardTitle className="flex items-center text-white text-xl font-light">
+          <Download className="mr-2 h-5 w-5 text-crimson" /> Downloads
         </CardTitle>
-        <CardDescription className="text-white">
+        <CardDescription className="text-zinc-400">
           {isProUser ? "Unlimited downloads with Pro" : "Monthly download allowance"}
         </CardDescription>
       </CardHeader>
       <CardContent>
         {isProUser ? (
           <div className="text-center py-4">
-            <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-gray-800 mb-4">
+            <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-zinc-800/50 mb-4">
               <Infinity className="h-8 w-8 text-green-500" />
             </div>
-            <h3 className="text-xl font-medium text-white mb-1">Unlimited Downloads</h3>
-            <p className="text-gray-400 text-sm">Enjoy unlimited access to all content with your Pro subscription</p>
+            <h3 className="text-xl font-light text-white mb-1">Unlimited Downloads</h3>
+            <p className="text-zinc-400 text-sm font-light">
+              Enjoy unlimited access to all content with your Pro subscription
+            </p>
           </div>
         ) : (
           <div className="space-y-4">
             <div className="flex justify-between items-center mb-1">
-              <span className="text-sm text-gray-400">
+              <span className="text-sm text-zinc-400 font-light">
                 {remainingDownloads} of {planData?.downloadsLimit || 5} downloads remaining
               </span>
-              <span className="text-xs text-gray-500">{getProgressPercentage()}%</span>
+              <span className="text-xs text-zinc-500">{getProgressPercentage()}%</span>
             </div>
 
             <Progress
               value={getProgressPercentage()}
-              className="h-2 bg-gray-800"
-              indicatorClassName={hasReachedLimit ? "bg-red-600" : "bg-green-600"}
+              className="h-2 bg-zinc-800/50"
+              indicatorClassName={hasReachedLimit ? "bg-red-600" : "bg-crimson"}
             />
 
             <div className="pt-2">
-              <p className="text-xs text-gray-500">Downloads reset on {getNextResetDate()}</p>
+              <p className="text-xs text-zinc-500 font-light">Downloads reset on {getNextResetDate()}</p>
             </div>
 
             {hasReachedLimit && (
-              <div className="bg-gray-900/50 p-3 rounded-md border border-gray-800 mt-4">
-                <p className="text-sm text-amber-400 mb-2">You've reached your download limit for this month</p>
-                <p className="text-xs text-gray-400">Upgrade to Pro for unlimited downloads</p>
-              </div>
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5 }}
+                className="bg-zinc-900/50 p-3 rounded-md border border-red-900/50 mt-4"
+              >
+                <p className="text-sm text-amber-400 mb-2 font-light">
+                  You've reached your download limit for this month
+                </p>
+                <p className="text-xs text-zinc-400 font-light">Upgrade to Pro for unlimited downloads</p>
+              </motion.div>
             )}
           </div>
         )}
@@ -99,7 +109,10 @@ export default function DownloadStats() {
 
       {!isProUser && (
         <CardFooter>
-          <Button onClick={() => router.push("/pricing")} className="w-full bg-red-600 hover:bg-red-700 text-white">
+          <Button
+            onClick={() => router.push("/membership-plans")}
+            className="w-full bg-crimson hover:bg-crimson-dark text-white"
+          >
             Upgrade to Pro
           </Button>
         </CardFooter>

@@ -14,13 +14,13 @@ export default function Logo({ className, href, linkClassName, size = "md" }: Lo
       <div className="flex items-center">
         <span
           className={cn(
-            "font-bold tracking-tighter",
+            "font-light tracking-tight",
             size === "sm" && "text-xl",
             size === "md" && "text-2xl",
             size === "lg" && "text-3xl md:text-4xl",
           )}
         >
-          <span className="text-crimson">Mass</span>
+          <span className="text-crimson font-normal">Mass</span>
           <span className="text-white">Clip</span>
           <span className="text-crimson text-xs align-super ml-0.5">™</span>
         </span>

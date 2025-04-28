@@ -2,14 +2,17 @@
 
 import { useRef, useEffect, useState } from "react"
 import { useSearchParams } from "next/navigation"
+import { motion } from "framer-motion"
+import { Search, TrendingUp, Clock, Zap, ChevronRight } from "lucide-react"
 import DashboardHeader from "@/components/dashboard-header"
 import VideoRow from "@/components/video-row"
-import BorderLine from "@/components/border-line"
 import { useVimeoShowcases } from "@/hooks/use-vimeo-showcases"
 import { useVimeoVideos } from "@/hooks/use-vimeo-videos"
 import { Button } from "@/components/ui/button"
 import { useRouter } from "next/navigation"
 import { filterCategoriesBySearch } from "@/lib/search-utils"
+import VimeoCard from "@/components/vimeo-card"
+import { shuffleArray } from "@/lib/utils"
 
 export default function Dashboard() {
   // Get search query from URL
@@ -19,6 +22,8 @@ export default function Dashboard() {
   // State to store the filtered videos
   const [filteredShowcaseVideos, setFilteredShowcaseVideos] = useState<Record<string, any[]>>({})
   const [hasSearchResults, setHasSearchResults] = useState(false)
+  const [featuredVideos, setFeaturedVideos] = useState<any[]>([])
+  const [isLoading, setIsLoading] = useState(true)
 
   // Fetch showcase-based videos
   const { showcaseVideos, showcaseIds, loading: loadingShowcases, error: showcaseError } = useVimeoShowcases()
@@ -65,50 +70,160 @@ export default function Dashboard() {
   // Get showcase names based on whether we're searching or not
   const showcaseNames = Object.keys(searchQuery ? filteredShowcaseVideos : showcaseVideos)
 
+  // Prepare featured videos from all showcases
+  useEffect(() => {
+    if (!loadingShowcases && !loadingVideos && Object.keys(showcaseVideos).length > 0) {
+      // Collect videos from all showcases
+      const allVideos = Object.values(showcaseVideos).flat()
+
+      // Shuffle and take the first 6 for featured section
+      if (allVideos.length > 0) {
+        setFeaturedVideos(shuffleArray(allVideos).slice(0, 6))
+      }
+
+      setIsLoading(false)
+    }
+  }, [showcaseVideos, loadingShowcases, loadingVideos])
+
   // Check if we're still loading initial data
-  const isLoading = (loadingShowcases || loadingVideos) && showcaseNames.length === 0
+  const isLoadingData = (loadingShowcases || loadingVideos) && showcaseNames.length === 0
 
   // Check for errors
   const error = showcaseError
 
+  // Animation variants
+  const containerVariants = {
+    hidden: { opacity: 0 },
+    visible: {
+      opacity: 1,
+      transition: {
+        staggerChildren: 0.1,
+      },
+    },
+  }
+
+  const itemVariants = {
+    hidden: { y: 20, opacity: 0 },
+    visible: {
+      y: 0,
+      opacity: 1,
+      transition: {
+        duration: 0.5,
+        ease: [0.25, 0.1, 0.25, 1.0],
+      },
+    },
+  }
+
   return (
     <div className="relative min-h-screen bg-black text-white">
-      {/* Static Gradient Background */}
-      <div className="fixed inset-0 z-0 static-gradient-bg"></div>
+      {/* Premium Gradient Background */}
+      <div className="fixed inset-0 z-0 premium-gradient">
+        <div className="absolute inset-0 bg-[url('/noise.png')] opacity-[0.03] mix-blend-soft-light"></div>
+      </div>
 
       <DashboardHeader initialSearchQuery={searchQuery} />
 
       <main className="pt-20 pb-16 relative z-10">
         {/* Search Results Header (if searching) */}
         {searchQuery && (
-          <div className="px-6 mb-8">
-            <div className="bg-gray-900/30 border border-gray-800 rounded-lg p-6">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5 }}
+            className="px-6 mb-8"
+          >
+            <div className="bg-zinc-900/30 border border-zinc-800/50 rounded-lg p-6">
               <h2 className="text-2xl font-light tracking-wider text-white mb-2">Search Results for "{searchQuery}"</h2>
-              <p className="text-gray-400">
+              <p className="text-zinc-400">
                 {hasSearchResults
                   ? `Found results in ${Object.keys(filteredShowcaseVideos).length} categories`
                   : "No results found. Try a different search term."}
               </p>
             </div>
-          </div>
+          </motion.div>
         )}
 
-        {/* Browse All Banner (if not searching) */}
-        {!searchQuery && (
-          <div className="px-6 mb-8">
-            <div className="bg-gray-900/30 border border-gray-800 rounded-lg p-6 flex flex-col md:flex-row justify-between items-center">
-              <div>
-                <h2 className="text-2xl font-light tracking-wider text-white mb-2">Browse All Content</h2>
-                <p className="text-gray-400 mb-4 md:mb-0">Explore our complete collection of clips</p>
-              </div>
+        {/* Featured Section (if not searching) */}
+        {!searchQuery && !isLoadingData && (
+          <motion.div variants={containerVariants} initial="hidden" animate="visible" className="px-6 mb-12">
+            <motion.div variants={itemVariants} className="flex items-center justify-between mb-6">
+              <h2 className="text-3xl font-extralight tracking-tight text-white">
+                Find Your Next <span className="text-gradient-accent">Viral Clip</span>
+              </h2>
               <Button
                 onClick={() => router.push("/category/browse-all")}
-                className="bg-crimson hover:bg-crimson-dark text-white"
+                variant="ghost"
+                className="text-zinc-400 hover:text-white hover:bg-zinc-900/50"
               >
-                View All Clips
+                View All <ChevronRight className="h-4 w-4 ml-1" />
               </Button>
-            </div>
-          </div>
+            </motion.div>
+
+            {/* Featured Videos Grid */}
+            <motion.div variants={itemVariants} className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+              {isLoading
+                ? // Skeleton loaders
+                  Array.from({ length: 6 }).map((_, index) => (
+                    <div
+                      key={`skeleton-${index}`}
+                      className="aspect-[9/16] rounded-md bg-zinc-900/50 animate-pulse"
+                    ></div>
+                  ))
+                : // Featured videos
+                  featuredVideos.map((video, index) => (
+                    <div key={`featured-${video.uri || index}`} className="group">
+                      <VimeoCard video={video} />
+                    </div>
+                  ))}
+            </motion.div>
+          </motion.div>
+        )}
+
+        {/* Category Quick Links (if not searching) */}
+        {!searchQuery && !isLoadingData && (
+          <motion.div variants={containerVariants} initial="hidden" animate="visible" className="px-6 mb-12">
+            <motion.h3 variants={itemVariants} className="text-xl font-light tracking-tight text-white mb-4">
+              Browse Categories
+            </motion.h3>
+
+            <motion.div variants={itemVariants} className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <Button
+                onClick={() => router.push("/category/trending")}
+                variant="outline"
+                className="flex items-center justify-start h-auto py-4 px-5 bg-zinc-900/30 border-zinc-800/50 hover:bg-zinc-900/50 hover:border-zinc-700"
+              >
+                <TrendingUp className="h-5 w-5 mr-3 text-crimson" />
+                <span className="text-left font-light">Trending Now</span>
+              </Button>
+
+              <Button
+                onClick={() => router.push("/category/motivation")}
+                variant="outline"
+                className="flex items-center justify-start h-auto py-4 px-5 bg-zinc-900/30 border-zinc-800/50 hover:bg-zinc-900/50 hover:border-zinc-700"
+              >
+                <Zap className="h-5 w-5 mr-3 text-crimson" />
+                <span className="text-left font-light">Motivation</span>
+              </Button>
+
+              <Button
+                onClick={() => router.push("/category/recent")}
+                variant="outline"
+                className="flex items-center justify-start h-auto py-4 px-5 bg-zinc-900/30 border-zinc-800/50 hover:bg-zinc-900/50 hover:border-zinc-700"
+              >
+                <Clock className="h-5 w-5 mr-3 text-crimson" />
+                <span className="text-left font-light">Recently Added</span>
+              </Button>
+
+              <Button
+                onClick={() => router.push("/dashboard/categories")}
+                variant="outline"
+                className="flex items-center justify-start h-auto py-4 px-5 bg-zinc-900/30 border-zinc-800/50 hover:bg-zinc-900/50 hover:border-zinc-700"
+              >
+                <Search className="h-5 w-5 mr-3 text-crimson" />
+                <span className="text-left font-light">All Categories</span>
+              </Button>
+            </motion.div>
+          </motion.div>
         )}
 
         {/* Error state */}
@@ -119,19 +234,24 @@ export default function Dashboard() {
         )}
 
         {/* Loading state (initial) */}
-        {isLoading && (
-          <div className="px-6 py-10 text-center">
-            <p className="text-gray-400">Loading videos...</p>
+        {isLoadingData && (
+          <div className="px-6 py-10">
+            <div className="h-8 w-48 bg-zinc-900/50 rounded-md animate-pulse mb-8"></div>
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+              {Array.from({ length: 6 }).map((_, index) => (
+                <div key={`skeleton-${index}`} className="aspect-[9/16] rounded-md bg-zinc-900/50 animate-pulse"></div>
+              ))}
+            </div>
           </div>
         )}
 
         {/* Showcase-based categories */}
         {showcaseNames.length > 0 && (
-          <>
+          <motion.div variants={containerVariants} initial="hidden" animate="visible" className="space-y-12">
             {showcaseNames.map((showcaseName, index) => {
               const videosToShow = searchQuery ? filteredShowcaseVideos[showcaseName] : showcaseVideos[showcaseName]
               return (
-                <div key={`showcase-${showcaseName}`}>
+                <motion.div key={`showcase-${showcaseName}`} variants={itemVariants}>
                   <VideoRow
                     title={showcaseName}
                     videos={videosToShow}
@@ -139,20 +259,19 @@ export default function Dashboard() {
                     isShowcase={true}
                     showcaseId={showcaseIds[showcaseName]}
                   />
-                  {index < showcaseNames.length - 1 && <BorderLine className="my-2" />}
-                </div>
+                </motion.div>
               )
             })}
-          </>
+          </motion.div>
         )}
 
         {/* No videos state */}
-        {!isLoading && showcaseNames.length === 0 && (
+        {!isLoadingData && showcaseNames.length === 0 && (
           <div className="px-6 py-10 text-center">
             {searchQuery ? (
-              <p className="text-gray-400">No videos found matching "{searchQuery}". Try a different search term.</p>
+              <p className="text-zinc-400">No videos found matching "{searchQuery}". Try a different search term.</p>
             ) : (
-              <p className="text-gray-400">
+              <p className="text-zinc-400">
                 No videos found. Make sure your Vimeo account has videos and your API credentials are correct.
               </p>
             )}

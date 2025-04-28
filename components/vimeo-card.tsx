@@ -3,12 +3,23 @@
 import type React from "react"
 
 import { useState, useRef, useEffect } from "react"
-import { Download, Lock } from "lucide-react"
+import { Download, Lock, Heart } from "lucide-react"
 import type { VimeoVideo } from "@/lib/types"
 import { useAuth } from "@/contexts/auth-context"
 import { db } from "@/lib/firebase"
 import { trackFirestoreWrite } from "@/lib/firestore-optimizer"
-import { collection, addDoc, serverTimestamp, doc, updateDoc, increment } from "firebase/firestore"
+import {
+  collection,
+  addDoc,
+  serverTimestamp,
+  doc,
+  updateDoc,
+  increment,
+  deleteDoc,
+  query,
+  where,
+  getDocs,
+} from "firebase/firestore"
 import { useToast } from "@/hooks/use-toast"
 import { useUserPlan } from "@/hooks/use-user-plan"
 import { useMobile } from "@/hooks/use-mobile"
@@ -28,6 +39,8 @@ export default function VimeoCard({ video }: VimeoCardProps) {
   const [thumbnailLoaded, setThumbnailLoaded] = useState(false)
   const [isDownloading, setIsDownloading] = useState(false)
   const [downloadLink, setDownloadLink] = useState<string | null>(null)
+  const [isFavorite, setIsFavorite] = useState(false)
+  const [isCheckingFavorite, setIsCheckingFavorite] = useState(true)
 
   const { user } = useAuth()
   const { toast } = useToast()
@@ -62,6 +75,31 @@ export default function VimeoCard({ video }: VimeoCardProps) {
       setDownloadLink(null)
     }
   }, [video])
+
+  // Check if video is in favorites
+  useEffect(() => {
+    const checkIfFavorite = async () => {
+      if (!user || !videoId) {
+        setIsCheckingFavorite(false)
+        return
+      }
+
+      try {
+        // Query for this video in user's favorites
+        const favoritesRef = collection(db, `users/${user.uid}/favorites`)
+        const q = query(favoritesRef, where("videoId", "==", videoId))
+        const querySnapshot = await getDocs(q)
+
+        setIsFavorite(!querySnapshot.empty)
+      } catch (err) {
+        console.error("Error checking favorite status:", err)
+      } finally {
+        setIsCheckingFavorite(false)
+      }
+    }
+
+    checkIfFavorite()
+  }, [user, videoId])
 
   // Clean up any iframe elements on unmount
   useEffect(() => {
@@ -119,6 +157,61 @@ export default function VimeoCard({ video }: VimeoCardProps) {
 
     trackVideoView()
   }, [user, videoId, video, isActive])
+
+  // Toggle favorite status
+  const toggleFavorite = async (e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+
+    if (!user || !videoId || !video) {
+      toast({
+        title: "Authentication Required",
+        description: "Please log in to save favorites",
+        variant: "destructive",
+      })
+      return
+    }
+
+    try {
+      if (isFavorite) {
+        // Find and remove from favorites
+        const favoritesRef = collection(db, `users/${user.uid}/favorites`)
+        const q = query(favoritesRef, where("videoId", "==", videoId))
+        const querySnapshot = await getDocs(q)
+
+        querySnapshot.forEach(async (document) => {
+          await deleteDoc(doc(db, `users/${user.uid}/favorites`, document.id))
+        })
+
+        toast({
+          title: "Removed from favorites",
+          description: "Video removed from your favorites",
+        })
+      } else {
+        // Add to favorites
+        await addDoc(collection(db, `users/${user.uid}/favorites`), {
+          videoId: videoId,
+          video: video,
+          createdAt: serverTimestamp(),
+        })
+
+        toast({
+          title: "Added to favorites",
+          description: "Video saved to your favorites",
+        })
+      }
+
+      // Toggle state
+      setIsFavorite(!isFavorite)
+    } catch (err) {
+      console.error("Error toggling favorite:", err)
+      toast({
+        title: "Error",
+        description: "Failed to update favorites",
+        variant: "destructive",
+      })
+    }
+  }
 
   // Record a download directly in Firestore
   const recordDownload = async () => {
@@ -249,6 +342,12 @@ export default function VimeoCard({ video }: VimeoCardProps) {
           console.error("Error recording pro user download:", error)
         })
       }
+
+      // Show success toast
+      toast({
+        title: "Download Started",
+        description: "Your video is downloading",
+      })
     } catch (error) {
       console.error("Download failed:", error)
       setDownloadError(true)
@@ -282,16 +381,16 @@ export default function VimeoCard({ video }: VimeoCardProps) {
             position: "relative",
             paddingBottom: "177.78%", // 9:16 aspect ratio
             height: 0,
-            borderRadius: "4px",
+            borderRadius: "8px",
             overflow: "hidden",
             backgroundColor: "#111",
           }}
         >
           <div className="absolute inset-0 flex items-center justify-center">
-            <span className="text-xs text-gray-500">Video unavailable</span>
+            <span className="text-xs text-zinc-500">Video unavailable</span>
           </div>
         </div>
-        <div className="mt-1 text-xs text-gray-300 truncate">Unavailable</div>
+        <div className="mt-2 text-xs text-zinc-400 truncate">Unavailable</div>
       </div>
     )
   }
@@ -306,7 +405,7 @@ export default function VimeoCard({ video }: VimeoCardProps) {
           position: "relative",
           paddingBottom: "177.78%", // 9:16 aspect ratio
           height: 0,
-          borderRadius: "4px",
+          borderRadius: "8px",
           overflow: "hidden",
         }}
         onMouseEnter={() => {
@@ -324,29 +423,47 @@ export default function VimeoCard({ video }: VimeoCardProps) {
           className="absolute inset-0 z-10 pointer-events-none transition-opacity duration-300"
           style={{
             opacity: isActive ? 1 : 0,
-            border: "1px solid #800020",
-            borderRadius: "4px",
-            boxShadow: "0 0 3px rgba(128, 0, 32, 0.5)",
+            border: "1px solid rgba(220, 20, 60, 0.5)",
+            borderRadius: "8px",
+            boxShadow: "0 0 20px rgba(220, 20, 60, 0.2)",
           }}
         ></div>
 
-        {/* Download button - visually disabled when limit reached */}
-        <button
-          className={`absolute bottom-2 left-2 z-20 ${
-            hasReachedLimit ? "bg-gray-800/90 cursor-not-allowed" : "bg-black/70 hover:bg-black/90"
-          } p-1.5 rounded-full transition-opacity duration-300 ${downloadError ? "ring-1 ring-red-500" : ""}`}
+        {/* Action buttons container */}
+        <div
+          className="absolute bottom-2 left-2 right-2 z-20 flex items-center justify-between transition-opacity duration-300"
           style={{ opacity: isHovered ? 1 : 0 }}
-          onClick={handleDownload}
-          aria-label={hasReachedLimit ? "Download limit reached" : "Download video"}
-          disabled={isDownloading || hasReachedLimit}
-          title={hasReachedLimit ? "Upgrade to Pro for unlimited downloads" : "Download video"}
         >
-          {hasReachedLimit ? (
-            <Lock className="h-3.5 w-3.5 text-gray-400" />
-          ) : (
-            <Download className={`h-3.5 w-3.5 ${downloadError ? "text-red-500" : "text-white"}`} />
-          )}
-        </button>
+          {/* Download button - visually disabled when limit reached */}
+          <button
+            className={`${
+              hasReachedLimit ? "bg-zinc-800/90 cursor-not-allowed" : "bg-black/70 hover:bg-black/90"
+            } p-1.5 rounded-full transition-all duration-300 ${downloadError ? "ring-1 ring-red-500" : ""}`}
+            onClick={handleDownload}
+            aria-label={hasReachedLimit ? "Download limit reached" : "Download video"}
+            disabled={isDownloading || hasReachedLimit}
+            title={hasReachedLimit ? "Upgrade to Pro for unlimited downloads" : "Download video"}
+          >
+            {hasReachedLimit ? (
+              <Lock className="h-3.5 w-3.5 text-zinc-400" />
+            ) : (
+              <Download className={`h-3.5 w-3.5 ${downloadError ? "text-red-500" : "text-white"}`} />
+            )}
+          </button>
+
+          {/* Favorite button */}
+          <button
+            className={`bg-black/70 hover:bg-black/90 p-1.5 rounded-full transition-all duration-300 ${
+              isFavorite ? "text-crimson" : "text-white"
+            }`}
+            onClick={toggleFavorite}
+            aria-label={isFavorite ? "Remove from favorites" : "Add to favorites"}
+            disabled={isCheckingFavorite}
+            title={isFavorite ? "Remove from favorites" : "Add to favorites"}
+          >
+            <Heart className="h-3.5 w-3.5" fill={isFavorite ? "currentColor" : "none"} />
+          </button>
+        </div>
 
         {videoId ? (
           <div className="absolute inset-0">
@@ -358,14 +475,19 @@ export default function VimeoCard({ video }: VimeoCardProps) {
                 }`}
                 style={{
                   backgroundImage: `url(${thumbnailUrl})`,
+                  backgroundSize: "cover",
+                  backgroundPosition: "center",
                   backgroundColor: "#111",
                 }}
               >
                 {/* Dark overlay with gradient for premium look */}
                 <div
-                  className={`absolute inset-0 dark-overlay transition-opacity duration-300 ${
+                  className={`absolute inset-0 transition-opacity duration-300 ${
                     isHovered ? "opacity-30" : "opacity-50"
                   }`}
+                  style={{
+                    background: "linear-gradient(to bottom, rgba(0,0,0,0.2), rgba(0,0,0,0.7))",
+                  }}
                 ></div>
 
                 {/* Preload the image with crossOrigin for canvas compatibility */}
@@ -415,14 +537,14 @@ export default function VimeoCard({ video }: VimeoCardProps) {
               backgroundColor: "#111",
             }}
           >
-            <span className="text-xs text-gray-500">Video unavailable</span>
+            <span className="text-xs text-zinc-500">Video unavailable</span>
           </div>
         )}
       </div>
       {/* Updated title div to allow wrapping */}
       <div
         ref={titleRef}
-        className="mt-1 text-xs text-gray-300 min-h-[2.5rem] line-clamp-2"
+        className="mt-2 text-xs text-zinc-300 min-h-[2.5rem] line-clamp-2 font-light"
         title={video.name || "Untitled video"}
       >
         {video.name || "Untitled video"}
