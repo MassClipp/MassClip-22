@@ -53,14 +53,6 @@ export default function PricingPage() {
                   </li>
                   <li className="flex items-start">
                     <CheckCircle2 className="h-5 w-5 text-green-500 mr-2 flex-shrink-0 mt-0.5" />
-                    <span>Access to free clips</span>
-                  </li>
-                  <li className="flex items-start">
-                    <CheckCircle2 className="h-5 w-5 text-green-500 mr-2 flex-shrink-0 mt-0.5" />
-                    <span>Save favorites</span>
-                  </li>
-                  <li className="flex items-start">
-                    <CheckCircle2 className="h-5 w-5 text-green-500 mr-2 flex-shrink-0 mt-0.5" />
                     <span>Standard video quality</span>
                   </li>
                 </ul>
@@ -95,10 +87,8 @@ export default function PricingPage() {
               <div className="p-8">
                 <div className="flex items-center mb-4">
                   <h2 className="text-2xl font-bold text-white">Pro</h2>
-                  <span className="ml-2 px-2 py-1 bg-yellow-600 text-xs font-bold rounded-md">BETA</span>
                 </div>
-                <p className="text-gray-400 mb-2">Everything you need to create amazing content</p>
-                <p className="text-crimson italic mb-4">More features coming soon!</p>
+                <p className="text-gray-400 mb-6">Everything you need to create amazing content</p>
                 <p className="text-4xl font-bold text-white mb-6">
                   $19<span className="text-xl text-gray-400">/month</span>
                 </p>
@@ -112,11 +102,7 @@ export default function PricingPage() {
                   </li>
                   <li className="flex items-start">
                     <CheckCircle2 className="h-5 w-5 text-green-500 mr-2 flex-shrink-0 mt-0.5" />
-                    <span>Access to ALL premium clips</span>
-                  </li>
-                  <li className="flex items-start">
-                    <CheckCircle2 className="h-5 w-5 text-green-500 mr-2 flex-shrink-0 mt-0.5" />
-                    <span>Premium video quality</span>
+                    <span>High video quality</span>
                   </li>
                   <li className="flex items-start">
                     <CheckCircle2 className="h-5 w-5 text-green-500 mr-2 flex-shrink-0 mt-0.5" />
