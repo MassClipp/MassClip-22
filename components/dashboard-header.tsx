@@ -72,6 +72,12 @@ export default function DashboardHeader() {
     { name: "Membership Plans", href: "/membership-plans", current: false },
   ]
 
+  // Handle upgrade button click
+  const handleUpgradeClick = () => {
+    router.push("/membership-plans")
+    setMobileMenuOpen(false)
+  }
+
   return (
     <header
       className={`fixed top-0 w-full z-50 transition-all duration-300 ${
@@ -192,7 +198,7 @@ export default function DashboardHeader() {
 
           {/* Upgrade Button */}
           <div className="flex justify-center py-2">
-            <UpgradeButton onClick={() => setMobileMenuOpen(false)}>Upgrade to Pro</UpgradeButton>
+            <UpgradeButton onClick={handleUpgradeClick}>Upgrade to Pro</UpgradeButton>
           </div>
 
           {/* Logout Button */}
