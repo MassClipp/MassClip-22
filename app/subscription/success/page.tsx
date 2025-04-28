@@ -3,8 +3,9 @@
 import { useEffect } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
+import { motion } from "framer-motion"
 import { Button } from "@/components/ui/button"
-import { CheckCircle } from "lucide-react"
+import { CheckCircle, ArrowRight } from "lucide-react"
 import { useAuth } from "@/contexts/auth-context"
 
 export default function SubscriptionSuccess() {
@@ -24,35 +25,73 @@ export default function SubscriptionSuccess() {
 
   return (
     <div className="relative min-h-screen bg-black text-white flex items-center justify-center">
-      {/* Static Gradient Background */}
-      <div className="fixed inset-0 z-0 static-gradient-bg"></div>
+      {/* Premium Gradient Background */}
+      <div className="fixed inset-0 z-0 bg-gradient-to-b from-black via-black to-gray-900"></div>
 
-      <div className="relative z-10 max-w-md w-full p-8 bg-black rounded-lg shadow-lg border border-gray-800 text-center">
-        <div className="flex justify-center">
+      <motion.div
+        initial={{ opacity: 0, scale: 0.9 }}
+        animate={{ opacity: 1, scale: 1 }}
+        transition={{ duration: 0.5 }}
+        className="relative z-10 max-w-md w-full p-8 bg-black/60 backdrop-blur-sm rounded-xl border border-gray-800 shadow-2xl text-center"
+      >
+        <motion.div
+          initial={{ scale: 0, opacity: 0 }}
+          animate={{ scale: 1, opacity: 1 }}
+          transition={{ delay: 0.3, type: "spring", stiffness: 200 }}
+          className="flex justify-center"
+        >
           <div className="rounded-full bg-green-900/20 p-3 mb-6">
             <CheckCircle className="h-12 w-12 text-green-500" />
           </div>
-        </div>
+        </motion.div>
 
-        <h1 className="text-2xl font-bold text-white mb-4">Subscription Successful!</h1>
+        <motion.h1
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.4, duration: 0.5 }}
+          className="text-2xl font-bold text-white mb-4"
+        >
+          Subscription Successful!
+        </motion.h1>
 
-        <p className="text-gray-400 mb-6">
+        <motion.p
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.5, duration: 0.5 }}
+          className="text-gray-400 mb-6"
+        >
           Thank you for subscribing to MassClip Pro! Your account has been upgraded and you now have access to all
           premium features.
-        </p>
+        </motion.p>
 
         <div className="space-y-4">
-          <Button className="w-full bg-red-600 hover:bg-red-700 text-white" onClick={() => router.push("/dashboard")}>
-            Go to Dashboard
-          </Button>
-
-          <Link href="/dashboard/user">
-            <Button variant="outline" className="w-full border-gray-700 text-gray-300 hover:bg-gray-800">
-              View Account
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.6, duration: 0.5 }}
+          >
+            <Button
+              className="w-full bg-red-600 hover:bg-red-700 text-white group flex items-center justify-center"
+              onClick={() => router.push("/dashboard")}
+            >
+              Go to Dashboard
+              <ArrowRight className="ml-2 h-4 w-4 transition-transform duration-300 group-hover:translate-x-1" />
             </Button>
-          </Link>
+          </motion.div>
+
+          <motion.div
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.7, duration: 0.5 }}
+          >
+            <Link href="/dashboard/user">
+              <Button variant="outline" className="w-full border-gray-700 text-gray-300 hover:bg-gray-800">
+                View Account
+              </Button>
+            </Link>
+          </motion.div>
         </div>
-      </div>
+      </motion.div>
     </div>
   )
 }

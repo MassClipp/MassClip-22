@@ -62,10 +62,10 @@
     "fs": "latest",
     "path": "latest",
     "firebase": "latest",
-    "framer-motion": "latest",
     "firebase-admin": "latest",
     "dotenv": "latest",
-    "stripe": "latest"
+    "stripe": "latest",
+    "framer-motion": "latest"
   },
   "devDependencies": {
     "@types/node": "^22",

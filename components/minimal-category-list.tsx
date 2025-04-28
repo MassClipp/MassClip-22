@@ -4,6 +4,7 @@ import { useState, useMemo } from "react"
 import Link from "next/link"
 import { motion } from "framer-motion"
 import { useVimeoShowcases } from "@/hooks/use-vimeo-showcases"
+import { ArrowUpRight } from "lucide-react"
 
 interface MinimalCategoryListProps {
   categories: string[]
@@ -57,15 +58,29 @@ export default function MinimalCategoryList({ categories, showcaseIds = {} }: Mi
     [showcaseIds, categoryToShowcaseMap, normalizeCategory],
   )
 
+  // Animation variants
+  const container = {
+    hidden: { opacity: 0 },
+    show: {
+      opacity: 1,
+      transition: {
+        staggerChildren: 0.1,
+      },
+    },
+  }
+
+  const item = {
+    hidden: { opacity: 0, y: 20 },
+    show: { opacity: 1, y: 0 },
+  }
+
   return (
-    <div className="w-full max-w-md mx-auto">
+    <motion.div className="w-full max-w-md mx-auto" variants={container} initial="hidden" animate="show">
       <ul className="space-y-6">
         {categories.map((category, index) => (
           <motion.li
             key={category}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3, delay: index * 0.05 }}
+            variants={item}
             className="relative"
             onMouseEnter={() => setHoveredIndex(index)}
             onMouseLeave={() => setHoveredIndex(null)}
@@ -75,9 +90,19 @@ export default function MinimalCategoryList({ categories, showcaseIds = {} }: Mi
               href={getCategoryLink(category)}
               className="block w-full text-left py-3 px-1 group transition-all duration-300"
             >
-              <span className="inline-block w-full font-extralight text-2xl tracking-wide text-gray-300 group-hover:text-white transition-colors duration-300">
-                {category}
-              </span>
+              <div className="flex items-center justify-between">
+                <span className="inline-block font-extralight text-2xl tracking-wide text-gray-300 group-hover:text-white transition-colors duration-300">
+                  {category}
+                </span>
+
+                <motion.div
+                  initial={{ opacity: 0, x: -10 }}
+                  animate={{ opacity: hoveredIndex === index ? 1 : 0, x: hoveredIndex === index ? 0 : -10 }}
+                  transition={{ duration: 0.2 }}
+                >
+                  <ArrowUpRight className="h-5 w-5 text-red-500" />
+                </motion.div>
+              </div>
 
               {/* Animated line that appears on hover */}
               <motion.div
@@ -90,6 +115,6 @@ export default function MinimalCategoryList({ categories, showcaseIds = {} }: Mi
           </motion.li>
         ))}
       </ul>
-    </div>
+    </motion.div>
   )
 }
