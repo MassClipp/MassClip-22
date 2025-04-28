@@ -217,7 +217,7 @@ export default function VimeoCard({ video }: VimeoCardProps) {
   const recordDownload = async () => {
     if (!user) return { success: false, message: "User not authenticated" }
 
-    // Pro users don't need to track downloads
+    // Creator Pro users don't need to track downloads
     if (isProUser) return { success: true }
 
     try {
@@ -278,13 +278,13 @@ export default function VimeoCard({ video }: VimeoCardProps) {
         return
       }
 
-      // 3. Pro users bypass limit checks
+      // 3. Creator Pro users bypass limit checks
       if (!isProUser) {
         // 4. Strict limit check - this is the core permission enforcement
         if (hasReachedLimit) {
           toast({
             title: "Download Limit Reached",
-            description: "You've reached your monthly download limit. Upgrade to Pro for unlimited downloads.",
+            description: "You've reached your monthly download limit. Upgrade to Creator Pro for unlimited downloads.",
             variant: "destructive",
           })
           return
@@ -442,7 +442,7 @@ export default function VimeoCard({ video }: VimeoCardProps) {
             onClick={handleDownload}
             aria-label={hasReachedLimit ? "Download limit reached" : "Download video"}
             disabled={isDownloading || hasReachedLimit}
-            title={hasReachedLimit ? "Upgrade to Pro for unlimited downloads" : "Download video"}
+            title={hasReachedLimit ? "Upgrade to Creator Pro for unlimited downloads" : "Download video"}
           >
             {hasReachedLimit ? (
               <Lock className="h-3.5 w-3.5 text-zinc-400" />

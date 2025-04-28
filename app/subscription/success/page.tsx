@@ -60,8 +60,8 @@ export default function SubscriptionSuccess() {
           transition={{ delay: 0.5, duration: 0.5 }}
           className="text-gray-400 mb-6"
         >
-          Thank you for subscribing to MassClip Pro! Your account has been upgraded and you now have access to all
-          premium features.
+          Thank you for subscribing to MassClip Creator Pro! Your account has been upgraded and you now have access to
+          all premium features.
         </motion.p>
 
         <div className="space-y-4">

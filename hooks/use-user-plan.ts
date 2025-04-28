@@ -6,7 +6,7 @@ import { db } from "@/lib/firebase"
 import { useAuth } from "@/contexts/auth-context"
 
 // Define plan types
-export type UserPlan = "free" | "pro"
+export type UserPlan = "free" | "creator_pro"
 
 export interface UserPlanData {
   plan: UserPlan
@@ -37,10 +37,13 @@ export function useUserPlan() {
 
         if (userDoc.exists()) {
           const userData = userDoc.data()
+          // Handle legacy "pro" plan values
+          const userPlan = userData.plan === "pro" ? "creator_pro" : userData.plan || "free"
+
           setPlanData({
-            plan: userData.plan || "free",
+            plan: userPlan,
             downloads: userData.downloads || 0,
-            downloadsLimit: userData.plan === "pro" ? Number.POSITIVE_INFINITY : 5,
+            downloadsLimit: userPlan === "creator_pro" ? Number.POSITIVE_INFINITY : 5,
             lastReset: userData.lastReset ? userData.lastReset.toDate() : null,
           })
         } else {
@@ -91,15 +94,15 @@ export function useUserPlan() {
   const recordDownload = useCallback(async () => {
     if (!user || !planData) return { success: false, message: "User not authenticated" }
 
-    // Pro users don't need to track downloads
-    if (planData.plan === "pro") return { success: true }
+    // Creator Pro users don't need to track downloads
+    if (planData.plan === "creator_pro") return { success: true }
 
     try {
       // CRITICAL: Check if user has reached their limit BEFORE incrementing
       if (planData.downloads >= planData.downloadsLimit) {
         return {
           success: false,
-          message: "You've reached your monthly download limit. Upgrade to Pro for unlimited downloads.",
+          message: "You've reached your monthly download limit. Upgrade to Creator Pro for unlimited downloads.",
         }
       }
 
@@ -152,7 +155,7 @@ export function useUserPlan() {
     planData,
     loading,
     error,
-    isProUser: planData?.plan === "pro",
+    isProUser: planData?.plan === "creator_pro",
     recordDownload,
     remainingDownloads: planData ? Math.max(0, planData.downloadsLimit - planData.downloads) : 0,
     hasReachedLimit, // Export this value for all components to use

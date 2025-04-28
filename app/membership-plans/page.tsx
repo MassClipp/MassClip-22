@@ -116,7 +116,7 @@ export default function MembershipPlansPage() {
               </div>
             </div>
 
-            {/* Pro Plan */}
+            {/* Creator Pro Plan */}
             <div
               className={`bg-zinc-900/30 rounded-lg overflow-hidden border ${isProUser ? "border-crimson" : "border-zinc-800/50"} backdrop-blur-sm relative`}
             >
@@ -128,7 +128,7 @@ export default function MembershipPlansPage() {
               <div className="p-8">
                 <div className="flex items-center mb-4">
                   <Crown className="h-6 w-6 text-yellow-500 mr-2" />
-                  <h2 className="text-2xl font-light text-white">Pro</h2>
+                  <h2 className="text-2xl font-light text-white">Creator Pro</h2>
                 </div>
                 <p className="text-zinc-400 mb-6 font-light">Everything you need to create amazing content</p>
                 <p className="text-4xl font-light text-white mb-6">
@@ -165,14 +165,16 @@ export default function MembershipPlansPage() {
                     Manage Subscription
                   </Button>
                 ) : (
-                  <SubscribeButton className="w-full bg-crimson hover:bg-crimson-dark">Upgrade to Pro</SubscribeButton>
+                  <SubscribeButton className="w-full bg-crimson hover:bg-crimson-dark">
+                    Upgrade to Creator Pro
+                  </SubscribeButton>
                 )}
               </div>
             </div>
           </motion.div>
 
           <motion.div variants={itemVariants} className="mt-16 text-center max-w-3xl mx-auto">
-            <h3 className="text-2xl font-light text-white mb-6">Why Choose MassClip Pro?</h3>
+            <h3 className="text-2xl font-light text-white mb-6">Why Choose MassClip Creator Pro?</h3>
 
             <div className="grid md:grid-cols-3 gap-6 mb-12">
               <div className="bg-zinc-900/30 border border-zinc-800/50 rounded-lg p-6 backdrop-blur-sm">
@@ -221,8 +223,8 @@ export default function MembershipPlansPage() {
               <div className="bg-zinc-900/30 border border-zinc-800/50 rounded-lg p-6 backdrop-blur-sm">
                 <h4 className="text-lg font-medium text-white mb-2">How do I get started?</h4>
                 <p className="text-zinc-400 font-light">
-                  Simply click the "Upgrade to Pro" button, complete the checkout process, and you'll have immediate
-                  access to all Pro features.
+                  Simply click the "Upgrade to Creator Pro" button, complete the checkout process, and you'll have
+                  immediate access to all Creator Pro features.
                 </p>
               </div>
             </div>

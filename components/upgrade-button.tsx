@@ -34,7 +34,7 @@ export default function UpgradeButton({ className = "", children, onClick }: Upg
       onClick={handleSubscribe}
       className={`premium-button bg-crimson hover:bg-crimson-dark text-white font-light text-sm py-2 px-4 rounded-md transition-all duration-300 ${className}`}
     >
-      {children || "Upgrade to Pro"}
+      {children || "Upgrade to Creator Pro"}
     </button>
   )
 }

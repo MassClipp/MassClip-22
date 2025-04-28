@@ -56,7 +56,7 @@ export async function POST(request: Request) {
 
           if (fallbackUserId) {
             console.log(`🔔 WEBHOOK: Found userId in Firestore: ${fallbackUserId}`)
-            await updateUserToPro(fallbackUserId, session)
+            await updateUserToCreatorPro(fallbackUserId, session)
             return NextResponse.json({ received: true })
           }
         }
@@ -65,8 +65,8 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: "User not found" }, { status: 404 })
       }
 
-      // Update the user to pro
-      await updateUserToPro(userId, session)
+      // Update the user to creator_pro
+      await updateUserToCreatorPro(userId, session)
     } else if (event.type === "customer.subscription.deleted") {
       const subscription = event.data.object as Stripe.Subscription
       console.log(`🔔 WEBHOOK: Processing subscription deletion: ${subscription.id}`)
@@ -109,10 +109,10 @@ export async function POST(request: Request) {
 }
 
 /**
- * Updates a user to pro plan
+ * Updates a user to creator_pro plan
  */
-async function updateUserToPro(userId: string, session: Stripe.Checkout.Session) {
-  console.log(`🔔 WEBHOOK: Updating user ${userId} to pro plan`)
+async function updateUserToCreatorPro(userId: string, session: Stripe.Checkout.Session) {
+  console.log(`🔔 WEBHOOK: Updating user ${userId} to creator_pro plan`)
 
   try {
     // Get the customer ID from the session
@@ -124,7 +124,7 @@ async function updateUserToPro(userId: string, session: Stripe.Checkout.Session)
       .collection("users")
       .doc(userId)
       .update({
-        plan: "pro",
+        plan: "creator_pro",
         stripeCustomerId: customerId,
         stripeSubscriptionId: subscriptionId,
         subscriptionUpdatedAt: new Date(),
@@ -136,7 +136,7 @@ async function updateUserToPro(userId: string, session: Stripe.Checkout.Session)
         },
       })
 
-    console.log(`🔔 WEBHOOK: Successfully updated user ${userId} to pro plan`)
+    console.log(`🔔 WEBHOOK: Successfully updated user ${userId} to creator_pro plan`)
 
     // Log the event
     await db.collection("subscriptionEvents").add({
@@ -158,7 +158,7 @@ async function updateUserToPro(userId: string, session: Stripe.Checkout.Session)
       })
     }
   } catch (error) {
-    console.error(`🔔 WEBHOOK ERROR: Failed to update user ${userId} to pro:`, error)
+    console.error(`🔔 WEBHOOK ERROR: Failed to update user ${userId} to creator_pro:`, error)
     throw error
   }
 }

@@ -21,7 +21,7 @@ export default function UserPlanBadge({ showTooltip = true, className = "" }: Us
       {isProUser && (
         <span className="flex items-center text-xs bg-gradient-to-r from-yellow-600 to-yellow-400 text-black px-2 py-0.5 rounded-full font-medium">
           <Crown className="h-3 w-3 mr-1" />
-          PRO
+          CREATOR PRO
         </span>
       )}
     </div>
@@ -38,7 +38,7 @@ export default function UserPlanBadge({ showTooltip = true, className = "" }: Us
         <TooltipContent side="bottom">
           {isProUser ? (
             <div className="text-sm">
-              <p className="font-medium">Pro Plan</p>
+              <p className="font-medium">Creator Pro Plan</p>
             </div>
           ) : (
             <div className="text-sm">
