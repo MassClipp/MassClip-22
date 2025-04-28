@@ -5,6 +5,7 @@ import type React from "react"
 import { useState, useEffect, useRef } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
+import Image from "next/image"
 import { motion } from "framer-motion"
 import { Search, ArrowRight, Clock, TrendingUp, Download, Play, Star } from "lucide-react"
 import LandingHeader from "@/components/landing-header"
@@ -232,31 +233,146 @@ export default function LandingPage() {
               </motion.div>
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                {randomCategories.map((category, index) => (
-                  <motion.div
-                    key={index}
-                    className="relative overflow-hidden group cursor-pointer"
-                    onClick={() => handleCategoryClick(category)}
-                    initial={{ opacity: 0, y: 20 }}
-                    whileInView={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.6, delay: index * 0.2 }}
-                    viewport={{ once: true, margin: "-100px" }}
-                  >
-                    <div className="aspect-video bg-white/5 relative overflow-hidden">
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent z-10"></div>
-                      <div className="absolute inset-0 bg-black/20 group-hover:bg-black/0 transition-all duration-300"></div>
+                {/* Slide Category */}
+                <motion.div
+                  className="relative overflow-hidden group cursor-pointer bg-black/20 border border-white/5"
+                  onClick={() => handleCategoryClick("slide")}
+                  initial={{ opacity: 0, y: 20 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.6 }}
+                  viewport={{ once: true, margin: "-100px" }}
+                >
+                  <div className="flex justify-between p-2">
+                    <div className="relative w-[32%] aspect-[9/16] mr-1">
+                      <Image
+                        src="/thumbnails/slide-1.png"
+                        alt="Slide thumbnail 1"
+                        fill
+                        className="object-cover rounded-sm"
+                      />
                     </div>
-                    <div className="absolute bottom-0 left-0 right-0 p-6 z-20">
-                      <h3 className="text-xl font-light text-white mb-2 group-hover:text-crimson transition-colors duration-300 capitalize">
-                        {category}
-                      </h3>
-                      <div className="flex items-center text-white/50 text-sm">
-                        <Play className="h-4 w-4 mr-2" />
-                        <span>Explore Collection</span>
-                      </div>
+                    <div className="relative w-[32%] aspect-[9/16] mx-1">
+                      <Image
+                        src="/thumbnails/slide-2.png"
+                        alt="Slide thumbnail 2"
+                        fill
+                        className="object-cover rounded-sm"
+                      />
                     </div>
-                  </motion.div>
-                ))}
+                    <div className="relative w-[32%] aspect-[9/16] ml-1">
+                      <Image
+                        src="/thumbnails/slide-3.png"
+                        alt="Slide thumbnail 3"
+                        fill
+                        className="object-cover rounded-sm"
+                      />
+                    </div>
+                  </div>
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent opacity-70 group-hover:opacity-40 transition-opacity duration-300"></div>
+                  <div className="absolute bottom-0 left-0 right-0 p-6 z-20">
+                    <h3 className="text-xl font-light text-white mb-2 group-hover:text-crimson transition-colors duration-300">
+                      Slide
+                    </h3>
+                    <div className="flex items-center text-white/50 text-sm">
+                      <Play className="h-4 w-4 mr-2" />
+                      <span>Explore Collection</span>
+                    </div>
+                  </div>
+                </motion.div>
+
+                {/* Pack Category */}
+                <motion.div
+                  className="relative overflow-hidden group cursor-pointer bg-black/20 border border-white/5"
+                  onClick={() => handleCategoryClick("pack")}
+                  initial={{ opacity: 0, y: 20 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.6, delay: 0.2 }}
+                  viewport={{ once: true, margin: "-100px" }}
+                >
+                  <div className="flex justify-between p-2">
+                    <div className="relative w-[32%] aspect-[9/16] mr-1">
+                      <Image
+                        src="/thumbnails/pack-1.png"
+                        alt="Pack thumbnail 1"
+                        fill
+                        className="object-cover rounded-sm"
+                      />
+                    </div>
+                    <div className="relative w-[32%] aspect-[9/16] mx-1">
+                      <Image
+                        src="/thumbnails/pack-2.png"
+                        alt="Pack thumbnail 2"
+                        fill
+                        className="object-cover rounded-sm"
+                      />
+                    </div>
+                    <div className="relative w-[32%] aspect-[9/16] ml-1">
+                      <Image
+                        src="/thumbnails/pack-3.png"
+                        alt="Pack thumbnail 3"
+                        fill
+                        className="object-cover rounded-sm"
+                      />
+                    </div>
+                  </div>
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent opacity-70 group-hover:opacity-40 transition-opacity duration-300"></div>
+                  <div className="absolute bottom-0 left-0 right-0 p-6 z-20">
+                    <h3 className="text-xl font-light text-white mb-2 group-hover:text-crimson transition-colors duration-300">
+                      Pack
+                    </h3>
+                    <div className="flex items-center text-white/50 text-sm">
+                      <Play className="h-4 w-4 mr-2" />
+                      <span>Explore Collection</span>
+                    </div>
+                  </div>
+                </motion.div>
+
+                {/* Transition Category */}
+                <motion.div
+                  className="relative overflow-hidden group cursor-pointer bg-black/20 border border-white/5"
+                  onClick={() => handleCategoryClick("transition")}
+                  initial={{ opacity: 0, y: 20 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.6, delay: 0.4 }}
+                  viewport={{ once: true, margin: "-100px" }}
+                >
+                  <div className="flex justify-between p-2">
+                    <div className="relative w-[32%] aspect-[9/16] mr-1">
+                      <Image
+                        src="/thumbnails/transition-1.png"
+                        alt="Transition thumbnail 1"
+                        fill
+                        className="object-cover rounded-sm"
+                      />
+                    </div>
+                    <div className="relative w-[32%] aspect-[9/16] mx-1">
+                      <Image
+                        src="/thumbnails/transition-2.png"
+                        alt="Transition thumbnail 2"
+                        fill
+                        className="object-cover rounded-sm"
+                      />
+                    </div>
+                    <div className="relative w-[32%] aspect-[9/16] ml-1">
+                      <Image
+                        src="/thumbnails/transition-3.png"
+                        alt="Transition thumbnail 3"
+                        fill
+                        className="object-cover rounded-sm"
+                      />
+                    </div>
+                  </div>
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/40 to-transparent opacity-70 group-hover:opacity-40 transition-opacity duration-300"></div>
+                  <div className="absolute bottom-0 left-0 right-0 p-6 z-20">
+                    <h3 className="text-xl font-light text-white mb-2 group-hover:text-crimson transition-colors duration-300">
+                      Transition
+                    </h3>
+                    <div className="flex items-center text-white/50 text-sm">
+                      <Play className="h-4 w-4 mr-2" />
+                      <span>Explore Collection</span>
+                    </div>
+                  </div>
+                </motion.div>
               </div>
 
               <motion.div
