@@ -69,7 +69,7 @@ export default function DashboardHeader() {
   const navigationItems = [
     { name: "Home", href: "/dashboard", current: true },
     { name: "Categories", href: "/dashboard/categories", current: false },
-    { name: "Pricing", href: "/pricing", current: false },
+    { name: "Membership Plans", href: "/membership-plans", current: false },
   ]
 
   return (

@@ -4,26 +4,29 @@ import type React from "react"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/contexts/auth-context"
 
-// Direct Stripe checkout link
-const STRIPE_CHECKOUT_URL = "https://buy.stripe.com/8wMdTW1A64PW1fqfZ0"
-
 interface UpgradeButtonProps {
   className?: string
   children?: React.ReactNode
+  onClick?: () => void
 }
 
-export default function UpgradeButton({ className = "", children }: UpgradeButtonProps) {
+export default function UpgradeButton({ className = "", children, onClick }: UpgradeButtonProps) {
   const router = useRouter()
   const { user } = useAuth()
 
   const handleSubscribe = () => {
-    if (!user) {
-      router.push("/login?redirect=/pricing")
+    if (onClick) {
+      onClick()
       return
     }
 
-    // Direct redirect to Stripe checkout
-    window.location.href = STRIPE_CHECKOUT_URL
+    if (!user) {
+      router.push("/login?redirect=/membership-plans")
+      return
+    }
+
+    // Redirect to membership plans page
+    router.push("/membership-plans")
   }
 
   return (
