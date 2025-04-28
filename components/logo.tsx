@@ -6,10 +6,9 @@ interface LogoProps {
   href?: string
   linkClassName?: string
   size?: "sm" | "md" | "lg"
-  showBeta?: boolean
 }
 
-export default function Logo({ className, href, linkClassName, size = "md", showBeta = true }: LogoProps) {
+export default function Logo({ className, href, linkClassName, size = "md" }: LogoProps) {
   const content = (
     <div className={cn("flex flex-col items-center", className)}>
       <div className="flex items-center">
@@ -26,9 +25,6 @@ export default function Logo({ className, href, linkClassName, size = "md", show
           <span className="text-crimson text-xs align-super ml-0.5">™</span>
         </span>
       </div>
-      {showBeta && (
-        <span className="text-xs bg-yellow-600 text-white px-1.5 py-0.5 rounded-sm mt-1 font-medium">BETA</span>
-      )}
     </div>
   )
 

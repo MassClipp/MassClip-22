@@ -10,6 +10,7 @@ import UpgradeButton from "@/components/upgrade-button"
 import DownloadStats from "@/components/download-stats"
 import { useUserPlan } from "@/hooks/use-user-plan"
 import CancelSubscriptionButton from "@/components/cancel-subscription-button"
+import { CheckCircle2 } from "lucide-react"
 
 export default function UserDashboardPage() {
   const { user, logOut } = useAuth()
@@ -144,29 +145,40 @@ export default function UserDashboardPage() {
                           Current Plan: {isProUser ? "Pro" : "Free"}
                         </h3>
                         <ul className="space-y-2 text-sm">
-                          <li className="flex items-center text-gray-300">
-                            <Check className="h-4 w-4 mr-2 text-green-500" /> Access to {isProUser ? "all" : "free"}{" "}
-                            clips
-                          </li>
-                          <li className="flex items-center text-gray-300">
-                            <Check className="h-4 w-4 mr-2 text-green-500" /> Save favorites
-                          </li>
                           {isProUser ? (
-                            <>
-                              <li className="flex items-center text-gray-300">
-                                <Check className="h-4 w-4 mr-2 text-green-500" /> Unlimited downloads
-                              </li>
-                              <li className="flex items-center text-gray-300">
-                                <Check className="h-4 w-4 mr-2 text-green-500" /> Advanced organization features
-                              </li>
-                              <li className="flex items-center text-gray-300">
-                                <Check className="h-4 w-4 mr-2 text-green-500" /> Early access to new clips
-                              </li>
-                            </>
+                            <div className="space-y-2">
+                              <p className="flex items-center">
+                                <CheckCircle2 className="h-4 w-4 text-green-500 mr-2" />
+                                <span>Unlimited downloads</span>
+                              </p>
+                              <p className="flex items-center">
+                                <CheckCircle2 className="h-4 w-4 text-green-500 mr-2" />
+                                <span>Access to all clips</span>
+                              </p>
+                              <p className="flex items-center">
+                                <CheckCircle2 className="h-4 w-4 text-green-500 mr-2" />
+                                <span>High video quality</span>
+                              </p>
+                              <p className="flex items-center">
+                                <CheckCircle2 className="h-4 w-4 text-green-500 mr-2" />
+                                <span>Priority support</span>
+                              </p>
+                            </div>
                           ) : (
-                            <li className="flex items-center text-gray-300">
-                              <Check className="h-4 w-4 mr-2 text-green-500" /> 5 downloads per month
-                            </li>
+                            <div className="space-y-2">
+                              <p className="flex items-center">
+                                <CheckCircle2 className="h-4 w-4 text-green-500 mr-2" />
+                                <span>5 downloads per month</span>
+                              </p>
+                              <p className="flex items-center">
+                                <CheckCircle2 className="h-4 w-4 text-green-500 mr-2" />
+                                <span>Access to free clips</span>
+                              </p>
+                              <p className="flex items-center">
+                                <CheckCircle2 className="h-4 w-4 text-green-500 mr-2" />
+                                <span>Standard video quality</span>
+                              </p>
+                            </div>
                           )}
                         </ul>
                       </div>
