@@ -5,7 +5,6 @@ import DashboardHeader from "@/components/dashboard-header"
 import { SubscribeButton } from "@/components/subscribe-button"
 import { useAuth } from "@/contexts/auth-context"
 import { useUserPlan } from "@/hooks/use-user-plan"
-import { AuthDebug } from "@/components/auth-debug"
 
 export default function PricingPage() {
   const { user } = useAuth()
@@ -133,15 +132,10 @@ export default function PricingPage() {
                     Manage Subscription
                   </button>
                 ) : (
-                  <SubscribeButton priceId={process.env.NEXT_PUBLIC_STRIPE_PRICE_ID}>Upgrade to Pro</SubscribeButton>
+                  <SubscribeButton>Upgrade to Pro</SubscribeButton>
                 )}
               </div>
             </div>
-          </div>
-
-          {/* Auth Debug Section */}
-          <div className="mt-12 max-w-4xl mx-auto">
-            <AuthDebug />
           </div>
 
           <div className="mt-16 text-center max-w-3xl mx-auto">

@@ -1,96 +1,57 @@
 "use client"
 
-import { useEffect, useState } from "react"
-import { useSearchParams } from "next/navigation"
+import { useEffect } from "react"
 import { useRouter } from "next/navigation"
+import Link from "next/link"
+import { Button } from "@/components/ui/button"
+import { CheckCircle } from "lucide-react"
 import { useAuth } from "@/contexts/auth-context"
-import { doc, updateDoc } from "firebase/firestore"
-import { db } from "@/lib/firebase"
 
-export default function SubscriptionSuccessPage() {
-  const searchParams = useSearchParams()
-  const router = useRouter()
+export default function SubscriptionSuccess() {
   const { user } = useAuth()
+  const router = useRouter()
 
-  const [status, setStatus] = useState<"loading" | "success" | "error">("loading")
-  const [message, setMessage] = useState("Verifying your subscription...")
-
+  // If no user, redirect to login
   useEffect(() => {
-    async function verifySubscription() {
-      try {
-        // Get the session ID from the URL
-        const sessionId = searchParams.get("session_id")
-
-        if (!sessionId) {
-          setStatus("error")
-          setMessage("Missing session information. Please contact support.")
-          return
-        }
-
-        if (!user) {
-          setStatus("error")
-          setMessage("User not authenticated. Please log in and try again.")
-          return
-        }
-
-        console.log(`Verifying subscription for user ${user.uid} with session ${sessionId}`)
-
-        // Update the user document to indicate we've seen this success page
-        await updateDoc(doc(db, "users", user.uid), {
-          lastCheckoutSessionId: sessionId,
-          checkoutCompleted: true,
-          checkoutCompletedAt: new Date().toISOString(),
-        })
-
-        // The actual subscription update will be handled by the webhook
-        setStatus("success")
-        setMessage("Your subscription was successful! You now have access to Pro features.")
-
-        // Redirect to dashboard after 3 seconds
-        setTimeout(() => {
-          router.push("/dashboard")
-        }, 3000)
-      } catch (error) {
-        console.error("Error verifying subscription:", error)
-        setStatus("error")
-        setMessage("There was an error verifying your subscription. Please contact support.")
-      }
+    if (!user) {
+      router.push("/login")
     }
+  }, [user, router])
 
-    verifySubscription()
-  }, [searchParams, user, router])
+  if (!user) {
+    return null
+  }
 
   return (
-    <div className="min-h-screen bg-black text-white flex items-center justify-center">
-      <div className="max-w-md w-full p-8 bg-gray-900 rounded-lg shadow-lg">
-        <h1 className="text-2xl font-bold mb-4 text-center">
-          {status === "loading" && "Processing..."}
-          {status === "success" && "Thank You!"}
-          {status === "error" && "Oops!"}
-        </h1>
+    <div className="relative min-h-screen bg-black text-white flex items-center justify-center">
+      {/* Static Gradient Background */}
+      <div className="fixed inset-0 z-0 static-gradient-bg"></div>
 
-        <div className="text-center mb-6">
-          {status === "loading" && (
-            <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-crimson mx-auto"></div>
-          )}
-          {status === "success" && <div className="text-green-500 text-5xl mb-4">✓</div>}
-          {status === "error" && <div className="text-red-500 text-5xl mb-4">✗</div>}
+      <div className="relative z-10 max-w-md w-full p-8 bg-black rounded-lg shadow-lg border border-gray-800 text-center">
+        <div className="flex justify-center">
+          <div className="rounded-full bg-green-900/20 p-3 mb-6">
+            <CheckCircle className="h-12 w-12 text-green-500" />
+          </div>
         </div>
 
-        <p className="text-center mb-6">{message}</p>
+        <h1 className="text-2xl font-bold text-white mb-4">Subscription Successful!</h1>
 
-        {status === "success" && (
-          <p className="text-center text-sm text-gray-400">Redirecting you to the dashboard in a few seconds...</p>
-        )}
+        <p className="text-gray-400 mb-6">
+          Thank you for subscribing to MassClip Pro! Your account has been upgraded and you now have access to all
+          premium features.
+        </p>
 
-        {status === "error" && (
-          <button
-            onClick={() => router.push("/dashboard")}
-            className="w-full py-2 bg-crimson text-white rounded-md hover:bg-red-700 transition-colors"
-          >
-            Return to Dashboard
-          </button>
-        )}
+        <div className="space-y-4">
+          <Button className="w-full bg-red-600 hover:bg-red-700 text-white" onClick={() => router.push("/dashboard")}>
+            Go to Dashboard
+          </Button>
+
+          <Link href="/dashboard/user">
+            <Button variant="outline" className="w-full border-gray-700 text-gray-300 hover:bg-gray-800">
+              View Account
+            </Button>
+          </Link>
+        </div>
       </div>
     </div>
   )

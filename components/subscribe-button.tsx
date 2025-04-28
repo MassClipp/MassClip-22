@@ -4,37 +4,27 @@ import type React from "react"
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
+import { Button } from "@/components/ui/button"
 import { useAuth } from "@/contexts/auth-context"
-import { useToast } from "@/hooks/use-toast"
 
-interface SubscribeButtonProps {
-  children?: React.ReactNode
-  className?: string
-  priceId?: string
-}
-
-export function SubscribeButton({ children, className = "", priceId }: SubscribeButtonProps) {
+export function SubscribeButton({ className, children }: { className?: string; children?: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(false)
   const { user } = useAuth()
   const router = useRouter()
-  const { toast } = useToast()
 
-  const handleSubscribe = async () => {
+  const handleSubscription = async () => {
     if (!user) {
       router.push("/login?redirect=/pricing")
       return
     }
 
-    setIsLoading(true)
-
     try {
-      console.log("Creating checkout session with user ID:", user.uid)
+      setIsLoading(true)
+      console.log("Creating checkout session for user:", user.uid, "with email:", user.email)
 
-      // Use the STRIPE_PRICE_ID from environment variables if priceId is not provided
-      const actualPriceId = priceId || process.env.NEXT_PUBLIC_STRIPE_PRICE_ID
-
-      if (!actualPriceId) {
-        throw new Error("Price ID is not defined")
+      // Ensure we have valid data to send
+      if (!user.uid || !user.email) {
+        throw new Error("Missing user ID or email")
       }
 
       const response = await fetch("/api/create-checkout-session", {
@@ -44,42 +34,41 @@ export function SubscribeButton({ children, className = "", priceId }: Subscribe
         },
         body: JSON.stringify({
           userId: user.uid,
-          priceId: actualPriceId,
+          userEmail: user.email,
+          // Add additional fields that might help with debugging
+          displayName: user.displayName || "",
+          timestamp: new Date().toISOString(),
         }),
       })
 
       if (!response.ok) {
-        const errorData = await response.json()
-        console.error("Error response:", errorData)
-        throw new Error(errorData.error || "Failed to create checkout session")
+        const errorText = await response.text()
+        console.error("Checkout session error:", response.status, errorText)
+        throw new Error(`Server returned ${response.status}: ${errorText}`)
       }
 
-      const { url } = await response.json()
+      const data = await response.json()
 
-      if (url) {
-        window.location.href = url
+      if (data.url) {
+        console.log("Redirecting to checkout URL:", data.url)
+        window.location.href = data.url
       } else {
-        throw new Error("No checkout URL returned")
+        console.error("No URL in response:", data)
+        alert("Something went wrong. Please try again.")
       }
     } catch (error) {
       console.error("Error creating checkout session:", error)
-      toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "Failed to start checkout process",
-        variant: "destructive",
-      })
+      alert(
+        `Error creating checkout session: ${error instanceof Error ? error.message : "Unknown error"}. Please try again.`,
+      )
     } finally {
       setIsLoading(false)
     }
   }
 
   return (
-    <button
-      onClick={handleSubscribe}
-      disabled={isLoading}
-      className={`w-full py-2 px-4 bg-crimson text-white rounded-md hover:bg-red-700 transition-colors disabled:opacity-50 ${className}`}
-    >
-      {isLoading ? "Loading..." : children || "Upgrade to Pro"}
-    </button>
+    <Button onClick={handleSubscription} disabled={isLoading} className={className || "w-full"} variant="default">
+      {isLoading ? "Loading..." : children || "Subscribe Now"}
+    </Button>
   )
 }
