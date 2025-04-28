@@ -5,31 +5,84 @@ import { useRouter } from "next/navigation"
 import { motion } from "framer-motion"
 import { ArrowLeft } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { useVimeoTagVideos } from "@/hooks/use-vimeo-tag-videos"
 import VimeoCard from "@/components/vimeo-card"
+import { useVimeoShowcases } from "@/hooks/use-vimeo-showcases"
 
 export default function HustleMentalityCategory() {
   const router = useRouter()
-  const { videos, loading, hasMore, loadMore } = useVimeoTagVideos("hustle mentality")
-  const [loadingMore, setLoadingMore] = useState(false)
+  const [videos, setVideos] = useState<any[]>([])
+  const [loading, setLoading] = useState(true)
 
-  // Handle infinite scroll
-  const handleScroll = () => {
-    if (
-      window.innerHeight + document.documentElement.scrollTop >= document.documentElement.offsetHeight - 500 &&
-      hasMore &&
-      !loadingMore
-    ) {
-      setLoadingMore(true)
-      loadMore()
-      setTimeout(() => setLoadingMore(false), 1000)
-    }
-  }
+  // Directly use the showcases hook to get all showcase videos
+  const { showcaseVideos, loading: loadingShowcases } = useVimeoShowcases()
 
   useEffect(() => {
-    window.addEventListener("scroll", handleScroll)
-    return () => window.removeEventListener("scroll", handleScroll)
-  }, [hasMore, loadingMore])
+    // When showcases are loaded, find videos that match hustle mentality theme
+    if (!loadingShowcases && Object.keys(showcaseVideos).length > 0) {
+      // Look for showcases with hustle-related names
+      const hustleShowcases = Object.keys(showcaseVideos).filter(
+        (name) =>
+          name.toLowerCase().includes("hustle") ||
+          name.toLowerCase().includes("grind") ||
+          name.toLowerCase().includes("entrepreneur") ||
+          name.toLowerCase().includes("business") ||
+          name.toLowerCase().includes("success"),
+      )
+
+      let matchedVideos: any[] = []
+
+      // If we have direct showcase matches, use those videos
+      if (hustleShowcases.length > 0) {
+        hustleShowcases.forEach((showcase) => {
+          matchedVideos = [...matchedVideos, ...showcaseVideos[showcase]]
+        })
+      } else {
+        // Otherwise, search through all showcases for videos with hustle-related tags or titles
+        Object.values(showcaseVideos).forEach((showcaseVideoArray) => {
+          const filteredVideos = showcaseVideoArray.filter((video) => {
+            // Check video title and description
+            const hasHustleTitle =
+              video.name?.toLowerCase().includes("hustle") ||
+              video.name?.toLowerCase().includes("grind") ||
+              video.name?.toLowerCase().includes("entrepreneur") ||
+              video.name?.toLowerCase().includes("success") ||
+              video.description?.toLowerCase().includes("hustle") ||
+              video.description?.toLowerCase().includes("grind") ||
+              video.description?.toLowerCase().includes("entrepreneur") ||
+              video.description?.toLowerCase().includes("success")
+
+            // Check video tags
+            const hasHustleTags = video.tags?.some(
+              (tag: any) =>
+                tag.name?.toLowerCase().includes("hustle") ||
+                tag.name?.toLowerCase().includes("grind") ||
+                tag.name?.toLowerCase().includes("entrepreneur") ||
+                tag.name?.toLowerCase().includes("business") ||
+                tag.name?.toLowerCase().includes("success") ||
+                tag.name?.toLowerCase().includes("ambition"),
+            )
+
+            return hasHustleTitle || hasHustleTags
+          })
+
+          matchedVideos = [...matchedVideos, ...filteredVideos]
+        })
+      }
+
+      // If we still don't have videos, just use some from any showcase
+      if (matchedVideos.length === 0 && Object.values(showcaseVideos).length > 0) {
+        // Get videos from the first available showcase
+        const firstShowcase = Object.values(showcaseVideos)[0]
+        matchedVideos = firstShowcase.slice(0, 12)
+      }
+
+      // Remove duplicates by URI
+      const uniqueVideos = Array.from(new Map(matchedVideos.map((video) => [video.uri, video])).values())
+
+      setVideos(uniqueVideos)
+      setLoading(false)
+    }
+  }, [showcaseVideos, loadingShowcases])
 
   // Animation variants
   const containerVariants = {
@@ -85,7 +138,7 @@ export default function HustleMentalityCategory() {
           </p>
         </motion.div>
 
-        {loading && videos.length === 0 ? (
+        {loading ? (
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
             {Array.from({ length: 12 }).map((_, index) => (
               <div key={`skeleton-${index}`} className="aspect-[9/16] bg-zinc-900/50 rounded-md animate-pulse"></div>
@@ -109,13 +162,6 @@ export default function HustleMentalityCategory() {
         {!loading && videos.length === 0 && (
           <div className="text-center py-20">
             <p className="text-white/60">No hustle mentality videos found. Check back soon for updates.</p>
-          </div>
-        )}
-
-        {/* Loading more indicator */}
-        {loadingMore && (
-          <div className="text-center py-8">
-            <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-current border-r-transparent motion-reduce:animate-[spin_1.5s_linear_infinite] opacity-60"></div>
           </div>
         )}
       </main>

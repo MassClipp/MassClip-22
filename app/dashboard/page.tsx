@@ -202,7 +202,7 @@ export default function Dashboard() {
             </motion.h3>
 
             <motion.div variants={itemVariants} className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              {/* Introspection Category */}
+              {/* Introspection Category (New) */}
               <Button
                 onClick={() => router.push("/category/introspection")}
                 variant="outline"
@@ -212,7 +212,7 @@ export default function Dashboard() {
                 <span className="text-left font-light">Introspection</span>
               </Button>
 
-              {/* Hustle Mentality Category */}
+              {/* Hustle Mentality Category (New) */}
               <Button
                 onClick={() => router.push("/category/hustle-mentality")}
                 variant="outline"
@@ -222,7 +222,7 @@ export default function Dashboard() {
                 <span className="text-left font-light">Hustle Mentality</span>
               </Button>
 
-              {/* Recently Added Category */}
+              {/* Recently Added Category (Kept) */}
               <Button
                 onClick={() => router.push("/category/recently-added")}
                 variant="outline"
@@ -232,7 +232,7 @@ export default function Dashboard() {
                 <span className="text-left font-light">Recently Added</span>
               </Button>
 
-              {/* All Categories */}
+              {/* All Categories (Kept) */}
               <Button
                 onClick={() => router.push("/dashboard/categories")}
                 variant="outline"
