@@ -147,34 +147,34 @@ export default function UserDashboardPage() {
                         <ul className="space-y-2 text-sm">
                           {isProUser ? (
                             <div className="space-y-2">
-                              <p className="flex items-center">
+                              <p className="flex items-center text-white">
                                 <CheckCircle2 className="h-4 w-4 text-green-500 mr-2" />
                                 <span>Unlimited downloads</span>
                               </p>
-                              <p className="flex items-center">
+                              <p className="flex items-center text-white">
                                 <CheckCircle2 className="h-4 w-4 text-green-500 mr-2" />
                                 <span>Access to all clips</span>
                               </p>
-                              <p className="flex items-center">
+                              <p className="flex items-center text-white">
                                 <CheckCircle2 className="h-4 w-4 text-green-500 mr-2" />
                                 <span>High video quality</span>
                               </p>
-                              <p className="flex items-center">
+                              <p className="flex items-center text-white">
                                 <CheckCircle2 className="h-4 w-4 text-green-500 mr-2" />
                                 <span>Priority support</span>
                               </p>
                             </div>
                           ) : (
                             <div className="space-y-2">
-                              <p className="flex items-center">
+                              <p className="flex items-center text-white">
                                 <CheckCircle2 className="h-4 w-4 text-green-500 mr-2" />
                                 <span>5 downloads per month</span>
                               </p>
-                              <p className="flex items-center">
+                              <p className="flex items-center text-white">
                                 <CheckCircle2 className="h-4 w-4 text-green-500 mr-2" />
                                 <span>Access to free clips</span>
                               </p>
-                              <p className="flex items-center">
+                              <p className="flex items-center text-white">
                                 <CheckCircle2 className="h-4 w-4 text-green-500 mr-2" />
                                 <span>Standard video quality</span>
                               </p>
@@ -282,8 +282,7 @@ export default function UserDashboardPage() {
                     <div className="pt-4 border-t border-gray-800">
                       <h3 className="text-lg font-medium text-white mb-2">Account Security</h3>
                       <Button
-                        variant="outline"
-                        className="border-crimson bg-transparent text-white hover:bg-crimson/10"
+                        className="border border-crimson bg-transparent text-white hover:bg-crimson/10"
                         onClick={() => router.push("/dashboard/password")}
                       >
                         Change Password
