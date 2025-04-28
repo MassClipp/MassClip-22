@@ -1,43 +1,21 @@
 "use client"
 
+import { useRef } from "react"
+
 import type React from "react"
 
-import { useState, useEffect, useRef } from "react"
+import { useState } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { motion } from "framer-motion"
 import { Search, ArrowRight, Clock, TrendingUp, Download, Play, Star } from "lucide-react"
 import LandingHeader from "@/components/landing-header"
 import { Button } from "@/components/ui/button"
-import { categories } from "@/lib/data"
 
 export default function LandingPage() {
   const router = useRouter()
   const [searchQuery, setSearchQuery] = useState("")
-  const [randomCategories, setRandomCategories] = useState<string[]>([])
   const heroRef = useRef<HTMLDivElement>(null)
-
-  // Get random categories on page load
-  useEffect(() => {
-    // Extract all unique category names from the data
-    const allCategories = new Set<string>()
-
-    categories.forEach((category) => {
-      allCategories.add(category.name)
-
-      // Also add unique tags from videos
-      category.videos.forEach((video) => {
-        video.tags.forEach((tag) => allCategories.add(tag))
-      })
-    })
-
-    // Convert to array and shuffle
-    const categoryArray = Array.from(allCategories)
-    const shuffled = categoryArray.sort(() => 0.5 - Math.random())
-
-    // Take the first 3 (or fewer if there aren't enough)
-    setRandomCategories(shuffled.slice(0, 3))
-  }, [])
 
   // Enhanced search functionality
   const handleSearch = (e: React.FormEvent) => {
@@ -57,7 +35,7 @@ export default function LandingPage() {
   }
 
   const handleCategoryClick = (category: string) => {
-    router.push(`/category/${encodeURIComponent(category.toLowerCase())}`)
+    router.push(`/category/${encodeURIComponent(category)}`)
   }
 
   const scrollToContent = () => {
@@ -232,31 +210,68 @@ export default function LandingPage() {
               </motion.div>
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                {randomCategories.map((category, index) => (
-                  <motion.div
-                    key={index}
-                    className="relative overflow-hidden group cursor-pointer"
-                    onClick={() => handleCategoryClick(category)}
-                    initial={{ opacity: 0, y: 20 }}
-                    whileInView={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.6, delay: index * 0.2 }}
-                    viewport={{ once: true, margin: "-100px" }}
-                  >
-                    <div className="aspect-video bg-white/5 relative overflow-hidden">
-                      <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent z-10"></div>
-                      <div className="absolute inset-0 bg-black/20 group-hover:bg-black/0 transition-all duration-300"></div>
+                {/* Money & Wealth Category */}
+                <motion.div
+                  className="relative overflow-hidden group cursor-pointer bg-black/20 border border-white/5 aspect-video flex items-center justify-center"
+                  onClick={() => handleCategoryClick("money-and-wealth")}
+                  initial={{ opacity: 0, y: 20 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.6 }}
+                  viewport={{ once: true, margin: "-100px" }}
+                >
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/30 to-transparent opacity-70 group-hover:opacity-40 transition-opacity duration-300"></div>
+                  <div className="relative z-10 text-center">
+                    <h3 className="text-2xl font-light text-white mb-2 group-hover:text-crimson transition-colors duration-300">
+                      Money & Wealth
+                    </h3>
+                    <div className="flex items-center justify-center text-white/50 text-sm">
+                      <Play className="h-4 w-4 mr-2" />
+                      <span>Explore Collection</span>
                     </div>
-                    <div className="absolute bottom-0 left-0 right-0 p-6 z-20">
-                      <h3 className="text-xl font-light text-white mb-2 group-hover:text-crimson transition-colors duration-300 capitalize">
-                        {category}
-                      </h3>
-                      <div className="flex items-center text-white/50 text-sm">
-                        <Play className="h-4 w-4 mr-2" />
-                        <span>Explore Collection</span>
-                      </div>
+                  </div>
+                </motion.div>
+
+                {/* Hustle Mentality Category */}
+                <motion.div
+                  className="relative overflow-hidden group cursor-pointer bg-black/20 border border-white/5 aspect-video flex items-center justify-center"
+                  onClick={() => handleCategoryClick("hustle-mentality")}
+                  initial={{ opacity: 0, y: 20 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.6, delay: 0.2 }}
+                  viewport={{ once: true, margin: "-100px" }}
+                >
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/30 to-transparent opacity-70 group-hover:opacity-40 transition-opacity duration-300"></div>
+                  <div className="relative z-10 text-center">
+                    <h3 className="text-2xl font-light text-white mb-2 group-hover:text-crimson transition-colors duration-300">
+                      Hustle Mentality
+                    </h3>
+                    <div className="flex items-center justify-center text-white/50 text-sm">
+                      <Play className="h-4 w-4 mr-2" />
+                      <span>Explore Collection</span>
                     </div>
-                  </motion.div>
-                ))}
+                  </div>
+                </motion.div>
+
+                {/* Introspection Category */}
+                <motion.div
+                  className="relative overflow-hidden group cursor-pointer bg-black/20 border border-white/5 aspect-video flex items-center justify-center"
+                  onClick={() => handleCategoryClick("introspection")}
+                  initial={{ opacity: 0, y: 20 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.6, delay: 0.4 }}
+                  viewport={{ once: true, margin: "-100px" }}
+                >
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/30 to-transparent opacity-70 group-hover:opacity-40 transition-opacity duration-300"></div>
+                  <div className="relative z-10 text-center">
+                    <h3 className="text-2xl font-light text-white mb-2 group-hover:text-crimson transition-colors duration-300">
+                      Introspection
+                    </h3>
+                    <div className="flex items-center justify-center text-white/50 text-sm">
+                      <Play className="h-4 w-4 mr-2" />
+                      <span>Explore Collection</span>
+                    </div>
+                  </div>
+                </motion.div>
               </div>
 
               <motion.div
