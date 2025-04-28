@@ -424,3 +424,72 @@
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
 }
+
+/* Add these styles to the end of the file */
+
+/* Landing page specific styles */
+.landing-container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 1rem;
+}
+
+.landing-search {
+  background-color: rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(4px);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 9999px;
+}
+
+.landing-button {
+  transition: all 0.2s ease;
+  border-radius: 0.5rem;
+  font-weight: 500;
+}
+
+.landing-button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.landing-feature {
+  display: flex;
+  align-items: flex-start;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.landing-feature-icon {
+  color: hsl(var(--crimson));
+  flex-shrink: 0;
+}
+
+.landing-feature-text {
+  font-size: 1.125rem;
+  color: white;
+}
+
+/* Enhanced mobile menu */
+.mobile-menu {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  background-color: rgba(0, 0, 0, 0.9);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  padding: 1rem;
+  z-index: 50;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.mobile-menu-link {
+  display: block;
+  padding: 0.75rem 0;
+  color: white;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.mobile-menu-link:last-child {
+  border-bottom: none;
+}
