@@ -3,7 +3,7 @@
 import { useRef, useEffect, useState } from "react"
 import { useSearchParams } from "next/navigation"
 import { motion } from "framer-motion"
-import { Search, Clock, Zap, ChevronRight } from "lucide-react"
+import { Search, Clock, Brain, Rocket, ChevronRight } from "lucide-react"
 import DashboardHeader from "@/components/dashboard-header"
 import VideoRow from "@/components/video-row"
 import { useVimeoShowcases } from "@/hooks/use-vimeo-showcases"
@@ -186,20 +186,30 @@ export default function Dashboard() {
               Browse Categories
             </motion.h3>
 
-            <motion.div variants={itemVariants} className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              {/* Removed Trending Now button */}
-
+            <motion.div variants={itemVariants} className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              {/* Introspection Category (New) */}
               <Button
-                onClick={() => router.push("/category/motivation")}
+                onClick={() => router.push("/category/introspection")}
                 variant="outline"
                 className="flex items-center justify-start h-auto py-4 px-5 bg-zinc-900/30 border-zinc-800/50 hover:bg-zinc-900/50 hover:border-zinc-700"
               >
-                <Zap className="h-5 w-5 mr-3 text-crimson" />
-                <span className="text-left font-light">Motivation</span>
+                <Brain className="h-5 w-5 mr-3 text-crimson" />
+                <span className="text-left font-light">Introspection</span>
               </Button>
 
+              {/* Hustle Mentality Category (New) */}
               <Button
-                onClick={() => router.push("/category/recent")}
+                onClick={() => router.push("/category/hustle-mentality")}
+                variant="outline"
+                className="flex items-center justify-start h-auto py-4 px-5 bg-zinc-900/30 border-zinc-800/50 hover:bg-zinc-900/50 hover:border-zinc-700"
+              >
+                <Rocket className="h-5 w-5 mr-3 text-crimson" />
+                <span className="text-left font-light">Hustle Mentality</span>
+              </Button>
+
+              {/* Recently Added Category (Kept) */}
+              <Button
+                onClick={() => router.push("/category/recently-added")}
                 variant="outline"
                 className="flex items-center justify-start h-auto py-4 px-5 bg-zinc-900/30 border-zinc-800/50 hover:bg-zinc-900/50 hover:border-zinc-700"
               >
@@ -207,6 +217,7 @@ export default function Dashboard() {
                 <span className="text-left font-light">Recently Added</span>
               </Button>
 
+              {/* All Categories (Kept) */}
               <Button
                 onClick={() => router.push("/dashboard/categories")}
                 variant="outline"
