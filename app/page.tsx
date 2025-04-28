@@ -177,8 +177,8 @@ export default function LandingPage() {
                 </div>
                 <h3 className="text-2xl font-light text-white mb-4">Save Hours Daily</h3>
                 <p className="text-white/70">
-                  Stop wasting time searching for content. Our curated vault gives you instant access to viral-ready
-                  clips.
+                  Reclaim your time with our platform. Access ready-made clips you can brand your way without the
+                  endless search.
                 </p>
               </motion.div>
 
@@ -192,9 +192,10 @@ export default function LandingPage() {
                 <div className="mb-6 p-3 bg-white/5 inline-block rounded-sm">
                   <TrendingUp className="h-6 w-6 text-crimson" />
                 </div>
-                <h3 className="text-2xl font-light text-white mb-4">Stay Ahead of Trends</h3>
+                <h3 className="text-2xl font-light text-white mb-4">Fresh Content Library</h3>
                 <p className="text-white/70">
-                  Our team constantly updates the vault with trending content before it goes viral.
+                  Our platform continuously updates with new content, ensuring you always have fresh clips to choose
+                  from.
                 </p>
               </motion.div>
 
@@ -210,7 +211,7 @@ export default function LandingPage() {
                 </div>
                 <h3 className="text-2xl font-light text-white mb-4">Instant Downloads</h3>
                 <p className="text-white/70">
-                  One-click downloads in multiple formats and qualities. Ready to post immediately.
+                  Browse and download any clip you want with a single click. Less work, more content for your channels.
                 </p>
               </motion.div>
             </div>
