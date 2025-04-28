@@ -70,7 +70,7 @@ export default function LandingPage() {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.8, delay: 0.2 }}
               >
-                The Elite Vault for <span className="text-gradient-accent">Faceless Creators</span>
+                The #1 Platform for <span className="text-gradient-accent">Faceless Creators</span>
               </motion.h1>
 
               <motion.p

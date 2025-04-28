@@ -4,6 +4,7 @@ import { useState, useEffect } from "react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
 import { Menu, X } from "lucide-react"
+import Logo from "@/components/logo"
 
 export default function LandingHeader() {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
@@ -20,33 +21,30 @@ export default function LandingHeader() {
 
   return (
     <header
-      className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
-        scrolled ? "py-3 bg-black/80 backdrop-blur-md border-b border-white/5" : "py-5"
+      className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 border-b border-white/10 ${
+        scrolled ? "py-3 bg-black/80 backdrop-blur-md" : "py-5"
       }`}
     >
       <div className="container mx-auto px-4 flex items-center justify-between">
         <div className="flex items-center">
-          <Link href="/" className="text-2xl font-medium tracking-tighter">
-            <span className="text-crimson">MASS</span>
-            <span className="text-white">CLIP</span>
-          </Link>
-        </div>
+          <Logo href="/" size="md" />
 
-        {/* Desktop Navigation */}
-        <nav className="hidden md:flex items-center space-x-8">
-          <Link href="/" className="text-sm text-white/80 hover:text-white transition-colors">
-            HOME
-          </Link>
-          <Link href="/dashboard" className="text-sm text-white/80 hover:text-white transition-colors">
-            EXPLORE
-          </Link>
-          <Link href="/membership-plans" className="text-sm text-white/80 hover:text-white transition-colors">
-            PRICING
-          </Link>
-          <Link href="/dashboard/categories" className="text-sm text-white/80 hover:text-white transition-colors">
-            CATEGORIES
-          </Link>
-        </nav>
+          {/* Desktop Navigation - Moved next to logo */}
+          <nav className="hidden md:flex items-center ml-10 space-x-8">
+            <Link href="/" className="text-sm text-white/80 hover:text-white transition-colors">
+              HOME
+            </Link>
+            <Link href="/dashboard" className="text-sm text-white/80 hover:text-white transition-colors">
+              EXPLORE
+            </Link>
+            <Link href="/membership-plans" className="text-sm text-white/80 hover:text-white transition-colors">
+              PRICING
+            </Link>
+            <Link href="/dashboard/categories" className="text-sm text-white/80 hover:text-white transition-colors">
+              CATEGORIES
+            </Link>
+          </nav>
+        </div>
 
         {/* Desktop CTA */}
         <div className="hidden md:flex items-center gap-6">
