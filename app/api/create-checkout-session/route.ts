@@ -1,22 +1,28 @@
 import { NextResponse } from "next/server"
 import Stripe from "stripe"
+import { initializeFirebaseAdmin } from "@/lib/firebase-admin"
+import { getFirestore } from "firebase-admin/firestore"
 
 export async function POST(request: Request) {
-  console.log("------------ APP ROUTER CHECKOUT SESSION START ------------")
+  console.log("------------ 🔐 CHECKOUT SESSION API START ------------")
+
+  // Initialize Firebase Admin
+  initializeFirebaseAdmin()
+  const db = getFirestore()
 
   // Check for required environment variables
   if (!process.env.STRIPE_SECRET_KEY) {
-    console.error("Missing environment variable: STRIPE_SECRET_KEY")
+    console.error("🔐 CHECKOUT ERROR: Missing STRIPE_SECRET_KEY")
     return NextResponse.json({ error: "Server configuration error: Missing Stripe secret key" }, { status: 500 })
   }
 
   if (!process.env.STRIPE_PRICE_ID) {
-    console.error("Missing environment variable: STRIPE_PRICE_ID")
+    console.error("🔐 CHECKOUT ERROR: Missing STRIPE_PRICE_ID")
     return NextResponse.json({ error: "Server configuration error: Missing Stripe price ID" }, { status: 500 })
   }
 
   if (!process.env.NEXT_PUBLIC_SITE_URL) {
-    console.error("Missing environment variable: NEXT_PUBLIC_SITE_URL")
+    console.error("🔐 CHECKOUT ERROR: Missing NEXT_PUBLIC_SITE_URL")
     return NextResponse.json({ error: "Server configuration error: Missing site URL" }, { status: 500 })
   }
 
@@ -28,74 +34,58 @@ export async function POST(request: Request) {
 
     // Parse the request body
     const body = await request.json()
-    console.log("Request body:", JSON.stringify(body))
 
-    // Get the user email from the request body
-    const { userId, userEmail, email } = body || {}
+    // Extract and validate required fields
+    const { userId, userEmail, timestamp, clientId } = body
 
-    // Try to get email from different possible properties
-    const customerEmail = userEmail || email || body?.user?.email
+    console.log("🔐 CHECKOUT: Received request with data:")
+    console.log(`🔐 CHECKOUT: User ID: ${userId || "MISSING"}`)
+    console.log(`🔐 CHECKOUT: User Email: ${userEmail || "MISSING"}`)
+    console.log(`🔐 CHECKOUT: Timestamp: ${timestamp || "MISSING"}`)
+    console.log(`🔐 CHECKOUT: Client ID: ${clientId || "MISSING"}`)
 
-    if (!customerEmail) {
-      console.error("MISSING EMAIL - Request body:", JSON.stringify(body))
-      return NextResponse.json({ error: "Missing email in request body" }, { status: 400 })
-    }
-
+    // Validate required fields
     if (!userId) {
-      console.warn("⚠️ WARNING: Missing userId in request body. Metadata will be incomplete.")
-      console.warn("Request body:", JSON.stringify(body))
+      console.error("🔐 CHECKOUT ERROR: Missing userId in request")
+      return NextResponse.json({ error: "Missing required field: userId" }, { status: 400 })
     }
 
-    console.log(`Creating checkout session for email: ${customerEmail}`)
-    console.log(`User ID for metadata: ${userId || "NOT PROVIDED"}`)
-    console.log("Using price ID:", process.env.STRIPE_PRICE_ID)
-    console.log("Success URL:", `${process.env.NEXT_PUBLIC_SITE_URL}/subscription/success`)
-    console.log("Cancel URL:", `${process.env.NEXT_PUBLIC_SITE_URL}/subscription/cancel`)
+    if (!userEmail) {
+      console.error("🔐 CHECKOUT ERROR: Missing userEmail in request")
+      return NextResponse.json({ error: "Missing required field: userEmail" }, { status: 400 })
+    }
 
-    // ENHANCED: Create metadata object with explicit string values
+    // Verify the user exists in Firestore
+    const userDoc = await db.collection("users").doc(userId).get()
+    if (!userDoc.exists) {
+      console.error(`🔐 CHECKOUT ERROR: User ${userId} not found in Firestore`)
+      return NextResponse.json({ error: "User not found" }, { status: 404 })
+    }
+
+    console.log(`🔐 CHECKOUT: User ${userId} verified in Firestore`)
+
+    // Create metadata object with all required fields
     const metadata = {
-      email: customerEmail.toString(),
-      firebaseUid: userId ? userId.toString() : "",
+      firebaseUid: userId,
+      email: userEmail,
       plan: "pro",
       timestamp: new Date().toISOString(),
-      source: "app_checkout", // Add source for tracking
+      requestTimestamp: timestamp || new Date().toISOString(),
+      clientId: clientId || "not-provided",
     }
 
-    console.log("METADATA BEING SENT TO STRIPE:", JSON.stringify(metadata, null, 2))
+    console.log("🔐 CHECKOUT: Prepared metadata:", JSON.stringify(metadata, null, 2))
 
-    // Create a customer first to ensure metadata is attached
-    let customer
-    try {
-      // Check if customer already exists
-      const customers = await stripe.customers.list({
-        email: customerEmail,
-        limit: 1,
-      })
+    // Generate unique success and cancel URLs with timestamp to prevent caching
+    const uniqueParam = `t=${Date.now()}`
+    const successUrl = `${process.env.NEXT_PUBLIC_SITE_URL}/subscription/success?session_id={CHECKOUT_SESSION_ID}&${uniqueParam}`
+    const cancelUrl = `${process.env.NEXT_PUBLIC_SITE_URL}/subscription/cancel?session_id={CHECKOUT_SESSION_ID}&${uniqueParam}`
 
-      if (customers.data.length > 0) {
-        customer = customers.data[0]
-        console.log(`Found existing customer: ${customer.id}`)
+    console.log(`🔐 CHECKOUT: Success URL: ${successUrl}`)
+    console.log(`🔐 CHECKOUT: Cancel URL: ${cancelUrl}`)
 
-        // Update customer with metadata
-        customer = await stripe.customers.update(customer.id, {
-          metadata: metadata,
-        })
-        console.log(`Updated existing customer with metadata`)
-      } else {
-        // Create new customer with metadata
-        customer = await stripe.customers.create({
-          email: customerEmail,
-          metadata: metadata,
-        })
-        console.log(`Created new customer: ${customer.id}`)
-      }
-    } catch (customerError) {
-      console.error("Error creating/updating customer:", customerError)
-      // Continue without customer if there's an error
-    }
-
-    // Create session parameters
-    const sessionParams: Stripe.Checkout.SessionCreateParams = {
+    // Create a new checkout session with metadata
+    const session = await stripe.checkout.sessions.create({
       payment_method_types: ["card"],
       line_items: [
         {
@@ -104,69 +94,49 @@ export async function POST(request: Request) {
         },
       ],
       mode: "subscription",
-      success_url: `${process.env.NEXT_PUBLIC_SITE_URL}/subscription/success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${process.env.NEXT_PUBLIC_SITE_URL}/subscription/cancel?session_id={CHECKOUT_SESSION_ID}`,
-      metadata: metadata,
-      // Add metadata to subscription_data to ensure it propagates to the subscription
+      success_url: successUrl,
+      cancel_url: cancelUrl,
+      customer_email: userEmail, // Always set customer_email for consistency
+      metadata: metadata, // Add metadata at session level
       subscription_data: {
-        metadata: metadata,
+        metadata: metadata, // Add metadata at subscription level
       },
-    }
-
-    // Use customer if we created/found one
-    if (customer) {
-      sessionParams.customer = customer.id
-      console.log(`Using customer ID: ${customer.id} for checkout session`)
-    } else {
-      // Fall back to customer_email if we couldn't create a customer
-      sessionParams.customer_email = customerEmail
-      console.log(`Using customer_email: ${customerEmail} for checkout session`)
-    }
-
-    console.log("Session parameters:", JSON.stringify(sessionParams, null, 2))
-
-    // Create the checkout session
-    const session = await stripe.checkout.sessions.create(sessionParams)
-
-    console.log("Session created with ID:", session.id)
-    console.log("DIAGNOSTIC - Session metadata received from Stripe:", JSON.stringify(session.metadata, null, 2))
-    console.log("Session URL:", session.url)
-
-    // DIAGNOSTIC: Verify the session was created with metadata
-    const retrievedSession = await stripe.checkout.sessions.retrieve(session.id, {
-      expand: ["subscription", "customer"],
     })
-    console.log("DIAGNOSTIC - Retrieved session metadata:", JSON.stringify(retrievedSession.metadata, null, 2))
 
-    if (retrievedSession.subscription) {
-      console.log(
-        "DIAGNOSTIC - Subscription metadata:",
-        typeof retrievedSession.subscription === "string"
-          ? "Subscription not expanded"
-          : JSON.stringify(retrievedSession.subscription.metadata, null, 2),
-      )
-    }
+    console.log(`🔐 CHECKOUT: Created new session with ID: ${session.id}`)
 
-    if (retrievedSession.customer) {
-      console.log(
-        "DIAGNOSTIC - Customer metadata:",
-        typeof retrievedSession.customer === "string"
-          ? "Customer not expanded"
-          : JSON.stringify(retrievedSession.customer.metadata, null, 2),
-      )
-    }
+    // Verify the session was created with metadata
+    const retrievedSession = await stripe.checkout.sessions.retrieve(session.id)
+    console.log("🔐 CHECKOUT: Verified session metadata:", JSON.stringify(retrievedSession.metadata, null, 2))
 
-    console.log("------------ APP ROUTER CHECKOUT SESSION END ------------")
+    // Store session info in Firestore for tracking and debugging
+    await db
+      .collection("stripeCheckoutSessions")
+      .doc(session.id)
+      .set({
+        userId,
+        userEmail,
+        sessionId: session.id,
+        createdAt: new Date(),
+        status: "created",
+        metadata: metadata,
+        clientId: clientId || "not-provided",
+        timestamp: timestamp || new Date().toISOString(),
+      })
 
-    // Return the session URL
-    return NextResponse.json({ url: session.url })
+    console.log("🔐 CHECKOUT: Session stored in Firestore")
+    console.log("------------ 🔐 CHECKOUT SESSION API END ------------")
+
+    // Return both the URL and session ID for tracking
+    return NextResponse.json({
+      url: session.url,
+      sessionId: session.id,
+    })
   } catch (error) {
-    console.error("Stripe session error:", error)
-    console.error("Error message:", error instanceof Error ? error.message : "Unknown error")
-
+    console.error("🔐 CHECKOUT ERROR:", error)
     return NextResponse.json(
       {
-        error: error instanceof Error ? `Stripe checkout error: ${error.message}` : "An unknown error occurred",
+        error: error instanceof Error ? error.message : "Failed to create checkout session",
       },
       { status: 500 },
     )
