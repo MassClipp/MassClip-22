@@ -20,6 +20,9 @@ export function SubscribeButton({ className, children }: { className?: string; c
       return
     }
 
+    // Update any plan checks
+    const isProUser = user?.plan === "creator_pro"
+
     try {
       setIsLoading(true)
 

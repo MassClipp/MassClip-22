@@ -97,7 +97,15 @@ export async function POST(request: Request) {
       success_url: successUrl,
       cancel_url: cancelUrl,
       customer_email: userEmail, // Always set customer_email for consistency
-      metadata: metadata, // Add metadata at session level
+      metadata: {
+        firebaseUid: userId,
+        email: userEmail,
+        planType: "creator_pro",
+        plan: "pro",
+        timestamp: new Date().toISOString(),
+        requestTimestamp: timestamp || new Date().toISOString(),
+        clientId: clientId || "not-provided",
+      }, // Add metadata at session level
       subscription_data: {
         metadata: metadata, // Add metadata at subscription level
       },

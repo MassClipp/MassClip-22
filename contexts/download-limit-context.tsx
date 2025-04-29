@@ -47,7 +47,7 @@ export function DownloadLimitProvider({ children }: { children: ReactNode }) {
       .then((doc) => {
         if (doc.exists()) {
           const userData = doc.data()
-          const isPro = userData.plan === "pro"
+          const isPro = userData?.plan === "creator_pro"
           const downloads = userData.downloads || 0
           const limit = isPro ? Number.POSITIVE_INFINITY : 5
 
@@ -66,7 +66,7 @@ export function DownloadLimitProvider({ children }: { children: ReactNode }) {
       (doc) => {
         if (doc.exists()) {
           const userData = doc.data()
-          const isPro = userData.plan === "pro"
+          const isPro = userData?.plan === "creator_pro"
           const downloads = userData.downloads || 0
           const limit = isPro ? Number.POSITIVE_INFINITY : 5
 

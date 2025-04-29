@@ -21,6 +21,9 @@ export default function CancelSubscriptionButton() {
   const router = useRouter()
   const { user } = useAuth()
 
+  // Update any plan checks
+  const isProUser = user?.plan === "creator_pro"
+
   const handleCancel = async () => {
     if (!user) {
       toast({
