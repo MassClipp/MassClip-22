@@ -1,6 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { initializeFirebaseAdmin } from "@/lib/firebase-admin"
-import { getAuth } from "firebase-admin/auth"
+import { initializeFirebaseAdmin, configureFirebaseAuthSettings } from "@/lib/firebase-admin"
 import { Resend } from "resend"
 
 // Initialize Resend client
@@ -94,6 +93,9 @@ export async function POST(request: NextRequest) {
     // Initialize Firebase Admin if not already initialized
     initializeFirebaseAdmin()
 
+    // Configure Firebase Auth settings to use production domain
+    const auth = configureFirebaseAuthSettings()
+
     // Parse request body
     const { email } = await request.json()
 
@@ -103,17 +105,26 @@ export async function POST(request: NextRequest) {
     }
 
     // Generate password reset link with Firebase Admin
-    const auth = getAuth()
-    const resetLink = await auth.generatePasswordResetLink(email, {
+    // Force the continueUrl to be the production domain
+    const actionCodeSettings = {
       url: "https://massclip.pro/reset-password",
-    })
+      handleCodeInApp: false,
+    }
+
+    const resetLink = await auth.generatePasswordResetLink(email, actionCodeSettings)
+
+    // Ensure the link uses the production domain
+    const productionResetLink = resetLink.replace("massclip.vercel.app", "massclip.pro")
+
+    console.log("Original reset link:", resetLink)
+    console.log("Production reset link:", productionResetLink)
 
     // Send email with Resend
     const { data, error } = await resend.emails.send({
       from: "support@massclip.pro",
       to: email,
       subject: "Reset Your Password",
-      html: createResetEmailTemplate(resetLink),
+      html: createResetEmailTemplate(productionResetLink),
     })
 
     if (error) {

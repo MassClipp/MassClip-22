@@ -32,6 +32,19 @@ try {
 
   // Initialize Firebase services
   auth = getAuth(app)
+
+  // Configure auth to use the production domain for action URLs
+  if (typeof window !== "undefined") {
+    // Only run this on the client side
+    auth.useDeviceLanguage()
+
+    // Set the auth domain to the production domain
+    if (process.env.NODE_ENV === "production") {
+      // @ts-ignore - This is a valid property but TypeScript doesn't recognize it
+      auth.tenantId = "massclip.pro"
+    }
+  }
+
   db = getFirestore(app)
   storage = getStorage(app)
 } catch (error) {

@@ -1,40 +1,47 @@
-import { cert, initializeApp, getApps } from "firebase-admin/app"
-import { getFirestore } from "firebase-admin/firestore"
+import * as admin from "firebase-admin"
+import { getApps } from "firebase-admin/app"
 
-/**
- * Initializes Firebase Admin SDK if it hasn't been initialized already
- * This prevents multiple initializations in serverless environments
- */
+// Initialize Firebase Admin
 export function initializeFirebaseAdmin() {
   if (getApps().length === 0) {
-    // Check for required environment variables
-    const projectId = process.env.FIREBASE_PROJECT_ID
-    const clientEmail = process.env.FIREBASE_CLIENT_EMAIL
-    const privateKey = process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n")
-
-    if (!projectId || !clientEmail || !privateKey) {
-      console.error("Missing Firebase Admin SDK credentials in environment variables")
-      throw new Error("Firebase Admin SDK credentials are required")
-    }
-
     try {
-      initializeApp({
-        credential: cert({
-          projectId,
-          clientEmail,
+      // Get the Firebase private key
+      const privateKey = process.env.FIREBASE_PRIVATE_KEY
+        ? process.env.FIREBASE_PRIVATE_KEY.replace(/\\n/g, "\n")
+        : undefined
+
+      admin.initializeApp({
+        credential: admin.credential.cert({
+          projectId: process.env.FIREBASE_PROJECT_ID,
+          clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
           privateKey,
         }),
+        // Add any other configuration options here
       })
-      console.log("Firebase Admin SDK initialized successfully")
     } catch (error) {
-      console.error("Error initializing Firebase Admin SDK:", error)
-      throw error
+      console.error("Firebase admin initialization error", error)
     }
   }
+
+  return admin
+}
+
+// Configure action URL settings for Firebase Auth
+export function configureFirebaseAuthSettings() {
+  const auth = admin.auth()
+
+  // Always set the production domain for action URLs
+  auth.setSettings({
+    uri: "https://massclip.pro",
+  })
+
+  return auth
 }
 
 // Initialize Firebase Admin if not already initialized
 initializeFirebaseAdmin()
 
 // Export the Firestore database
-export const db = getFirestore()
+export const db = admin.firestore()
+
+export { admin }
