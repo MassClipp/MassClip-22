@@ -53,3 +53,5 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Failed to update environment variable" }, { status: 500 })
   }
 }
+
+// Triggering preview deployment

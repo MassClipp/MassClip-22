@@ -729,3 +729,105 @@
 .animate-pulse-slow {
   animation: pulse-slow 8s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }
+
+/* New premium mobile menu styles */
+.mobile-menu-premium {
+  background: linear-gradient(to bottom, rgba(18, 18, 18, 0.98), rgba(10, 10, 10, 0.98));
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3);
+}
+
+.mobile-menu-item {
+  transition: all 0.2s ease;
+}
+
+.mobile-menu-item:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.mobile-menu-item:active {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.mobile-menu-divider {
+  height: 1px;
+  background: linear-gradient(to right, transparent, rgba(255, 255, 255, 0.1), transparent);
+  margin: 0.75rem 0;
+}
+
+/* Slide-in animation for mobile menu */
+@keyframes slideInRight {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.animate-slide-in {
+  animation: slideInRight 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Staggered animation for menu items */
+.stagger-item-1 {
+  animation-delay: 0.05s;
+}
+.stagger-item-2 {
+  animation-delay: 0.1s;
+}
+.stagger-item-3 {
+  animation-delay: 0.15s;
+}
+.stagger-item-4 {
+  animation-delay: 0.2s;
+}
+.stagger-item-5 {
+  animation-delay: 0.25s;
+}
+
+/* Subtle hover effect for menu items */
+.menu-hover-effect {
+  position: relative;
+  overflow: hidden;
+}
+
+.menu-hover-effect::after {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 0;
+  height: 1px;
+  background-color: hsl(348, 83%, 47%);
+  transition: width 0.3s ease;
+}
+
+.menu-hover-effect:hover::after {
+  width: 100%;
+}
+
+/* Premium glass effect */
+.glass-effect {
+  background: rgba(18, 18, 18, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-left: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+/* Enhanced mobile menu animations */
+@keyframes fadeScale {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.animate-fade-scale {
+  animation: fadeScale 0.3s ease-out forwards;
+}

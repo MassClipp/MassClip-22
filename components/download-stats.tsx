@@ -57,7 +57,7 @@ export default function DownloadStats() {
           <Download className="mr-2 h-5 w-5 text-crimson" /> Downloads
         </CardTitle>
         <CardDescription className="text-zinc-400">
-          {isProUser ? "Unlimited downloads with Pro" : "Monthly download allowance"}
+          {isProUser ? "Unlimited downloads with Creator Pro" : "Monthly download allowance"}
         </CardDescription>
       </CardHeader>
       <CardContent>
@@ -68,22 +68,29 @@ export default function DownloadStats() {
             </div>
             <h3 className="text-xl font-light text-white mb-1">Unlimited Downloads</h3>
             <p className="text-zinc-400 text-sm font-light">
-              Enjoy unlimited access to all content with your Pro subscription
+              Enjoy unlimited access to all content with your Creator Pro subscription
             </p>
           </div>
         ) : (
           <div className="space-y-4">
             <div className="flex justify-between items-center mb-1">
-              <span className="text-sm text-zinc-400 font-light">
-                {remainingDownloads} of {planData?.downloadsLimit || 5} downloads remaining
-              </span>
+              <div className="flex items-center">
+                <span className={`text-sm font-medium ${hasReachedLimit ? "text-amber-400" : "text-white"}`}>
+                  {remainingDownloads} of {planData?.downloadsLimit || 5} downloads remaining
+                </span>
+                {hasReachedLimit && (
+                  <span className="ml-2 inline-flex items-center justify-center px-2 py-0.5 text-xs font-medium rounded-full bg-amber-500/20 text-amber-500 border border-amber-500/30">
+                    Limit reached
+                  </span>
+                )}
+              </div>
               <span className="text-xs text-zinc-500">{getProgressPercentage()}%</span>
             </div>
 
             <Progress
               value={getProgressPercentage()}
-              className="h-2 bg-zinc-800/50"
-              indicatorClassName={hasReachedLimit ? "bg-red-600" : "bg-crimson"}
+              className="h-3 bg-zinc-800/50 rounded-full"
+              indicatorClassName={hasReachedLimit ? "bg-amber-500" : "bg-crimson"}
             />
 
             <div className="pt-2">
@@ -95,12 +102,12 @@ export default function DownloadStats() {
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.5 }}
-                className="bg-zinc-900/50 p-3 rounded-md border border-red-900/50 mt-4"
+                className="bg-zinc-900/50 p-3 rounded-md border border-amber-900/50 mt-4"
               >
-                <p className="text-sm text-amber-400 mb-2 font-light">
+                <p className="text-sm text-amber-400 mb-2 font-medium">
                   You've reached your download limit for this month
                 </p>
-                <p className="text-xs text-zinc-400 font-light">Upgrade to Pro for unlimited downloads</p>
+                <p className="text-xs text-zinc-400 font-light">Upgrade to Creator Pro for unlimited downloads</p>
               </motion.div>
             )}
           </div>
@@ -113,7 +120,7 @@ export default function DownloadStats() {
             onClick={() => router.push("/membership-plans")}
             className="w-full bg-crimson hover:bg-crimson-dark text-white"
           >
-            Upgrade to Pro
+            Upgrade to Creator Pro
           </Button>
         </CardFooter>
       )}

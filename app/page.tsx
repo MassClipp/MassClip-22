@@ -1,9 +1,7 @@
 "use client"
 
 import { useRef } from "react"
-
 import type React from "react"
-
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
@@ -331,6 +329,9 @@ export default function LandingPage() {
               <Link href="/privacy" className="hover:text-white transition-colors">
                 PRIVACY
               </Link>
+              <a href="mailto:john@massclip.pro" className="hover:text-white transition-colors">
+                john@massclip.pro
+              </a>
             </div>
           </div>
 

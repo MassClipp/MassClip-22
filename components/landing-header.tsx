@@ -1,14 +1,19 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import Link from "next/link"
 import { Button } from "@/components/ui/button"
-import { Menu, X } from "lucide-react"
+import { Menu, X, ChevronRight, Instagram } from "lucide-react"
 import Logo from "@/components/logo"
+import { useScrollLock } from "@/hooks/use-scroll-lock"
 
 export default function LandingHeader() {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const [scrolled, setScrolled] = useState(false)
+  const mobileMenuRef = useRef<HTMLDivElement>(null)
+
+  // Lock scroll when menu is open
+  useScrollLock(isMenuOpen)
 
   useEffect(() => {
     const handleScroll = () => {
@@ -18,6 +23,29 @@ export default function LandingHeader() {
     window.addEventListener("scroll", handleScroll)
     return () => window.removeEventListener("scroll", handleScroll)
   }, [])
+
+  // Close mobile menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (mobileMenuRef.current && !mobileMenuRef.current.contains(event.target as Node)) {
+        setIsMenuOpen(false)
+      }
+    }
+
+    if (isMenuOpen) {
+      document.addEventListener("mousedown", handleClickOutside)
+    }
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside)
+    }
+  }, [isMenuOpen])
+
+  const navigationItems = [
+    { name: "HOME", href: "/" },
+    { name: "EXPLORE", href: "/dashboard" },
+    { name: "PRICING", href: "/membership-plans" },
+    { name: "CATEGORIES", href: "/dashboard/categories" },
+  ]
 
   return (
     <header
@@ -29,20 +57,17 @@ export default function LandingHeader() {
         <div className="flex items-center">
           <Logo href="/" size="md" />
 
-          {/* Desktop Navigation - Moved next to logo */}
+          {/* Desktop Navigation */}
           <nav className="hidden md:flex items-center ml-10 space-x-8">
-            <Link href="/" className="text-sm text-white/80 hover:text-white transition-colors">
-              HOME
-            </Link>
-            <Link href="/dashboard" className="text-sm text-white/80 hover:text-white transition-colors">
-              EXPLORE
-            </Link>
-            <Link href="/membership-plans" className="text-sm text-white/80 hover:text-white transition-colors">
-              PRICING
-            </Link>
-            <Link href="/dashboard/categories" className="text-sm text-white/80 hover:text-white transition-colors">
-              CATEGORIES
-            </Link>
+            {navigationItems.map((item) => (
+              <Link
+                key={item.name}
+                href={item.href}
+                className="text-sm text-white/80 hover:text-white transition-colors"
+              >
+                {item.name}
+              </Link>
+            ))}
           </nav>
         </div>
 
@@ -59,60 +84,93 @@ export default function LandingHeader() {
         </div>
 
         {/* Mobile Menu Button */}
-        <button className="md:hidden text-white" onClick={() => setIsMenuOpen(!isMenuOpen)}>
-          {isMenuOpen ? <X size={24} /> : <Menu size={24} />}
+        <button
+          className="md:hidden flex items-center justify-center w-10 h-10 text-white bg-zinc-900/50 rounded-full border border-zinc-800/50 backdrop-blur-sm"
+          onClick={() => setIsMenuOpen(!isMenuOpen)}
+          aria-label={isMenuOpen ? "Close menu" : "Open menu"}
+        >
+          {isMenuOpen ? <X size={18} /> : <Menu size={18} />}
         </button>
       </div>
 
-      {/* Mobile Menu */}
+      {/* Mobile Menu Backdrop */}
       {isMenuOpen && (
-        <div className="md:hidden mobile-menu fixed inset-0 z-40 pt-20">
-          <div className="container mx-auto px-4 py-8 flex flex-col space-y-6">
-            <Link
-              href="/"
-              className="text-2xl font-light text-white py-2 border-b border-white/10"
+        <div
+          className="md:hidden fixed inset-0 bg-black/60 backdrop-blur-sm z-40"
+          onClick={() => setIsMenuOpen(false)}
+        />
+      )}
+
+      {/* Mobile Menu */}
+      <div
+        ref={mobileMenuRef}
+        className={`md:hidden fixed inset-y-0 right-0 w-[280px] bg-gradient-to-b from-zinc-900/95 to-black/95 backdrop-blur-md border-l border-zinc-800/50 shadow-2xl transition-all duration-300 ease-in-out z-50 ${
+          isMenuOpen ? "translate-x-0" : "translate-x-full"
+        }`}
+      >
+        <div className="flex flex-col h-full">
+          {/* Menu Header */}
+          <div className="flex items-center justify-between p-5 border-b border-zinc-800/50">
+            <Logo href="/" size="sm" />
+            <button
+              className="flex items-center justify-center w-8 h-8 text-white/80 hover:text-white bg-zinc-800/50 rounded-full"
               onClick={() => setIsMenuOpen(false)}
+              aria-label="Close menu"
             >
-              HOME
-            </Link>
-            <Link
-              href="/dashboard"
-              className="text-2xl font-light text-white py-2 border-b border-white/10"
-              onClick={() => setIsMenuOpen(false)}
-            >
-              EXPLORE
-            </Link>
-            <Link
-              href="/membership-plans"
-              className="text-2xl font-light text-white py-2 border-b border-white/10"
-              onClick={() => setIsMenuOpen(false)}
-            >
-              PRICING
-            </Link>
-            <Link
-              href="/dashboard/categories"
-              className="text-2xl font-light text-white py-2 border-b border-white/10"
-              onClick={() => setIsMenuOpen(false)}
-            >
-              CATEGORIES
-            </Link>
-            <div className="flex flex-col pt-6 space-y-4">
-              <Link
-                href="/login"
-                className="text-xl font-light text-white/80 hover:text-white"
-                onClick={() => setIsMenuOpen(false)}
-              >
-                LOG IN
-              </Link>
-              <Link href="/signup" onClick={() => setIsMenuOpen(false)}>
-                <Button className="w-full bg-crimson hover:bg-crimson-dark text-white text-lg py-6 rounded-none">
-                  SIGN UP
-                </Button>
-              </Link>
+              <X size={16} />
+            </button>
+          </div>
+
+          {/* Navigation Links */}
+          <nav className="flex-1 overflow-y-auto py-6 px-5">
+            <div className="space-y-1">
+              {navigationItems.map((item) => (
+                <Link
+                  key={item.name}
+                  href={item.href}
+                  className="flex items-center justify-between py-3 px-4 text-white/90 hover:text-white hover:bg-white/5 rounded-lg transition-colors group"
+                  onClick={() => setIsMenuOpen(false)}
+                >
+                  <span className="text-sm font-light tracking-wide">{item.name}</span>
+                  <ChevronRight className="h-4 w-4 text-zinc-500 group-hover:text-white/70 transition-colors" />
+                </Link>
+              ))}
             </div>
+
+            {/* Social Links */}
+            <div className="mt-8 pt-6 border-t border-zinc-800/50">
+              <p className="text-xs text-zinc-500 font-light px-4 mb-4">FOLLOW US</p>
+              <a
+                href="https://instagram.com"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center py-3 px-4 text-white/90 hover:text-white hover:bg-white/5 rounded-lg transition-colors"
+              >
+                <Instagram className="h-4 w-4 mr-3" />
+                <span className="text-sm font-light">Instagram</span>
+              </a>
+            </div>
+          </nav>
+
+          {/* Auth Buttons */}
+          <div className="p-5 border-t border-zinc-800/50 space-y-3">
+            <Link
+              href="/login"
+              className="flex items-center justify-center w-full py-2.5 text-sm text-white/90 hover:text-white bg-zinc-800/50 hover:bg-zinc-800 rounded-lg transition-colors"
+              onClick={() => setIsMenuOpen(false)}
+            >
+              LOG IN
+            </Link>
+            <Link
+              href="/signup"
+              className="flex items-center justify-center w-full py-2.5 text-sm text-white bg-crimson hover:bg-crimson-dark rounded-lg transition-colors"
+              onClick={() => setIsMenuOpen(false)}
+            >
+              SIGN UP
+            </Link>
           </div>
         </div>
-      )}
+      </div>
     </header>
   )
 }
