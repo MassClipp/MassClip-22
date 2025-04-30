@@ -2,6 +2,7 @@ import { NextResponse } from "next/server"
 import Stripe from "stripe"
 import { initializeFirebaseAdmin } from "@/lib/firebase-admin"
 import { getFirestore } from "firebase-admin/firestore"
+import { getProductionUrl } from "@/lib/url-utils"
 
 // Initialize Firebase Admin
 initializeFirebaseAdmin()
@@ -118,6 +119,7 @@ async function updateUserToCreatorPro(userId: string, session: Stripe.Checkout.S
     // Get the customer ID from the session
     const customerId = session.customer as string
     const subscriptionId = session.subscription as string
+    const productionUrl = getProductionUrl()
 
     // Update the user document
     await db
@@ -133,6 +135,7 @@ async function updateUserToCreatorPro(userId: string, session: Stripe.Checkout.S
         metadata: {
           checkoutSessionId: session.id,
           upgradedAt: new Date().toISOString(),
+          productionUrl: productionUrl, // Add production URL for reference
         },
       })
 
@@ -146,6 +149,7 @@ async function updateUserToCreatorPro(userId: string, session: Stripe.Checkout.S
       checkoutSessionId: session.id,
       timestamp: new Date().toISOString(),
       metadata: session.metadata || {},
+      productionUrl: productionUrl, // Add production URL for reference
     })
 
     // Update the session status in our database
@@ -155,6 +159,7 @@ async function updateUserToCreatorPro(userId: string, session: Stripe.Checkout.S
         status: "completed",
         completedAt: new Date(),
         subscriptionId: subscriptionId,
+        productionUrl: productionUrl, // Add production URL for reference
       })
     }
   } catch (error) {
@@ -170,6 +175,8 @@ async function downgradeUserToFree(userId: string) {
   console.log(`🔔 WEBHOOK: Downgrading user ${userId} to free plan`)
 
   try {
+    const productionUrl = getProductionUrl()
+
     // Update the user document
     await db
       .collection("users")
@@ -182,6 +189,7 @@ async function downgradeUserToFree(userId: string) {
         hasAccess: false,
         metadata: {
           downgradedAt: new Date().toISOString(),
+          productionUrl: productionUrl, // Add production URL for reference
         },
       })
 
@@ -192,6 +200,7 @@ async function downgradeUserToFree(userId: string) {
       userId,
       eventType: "subscription_canceled",
       timestamp: new Date().toISOString(),
+      productionUrl: productionUrl, // Add production URL for reference
     })
   } catch (error) {
     console.error(`🔔 WEBHOOK ERROR: Failed to downgrade user ${userId} to free:`, error)
