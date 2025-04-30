@@ -1,14 +1,11 @@
 import { cert, getApps, initializeApp } from "firebase-admin/app"
-import { getFirestore } from "firebase-admin/firestore"
-import { getAuth } from "firebase-admin/auth"
+import * as admin from "firebase-admin"
 
 /**
  * Initializes Firebase Admin SDK if it hasn't been initialized already
  * This prevents multiple initializations in serverless environments
  */
 export function initializeFirebaseAdmin() {
-  console.log("Initializing Firebase Admin")
-
   if (getApps().length === 0) {
     // Check for required environment variables
     const projectId = process.env.FIREBASE_PROJECT_ID
@@ -21,7 +18,6 @@ export function initializeFirebaseAdmin() {
     }
 
     try {
-      console.log("Creating Firebase Admin app")
       initializeApp({
         credential: cert({
           projectId,
@@ -34,12 +30,17 @@ export function initializeFirebaseAdmin() {
       console.error("Error initializing Firebase Admin SDK:", error)
       throw error
     }
-  } else {
-    console.log("Firebase Admin already initialized")
   }
 
-  return getAuth()
+  return admin
 }
 
+// Initialize Firebase Admin if not already initialized
+const adminApp = initializeFirebaseAdmin()
+
 // Export the Firestore database
-export const db = getFirestore()
+export const db = adminApp.firestore()
+export const auth = adminApp.auth()
+
+// Export the admin app
+export { adminApp as admin }
