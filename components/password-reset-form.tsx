@@ -3,28 +3,20 @@
 import type React from "react"
 
 import { useState } from "react"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
-import { AlertCircle, CheckCircle } from "lucide-react"
+import { useRouter } from "next/navigation"
 
 export default function PasswordResetForm() {
   const [email, setEmail] = useState("")
   const [isLoading, setIsLoading] = useState(false)
-  const [status, setStatus] = useState<"idle" | "success" | "error">("idle")
   const [message, setMessage] = useState("")
+  const [error, setError] = useState("")
+  const router = useRouter()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-
-    if (!email) {
-      setStatus("error")
-      setMessage("Please enter your email address")
-      return
-    }
-
     setIsLoading(true)
-    setStatus("idle")
+    setError("")
+    setMessage("")
 
     try {
       const response = await fetch("/api/send-reset-link", {
@@ -38,70 +30,59 @@ export default function PasswordResetForm() {
       const data = await response.json()
 
       if (!response.ok) {
-        throw new Error(data.error || "Failed to send reset link")
+        throw new Error(data.error || data.details || "Something went wrong")
       }
 
-      setStatus("success")
       setMessage("If an account exists with this email, a password reset link has been sent.")
       setEmail("")
-    } catch (error) {
-      console.error("Error sending reset link:", error)
-      setStatus("error")
-      setMessage("Something went wrong. Please try again later.")
+    } catch (err: any) {
+      console.error("Password reset error:", err)
+      setError(err.message || "Failed to send password reset email. Please try again.")
     } finally {
       setIsLoading(false)
     }
   }
 
   return (
-    <Card className="w-full max-w-md mx-auto">
-      <CardHeader>
-        <CardTitle className="text-2xl font-bold">Reset Password</CardTitle>
-        <CardDescription>Enter your email address and we'll send you a link to reset your password.</CardDescription>
-      </CardHeader>
+    <div className="max-w-md mx-auto p-6 bg-white rounded-lg shadow-md">
+      <h2 className="text-2xl font-bold mb-6 text-center">Reset Your Password</h2>
 
-      <CardContent>
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-2">
-            <label htmlFor="email" className="text-sm font-medium">
-              Email Address
-            </label>
-            <Input
-              id="email"
-              type="email"
-              placeholder="your@email.com"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              disabled={isLoading}
-              required
-            />
-          </div>
+      {message && <div className="mb-4 p-3 bg-green-100 text-green-800 rounded">{message}</div>}
 
-          {status === "success" && (
-            <div className="flex items-start gap-2 p-3 text-sm rounded-md bg-green-50 text-green-800">
-              <CheckCircle className="h-5 w-5 shrink-0 text-green-500" />
-              <p>{message}</p>
-            </div>
-          )}
+      {error && <div className="mb-4 p-3 bg-red-100 text-red-800 rounded">{error}</div>}
 
-          {status === "error" && (
-            <div className="flex items-start gap-2 p-3 text-sm rounded-md bg-red-50 text-red-800">
-              <AlertCircle className="h-5 w-5 shrink-0 text-red-500" />
-              <p>{message}</p>
-            </div>
-          )}
+      <form onSubmit={handleSubmit}>
+        <div className="mb-4">
+          <label htmlFor="email" className="block text-sm font-medium text-gray-700 mb-1">
+            Email Address
+          </label>
+          <input
+            type="email"
+            id="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-red-500"
+            required
+            disabled={isLoading}
+          />
+        </div>
 
-          <Button type="submit" className="w-full" disabled={isLoading}>
-            {isLoading ? "Sending..." : "Send Reset Link"}
-          </Button>
-        </form>
-      </CardContent>
+        <button
+          type="submit"
+          className={`w-full py-2 px-4 bg-red-600 text-white rounded-md hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 ${
+            isLoading ? "opacity-70 cursor-not-allowed" : ""
+          }`}
+          disabled={isLoading}
+        >
+          {isLoading ? "Sending..." : "Send Reset Link"}
+        </button>
+      </form>
 
-      <CardFooter className="flex justify-center border-t pt-4">
-        <a href="/login" className="text-sm text-gray-500 hover:text-gray-800">
+      <div className="mt-4 text-center">
+        <button onClick={() => router.push("/login")} className="text-sm text-red-600 hover:underline">
           Back to Login
-        </a>
-      </CardFooter>
-    </Card>
+        </button>
+      </div>
+    </div>
   )
 }
