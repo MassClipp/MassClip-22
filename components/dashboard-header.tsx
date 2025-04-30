@@ -267,25 +267,30 @@ export default function DashboardHeader({ initialSearchQuery = "" }) {
       {/* Mobile Menu Backdrop */}
       {mobileMenuOpen && (
         <div
-          className="md:hidden fixed inset-0 bg-black/50 backdrop-blur-sm z-40"
+          className="md:hidden fixed inset-0 bg-black/70 z-40"
           onClick={() => setMobileMenuOpen(false)}
+          aria-hidden="true"
         />
       )}
 
-      {/* Mobile Dropdown Menu - Enhanced Premium Version */}
+      {/* Mobile Dropdown Menu - Revamped for consistency */}
       <div
         ref={mobileMenuRef}
-        className={`md:hidden fixed inset-y-0 right-0 w-72 mobile-menu-premium glass-effect shadow-2xl transition-all duration-300 ease-in-out z-50 flex flex-col ${
+        className={`md:hidden fixed inset-y-0 right-0 w-72 bg-zinc-900 shadow-xl z-50 transform transition-transform duration-300 ease-out ${
           mobileMenuOpen ? "translate-x-0" : "translate-x-full"
         }`}
+        style={{
+          boxShadow: "-5px 0 25px rgba(0, 0, 0, 0.5)",
+          borderLeft: "1px solid rgba(255, 255, 255, 0.05)",
+        }}
       >
         {/* Header with logo and close button */}
-        <div className="flex items-center justify-between p-5 border-b border-white/10">
+        <div className="flex items-center justify-between p-5 border-b border-zinc-800">
           <Logo href="/dashboard" className="h-6" />
           <Button
             variant="ghost"
             size="icon"
-            className="text-zinc-400 hover:text-white hover:bg-zinc-800/30 rounded-full"
+            className="text-zinc-400 hover:text-white hover:bg-zinc-800 rounded-full"
             onClick={() => setMobileMenuOpen(false)}
             aria-label="Close menu"
           >
@@ -295,7 +300,7 @@ export default function DashboardHeader({ initialSearchQuery = "" }) {
 
         {/* User profile section */}
         {user && (
-          <div className="p-5 border-b border-white/10">
+          <div className="p-5 border-b border-zinc-800">
             <div
               className="flex items-center space-x-3 cursor-pointer"
               onClick={() => {
@@ -303,8 +308,8 @@ export default function DashboardHeader({ initialSearchQuery = "" }) {
                 setMobileMenuOpen(false)
               }}
             >
-              <div className="h-12 w-12 rounded-full bg-gradient-to-br from-zinc-800 to-zinc-900 flex items-center justify-center border border-white/10 shadow-inner">
-                <User className="h-6 w-6 text-white/70" />
+              <div className="h-12 w-12 rounded-full bg-zinc-800 flex items-center justify-center border border-zinc-700">
+                <User className="h-6 w-6 text-zinc-400" />
               </div>
               <div>
                 <p className="text-white font-light text-base">{user.displayName || user.email}</p>
@@ -318,7 +323,7 @@ export default function DashboardHeader({ initialSearchQuery = "" }) {
         {/* Download counter for free users */}
         {!isProUser && (
           <div className="px-5 py-4">
-            <div className="bg-zinc-800/30 rounded-lg p-4 border border-white/5 shadow-inner">
+            <div className="bg-zinc-800 rounded-lg p-4 border border-zinc-700">
               <div className="flex items-center justify-between">
                 <div className="flex items-center">
                   <Download className={`h-4 w-4 mr-2 ${hasReachedLimit ? "text-amber-500" : "text-crimson"}`} />
@@ -342,13 +347,13 @@ export default function DashboardHeader({ initialSearchQuery = "" }) {
         )}
 
         {/* Navigation menu */}
-        <nav className="flex-1 px-5 py-2 overflow-y-auto scrollbar-hide">
+        <nav className="flex-1 px-5 py-2 overflow-y-auto">
           <div className="space-y-1">
-            {navigationItems.map((item, index) => (
+            {navigationItems.map((item) => (
               <Link
                 key={item.name}
                 href={item.href}
-                className={`flex items-center justify-between py-3.5 px-3 rounded-lg text-zinc-200 hover:text-white hover:bg-white/5 transition-all duration-200 animate-slide-in mobile-menu-item stagger-item-${index + 1}`}
+                className="flex items-center justify-between py-3.5 px-3 rounded-lg text-zinc-200 hover:text-white hover:bg-zinc-800 transition-colors"
                 onClick={() => setMobileMenuOpen(false)}
               >
                 <div className="flex items-center">
@@ -360,12 +365,12 @@ export default function DashboardHeader({ initialSearchQuery = "" }) {
             ))}
           </div>
 
-          <div className="mobile-menu-divider my-4"></div>
+          <div className="h-px bg-zinc-800 my-4"></div>
 
           <div className="space-y-1">
             <Link
               href="/dashboard/profile"
-              className="flex items-center justify-between py-3.5 px-3 rounded-lg text-zinc-200 hover:text-white hover:bg-white/5 transition-all duration-200 animate-slide-in mobile-menu-item stagger-item-4"
+              className="flex items-center justify-between py-3.5 px-3 rounded-lg text-zinc-200 hover:text-white hover:bg-zinc-800 transition-colors"
               onClick={() => setMobileMenuOpen(false)}
             >
               <div className="flex items-center">
@@ -380,11 +385,11 @@ export default function DashboardHeader({ initialSearchQuery = "" }) {
         </nav>
 
         {/* Footer actions */}
-        <div className="p-5 border-t border-white/10">
+        <div className="p-5 border-t border-zinc-800">
           {!isProUser && (
             <UpgradeButton
               onClick={handleUpgradeClick}
-              className="w-full mb-4 py-2.5 bg-gradient-to-r from-crimson to-crimson-dark hover:from-crimson-dark hover:to-crimson border-none shadow-lg"
+              className="w-full mb-4 py-2.5 bg-crimson hover:bg-crimson-dark border-none"
             >
               Upgrade to Creator Pro
             </UpgradeButton>
@@ -392,7 +397,7 @@ export default function DashboardHeader({ initialSearchQuery = "" }) {
 
           <Button
             variant="outline"
-            className="w-full justify-center text-zinc-300 hover:text-white border-zinc-700 hover:bg-zinc-800/50 hover:border-zinc-600"
+            className="w-full justify-center text-zinc-300 hover:text-white border-zinc-700 hover:bg-zinc-800 hover:border-zinc-600"
             onClick={() => {
               handleLogout()
               setMobileMenuOpen(false)
