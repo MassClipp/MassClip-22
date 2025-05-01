@@ -2,7 +2,6 @@
 
 import type React from "react"
 import { useState, useRef, useEffect } from "react"
-import { Download, Lock, Heart, ExternalLink } from "lucide-react"
 import type { VimeoVideo } from "@/lib/types"
 import { useAuth } from "@/contexts/auth-context"
 import { db } from "@/lib/firebase"
@@ -24,24 +23,48 @@ import { useUserPlan } from "@/hooks/use-user-plan"
 import { useMobile } from "@/hooks/use-mobile"
 import { useDownloadLimit } from "@/contexts/download-limit-context"
 import { isInTikTokBrowser } from "@/lib/browser-detection"
+import { Card, CardContent } from "@/components/ui/card"
+import { useInView } from "react-intersection-observer"
+import { useTikTokDetection } from "@/hooks/use-tiktok-detection"
 
 interface VimeoCardProps {
   video: VimeoVideo
+  autoPlay?: boolean
+  muted?: boolean
+  loop?: boolean
+  controls?: boolean
+  responsive?: boolean
+  dnt?: boolean
+  onPlay?: () => void
+  className?: string
+  aspectRatio?: "16:9" | "1:1" | "4:3" | "9:16"
+  priority?: boolean
 }
 
-export default function VimeoCard({ video }: VimeoCardProps) {
+export default function VimeoCard({
+  video,
+  autoPlay = false,
+  muted = true,
+  loop = true,
+  controls = true,
+  responsive = true,
+  dnt = true,
+  onPlay,
+  className = "",
+  aspectRatio = "16:9",
+  priority = false,
+}: VimeoCardProps) {
   const [isActive, setIsActive] = useState(false)
   const [isHovered, setIsHovered] = useState(false)
   const [downloadError, setDownloadError] = useState(false)
   const [isTitleOverflowing, setIsTitleOverflowing] = useState(false)
   const [hasTrackedView, setHasTrackedView] = useState(false)
   const [isIframeLoaded, setIsIframeLoaded] = useState(false)
-  const [thumbnailLoaded, setThumbnailLoaded] = useState(false)
   const [isDownloading, setIsDownloading] = useState(false)
   const [downloadLink, setDownloadLink] = useState<string | null>(null)
   const [isFavorite, setIsFavorite] = useState(false)
   const [isCheckingFavorite, setIsCheckingFavorite] = useState(true)
-  const [isTikTokBrowser, setIsTikTokBrowser] = useState(false)
+  const [isTikTokBrowserOriginal, setIsTikTokBrowserOriginal] = useState(false)
 
   const { user } = useAuth()
   const { toast } = useToast()
@@ -54,13 +77,16 @@ export default function VimeoCard({ video }: VimeoCardProps) {
   const downloadFrameRef = useRef<HTMLIFrameElement | null>(null)
   const downloadLinkRef = useRef<HTMLAnchorElement | null>(null)
   const videoContainerRef = useRef<HTMLDivElement>(null)
+  const iframeRef = useRef<HTMLIFrameElement>(null)
+  const [isPlaying, setIsPlaying] = useState(false)
+  const { isTikTokBrowser } = useTikTokDetection()
 
   // Extract video ID from URI (format: "/videos/12345678") with null check
   const videoId = video?.uri ? video.uri.split("/").pop() : null
 
   // Check if we're in TikTok browser on mount
   useEffect(() => {
-    setIsTikTokBrowser(isInTikTokBrowser())
+    setIsTikTokBrowserOriginal(isInTikTokBrowser())
   }, [])
 
   // Get the highest quality thumbnail
@@ -467,184 +493,70 @@ export default function VimeoCard({ video }: VimeoCardProps) {
     const baseUrl = `https://player.vimeo.com/video/${videoId}?title=0&byline=0&portrait=0&badge=0&autopause=0&player_id=0&app_id=58479&quality=1080p`
 
     // For TikTok browsers, add parameters to restrict behavior
-    if (isTikTokBrowser) {
+    if (isTikTokBrowserOriginal) {
       return `${baseUrl}&playsinline=1&transparent=0`
     }
 
     return baseUrl
   }
 
+  const { ref, inView } = useInView({
+    threshold: 0.5,
+    triggerOnce: false,
+  })
+
+  // Determine aspect ratio class
+  const aspectRatioClass = {
+    "16:9": "aspect-video",
+    "1:1": "aspect-square",
+    "4:3": "aspect-[4/3]",
+    "9:16": "aspect-[9/16]",
+  }[aspectRatio]
+
   return (
-    <div className="flex-shrink-0 w-[160px]">
-      <div
-        className="group relative premium-hover-effect"
-        style={{
-          position: "relative",
-          paddingBottom: "177.78%", // 9:16 aspect ratio
-          height: 0,
-          borderRadius: "8px",
-          overflow: "hidden",
-        }}
-        onMouseEnter={() => {
-          setIsActive(true)
-          setIsHovered(true)
-        }}
-        onMouseLeave={() => {
-          setIsActive(false)
-          setIsHovered(false)
-        }}
-        onClick={() => setIsActive(true)}
-      >
-        {/* Border overlay that appears on hover/click */}
+    <Card ref={ref} className={`overflow-hidden ${className}`}>
+      <CardContent className="p-0 relative">
         <div
-          className="absolute inset-0 z-10 pointer-events-none transition-opacity duration-300"
-          style={{
-            opacity: isActive ? 1 : 0,
-            border: "1px solid rgba(220, 20, 60, 0.5)",
-            borderRadius: "8px",
-            boxShadow: "0 0 20px rgba(220, 20, 60, 0.2)",
-          }}
-        ></div>
-
-        {/* Action buttons container */}
-        <div
-          className="absolute bottom-2 left-2 right-2 z-20 flex items-center justify-between transition-opacity duration-300"
-          style={{ opacity: isHovered ? 1 : 0 }}
+          ref={videoContainerRef}
+          className={`relative group cursor-pointer ${aspectRatioClass}`}
+          onClick={() => setIsActive(!isActive)}
+          onMouseEnter={() => setIsHovered(true)}
+          onMouseLeave={() => setIsHovered(false)}
         >
-          {/* Download button - visually disabled when limit reached */}
-          <button
-            className={`${
-              hasReachedLimit ? "bg-zinc-800/90 cursor-not-allowed" : "bg-black/70 hover:bg-black/90"
-            } p-1.5 rounded-full transition-all duration-300 ${downloadError ? "ring-1 ring-red-500" : ""}`}
-            onClick={handleDownload}
-            aria-label={hasReachedLimit ? "Download limit reached" : "Download video"}
-            disabled={isDownloading || hasReachedLimit}
-            title={hasReachedLimit ? "Upgrade to Creator Pro for unlimited downloads" : "Download video"}
-          >
-            {hasReachedLimit ? (
-              <Lock className="h-3.5 w-3.5 text-zinc-400" />
-            ) : (
-              <Download className={`h-3.5 w-3.5 ${downloadError ? "text-red-500" : "text-white"}`} />
-            )}
-          </button>
-
-          {/* Favorite button */}
-          <button
-            className={`bg-black/70 hover:bg-black/90 p-1.5 rounded-full transition-all duration-300 ${
-              isFavorite ? "text-crimson" : "text-white"
-            }`}
-            onClick={toggleFavorite}
-            aria-label={isFavorite ? "Remove from favorites" : "Add to favorites"}
-            disabled={isCheckingFavorite}
-            title={isFavorite ? "Remove from favorites" : "Add to favorites"}
-          >
-            <Heart className="h-3.5 w-3.5" fill={isFavorite ? "currentColor" : "none"} />
-          </button>
-        </div>
-
-        {/* TikTok-specific "Open in browser" button */}
-        {isTikTokBrowser && (
-          <div className="absolute top-2 right-2 z-30">
-            <button
-              onClick={handleOpenExternal}
-              className="bg-white/90 hover:bg-white text-black text-xs px-2 py-1 rounded-full flex items-center space-x-1"
-              aria-label="Open in browser"
-            >
-              <ExternalLink size={10} />
-              <span className="text-[10px]">Open</span>
-            </button>
-          </div>
-        )}
-
-        {videoId ? (
-          <div className="absolute inset-0 video-container" ref={videoContainerRef}>
-            {/* High-quality thumbnail with dark overlay */}
-            {thumbnailUrl && (
-              <div
-                className={`absolute inset-0 video-card-thumbnail transition-all duration-300 ${
-                  isActive && isIframeLoaded ? "opacity-0" : "opacity-100"
-                }`}
-                style={{
-                  backgroundImage: `url(${thumbnailUrl})`,
-                  backgroundSize: "cover",
-                  backgroundPosition: "center",
-                  backgroundColor: "#111",
-                }}
-              >
-                {/* Dark overlay with gradient for premium look */}
-                <div
-                  className={`absolute inset-0 transition-opacity duration-300 ${
-                    isHovered ? "opacity-30" : "opacity-50"
-                  }`}
-                  style={{
-                    background: "linear-gradient(to bottom, rgba(0,0,0,0.2), rgba(0,0,0,0.7))",
-                  }}
-                ></div>
-
-                {/* Preload the image with crossOrigin for canvas compatibility */}
-                <img
-                  src={thumbnailUrl || "/placeholder.svg"}
-                  alt=""
-                  className="hidden"
-                  onLoad={handleThumbnailLoad}
-                  crossOrigin="anonymous"
-                />
+          {/* Video thumbnail */}
+          {!isPlaying && (
+            <div className="absolute inset-0 z-10 flex items-center justify-center">
+              <div className="absolute inset-0 bg-black/50 backdrop-blur-sm transition-opacity duration-300 opacity-0 group-hover:opacity-100"></div>
+              <div className="absolute inset-0 bg-gradient-to-t from-black/80 to-transparent transition-opacity duration-300 opacity-0 group-hover:opacity-100"></div>
+              <div className="absolute inset-0 flex items-center justify-center">
+                <svg
+                  xmlns="http://www.w3.org/2000/svg"
+                  viewBox="0 0 24 24"
+                  fill="currentColor"
+                  className="w-12 h-12 text-white/80 transition-transform duration-300 transform group-hover:scale-110"
+                >
+                  <path
+                    fillRule="evenodd"
+                    d="M4.5 5.653c0-1.426 1.529-2.333 2.77-1.664l11.54 6.348c1.295.712 1.295 2.573 0 3.285L7.27 19.911c-1.241.67-2.77-.236-2.77-1.664V5.653z"
+                    clipRule="evenodd"
+                  />
+                </svg>
               </div>
-            )}
+            </div>
+          )}
 
-            {/* Video iframe with fade-in effect */}
-            {isActive && (
-              <iframe
-                ref={videoRef}
-                src={getVideoSrc()}
-                style={{
-                  position: "absolute",
-                  top: 0,
-                  left: 0,
-                  width: "100%",
-                  height: "100%",
-                  border: "none",
-                  opacity: isIframeLoaded ? 1 : 0,
-                  transition: "opacity 300ms ease-in-out",
-                }}
-                allow={
-                  isTikTokBrowser
-                    ? "autoplay; picture-in-picture; clipboard-write; encrypted-media"
-                    : "autoplay; fullscreen; picture-in-picture; clipboard-write; encrypted-media"
-                }
-                title={video.name || "Video"}
-                loading="lazy"
-                onLoad={handleIframeLoad}
-                className={isTikTokBrowser ? "tiktok-restricted-iframe" : ""}
-              ></iframe>
-            )}
-          </div>
-        ) : (
-          <div
-            style={{
-              position: "absolute",
-              top: 0,
-              left: 0,
-              width: "100%",
-              height: "100%",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              backgroundColor: "#111",
-            }}
-          >
-            <span className="text-xs text-zinc-500">Video unavailable</span>
-          </div>
-        )}
-      </div>
-      {/* Updated title div to allow wrapping */}
-      <div
-        ref={titleRef}
-        className="mt-2 text-xs text-zinc-300 min-h-[2.5rem] line-clamp-2 font-light"
-        title={video.name || "Untitled video"}
-      >
-        {video.name || "Untitled video"}
-      </div>
-    </div>
+          {/* Video iframe */}
+          <iframe
+            ref={iframeRef}
+            src={getVideoSrc()}
+            className={`absolute inset-0 w-full h-full bg-black ${isPlaying ? "z-10" : "z-0"}`}
+            frameBorder="0"
+            allow={`autoplay; fullscreen; picture-in-picture ${!isTikTokBrowser ? "; fullscreen" : ""}`}
+            allowFullScreen={!isTikTokBrowser}
+            loading={priority ? "eager" : "lazy"}
+          />
+        </div>
+      </CardContent>
+    </Card>
   )
 }

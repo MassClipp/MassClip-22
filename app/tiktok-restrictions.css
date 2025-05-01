@@ -1,5 +1,13 @@
 /* TikTok-specific restrictions */
 
+/* Hide fullscreen button in TikTok browser */
+.tiktok-browser .vp-sidedock,
+.tiktok-browser .vp-title,
+.tiktok-browser .vp-fullscreen,
+.tiktok-browser .vp-picture-in-picture {
+  display: none !important;
+}
+
 /* Hide fullscreen button in Vimeo player when in TikTok */
 .tiktok-browser .vp-controls .fullscreen,
 .tiktok-browser .vp-controls [data-fullscreen],
@@ -17,6 +25,11 @@
 .tiktok-browser iframe[src*="vimeo"] {
   max-width: 100% !important;
   max-height: 100% !important;
+}
+
+/* Ensure watermark stays visible in fullscreen */
+.tiktok-browser .video-watermark {
+  z-index: 9999 !important;
 }
 
 /* Blur effect for TikTok browser */

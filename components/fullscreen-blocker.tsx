@@ -1,86 +1,83 @@
 "use client"
 
 import { useEffect } from "react"
-import { isInTikTokBrowser } from "@/lib/browser-detection"
+import { useTikTokDetection } from "@/hooks/use-tiktok-detection"
 
-export const FullscreenBlocker = () => {
+export function FullscreenBlocker() {
+  const { isTikTokBrowser } = useTikTokDetection()
+
   useEffect(() => {
-    // Only apply in TikTok browser
-    if (!isInTikTokBrowser()) return
+    if (!isTikTokBrowser) return
 
     // Store original methods
     const originalRequestFullscreen = Element.prototype.requestFullscreen
-    const originalMsRequestFullscreen = Element.prototype.msRequestFullscreen
     const originalMozRequestFullScreen = Element.prototype.mozRequestFullScreen
     const originalWebkitRequestFullscreen = Element.prototype.webkitRequestFullscreen
+    const originalMsRequestFullscreen = Element.prototype.msRequestFullscreen
 
     // Override fullscreen methods
-    if (Element.prototype.requestFullscreen) {
-      Element.prototype.requestFullscreen = () => {
-        console.log("Fullscreen blocked in TikTok browser")
-        return Promise.resolve()
-      }
+    Element.prototype.requestFullscreen = () => {
+      console.log("Fullscreen blocked by TikTok browser restrictions")
+      return Promise.reject(new Error("Fullscreen blocked"))
     }
 
-    if (Element.prototype.msRequestFullscreen) {
-      Element.prototype.msRequestFullscreen = () => {
-        console.log("MS Fullscreen blocked in TikTok browser")
-        return Promise.resolve()
-      }
-    }
-
+    // Handle vendor prefixed versions
     if (Element.prototype.mozRequestFullScreen) {
       Element.prototype.mozRequestFullScreen = () => {
-        console.log("Moz Fullscreen blocked in TikTok browser")
-        return Promise.resolve()
+        console.log("Fullscreen blocked by TikTok browser restrictions (moz)")
+        return Promise.reject(new Error("Fullscreen blocked"))
       }
     }
 
     if (Element.prototype.webkitRequestFullscreen) {
       Element.prototype.webkitRequestFullscreen = () => {
-        console.log("Webkit Fullscreen blocked in TikTok browser")
-        return Promise.resolve()
+        console.log("Fullscreen blocked by TikTok browser restrictions (webkit)")
+        return Promise.reject(new Error("Fullscreen blocked"))
       }
     }
 
-    // Block fullscreen change events
-    const handleFullscreenChange = () => {
-      if (document.fullscreenElement) {
-        document.exitFullscreen().catch((err) => console.error(err))
+    if (Element.prototype.msRequestFullscreen) {
+      Element.prototype.msRequestFullscreen = () => {
+        console.log("Fullscreen blocked by TikTok browser restrictions (ms)")
+        return Promise.reject(new Error("Fullscreen blocked"))
       }
     }
 
-    document.addEventListener("fullscreenchange", handleFullscreenChange)
-    document.addEventListener("webkitfullscreenchange", handleFullscreenChange)
-    document.addEventListener("mozfullscreenchange", handleFullscreenChange)
-    document.addEventListener("MSFullscreenChange", handleFullscreenChange)
+    // Block postMessage requests for fullscreen
+    const originalPostMessage = window.postMessage
+    window.postMessage = function (message, targetOrigin, transfer) {
+      // Check if the message is a fullscreen request
+      if (
+        typeof message === "object" &&
+        message !== null &&
+        (message.event === "fullscreenchange" ||
+          message.method === "fullscreen" ||
+          (message.method === "setFullscreen" && message.value === true))
+      ) {
+        console.log("Blocked fullscreen postMessage request", message)
+        return
+      }
 
-    // Cleanup
+      // Allow other messages to pass through
+      return originalPostMessage.call(this, message, targetOrigin, transfer)
+    }
+
+    // Cleanup function to restore original methods
     return () => {
-      // Restore original methods
-      if (originalRequestFullscreen) {
-        Element.prototype.requestFullscreen = originalRequestFullscreen
-      }
-      if (originalMsRequestFullscreen) {
-        Element.prototype.msRequestFullscreen = originalMsRequestFullscreen
-      }
-      if (originalMozRequestFullScreen) {
+      Element.prototype.requestFullscreen = originalRequestFullscreen
+      if (Element.prototype.mozRequestFullScreen) {
         Element.prototype.mozRequestFullScreen = originalMozRequestFullScreen
       }
-      if (originalWebkitRequestFullscreen) {
+      if (Element.prototype.webkitRequestFullscreen) {
         Element.prototype.webkitRequestFullscreen = originalWebkitRequestFullscreen
       }
-
-      // Remove event listeners
-      document.removeEventListener("fullscreenchange", handleFullscreenChange)
-      document.removeEventListener("webkitfullscreenchange", handleFullscreenChange)
-      document.removeEventListener("mozfullscreenchange", handleFullscreenChange)
-      document.removeEventListener("MSFullscreenChange", handleFullscreenChange)
+      if (Element.prototype.msRequestFullscreen) {
+        Element.prototype.msRequestFullscreen = originalMsRequestFullscreen
+      }
+      window.postMessage = originalPostMessage
     }
-  }, [])
+  }, [isTikTokBrowser])
 
+  // This component doesn't render anything
   return null
 }
-
-// Add default export as well to support both import styles
-export default FullscreenBlocker

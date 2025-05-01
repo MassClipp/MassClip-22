@@ -803,3 +803,34 @@
   background-color: #27272a; /* zinc-800 */
   margin: 0.75rem 0;
 }
+
+/* Video watermark styles */
+.video-watermark {
+  z-index: 30;
+  transition: opacity 0.3s ease;
+}
+
+/* Make watermark more visible on hover */
+.video-container:hover .video-watermark {
+  opacity: 0.9;
+}
+
+/* Ensure watermark stays visible in fullscreen */
+:fullscreen .video-watermark,
+:-webkit-full-screen .video-watermark,
+:-moz-full-screen .video-watermark,
+:-ms-fullscreen .video-watermark {
+  z-index: 9999 !important;
+  font-size: 1.2rem !important;
+  padding: 0.5rem 0.75rem !important;
+}
+
+/* Responsive watermark positioning */
+@media (max-width: 640px) {
+  .video-watermark {
+    font-size: 0.75rem;
+    padding: 0.25rem 0.5rem;
+    bottom: 0.5rem;
+    right: 0.5rem;
+  }
+}
