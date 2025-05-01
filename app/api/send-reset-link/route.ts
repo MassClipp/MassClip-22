@@ -6,24 +6,72 @@ import { Resend } from "resend"
 // Initialize Resend client
 const resend = new Resend(process.env.RESEND_API_KEY)
 
-// Simplified email template for password reset
+// Email template for password reset
 const createResetEmailTemplate = (resetLink: string) => `
 <!DOCTYPE html>
 <html>
 <head>
   <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Reset Your MassClip Password</title>
+  <style>
+    body {
+      font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+      line-height: 1.6;
+      color: #333;
+      max-width: 600px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+    .logo {
+      text-align: center;
+      margin-bottom: 24px;
+    }
+    .logo img {
+      max-width: 150px;
+    }
+    .container {
+      background-color: #ffffff;
+      border-radius: 8px;
+      padding: 30px;
+      box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    }
+    h1 {
+      color: #e11d48;
+      margin-top: 0;
+    }
+    .button {
+      display: inline-block;
+      background-color: #e11d48;
+      color: white;
+      text-decoration: none;
+      padding: 12px 24px;
+      border-radius: 4px;
+      margin: 20px 0;
+      font-weight: 500;
+    }
+    .footer {
+      margin-top: 30px;
+      text-align: center;
+      font-size: 12px;
+      color: #666;
+    }
+  </style>
 </head>
-<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
-  <div style="background-color: #ffffff; border-radius: 8px; padding: 30px; box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);">
-    <h1 style="color: #e11d48; margin-top: 0;">Reset Your Password</h1>
+<body>
+  <div class="container">
+    <div class="logo">
+      <img src="https://massclip.pro/logo.png" alt="MassClip Logo" />
+    </div>
+    
+    <h1>Reset Your Password</h1>
     
     <p>Hello,</p>
     
-    <p>We received a request to reset your password for your MassClip account. Click the link below to reset your password:</p>
+    <p>We received a request to reset your password for your MassClip account. Click the button below to reset your password:</p>
     
-    <p style="margin: 20px 0;">
-      <a href="${resetLink}" style="display: inline-block; background-color: #e11d48; color: white; text-decoration: none; padding: 12px 24px; border-radius: 4px; font-weight: 500;">Reset Password</a>
+    <p style="text-align: center;">
+      <a href="${resetLink}" class="button">Reset Password</a>
     </p>
     
     <p>If you didn't request a password reset, you can safely ignore this email.</p>
@@ -32,105 +80,67 @@ const createResetEmailTemplate = (resetLink: string) => `
     
     <p>Best regards,<br>The MassClip Team</p>
   </div>
+  
+  <div class="footer">
+    <p>&copy; ${new Date().getFullYear()} MassClip. All rights reserved.</p>
+    <p>MassClip Pro - Your Ultimate Clip Vault</p>
+  </div>
 </body>
 </html>
 `
 
 export async function POST(request: NextRequest) {
-  console.log("Password reset request received")
-
   try {
     // Initialize Firebase Admin if not already initialized
     initializeFirebaseAdmin()
-    console.log("Firebase Admin initialized")
 
     // Parse request body
-    const body = await request.json().catch((e) => {
-      console.error("Error parsing request body:", e)
-      return {}
-    })
-
-    const { email } = body
-    console.log("Email from request:", email ? "Valid email received" : "No email received")
+    const { email } = await request.json()
 
     // Validate email
     if (!email || typeof email !== "string") {
-      console.error("Invalid email format")
       return NextResponse.json({ error: "Valid email is required" }, { status: 400 })
     }
 
-    // Check if Resend API key is configured
-    if (!process.env.RESEND_API_KEY) {
-      console.error("Resend API key is not configured")
-      return NextResponse.json({ error: "Email service not configured" }, { status: 500 })
+    // Generate password reset link with Firebase Admin
+    const auth = getAuth()
+    const resetLink = await auth.generatePasswordResetLink(email, {
+      url: "https://massclip.pro/reset-password",
+    })
+
+    // Send email with Resend
+    const { data, error } = await resend.emails.send({
+      from: "support@massclip.pro",
+      to: email,
+      subject: "Reset Your Password",
+      html: createResetEmailTemplate(resetLink),
+    })
+
+    if (error) {
+      console.error("Error sending reset email:", error)
+      return NextResponse.json({ error: "Failed to send reset email" }, { status: 500 })
     }
 
-    try {
-      // Generate password reset link with Firebase Admin
-      const auth = getAuth()
-      console.log("Getting Firebase Auth instance")
+    // Log success for monitoring (optional)
+    console.log(`Password reset email sent to ${email}`)
 
-      // Force the continueUrl to be the production domain
-      const actionCodeSettings = {
-        url: "https://massclip.pro/reset-password",
-        handleCodeInApp: false,
-      }
+    // Return success response
+    return NextResponse.json({
+      success: true,
+      message: "Password reset link sent",
+    })
+  } catch (error: any) {
+    console.error("Error in password reset flow:", error)
 
-      console.log("Generating password reset link")
-      const resetLink = await auth.generatePasswordResetLink(email, actionCodeSettings)
-      console.log("Reset link generated successfully")
-
-      // Ensure the link uses the production domain
-      const productionResetLink = resetLink.replace("massclip.vercel.app", "massclip.pro")
-      console.log("Reset link domain corrected")
-
-      // Send email with Resend
-      console.log("Sending email via Resend")
-      const { data, error } = await resend.emails.send({
-        from: "support@massclip.pro",
-        to: email,
-        subject: "Reset Your Password",
-        html: createResetEmailTemplate(productionResetLink),
-      })
-
-      if (error) {
-        console.error("Resend API error:", error)
-        return NextResponse.json({ error: "Failed to send reset email" }, { status: 500 })
-      }
-
-      console.log("Email sent successfully")
+    // Handle Firebase specific errors
+    if (error.code === "auth/user-not-found") {
+      // Don't reveal if user exists for security
       return NextResponse.json({
         success: true,
-        message: "Password reset link sent",
+        message: "If an account exists, a password reset link has been sent",
       })
-    } catch (firebaseError: any) {
-      console.error("Firebase error:", firebaseError)
-
-      // Handle Firebase specific errors
-      if (firebaseError.code === "auth/user-not-found") {
-        // Don't reveal if user exists for security
-        return NextResponse.json({
-          success: true,
-          message: "If an account exists, a password reset link has been sent",
-        })
-      }
-
-      return NextResponse.json(
-        {
-          error: "Error generating reset link",
-          details: firebaseError.message || "Unknown Firebase error",
-        },
-        { status: 500 },
-      )
     }
-  } catch (error: any) {
-    console.error("Unexpected error in password reset flow:", error)
-    return NextResponse.json(
-      {
-        error: "An unexpected error occurred",
-        details: error.message || "Unknown error",
-      },
-      { status: 500 },
-    )
+
+    return NextResponse.json({ error: "An unexpected error occurred" }, { status: 500 })
   }
 }

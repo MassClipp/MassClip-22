@@ -3,29 +3,9 @@ import type { NextRequest } from "next/server"
 
 // This function can be marked `async` if using `await` inside
 export function middleware(request: NextRequest) {
-  const url = request.nextUrl.clone()
-
-  // Check if this is a password reset request
-  if (url.pathname === "/login" && url.searchParams.has("mode") && url.searchParams.get("mode") === "resetPassword") {
-    // Get all the query parameters
-    const oobCode = url.searchParams.get("oobCode")
-    const apiKey = url.searchParams.get("apiKey")
-    const lang = url.searchParams.get("lang")
-
-    // Create a new URL for the reset-password page
-    const resetUrl = new URL("/reset-password", "https://massclip.pro")
-
-    // Add the query parameters
-    if (oobCode) resetUrl.searchParams.set("oobCode", oobCode)
-    if (apiKey) resetUrl.searchParams.set("apiKey", apiKey)
-    if (lang) resetUrl.searchParams.set("lang", lang)
-
-    // Redirect to the reset-password page
-    return NextResponse.redirect(resetUrl)
-  }
-
   // Get the hostname from the request
   const hostname = request.headers.get("host") || ""
+  const url = request.nextUrl.clone()
 
   // Check if we're in production and not on the production domain
   const isProduction = process.env.NODE_ENV === "production"
@@ -45,10 +25,14 @@ export function middleware(request: NextRequest) {
     return NextResponse.redirect(redirectUrl)
   }
 
+  // Continue with the request if no redirect is needed
   return NextResponse.next()
 }
 
-// Only run the middleware on the login page
+// Only run the middleware on specific paths
 export const config = {
-  matcher: "/login",
+  matcher: [
+    // Match all paths except for API routes, static files, etc.
+    "/((?!api|_next/static|_next/image|favicon.ico).*)",
+  ],
 }

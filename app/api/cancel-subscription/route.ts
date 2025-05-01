@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server"
-import { initializeFirebaseAdmin } from "@/lib/firebase-admin"
+import { db } from "@/lib/firebase-admin"
 import Stripe from "stripe"
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
@@ -8,10 +8,6 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
 
 export async function POST(request: Request) {
   try {
-    // Initialize Firebase Admin first
-    const auth = initializeFirebaseAdmin()
-    const db = auth.app.firestore()
-
     const { userId } = await request.json()
 
     if (!userId) {
