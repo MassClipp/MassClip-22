@@ -1,15 +1,14 @@
 "use client"
 
 import { useUserPlan } from "@/hooks/use-user-plan"
-import { cn } from "@/lib/utils"
 import { useEffect, useState } from "react"
 
 interface VideoWatermarkProps {
-  className?: string
   position?: "bottom-right" | "top-right"
+  className?: string
 }
 
-export function VideoWatermark({ className, position = "bottom-right" }: VideoWatermarkProps) {
+export function VideoWatermark({ position = "bottom-right", className = "" }: VideoWatermarkProps) {
   const { isProUser } = useUserPlan()
   const [mounted, setMounted] = useState(false)
 
@@ -25,13 +24,9 @@ export function VideoWatermark({ className, position = "bottom-right" }: VideoWa
 
   return (
     <div
-      className={cn(
-        "absolute z-30 pointer-events-none select-none",
-        position === "bottom-right" ? "bottom-4 right-4" : "top-4 right-4",
-        "font-medium text-white/70 text-sm md:text-base backdrop-blur-sm px-2 py-1 rounded",
-        "bg-black/30 shadow-sm",
-        className,
-      )}
+      className={`absolute z-30 pointer-events-none select-none ${
+        position === "bottom-right" ? "bottom-2 right-2" : "top-2 right-2"
+      } text-white/70 text-xs font-medium px-1.5 py-0.5 bg-black/40 rounded ${className}`}
       style={{
         textShadow: "0px 1px 2px rgba(0, 0, 0, 0.5)",
       }}

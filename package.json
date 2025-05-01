@@ -66,8 +66,7 @@
     "dotenv": "latest",
     "stripe": "latest",
     "framer-motion": "latest",
-    "resend": "latest",
-    "react-intersection-observer": "latest"
+    "resend": "latest"
   },
   "devDependencies": {
     "@types/node": "^22",
