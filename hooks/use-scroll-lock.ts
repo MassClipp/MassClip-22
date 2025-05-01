@@ -4,23 +4,34 @@ import { useEffect } from "react"
 
 export function useScrollLock(lock: boolean) {
   useEffect(() => {
-    if (lock) {
-      // Save the current scroll position
+    if (!lock) return
+
+    // Save initial body style
+    const originalStyle = window.getComputedStyle(document.body)
+    const originalOverflow = originalStyle.overflow
+    const originalPaddingRight = originalStyle.paddingRight
+    const scrollbarWidth = window.innerWidth - document.documentElement.clientWidth
+
+    // Apply lock
+    document.body.style.overflow = "hidden"
+    document.body.style.paddingRight = `${scrollbarWidth}px`
+
+    // iOS specific fix
+    if (/iPhone|iPad|iPod/.test(navigator.userAgent)) {
       const scrollY = window.scrollY
-
-      // Add the no-scroll class to the body
-      document.body.classList.add("body-no-scroll")
-
-      // Apply fixed positioning to maintain scroll position
       document.body.style.position = "fixed"
       document.body.style.top = `-${scrollY}px`
       document.body.style.width = "100%"
+    }
 
-      return () => {
-        // Remove the no-scroll class
-        document.body.classList.remove("body-no-scroll")
+    return () => {
+      // Restore original style
+      document.body.style.overflow = originalOverflow
+      document.body.style.paddingRight = originalPaddingRight
 
-        // Restore the scroll position
+      // iOS specific restore
+      if (/iPhone|iPad|iPod/.test(navigator.userAgent)) {
+        const scrollY = Number.parseInt(document.body.style.top || "0", 10) * -1
         document.body.style.position = ""
         document.body.style.top = ""
         document.body.style.width = ""

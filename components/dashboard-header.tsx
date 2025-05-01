@@ -27,6 +27,7 @@ import { useDownloadLimit } from "@/contexts/download-limit-context"
 export default function DashboardHeader({ initialSearchQuery = "" }) {
   const [isScrolled, setIsScrolled] = useState(false)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
+  const [isAnimating, setIsAnimating] = useState(false)
   const [searchQuery, setSearchQuery] = useState(initialSearchQuery)
   const [isSearchOpen, setIsSearchOpen] = useState(false)
   const { user, logOut } = useAuth()
@@ -34,8 +35,10 @@ export default function DashboardHeader({ initialSearchQuery = "" }) {
   const { remainingDownloads, hasReachedLimit } = useDownloadLimit()
   const router = useRouter()
   const mobileMenuRef = useRef<HTMLDivElement>(null)
+  const backdropRef = useRef<HTMLDivElement>(null)
   const searchInputRef = useRef<HTMLInputElement>(null)
 
+  // Enhanced scroll lock
   useScrollLock(mobileMenuOpen)
 
   useEffect(() => {
@@ -51,21 +54,65 @@ export default function DashboardHeader({ initialSearchQuery = "" }) {
     return () => window.removeEventListener("scroll", handleScroll)
   }, [])
 
-  // Close mobile menu when clicking outside
+  // Handle animation states
+  useEffect(() => {
+    if (mobileMenuOpen) {
+      setIsAnimating(true)
+      // Ensure backdrop is visible before animating menu
+      setTimeout(() => {
+        if (mobileMenuRef.current) {
+          mobileMenuRef.current.style.transform = "translateX(0)"
+        }
+      }, 10)
+    } else if (mobileMenuRef.current) {
+      mobileMenuRef.current.style.transform = "translateX(100%)"
+      // Wait for animation to complete before hiding completely
+      setTimeout(() => {
+        setIsAnimating(false)
+      }, 300) // Match the transition duration
+    }
+  }, [mobileMenuOpen])
+
+  // Improved outside click detection
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
-      if (mobileMenuRef.current && !mobileMenuRef.current.contains(event.target as Node)) {
+      if (
+        mobileMenuOpen &&
+        mobileMenuRef.current &&
+        !mobileMenuRef.current.contains(event.target as Node) &&
+        event.target !== document.querySelector('button[aria-label="Toggle mobile menu"]')
+      ) {
         setMobileMenuOpen(false)
       }
     }
 
+    // Use capture phase to ensure we get the event before it's stopped
     if (mobileMenuOpen) {
-      document.addEventListener("mousedown", handleClickOutside)
+      document.addEventListener("mousedown", handleClickOutside, true)
+      document.addEventListener("touchstart", handleClickOutside, true)
     }
+
     return () => {
-      document.removeEventListener("mousedown", handleClickOutside)
+      document.removeEventListener("mousedown", handleClickOutside, true)
+      document.removeEventListener("touchstart", handleClickOutside, true)
     }
   }, [mobileMenuOpen])
+
+  // Handle escape key
+  useEffect(() => {
+    const handleEscKey = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        if (mobileMenuOpen) {
+          setMobileMenuOpen(false)
+        } else if (isSearchOpen) {
+          setIsSearchOpen(false)
+        }
+      }
+    }
+
+    document.addEventListener("keydown", handleEscKey)
+    return () => document.removeEventListener("keydown", handleEscKey)
+  }, [mobileMenuOpen, isSearchOpen])
 
   // Focus search input when search is opened
   useEffect(() => {
@@ -104,6 +151,10 @@ export default function DashboardHeader({ initialSearchQuery = "" }) {
   const handleUpgradeClick = () => {
     router.push("/membership-plans")
     setMobileMenuOpen(false)
+  }
+
+  const toggleMenu = () => {
+    setMobileMenuOpen((prev) => !prev)
   }
 
   return (
@@ -209,12 +260,12 @@ export default function DashboardHeader({ initialSearchQuery = "" }) {
           )}
         </div>
 
-        {/* Mobile Menu Button */}
+        {/* Mobile Menu Button - Improved touch target */}
         <div className="flex md:hidden items-center gap-2">
           {/* Mobile Search Button */}
           <button
             onClick={() => setIsSearchOpen(!isSearchOpen)}
-            className="text-zinc-400 hover:text-white transition-colors p-2"
+            className="text-zinc-400 hover:text-white transition-colors p-2 touch-manipulation"
             aria-label="Search"
           >
             <Search className="h-5 w-5" />
@@ -234,9 +285,11 @@ export default function DashboardHeader({ initialSearchQuery = "" }) {
           <Button
             variant="ghost"
             size="icon"
-            className="text-zinc-400 hover:text-white hover:bg-transparent"
-            onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+            className="text-zinc-400 hover:text-white hover:bg-transparent touch-manipulation"
+            onClick={toggleMenu}
             aria-label="Toggle mobile menu"
+            aria-expanded={mobileMenuOpen}
+            aria-controls="mobile-menu"
           >
             {mobileMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
           </Button>
@@ -260,7 +313,7 @@ export default function DashboardHeader({ initialSearchQuery = "" }) {
               <button
                 type="button"
                 onClick={() => setIsSearchOpen(false)}
-                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-zinc-500 hover:text-white"
+                className="absolute right-3 top-1/2 transform -translate-y-1/2 text-zinc-500 hover:text-white touch-manipulation"
               >
                 <X className="h-4 w-4" />
               </button>
@@ -269,150 +322,155 @@ export default function DashboardHeader({ initialSearchQuery = "" }) {
         </div>
       )}
 
-      {/* Mobile Menu Backdrop */}
-      {mobileMenuOpen && (
+      {/* Mobile Menu Backdrop - Improved with opacity transition */}
+      {(mobileMenuOpen || isAnimating) && (
         <div
-          className="md:hidden fixed inset-0 bg-black/70 z-40"
-          onClick={() => setMobileMenuOpen(false)}
+          ref={backdropRef}
+          className={`md:hidden fixed inset-0 bg-black/70 z-40 transition-opacity duration-300 ${
+            mobileMenuOpen ? "opacity-100" : "opacity-0"
+          }`}
           aria-hidden="true"
         />
       )}
 
-      {/* Mobile Dropdown Menu - Revamped for consistency */}
-      <div
-        ref={mobileMenuRef}
-        className={`md:hidden fixed inset-y-0 right-0 w-72 bg-zinc-900 shadow-xl z-50 transform transition-transform duration-300 ease-out ${
-          mobileMenuOpen ? "translate-x-0" : "translate-x-full"
-        }`}
-        style={{
-          boxShadow: "-5px 0 25px rgba(0, 0, 0, 0.5)",
-          borderLeft: "1px solid rgba(255, 255, 255, 0.05)",
-        }}
-      >
-        {/* Header with logo and close button */}
-        <div className="flex items-center justify-between p-5 border-b border-zinc-800">
-          <Logo href="/dashboard" className="h-6" />
-          <Button
-            variant="ghost"
-            size="icon"
-            className="text-zinc-400 hover:text-white hover:bg-zinc-800 rounded-full"
-            onClick={() => setMobileMenuOpen(false)}
-            aria-label="Close menu"
-          >
-            <X className="h-5 w-5" />
-          </Button>
-        </div>
-
-        {/* User profile section */}
-        {user && (
-          <div className="p-5 border-b border-zinc-800">
-            <div
-              className="flex items-center space-x-3 cursor-pointer"
-              onClick={() => {
-                router.push("/dashboard/user")
-                setMobileMenuOpen(false)
-              }}
+      {/* Mobile Dropdown Menu - Improved animation and rendering */}
+      {(mobileMenuOpen || isAnimating) && (
+        <div
+          id="mobile-menu"
+          ref={mobileMenuRef}
+          className="md:hidden fixed inset-y-0 right-0 w-72 bg-zinc-900 shadow-xl z-50 transition-transform duration-300 ease-out transform translate-x-full"
+          style={{
+            boxShadow: "-5px 0 25px rgba(0, 0, 0, 0.5)",
+            borderLeft: "1px solid rgba(255, 255, 255, 0.05)",
+            willChange: "transform",
+            overscrollBehavior: "contain",
+          }}
+        >
+          {/* Header with logo and close button */}
+          <div className="flex items-center justify-between p-5 border-b border-zinc-800">
+            <Logo href="/dashboard" className="h-6" />
+            <Button
+              variant="ghost"
+              size="icon"
+              className="text-zinc-400 hover:text-white hover:bg-zinc-800 rounded-full touch-manipulation"
+              onClick={() => setMobileMenuOpen(false)}
+              aria-label="Close menu"
             >
-              <div className="h-12 w-12 rounded-full bg-zinc-800 flex items-center justify-center border border-zinc-700">
-                <User className="h-6 w-6 text-zinc-400" />
-              </div>
-              <div>
-                <p className="text-white font-light text-base">{user.displayName || user.email}</p>
-                <UserPlanBadge showTooltip={false} className="mt-1" />
-              </div>
-              <ChevronRight className="h-4 w-4 text-zinc-500 ml-auto" />
-            </div>
+              <X className="h-5 w-5" />
+            </Button>
           </div>
-        )}
 
-        {/* Download counter for free users */}
-        {!isProUser && (
-          <div className="px-5 py-4">
-            <div className="bg-zinc-800 rounded-lg p-4 border border-zinc-700">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center">
-                  <Download className={`h-4 w-4 mr-2 ${hasReachedLimit ? "text-amber-500" : "text-crimson"}`} />
-                  <span className="text-white font-medium text-sm">Downloads</span>
+          {/* User profile section */}
+          {user && (
+            <div className="p-5 border-b border-zinc-800">
+              <div
+                className="flex items-center space-x-3 cursor-pointer touch-manipulation"
+                onClick={() => {
+                  router.push("/dashboard/user")
+                  setMobileMenuOpen(false)
+                }}
+              >
+                <div className="h-12 w-12 rounded-full bg-zinc-800 flex items-center justify-center border border-zinc-700">
+                  <User className="h-6 w-6 text-zinc-400" />
                 </div>
-                <span
-                  className={`text-sm font-medium px-3 py-1 rounded-full ${
-                    hasReachedLimit
-                      ? "bg-amber-500/20 text-amber-500 border border-amber-500/30"
-                      : "bg-crimson/20 text-white border border-crimson/30"
-                  }`}
-                >
-                  {remainingDownloads} left
-                </span>
+                <div>
+                  <p className="text-white font-light text-base">{user.displayName || user.email}</p>
+                  <UserPlanBadge showTooltip={false} className="mt-1" />
+                </div>
+                <ChevronRight className="h-4 w-4 text-zinc-500 ml-auto" />
               </div>
-              {hasReachedLimit && (
-                <p className="text-xs text-amber-400 mt-2">You've reached your download limit for this month</p>
-              )}
             </div>
-          </div>
-        )}
+          )}
 
-        {/* Navigation menu */}
-        <nav className="flex-1 px-5 py-2 overflow-y-auto">
-          <div className="space-y-1">
-            {navigationItems.map((item) => (
+          {/* Download counter for free users */}
+          {!isProUser && (
+            <div className="px-5 py-4">
+              <div className="bg-zinc-800 rounded-lg p-4 border border-zinc-700">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center">
+                    <Download className={`h-4 w-4 mr-2 ${hasReachedLimit ? "text-amber-500" : "text-crimson"}`} />
+                    <span className="text-white font-medium text-sm">Downloads</span>
+                  </div>
+                  <span
+                    className={`text-sm font-medium px-3 py-1 rounded-full ${
+                      hasReachedLimit
+                        ? "bg-amber-500/20 text-amber-500 border border-amber-500/30"
+                        : "bg-crimson/20 text-white border border-crimson/30"
+                    }`}
+                  >
+                    {remainingDownloads} left
+                  </span>
+                </div>
+                {hasReachedLimit && (
+                  <p className="text-xs text-amber-400 mt-2">You've reached your download limit for this month</p>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Navigation menu - Improved touch targets */}
+          <nav className="flex-1 px-5 py-2 overflow-y-auto overscroll-contain">
+            <div className="space-y-1">
+              {navigationItems.map((item) => (
+                <Link
+                  key={item.name}
+                  href={item.href}
+                  className="flex items-center justify-between py-4 px-3 rounded-lg text-zinc-200 hover:text-white hover:bg-zinc-800 transition-colors touch-manipulation"
+                  onClick={() => setMobileMenuOpen(false)}
+                >
+                  <div className="flex items-center">
+                    <span className="mr-3 text-zinc-400">{item.icon}</span>
+                    <span className="text-sm font-light">{item.name}</span>
+                  </div>
+                  <ChevronRight className="h-4 w-4 text-zinc-500" />
+                </Link>
+              ))}
+            </div>
+
+            <div className="h-px bg-zinc-800 my-4"></div>
+
+            <div className="space-y-1">
               <Link
-                key={item.name}
-                href={item.href}
-                className="flex items-center justify-between py-3.5 px-3 rounded-lg text-zinc-200 hover:text-white hover:bg-zinc-800 transition-colors"
+                href="/dashboard/profile"
+                className="flex items-center justify-between py-4 px-3 rounded-lg text-zinc-200 hover:text-white hover:bg-zinc-800 transition-colors touch-manipulation"
                 onClick={() => setMobileMenuOpen(false)}
               >
                 <div className="flex items-center">
-                  <span className="mr-3 text-zinc-400">{item.icon}</span>
-                  <span className="text-sm font-light">{item.name}</span>
+                  <span className="mr-3 text-zinc-400">
+                    <User className="h-4 w-4" />
+                  </span>
+                  <span className="text-sm font-light">Profile</span>
                 </div>
                 <ChevronRight className="h-4 w-4 text-zinc-500" />
               </Link>
-            ))}
-          </div>
+            </div>
+          </nav>
 
-          <div className="h-px bg-zinc-800 my-4"></div>
+          {/* Footer actions - Improved touch targets */}
+          <div className="p-5 border-t border-zinc-800">
+            {!isProUser && (
+              <UpgradeButton
+                onClick={handleUpgradeClick}
+                className="w-full mb-4 py-3 bg-crimson hover:bg-crimson-dark border-none touch-manipulation"
+              >
+                Upgrade to Creator Pro
+              </UpgradeButton>
+            )}
 
-          <div className="space-y-1">
-            <Link
-              href="/dashboard/profile"
-              className="flex items-center justify-between py-3.5 px-3 rounded-lg text-zinc-200 hover:text-white hover:bg-zinc-800 transition-colors"
-              onClick={() => setMobileMenuOpen(false)}
+            <Button
+              variant="outline"
+              className="w-full justify-center text-zinc-300 hover:text-white border-zinc-700 hover:bg-zinc-800 hover:border-zinc-600 touch-manipulation"
+              onClick={() => {
+                handleLogout()
+                setMobileMenuOpen(false)
+              }}
             >
-              <div className="flex items-center">
-                <span className="mr-3 text-zinc-400">
-                  <User className="h-4 w-4" />
-                </span>
-                <span className="text-sm font-light">Profile</span>
-              </div>
-              <ChevronRight className="h-4 w-4 text-zinc-500" />
-            </Link>
+              <LogOut className="h-4 w-4 mr-2" />
+              Log out
+            </Button>
           </div>
-        </nav>
-
-        {/* Footer actions */}
-        <div className="p-5 border-t border-zinc-800">
-          {!isProUser && (
-            <UpgradeButton
-              onClick={handleUpgradeClick}
-              className="w-full mb-4 py-2.5 bg-crimson hover:bg-crimson-dark border-none"
-            >
-              Upgrade to Creator Pro
-            </UpgradeButton>
-          )}
-
-          <Button
-            variant="outline"
-            className="w-full justify-center text-zinc-300 hover:text-white border-zinc-700 hover:bg-zinc-800 hover:border-zinc-600"
-            onClick={() => {
-              handleLogout()
-              setMobileMenuOpen(false)
-            }}
-          >
-            <LogOut className="h-4 w-4 mr-2" />
-            Log out
-          </Button>
         </div>
-      </div>
+      )}
     </header>
   )
 }
