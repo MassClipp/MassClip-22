@@ -835,24 +835,70 @@
   }
 }
 
-/* Zoom prevention for free users */
+/* Zoom prevention for free users - ENHANCED VERSION */
 .prevent-zoom {
-  touch-action: manipulation;
-  overscroll-behavior: none;
-  -ms-content-zooming: none;
-  -ms-touch-action: manipulation;
+  touch-action: pan-x pan-y !important;
+  -ms-touch-action: pan-x pan-y !important;
+  -webkit-touch-callout: none !important;
+  -webkit-user-select: none !important;
+  -moz-user-select: none !important;
+  -ms-user-select: none !important;
+  user-select: none !important;
+  overscroll-behavior: none !important;
+  -ms-content-zooming: none !important;
+  -webkit-text-size-adjust: 100% !important;
+  -moz-text-size-adjust: 100% !important;
+  text-size-adjust: 100% !important;
 }
 
 /* Additional zoom prevention */
 .prevent-zoom * {
-  max-height: 100%;
+  max-height: 100% !important;
+}
+
+/* Force fixed size for elements to prevent zoom */
+.prevent-zoom img,
+.prevent-zoom video,
+.prevent-zoom iframe {
+  max-width: 100% !important;
+  object-fit: contain !important;
+}
+
+/* Disable text selection which can trigger zoom on some mobile browsers */
+.prevent-zoom {
+  -webkit-touch-callout: none !important;
+  -webkit-user-select: none !important;
+  -khtml-user-select: none !important;
+  -moz-user-select: none !important;
+  -ms-user-select: none !important;
+  user-select: none !important;
+}
+
+/* Disable pinch gestures */
+.prevent-zoom {
+  touch-action: manipulation !important;
 }
 
 @media (max-width: 768px) {
   .prevent-zoom {
     /* Additional mobile-specific zoom prevention */
-    -webkit-text-size-adjust: 100%;
-    -moz-text-size-adjust: 100%;
-    text-size-adjust: 100%;
+    -webkit-text-size-adjust: 100% !important;
+    -moz-text-size-adjust: 100% !important;
+    text-size-adjust: 100% !important;
+    font-size: 16px !important; /* Force consistent font size */
+  }
+
+  /* Force fixed layout on mobile */
+  .prevent-zoom body {
+    width: 100vw !important;
+    min-height: 100vh !important;
+    overflow-x: hidden !important;
+  }
+
+  /* Prevent iOS Safari zoom on input focus */
+  .prevent-zoom input,
+  .prevent-zoom select,
+  .prevent-zoom textarea {
+    font-size: 16px !important;
   }
 }
