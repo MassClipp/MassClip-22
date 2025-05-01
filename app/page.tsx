@@ -296,7 +296,7 @@ export default function LandingPage() {
               transition={{ duration: 0.6 }}
               viewport={{ once: true, margin: "-100px" }}
             >
-              <h2 className="text-3xl md:text-5xl font-light text-white mb-6">Ready to Accelerate Your Growth?</h2>
+              <h2 className="text-3xl md:text-5xl font-light text-white mb-6">Ready to Simplify Your Workflow?</h2>
               <p className="text-white/70 text-xl mb-10 max-w-2xl mx-auto">
                 Join the community of creators today who are building their pages and community with MassClip.
               </p>

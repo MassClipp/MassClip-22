@@ -656,7 +656,7 @@
   top: 100%;
   left: 0;
   right: 0;
-  background-color: rgba(0, 0, 0, 0.9);
+  background: #000000; /* Solid black background */
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
   padding: 1rem;
@@ -677,7 +677,7 @@
 
 /* Mobile menu styles */
 .mobile-menu {
-  background: rgba(10, 10, 10, 0.95);
+  background: #000000; /* Solid black background */
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
 }
@@ -732,7 +732,7 @@
 
 /* New premium mobile menu styles */
 .mobile-menu-premium {
-  background: linear-gradient(to bottom, rgba(18, 18, 18, 0.98), rgba(10, 10, 10, 0.98));
+  background: #000000; /* Solid black background */
   box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3);
 }
 
