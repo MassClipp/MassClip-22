@@ -274,7 +274,7 @@ export default function Dashboard() {
                   <VideoRow
                     title={showcaseName}
                     videos={videosToShow}
-                    limit={6}
+                    limit={10}
                     isShowcase={true}
                     showcaseId={showcaseIds[showcaseName]}
                   />

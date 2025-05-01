@@ -340,7 +340,12 @@ export default function LandingPage() {
               © {new Date().getFullYear()} MassClip. All rights reserved.
             </p>
             <div className="flex gap-4">
-              <a href="#" className="text-white/30 hover:text-white transition-colors">
+              <a
+                href="https://www.instagram.com/massclipp?igsh=MTZtY2w0bnQwaHI1OA%3D%3D&utm_source=qr"
+                className="text-white/30 hover:text-white transition-colors"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
                 <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                   <path
                     fillRule="evenodd"
