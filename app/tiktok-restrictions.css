@@ -1,54 +1,31 @@
-/* TikTok-specific restrictions */
-.tiktok-restricted-iframe {
-  /* Ensure the iframe doesn't break out of its container */
-  max-height: 100% !important;
-}
+/* TikTok-specific restrictions - only hide fullscreen buttons */
 
 /* Hide fullscreen button in Vimeo player when in TikTok */
-:root:has(.tiktok-restricted-iframe) .vp-controls .fullscreen,
-:root:has(.tiktok-restricted-iframe) .vp-controls [data-fullscreen],
-:root:has(.tiktok-restricted-iframe) .vp-controls [aria-label*="fullscreen"],
-:root:has(.tiktok-restricted-iframe) .vp-controls [title*="fullscreen"],
-:root:has(.tiktok-restricted-iframe) .vp-controls [aria-label*="Fullscreen"],
-:root:has(.tiktok-restricted-iframe) .vp-controls [title*="Fullscreen"] {
+.tiktok-browser .vp-controls .fullscreen,
+.tiktok-browser .vp-controls [data-fullscreen],
+.tiktok-browser .vp-controls [aria-label*="fullscreen"],
+.tiktok-browser .vp-controls [title*="fullscreen"],
+.tiktok-browser .vp-controls [aria-label*="Fullscreen"],
+.tiktok-browser .vp-controls [title*="Fullscreen"] {
   display: none !important;
   visibility: hidden !important;
   opacity: 0 !important;
   pointer-events: none !important;
 }
 
-/* Ensure videos don't expand beyond their container */
-.tiktok-restricted-iframe {
+/* Ensure videos can play but not go fullscreen */
+.tiktok-browser iframe[src*="vimeo"] {
+  max-width: 100% !important;
   max-height: 100% !important;
 }
 
-/* TikTok-specific styles to prevent fullscreen */
-
-/* Hide fullscreen button in Vimeo player */
-.tiktok-browser .vimeo-player .fullscreen-button,
-.tiktok-browser .vimeo-player [aria-label*="fullscreen"],
-.tiktok-browser .vimeo-player [title*="fullscreen"],
-.tiktok-browser .vimeo-player [data-fullscreen],
-.tiktok-browser .vimeo-player .vp-fullscreen-control {
-  display: none !important;
-  opacity: 0 !important;
-  pointer-events: none !important;
-}
-
-/* Ensure videos don't expand beyond their containers */
-.tiktok-browser .video-container {
-  max-height: 80vh !important;
-  overflow: hidden !important;
-}
-
-/* Add a transparent overlay to block fullscreen button interactions */
+/* Add a small overlay in the corner to block fullscreen button interactions */
 .tiktok-browser .video-container::after {
   content: "";
   position: absolute;
   top: 0;
   right: 0;
-  width: 50px;
-  height: 50px;
+  width: 40px;
+  height: 40px;
   z-index: 10;
-  pointer-events: auto !important;
 }
