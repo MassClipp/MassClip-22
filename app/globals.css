@@ -834,3 +834,25 @@
     right: 0.5rem;
   }
 }
+
+/* Zoom prevention for free users */
+.prevent-zoom {
+  touch-action: manipulation;
+  overscroll-behavior: none;
+  -ms-content-zooming: none;
+  -ms-touch-action: manipulation;
+}
+
+/* Additional zoom prevention */
+.prevent-zoom * {
+  max-height: 100%;
+}
+
+@media (max-width: 768px) {
+  .prevent-zoom {
+    /* Additional mobile-specific zoom prevention */
+    -webkit-text-size-adjust: 100%;
+    -moz-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+}

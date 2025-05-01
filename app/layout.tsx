@@ -9,6 +9,7 @@ import "./watermark.css"
 import { DownloadLimitProvider } from "@/contexts/download-limit-context"
 import { TikTokBrowserBanner } from "@/components/tiktok-browser-banner"
 import { FullscreenBlocker } from "@/components/fullscreen-blocker"
+import { ZoomPrevention } from "@/components/zoom-prevention"
 
 const inter = Inter({ subsets: ["latin"] })
 
@@ -51,6 +52,7 @@ export default function RootLayout({
       <body className={inter.className}>
         <AuthProvider>
           <DownloadLimitProvider>
+            <ZoomPrevention />
             <FullscreenBlocker />
             <TikTokBrowserBanner />
             {children}
