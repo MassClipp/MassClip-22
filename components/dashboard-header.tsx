@@ -132,8 +132,8 @@ export default function DashboardHeader({ initialSearchQuery = "" }) {
           </nav>
         </div>
 
-        {/* BETA Tag */}
-        <div className="absolute left-1/2 transform -translate-x-1/2 hidden md:block">
+        {/* BETA Tag - Now visible on all screen sizes */}
+        <div className="absolute left-1/2 transform -translate-x-1/2">
           <span className="text-xs font-extralight tracking-widest text-amber-400">BETA</span>
         </div>
 
