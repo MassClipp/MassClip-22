@@ -1,0 +1,27 @@
+/* TikTok-specific restrictions */
+.tiktok-video-container {
+  position: relative;
+  overflow: hidden;
+  max-height: 100%;
+}
+
+.tiktok-restricted-iframe {
+  /* Prevent certain interactions */
+  pointer-events: auto !important;
+}
+
+/* Hide fullscreen button in TikTok browser */
+.tiktok-video-container .vp-controls .fullscreen {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+/* Add this to your global CSS to inject styles into the iframe */
+@media screen {
+  iframe.tiktok-restricted-iframe {
+    max-height: 100% !important;
+    overflow: hidden !important;
+  }
+}

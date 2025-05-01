@@ -24,6 +24,7 @@ import { useToast } from "@/hooks/use-toast"
 import { useUserPlan } from "@/hooks/use-user-plan"
 import { useMobile } from "@/hooks/use-mobile"
 import { useDownloadLimit } from "@/contexts/download-limit-context"
+import { isInTikTokBrowser } from "@/lib/browser-detection"
 
 interface VimeoCardProps {
   video: VimeoVideo
@@ -41,6 +42,7 @@ export default function VimeoCard({ video }: VimeoCardProps) {
   const [downloadLink, setDownloadLink] = useState<string | null>(null)
   const [isFavorite, setIsFavorite] = useState(false)
   const [isCheckingFavorite, setIsCheckingFavorite] = useState(true)
+  const [isTikTokBrowser, setIsTikTokBrowser] = useState(false)
 
   const { user } = useAuth()
   const { toast } = useToast()
@@ -52,9 +54,15 @@ export default function VimeoCard({ video }: VimeoCardProps) {
   const viewTrackedRef = useRef(false)
   const downloadFrameRef = useRef<HTMLIFrameElement | null>(null)
   const downloadLinkRef = useRef<HTMLAnchorElement | null>(null)
+  const videoContainerRef = useRef<HTMLDivElement>(null)
 
   // Extract video ID from URI (format: "/videos/12345678") with null check
   const videoId = video?.uri ? video.uri.split("/").pop() : null
+
+  // Check if we're in TikTok browser on mount
+  useEffect(() => {
+    setIsTikTokBrowser(isInTikTokBrowser())
+  }, [])
 
   // Get the highest quality thumbnail
   const getHighQualityThumbnail = () => {
@@ -147,6 +155,37 @@ export default function VimeoCard({ video }: VimeoCardProps) {
       window.removeEventListener("resize", handleResize)
     }
   }, [video?.name])
+
+  // Apply TikTok-specific restrictions when iframe loads
+  useEffect(() => {
+    if (isTikTokBrowser && videoRef.current && isIframeLoaded) {
+      try {
+        // Try to access the iframe content if possible
+        const iframeWindow = videoRef.current.contentWindow
+
+        if (iframeWindow) {
+          // Add a message listener to intercept fullscreen requests
+          window.addEventListener("message", (event) => {
+            // Check if the message is from Vimeo and related to fullscreen
+            if (
+              event.origin.includes("vimeo.com") &&
+              event.data &&
+              typeof event.data === "string" &&
+              event.data.includes("fullscreen")
+            ) {
+              // Prevent the default fullscreen behavior
+              event.preventDefault()
+              event.stopPropagation()
+              return false
+            }
+          })
+        }
+      } catch (e) {
+        // Cross-origin restrictions might prevent this
+        console.log("Could not access iframe content due to cross-origin restrictions")
+      }
+    }
+  }, [isTikTokBrowser, isIframeLoaded])
 
   // Track video view when active - OPTIMIZED: only track once per session
   useEffect(() => {
@@ -445,6 +484,18 @@ export default function VimeoCard({ video }: VimeoCardProps) {
 
   const thumbnailUrl = getHighQualityThumbnail()
 
+  // Modify the iframe src for TikTok browsers to disable fullscreen
+  const getVideoSrc = () => {
+    const baseUrl = `https://player.vimeo.com/video/${videoId}?title=0&byline=0&portrait=0&badge=0&autopause=0&player_id=0&app_id=58479&quality=1080p`
+
+    // For TikTok browsers, add parameters to restrict behavior
+    if (isTikTokBrowser) {
+      return `${baseUrl}&playsinline=1&autoplay=0&fullscreen=0&transparent=0`
+    }
+
+    return baseUrl
+  }
+
   return (
     <div className="flex-shrink-0 w-[160px]">
       <div
@@ -514,7 +565,20 @@ export default function VimeoCard({ video }: VimeoCardProps) {
         </div>
 
         {videoId ? (
-          <div className="absolute inset-0">
+          <div
+            className="absolute inset-0"
+            ref={videoContainerRef}
+            // For TikTok browsers, add a special class to restrict the video
+            style={
+              isTikTokBrowser
+                ? {
+                    maxHeight: "100%",
+                    overflow: "hidden",
+                    position: "relative",
+                  }
+                : {}
+            }
+          >
             {/* High-quality thumbnail with dark overlay */}
             {thumbnailUrl && (
               <div
@@ -551,24 +615,36 @@ export default function VimeoCard({ video }: VimeoCardProps) {
 
             {/* Video iframe with fade-in effect */}
             {isActive && (
-              <iframe
-                ref={videoRef}
-                src={`https://player.vimeo.com/video/${videoId}?title=0&byline=0&portrait=0&badge=0&autopause=0&player_id=0&app_id=58479&quality=1080p`}
-                style={{
-                  position: "absolute",
-                  top: 0,
-                  left: 0,
-                  width: "100%",
-                  height: "100%",
-                  border: "none",
-                  opacity: isIframeLoaded ? 1 : 0,
-                  transition: "opacity 300ms ease-in-out",
-                }}
-                allow="autoplay; fullscreen; picture-in-picture; clipboard-write; encrypted-media"
-                title={video.name || "Video"}
-                loading="lazy"
-                onLoad={handleIframeLoad}
-              ></iframe>
+              <div className={isTikTokBrowser ? "tiktok-video-container" : ""}>
+                <iframe
+                  ref={videoRef}
+                  src={getVideoSrc()}
+                  style={{
+                    position: "absolute",
+                    top: 0,
+                    left: 0,
+                    width: "100%",
+                    height: "100%",
+                    border: "none",
+                    opacity: isIframeLoaded ? 1 : 0,
+                    transition: "opacity 300ms ease-in-out",
+                  }}
+                  allow={
+                    isTikTokBrowser
+                      ? "autoplay; picture-in-picture; clipboard-write; encrypted-media"
+                      : "autoplay; fullscreen; picture-in-picture; clipboard-write; encrypted-media"
+                  }
+                  title={video.name || "Video"}
+                  loading="lazy"
+                  onLoad={handleIframeLoad}
+                  className={isTikTokBrowser ? "tiktok-restricted-iframe" : ""}
+                ></iframe>
+
+                {/* Overlay to prevent fullscreen in TikTok */}
+                {isTikTokBrowser && isActive && (
+                  <div className="absolute top-0 right-0 w-12 h-12 z-10" style={{ pointerEvents: "all" }}></div>
+                )}
+              </div>
             )}
           </div>
         ) : (

@@ -4,8 +4,10 @@ import { Inter } from "next/font/google"
 import { AuthProvider } from "@/contexts/auth-context"
 import { Toaster } from "@/components/ui/toaster"
 import "./globals.css"
+import "./tiktok-restrictions.css" // Add the TikTok restrictions CSS
 // Import the DownloadLimitProvider
 import { DownloadLimitProvider } from "@/contexts/download-limit-context"
+import { TikTokBrowserBanner } from "@/components/tiktok-browser-banner"
 
 const inter = Inter({ subsets: ["latin"] })
 
@@ -26,6 +28,45 @@ export default function RootLayout({
       <head>
         {/* Add Vimeo Player API */}
         <script src="https://player.vimeo.com/api/player.js" async></script>
+
+        {/* Add TikTok detection and protection script */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `
+            // Execute immediately to prevent fullscreen in TikTok
+            (function() {
+              try {
+                const ua = navigator.userAgent.toLowerCase();
+                if (ua.includes('tiktok') || ua.includes('musical_ly') || ua.includes('bytedance')) {
+                  // Add a class to the HTML element for TikTok-specific styles
+                  document.documentElement.classList.add('tiktok-browser');
+                  
+                  // Override fullscreen API
+                  if (Element.prototype.requestFullscreen) {
+                    const originalRequestFullscreen = Element.prototype.requestFullscreen;
+                    Element.prototype.requestFullscreen = function() {
+                      if (document.documentElement.classList.contains('tiktok-browser')) {
+                        console.log('Fullscreen blocked in TikTok browser');
+                        return Promise.reject(new Error('Fullscreen not allowed in TikTok browser'));
+                      }
+                      return originalRequestFullscreen.apply(this, arguments);
+                    };
+                  }
+                  
+                  // Also override the Fullscreen API methods
+                  document.addEventListener('fullscreenchange', function(e) {
+                    if (document.fullscreenElement && document.documentElement.classList.contains('tiktok-browser')) {
+                      document.exitFullscreen().catch(err => console.log(err));
+                    }
+                  });
+                }
+              } catch (e) {
+                console.error('Error in TikTok detection:', e);
+              }
+            })();
+          `,
+          }}
+        />
       </head>
       <body className={inter.className}>
         <AuthProvider>
@@ -35,6 +76,7 @@ export default function RootLayout({
           </DownloadLimitProvider>
         </AuthProvider>
         <Toaster />
+        <TikTokBrowserBanner />
       </body>
     </html>
   )
