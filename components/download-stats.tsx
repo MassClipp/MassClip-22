@@ -76,7 +76,7 @@ export default function DownloadStats() {
             <div className="flex justify-between items-center mb-1">
               <div className="flex items-center">
                 <span className={`text-sm font-medium ${hasReachedLimit ? "text-amber-400" : "text-white"}`}>
-                  {remainingDownloads} of {planData?.downloadsLimit || 5} downloads remaining
+                  {remainingDownloads} of {planData?.downloadsLimit || 10} downloads remaining
                 </span>
                 {hasReachedLimit && (
                   <span className="ml-2 inline-flex items-center justify-center px-2 py-0.5 text-xs font-medium rounded-full bg-amber-500/20 text-amber-500 border border-amber-500/30">

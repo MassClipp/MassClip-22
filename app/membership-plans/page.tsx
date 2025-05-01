@@ -83,7 +83,7 @@ export default function MembershipPlansPage() {
                   <li className="flex items-start">
                     <CheckCircle2 className="h-5 w-5 text-green-500 mr-2 flex-shrink-0 mt-0.5" />
                     <span className="font-light">
-                      <strong>5 downloads per month</strong>
+                      <strong>10 downloads per month</strong>
                     </span>
                   </li>
                   <li className="flex items-start">

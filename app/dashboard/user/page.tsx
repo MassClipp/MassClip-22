@@ -1,22 +1,30 @@
 "use client"
 
-import { useState } from "react"
+import { useRouter } from "next/navigation"
 import { motion } from "framer-motion"
-import { Crown, CheckCircle2, AlertCircle } from "lucide-react"
-import DashboardHeader from "@/components/dashboard-header"
 import { useAuth } from "@/contexts/auth-context"
+import DashboardHeader from "@/components/dashboard-header"
+import { Button } from "@/components/ui/button"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
+import { Edit, Crown, LogOut, Check, User2, Clock, Heart, Download, Shield } from "lucide-react"
+import UpgradeButton from "@/components/upgrade-button"
+import DownloadStats from "@/components/download-stats"
 import { useUserPlan } from "@/hooks/use-user-plan"
 import { CancelSubscriptionButton } from "@/components/cancel-subscription-button"
-import { SubscribeButton } from "@/components/subscribe-button"
-import { Button } from "@/components/ui/button"
-import { useRouter } from "next/navigation"
-import Link from "next/link"
+import { CheckCircle2 } from "lucide-react"
 
-export default function UserPage() {
-  const { user } = useAuth()
-  const { planData, isProUser, loading } = useUserPlan()
-  const [showCancelConfirm, setShowCancelConfirm] = useState(false)
+export default function UserDashboardPage() {
+  const { user, logOut } = useAuth()
   const router = useRouter()
+  const { isProUser } = useUserPlan()
+
+  const handleLogout = async () => {
+    const result = await logOut()
+    if (result.success) {
+      router.push("/login")
+    }
+  }
 
   // Animation variants
   const containerVariants = {
@@ -43,8 +51,8 @@ export default function UserPage() {
 
   if (!user) {
     return (
-      <div className="min-h-screen bg-black text-white flex items-center justify-center">
-        <p>Please log in to view your profile.</p>
+      <div className="min-h-screen bg-black flex items-center justify-center">
+        <div className="text-white">Loading...</div>
       </div>
     )
   }
@@ -59,190 +67,338 @@ export default function UserPage() {
       <DashboardHeader />
 
       <main className="pt-20 pb-16 relative z-10">
-        <motion.div
-          variants={containerVariants}
-          initial="hidden"
-          animate="visible"
-          className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8"
-        >
-          <motion.div variants={itemVariants} className="mb-8">
-            <h1 className="text-3xl font-extralight tracking-tight text-white">Your Account</h1>
-            <p className="text-zinc-400 mt-2 font-light">Manage your account settings and subscription</p>
+        <div className="container mx-auto px-4">
+          <motion.div
+            variants={containerVariants}
+            initial="hidden"
+            animate="visible"
+            className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8"
+          >
+            <motion.div variants={itemVariants}>
+              <h1 className="text-3xl font-extralight tracking-tight text-white">
+                {user.displayName ? `Welcome, ${user.displayName}` : "Welcome to Your Dashboard"}
+              </h1>
+              <p className="text-zinc-400 mt-1 font-light">Manage your account and subscription</p>
+            </motion.div>
+
+            <motion.div variants={itemVariants} className="mt-4 md:mt-0 flex gap-3">
+              <Button
+                variant="outline"
+                className="border-zinc-800 bg-zinc-900/30 text-white hover:bg-zinc-900/50 hover:border-zinc-700"
+                onClick={() => router.push("/dashboard/profile")}
+              >
+                <Edit className="mr-2 h-4 w-4" /> Edit Profile
+              </Button>
+            </motion.div>
           </motion.div>
 
-          <motion.div variants={itemVariants} className="grid md:grid-cols-3 gap-6 mb-8">
-            <div className="bg-zinc-900/30 border border-zinc-800/50 rounded-lg p-6 backdrop-blur-sm col-span-2">
-              <h2 className="text-xl font-light text-white mb-4">Profile Information</h2>
-              <div className="space-y-4">
-                <div>
-                  <p className="text-sm text-zinc-400">Email</p>
-                  <p className="text-white">{user.email}</p>
-                </div>
-                <div>
-                  <p className="text-sm text-zinc-400">Display Name</p>
-                  <p className="text-white">{user.displayName || "Not set"}</p>
-                </div>
-                <div className="pt-2">
-                  <Button
-                    onClick={() => router.push("/dashboard/profile")}
-                    variant="outline"
-                    className="border-zinc-800 bg-zinc-900/30 text-white hover:bg-zinc-900/50 hover:border-zinc-700"
-                  >
-                    Edit Profile
-                  </Button>
-                </div>
-              </div>
-            </div>
+          <Tabs defaultValue="overview" className="w-full">
+            <TabsList className="bg-zinc-900/30 border-b border-zinc-800/50 w-full justify-start rounded-none mb-6">
+              <TabsTrigger
+                value="overview"
+                className="text-white data-[state=active]:bg-zinc-800/50 data-[state=active]:border-b-2 data-[state=active]:border-crimson rounded-none px-6 py-3"
+              >
+                Overview
+              </TabsTrigger>
+              <TabsTrigger
+                value="settings"
+                className="text-white data-[state=active]:bg-zinc-800/50 data-[state=active]:border-b-2 data-[state=active]:border-crimson rounded-none px-6 py-3"
+              >
+                Settings
+              </TabsTrigger>
+            </TabsList>
 
-            <div className="bg-zinc-900/30 border border-zinc-800/50 rounded-lg p-6 backdrop-blur-sm">
-              <h2 className="text-xl font-light text-white mb-4">Security</h2>
-              <div className="space-y-4">
-                <div>
-                  <p className="text-sm text-zinc-400">Password</p>
-                  <p className="text-white">••••••••</p>
-                </div>
-                <div className="pt-2">
-                  <Button
-                    onClick={() => router.push("/dashboard/password")}
-                    variant="outline"
-                    className="border-zinc-800 bg-zinc-900/30 text-white hover:bg-zinc-900/50 hover:border-zinc-700"
-                  >
-                    Change Password
-                  </Button>
-                </div>
-              </div>
-            </div>
-          </motion.div>
-
-          <motion.div variants={itemVariants}>
-            <div className="bg-zinc-900/30 border border-zinc-800/50 rounded-lg p-6 backdrop-blur-sm mb-8">
-              <div className="flex items-center mb-4">
-                <Crown className="h-5 w-5 text-yellow-500 mr-2" />
-                <h2 className="text-xl font-light text-white">Your Subscription</h2>
-              </div>
-              <p className="text-zinc-400 mb-6 font-light">Manage your subscription plan</p>
-
-              <div className="grid md:grid-cols-2 gap-8">
-                <div>
-                  <h3 className="text-lg font-medium text-white mb-4">
-                    Current Plan:{" "}
-                    <span className={isProUser ? "text-yellow-500" : ""}>{isProUser ? "Creator Pro" : "Free"}</span>
-                  </h3>
-
-                  {isProUser ? (
-                    <ul className="space-y-3 mb-6">
-                      <li className="flex items-start">
-                        <CheckCircle2 className="h-5 w-5 text-green-500 mr-2 flex-shrink-0 mt-0.5" />
-                        <span className="font-light">Unlimited downloads</span>
-                      </li>
-                      <li className="flex items-start">
-                        <CheckCircle2 className="h-5 w-5 text-green-500 mr-2 flex-shrink-0 mt-0.5" />
-                        <span className="font-light">Access to all clips</span>
-                      </li>
-                      <li className="flex items-start">
-                        <CheckCircle2 className="h-5 w-5 text-green-500 mr-2 flex-shrink-0 mt-0.5" />
-                        <span className="font-light">High video quality</span>
-                      </li>
-                      <li className="flex items-start">
-                        <CheckCircle2 className="h-5 w-5 text-green-500 mr-2 flex-shrink-0 mt-0.5" />
-                        <span className="font-light">Priority support</span>
-                      </li>
-                    </ul>
-                  ) : (
-                    <ul className="space-y-3 mb-6">
-                      <li className="flex items-start">
-                        <CheckCircle2 className="h-5 w-5 text-green-500 mr-2 flex-shrink-0 mt-0.5" />
-                        <span className="font-light">5 downloads per month</span>
-                      </li>
-                      <li className="flex items-start">
-                        <CheckCircle2 className="h-5 w-5 text-green-500 mr-2 flex-shrink-0 mt-0.5" />
-                        <span className="font-light">Access to free clips</span>
-                      </li>
-                      <li className="flex items-start">
-                        <CheckCircle2 className="h-5 w-5 text-green-500 mr-2 flex-shrink-0 mt-0.5" />
-                        <span className="font-light">Standard video quality</span>
-                      </li>
-                    </ul>
-                  )}
-
-                  {isProUser ? (
-                    <>
-                      {showCancelConfirm ? (
-                        <div className="space-y-4">
-                          <div className="bg-zinc-800/50 border border-zinc-700/50 rounded-md p-4">
-                            <div className="flex items-start mb-2">
-                              <AlertCircle className="h-5 w-5 text-yellow-500 mr-2 flex-shrink-0 mt-0.5" />
-                              <p className="text-white font-medium">Are you sure you want to cancel?</p>
-                            </div>
-                            <p className="text-zinc-400 text-sm mb-4">
-                              You'll lose access to all Creator Pro features at the end of your current billing period.
-                            </p>
-                            <div className="flex space-x-3">
-                              <CancelSubscriptionButton className="bg-red-600 hover:bg-red-700 text-white" />
-                              <Button
-                                onClick={() => setShowCancelConfirm(false)}
-                                variant="outline"
-                                className="border-zinc-700 bg-zinc-800/50"
-                              >
-                                Keep Subscription
-                              </Button>
-                            </div>
-                          </div>
+            <TabsContent value="overview">
+              <motion.div
+                variants={containerVariants}
+                initial="hidden"
+                animate="visible"
+                className="grid grid-cols-1 md:grid-cols-3 gap-6"
+              >
+                {/* Account Settings Card */}
+                <motion.div variants={itemVariants} className="md:col-span-2">
+                  <Card className="bg-zinc-900/30 border-zinc-800/50 backdrop-blur-sm">
+                    <CardHeader className="pb-4">
+                      <CardTitle className="flex items-center text-white text-xl font-light">
+                        <User2 className="mr-2 h-5 w-5 text-crimson" /> Account Information
+                      </CardTitle>
+                      <CardDescription className="text-zinc-400">Your account details</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                          <h3 className="text-sm font-medium text-zinc-400 mb-1">Email</h3>
+                          <p className="text-white font-light">{user.email}</p>
                         </div>
-                      ) : (
+                        <div>
+                          <h3 className="text-sm font-medium text-zinc-400 mb-1">Display Name</h3>
+                          <p className="text-white font-light">{user.displayName || "Not set"}</p>
+                        </div>
+                        <div>
+                          <h3 className="text-sm font-medium text-zinc-400 mb-1">Account Created</h3>
+                          <p className="text-white font-light">
+                            {user.metadata.creationTime
+                              ? new Date(user.metadata.creationTime).toLocaleDateString()
+                              : "Unknown"}
+                          </p>
+                        </div>
+                        <div>
+                          <h3 className="text-sm font-medium text-zinc-400 mb-1">Last Sign In</h3>
+                          <p className="text-white font-light">
+                            {user.metadata.lastSignInTime
+                              ? new Date(user.metadata.lastSignInTime).toLocaleDateString()
+                              : "Unknown"}
+                          </p>
+                        </div>
+                      </div>
+                    </CardContent>
+                    <CardFooter>
+                      <Button
+                        variant="outline"
+                        className="border-zinc-800 bg-zinc-900/30 text-white hover:bg-zinc-900/50 hover:border-zinc-700"
+                        onClick={() => router.push("/dashboard/profile")}
+                      >
+                        Edit Profile
+                      </Button>
+                    </CardFooter>
+                  </Card>
+                </motion.div>
+
+                {/* Download Stats Card */}
+                <motion.div variants={itemVariants} className="md:col-span-1">
+                  <DownloadStats />
+                </motion.div>
+
+                {/* Quick Actions */}
+                <motion.div variants={itemVariants} className="md:col-span-3">
+                  <Card className="bg-zinc-900/30 border-zinc-800/50 backdrop-blur-sm">
+                    <CardHeader className="pb-4">
+                      <CardTitle className="flex items-center text-white text-xl font-light">
+                        <Clock className="mr-2 h-5 w-5 text-crimson" /> Quick Actions
+                      </CardTitle>
+                      <CardDescription className="text-zinc-400">Access your content quickly</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4">
                         <Button
-                          onClick={() => setShowCancelConfirm(true)}
+                          variant="outline"
+                          className="h-auto py-6 flex flex-col items-center justify-center gap-3 border-zinc-800 bg-zinc-900/30 text-white hover:bg-zinc-900/50 hover:border-zinc-700"
+                          onClick={() => router.push("/dashboard")}
+                        >
+                          <Download className="h-6 w-6 text-crimson" />
+                          <span>Browse Clips</span>
+                        </Button>
+
+                        <Button
+                          variant="outline"
+                          className="h-auto py-6 flex flex-col items-center justify-center gap-3 border-zinc-800 bg-zinc-900/30 text-white hover:bg-zinc-900/50 hover:border-zinc-700"
+                          onClick={() => router.push("/dashboard/favorites")}
+                        >
+                          <Heart className="h-6 w-6 text-crimson" />
+                          <span>Favorites</span>
+                        </Button>
+
+                        <Button
+                          variant="outline"
+                          className="h-auto py-6 flex flex-col items-center justify-center gap-3 border-zinc-800 bg-zinc-900/30 text-white hover:bg-zinc-900/50 hover:border-zinc-700"
+                          onClick={() => router.push("/dashboard/history")}
+                        >
+                          <Clock className="h-6 w-6 text-crimson" />
+                          <span>History</span>
+                        </Button>
+
+                        <Button
+                          variant="outline"
+                          className="h-auto py-6 flex flex-col items-center justify-center gap-3 border-zinc-800 bg-zinc-900/30 text-white hover:bg-zinc-900/50 hover:border-zinc-700"
+                          onClick={() => router.push("/dashboard/profile")}
+                        >
+                          <User2 className="h-6 w-6 text-crimson" />
+                          <span>Profile</span>
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </motion.div>
+
+                {/* Subscription Card */}
+                <motion.div variants={itemVariants} className="md:col-span-3">
+                  <Card className="bg-zinc-900/30 border-zinc-800/50 backdrop-blur-sm">
+                    <CardHeader className="pb-4">
+                      <CardTitle className="flex items-center text-white text-xl font-light">
+                        <Crown className="mr-2 h-5 w-5 text-yellow-500" /> Your Subscription
+                      </CardTitle>
+                      <CardDescription className="text-zinc-400">Manage your subscription plan</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div>
+                          <h3 className="text-lg font-light text-white mb-3">
+                            Current Plan:{" "}
+                            <span className={isProUser ? "text-yellow-500" : "text-zinc-400"}>
+                              {isProUser ? "Pro" : "Free"}
+                            </span>
+                          </h3>
+                          <ul className="space-y-2 text-sm">
+                            {isProUser ? (
+                              <div className="space-y-2">
+                                <p className="flex items-center text-white">
+                                  <CheckCircle2 className="h-4 w-4 text-green-500 mr-2" />
+                                  <span className="font-light">Unlimited downloads</span>
+                                </p>
+                                <p className="flex items-center text-white">
+                                  <CheckCircle2 className="h-4 w-4 text-green-500 mr-2" />
+                                  <span className="font-light">Access to all clips</span>
+                                </p>
+                                <p className="flex items-center text-white">
+                                  <CheckCircle2 className="h-4 w-4 text-green-500 mr-2" />
+                                  <span className="font-light">High video quality</span>
+                                </p>
+                                <p className="flex items-center text-white">
+                                  <CheckCircle2 className="h-4 w-4 text-green-500 mr-2" />
+                                  <span className="font-light">Priority support</span>
+                                </p>
+                              </div>
+                            ) : (
+                              <div className="space-y-2">
+                                <p className="flex items-center text-white">
+                                  <CheckCircle2 className="h-4 w-4 text-green-500 mr-2" />
+                                  <span className="font-light">10 downloads per month</span>
+                                </p>
+                                <p className="flex items-center text-white">
+                                  <CheckCircle2 className="h-4 w-4 text-green-500 mr-2" />
+                                  <span className="font-light">Access to free clips</span>
+                                </p>
+                                <p className="flex items-center text-white">
+                                  <CheckCircle2 className="h-4 w-4 text-green-500 mr-2" />
+                                  <span className="font-light">Standard video quality</span>
+                                </p>
+                              </div>
+                            )}
+                          </ul>
+                        </div>
+
+                        {!isProUser && (
+                          <div className="bg-zinc-900/50 p-6 rounded-lg border border-zinc-800/50 backdrop-blur-sm">
+                            <h3 className="text-lg font-light text-white mb-3">Upgrade to Pro</h3>
+                            <p className="text-zinc-300 mb-3 font-light">
+                              Get unlimited access to all premium features
+                            </p>
+                            <ul className="space-y-2 text-sm mb-4">
+                              <li className="flex items-center text-zinc-300">
+                                <Check className="h-4 w-4 mr-2 text-crimson" />{" "}
+                                <span className="font-light">Access to ALL premium clips</span>
+                              </li>
+                              <li className="flex items-center text-zinc-300">
+                                <Check className="h-4 w-4 mr-2 text-crimson" />{" "}
+                                <span className="font-light">Unlimited downloads</span>
+                              </li>
+                              <li className="flex items-center text-zinc-300">
+                                <Check className="h-4 w-4 mr-2 text-crimson" />{" "}
+                                <span className="font-light">Advanced organization features</span>
+                              </li>
+                              <li className="flex items-center text-zinc-300">
+                                <Check className="h-4 w-4 mr-2 text-crimson" />{" "}
+                                <span className="font-light">Early access to new clips</span>
+                              </li>
+                            </ul>
+                            <UpgradeButton className="w-full">Upgrade Now - $19/month</UpgradeButton>
+                          </div>
+                        )}
+                      </div>
+                    </CardContent>
+                    <CardFooter className="flex justify-between">
+                      <Button
+                        variant="link"
+                        className="text-crimson hover:text-crimson/80 p-0"
+                        onClick={() => router.push("/membership-plans")}
+                      >
+                        View all plan options
+                      </Button>
+                      {isProUser && <CancelSubscriptionButton />}
+                    </CardFooter>
+                  </Card>
+                </motion.div>
+
+                {/* Account Actions Card */}
+                <motion.div variants={itemVariants} className="md:col-span-3">
+                  <Card className="bg-zinc-900/30 border-zinc-800/50 backdrop-blur-sm">
+                    <CardHeader className="pb-4">
+                      <CardTitle className="flex items-center text-white text-xl font-light">
+                        <Shield className="mr-2 h-5 w-5 text-crimson" /> Account Security
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="flex flex-wrap gap-3">
+                        <Button
                           variant="outline"
                           className="border-zinc-800 bg-zinc-900/30 text-white hover:bg-zinc-900/50 hover:border-zinc-700"
+                          onClick={() => router.push("/dashboard/password")}
                         >
-                          Cancel Subscription
+                          Change Password
                         </Button>
-                      )}
-                    </>
-                  ) : (
-                    <Link href="/membership-plans" className="inline-block">
-                      <Button className="bg-crimson hover:bg-crimson-dark text-white">View Plan Options</Button>
-                    </Link>
-                  )}
-                </div>
+                        <Button
+                          variant="outline"
+                          className="border-zinc-800 bg-zinc-900/30 text-white hover:bg-zinc-900/50 hover:border-zinc-700"
+                          onClick={handleLogout}
+                        >
+                          <LogOut className="mr-2 h-4 w-4" /> Log Out
+                        </Button>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </motion.div>
+              </motion.div>
+            </TabsContent>
 
-                {!isProUser && (
-                  <div className="bg-zinc-900/50 border border-zinc-800/50 rounded-lg p-6">
-                    <h3 className="text-lg font-medium text-white mb-4">Upgrade to Pro</h3>
-                    <p className="text-zinc-400 mb-4 font-light">Get unlimited access to all premium features</p>
-                    <ul className="space-y-3 mb-6">
-                      <li className="flex items-start">
-                        <CheckCircle2 className="h-5 w-5 text-crimson mr-2 flex-shrink-0 mt-0.5" />
-                        <span className="font-light">Access to ALL premium clips</span>
-                      </li>
-                      <li className="flex items-start">
-                        <CheckCircle2 className="h-5 w-5 text-crimson mr-2 flex-shrink-0 mt-0.5" />
-                        <span className="font-light">Unlimited downloads</span>
-                      </li>
-                      <li className="flex items-start">
-                        <CheckCircle2 className="h-5 w-5 text-crimson mr-2 flex-shrink-0 mt-0.5" />
-                        <span className="font-light">High video quality</span>
-                      </li>
-                      <li className="flex items-start">
-                        <CheckCircle2 className="h-5 w-5 text-crimson mr-2 flex-shrink-0 mt-0.5" />
-                        <span className="font-light">Priority support</span>
-                      </li>
-                    </ul>
-                    <SubscribeButton className="w-full bg-crimson hover:bg-crimson-dark">
-                      Upgrade Now - $19/month
-                    </SubscribeButton>
-                  </div>
-                )}
-              </div>
-            </div>
-          </motion.div>
+            <TabsContent value="settings">
+              <motion.div variants={containerVariants} initial="hidden" animate="visible">
+                <motion.div variants={itemVariants}>
+                  <Card className="bg-zinc-900/30 border-zinc-800/50 backdrop-blur-sm">
+                    <CardHeader className="pb-4">
+                      <CardTitle className="text-white text-xl font-light">Account Settings</CardTitle>
+                      <CardDescription className="text-zinc-400">Manage your account preferences</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-6">
+                        <div>
+                          <h3 className="text-lg font-light text-white mb-2">Profile Information</h3>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div>
+                              <p className="text-sm text-zinc-400 mb-1">Email</p>
+                              <p className="text-white font-light">{user.email}</p>
+                            </div>
+                            <div>
+                              <p className="text-sm text-zinc-400 mb-1">Display Name</p>
+                              <p className="text-white font-light">{user.displayName || "Not set"}</p>
+                            </div>
+                          </div>
+                          <Button
+                            className="mt-4 border-zinc-800 bg-zinc-900/30 text-white hover:bg-zinc-900/50 hover:border-zinc-700"
+                            onClick={() => router.push("/dashboard/profile")}
+                            variant="outline"
+                          >
+                            Edit Profile
+                          </Button>
+                        </div>
 
-          <motion.div variants={itemVariants} className="text-center">
-            <Link href="/membership-plans" className="text-crimson hover:text-crimson-light">
-              View all plan options
-            </Link>
-          </motion.div>
-        </motion.div>
+                        <div className="pt-4 border-t border-zinc-800/50">
+                          <h3 className="text-lg font-light text-white mb-2">Account Security</h3>
+                          <Button
+                            className="border-zinc-800 bg-zinc-900/30 text-white hover:bg-zinc-900/50 hover:border-zinc-700"
+                            onClick={() => router.push("/dashboard/password")}
+                            variant="outline"
+                          >
+                            Change Password
+                          </Button>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </motion.div>
+              </motion.div>
+            </TabsContent>
+          </Tabs>
+        </div>
       </main>
     </div>
   )
