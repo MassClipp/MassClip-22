@@ -134,9 +134,7 @@ export default function DashboardHeader({ initialSearchQuery = "" }) {
 
         {/* BETA Tag */}
         <div className="absolute left-1/2 transform -translate-x-1/2 hidden md:block">
-          <span className="text-xs font-extralight tracking-widest bg-crimson/20 text-crimson border border-crimson/30 px-2 py-0.5 rounded-sm">
-            BETA
-          </span>
+          <span className="text-xs font-extralight tracking-widest text-amber-400">BETA</span>
         </div>
 
         {/* Desktop Action Buttons */}
