@@ -6,6 +6,8 @@ import { Toaster } from "@/components/ui/toaster"
 import "./globals.css"
 // Import the DownloadLimitProvider
 import { DownloadLimitProvider } from "@/contexts/download-limit-context"
+// Import our client component
+import { AntiFullscreenClient } from "@/components/anti-fullscreen-client"
 
 const inter = Inter({ subsets: ["latin"] })
 
@@ -30,6 +32,8 @@ export default function RootLayout({
       <body className={inter.className}>
         <AuthProvider>
           <DownloadLimitProvider>
+            {/* Anti-fullscreen client component */}
+            <AntiFullscreenClient />
             {/* Rest of your layout */}
             {children}
           </DownloadLimitProvider>

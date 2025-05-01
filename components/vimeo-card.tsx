@@ -41,6 +41,7 @@ export default function VimeoCard({ video }: VimeoCardProps) {
   const [downloadLink, setDownloadLink] = useState<string | null>(null)
   const [isFavorite, setIsFavorite] = useState(false)
   const [isCheckingFavorite, setIsCheckingFavorite] = useState(true)
+  const [isExternalReferrer, setIsExternalReferrer] = useState(false)
 
   const { user } = useAuth()
   const { toast } = useToast()
@@ -48,12 +49,42 @@ export default function VimeoCard({ video }: VimeoCardProps) {
   const { hasReachedLimit, isProUser, forceRefresh } = useDownloadLimit()
   const isMobile = useMobile()
   const titleRef = useRef<HTMLDivElement>(null)
-  const videoRef = useRef<HTMLIFrameElement>(null)
+  const videoRef = useRef<HTMLIFrameElement | null>(null)
   const viewTrackedRef = useRef(false)
   const downloadFrameRef = useRef<HTMLIFrameElement | null>(null)
+  const containerRef = useRef<HTMLDivElement>(null)
 
   // Extract video ID from URI (format: "/videos/12345678") with null check
   const videoId = video?.uri ? video.uri.split("/").pop() : null
+
+  // Check if user is coming from external site
+  useEffect(() => {
+    // Check for external referrers (social media)
+    const checkReferrer = () => {
+      if (typeof window !== "undefined") {
+        const referrer = document.referrer.toLowerCase()
+        const isSocialMedia =
+          referrer.includes("instagram") ||
+          referrer.includes("tiktok") ||
+          referrer.includes("facebook") ||
+          referrer.includes("twitter") ||
+          referrer.includes("t.co") ||
+          referrer.includes("fb.com") ||
+          referrer.includes("snapchat")
+
+        setIsExternalReferrer(isSocialMedia)
+
+        // Also check URL parameters for external sources
+        const urlParams = new URLSearchParams(window.location.search)
+        const source = urlParams.get("source")
+        if (source && ["ig", "tiktok", "fb", "social"].includes(source.toLowerCase())) {
+          setIsExternalReferrer(true)
+        }
+      }
+    }
+
+    checkReferrer()
+  }, [])
 
   // Get the highest quality thumbnail
   const getHighQualityThumbnail = () => {
@@ -100,6 +131,64 @@ export default function VimeoCard({ video }: VimeoCardProps) {
 
     checkIfFavorite()
   }, [user, videoId])
+
+  // Add protection against fullscreen for mobile and external referrers
+  useEffect(() => {
+    const preventFullscreen = () => {
+      if (videoRef.current && (isMobile || isExternalReferrer)) {
+        // Try to access the iframe's contentWindow
+        try {
+          // Add event listeners to prevent fullscreen
+          document.addEventListener("fullscreenchange", exitFullscreen)
+          document.addEventListener("webkitfullscreenchange", exitFullscreen)
+          document.addEventListener("mozfullscreenchange", exitFullscreen)
+          document.addEventListener("MSFullscreenChange", exitFullscreen)
+
+          // If we have access to the iframe's contentWindow, add more protections
+          if (videoRef.current.contentWindow) {
+            // This might not work due to cross-origin restrictions
+            try {
+              videoRef.current.contentWindow.document.addEventListener("fullscreenchange", exitFullscreen)
+            } catch (e) {
+              // Expected to fail due to cross-origin policy
+            }
+          }
+        } catch (e) {
+          console.log("Could not access iframe contentWindow due to cross-origin policy")
+        }
+      }
+    }
+
+    const exitFullscreen = () => {
+      if (
+        document.fullscreenElement ||
+        (document as any).webkitFullscreenElement ||
+        (document as any).mozFullScreenElement ||
+        (document as any).msFullscreenElement
+      ) {
+        // Exit fullscreen
+        if (document.exitFullscreen) {
+          document.exitFullscreen()
+        } else if ((document as any).webkitExitFullscreen) {
+          ;(document as any).webkitExitFullscreen()
+        } else if ((document as any).mozCancelFullScreen) {
+          ;(document as any).mozCancelFullScreen()
+        } else if ((document as any).msExitFullscreen) {
+          ;(document as any).msExitFullscreen()
+        }
+      }
+    }
+
+    preventFullscreen()
+
+    return () => {
+      // Clean up event listeners
+      document.removeEventListener("fullscreenchange", exitFullscreen)
+      document.removeEventListener("webkitfullscreenchange", exitFullscreen)
+      document.removeEventListener("mozfullscreenchange", exitFullscreen)
+      document.removeEventListener("MSFullscreenChange", exitFullscreen)
+    }
+  }, [isMobile, isExternalReferrer, videoRef.current])
 
   // Clean up any iframe elements on unmount
   useEffect(() => {
@@ -400,6 +489,7 @@ export default function VimeoCard({ video }: VimeoCardProps) {
   return (
     <div className="flex-shrink-0 w-[160px]">
       <div
+        ref={containerRef}
         className="group relative premium-hover-effect"
         style={{
           position: "relative",
@@ -505,7 +595,7 @@ export default function VimeoCard({ video }: VimeoCardProps) {
             {isActive && (
               <iframe
                 ref={videoRef}
-                src={`https://player.vimeo.com/video/${videoId}?title=0&byline=0&portrait=0&badge=0&autopause=0&player_id=0&app_id=58479&quality=1080p`}
+                src={`https://player.vimeo.com/video/${videoId}?title=0&byline=0&portrait=0&badge=0&autopause=0&player_id=0&app_id=58479&quality=1080p&fullscreen=0`}
                 style={{
                   position: "absolute",
                   top: 0,
@@ -515,12 +605,34 @@ export default function VimeoCard({ video }: VimeoCardProps) {
                   border: "none",
                   opacity: isIframeLoaded ? 1 : 0,
                   transition: "opacity 300ms ease-in-out",
+                  pointerEvents: isMobile || isExternalReferrer ? "none" : "auto", // Disable interactions on mobile/external
                 }}
-                allow="autoplay; fullscreen; picture-in-picture; clipboard-write; encrypted-media"
+                allow="autoplay; picture-in-picture; clipboard-write; encrypted-media"
+                allowFullScreen={false}
                 title={video.name || "Video"}
                 loading="lazy"
                 onLoad={handleIframeLoad}
               ></iframe>
+            )}
+
+            {/* Overlay to prevent interactions on mobile/external referrers */}
+            {isActive && (isMobile || isExternalReferrer) && (
+              <div
+                className="absolute inset-0 z-15 bg-transparent"
+                onClick={(e) => {
+                  // Prevent default behavior and propagation
+                  e.preventDefault()
+                  e.stopPropagation()
+
+                  // Show a message about protection
+                  if (isExternalReferrer) {
+                    toast({
+                      title: "Content Protected",
+                      description: "Please use our app directly for the best experience.",
+                    })
+                  }
+                }}
+              />
             )}
           </div>
         ) : (
