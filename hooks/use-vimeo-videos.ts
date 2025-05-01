@@ -12,7 +12,9 @@ export function useVimeoVideos() {
   const [videosByTag, setVideosByTag] = useState<Record<string, VimeoVideo[]>>({})
   const isMounted = useRef(true)
   const isInitialLoad = useRef(true)
-  const perPage = 20 // Increased from 12 to 20 for better content coverage
+  const fetchedPages = useRef(new Set<number>())
+  const allVideosCache = useRef<VimeoVideo[]>([])
+  const perPage = 50 // Increased from 20 to 50 for better content coverage
 
   // Helper function to normalize tag names
   const normalizeTagName = (tagName: string): string => {
@@ -92,6 +94,11 @@ export function useVimeoVideos() {
   }
 
   const fetchVideos = async (pageNum: number) => {
+    // Skip if we've already fetched this page
+    if (fetchedPages.current.has(pageNum)) {
+      return
+    }
+
     try {
       setLoading(true)
       console.log(`Fetching videos page ${pageNum}, ${perPage} per page`)
@@ -106,11 +113,25 @@ export function useVimeoVideos() {
       const data: VimeoApiResponse = await response.json()
       console.log(`Received ${data.data.length} videos from API`)
 
+      // Mark this page as fetched
+      fetchedPages.current.add(pageNum)
+
       // Only update state if component is still mounted
       if (!isMounted.current) return
 
-      // Update videos
-      setVideos((prev) => [...prev, ...data.data])
+      // Add new videos to our cache
+      const newVideos = data.data.filter(
+        (newVideo) => !allVideosCache.current.some((existingVideo) => existingVideo.uri === newVideo.uri),
+      )
+      allVideosCache.current = [...allVideosCache.current, ...newVideos]
+
+      // Update videos state
+      setVideos((prev) => {
+        const combined = [...prev, ...newVideos]
+        // Remove duplicates based on URI
+        const uniqueVideos = Array.from(new Map(combined.map((video) => [video.uri, video])).values())
+        return uniqueVideos
+      })
 
       // Check if there are more videos to load
       setHasMore(!!data.paging.next)
@@ -124,7 +145,9 @@ export function useVimeoVideos() {
       }
 
       // Add all videos to the "browse all" category
-      newVideosByTag["browse all"] = [...(newVideosByTag["browse all"] || []), ...data.data]
+      newVideosByTag["browse all"] = Array.from(
+        new Map([...newVideosByTag["browse all"], ...data.data].map((video) => [video.uri, video])).values(),
+      )
 
       // Create a set to track processed tags to avoid duplicates
       const processedTags = new Set<string>()
@@ -146,7 +169,9 @@ export function useVimeoVideos() {
             }
 
             // Store the video with this tag
-            newVideosByTag[normalizedTagName].push(video)
+            if (!newVideosByTag[normalizedTagName].some((v) => v.uri === video.uri)) {
+              newVideosByTag[normalizedTagName].push(video)
+            }
           })
         }
       })
@@ -190,17 +215,10 @@ export function useVimeoVideos() {
           // If video matches, add it to this category
           if (hasRelatedTag || nameOrDescriptionMatches) {
             processedTags.add(`${video.uri}-${category}`)
-            newVideosByTag[category].push(video)
+            if (!newVideosByTag[category].some((v) => v.uri === video.uri)) {
+              newVideosByTag[category].push(video)
+            }
           }
-        })
-      })
-
-      // Sort videos in each category alphabetically by title
-      Object.keys(newVideosByTag).forEach((tag) => {
-        newVideosByTag[tag].sort((a, b) => {
-          const nameA = (a.name || "").toLowerCase()
-          const nameB = (b.name || "").toLowerCase()
-          return nameA.localeCompare(nameB)
         })
       })
 
@@ -226,10 +244,23 @@ export function useVimeoVideos() {
     }
   }
 
+  // Function to fetch additional pages for more variety
+  const fetchAdditionalPages = async () => {
+    // Fetch up to 3 pages for more variety
+    const pagesToFetch = 3
+    for (let i = 1; i <= pagesToFetch; i++) {
+      if (i !== page && hasMore) {
+        await fetchVideos(i)
+      }
+    }
+  }
+
   useEffect(() => {
     // Only fetch on initial mount
     if (isInitialLoad.current) {
       fetchVideos(page)
+      // After initial load, fetch additional pages for more variety
+      fetchAdditionalPages()
     }
 
     // Cleanup function
@@ -245,5 +276,6 @@ export function useVimeoVideos() {
     error,
     hasMore,
     loadMore,
+    allVideosCache: allVideosCache.current,
   }
 }

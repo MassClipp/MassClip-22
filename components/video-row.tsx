@@ -59,9 +59,21 @@ export default function VideoRow({ title, videos, limit = 6, isShowcase = false,
   // Load videos when row becomes visible
   useEffect(() => {
     if (isIntersecting && videos) {
-      // Shuffle videos instead of sorting alphabetically
-      const shuffledVideos = shuffleArray([...videos]).slice(0, limit)
-      setVisibleVideos(shuffledVideos)
+      // Create a more thorough shuffle to ensure variety
+      const shuffledVideos = shuffleArray([...videos])
+
+      // Take a different slice each time based on a random starting point
+      // This ensures we get different videos even if the array is the same
+      const randomStart = Math.floor(Math.random() * Math.max(1, videos.length - limit))
+      const selectedVideos = shuffledVideos.slice(randomStart, randomStart + limit)
+
+      // If we don't have enough videos from the random start, wrap around to the beginning
+      if (selectedVideos.length < limit && videos.length > limit) {
+        const remaining = limit - selectedVideos.length
+        selectedVideos.push(...shuffledVideos.slice(0, remaining))
+      }
+
+      setVisibleVideos(selectedVideos)
     }
   }, [isIntersecting, videos, limit])
 
