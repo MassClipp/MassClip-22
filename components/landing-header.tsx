@@ -71,8 +71,8 @@ export default function LandingHeader() {
           </nav>
         </div>
 
-        {/* BETA Tag - Centered */}
-        <div className="absolute left-1/2 transform -translate-x-1/2 flex items-center">
+        {/* BETA Tag - Centered (hidden on mobile) */}
+        <div className="absolute left-1/2 transform -translate-x-1/2 hidden md:flex items-center">
           <Link
             href="/beta-notice"
             className="text-amber-400 text-xs font-extralight tracking-widest hover:text-amber-300 transition-colors"
