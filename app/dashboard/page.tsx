@@ -12,30 +12,7 @@ import { Button } from "@/components/ui/button"
 import { useRouter } from "next/navigation"
 import { filterCategoriesBySearch } from "@/lib/search-utils"
 import VimeoCard from "@/components/vimeo-card"
-
-// Add this improved shuffle function that accepts a seed
-const shuffleArray = (array: any[], seed?: number) => {
-  const newArray = [...array]
-  let currentIndex = newArray.length
-  let temporaryValue, randomIndex
-
-  // Use a seed for more variety if provided
-  const getSeed = seed !== undefined ? seed : Math.floor(Math.random() * 10000)
-
-  // Fisher-Yates shuffle with seeded randomness
-  while (currentIndex !== 0) {
-    // Use a combination of current index and seed for randomness
-    randomIndex = Math.floor((Math.sin(currentIndex * getSeed) * 10000) % currentIndex)
-    currentIndex -= 1
-
-    // Swap elements
-    temporaryValue = newArray[currentIndex]
-    newArray[currentIndex] = newArray[randomIndex]
-    newArray[randomIndex] = temporaryValue
-  }
-
-  return newArray
-}
+import { shuffleArray } from "@/lib/utils"
 
 export default function Dashboard() {
   // Get search query from URL
@@ -99,35 +76,9 @@ export default function Dashboard() {
       // Collect videos from all showcases
       const allVideos = Object.values(showcaseVideos).flat()
 
-      // Create a map to deduplicate videos by URI
-      const uniqueVideosMap = new Map<string, any>()
-      allVideos.forEach((video) => {
-        if (video.uri) {
-          uniqueVideosMap.set(video.uri, video)
-        }
-      })
-
-      // Convert back to array
-      const uniqueVideos = Array.from(uniqueVideosMap.values())
-
-      // Shuffle and take videos for featured section
-      // Use a different random seed each time to ensure variety
-      if (uniqueVideos.length > 0) {
-        // Use a more thorough shuffle with a random seed
-        const seed = Date.now() % 1000
-        const thoroughlyShuffled = shuffleArray(uniqueVideos, seed)
-
-        // Take a different slice each time based on the current time
-        const sliceStart = Math.floor((Date.now() % uniqueVideos.length) / 2)
-        let featuredSelection = thoroughlyShuffled.slice(sliceStart, sliceStart + 6)
-
-        // If we don't have enough, wrap around
-        if (featuredSelection.length < 6 && uniqueVideos.length > 6) {
-          const remaining = 6 - featuredSelection.length
-          featuredSelection = [...featuredSelection, ...thoroughlyShuffled.slice(0, remaining)]
-        }
-
-        setFeaturedVideos(featuredSelection)
+      // Shuffle and take the first 6 for featured section
+      if (allVideos.length > 0) {
+        setFeaturedVideos(shuffleArray(allVideos).slice(0, 6))
       }
 
       setIsLoading(false)
