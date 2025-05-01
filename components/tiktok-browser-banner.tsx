@@ -1,39 +1,48 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { X } from "lucide-react"
+import { X, ExternalLink } from "lucide-react"
 import { isInTikTokBrowser } from "@/lib/browser-detection"
 
-export const TikTokBrowserBanner = () => {
+export function TikTokBrowserBanner() {
   const [isVisible, setIsVisible] = useState(false)
+  const [isTikTok, setIsTikTok] = useState(false)
 
   useEffect(() => {
-    // Check if we're in TikTok browser and if the banner has been dismissed before
-    const isTikTok = isInTikTokBrowser()
-    const bannerDismissed = localStorage.getItem("tiktok-banner-dismissed") === "true"
-
-    setIsVisible(isTikTok && !bannerDismissed)
+    // Check if we're in TikTok browser
+    const tikTokBrowser = isInTikTokBrowser()
+    setIsTikTok(tikTokBrowser)
+    setIsVisible(tikTokBrowser)
   }, [])
-
-  const dismissBanner = () => {
-    localStorage.setItem("tiktok-banner-dismissed", "true")
-    setIsVisible(false)
-  }
 
   if (!isVisible) return null
 
+  const handleOpenInBrowser = () => {
+    // Try to open the current URL in the device's default browser
+    const currentUrl = window.location.href
+    window.open(currentUrl, "_blank")
+  }
+
   return (
-    <div className="fixed bottom-0 left-0 right-0 bg-blue-600 text-white p-3 z-50 flex justify-between items-center">
-      <p className="text-sm">For the best experience, tap the ••• in the corner and open in your browser.</p>
-      <button
-        onClick={dismissBanner}
-        className="ml-2 p-1 rounded-full hover:bg-blue-700 transition-colors"
-        aria-label="Dismiss"
-      >
-        <X size={18} />
-      </button>
+    <div className="fixed bottom-0 left-0 right-0 bg-black/90 text-white p-3 z-50 flex items-center justify-between">
+      <div className="flex items-center space-x-2">
+        <div className="text-sm">
+          <p className="font-medium">Videos are blurred in TikTok</p>
+          <p className="text-xs text-gray-300">Open in your browser for full quality</p>
+        </div>
+      </div>
+      <div className="flex items-center space-x-2">
+        <button
+          onClick={handleOpenInBrowser}
+          className="bg-white text-black text-xs px-3 py-1.5 rounded-full flex items-center space-x-1"
+        >
+          <ExternalLink size={12} />
+          <span>Open</span>
+        </button>
+        <button onClick={() => setIsVisible(false)} className="p-1.5 rounded-full hover:bg-white/20">
+          <X size={16} />
+        </button>
+      </div>
     </div>
   )
 }
-
-export default TikTokBrowserBanner

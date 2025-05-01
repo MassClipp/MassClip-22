@@ -2,7 +2,7 @@
 
 import type React from "react"
 import { useState, useRef, useEffect } from "react"
-import { Download, Lock, Heart } from "lucide-react"
+import { Download, Lock, Heart, ExternalLink } from "lucide-react"
 import type { VimeoVideo } from "@/lib/types"
 import { useAuth } from "@/contexts/auth-context"
 import { db } from "@/lib/firebase"
@@ -427,6 +427,16 @@ export default function VimeoCard({ video }: VimeoCardProps) {
     setThumbnailLoaded(true)
   }
 
+  // Handle opening in external browser
+  const handleOpenExternal = (e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+
+    // Try to open the current URL in the device's default browser
+    const currentUrl = window.location.href
+    window.open(currentUrl, "_blank")
+  }
+
   // If video is null or undefined, render a placeholder
   if (!video) {
     return (
@@ -531,6 +541,20 @@ export default function VimeoCard({ video }: VimeoCardProps) {
             <Heart className="h-3.5 w-3.5" fill={isFavorite ? "currentColor" : "none"} />
           </button>
         </div>
+
+        {/* TikTok-specific "Open in browser" button */}
+        {isTikTokBrowser && (
+          <div className="absolute top-2 right-2 z-30">
+            <button
+              onClick={handleOpenExternal}
+              className="bg-white/90 hover:bg-white text-black text-xs px-2 py-1 rounded-full flex items-center space-x-1"
+              aria-label="Open in browser"
+            >
+              <ExternalLink size={10} />
+              <span className="text-[10px]">Open</span>
+            </button>
+          </div>
+        )}
 
         {videoId ? (
           <div className="absolute inset-0 video-container" ref={videoContainerRef}>
