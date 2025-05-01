@@ -77,7 +77,7 @@ export default function LandingHeader() {
             href="/beta-notice"
             className="text-amber-400 text-xs font-extralight tracking-widest hover:text-amber-300 transition-colors"
           >
-            BETA
+            READ BETA NOTICE
           </Link>
         </div>
 
