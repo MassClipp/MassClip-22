@@ -51,6 +51,7 @@ export default function VimeoCard({ video }: VimeoCardProps) {
   const videoRef = useRef<HTMLIFrameElement>(null)
   const viewTrackedRef = useRef(false)
   const downloadFrameRef = useRef<HTMLIFrameElement | null>(null)
+  const downloadLinkRef = useRef<HTMLAnchorElement | null>(null)
 
   // Extract video ID from URI (format: "/videos/12345678") with null check
   const videoId = video?.uri ? video.uri.split("/").pop() : null
@@ -106,6 +107,21 @@ export default function VimeoCard({ video }: VimeoCardProps) {
     return () => {
       if (downloadFrameRef.current && downloadFrameRef.current.parentNode) {
         downloadFrameRef.current.parentNode.removeChild(downloadFrameRef.current)
+      }
+    }
+  }, [])
+
+  // Create a hidden download link element
+  useEffect(() => {
+    // Create a hidden anchor element for downloads
+    const downloadLink = document.createElement("a")
+    downloadLink.style.display = "none"
+    document.body.appendChild(downloadLink)
+    downloadLinkRef.current = downloadLink
+
+    return () => {
+      if (downloadLink.parentNode) {
+        downloadLink.parentNode.removeChild(downloadLink)
       }
     }
   }, [])
@@ -241,6 +257,38 @@ export default function VimeoCard({ video }: VimeoCardProps) {
     }
   }
 
+  // Direct download function for desktop
+  const startDirectDownload = async (url: string, filename: string) => {
+    try {
+      // Fetch the file
+      const response = await fetch(url)
+      if (!response.ok) throw new Error("Network response was not ok")
+
+      // Get the blob
+      const blob = await response.blob()
+
+      // Create object URL
+      const objectUrl = URL.createObjectURL(blob)
+
+      // Use the hidden anchor to download
+      if (downloadLinkRef.current) {
+        downloadLinkRef.current.href = objectUrl
+        downloadLinkRef.current.download = filename
+        downloadLinkRef.current.click()
+
+        // Clean up
+        setTimeout(() => {
+          URL.revokeObjectURL(objectUrl)
+        }, 100)
+      }
+
+      return true
+    } catch (error) {
+      console.error("Direct download failed:", error)
+      return false
+    }
+  }
+
   // Handle download button click with strict permission enforcement
   const handleDownload = async (e: React.MouseEvent) => {
     e.preventDefault()
@@ -305,8 +353,10 @@ export default function VimeoCard({ video }: VimeoCardProps) {
       }
 
       // 6. Only now, trigger the actual download
+      const filename = `${video?.name?.replace(/[^\w\s]/gi, "") || "video"}.mp4`
+
       if (isMobile) {
-        // Mobile download approach
+        // Mobile download approach - keep using iframe for mobile
         const iframe = document.createElement("iframe")
         iframe.style.display = "none"
         document.body.appendChild(iframe)
@@ -321,19 +371,17 @@ export default function VimeoCard({ video }: VimeoCardProps) {
           downloadFrameRef.current = null
         }, 5000)
       } else {
-        // Desktop download approach
-        const a = document.createElement("a")
-        a.href = downloadLink
-        a.download = `${video?.name?.replace(/[^\w\s]/gi, "") || "video"}.mp4`
-        a.target = "_blank"
-        a.rel = "noopener noreferrer"
-        document.body.appendChild(a)
-        a.click()
+        // Desktop download - use direct download approach
+        const success = await startDirectDownload(downloadLink, filename)
 
-        // Clean up
-        setTimeout(() => {
-          document.body.removeChild(a)
-        }, 100)
+        if (!success) {
+          // Fallback to traditional method if direct download fails
+          if (downloadLinkRef.current) {
+            downloadLinkRef.current.href = downloadLink
+            downloadLinkRef.current.download = filename
+            downloadLinkRef.current.click()
+          }
+        }
       }
 
       // 7. If pro user, record the download after (doesn't affect permissions)
