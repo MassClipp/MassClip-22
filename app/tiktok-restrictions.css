@@ -32,11 +32,16 @@
   z-index: 9999 !important;
 }
 
-/* Removed blur effect for TikTok browser */
+/* Blur effect for TikTok browser */
+.tiktok-browser .video-container iframe,
+.tiktok-browser .video-card-thumbnail {
+  filter: blur(10px) !important;
+  -webkit-filter: blur(10px) !important;
+}
 
 /* Add an overlay with text for TikTok browser */
 .tiktok-browser .video-container::before {
-  content: "Limited features in TikTok browser";
+  content: "Open in browser for full quality";
   position: absolute;
   top: 50%;
   left: 50%;
@@ -49,7 +54,6 @@
   z-index: 30;
   white-space: nowrap;
   pointer-events: none;
-  opacity: 0.7;
 }
 
 /* Add a small overlay in the corner to block fullscreen button interactions */

@@ -27,8 +27,8 @@ export function TikTokBrowserBanner() {
     <div className="fixed bottom-0 left-0 right-0 bg-black/90 text-white p-3 z-50 flex items-center justify-between">
       <div className="flex items-center space-x-2">
         <div className="text-sm">
-          <p className="font-medium">Limited features in TikTok</p>
-          <p className="text-xs text-gray-300">Open in your browser for full experience</p>
+          <p className="font-medium">Videos are blurred in TikTok</p>
+          <p className="text-xs text-gray-300">Open in your browser for full quality</p>
         </div>
       </div>
       <div className="flex items-center space-x-2">
