@@ -490,7 +490,7 @@ export default function VimeoCard({ video }: VimeoCardProps) {
 
     // For TikTok browsers, add parameters to restrict behavior
     if (isTikTokBrowser) {
-      return `${baseUrl}&playsinline=1&autoplay=0&fullscreen=0&transparent=0`
+      return `${baseUrl}&playsinline=1&transparent=0`
     }
 
     return baseUrl

@@ -1,25 +1,17 @@
 /**
- * Utility functions for browser detection
+ * Utility functions to detect browser environments
  */
 
-// Detect if the user is browsing from TikTok's in-app browser
-export function isInTikTokBrowser(): boolean {
+// Check if the current browser is TikTok's in-app browser
+export const isInTikTokBrowser = (): boolean => {
   if (typeof window === "undefined") return false
 
   const userAgent = navigator.userAgent.toLowerCase()
-
-  // TikTok's in-app browser typically contains 'tiktok' in the user agent
-  // It may appear as "TikTok" or "musical_ly" (older versions)
-  return (
-    userAgent.includes("tiktok") ||
-    userAgent.includes("musical_ly") ||
-    // Additional check for ByteDance's browser engine
-    userAgent.includes("bytedance")
-  )
+  return userAgent.includes("tiktok") || userAgent.includes("musical_ly") || userAgent.includes("bytedance")
 }
 
-// Get a more general classification of the browser environment
-export function getBrowserEnvironment() {
+// Get the current browser environment
+export const getBrowserEnvironment = (): string => {
   if (typeof window === "undefined") return "server"
 
   const ua = navigator.userAgent.toLowerCase()
@@ -28,13 +20,20 @@ export function getBrowserEnvironment() {
     return "tiktok"
   } else if (ua.includes("instagram")) {
     return "instagram"
-  } else if (ua.includes("fbav") || ua.includes("fban")) {
+  } else if (ua.includes("facebook") || ua.includes("fb")) {
     return "facebook"
-  } else if (ua.includes("twitter") || ua.includes("x-twitter")) {
+  } else if (ua.includes("twitter")) {
     return "twitter"
   } else if (ua.includes("snapchat")) {
     return "snapchat"
+  } else if (ua.includes("wechat")) {
+    return "wechat"
   } else {
     return "standard"
   }
+}
+
+// Check if we're in any in-app browser
+export const isInAppBrowser = (): boolean => {
+  return getBrowserEnvironment() !== "standard" && getBrowserEnvironment() !== "server"
 }

@@ -8,6 +8,8 @@ import "./tiktok-restrictions.css" // Add the TikTok restrictions CSS
 // Import the DownloadLimitProvider
 import { DownloadLimitProvider } from "@/contexts/download-limit-context"
 import { TikTokBrowserBanner } from "@/components/tiktok-browser-banner"
+// Make sure the import uses the named export
+import { FullscreenBlocker } from "@/components/fullscreen-blocker"
 
 const inter = Inter({ subsets: ["latin"] })
 
@@ -71,6 +73,8 @@ export default function RootLayout({
       <body className={inter.className}>
         <AuthProvider>
           <DownloadLimitProvider>
+            <FullscreenBlocker />
+            <TikTokBrowserBanner />
             {/* Rest of your layout */}
             {children}
           </DownloadLimitProvider>

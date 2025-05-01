@@ -1,27 +1,54 @@
 /* TikTok-specific restrictions */
-.tiktok-video-container {
-  position: relative;
-  overflow: hidden;
-  max-height: 100%;
-}
-
 .tiktok-restricted-iframe {
-  /* Prevent certain interactions */
-  pointer-events: auto !important;
+  /* Ensure the iframe doesn't break out of its container */
+  max-height: 100% !important;
 }
 
-/* Hide fullscreen button in TikTok browser */
-.tiktok-video-container .vp-controls .fullscreen {
+/* Hide fullscreen button in Vimeo player when in TikTok */
+:root:has(.tiktok-restricted-iframe) .vp-controls .fullscreen,
+:root:has(.tiktok-restricted-iframe) .vp-controls [data-fullscreen],
+:root:has(.tiktok-restricted-iframe) .vp-controls [aria-label*="fullscreen"],
+:root:has(.tiktok-restricted-iframe) .vp-controls [title*="fullscreen"],
+:root:has(.tiktok-restricted-iframe) .vp-controls [aria-label*="Fullscreen"],
+:root:has(.tiktok-restricted-iframe) .vp-controls [title*="Fullscreen"] {
   display: none !important;
   visibility: hidden !important;
   opacity: 0 !important;
   pointer-events: none !important;
 }
 
-/* Add this to your global CSS to inject styles into the iframe */
-@media screen {
-  iframe.tiktok-restricted-iframe {
-    max-height: 100% !important;
-    overflow: hidden !important;
-  }
+/* Ensure videos don't expand beyond their container */
+.tiktok-restricted-iframe {
+  max-height: 100% !important;
+}
+
+/* TikTok-specific styles to prevent fullscreen */
+
+/* Hide fullscreen button in Vimeo player */
+.tiktok-browser .vimeo-player .fullscreen-button,
+.tiktok-browser .vimeo-player [aria-label*="fullscreen"],
+.tiktok-browser .vimeo-player [title*="fullscreen"],
+.tiktok-browser .vimeo-player [data-fullscreen],
+.tiktok-browser .vimeo-player .vp-fullscreen-control {
+  display: none !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+/* Ensure videos don't expand beyond their containers */
+.tiktok-browser .video-container {
+  max-height: 80vh !important;
+  overflow: hidden !important;
+}
+
+/* Add a transparent overlay to block fullscreen button interactions */
+.tiktok-browser .video-container::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 50px;
+  height: 50px;
+  z-index: 10;
+  pointer-events: auto !important;
 }
