@@ -14,7 +14,7 @@ import {
 import { useToast } from "@/hooks/use-toast"
 import { useAuth } from "@/contexts/auth-context"
 
-export default function CancelSubscriptionButton() {
+export function CancelSubscriptionButton() {
   const [isLoading, setIsLoading] = useState(false)
   const [isOpen, setIsOpen] = useState(false)
   const { toast } = useToast()
@@ -114,3 +114,5 @@ export default function CancelSubscriptionButton() {
     </Dialog>
   )
 }
+
+export default CancelSubscriptionButton

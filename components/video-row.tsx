@@ -18,7 +18,7 @@ interface VideoRowProps {
   showcaseId?: string
 }
 
-export default function VideoRow({ title, videos, limit = 6, isShowcase = false, showcaseId }: VideoRowProps) {
+export default function VideoRow({ title, videos, limit = 10, isShowcase = false, showcaseId }: VideoRowProps) {
   const [visibleVideos, setVisibleVideos] = useState<VimeoVideo[]>([])
   const [isIntersecting, setIsIntersecting] = useState(false)
   const [scrollPosition, setScrollPosition] = useState(0)
@@ -169,7 +169,7 @@ export default function VideoRow({ title, videos, limit = 6, isShowcase = false,
                 </motion.div>
               ))
             : // Show skeleton loaders while waiting for intersection
-              Array.from({ length: Math.min(limit, 6) }).map((_, index) => <VideoSkeleton key={index} />)}
+              Array.from({ length: Math.min(limit, 10) }).map((_, index) => <VideoSkeleton key={index} />)}
         </div>
       </div>
     </section>

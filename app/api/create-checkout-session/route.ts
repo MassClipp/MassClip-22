@@ -21,11 +21,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Server configuration error: Missing Stripe price ID" }, { status: 500 })
   }
 
-  if (!process.env.NEXT_PUBLIC_SITE_URL) {
-    console.error("🔐 CHECKOUT ERROR: Missing NEXT_PUBLIC_SITE_URL")
-    return NextResponse.json({ error: "Server configuration error: Missing site URL" }, { status: 500 })
-  }
-
   try {
     // Initialize Stripe with the secret key
     const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
@@ -76,10 +71,14 @@ export async function POST(request: Request) {
 
     console.log("🔐 CHECKOUT: Prepared metadata:", JSON.stringify(metadata, null, 2))
 
+    // IMPORTANT: Always use production URL for success and cancel URLs
+    // Force the domain to be massclip.pro regardless of environment variable
+    const productionDomain = "https://massclip.pro"
+
     // Generate unique success and cancel URLs with timestamp to prevent caching
     const uniqueParam = `t=${Date.now()}`
-    const successUrl = `${process.env.NEXT_PUBLIC_SITE_URL}/subscription/success?session_id={CHECKOUT_SESSION_ID}&${uniqueParam}`
-    const cancelUrl = `${process.env.NEXT_PUBLIC_SITE_URL}/subscription/cancel?session_id={CHECKOUT_SESSION_ID}&${uniqueParam}`
+    const successUrl = `${productionDomain}/subscription/success?session_id={CHECKOUT_SESSION_ID}&${uniqueParam}`
+    const cancelUrl = `${productionDomain}/subscription/cancel?session_id={CHECKOUT_SESSION_ID}&${uniqueParam}`
 
     console.log(`🔐 CHECKOUT: Success URL: ${successUrl}`)
     console.log(`🔐 CHECKOUT: Cancel URL: ${cancelUrl}`)
@@ -105,6 +104,7 @@ export async function POST(request: Request) {
         timestamp: new Date().toISOString(),
         requestTimestamp: timestamp || new Date().toISOString(),
         clientId: clientId || "not-provided",
+        productionUrl: productionDomain, // Add production URL to metadata for debugging
       }, // Add metadata at session level
       subscription_data: {
         metadata: metadata, // Add metadata at subscription level
@@ -130,6 +130,9 @@ export async function POST(request: Request) {
         metadata: metadata,
         clientId: clientId || "not-provided",
         timestamp: timestamp || new Date().toISOString(),
+        productionUrl: productionDomain, // Add production URL for debugging
+        successUrl: successUrl.replace("{CHECKOUT_SESSION_ID}", session.id),
+        cancelUrl: cancelUrl.replace("{CHECKOUT_SESSION_ID}", session.id),
       })
 
     console.log("🔐 CHECKOUT: Session stored in Firestore")

@@ -1,4 +1,5 @@
 "use client"
+
 import { useRouter } from "next/navigation"
 import { motion } from "framer-motion"
 import { useAuth } from "@/contexts/auth-context"
@@ -10,7 +11,7 @@ import { Edit, Crown, LogOut, Check, User2, Clock, Heart, Download, Shield } fro
 import UpgradeButton from "@/components/upgrade-button"
 import DownloadStats from "@/components/download-stats"
 import { useUserPlan } from "@/hooks/use-user-plan"
-import CancelSubscriptionButton from "@/components/cancel-subscription-button"
+import { CancelSubscriptionButton } from "@/components/cancel-subscription-button"
 import { CheckCircle2 } from "lucide-react"
 
 export default function UserDashboardPage() {
@@ -261,7 +262,7 @@ export default function UserDashboardPage() {
                               <div className="space-y-2">
                                 <p className="flex items-center text-white">
                                   <CheckCircle2 className="h-4 w-4 text-green-500 mr-2" />
-                                  <span className="font-light">5 downloads per month</span>
+                                  <span className="font-light">10 downloads per month</span>
                                 </p>
                                 <p className="flex items-center text-white">
                                   <CheckCircle2 className="h-4 w-4 text-green-500 mr-2" />

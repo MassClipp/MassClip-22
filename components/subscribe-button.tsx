@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { useAuth } from "@/contexts/auth-context"
 import { useToast } from "@/hooks/use-toast"
+import { getProductionUrl } from "@/lib/url-utils"
 
 export function SubscribeButton({ className, children }: { className?: string; children?: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(false)
@@ -16,7 +17,9 @@ export function SubscribeButton({ className, children }: { className?: string; c
   const handleSubscription = async () => {
     if (!user) {
       console.log("No user found, redirecting to login")
-      router.push("/login?redirect=/pricing")
+      // Use production URL for login redirect
+      const productionUrl = getProductionUrl()
+      router.push(`${productionUrl}/login?redirect=/pricing`)
       return
     }
 
@@ -52,6 +55,7 @@ export function SubscribeButton({ className, children }: { className?: string; c
         userEmail,
         timestamp: new Date().toISOString(),
         clientId: Math.random().toString(36).substring(2, 15), // Add random client ID to ensure uniqueness
+        productionUrl: getProductionUrl(), // Add production URL to payload
       }
 
       console.log("🔐 CHECKOUT: Sending payload to API:", JSON.stringify(payload))

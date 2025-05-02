@@ -5,9 +5,11 @@ import Link from "next/link"
 import { motion } from "framer-motion"
 import { Button } from "@/components/ui/button"
 import { XCircle, ArrowRight } from "lucide-react"
+import { getProductionUrl } from "@/lib/url-utils"
 
 export default function SubscriptionCancelled() {
   const router = useRouter()
+  const productionUrl = getProductionUrl()
 
   return (
     <div className="relative min-h-screen bg-black text-white flex items-center justify-center">
@@ -58,7 +60,7 @@ export default function SubscriptionCancelled() {
           >
             <Button
               className="w-full bg-red-600 hover:bg-red-700 text-white group flex items-center justify-center"
-              onClick={() => router.push("/membership-plans")}
+              onClick={() => router.push(`${productionUrl}/membership-plans`)}
             >
               Try Again
               <ArrowRight className="ml-2 h-4 w-4 transition-transform duration-300 group-hover:translate-x-1" />
@@ -70,7 +72,7 @@ export default function SubscriptionCancelled() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.7, duration: 0.5 }}
           >
-            <Link href="/dashboard">
+            <Link href={`${productionUrl}/dashboard`}>
               <Button variant="outline" className="w-full border-gray-700 text-gray-300 hover:bg-gray-800">
                 Return to Dashboard
               </Button>

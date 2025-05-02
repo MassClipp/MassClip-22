@@ -1,9 +1,7 @@
 "use client"
 
 import { useRef } from "react"
-
 import type React from "react"
-
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
@@ -298,7 +296,7 @@ export default function LandingPage() {
               transition={{ duration: 0.6 }}
               viewport={{ once: true, margin: "-100px" }}
             >
-              <h2 className="text-3xl md:text-5xl font-light text-white mb-6">Ready to Accelerate Your Growth?</h2>
+              <h2 className="text-3xl md:text-5xl font-light text-white mb-6">Ready to Simplify Your Workflow?</h2>
               <p className="text-white/70 text-xl mb-10 max-w-2xl mx-auto">
                 Join the community of creators today who are building their pages and community with MassClip.
               </p>
@@ -331,6 +329,9 @@ export default function LandingPage() {
               <Link href="/privacy" className="hover:text-white transition-colors">
                 PRIVACY
               </Link>
+              <a href="mailto:john@massclip.pro" className="hover:text-white transition-colors">
+                john@massclip.pro
+              </a>
             </div>
           </div>
 
@@ -339,7 +340,12 @@ export default function LandingPage() {
               © {new Date().getFullYear()} MassClip. All rights reserved.
             </p>
             <div className="flex gap-4">
-              <a href="#" className="text-white/30 hover:text-white transition-colors">
+              <a
+                href="https://www.instagram.com/massclipp?igsh=MTZtY2w0bnQwaHI1OA%3D%3D&utm_source=qr"
+                className="text-white/30 hover:text-white transition-colors"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
                 <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                   <path
                     fillRule="evenodd"

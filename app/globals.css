@@ -656,7 +656,7 @@
   top: 100%;
   left: 0;
   right: 0;
-  background-color: rgba(0, 0, 0, 0.9);
+  background: #000000; /* Solid black background */
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
   padding: 1rem;
@@ -677,7 +677,7 @@
 
 /* Mobile menu styles */
 .mobile-menu {
-  background: rgba(10, 10, 10, 0.95);
+  background: #000000; /* Solid black background */
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
 }
@@ -728,4 +728,177 @@
 
 .animate-pulse-slow {
   animation: pulse-slow 8s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* New premium mobile menu styles */
+.mobile-menu-premium {
+  background: #000000; /* Solid black background */
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3);
+}
+
+.mobile-menu-item {
+  transition: all 0.2s ease;
+}
+
+.mobile-menu-item:hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.mobile-menu-item:active {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.mobile-menu-divider {
+  height: 1px;
+  background: linear-gradient(to right, transparent, rgba(255, 255, 255, 0.1), transparent);
+  margin: 0.75rem 0;
+}
+
+/* Subtle hover effect for menu items */
+.menu-hover-effect {
+  position: relative;
+  overflow: hidden;
+}
+
+.menu-hover-effect::after {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 0;
+  height: 1px;
+  background-color: hsl(348, 83%, 47%);
+  transition: width 0.3s ease;
+}
+
+.menu-hover-effect:hover::after {
+  width: 100%;
+}
+
+/* Premium glass effect */
+.glass-effect {
+  background: rgba(18, 18, 18, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-left: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+/* Simplified mobile menu styles */
+.mobile-menu-overlay {
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.mobile-menu-overlay.active {
+  opacity: 1;
+}
+
+.mobile-menu {
+  background-color: #18181b; /* zinc-900 */
+  border-left: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.mobile-menu-divider {
+  height: 1px;
+  background-color: #27272a; /* zinc-800 */
+  margin: 0.75rem 0;
+}
+
+/* Video watermark styles */
+.video-watermark {
+  z-index: 30;
+  transition: opacity 0.3s ease;
+}
+
+/* Make watermark more visible on hover */
+.video-container:hover .video-watermark {
+  opacity: 0.9;
+}
+
+/* Ensure watermark stays visible in fullscreen */
+:fullscreen .video-watermark,
+:-webkit-full-screen .video-watermark,
+:-moz-full-screen .video-watermark,
+:-ms-fullscreen .video-watermark {
+  z-index: 9999 !important;
+  font-size: 1.2rem !important;
+  padding: 0.5rem 0.75rem !important;
+}
+
+/* Responsive watermark positioning */
+@media (max-width: 640px) {
+  .video-watermark {
+    font-size: 0.75rem;
+    padding: 0.25rem 0.5rem;
+    bottom: 0.5rem;
+    right: 0.5rem;
+  }
+}
+
+/* Zoom prevention for free users - ENHANCED VERSION */
+.prevent-zoom {
+  touch-action: pan-x pan-y !important;
+  -ms-touch-action: pan-x pan-y !important;
+  -webkit-touch-callout: none !important;
+  -webkit-user-select: none !important;
+  -moz-user-select: none !important;
+  -ms-user-select: none !important;
+  user-select: none !important;
+  overscroll-behavior: none !important;
+  -ms-content-zooming: none !important;
+  -webkit-text-size-adjust: 100% !important;
+  -moz-text-size-adjust: 100% !important;
+  text-size-adjust: 100% !important;
+}
+
+/* Additional zoom prevention */
+.prevent-zoom * {
+  max-height: 100% !important;
+}
+
+/* Force fixed size for elements to prevent zoom */
+.prevent-zoom img,
+.prevent-zoom video,
+.prevent-zoom iframe {
+  max-width: 100% !important;
+  object-fit: contain !important;
+}
+
+/* Disable text selection which can trigger zoom on some mobile browsers */
+.prevent-zoom {
+  -webkit-touch-callout: none !important;
+  -webkit-user-select: none !important;
+  -khtml-user-select: none !important;
+  -moz-user-select: none !important;
+  -ms-user-select: none !important;
+  user-select: none !important;
+}
+
+/* Disable pinch gestures */
+.prevent-zoom {
+  touch-action: manipulation !important;
+}
+
+@media (max-width: 768px) {
+  .prevent-zoom {
+    /* Additional mobile-specific zoom prevention */
+    -webkit-text-size-adjust: 100% !important;
+    -moz-text-size-adjust: 100% !important;
+    text-size-adjust: 100% !important;
+    font-size: 16px !important; /* Force consistent font size */
+  }
+
+  /* Force fixed layout on mobile */
+  .prevent-zoom body {
+    width: 100vw !important;
+    min-height: 100vh !important;
+    overflow-x: hidden !important;
+  }
+
+  /* Prevent iOS Safari zoom on input focus */
+  .prevent-zoom input,
+  .prevent-zoom select,
+  .prevent-zoom textarea {
+    font-size: 16px !important;
+  }
 }
