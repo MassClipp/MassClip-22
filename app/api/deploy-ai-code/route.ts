@@ -22,10 +22,9 @@ export async function POST(request: NextRequest) {
     }
 
     // UPDATED: Use the correct repository path
-    // You need to replace "username/repository" with your actual GitHub username and repository name
-    const repoPath = "username/repository" // CHANGE THIS TO YOUR ACTUAL REPOSITORY PATH
+    const repoPath = "MassClipp/MassClip-22" // Your GitHub repository path
     
-    console.log(`Sending repository_dispatch to ${repoPath}`)
+    console.log(`Sending repository_dispatch to ${repoPath} for file ${file_path}`)
 
     // Send repository_dispatch event to GitHub
     const response = await fetch(`https://api.github.com/repos/${repoPath}/dispatches`, {
@@ -46,17 +45,18 @@ export async function POST(request: NextRequest) {
       }),
     })
 
-    // Check if the request was successful
+    // Log the response for debugging
+    console.log("GitHub API response status:", response.status)
+    
     if (!response.ok) {
       const errorData = await response.text()
       console.error("GitHub API error:", errorData)
       return NextResponse.json({
         error: `GitHub API error: ${response.status} ${response.statusText}`,
         details: errorData,
-      })
+      }, { status: response.status })
     }
 
-    // Return success response
     return NextResponse.json({
       success: true,
       message: `Deployment triggered for ${file_path} to ${branch} branch`,
