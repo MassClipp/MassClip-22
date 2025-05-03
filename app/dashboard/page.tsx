@@ -3,7 +3,7 @@
 import { useRef, useEffect, useState } from "react"
 import { useSearchParams } from "next/navigation"
 import { motion } from "framer-motion"
-import { Search, Clock, Brain, Rocket, ChevronRight } from "lucide-react"
+import { Search, Clock, Brain, Rocket, ChevronRight, Sparkles, TrendingUp, Zap } from "lucide-react"
 import DashboardHeader from "@/components/dashboard-header"
 import VideoRow from "@/components/video-row"
 import { useVimeoShowcases } from "@/hooks/use-vimeo-showcases"
@@ -24,6 +24,7 @@ export default function Dashboard() {
   const [hasSearchResults, setHasSearchResults] = useState(false)
   const [featuredVideos, setFeaturedVideos] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [activeCategory, setActiveCategory] = useState<string | null>(null)
 
   // Fetch showcase-based videos
   const { showcaseVideos, showcaseIds, loading: loadingShowcases, error: showcaseError } = useVimeoShowcases()
@@ -129,11 +130,23 @@ export default function Dashboard() {
       name.toLowerCase().includes("entrepreneur"),
   )
 
+  // Quick category navigation
+  const quickCategories = [
+    { name: "Introspection", icon: <Brain className="h-5 w-5" />, href: "/category/introspection" },
+    { name: "Hustle Mentality", icon: <Rocket className="h-5 w-5" />, href: "/category/hustle-mentality" },
+    { name: "Recently Added", icon: <Clock className="h-5 w-5" />, href: "/category/recently-added" },
+    { name: "All Categories", icon: <Search className="h-5 w-5" />, href: "/dashboard/categories" },
+  ]
+
   return (
     <div className="relative min-h-screen bg-black text-white">
       {/* Premium Gradient Background */}
-      <div className="fixed inset-0 z-0 premium-gradient">
-        <div className="absolute inset-0 bg-[url('/noise.png')] opacity-[0.03] mix-blend-soft-light"></div>
+      <div className="fixed inset-0 z-0">
+        <div className="absolute inset-0 bg-gradient-to-br from-black via-black to-zinc-900">
+          <div className="absolute inset-0 bg-[url('/noise.png')] opacity-[0.03] mix-blend-soft-light"></div>
+        </div>
+        <div className="absolute top-0 left-0 right-0 h-[30vh] bg-gradient-to-b from-zinc-900/20 to-transparent"></div>
+        <div className="absolute bottom-0 left-0 right-0 h-[30vh] bg-gradient-to-t from-zinc-900/20 to-transparent"></div>
       </div>
 
       <DashboardHeader initialSearchQuery={searchQuery} />
@@ -147,8 +160,11 @@ export default function Dashboard() {
             transition={{ duration: 0.5 }}
             className="px-6 mb-8"
           >
-            <div className="bg-zinc-900/30 border border-zinc-800/50 rounded-lg p-6">
-              <h2 className="text-2xl font-light tracking-wider text-white mb-2">Search Results for "{searchQuery}"</h2>
+            <div className="bg-zinc-900/30 backdrop-blur-sm border border-zinc-800/50 rounded-xl p-6 shadow-xl">
+              <h2 className="text-2xl font-light tracking-wider text-white mb-2 flex items-center">
+                <Search className="h-5 w-5 mr-2 text-zinc-400" />
+                Results for "{searchQuery}"
+              </h2>
               <p className="text-zinc-400">
                 {hasSearchResults
                   ? `Found results in ${Object.keys(filteredShowcaseVideos).length} categories`
@@ -162,13 +178,14 @@ export default function Dashboard() {
         {!searchQuery && !isLoadingData && (
           <motion.div variants={containerVariants} initial="hidden" animate="visible" className="px-6 mb-12">
             <motion.div variants={itemVariants} className="flex items-center justify-between mb-6">
-              <h2 className="text-3xl font-extralight tracking-tight text-white">
-                Find Your Next <span className="text-gradient-accent">Viral Clip</span>
+              <h2 className="text-3xl font-extralight tracking-tight text-white flex items-center">
+                <Sparkles className="h-5 w-5 mr-3 text-amber-400" />
+                Find Your Next <span className="text-gradient-accent ml-2">Viral Clip</span>
               </h2>
               <Button
                 onClick={() => router.push("/category/browse-all")}
                 variant="ghost"
-                className="text-zinc-400 hover:text-white hover:bg-zinc-900/50"
+                className="text-zinc-400 hover:text-white hover:bg-zinc-900/50 rounded-full px-4 py-2 transition-all duration-300"
               >
                 View All <ChevronRight className="h-4 w-4 ml-1" />
               </Button>
@@ -181,7 +198,7 @@ export default function Dashboard() {
                   Array.from({ length: 6 }).map((_, index) => (
                     <div
                       key={`skeleton-${index}`}
-                      className="aspect-[9/16] rounded-md bg-zinc-900/50 animate-pulse"
+                      className="aspect-[9/16] rounded-xl bg-zinc-900/50 animate-pulse"
                     ></div>
                   ))
                 : // Featured videos
@@ -197,50 +214,35 @@ export default function Dashboard() {
         {/* Category Quick Links (if not searching) */}
         {!searchQuery && !isLoadingData && (
           <motion.div variants={containerVariants} initial="hidden" animate="visible" className="px-6 mb-12">
-            <motion.h3 variants={itemVariants} className="text-xl font-light tracking-tight text-white mb-4">
-              Browse Categories
+            <motion.h3
+              variants={itemVariants}
+              className="text-xl font-light tracking-tight text-white mb-4 flex items-center"
+            >
+              <TrendingUp className="h-4 w-4 mr-2 text-zinc-400" />
+              Trending Categories
             </motion.h3>
 
             <motion.div variants={itemVariants} className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              {/* Introspection Category (New) */}
-              <Button
-                onClick={() => router.push("/category/introspection")}
-                variant="outline"
-                className="flex items-center justify-start h-auto py-4 px-5 bg-zinc-900/30 border-zinc-800/50 hover:bg-zinc-900/50 hover:border-zinc-700"
-              >
-                <Brain className="h-5 w-5 mr-3 text-crimson" />
-                <span className="text-left font-light">Introspection</span>
-              </Button>
-
-              {/* Hustle Mentality Category (New) */}
-              <Button
-                onClick={() => router.push("/category/hustle-mentality")}
-                variant="outline"
-                className="flex items-center justify-start h-auto py-4 px-5 bg-zinc-900/30 border-zinc-800/50 hover:bg-zinc-900/50 hover:border-zinc-700"
-              >
-                <Rocket className="h-5 w-5 mr-3 text-crimson" />
-                <span className="text-left font-light">Hustle Mentality</span>
-              </Button>
-
-              {/* Recently Added Category (Kept) */}
-              <Button
-                onClick={() => router.push("/category/recently-added")}
-                variant="outline"
-                className="flex items-center justify-start h-auto py-4 px-5 bg-zinc-900/30 border-zinc-800/50 hover:bg-zinc-900/50 hover:border-zinc-700"
-              >
-                <Clock className="h-5 w-5 mr-3 text-crimson" />
-                <span className="text-left font-light">Recently Added</span>
-              </Button>
-
-              {/* All Categories (Kept) */}
-              <Button
-                onClick={() => router.push("/dashboard/categories")}
-                variant="outline"
-                className="flex items-center justify-start h-auto py-4 px-5 bg-zinc-900/30 border-zinc-800/50 hover:bg-zinc-900/50 hover:border-zinc-700"
-              >
-                <Search className="h-5 w-5 mr-3 text-crimson" />
-                <span className="text-left font-light">All Categories</span>
-              </Button>
+              {quickCategories.map((category, index) => (
+                <Button
+                  key={category.name}
+                  onClick={() => {
+                    setActiveCategory(category.name)
+                    router.push(category.href)
+                  }}
+                  variant="outline"
+                  className={`flex items-center justify-start h-auto py-4 px-5 bg-zinc-900/30 backdrop-blur-sm border-zinc-800/50 hover:bg-zinc-900/50 hover:border-zinc-700 rounded-xl transition-all duration-300 ${
+                    activeCategory === category.name ? "border-crimson/50 bg-crimson/5" : ""
+                  }`}
+                >
+                  <div
+                    className={`p-2 rounded-full bg-black/30 mr-3 ${activeCategory === category.name ? "text-crimson" : "text-crimson"}`}
+                  >
+                    {category.icon}
+                  </div>
+                  <span className="text-left font-light">{category.name}</span>
+                </Button>
+              ))}
             </motion.div>
           </motion.div>
         )}
@@ -258,7 +260,7 @@ export default function Dashboard() {
             <div className="h-8 w-48 bg-zinc-900/50 rounded-md animate-pulse mb-8"></div>
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
               {Array.from({ length: 6 }).map((_, index) => (
-                <div key={`skeleton-${index}`} className="aspect-[9/16] rounded-md bg-zinc-900/50 animate-pulse"></div>
+                <div key={`skeleton-${index}`} className="aspect-[9/16] rounded-xl bg-zinc-900/50 animate-pulse"></div>
               ))}
             </div>
           </div>
@@ -296,6 +298,20 @@ export default function Dashboard() {
             )}
           </div>
         )}
+
+        {/* Floating "New" badge */}
+        <div className="fixed bottom-6 right-6 z-50">
+          <motion.div
+            initial={{ scale: 0.8, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            transition={{ delay: 1, duration: 0.5 }}
+          >
+            <div className="bg-gradient-to-r from-crimson to-crimson-dark text-white px-4 py-2 rounded-full shadow-lg flex items-center">
+              <Zap className="h-4 w-4 mr-2" />
+              <span className="text-sm font-medium">New Design</span>
+            </div>
+          </motion.div>
+        </div>
       </main>
     </div>
   )

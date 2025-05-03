@@ -3,7 +3,7 @@
 import { useState, useRef, useEffect } from "react"
 import Link from "next/link"
 import { motion } from "framer-motion"
-import { ChevronRight, ChevronLeft } from "lucide-react"
+import { ChevronRight, ChevronLeft, ArrowRight } from "lucide-react"
 import type { VimeoVideo } from "@/lib/types"
 import VimeoCard from "@/components/vimeo-card"
 import VideoSkeleton from "@/components/video-skeleton"
@@ -23,6 +23,7 @@ export default function VideoRow({ title, videos, limit = 10, isShowcase = false
   const [isIntersecting, setIsIntersecting] = useState(false)
   const [scrollPosition, setScrollPosition] = useState(0)
   const [maxScroll, setMaxScroll] = useState(0)
+  const [isHovered, setIsHovered] = useState(false)
   const rowRef = useRef<HTMLDivElement>(null)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
 
@@ -117,39 +118,53 @@ export default function VideoRow({ title, videos, limit = 10, isShowcase = false
   const hasMore = videos.length > limit
 
   return (
-    <section className="mb-12 category-section" ref={rowRef}>
+    <section
+      className="mb-12 category-section"
+      ref={rowRef}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+    >
       <div className="px-6 mb-4 flex items-center justify-between">
-        <h2 className="text-2xl font-extralight tracking-wider text-white category-title">{title}</h2>
+        <h2 className="text-2xl font-extralight tracking-wider text-white category-title group-hover:text-crimson transition-colors duration-300">
+          {title}
+        </h2>
         {hasMore && (
-          <Link href={linkPath} className="text-zinc-400 hover:text-white flex items-center group">
-            <span className="mr-1">{buttonText}</span>
-            <ChevronRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
+          <Link
+            href={linkPath}
+            className="text-zinc-400 hover:text-white flex items-center group bg-zinc-900/30 hover:bg-zinc-900/50 px-3 py-1 rounded-full transition-all duration-300"
+          >
+            <span className="mr-1 text-sm">{buttonText}</span>
+            <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
           </Link>
         )}
       </div>
       <div className="relative">
         {/* Left scroll button */}
         {scrollPosition > 0 && (
-          <Button
-            variant="ghost"
-            size="icon"
-            className="absolute left-1 top-1/2 -translate-y-1/2 z-10 bg-black/50 backdrop-blur-sm hover:bg-black/70 rounded-full h-8 w-8"
-            onClick={() => handleScroll("left")}
-          >
-            <ChevronLeft className="h-4 w-4" />
-          </Button>
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: isHovered ? 1 : 0 }} transition={{ duration: 0.2 }}>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="absolute left-1 top-1/2 -translate-y-1/2 z-10 bg-black/50 backdrop-blur-sm hover:bg-black/70 rounded-full h-8 w-8 shadow-lg"
+              onClick={() => handleScroll("left")}
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+          </motion.div>
         )}
 
         {/* Right scroll button */}
         {scrollPosition < maxScroll && maxScroll > 0 && (
-          <Button
-            variant="ghost"
-            size="icon"
-            className="absolute right-1 top-1/2 -translate-y-1/2 z-10 bg-black/50 backdrop-blur-sm hover:bg-black/70 rounded-full h-8 w-8"
-            onClick={() => handleScroll("right")}
-          >
-            <ChevronRight className="h-4 w-4" />
-          </Button>
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: isHovered ? 1 : 0 }} transition={{ duration: 0.2 }}>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="absolute right-1 top-1/2 -translate-y-1/2 z-10 bg-black/50 backdrop-blur-sm hover:bg-black/70 rounded-full h-8 w-8 shadow-lg"
+              onClick={() => handleScroll("right")}
+            >
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </motion.div>
         )}
 
         <div
