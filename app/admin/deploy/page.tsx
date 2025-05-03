@@ -23,19 +23,8 @@ export default function DeploymentAdmin() {
     return null
   }
 
-  // Check if user is admin (you may need to adjust this based on your user roles)
-  const isAdmin = user?.email === "admin@example.com" || user?.email?.endsWith("@massclip.pro")
-
-  if (!loading && !isAdmin) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-100">
-        <div className="bg-white p-8 rounded-lg shadow-md w-full max-w-md">
-          <h1 className="text-2xl font-bold mb-4 text-center text-red-600">Access Denied</h1>
-          <p className="text-gray-600 text-center">You do not have permission to access this page.</p>
-        </div>
-      </div>
-    )
-  }
+  // Allow any authenticated user to access the page
+  // Remove the restrictive admin check
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -84,6 +73,8 @@ export default function DeploymentAdmin() {
       <div className="max-w-3xl mx-auto">
         <div className="bg-white shadow-md rounded-lg p-6">
           <h1 className="text-2xl font-bold mb-6 text-center">AI Code Deployment</h1>
+
+          {user && <div className="mb-4 text-sm text-gray-600 text-center">Logged in as: {user.email}</div>}
 
           {result && (
             <div
