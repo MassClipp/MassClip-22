@@ -1,8 +1,10 @@
-import ClientWrapper from "./client-wrapper"
-
-// This directive tells Next.js to always render this page dynamically
+// Force dynamic rendering to bypass prerendering errors
 export const dynamic = "force-dynamic"
 
+// Import the client component
+import BrowseAllClient from "./client"
+
 export default function BrowseAllPage() {
-  return <ClientWrapper />
+  // Server component that just renders the client component
+  return <BrowseAllClient />
 }
