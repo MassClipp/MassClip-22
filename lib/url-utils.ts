@@ -1,45 +1,25 @@
 /**
- * Utility functions for handling URLs in the application
- */
-
-/**
- * Returns the primary site URL based on environment variables
+ * Gets the site URL from environment variables
  */
 export function getSiteUrl(): string {
-  // Use the environment variable for the site URL
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL
-
-  if (!siteUrl) {
-    console.warn("WARNING: NEXT_PUBLIC_SITE_URL is not set. Using localhost as fallback.")
-    return "http://localhost:3000"
+  // Use NEXT_PUBLIC_SITE_URL if available
+  if (process.env.NEXT_PUBLIC_SITE_URL) {
+    return process.env.NEXT_PUBLIC_SITE_URL
   }
 
-  return siteUrl
+  // Fallback for development
+  return "http://localhost:3000"
 }
 
 /**
- * Returns the secondary site URL based on environment variables
+ * Gets the secondary site URL from environment variables
  */
 export function getSecondarySiteUrl(): string | null {
-  // Use the environment variable for the secondary site URL
-  const secondarySiteUrl = process.env.NEXT_PUBLIC_SITE_URL_2
-
-  if (!secondarySiteUrl) {
-    return null
-  }
-
-  return secondarySiteUrl
+  return process.env.NEXT_PUBLIC_SITE_URL_2 || null
 }
 
 /**
- * Returns the production URL (same as primary site URL for consistency)
- */
-export function getProductionUrl(): string {
-  return getSiteUrl()
-}
-
-/**
- * Returns all configured site URLs as an array
+ * Gets all configured site URLs
  */
 export function getAllSiteUrls(): string[] {
   const urls = [getSiteUrl()]
@@ -53,65 +33,51 @@ export function getAllSiteUrls(): string[] {
 }
 
 /**
- * Creates a URL with the production domain
- * @param path The path to append to the production domain
+ * Gets the production URL (same as getSiteUrl for consistency)
  */
-export function createProductionUrl(path: string): string {
-  const baseUrl = getProductionUrl()
-  const normalizedPath = path.startsWith("/") ? path : `/${path}`
-  return `${baseUrl}${normalizedPath}`
+export function getProductionUrl(): string {
+  return getSiteUrl()
 }
 
 /**
- * Checks if the current URL is the production URL
- * @param url The URL to check
+ * Extracts the domain from a URL
+ */
+function extractDomain(url: string): string {
+  try {
+    const parsedUrl = new URL(url)
+    return parsedUrl.hostname
+  } catch (e) {
+    return url
+  }
+}
+
+/**
+ * Checks if a URL is our production URL
  */
 export function isProductionUrl(url: string): boolean {
-  const productionUrl = getProductionUrl()
-  // Extract domain without protocol for comparison
-  const productionDomain = productionUrl.replace(/^https?:\/\//, "")
-  return url.includes(productionDomain)
+  const productionDomain = extractDomain(getSiteUrl())
+  const urlDomain = extractDomain(url)
+
+  return productionDomain === urlDomain
 }
 
 /**
  * Checks if a URL belongs to any of our domains
- * @param url The URL to check
  */
 export function isOurDomain(url: string): boolean {
-  const allUrls = getAllSiteUrls()
+  const urlDomain = extractDomain(url)
+  const ourDomains = getAllSiteUrls().map(extractDomain)
 
-  for (const siteUrl of allUrls) {
-    const domain = siteUrl.replace(/^https?:\/\//, "")
-    if (url.includes(domain)) {
-      return true
-    }
-  }
-
-  return false
+  return ourDomains.includes(urlDomain)
 }
 
 /**
- * Gets the current domain from the URL or returns the primary site URL
- * @param url Optional URL to extract domain from
+ * Gets the current domain from the browser
  */
-export function getCurrentDomain(url?: string): string {
-  // If we're in the browser and no URL is provided, use the current location
-  if (typeof window !== "undefined" && !url) {
-    url = window.location.href
+export function getCurrentDomain(): string {
+  if (typeof window !== "undefined") {
+    return window.location.origin
   }
 
-  // If we have a URL, check if it matches any of our domains
-  if (url) {
-    const allUrls = getAllSiteUrls()
-
-    for (const siteUrl of allUrls) {
-      const domain = siteUrl.replace(/^https?:\/\//, "")
-      if (url.includes(domain)) {
-        return siteUrl
-      }
-    }
-  }
-
-  // Default to the primary site URL
   return getSiteUrl()
 }
