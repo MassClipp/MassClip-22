@@ -7,16 +7,30 @@
  * This ensures all user-facing redirects go to the correct domain
  */
 export function getProductionUrl(): string {
-  // Use environment variable instead of hardcoded value
-  return process.env.NEXT_PUBLIC_SITE_URL || "https://massclip.pro"
+  // ONLY use environment variable, no hardcoded fallback domain
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL
+
+  if (!siteUrl) {
+    console.warn("WARNING: NEXT_PUBLIC_SITE_URL is not set. Using localhost as fallback.")
+    return "http://localhost:3000"
+  }
+
+  return siteUrl
 }
 
 /**
  * Returns the site URL based on environment
  */
 export function getSiteUrl(): string {
-  // Use the environment variable for the site URL
-  return process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000"
+  // ONLY use environment variable, no hardcoded fallback domain
+  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL
+
+  if (!siteUrl) {
+    console.warn("WARNING: NEXT_PUBLIC_SITE_URL is not set. Using localhost as fallback.")
+    return "http://localhost:3000"
+  }
+
+  return siteUrl
 }
 
 /**
@@ -35,5 +49,7 @@ export function createProductionUrl(path: string): string {
  */
 export function isProductionUrl(url: string): boolean {
   const productionUrl = getProductionUrl()
-  return url.includes(productionUrl.replace("https://", ""))
+  // Extract domain without protocol for comparison
+  const productionDomain = productionUrl.replace(/^https?:\/\//, "")
+  return url.includes(productionDomain)
 }

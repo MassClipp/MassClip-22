@@ -4,20 +4,37 @@ import { initializeFirebaseAdmin } from "@/lib/firebase-admin"
 import { getFirestore } from "firebase-admin/firestore"
 import { getSiteUrl } from "@/lib/url-utils"
 
-// Initialize Firebase Admin
-initializeFirebaseAdmin()
-const db = getFirestore()
-
-// Initialize Stripe
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: "2023-10-16",
-})
-
-// This is your Stripe CLI webhook secret for testing your endpoint locally.
-const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET!
-
 export async function POST(request: Request) {
   console.log("------------ 🔔 WEBHOOK HANDLER START ------------")
+
+  // Check for required environment variables
+  if (!process.env.STRIPE_SECRET_KEY) {
+    console.error("🔔 WEBHOOK ERROR: Missing STRIPE_SECRET_KEY")
+    return NextResponse.json({ error: "Server configuration error: Missing Stripe secret key" }, { status: 500 })
+  }
+
+  if (!process.env.STRIPE_WEBHOOK_SECRET) {
+    console.error("🔔 WEBHOOK ERROR: Missing STRIPE_WEBHOOK_SECRET")
+    return NextResponse.json({ error: "Server configuration error: Missing webhook secret" }, { status: 500 })
+  }
+
+  if (!process.env.NEXT_PUBLIC_SITE_URL) {
+    console.error("🔔 WEBHOOK ERROR: Missing NEXT_PUBLIC_SITE_URL")
+    console.warn("🔔 WEBHOOK WARNING: Will use fallback URL")
+  }
+
+  // Initialize Firebase Admin
+  initializeFirebaseAdmin()
+  const db = getFirestore()
+
+  // Initialize Stripe
+  const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
+    apiVersion: "2023-10-16",
+  })
+
+  // Get the webhook secret
+  const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET
+
   console.log(`🔔 WEBHOOK: Running in environment: ${process.env.NEXT_PUBLIC_VERCEL_ENV || "unknown"}`)
   console.log(`🔔 WEBHOOK: Site URL: ${process.env.NEXT_PUBLIC_SITE_URL || "unknown"}`)
   console.log(`🔔 WEBHOOK: Request URL: ${request.url}`)
