@@ -3,7 +3,6 @@
 import type React from "react"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/contexts/auth-context"
-import { getProductionUrl } from "@/lib/url-utils"
 
 interface UpgradeButtonProps {
   className?: string
@@ -22,15 +21,15 @@ export default function UpgradeButton({ className = "", children, onClick }: Upg
     }
 
     if (!user) {
-      // Use production URL for login redirect
-      const productionUrl = getProductionUrl()
-      router.push(`${productionUrl}/login?redirect=/membership-plans`)
+      // Use current site URL for login redirect
+      const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || window.location.origin
+      router.push(`${siteUrl}/login?redirect=/membership-plans`)
       return
     }
 
     // Redirect to membership plans page
-    const productionUrl = getProductionUrl()
-    router.push(`${productionUrl}/membership-plans`)
+    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || window.location.origin
+    router.push(`${siteUrl}/membership-plans`)
   }
 
   return (
