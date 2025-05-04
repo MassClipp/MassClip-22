@@ -8,7 +8,7 @@
  */
 export function getProductionUrl(): string {
   // Use environment variable instead of hardcoded value
-  return process.env.NEXT_PUBLIC_SITE_URL || "https://masscliptest.vercel.app"
+  return process.env.NEXT_PUBLIC_SITE_URL || "https://massclip.pro"
 }
 
 /**
