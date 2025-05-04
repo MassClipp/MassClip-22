@@ -5,22 +5,7 @@ import type React from "react"
 import { useState, useEffect, useRef } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
-import {
-  User,
-  LogOut,
-  Menu,
-  X,
-  Search,
-  Download,
-  ChevronRight,
-  Home,
-  Grid,
-  Heart,
-  Clock,
-  Crown,
-  Upload,
-  Users,
-} from "lucide-react"
+import { User, LogOut, Menu, X, Search, Download, ChevronRight, Home, Grid, Heart, Clock, Crown } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useAuth } from "@/contexts/auth-context"
 import {
@@ -43,7 +28,7 @@ export default function DashboardHeader({ initialSearchQuery = "" }) {
   const [isScrolled, setIsScrolled] = useState(false)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState(initialSearchQuery)
-  const [isSearchOpen, setIsSearchOpen] = useState(isSearchOpen)
+  const [isSearchOpen, setIsSearchOpen] = useState(false)
   const { user, logOut } = useAuth()
   const { isProUser } = useUserPlan()
   const { remainingDownloads, hasReachedLimit } = useDownloadLimit()
@@ -113,8 +98,6 @@ export default function DashboardHeader({ initialSearchQuery = "" }) {
     { name: "Favorites", href: "/dashboard/favorites", icon: <Heart className="h-4 w-4" /> },
     { name: "History", href: "/dashboard/history", icon: <Clock className="h-4 w-4" /> },
     { name: "Membership", href: "/membership-plans", icon: <Crown className="h-4 w-4" /> },
-    { name: "My Uploads", href: "/dashboard/uploads/my-content", icon: <Upload className="h-4 w-4" /> },
-    { name: "Community", href: "/dashboard/community", icon: <Users className="h-4 w-4" /> },
   ]
 
   // Handle upgrade button click

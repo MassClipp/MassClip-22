@@ -393,22 +393,3 @@ export interface VimeoVideo {
     md5?: string
   }>
 }
-
-// New type for user-generated videos
-export interface UserVideo {
-  id: string
-  userId: string
-  title: string
-  description?: string
-  category: string
-  isPublic: boolean
-  videoUrl: string
-  thumbnailUrl?: string
-  fileName?: string
-  fileSize?: number
-  storageRef?: string
-  createdAt: any // Timestamp
-  updatedAt: any // Timestamp
-  viewCount?: number
-  likeCount?: number
-}
