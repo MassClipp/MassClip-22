@@ -1,0 +1,18 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+    // Allow authenticated users to upload their own videos
+    match /videos/{userId}/{fileName} {
+      allow read: if true; // Anyone can read videos
+      allow write: if request.auth != null && request.auth.uid == userId;
+      allow delete: if request.auth != null && request.auth.uid == userId;
+    }
+    
+    // Allow authenticated users to upload their own thumbnails
+    match /thumbnails/{userId}/{fileName} {
+      allow read: if true; // Anyone can read thumbnails
+      allow write: if request.auth != null && request.auth.uid == userId;
+      allow delete: if request.auth != null && request.auth.uid == userId;
+    }
+  }
+}

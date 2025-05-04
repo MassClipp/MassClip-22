@@ -34,6 +34,14 @@ service cloud.firestore {
       }
     }
     
+    // Allow users to read and write their own documents in userVideos collection
+    match /userVideos/{videoId} {
+      allow create: if request.auth != null;
+      allow read: if resource.data.isPublic == true || 
+                    (request.auth != null && request.auth.uid == resource.data.userId);
+      allow update, delete: if request.auth != null && request.auth.uid == resource.data.userId;
+    }
+    
     // Function to check if a user has reached their download limit
     function hasReachedDownloadLimit(userId) {
       let user = get(/databases/$(database)/documents/users/$(userId)).data;
