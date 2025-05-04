@@ -18,11 +18,6 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Server configuration error: Missing Stripe price ID" }, { status: 500 })
   }
 
-  if (!process.env.NEXT_PUBLIC_SITE_URL) {
-    console.error("🔐 CHECKOUT ERROR: Missing NEXT_PUBLIC_SITE_URL")
-    console.warn("🔐 CHECKOUT WARNING: Will use fallback URL")
-  }
-
   // Initialize Firebase Admin
   initializeFirebaseAdmin()
   const db = getFirestore()
@@ -35,15 +30,18 @@ export async function POST(request: Request) {
 
     // Parse the request body
     const body = await request.json()
+    console.log("🔐 CHECKOUT: Request body:", JSON.stringify(body, null, 2))
 
     // Extract and validate required fields
-    const { userId, email } = body
+    const { userId, email, userEmail } = body
 
-    console.log("🔐 CHECKOUT: Received request with data:")
-    console.log(`🔐 CHECKOUT: User ID: ${userId || "MISSING"}`)
-    console.log(`🔐 CHECKOUT: Email: ${email || "MISSING"}`)
-    console.log(`🔐 CHECKOUT: Environment: ${process.env.NEXT_PUBLIC_VERCEL_ENV || "unknown"}`)
-    console.log(`🔐 CHECKOUT: Site URL: ${process.env.NEXT_PUBLIC_SITE_URL || "unknown"}`)
+    // Log all possible email fields for debugging
+    console.log("🔐 CHECKOUT: User ID:", userId || "MISSING")
+    console.log("🔐 CHECKOUT: Email field:", email || "MISSING")
+    console.log("🔐 CHECKOUT: UserEmail field:", userEmail || "MISSING")
+
+    // Use either email or userEmail, whichever is available
+    const customerEmail = email || userEmail
 
     // Validate required fields
     if (!userId) {
@@ -51,9 +49,28 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Missing required field: userId" }, { status: 400 })
     }
 
-    if (!email) {
+    if (!customerEmail) {
       console.error("🔐 CHECKOUT ERROR: Missing email in request")
       return NextResponse.json({ error: "Missing required field: email" }, { status: 400 })
+    }
+
+    // Verify the user exists in Firestore
+    const userDoc = await db.collection("users").doc(userId).get()
+
+    if (!userDoc.exists) {
+      console.error(`🔐 CHECKOUT ERROR: User ${userId} not found in Firestore`)
+
+      // If user doesn't exist in Firestore, create a basic record
+      await db.collection("users").doc(userId).set({
+        email: customerEmail,
+        createdAt: new Date(),
+        lastUpdated: new Date(),
+        plan: "free",
+      })
+
+      console.log(`🔐 CHECKOUT: Created basic user record for ${userId}`)
+    } else {
+      console.log(`🔐 CHECKOUT: User ${userId} verified in Firestore`)
     }
 
     // Get the site URL for this environment
@@ -63,7 +80,7 @@ export async function POST(request: Request) {
     // Create metadata object with all required fields
     const metadata = {
       firebaseUid: userId,
-      email: email,
+      email: customerEmail,
       timestamp: new Date().toISOString(),
       environment: process.env.NEXT_PUBLIC_VERCEL_ENV || "unknown",
       siteUrl: siteUrl,
@@ -91,7 +108,7 @@ export async function POST(request: Request) {
       mode: "subscription",
       success_url: successUrl,
       cancel_url: cancelUrl,
-      customer_email: email,
+      customer_email: customerEmail,
       metadata: metadata,
       subscription_data: {
         metadata: metadata,
@@ -106,7 +123,7 @@ export async function POST(request: Request) {
       .doc(session.id)
       .set({
         userId,
-        email,
+        email: customerEmail,
         sessionId: session.id,
         createdAt: new Date(),
         status: "created",

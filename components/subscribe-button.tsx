@@ -3,103 +3,76 @@
 import type React from "react"
 import { useState } from "react"
 import { useRouter } from "next/navigation"
-import { Button } from "@/components/ui/button"
 import { useAuth } from "@/contexts/auth-context"
 import { useToast } from "@/hooks/use-toast"
-import { getProductionUrl } from "@/lib/url-utils"
 
-export function SubscribeButton({ className, children }: { className?: string; children?: React.ReactNode }) {
+interface SubscribeButtonProps {
+  className?: string
+  children?: React.ReactNode
+}
+
+// Export as a named export to match imports in other files
+export function SubscribeButton({ className = "", children }: SubscribeButtonProps) {
   const [isLoading, setIsLoading] = useState(false)
-  const { user } = useAuth()
   const router = useRouter()
+  const { user } = useAuth()
   const { toast } = useToast()
 
-  const handleSubscription = async () => {
+  const handleSubscribe = async () => {
     if (!user) {
-      console.log("No user found, redirecting to login")
-      // Use production URL for login redirect
-      const productionUrl = getProductionUrl()
-      router.push(`${productionUrl}/login?redirect=/pricing`)
+      toast({
+        title: "Please log in",
+        description: "You need to be logged in to subscribe.",
+        variant: "destructive",
+      })
+      router.push("/login?redirect=/membership-plans")
       return
     }
 
-    // Update any plan checks
-    const isProUser = user?.plan === "creator_pro"
+    setIsLoading(true)
 
     try {
-      setIsLoading(true)
-
-      // Get fresh user data directly from the auth context
-      const userId = user.uid
-      const userEmail = user.email
-
-      console.log("🔐 CHECKOUT: Creating session with fresh user data:")
-      console.log(`🔐 CHECKOUT: User ID: ${userId}`)
-      console.log(`🔐 CHECKOUT: User Email: ${userEmail}`)
-
-      // Validate user data before proceeding
-      if (!userId || !userEmail) {
-        const errorMsg = `Missing required user data: ${!userId ? "User ID" : ""} ${!userEmail ? "Email" : ""}`
-        console.error(errorMsg)
+      // Make sure we have the user's email
+      if (!user.email) {
         toast({
-          title: "Authentication Error",
-          description: "Your account information is incomplete. Please try logging out and back in.",
+          title: "Error",
+          description: "Your account doesn't have an email address. Please contact support.",
           variant: "destructive",
         })
+        setIsLoading(false)
         return
       }
 
-      // Create a fresh payload with current timestamp to prevent caching
-      const payload = {
-        userId,
-        userEmail,
-        timestamp: new Date().toISOString(),
-        clientId: Math.random().toString(36).substring(2, 15), // Add random client ID to ensure uniqueness
-        productionUrl: getProductionUrl(), // Add production URL to payload
-      }
-
-      console.log("🔐 CHECKOUT: Sending payload to API:", JSON.stringify(payload))
+      // Log the user object for debugging
+      console.log("User object:", user)
+      console.log("User email:", user.email)
 
       const response = await fetch("/api/create-checkout-session", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Cache-Control": "no-cache, no-store", // Prevent caching
         },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({
+          userId: user.uid,
+          email: user.email, // Make sure we're sending the email
+          userEmail: user.email, // Send as an alternative field name too
+          timestamp: new Date().toISOString(),
+          clientId: crypto.randomUUID(),
+        }),
       })
 
       if (!response.ok) {
-        const errorText = await response.text()
-        console.error("🔐 CHECKOUT ERROR:", response.status, errorText)
-        throw new Error(`Server returned ${response.status}: ${errorText}`)
+        const errorData = await response.json()
+        throw new Error(errorData.error || "Failed to create checkout session")
       }
 
-      const data = await response.json()
-
-      if (data.url && data.sessionId) {
-        console.log(`🔐 CHECKOUT SUCCESS: Session ID: ${data.sessionId}`)
-        console.log(`🔐 CHECKOUT SUCCESS: Redirecting to: ${data.url}`)
-
-        // Store the session ID in localStorage for debugging
-        localStorage.setItem("lastCheckoutSessionId", data.sessionId)
-        localStorage.setItem("lastCheckoutTime", new Date().toISOString())
-
-        // Redirect to Stripe checkout
-        window.location.href = data.url
-      } else {
-        console.error("🔐 CHECKOUT ERROR: No URL in response:", data)
-        toast({
-          title: "Checkout Error",
-          description: "Unable to start checkout process. Please try again.",
-          variant: "destructive",
-        })
-      }
+      const { url } = await response.json()
+      window.location.href = url
     } catch (error) {
-      console.error("🔐 CHECKOUT ERROR:", error)
+      console.error("Error creating checkout session:", error)
       toast({
-        title: "Checkout Error",
-        description: error instanceof Error ? error.message : "Failed to start checkout process",
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to create checkout session",
         variant: "destructive",
       })
     } finally {
@@ -108,8 +81,17 @@ export function SubscribeButton({ className, children }: { className?: string; c
   }
 
   return (
-    <Button onClick={handleSubscription} disabled={isLoading} className={className || "w-full"} variant="default">
+    <button
+      onClick={handleSubscribe}
+      disabled={isLoading}
+      className={`bg-crimson hover:bg-crimson-dark text-white font-medium py-2 px-6 rounded-md transition-all duration-300 ${
+        isLoading ? "opacity-70 cursor-not-allowed" : ""
+      } ${className}`}
+    >
       {isLoading ? "Loading..." : children || "Subscribe Now"}
-    </Button>
+    </button>
   )
 }
+
+// Also export as default for backward compatibility
+export default SubscribeButton
