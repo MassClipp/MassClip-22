@@ -1,40 +1,31 @@
 "use client"
 
 import type React from "react"
-
 import { useState } from "react"
 import { useRouter } from "next/navigation"
-import { Button } from "@/components/ui/button"
 import { useToast } from "@/hooks/use-toast"
+import { useAuth } from "@/contexts/auth-context"
 
 interface UpgradeButtonProps {
-  userId: string
-  email: string
   className?: string
   children?: React.ReactNode
+  onClick?: () => void
 }
 
-export function UpgradeButton({ userId, email, className, children }: UpgradeButtonProps) {
+export default function UpgradeButton({ className = "", children, onClick }: UpgradeButtonProps) {
   const [isLoading, setIsLoading] = useState(false)
   const router = useRouter()
   const { toast } = useToast()
+  const { user } = useAuth()
 
   const handleUpgrade = async () => {
-    if (!userId) {
-      toast({
-        title: "Error",
-        description: "You must be logged in to upgrade",
-        variant: "destructive",
-      })
+    if (onClick) {
+      onClick()
       return
     }
 
-    if (!email) {
-      toast({
-        title: "Error",
-        description: "Email is required for checkout",
-        variant: "destructive",
-      })
+    if (!user) {
+      router.push("/login?redirect=/membership-plans")
       return
     }
 
@@ -49,7 +40,7 @@ export function UpgradeButton({ userId, email, className, children }: UpgradeBut
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            userId,
+            userId: user.uid,
             action: "upgrade_click",
             timestamp: new Date().toISOString(),
           }),
@@ -60,15 +51,15 @@ export function UpgradeButton({ userId, email, className, children }: UpgradeBut
       }
 
       // Create checkout session
-      console.log(`Creating checkout session for user ${userId} with email ${email}`)
+      console.log(`Creating checkout session for user ${user.uid} with email ${user.email}`)
       const response = await fetch("/api/create-checkout-session", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          userId,
-          email,
+          userId: user.uid,
+          email: user.email,
           siteUrl: "https://massclip.pro", // Hardcoded for production
         }),
       })
@@ -95,11 +86,17 @@ export function UpgradeButton({ userId, email, className, children }: UpgradeBut
       })
       setIsLoading(false)
     }
+
+    router.push("/membership-plans")
   }
 
   return (
-    <Button onClick={handleUpgrade} disabled={isLoading} className={className}>
+    <button
+      onClick={handleUpgrade}
+      disabled={isLoading}
+      className={`premium-button bg-crimson hover:bg-crimson-dark text-white font-light text-sm py-2 px-4 rounded-md transition-all duration-300 ${className}`}
+    >
       {isLoading ? "Loading..." : children || "Upgrade to Creator Pro"}
-    </Button>
+    </button>
   )
 }
