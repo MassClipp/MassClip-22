@@ -37,14 +37,7 @@ export async function POST(request: Request) {
     }
 
     // Initialize Firebase Admin
-    try {
-      initializeFirebaseAdmin()
-      console.log("💰 CHECKOUT: Firebase Admin initialized successfully")
-    } catch (error) {
-      console.error("💰 CHECKOUT ERROR: Failed to initialize Firebase Admin:", error)
-      return NextResponse.json({ error: "Failed to initialize Firebase" }, { status: 500 })
-    }
-
+    initializeFirebaseAdmin()
     const db = getFirestore()
 
     // Initialize Stripe
@@ -53,11 +46,35 @@ export async function POST(request: Request) {
     })
 
     // Get the success and cancel URLs
-    const successUrl = `${SITE_URL}/subscription/success`
-    const cancelUrl = `${SITE_URL}/subscription/cancel`
+    const uniqueParam = `t=${Date.now()}`
+    const successUrl = `${SITE_URL}/subscription/success?session_id={CHECKOUT_SESSION_ID}&${uniqueParam}`
+    const cancelUrl = `${SITE_URL}/subscription/cancel?${uniqueParam}`
 
     console.log(`💰 CHECKOUT: Success URL: ${successUrl}`)
     console.log(`💰 CHECKOUT: Cancel URL: ${cancelUrl}`)
+
+    // Create metadata object with all required fields
+    const metadata = {
+      firebaseUid: requestData.userId,
+      email: requestData.email,
+      timestamp: new Date().toISOString(),
+      siteUrl: SITE_URL,
+    }
+
+    console.log("💰 CHECKOUT: Metadata:", JSON.stringify(metadata, null, 2))
+
+    // Store the session in Firestore before creating in Stripe
+    // This helps with recovery if metadata isn't sent correctly
+    const sessionData = {
+      userId: requestData.userId,
+      email: requestData.email,
+      status: "created",
+      createdAt: new Date(),
+      metadata: metadata,
+      siteUrl: SITE_URL,
+    }
+
+    console.log("💰 CHECKOUT: Session data for Firestore:", JSON.stringify(sessionData, null, 2))
 
     // Create the checkout session
     console.log(`💰 CHECKOUT: Creating checkout session for user ${requestData.userId}`)
@@ -74,32 +91,31 @@ export async function POST(request: Request) {
       success_url: successUrl,
       cancel_url: cancelUrl,
       customer_email: requestData.email,
-      metadata: {
-        firebaseUid: requestData.userId,
-        siteUrl: SITE_URL,
-        createdAt: new Date().toISOString(),
+      metadata: metadata,
+      subscription_data: {
+        metadata: metadata, // Add metadata to subscription as well
       },
     })
 
-    console.log(`💰 CHECKOUT: Created checkout session: ${session.id}`)
+    console.log(`💰 CHECKOUT: Created checkout session with ID: ${session.id}`)
 
-    // Store the checkout session in Firestore
+    // Now store the session in Firestore with the Stripe session ID
     try {
-      await db.collection("stripeCheckoutSessions").doc(session.id).set({
-        userId: requestData.userId,
-        email: requestData.email,
-        status: "created",
-        createdAt: new Date(),
-        siteUrl: SITE_URL,
-      })
-      console.log(`💰 CHECKOUT: Stored checkout session in Firestore`)
+      await db
+        .collection("stripeCheckoutSessions")
+        .doc(session.id)
+        .set({
+          ...sessionData,
+          sessionId: session.id,
+        })
+      console.log(`💰 CHECKOUT: Stored checkout session in Firestore with ID: ${session.id}`)
     } catch (error) {
       console.error("💰 CHECKOUT ERROR: Failed to store checkout session in Firestore:", error)
       // Continue anyway, as this is not critical
     }
 
     console.log("------------ 💰 CREATE CHECKOUT SESSION END ------------")
-    return NextResponse.json({ url: session.url })
+    return NextResponse.json({ url: session.url, sessionId: session.id })
   } catch (error: any) {
     console.error("💰 CHECKOUT ERROR:", error)
     return NextResponse.json({ error: error.message || "Failed to create checkout session" }, { status: 500 })
