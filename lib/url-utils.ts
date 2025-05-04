@@ -3,27 +3,19 @@
  */
 
 /**
- * Returns the production URL regardless of environment
- * This ensures all user-facing redirects go to the production domain
+ * Returns the production URL based on environment variables
+ * This ensures all user-facing redirects go to the correct domain
  */
 export function getProductionUrl(): string {
-  return "https://massclip.pro"
+  // Use environment variable instead of hardcoded value
+  return process.env.NEXT_PUBLIC_SITE_URL || "https://masscliptest.vercel.app"
 }
 
 /**
  * Returns the site URL based on environment
- * In production, this will always return the production URL
- * In development or preview, it will use the environment variable or fallback
  */
 export function getSiteUrl(): string {
-  // Check if we're in production (Vercel sets this automatically)
-  const isProduction = process.env.NODE_ENV === "production" && !process.env.NEXT_PUBLIC_VERCEL_ENV?.includes("preview")
-
-  if (isProduction) {
-    return getProductionUrl()
-  }
-
-  // For development or preview environments, use the environment variable or fallback
+  // Use the environment variable for the site URL
   return process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000"
 }
 
@@ -42,5 +34,6 @@ export function createProductionUrl(path: string): string {
  * @param url The URL to check
  */
 export function isProductionUrl(url: string): boolean {
-  return url.includes("massclip.pro")
+  const productionUrl = getProductionUrl()
+  return url.includes(productionUrl.replace("https://", ""))
 }

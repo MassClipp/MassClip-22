@@ -2,7 +2,7 @@ import { NextResponse } from "next/server"
 import Stripe from "stripe"
 import { initializeFirebaseAdmin } from "@/lib/firebase-admin"
 import { getFirestore } from "firebase-admin/firestore"
-import { getProductionUrl } from "@/lib/url-utils"
+import { getSiteUrl } from "@/lib/url-utils"
 
 // Initialize Firebase Admin
 initializeFirebaseAdmin()
@@ -18,14 +18,20 @@ const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET!
 
 export async function POST(request: Request) {
   console.log("------------ 🔔 WEBHOOK HANDLER START ------------")
+  console.log(`🔔 WEBHOOK: Running in environment: ${process.env.NEXT_PUBLIC_VERCEL_ENV || "unknown"}`)
+  console.log(`🔔 WEBHOOK: Site URL: ${process.env.NEXT_PUBLIC_SITE_URL || "unknown"}`)
+  console.log(`🔔 WEBHOOK: Request URL: ${request.url}`)
 
   const payload = await request.text()
   const sig = request.headers.get("stripe-signature") as string
+
+  console.log(`🔔 WEBHOOK: Received signature: ${sig ? "present" : "missing"}`)
 
   let event
 
   try {
     event = stripe.webhooks.constructEvent(payload, sig, endpointSecret)
+    console.log(`🔔 WEBHOOK: Successfully verified signature`)
   } catch (err: any) {
     console.error(`🔔 WEBHOOK ERROR: Signature verification failed: ${err.message}`)
     return NextResponse.json({ error: `Webhook Error: ${err.message}` }, { status: 400 })
@@ -41,6 +47,8 @@ export async function POST(request: Request) {
 
       // Log all metadata for debugging
       console.log("🔔 WEBHOOK: Session metadata:", JSON.stringify(session.metadata || {}, null, 2))
+      console.log("🔔 WEBHOOK: Session customer:", session.customer)
+      console.log("🔔 WEBHOOK: Session subscription:", session.subscription)
 
       // Get the user ID from metadata
       const userId = session.metadata?.firebaseUid
@@ -49,6 +57,7 @@ export async function POST(request: Request) {
         console.error("🔔 WEBHOOK ERROR: No firebaseUid in session metadata")
 
         // Try to find the session in our database as fallback
+        console.log(`🔔 WEBHOOK: Attempting to find session ${session.id} in Firestore`)
         const sessionDoc = await db.collection("stripeCheckoutSessions").doc(session.id).get()
 
         if (sessionDoc.exists) {
@@ -83,6 +92,7 @@ export async function POST(request: Request) {
 
         // Try to find the user by customer ID as fallback
         const customerId = subscription.customer as string
+        console.log(`🔔 WEBHOOK: Attempting to find user with customer ID ${customerId} in Firestore`)
         const usersSnapshot = await db.collection("users").where("stripeCustomerId", "==", customerId).limit(1).get()
 
         if (!usersSnapshot.empty) {
@@ -113,31 +123,38 @@ export async function POST(request: Request) {
  * Updates a user to creator_pro plan
  */
 async function updateUserToCreatorPro(userId: string, session: Stripe.Checkout.Session) {
-  console.log(`🔔 WEBHOOK: Updating user ${userId} to creator_pro plan`)
+  console.log(`🔔 WEBHOOK: Starting user update for ${userId} with session ${session.id}`)
 
   try {
     // Get the customer ID from the session
     const customerId = session.customer as string
     const subscriptionId = session.subscription as string
-    const productionUrl = getProductionUrl()
+    const siteUrl = getSiteUrl()
+
+    console.log(`🔔 WEBHOOK: Customer ID: ${customerId}, Subscription ID: ${subscriptionId}`)
+    console.log(`🔔 WEBHOOK: Current site URL: ${siteUrl}`)
 
     // Update the user document
-    await db
-      .collection("users")
-      .doc(userId)
-      .update({
-        plan: "creator_pro",
-        stripeCustomerId: customerId,
-        stripeSubscriptionId: subscriptionId,
-        subscriptionUpdatedAt: new Date(),
-        subscriptionStatus: "active",
-        hasAccess: true,
-        metadata: {
-          checkoutSessionId: session.id,
-          upgradedAt: new Date().toISOString(),
-          productionUrl: productionUrl, // Add production URL for reference
-        },
-      })
+    console.log(`🔔 WEBHOOK: Updating Firestore document for user ${userId}`)
+
+    const updateData = {
+      plan: "creator_pro",
+      stripeCustomerId: customerId,
+      stripeSubscriptionId: subscriptionId,
+      subscriptionUpdatedAt: new Date(),
+      subscriptionStatus: "active",
+      hasAccess: true,
+      metadata: {
+        checkoutSessionId: session.id,
+        upgradedAt: new Date().toISOString(),
+        environment: process.env.NEXT_PUBLIC_VERCEL_ENV || "unknown",
+        siteUrl: siteUrl,
+      },
+    }
+
+    console.log(`🔔 WEBHOOK: Update data:`, JSON.stringify(updateData, null, 2))
+
+    await db.collection("users").doc(userId).update(updateData)
 
     console.log(`🔔 WEBHOOK: Successfully updated user ${userId} to creator_pro plan`)
 
@@ -149,18 +166,39 @@ async function updateUserToCreatorPro(userId: string, session: Stripe.Checkout.S
       checkoutSessionId: session.id,
       timestamp: new Date().toISOString(),
       metadata: session.metadata || {},
-      productionUrl: productionUrl, // Add production URL for reference
+      siteUrl: siteUrl,
+      environment: process.env.NEXT_PUBLIC_VERCEL_ENV || "unknown",
     })
 
     // Update the session status in our database
+    console.log(`🔔 WEBHOOK: Checking if session ${session.id} exists in Firestore`)
     const sessionDoc = await db.collection("stripeCheckoutSessions").doc(session.id).get()
     if (sessionDoc.exists) {
-      await db.collection("stripeCheckoutSessions").doc(session.id).update({
-        status: "completed",
-        completedAt: new Date(),
-        subscriptionId: subscriptionId,
-        productionUrl: productionUrl, // Add production URL for reference
-      })
+      console.log(`🔔 WEBHOOK: Updating session ${session.id} in Firestore`)
+      await db
+        .collection("stripeCheckoutSessions")
+        .doc(session.id)
+        .update({
+          status: "completed",
+          completedAt: new Date(),
+          subscriptionId: subscriptionId,
+          siteUrl: siteUrl,
+          environment: process.env.NEXT_PUBLIC_VERCEL_ENV || "unknown",
+        })
+    } else {
+      console.log(`🔔 WEBHOOK: Session ${session.id} not found in Firestore, creating new record`)
+      await db
+        .collection("stripeCheckoutSessions")
+        .doc(session.id)
+        .set({
+          status: "completed",
+          completedAt: new Date(),
+          subscriptionId: subscriptionId,
+          userId: userId,
+          siteUrl: siteUrl,
+          environment: process.env.NEXT_PUBLIC_VERCEL_ENV || "unknown",
+          createdAt: new Date(),
+        })
     }
   } catch (error) {
     console.error(`🔔 WEBHOOK ERROR: Failed to update user ${userId} to creator_pro:`, error)
@@ -172,26 +210,31 @@ async function updateUserToCreatorPro(userId: string, session: Stripe.Checkout.S
  * Downgrades a user to free plan
  */
 async function downgradeUserToFree(userId: string) {
-  console.log(`🔔 WEBHOOK: Downgrading user ${userId} to free plan`)
+  console.log(`🔔 WEBHOOK: Starting downgrade for user ${userId}`)
 
   try {
-    const productionUrl = getProductionUrl()
+    const siteUrl = getSiteUrl()
+    console.log(`🔔 WEBHOOK: Current site URL: ${siteUrl}`)
 
     // Update the user document
-    await db
-      .collection("users")
-      .doc(userId)
-      .update({
-        plan: "free",
-        stripeSubscriptionId: null,
-        subscriptionUpdatedAt: new Date(),
-        subscriptionStatus: "canceled",
-        hasAccess: false,
-        metadata: {
-          downgradedAt: new Date().toISOString(),
-          productionUrl: productionUrl, // Add production URL for reference
-        },
-      })
+    console.log(`🔔 WEBHOOK: Updating Firestore document for user ${userId}`)
+
+    const updateData = {
+      plan: "free",
+      stripeSubscriptionId: null,
+      subscriptionUpdatedAt: new Date(),
+      subscriptionStatus: "canceled",
+      hasAccess: false,
+      metadata: {
+        downgradedAt: new Date().toISOString(),
+        environment: process.env.NEXT_PUBLIC_VERCEL_ENV || "unknown",
+        siteUrl: siteUrl,
+      },
+    }
+
+    console.log(`🔔 WEBHOOK: Update data:`, JSON.stringify(updateData, null, 2))
+
+    await db.collection("users").doc(userId).update(updateData)
 
     console.log(`🔔 WEBHOOK: Successfully downgraded user ${userId} to free plan`)
 
@@ -200,7 +243,8 @@ async function downgradeUserToFree(userId: string) {
       userId,
       eventType: "subscription_canceled",
       timestamp: new Date().toISOString(),
-      productionUrl: productionUrl, // Add production URL for reference
+      siteUrl: siteUrl,
+      environment: process.env.NEXT_PUBLIC_VERCEL_ENV || "unknown",
     })
   } catch (error) {
     console.error(`🔔 WEBHOOK ERROR: Failed to downgrade user ${userId} to free:`, error)
