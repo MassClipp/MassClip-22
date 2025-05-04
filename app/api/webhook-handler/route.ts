@@ -2,7 +2,7 @@ import { NextResponse } from "next/server"
 import Stripe from "stripe"
 import { initializeFirebaseAdmin } from "@/lib/firebase-admin"
 import { getFirestore } from "firebase-admin/firestore"
-import { getSiteUrl } from "@/lib/url-utils"
+import { getSiteUrl, getAllSiteUrls } from "@/lib/url-utils"
 
 export async function POST(request: Request) {
   console.log("------------ 🔔 WEBHOOK HANDLER START ------------")
@@ -18,10 +18,12 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Server configuration error: Missing webhook secret" }, { status: 500 })
   }
 
-  if (!process.env.NEXT_PUBLIC_SITE_URL) {
-    console.error("🔔 WEBHOOK ERROR: Missing NEXT_PUBLIC_SITE_URL")
-    console.warn("🔔 WEBHOOK WARNING: Will use fallback URL")
-  }
+  // Log all configured site URLs
+  const allSiteUrls = getAllSiteUrls()
+  console.log(`🔔 WEBHOOK: Primary site URL: ${getSiteUrl()}`)
+  console.log(`🔔 WEBHOOK: All configured site URLs:`, allSiteUrls)
+  console.log(`🔔 WEBHOOK: Running in environment: ${process.env.NEXT_PUBLIC_VERCEL_ENV || "unknown"}`)
+  console.log(`🔔 WEBHOOK: Request URL: ${request.url}`)
 
   // Initialize Firebase Admin
   initializeFirebaseAdmin()
@@ -34,10 +36,6 @@ export async function POST(request: Request) {
 
   // Get the webhook secret
   const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET
-
-  console.log(`🔔 WEBHOOK: Running in environment: ${process.env.NEXT_PUBLIC_VERCEL_ENV || "unknown"}`)
-  console.log(`🔔 WEBHOOK: Site URL: ${process.env.NEXT_PUBLIC_SITE_URL || "unknown"}`)
-  console.log(`🔔 WEBHOOK: Request URL: ${request.url}`)
 
   const payload = await request.text()
   const sig = request.headers.get("stripe-signature") as string
@@ -146,10 +144,12 @@ async function updateUserToCreatorPro(userId: string, session: Stripe.Checkout.S
     // Get the customer ID from the session
     const customerId = session.customer as string
     const subscriptionId = session.subscription as string
-    const siteUrl = getSiteUrl()
+
+    // Get the site URL from metadata if available, otherwise use default
+    const siteUrl = session.metadata?.siteUrl || getSiteUrl()
 
     console.log(`🔔 WEBHOOK: Customer ID: ${customerId}, Subscription ID: ${subscriptionId}`)
-    console.log(`🔔 WEBHOOK: Current site URL: ${siteUrl}`)
+    console.log(`🔔 WEBHOOK: Site URL from metadata: ${siteUrl}`)
 
     // Update the user document
     console.log(`🔔 WEBHOOK: Updating Firestore document for user ${userId}`)
@@ -166,6 +166,7 @@ async function updateUserToCreatorPro(userId: string, session: Stripe.Checkout.S
         upgradedAt: new Date().toISOString(),
         environment: process.env.NEXT_PUBLIC_VERCEL_ENV || "unknown",
         siteUrl: siteUrl,
+        allSiteUrls: getAllSiteUrls(),
       },
     }
 
@@ -184,6 +185,7 @@ async function updateUserToCreatorPro(userId: string, session: Stripe.Checkout.S
       timestamp: new Date().toISOString(),
       metadata: session.metadata || {},
       siteUrl: siteUrl,
+      allSiteUrls: getAllSiteUrls(),
       environment: process.env.NEXT_PUBLIC_VERCEL_ENV || "unknown",
     })
 
@@ -200,6 +202,7 @@ async function updateUserToCreatorPro(userId: string, session: Stripe.Checkout.S
           completedAt: new Date(),
           subscriptionId: subscriptionId,
           siteUrl: siteUrl,
+          allSiteUrls: getAllSiteUrls(),
           environment: process.env.NEXT_PUBLIC_VERCEL_ENV || "unknown",
         })
     } else {
@@ -213,6 +216,7 @@ async function updateUserToCreatorPro(userId: string, session: Stripe.Checkout.S
           subscriptionId: subscriptionId,
           userId: userId,
           siteUrl: siteUrl,
+          allSiteUrls: getAllSiteUrls(),
           environment: process.env.NEXT_PUBLIC_VERCEL_ENV || "unknown",
           createdAt: new Date(),
         })
@@ -246,6 +250,7 @@ async function downgradeUserToFree(userId: string) {
         downgradedAt: new Date().toISOString(),
         environment: process.env.NEXT_PUBLIC_VERCEL_ENV || "unknown",
         siteUrl: siteUrl,
+        allSiteUrls: getAllSiteUrls(),
       },
     }
 
@@ -261,6 +266,7 @@ async function downgradeUserToFree(userId: string) {
       eventType: "subscription_canceled",
       timestamp: new Date().toISOString(),
       siteUrl: siteUrl,
+      allSiteUrls: getAllSiteUrls(),
       environment: process.env.NEXT_PUBLIC_VERCEL_ENV || "unknown",
     })
   } catch (error) {

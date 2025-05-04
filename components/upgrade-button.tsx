@@ -3,7 +3,7 @@
 import type React from "react"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/contexts/auth-context"
-import { getSiteUrl } from "@/lib/url-utils"
+import { getCurrentDomain } from "@/lib/url-utils"
 
 interface UpgradeButtonProps {
   className?: string
@@ -21,17 +21,17 @@ export default function UpgradeButton({ className = "", children, onClick }: Upg
       return
     }
 
-    // Get the current site URL from environment variables
-    const currentSiteUrl = getSiteUrl()
+    // Get the current domain from the browser
+    const currentDomain = getCurrentDomain()
 
     if (!user) {
-      // Use current site URL for login redirect
-      router.push(`${currentSiteUrl}/login?redirect=/membership-plans`)
+      // Use current domain for login redirect
+      router.push(`${currentDomain}/login?redirect=/membership-plans`)
       return
     }
 
-    // Redirect to membership plans page on current site
-    router.push(`${currentSiteUrl}/membership-plans`)
+    // Redirect to membership plans page on current domain
+    router.push(`${currentDomain}/membership-plans`)
   }
 
   return (
