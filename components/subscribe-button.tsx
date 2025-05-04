@@ -6,13 +6,7 @@ import { useRouter } from "next/navigation"
 import { useAuth } from "@/contexts/auth-context"
 import { useToast } from "@/hooks/use-toast"
 
-interface SubscribeButtonProps {
-  className?: string
-  children?: React.ReactNode
-}
-
-// Export as a named export to match imports in other files
-export function SubscribeButton({ className = "", children }: SubscribeButtonProps) {
+export function SubscribeButton({ className = "", children }: { className?: string; children?: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(false)
   const router = useRouter()
   const { user } = useAuth()
@@ -43,10 +37,6 @@ export function SubscribeButton({ className = "", children }: SubscribeButtonPro
         return
       }
 
-      // Log the user object for debugging
-      console.log("User object:", user)
-      console.log("User email:", user.email)
-
       const response = await fetch("/api/create-checkout-session", {
         method: "POST",
         headers: {
@@ -54,8 +44,7 @@ export function SubscribeButton({ className = "", children }: SubscribeButtonPro
         },
         body: JSON.stringify({
           userId: user.uid,
-          email: user.email, // Make sure we're sending the email
-          userEmail: user.email, // Send as an alternative field name too
+          email: user.email,
           timestamp: new Date().toISOString(),
           clientId: crypto.randomUUID(),
         }),

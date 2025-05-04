@@ -3,7 +3,6 @@
 import type React from "react"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/contexts/auth-context"
-import { getCurrentDomain } from "@/lib/url-utils"
 
 interface UpgradeButtonProps {
   className?: string
@@ -21,17 +20,12 @@ export default function UpgradeButton({ className = "", children, onClick }: Upg
       return
     }
 
-    // Get the current domain from the browser
-    const currentDomain = getCurrentDomain()
-
     if (!user) {
-      // Use current domain for login redirect
-      router.push(`${currentDomain}/login?redirect=/membership-plans`)
+      router.push("/login?redirect=/membership-plans")
       return
     }
 
-    // Redirect to membership plans page on current domain
-    router.push(`${currentDomain}/membership-plans`)
+    router.push("/membership-plans")
   }
 
   return (

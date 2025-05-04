@@ -33,15 +33,7 @@ export async function POST(request: Request) {
     console.log("🔐 CHECKOUT: Request body:", JSON.stringify(body, null, 2))
 
     // Extract and validate required fields
-    const { userId, email, userEmail } = body
-
-    // Log all possible email fields for debugging
-    console.log("🔐 CHECKOUT: User ID:", userId || "MISSING")
-    console.log("🔐 CHECKOUT: Email field:", email || "MISSING")
-    console.log("🔐 CHECKOUT: UserEmail field:", userEmail || "MISSING")
-
-    // Use either email or userEmail, whichever is available
-    const customerEmail = email || userEmail
+    const { userId, email } = body
 
     // Validate required fields
     if (!userId) {
@@ -49,40 +41,20 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Missing required field: userId" }, { status: 400 })
     }
 
-    if (!customerEmail) {
+    if (!email) {
       console.error("🔐 CHECKOUT ERROR: Missing email in request")
       return NextResponse.json({ error: "Missing required field: email" }, { status: 400 })
     }
 
-    // Verify the user exists in Firestore
-    const userDoc = await db.collection("users").doc(userId).get()
-
-    if (!userDoc.exists) {
-      console.error(`🔐 CHECKOUT ERROR: User ${userId} not found in Firestore`)
-
-      // If user doesn't exist in Firestore, create a basic record
-      await db.collection("users").doc(userId).set({
-        email: customerEmail,
-        createdAt: new Date(),
-        lastUpdated: new Date(),
-        plan: "free",
-      })
-
-      console.log(`🔐 CHECKOUT: Created basic user record for ${userId}`)
-    } else {
-      console.log(`🔐 CHECKOUT: User ${userId} verified in Firestore`)
-    }
-
-    // Get the site URL for this environment
+    // Get the site URL
     const siteUrl = getSiteUrl()
     console.log(`🔐 CHECKOUT: Using site URL: ${siteUrl}`)
 
     // Create metadata object with all required fields
     const metadata = {
       firebaseUid: userId,
-      email: customerEmail,
+      email: email,
       timestamp: new Date().toISOString(),
-      environment: process.env.NEXT_PUBLIC_VERCEL_ENV || "unknown",
       siteUrl: siteUrl,
     }
 
@@ -108,7 +80,7 @@ export async function POST(request: Request) {
       mode: "subscription",
       success_url: successUrl,
       cancel_url: cancelUrl,
-      customer_email: customerEmail,
+      customer_email: email,
       metadata: metadata,
       subscription_data: {
         metadata: metadata,
@@ -118,19 +90,15 @@ export async function POST(request: Request) {
     console.log(`🔐 CHECKOUT: Created new session with ID: ${session.id}`)
 
     // Store session info in Firestore for tracking and debugging
-    await db
-      .collection("stripeCheckoutSessions")
-      .doc(session.id)
-      .set({
-        userId,
-        email: customerEmail,
-        sessionId: session.id,
-        createdAt: new Date(),
-        status: "created",
-        metadata: metadata,
-        environment: process.env.NEXT_PUBLIC_VERCEL_ENV || "unknown",
-        siteUrl: siteUrl,
-      })
+    await db.collection("stripeCheckoutSessions").doc(session.id).set({
+      userId,
+      email,
+      sessionId: session.id,
+      createdAt: new Date(),
+      status: "created",
+      metadata: metadata,
+      siteUrl: siteUrl,
+    })
 
     console.log("🔐 CHECKOUT: Session stored in Firestore")
     console.log("------------ 🔐 CHECKOUT SESSION API END ------------")
