@@ -3,7 +3,7 @@
 import type React from "react"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/contexts/auth-context"
-import { getProductionUrl } from "@/lib/url-utils"
+import { getSiteUrl } from "@/lib/url-utils"
 
 interface UpgradeButtonProps {
   className?: string
@@ -21,16 +21,17 @@ export default function UpgradeButton({ className = "", children, onClick }: Upg
       return
     }
 
+    // Get the current site URL from environment variables
+    const currentSiteUrl = getSiteUrl()
+
     if (!user) {
-      // Use production URL for login redirect
-      const productionUrl = getProductionUrl()
-      router.push(`${productionUrl}/login?redirect=/membership-plans`)
+      // Use current site URL for login redirect
+      router.push(`${currentSiteUrl}/login?redirect=/membership-plans`)
       return
     }
 
-    // Redirect to membership plans page
-    const productionUrl = getProductionUrl()
-    router.push(`${productionUrl}/membership-plans`)
+    // Redirect to membership plans page on current site
+    router.push(`${currentSiteUrl}/membership-plans`)
   }
 
   return (
