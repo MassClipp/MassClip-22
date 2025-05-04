@@ -75,10 +75,6 @@ export async function POST(request: Request) {
     // Force the domain to be massclip.pro regardless of environment variable
     const productionDomain = "https://massclip.pro"
 
-    // Keep the production URL for Stripe success/cancel URLs
-    // This is important for Stripe webhook handling
-    // DO NOT CHANGE these as they're part of the Stripe flow
-
     // Generate unique success and cancel URLs with timestamp to prevent caching
     const uniqueParam = `t=${Date.now()}`
     const successUrl = `${productionDomain}/subscription/success?session_id={CHECKOUT_SESSION_ID}&${uniqueParam}`

@@ -7,18 +7,19 @@ import { motion } from "framer-motion"
 import { Button } from "@/components/ui/button"
 import { CheckCircle, ArrowRight } from "lucide-react"
 import { useAuth } from "@/contexts/auth-context"
+import { getProductionUrl } from "@/lib/url-utils"
 
 export default function SubscriptionSuccess() {
   const { user } = useAuth()
   const router = useRouter()
-  const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || window.location.origin
+  const productionUrl = getProductionUrl()
 
   // If no user, redirect to login
   useEffect(() => {
     if (!user) {
-      router.push(`${siteUrl}/login`)
+      router.push(`${productionUrl}/login`)
     }
-  }, [user, router, siteUrl])
+  }, [user, router, productionUrl])
 
   if (!user) {
     return null
@@ -73,7 +74,7 @@ export default function SubscriptionSuccess() {
           >
             <Button
               className="w-full bg-red-600 hover:bg-red-700 text-white group flex items-center justify-center"
-              onClick={() => router.push(`${siteUrl}/dashboard`)}
+              onClick={() => router.push(`${productionUrl}/dashboard`)}
             >
               Go to Dashboard
               <ArrowRight className="ml-2 h-4 w-4 transition-transform duration-300 group-hover:translate-x-1" />
@@ -85,7 +86,7 @@ export default function SubscriptionSuccess() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.7, duration: 0.5 }}
           >
-            <Link href={`${siteUrl}/dashboard/user`}>
+            <Link href={`${productionUrl}/dashboard/user`}>
               <Button variant="outline" className="w-full border-gray-700 text-gray-300 hover:bg-gray-800">
                 View Account
               </Button>

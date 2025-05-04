@@ -16,7 +16,14 @@ export function getProductionUrl(): string {
  * In development or preview, it will use the environment variable or fallback
  */
 export function getSiteUrl(): string {
-  // Use the environment variable for the site URL
+  // Check if we're in production (Vercel sets this automatically)
+  const isProduction = process.env.NODE_ENV === "production" && !process.env.NEXT_PUBLIC_VERCEL_ENV?.includes("preview")
+
+  if (isProduction) {
+    return getProductionUrl()
+  }
+
+  // For development or preview environments, use the environment variable or fallback
   return process.env.NEXT_PUBLIC_SITE_URL || "http://localhost:3000"
 }
 
