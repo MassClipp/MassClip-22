@@ -2,56 +2,78 @@ import { NextResponse } from "next/server"
 import Stripe from "stripe"
 import { initializeFirebaseAdmin } from "@/lib/firebase-admin"
 import { getFirestore } from "firebase-admin/firestore"
-import { getSiteUrl } from "@/lib/url-utils"
+import type * as FirebaseFirestore from "@google-cloud/firestore"
+
+// Hardcoded site URL for production
+const SITE_URL = "https://massclip.pro"
 
 export async function POST(request: Request) {
   console.log("------------ 🔔 WEBHOOK HANDLER START ------------")
-
-  // Check for required environment variables
-  if (!process.env.STRIPE_SECRET_KEY) {
-    console.error("🔔 WEBHOOK ERROR: Missing STRIPE_SECRET_KEY")
-    return NextResponse.json({ error: "Server configuration error: Missing Stripe secret key" }, { status: 500 })
-  }
-
-  if (!process.env.STRIPE_WEBHOOK_SECRET) {
-    console.error("🔔 WEBHOOK ERROR: Missing STRIPE_WEBHOOK_SECRET")
-    return NextResponse.json({ error: "Server configuration error: Missing webhook secret" }, { status: 500 })
-  }
-
-  // Initialize Firebase Admin
-  initializeFirebaseAdmin()
-  const db = getFirestore()
-
-  // Initialize Stripe
-  const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
-    apiVersion: "2023-10-16",
-  })
-
-  // Get the webhook secret
-  const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET
-
-  console.log(`🔔 WEBHOOK: Site URL: ${getSiteUrl()}`)
   console.log(`🔔 WEBHOOK: Request URL: ${request.url}`)
-
-  const payload = await request.text()
-  const sig = request.headers.get("stripe-signature") as string
-
-  console.log(`🔔 WEBHOOK: Received signature: ${sig ? "present" : "missing"}`)
-
-  let event
+  console.log(`🔔 WEBHOOK: Site URL: ${SITE_URL}`)
 
   try {
-    event = stripe.webhooks.constructEvent(payload, sig, endpointSecret)
-    console.log(`🔔 WEBHOOK: Successfully verified signature`)
-  } catch (err: any) {
-    console.error(`🔔 WEBHOOK ERROR: Signature verification failed: ${err.message}`)
-    return NextResponse.json({ error: `Webhook Error: ${err.message}` }, { status: 400 })
-  }
+    // Check for required environment variables
+    if (!process.env.STRIPE_SECRET_KEY) {
+      console.error("🔔 WEBHOOK ERROR: Missing STRIPE_SECRET_KEY")
+      return NextResponse.json({ error: "Server configuration error: Missing Stripe secret key" }, { status: 500 })
+    }
 
-  console.log(`🔔 WEBHOOK: Received event type: ${event.type}`)
+    if (!process.env.STRIPE_WEBHOOK_SECRET) {
+      console.error("🔔 WEBHOOK ERROR: Missing STRIPE_WEBHOOK_SECRET")
+      return NextResponse.json({ error: "Server configuration error: Missing webhook secret" }, { status: 500 })
+    }
 
-  // Handle the event
-  try {
+    // Initialize Firebase Admin
+    try {
+      initializeFirebaseAdmin()
+      console.log("🔔 WEBHOOK: Firebase Admin initialized successfully")
+    } catch (error) {
+      console.error("🔔 WEBHOOK ERROR: Failed to initialize Firebase Admin:", error)
+      return NextResponse.json({ error: "Failed to initialize Firebase" }, { status: 500 })
+    }
+
+    const db = getFirestore()
+
+    // Initialize Stripe
+    const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
+      apiVersion: "2023-10-16",
+    })
+
+    // Get the webhook secret
+    const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET
+    console.log(`🔔 WEBHOOK: Using webhook secret: ${endpointSecret ? "present (hidden)" : "missing"}`)
+
+    // Get the request payload and signature
+    let payload
+    try {
+      payload = await request.text()
+      console.log(`🔔 WEBHOOK: Received payload length: ${payload.length} characters`)
+    } catch (error) {
+      console.error("🔔 WEBHOOK ERROR: Failed to read request payload:", error)
+      return NextResponse.json({ error: "Failed to read request payload" }, { status: 400 })
+    }
+
+    const sig = request.headers.get("stripe-signature")
+    console.log(`🔔 WEBHOOK: Received signature: ${sig ? "present" : "missing"}`)
+
+    if (!sig) {
+      console.error("🔔 WEBHOOK ERROR: Missing Stripe signature")
+      return NextResponse.json({ error: "Missing Stripe signature" }, { status: 400 })
+    }
+
+    // Verify the event
+    let event
+    try {
+      event = stripe.webhooks.constructEvent(payload, sig, endpointSecret)
+      console.log(`🔔 WEBHOOK: Successfully verified signature`)
+      console.log(`🔔 WEBHOOK: Received event type: ${event.type}`)
+    } catch (err: any) {
+      console.error(`🔔 WEBHOOK ERROR: Signature verification failed: ${err.message}`)
+      return NextResponse.json({ error: `Webhook Error: ${err.message}` }, { status: 400 })
+    }
+
+    // Handle the event
     if (event.type === "checkout.session.completed") {
       const session = event.data.object as Stripe.Checkout.Session
       console.log(`🔔 WEBHOOK: Processing checkout session: ${session.id}`)
@@ -69,17 +91,21 @@ export async function POST(request: Request) {
 
         // Try to find the session in our database as fallback
         console.log(`🔔 WEBHOOK: Attempting to find session ${session.id} in Firestore`)
-        const sessionDoc = await db.collection("stripeCheckoutSessions").doc(session.id).get()
+        try {
+          const sessionDoc = await db.collection("stripeCheckoutSessions").doc(session.id).get()
 
-        if (sessionDoc.exists) {
-          const sessionData = sessionDoc.data()
-          const fallbackUserId = sessionData?.userId
+          if (sessionDoc.exists) {
+            const sessionData = sessionDoc.data()
+            const fallbackUserId = sessionData?.userId
 
-          if (fallbackUserId) {
-            console.log(`🔔 WEBHOOK: Found userId in Firestore: ${fallbackUserId}`)
-            await updateUserToCreatorPro(fallbackUserId, session)
-            return NextResponse.json({ received: true })
+            if (fallbackUserId) {
+              console.log(`🔔 WEBHOOK: Found userId in Firestore: ${fallbackUserId}`)
+              await updateUserToCreatorPro(db, fallbackUserId, session)
+              return NextResponse.json({ received: true })
+            }
           }
+        } catch (error) {
+          console.error("🔔 WEBHOOK ERROR: Failed to query Firestore for session:", error)
         }
 
         console.error("🔔 WEBHOOK ERROR: Could not find user for checkout session")
@@ -87,7 +113,7 @@ export async function POST(request: Request) {
       }
 
       // Update the user to creator_pro
-      await updateUserToCreatorPro(userId, session)
+      await updateUserToCreatorPro(db, userId, session)
     } else if (event.type === "customer.subscription.deleted") {
       const subscription = event.data.object as Stripe.Subscription
       console.log(`🔔 WEBHOOK: Processing subscription deletion: ${subscription.id}`)
@@ -104,13 +130,18 @@ export async function POST(request: Request) {
         // Try to find the user by customer ID as fallback
         const customerId = subscription.customer as string
         console.log(`🔔 WEBHOOK: Attempting to find user with customer ID ${customerId} in Firestore`)
-        const usersSnapshot = await db.collection("users").where("stripeCustomerId", "==", customerId).limit(1).get()
 
-        if (!usersSnapshot.empty) {
-          const userDoc = usersSnapshot.docs[0]
-          console.log(`🔔 WEBHOOK: Found user by customer ID: ${userDoc.id}`)
-          await downgradeUserToFree(userDoc.id)
-          return NextResponse.json({ received: true })
+        try {
+          const usersSnapshot = await db.collection("users").where("stripeCustomerId", "==", customerId).limit(1).get()
+
+          if (!usersSnapshot.empty) {
+            const userDoc = usersSnapshot.docs[0]
+            console.log(`🔔 WEBHOOK: Found user by customer ID: ${userDoc.id}`)
+            await downgradeUserToFree(db, userDoc.id)
+            return NextResponse.json({ received: true })
+          }
+        } catch (error) {
+          console.error("🔔 WEBHOOK ERROR: Failed to query Firestore for user:", error)
         }
 
         console.error("🔔 WEBHOOK ERROR: Could not find user for subscription")
@@ -118,12 +149,12 @@ export async function POST(request: Request) {
       }
 
       // Downgrade the user to free
-      await downgradeUserToFree(userId)
+      await downgradeUserToFree(db, userId)
     }
 
     return NextResponse.json({ received: true })
   } catch (error) {
-    console.error("🔔 WEBHOOK ERROR:", error)
+    console.error("🔔 WEBHOOK ERROR: Unhandled exception:", error)
     return NextResponse.json({ error: "Failed to process webhook" }, { status: 500 })
   } finally {
     console.log("------------ 🔔 WEBHOOK HANDLER END ------------")
@@ -133,17 +164,20 @@ export async function POST(request: Request) {
 /**
  * Updates a user to creator_pro plan
  */
-async function updateUserToCreatorPro(userId: string, session: Stripe.Checkout.Session) {
+async function updateUserToCreatorPro(
+  db: FirebaseFirestore.Firestore,
+  userId: string,
+  session: Stripe.Checkout.Session,
+) {
   console.log(`🔔 WEBHOOK: Starting user update for ${userId} with session ${session.id}`)
 
   try {
     // Get the customer ID from the session
     const customerId = session.customer as string
     const subscriptionId = session.subscription as string
-    const siteUrl = getSiteUrl()
 
     console.log(`🔔 WEBHOOK: Customer ID: ${customerId}, Subscription ID: ${subscriptionId}`)
-    console.log(`🔔 WEBHOOK: Current site URL: ${siteUrl}`)
+    console.log(`🔔 WEBHOOK: Using site URL: ${SITE_URL}`)
 
     // Update the user document
     console.log(`🔔 WEBHOOK: Updating Firestore document for user ${userId}`)
@@ -158,7 +192,7 @@ async function updateUserToCreatorPro(userId: string, session: Stripe.Checkout.S
       metadata: {
         checkoutSessionId: session.id,
         upgradedAt: new Date().toISOString(),
-        siteUrl: siteUrl,
+        siteUrl: SITE_URL,
       },
     }
 
@@ -176,7 +210,7 @@ async function updateUserToCreatorPro(userId: string, session: Stripe.Checkout.S
       checkoutSessionId: session.id,
       timestamp: new Date().toISOString(),
       metadata: session.metadata || {},
-      siteUrl: siteUrl,
+      siteUrl: SITE_URL,
     })
 
     // Update the session status in our database
@@ -188,7 +222,7 @@ async function updateUserToCreatorPro(userId: string, session: Stripe.Checkout.S
         status: "completed",
         completedAt: new Date(),
         subscriptionId: subscriptionId,
-        siteUrl: siteUrl,
+        siteUrl: SITE_URL,
       })
     } else {
       console.log(`🔔 WEBHOOK: Session ${session.id} not found in Firestore, creating new record`)
@@ -197,7 +231,7 @@ async function updateUserToCreatorPro(userId: string, session: Stripe.Checkout.S
         completedAt: new Date(),
         subscriptionId: subscriptionId,
         userId: userId,
-        siteUrl: siteUrl,
+        siteUrl: SITE_URL,
         createdAt: new Date(),
       })
     }
@@ -210,12 +244,11 @@ async function updateUserToCreatorPro(userId: string, session: Stripe.Checkout.S
 /**
  * Downgrades a user to free plan
  */
-async function downgradeUserToFree(userId: string) {
+async function downgradeUserToFree(db: FirebaseFirestore.Firestore, userId: string) {
   console.log(`🔔 WEBHOOK: Starting downgrade for user ${userId}`)
 
   try {
-    const siteUrl = getSiteUrl()
-    console.log(`🔔 WEBHOOK: Current site URL: ${siteUrl}`)
+    console.log(`🔔 WEBHOOK: Using site URL: ${SITE_URL}`)
 
     // Update the user document
     console.log(`🔔 WEBHOOK: Updating Firestore document for user ${userId}`)
@@ -228,7 +261,7 @@ async function downgradeUserToFree(userId: string) {
       hasAccess: false,
       metadata: {
         downgradedAt: new Date().toISOString(),
-        siteUrl: siteUrl,
+        siteUrl: SITE_URL,
       },
     }
 
@@ -243,7 +276,7 @@ async function downgradeUserToFree(userId: string) {
       userId,
       eventType: "subscription_canceled",
       timestamp: new Date().toISOString(),
-      siteUrl: siteUrl,
+      siteUrl: SITE_URL,
     })
   } catch (error) {
     console.error(`🔔 WEBHOOK ERROR: Failed to downgrade user ${userId} to free:`, error)
