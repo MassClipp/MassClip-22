@@ -118,13 +118,15 @@ export default function BrowseAllPage() {
 
   // Fetch videos on mount
   useEffect(() => {
-    isMounted.current = true
-    fetchVideos(1)
+    if (typeof window !== "undefined") {
+      isMounted.current = true
+      fetchVideos(1)
 
-    return () => {
-      isMounted.current = false
-      if (observer.current) {
-        observer.current.disconnect()
+      return () => {
+        isMounted.current = false
+        if (observer.current) {
+          observer.current.disconnect()
+        }
       }
     }
   }, [])
