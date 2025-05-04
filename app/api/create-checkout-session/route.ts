@@ -2,7 +2,6 @@ import { NextResponse } from "next/server"
 import Stripe from "stripe"
 import { initializeFirebaseAdmin } from "@/lib/firebase-admin"
 import { getFirestore } from "firebase-admin/firestore"
-import { getSiteUrl } from "@/lib/url-utils"
 
 export async function POST(request: Request) {
   console.log("------------ 🔐 CHECKOUT SESSION API START ------------")
@@ -46,9 +45,9 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Missing required field: email" }, { status: 400 })
     }
 
-    // Get the site URL
-    const siteUrl = getSiteUrl()
-    console.log(`🔐 CHECKOUT: Using site URL: ${siteUrl}`)
+    // IMPORTANT: Always use https://massclip.pro for production
+    const siteUrl = "https://massclip.pro"
+    console.log(`🔐 CHECKOUT: Using hardcoded site URL: ${siteUrl}`)
 
     // Create metadata object with all required fields
     const metadata = {

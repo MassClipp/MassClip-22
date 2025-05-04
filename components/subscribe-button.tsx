@@ -37,6 +37,8 @@ export function SubscribeButton({ className = "", children }: { className?: stri
         return
       }
 
+      console.log("Creating checkout session for user:", user.uid, user.email)
+
       const response = await fetch("/api/create-checkout-session", {
         method: "POST",
         headers: {
@@ -56,6 +58,7 @@ export function SubscribeButton({ className = "", children }: { className?: stri
       }
 
       const { url } = await response.json()
+      console.log("Redirecting to checkout URL:", url)
       window.location.href = url
     } catch (error) {
       console.error("Error creating checkout session:", error)
