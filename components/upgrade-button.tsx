@@ -86,8 +86,6 @@ export default function UpgradeButton({ className = "", children, onClick }: Upg
       })
       setIsLoading(false)
     }
-
-    router.push("/membership-plans")
   }
 
   return (

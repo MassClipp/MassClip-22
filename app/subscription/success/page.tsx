@@ -1,99 +1,80 @@
 "use client"
 
-import { useEffect } from "react"
-import { useRouter } from "next/navigation"
-import Link from "next/link"
-import { motion } from "framer-motion"
+import { useEffect, useState } from "react"
+import { useRouter, useSearchParams } from "next/navigation"
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { CheckCircle, ArrowRight } from "lucide-react"
 import { useAuth } from "@/contexts/auth-context"
-import { getProductionUrl } from "@/lib/url-utils"
 
-export default function SubscriptionSuccess() {
-  const { user } = useAuth()
+export default function SubscriptionSuccessPage() {
+  const [isLoading, setIsLoading] = useState(true)
+  const [message, setMessage] = useState("Processing your subscription...")
   const router = useRouter()
-  const productionUrl = getProductionUrl()
+  const searchParams = useSearchParams()
+  const { user } = useAuth()
 
-  // If no user, redirect to login
+  // Get the session ID from the URL
+  const sessionId = searchParams?.get("session_id")
+
   useEffect(() => {
-    if (!user) {
-      router.push(`${productionUrl}/login`)
+    // If no session ID, redirect to dashboard
+    if (!sessionId) {
+      router.push("/dashboard")
+      return
     }
-  }, [user, router, productionUrl])
 
-  if (!user) {
-    return null
-  }
+    // If user is not logged in, wait for auth to initialize
+    if (!user) {
+      return
+    }
+
+    // Check the subscription status
+    const checkSubscription = async () => {
+      try {
+        // Call an API to verify the subscription status
+        const response = await fetch(`/api/verify-subscription?sessionId=${sessionId}`)
+
+        if (response.ok) {
+          setMessage("Your subscription has been activated successfully!")
+        } else {
+          setMessage("There was an issue activating your subscription. Please contact support.")
+        }
+      } catch (error) {
+        console.error("Error checking subscription:", error)
+        setMessage("There was an error processing your subscription. Please contact support.")
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    checkSubscription()
+  }, [sessionId, user, router])
 
   return (
-    <div className="relative min-h-screen bg-black text-white flex items-center justify-center">
-      {/* Premium Gradient Background */}
-      <div className="fixed inset-0 z-0 bg-gradient-to-b from-black via-black to-gray-900"></div>
-
-      <motion.div
-        initial={{ opacity: 0, scale: 0.9 }}
-        animate={{ opacity: 1, scale: 1 }}
-        transition={{ duration: 0.5 }}
-        className="relative z-10 max-w-md w-full p-8 bg-black/60 backdrop-blur-sm rounded-xl border border-gray-800 shadow-2xl text-center"
-      >
-        <motion.div
-          initial={{ scale: 0, opacity: 0 }}
-          animate={{ scale: 1, opacity: 1 }}
-          transition={{ delay: 0.3, type: "spring", stiffness: 200 }}
-          className="flex justify-center"
-        >
-          <div className="rounded-full bg-green-900/20 p-3 mb-6">
-            <CheckCircle className="h-12 w-12 text-green-500" />
+    <div className="container mx-auto py-20 px-4">
+      <Card className="max-w-md mx-auto">
+        <CardHeader>
+          <CardTitle>Subscription Successful</CardTitle>
+          <CardDescription>Thank you for your subscription!</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="text-center py-4">
+            {isLoading ? (
+              <div className="flex flex-col items-center">
+                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary mb-4"></div>
+                <p>{message}</p>
+              </div>
+            ) : (
+              <p className="text-lg">{message}</p>
+            )}
           </div>
-        </motion.div>
-
-        <motion.h1
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.4, duration: 0.5 }}
-          className="text-2xl font-bold text-white mb-4"
-        >
-          Subscription Successful!
-        </motion.h1>
-
-        <motion.p
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ delay: 0.5, duration: 0.5 }}
-          className="text-gray-400 mb-6"
-        >
-          Thank you for subscribing to MassClip Creator Pro! Your account has been upgraded and you now have access to
-          all premium features.
-        </motion.p>
-
-        <div className="space-y-4">
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.6, duration: 0.5 }}
-          >
-            <Button
-              className="w-full bg-red-600 hover:bg-red-700 text-white group flex items-center justify-center"
-              onClick={() => router.push(`${productionUrl}/dashboard`)}
-            >
-              Go to Dashboard
-              <ArrowRight className="ml-2 h-4 w-4 transition-transform duration-300 group-hover:translate-x-1" />
-            </Button>
-          </motion.div>
-
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.7, duration: 0.5 }}
-          >
-            <Link href={`${productionUrl}/dashboard/user`}>
-              <Button variant="outline" className="w-full border-gray-700 text-gray-300 hover:bg-gray-800">
-                View Account
-              </Button>
-            </Link>
-          </motion.div>
-        </div>
-      </motion.div>
+        </CardContent>
+        <CardFooter className="flex justify-center">
+          <Button onClick={() => router.push("/dashboard")} disabled={isLoading}>
+            Go to Dashboard
+          </Button>
+        </CardFooter>
+      </Card>
     </div>
   )
 }

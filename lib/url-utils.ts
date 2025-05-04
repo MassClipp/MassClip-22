@@ -6,8 +6,8 @@
  * Returns the site URL - always massclip.pro for production
  */
 export function getSiteUrl(): string {
-  // Always return massclip.pro for production
-  return "https://massclip.pro"
+  // Use environment variable with fallback to hardcoded value
+  return process.env.NEXT_PUBLIC_SITE_URL || "https://massclip.pro"
 }
 
 /**
@@ -29,10 +29,16 @@ export function createProductionUrl(path: string): string {
 
 /**
  * Gets the current domain from the browser
+ * Safely handles server-side rendering
  */
 export function getCurrentDomain(): string {
-  // Even if we're on a different domain, always return massclip.pro
-  return getSiteUrl()
+  // Check if we're in a browser environment before using location
+  if (typeof window !== "undefined") {
+    return window.location.origin
+  }
+
+  // If we're on the server, use the environment variable
+  return process.env.NEXT_PUBLIC_SITE_URL_2 || process.env.NEXT_PUBLIC_SITE_URL || "https://massclip.pro"
 }
 
 /**

@@ -66,7 +66,8 @@
     "dotenv": "latest",
     "stripe": "latest",
     "framer-motion": "latest",
-    "resend": "latest"
+    "resend": "latest",
+    "@radix-ui/react-icons": "latest"
   },
   "devDependencies": {
     "@types/node": "^22",
