@@ -63,7 +63,7 @@ export default function LandingPage() {
           <div className="container mx-auto max-w-6xl">
             <div className="flex flex-col items-center text-center mb-12">
               <motion.h1
-                className="text-5xl md:text-7xl lg:text-8xl font-light text-white mb-6 max-w-4xl leading-tight"
+                className="text-4xl md:text-7xl lg:text-8xl font-light text-white mb-6 max-w-4xl leading-tight"
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.8, delay: 0.2 }}
@@ -72,7 +72,7 @@ export default function LandingPage() {
               </motion.h1>
 
               <motion.p
-                className="text-xl md:text-2xl font-light text-white/70 mb-12 max-w-2xl"
+                className="text-lg md:text-2xl font-light text-white/70 mb-8 md:mb-12 max-w-2xl"
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.8, delay: 0.4 }}
@@ -207,7 +207,7 @@ export default function LandingPage() {
                 </p>
               </motion.div>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6">
                 {/* Money & Wealth Category */}
                 <motion.div
                   className="relative overflow-hidden group cursor-pointer bg-black/20 border border-white/5 aspect-video flex items-center justify-center"
@@ -218,12 +218,12 @@ export default function LandingPage() {
                   viewport={{ once: true, margin: "-100px" }}
                 >
                   <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/30 to-transparent opacity-70 group-hover:opacity-40 transition-opacity duration-300"></div>
-                  <div className="relative z-10 text-center">
-                    <h3 className="text-2xl font-light text-white mb-2 group-hover:text-crimson transition-colors duration-300">
+                  <div className="relative z-10 text-center px-2">
+                    <h3 className="text-xl md:text-2xl font-light text-white mb-2 group-hover:text-crimson transition-colors duration-300">
                       Money & Wealth
                     </h3>
-                    <div className="flex items-center justify-center text-white/50 text-sm">
-                      <Play className="h-4 w-4 mr-2" />
+                    <div className="flex items-center justify-center text-white/50 text-xs md:text-sm">
+                      <Play className="h-3 w-3 md:h-4 md:w-4 mr-1 md:mr-2" />
                       <span>Explore Collection</span>
                     </div>
                   </div>
@@ -239,12 +239,12 @@ export default function LandingPage() {
                   viewport={{ once: true, margin: "-100px" }}
                 >
                   <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/30 to-transparent opacity-70 group-hover:opacity-40 transition-opacity duration-300"></div>
-                  <div className="relative z-10 text-center">
-                    <h3 className="text-2xl font-light text-white mb-2 group-hover:text-crimson transition-colors duration-300">
+                  <div className="relative z-10 text-center px-2">
+                    <h3 className="text-xl md:text-2xl font-light text-white mb-2 group-hover:text-crimson transition-colors duration-300">
                       Hustle Mentality
                     </h3>
-                    <div className="flex items-center justify-center text-white/50 text-sm">
-                      <Play className="h-4 w-4 mr-2" />
+                    <div className="flex items-center justify-center text-white/50 text-xs md:text-sm">
+                      <Play className="h-3 w-3 md:h-4 md:w-4 mr-1 md:mr-2" />
                       <span>Explore Collection</span>
                     </div>
                   </div>
@@ -260,12 +260,12 @@ export default function LandingPage() {
                   viewport={{ once: true, margin: "-100px" }}
                 >
                   <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/30 to-transparent opacity-70 group-hover:opacity-40 transition-opacity duration-300"></div>
-                  <div className="relative z-10 text-center">
-                    <h3 className="text-2xl font-light text-white mb-2 group-hover:text-crimson transition-colors duration-300">
+                  <div className="relative z-10 text-center px-2">
+                    <h3 className="text-xl md:text-2xl font-light text-white mb-2 group-hover:text-crimson transition-colors duration-300">
                       Introspection
                     </h3>
-                    <div className="flex items-center justify-center text-white/50 text-sm">
-                      <Play className="h-4 w-4 mr-2" />
+                    <div className="flex items-center justify-center text-white/50 text-xs md:text-sm">
+                      <Play className="h-3 w-3 md:h-4 md:w-4 mr-1 md:mr-2" />
                       <span>Explore Collection</span>
                     </div>
                   </div>

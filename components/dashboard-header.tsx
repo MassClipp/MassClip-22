@@ -164,7 +164,7 @@ export default function DashboardHeader({ initialSearchQuery = "" }) {
           )}
 
           {/* Pro Badge */}
-          {user && <UserPlanBadge className="mr-2" />}
+          {/* Pro badge only shown in dropdown menu */}
 
           {/* Upgrade Button (non-Pro users) */}
           {!isProUser && (
@@ -234,7 +234,7 @@ export default function DashboardHeader({ initialSearchQuery = "" }) {
             </div>
           )}
 
-          {user && <UserPlanBadge className="mr-2" />}
+          {/* Pro badge only shown in dropdown menu */}
           <Button
             variant="ghost"
             size="icon"
@@ -276,16 +276,16 @@ export default function DashboardHeader({ initialSearchQuery = "" }) {
       {/* Mobile Menu Backdrop */}
       {mobileMenuOpen && (
         <div
-          className="md:hidden fixed inset-0 bg-black/80 z-40"
+          className="md:hidden fixed inset-0 bg-black/90 backdrop-blur-sm z-40"
           onClick={() => setMobileMenuOpen(false)}
           aria-hidden="true"
         />
       )}
 
-      {/* Mobile Dropdown Menu - UPDATED with solid background */}
+      {/* Mobile Dropdown Menu - COMPLETELY REVAMPED */}
       <div
         ref={mobileMenuRef}
-        className={`md:hidden fixed inset-y-0 right-0 w-72 bg-black z-50 transform transition-transform duration-300 ease-out ${
+        className={`md:hidden fixed inset-y-0 right-0 w-72 bg-black z-50 transform transition-transform duration-300 ease-in-out ${
           mobileMenuOpen ? "translate-x-0" : "translate-x-full"
         }`}
         style={{
@@ -294,7 +294,7 @@ export default function DashboardHeader({ initialSearchQuery = "" }) {
         }}
       >
         {/* Header with logo and close button */}
-        <div className="flex items-center justify-between p-5 border-b border-zinc-800 bg-black">
+        <div className="flex items-center justify-between p-5 border-b border-zinc-800">
           <Logo href="/dashboard" className="h-6" />
           <Button
             variant="ghost"
@@ -307,115 +307,117 @@ export default function DashboardHeader({ initialSearchQuery = "" }) {
           </Button>
         </div>
 
-        {/* User profile section */}
-        {user && (
-          <div className="p-5 border-b border-zinc-800 bg-black">
-            <div
-              className="flex items-center space-x-3 cursor-pointer"
-              onClick={() => {
-                router.push("/dashboard/user")
-                setMobileMenuOpen(false)
-              }}
-            >
-              <div className="h-12 w-12 rounded-full bg-zinc-800 flex items-center justify-center border border-zinc-700">
-                <User className="h-6 w-6 text-zinc-400" />
-              </div>
-              <div>
-                <p className="text-white font-light text-base">{user.displayName || user.email}</p>
-                <UserPlanBadge showTooltip={false} className="mt-1" />
-              </div>
-              <ChevronRight className="h-4 w-4 text-zinc-500 ml-auto" />
-            </div>
-          </div>
-        )}
-
-        {/* Download counter for free users */}
-        {!isProUser && (
-          <div className="px-5 py-4 bg-black">
-            <div className="bg-zinc-800 rounded-lg p-4 border border-zinc-700">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center">
-                  <Download className={`h-4 w-4 mr-2 ${hasReachedLimit ? "text-amber-500" : "text-crimson"}`} />
-                  <span className="text-white font-medium text-sm">Downloads</span>
+        <div className="flex flex-col h-[calc(100%-64px)] overflow-hidden">
+          {/* User profile section */}
+          {user && (
+            <div className="p-5 border-b border-zinc-800">
+              <div
+                className="flex items-center space-x-3 cursor-pointer"
+                onClick={() => {
+                  router.push("/dashboard/user")
+                  setMobileMenuOpen(false)
+                }}
+              >
+                <div className="h-12 w-12 rounded-full bg-zinc-800 flex items-center justify-center border border-zinc-700">
+                  <User className="h-6 w-6 text-zinc-400" />
                 </div>
-                <span
-                  className={`text-sm font-medium px-3 py-1 rounded-full ${
-                    hasReachedLimit
-                      ? "bg-amber-500/20 text-amber-500 border border-amber-500/30"
-                      : "bg-crimson/20 text-white border border-crimson/30"
-                  }`}
-                >
-                  {remainingDownloads} left
-                </span>
+                <div>
+                  <p className="text-white font-light text-base">{user.displayName || user.email}</p>
+                  <UserPlanBadge showTooltip={false} className="mt-1" />
+                </div>
+                <ChevronRight className="h-4 w-4 text-zinc-500 ml-auto" />
               </div>
-              {hasReachedLimit && (
-                <p className="text-xs text-amber-400 mt-2">You've reached your download limit for this month</p>
-              )}
             </div>
-          </div>
-        )}
+          )}
 
-        {/* Navigation menu */}
-        <nav className="flex-1 px-5 py-2 overflow-y-auto bg-black">
-          <div className="space-y-1">
-            {navigationItems.map((item) => (
+          {/* Download counter for free users */}
+          {!isProUser && (
+            <div className="px-5 py-4">
+              <div className="bg-zinc-800/50 rounded-lg p-4 border border-zinc-700/50">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center">
+                    <Download className={`h-4 w-4 mr-2 ${hasReachedLimit ? "text-amber-500" : "text-crimson"}`} />
+                    <span className="text-white font-medium text-sm">Downloads</span>
+                  </div>
+                  <span
+                    className={`text-sm font-medium px-3 py-1 rounded-full ${
+                      hasReachedLimit
+                        ? "bg-amber-500/20 text-amber-500 border border-amber-500/30"
+                        : "bg-crimson/20 text-white border border-crimson/30"
+                    }`}
+                  >
+                    {remainingDownloads} left
+                  </span>
+                </div>
+                {hasReachedLimit && (
+                  <p className="text-xs text-amber-400 mt-2">You've reached your download limit for this month</p>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Navigation menu */}
+          <nav className="flex-1 px-5 py-2 overflow-y-auto">
+            <div className="space-y-1">
+              {navigationItems.map((item) => (
+                <Link
+                  key={item.name}
+                  href={item.href}
+                  className="flex items-center justify-between py-3.5 px-3 rounded-lg text-zinc-200 hover:text-white hover:bg-zinc-800/70 transition-colors"
+                  onClick={() => setMobileMenuOpen(false)}
+                >
+                  <div className="flex items-center">
+                    <span className="mr-3 text-zinc-400">{item.icon}</span>
+                    <span className="text-sm font-light">{item.name}</span>
+                  </div>
+                  <ChevronRight className="h-4 w-4 text-zinc-500" />
+                </Link>
+              ))}
+            </div>
+
+            <div className="h-px bg-zinc-800 my-4"></div>
+
+            <div className="space-y-1">
               <Link
-                key={item.name}
-                href={item.href}
-                className="flex items-center justify-between py-3.5 px-3 rounded-lg text-zinc-200 hover:text-white hover:bg-zinc-800 transition-colors"
+                href="/dashboard/profile"
+                className="flex items-center justify-between py-3.5 px-3 rounded-lg text-zinc-200 hover:text-white hover:bg-zinc-800/70 transition-colors"
                 onClick={() => setMobileMenuOpen(false)}
               >
                 <div className="flex items-center">
-                  <span className="mr-3 text-zinc-400">{item.icon}</span>
-                  <span className="text-sm font-light">{item.name}</span>
+                  <span className="mr-3 text-zinc-400">
+                    <User className="h-4 w-4" />
+                  </span>
+                  <span className="text-sm font-light">Profile</span>
                 </div>
                 <ChevronRight className="h-4 w-4 text-zinc-500" />
               </Link>
-            ))}
-          </div>
+            </div>
+          </nav>
 
-          <div className="h-px bg-zinc-800 my-4"></div>
+          {/* Footer actions */}
+          <div className="p-5 border-t border-zinc-800 mt-auto">
+            {!isProUser && (
+              <UpgradeButton
+                navigateOnly={true}
+                onClick={handleUpgradeClick}
+                className="w-full mb-4 py-2.5 bg-crimson hover:bg-crimson-dark border-none"
+              >
+                Upgrade to Creator Pro
+              </UpgradeButton>
+            )}
 
-          <div className="space-y-1">
-            <Link
-              href="/dashboard/profile"
-              className="flex items-center justify-between py-3.5 px-3 rounded-lg text-zinc-200 hover:text-white hover:bg-zinc-800 transition-colors"
-              onClick={() => setMobileMenuOpen(false)}
+            <Button
+              variant="outline"
+              className="w-full justify-center text-zinc-300 hover:text-white border-zinc-700 hover:bg-zinc-800 hover:border-zinc-600"
+              onClick={() => {
+                handleLogout()
+                setMobileMenuOpen(false)
+              }}
             >
-              <div className="flex items-center">
-                <span className="mr-3 text-zinc-400">
-                  <User className="h-4 w-4" />
-                </span>
-                <span className="text-sm font-light">Profile</span>
-              </div>
-              <ChevronRight className="h-4 w-4 text-zinc-500" />
-            </Link>
+              <LogOut className="h-4 w-4 mr-2" />
+              Log out
+            </Button>
           </div>
-        </nav>
-
-        {/* Footer actions */}
-        <div className="p-5 border-t border-zinc-800 bg-black">
-          {!isProUser && (
-            <UpgradeButton
-              navigateOnly={true}
-              onClick={handleUpgradeClick}
-              className="w-full mb-4 py-2.5 bg-crimson hover:bg-crimson-dark border-none"
-            >
-              Upgrade to Creator Pro
-            </UpgradeButton>
-          )}
-
-          <Button
-            variant="outline"
-            className="w-full justify-center text-zinc-300 hover:text-white border-zinc-700 hover:bg-zinc-800 hover:border-zinc-600"
-            onClick={() => {
-              handleLogout()
-              setMobileMenuOpen(false)
-            }}
-          >
-            <LogOut className="h-4 w-4 mr-2" />
-            Log out
-          </Button>
         </div>
       </div>
     </header>
