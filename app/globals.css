@@ -812,3 +812,12 @@
     z-index: 49;
   }
 }
+
+/* Add this to your globals.css file if it's not already there */
+.text-gradient-accent {
+  background: linear-gradient(to right, #e61e4d, #d70466);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  display: inline-block;
+}
