@@ -3,7 +3,7 @@
 import { useRef, useEffect, useState } from "react"
 import { useSearchParams } from "next/navigation"
 import { motion } from "framer-motion"
-import { Search, Clock, Brain, Rocket, ChevronRight, TrendingUp, Zap } from "lucide-react"
+import { Search, Clock, Brain, Rocket, ChevronRight, TrendingUp } from "lucide-react"
 import DashboardHeader from "@/components/dashboard-header"
 import VideoRow from "@/components/video-row"
 import { useVimeoShowcases } from "@/hooks/use-vimeo-showcases"
@@ -297,20 +297,6 @@ export default function Dashboard() {
             )}
           </div>
         )}
-
-        {/* Floating "New" badge */}
-        <div className="fixed bottom-6 right-6 z-50">
-          <motion.div
-            initial={{ scale: 0.8, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            transition={{ delay: 1, duration: 0.5 }}
-          >
-            <div className="bg-gradient-to-r from-crimson to-crimson-dark text-white px-4 py-2 rounded-full shadow-lg flex items-center">
-              <Zap className="h-4 w-4 mr-2" />
-              <span className="text-sm font-medium">New Design</span>
-            </div>
-          </motion.div>
-        </div>
       </main>
     </div>
   )
