@@ -40,10 +40,19 @@ export async function POST(request: Request) {
     initializeFirebaseAdmin()
     const db = getFirestore()
 
-    // Initialize Stripe
-    const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
-      apiVersion: "2023-10-16",
-    })
+    // Initialize Stripe with proper error handling
+    let stripe: Stripe
+    try {
+      stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
+        apiVersion: "2023-10-16",
+      })
+      // Test the connection
+      await stripe.customers.list({ limit: 1 })
+      console.log("💰 CHECKOUT: Stripe connection successful")
+    } catch (stripeError) {
+      console.error("💰 CHECKOUT ERROR: Failed to initialize Stripe:", stripeError)
+      return NextResponse.json({ error: "Failed to connect to payment provider" }, { status: 500 })
+    }
 
     // Get the success and cancel URLs
     const uniqueParam = `t=${Date.now()}`
@@ -77,28 +86,41 @@ export async function POST(request: Request) {
 
     console.log("💰 CHECKOUT: Session data for Firestore:", JSON.stringify(sessionData, null, 2))
 
-    // Create the checkout session
+    // Create the checkout session with proper error handling
     console.log(`💰 CHECKOUT: Creating checkout session for user ${requestData.userId}`)
+    let session
 
-    const session = await stripe.checkout.sessions.create({
-      payment_method_types: ["card"],
-      line_items: [
-        {
-          price: process.env.STRIPE_PRICE_ID,
-          quantity: 1,
+    try {
+      session = await stripe.checkout.sessions.create({
+        payment_method_types: ["card"],
+        line_items: [
+          {
+            price: process.env.STRIPE_PRICE_ID,
+            quantity: 1,
+          },
+        ],
+        mode: "subscription",
+        success_url: successUrl,
+        cancel_url: cancelUrl,
+        customer_email: requestData.email,
+        metadata: metadata,
+        subscription_data: {
+          metadata: metadata, // Add metadata to subscription as well
         },
-      ],
-      mode: "subscription",
-      success_url: successUrl,
-      cancel_url: cancelUrl,
-      customer_email: requestData.email,
-      metadata: metadata,
-      subscription_data: {
-        metadata: metadata, // Add metadata to subscription as well
-      },
-    })
+      })
 
-    console.log(`💰 CHECKOUT: Created checkout session with ID: ${session.id}`)
+      console.log(`💰 CHECKOUT: Created checkout session with ID: ${session.id}`)
+      console.log(`💰 CHECKOUT: Checkout URL: ${session.url}`)
+    } catch (checkoutError: any) {
+      console.error("💰 CHECKOUT ERROR: Failed to create checkout session:", checkoutError)
+      return NextResponse.json(
+        {
+          error: `Failed to create checkout session: ${checkoutError.message}`,
+          details: checkoutError,
+        },
+        { status: 500 },
+      )
+    }
 
     // Now store the session in Firestore with the Stripe session ID
     try {
@@ -108,6 +130,7 @@ export async function POST(request: Request) {
         .set({
           ...sessionData,
           sessionId: session.id,
+          checkoutUrl: session.url, // Store the URL for debugging
         })
       console.log(`💰 CHECKOUT: Stored checkout session in Firestore with ID: ${session.id}`)
     } catch (error) {
@@ -119,6 +142,12 @@ export async function POST(request: Request) {
     return NextResponse.json({ url: session.url, sessionId: session.id })
   } catch (error: any) {
     console.error("💰 CHECKOUT ERROR:", error)
-    return NextResponse.json({ error: error.message || "Failed to create checkout session" }, { status: 500 })
+    return NextResponse.json(
+      {
+        error: error.message || "Failed to create checkout session",
+        stack: error.stack,
+      },
+      { status: 500 },
+    )
   }
 }

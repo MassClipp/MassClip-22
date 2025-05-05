@@ -10,9 +10,15 @@ interface UpgradeButtonProps {
   className?: string
   children?: React.ReactNode
   onClick?: () => void
+  navigateOnly?: boolean // New prop to control behavior
 }
 
-export default function UpgradeButton({ className = "", children, onClick }: UpgradeButtonProps) {
+export default function UpgradeButton({
+  className = "",
+  children,
+  onClick,
+  navigateOnly = false, // Default to false for backward compatibility
+}: UpgradeButtonProps) {
   const [isLoading, setIsLoading] = useState(false)
   const router = useRouter()
   const { toast } = useToast()
@@ -21,6 +27,12 @@ export default function UpgradeButton({ className = "", children, onClick }: Upg
   const handleUpgrade = async () => {
     if (onClick) {
       onClick()
+      return
+    }
+
+    // If navigateOnly is true, just go to the membership plans page
+    if (navigateOnly) {
+      router.push("/membership-plans")
       return
     }
 
@@ -73,6 +85,7 @@ export default function UpgradeButton({ className = "", children, onClick }: Upg
 
       if (url) {
         console.log(`Redirecting to checkout URL: ${url}`)
+        // Use window.location.href for a full page navigation to Stripe
         window.location.href = url
       } else {
         throw new Error("No checkout URL returned")
