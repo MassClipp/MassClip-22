@@ -178,9 +178,9 @@ export default function Dashboard() {
         {!searchQuery && !isLoadingData && (
           <motion.div variants={containerVariants} initial="hidden" animate="visible" className="px-6 mb-12">
             <motion.div variants={itemVariants} className="flex items-center justify-between mb-6">
-              <h2 className="text-3xl font-extralight tracking-tight text-white">
+              <h1 className="text-3xl font-extralight tracking-tight text-white">
                 Find Your Next <span className="text-gradient-accent ml-2">Viral Clip</span>
-              </h2>
+              </h1>
               <Button
                 onClick={() => router.push("/category/browse-all")}
                 variant="ghost"

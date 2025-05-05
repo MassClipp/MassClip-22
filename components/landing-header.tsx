@@ -6,7 +6,6 @@ import { Button } from "@/components/ui/button"
 import { Menu, X, ChevronRight, Instagram } from "lucide-react"
 import Logo from "@/components/logo"
 import { useScrollLock } from "@/hooks/use-scroll-lock"
-import UpgradeButton from "@/components/upgrade-button"
 
 export default function LandingHeader() {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
@@ -92,10 +91,6 @@ export default function LandingHeader() {
               SIGN UP
             </Button>
           </Link>
-          {/* Use navigateOnly prop to make the button go to membership page */}
-          <UpgradeButton navigateOnly={true} className="ml-2">
-            Upgrade
-          </UpgradeButton>
         </div>
 
         {/* Mobile Menu Button */}
@@ -197,10 +192,6 @@ export default function LandingHeader() {
             >
               SIGN UP
             </Link>
-            {/* Use navigateOnly prop to make the button go to membership page */}
-            <UpgradeButton navigateOnly={true} className="w-full text-center" onClick={() => setIsMenuOpen(false)}>
-              Upgrade
-            </UpgradeButton>
           </div>
         </div>
       </div>

@@ -235,7 +235,7 @@ export default function UserDashboardPage() {
                           <h3 className="text-lg font-light text-white mb-3">
                             Current Plan:{" "}
                             <span className={isProUser ? "text-yellow-500" : "text-zinc-400"}>
-                              {isProUser ? "Pro" : "Free"}
+                              {isProUser ? "Creator Pro" : "Free"}
                             </span>
                           </h3>
                           <ul className="space-y-2 text-sm">
