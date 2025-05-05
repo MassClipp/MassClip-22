@@ -1005,6 +1005,29 @@
   }
 }
 
+/* Add these specific category fixes near the end of the file */
+@media (max-width: 640px) {
+  /* Fix dashboard category buttons */
+  .dashboard-category-button {
+    padding: 0.5rem !important;
+  }
+
+  .dashboard-category-button span {
+    font-size: 0.75rem !important;
+    line-height: 1 !important;
+  }
+
+  .dashboard-category-button .icon-container {
+    padding: 0.35rem !important;
+    margin-right: 0.35rem !important;
+  }
+
+  .dashboard-category-button .icon-container svg {
+    width: 0.75rem !important;
+    height: 0.75rem !important;
+  }
+}
+
 /* Ensure text doesn't overflow containers */
 .text-truncate {
   white-space: nowrap;

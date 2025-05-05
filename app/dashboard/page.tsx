@@ -3,7 +3,7 @@
 import { useRef, useEffect, useState } from "react"
 import { useSearchParams } from "next/navigation"
 import { motion } from "framer-motion"
-import { Search, Clock, Brain, Rocket, ChevronRight, Sparkles, TrendingUp, Zap } from "lucide-react"
+import { Search, Clock, Brain, Rocket, ChevronRight, TrendingUp, Zap } from "lucide-react"
 import DashboardHeader from "@/components/dashboard-header"
 import VideoRow from "@/components/video-row"
 import { useVimeoShowcases } from "@/hooks/use-vimeo-showcases"
@@ -132,10 +132,10 @@ export default function Dashboard() {
 
   // Quick category navigation
   const quickCategories = [
-    { name: "Introspection", icon: <Brain className="h-5 w-5" />, href: "/category/introspection" },
-    { name: "Hustle Mentality", icon: <Rocket className="h-5 w-5" />, href: "/category/hustle-mentality" },
-    { name: "Recently Added", icon: <Clock className="h-5 w-5" />, href: "/category/recently-added" },
-    { name: "All Categories", icon: <Search className="h-5 w-5" />, href: "/dashboard/categories" },
+    { name: "Introspection", icon: <Brain className="h-4 w-4 md:h-5 md:w-5" />, href: "/category/introspection" },
+    { name: "Hustle", icon: <Rocket className="h-4 w-4 md:h-5 md:w-5" />, href: "/category/hustle-mentality" },
+    { name: "Recent", icon: <Clock className="h-4 w-4 md:h-5 md:w-5" />, href: "/category/recently-added" },
+    { name: "All", icon: <Search className="h-4 w-4 md:h-5 md:w-5" />, href: "/dashboard/categories" },
   ]
 
   return (
@@ -178,8 +178,7 @@ export default function Dashboard() {
         {!searchQuery && !isLoadingData && (
           <motion.div variants={containerVariants} initial="hidden" animate="visible" className="px-6 mb-12">
             <motion.div variants={itemVariants} className="flex items-center justify-between mb-6">
-              <h2 className="text-3xl font-extralight tracking-tight text-white flex items-center">
-                <Sparkles className="h-5 w-5 mr-3 text-amber-400" />
+              <h2 className="text-3xl font-extralight tracking-tight text-white">
                 Find Your Next <span className="text-gradient-accent ml-2">Viral Clip</span>
               </h2>
               <Button
@@ -240,7 +239,7 @@ export default function Dashboard() {
                   >
                     {category.icon}
                   </div>
-                  <span className="text-left font-light">{category.name}</span>
+                  <span className="text-left font-light text-sm md:text-base">{category.name}</span>
                 </Button>
               ))}
             </motion.div>
