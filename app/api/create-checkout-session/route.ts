@@ -3,7 +3,7 @@ import Stripe from "stripe"
 import { initializeFirebaseAdmin } from "@/lib/firebase-admin"
 import { getFirestore } from "firebase-admin/firestore"
 
-// Hardcoded site URL for production
+// Hardcoded site URL for production - ALWAYS use massclip.pro
 const SITE_URL = "https://massclip.pro"
 
 export async function POST(request: Request) {
@@ -58,7 +58,8 @@ export async function POST(request: Request) {
       firebaseUid: requestData.userId,
       email: requestData.email,
       timestamp: new Date().toISOString(),
-      siteUrl: SITE_URL,
+      siteUrl: SITE_URL, // Always use massclip.pro
+      environment: "production",
     }
 
     console.log("💰 CHECKOUT: Metadata:", JSON.stringify(metadata, null, 2))
@@ -71,7 +72,7 @@ export async function POST(request: Request) {
       status: "created",
       createdAt: new Date(),
       metadata: metadata,
-      siteUrl: SITE_URL,
+      siteUrl: SITE_URL, // Always use massclip.pro
     }
 
     console.log("💰 CHECKOUT: Session data for Firestore:", JSON.stringify(sessionData, null, 2))

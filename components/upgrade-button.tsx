@@ -60,7 +60,7 @@ export default function UpgradeButton({ className = "", children, onClick }: Upg
         body: JSON.stringify({
           userId: user.uid,
           email: user.email,
-          siteUrl: "https://massclip.pro", // Hardcoded for production
+          siteUrl: "https://massclip.pro", // Always use massclip.pro
         }),
       })
 
