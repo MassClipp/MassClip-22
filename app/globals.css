@@ -967,3 +967,65 @@
   text-overflow: ellipsis;
   max-width: 180px;
 }
+
+/* Add these specific fixes at the end of the file */
+
+/* Fix for category boxes to ensure text stays inside */
+@media (max-width: 640px) {
+  /* Make category text smaller on mobile */
+  .category-title {
+    font-size: 1rem !important;
+    line-height: 1.2 !important;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* Ensure proper padding in category boxes */
+  .category-box {
+    padding: 0.5rem !important;
+  }
+
+  /* Reduce text size in category boxes */
+  .category-box h3 {
+    font-size: 1rem !important;
+    line-height: 1.2 !important;
+    margin-bottom: 0.25rem !important;
+  }
+
+  /* Make explore text smaller */
+  .category-box .explore-text {
+    font-size: 0.75rem !important;
+  }
+
+  /* Ensure proper spacing */
+  .category-grid {
+    gap: 0.5rem !important;
+  }
+}
+
+/* Ensure text doesn't overflow containers */
+.text-truncate {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+/* Fix for mobile menu */
+.mobile-menu {
+  position: fixed !important;
+  top: 60px !important;
+  height: calc(100vh - 60px) !important;
+  overflow-y: auto !important;
+}
+\
+</
+merged 60px !important
+;
+height: calc(100vh - 60px) !important
+;
+overflow-y: auto !important
+;
+}
