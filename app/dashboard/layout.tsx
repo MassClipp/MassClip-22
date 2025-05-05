@@ -11,8 +11,12 @@ export default function DashboardLayout({
   return (
     <DownloadLimitProvider>
       <RedirectHelper />
-      {children}
-      <footer className="mt-4 py-4 border-t border-zinc-800/30 text-center">
+      <div className="pb-16 md:pb-0">
+        {" "}
+        {/* Add padding at the bottom for mobile navigation */}
+        {children}
+      </div>
+      <footer className="mt-4 py-4 border-t border-zinc-800/30 text-center hidden md:block">
         <div className="container mx-auto px-4 flex flex-col md:flex-row justify-between items-center">
           <div className="mb-4 md:mb-0">
             <Logo href="/" size="sm" />
