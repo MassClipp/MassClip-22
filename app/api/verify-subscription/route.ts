@@ -61,7 +61,7 @@ export async function GET(request: Request) {
                 .collection("users")
                 .doc(userId)
                 .update({
-                  plan: "creator-pro",
+                  plan: "creator_pro", // CHANGED: Using underscore instead of hyphen
                   permissions: {
                     download: true,
                     premium: true,
@@ -114,7 +114,7 @@ export async function GET(request: Request) {
             .collection("users")
             .doc(userId)
             .update({
-              plan: "creator-pro",
+              plan: "creator_pro", // CHANGED: Using underscore instead of hyphen
               permissions: {
                 download: true,
                 premium: true,

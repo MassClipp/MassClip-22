@@ -40,6 +40,13 @@ export async function POST(request: Request) {
     initializeFirebaseAdmin()
     const db = getFirestore()
 
+    // Verify that the user exists in Firestore
+    const userDoc = await db.collection("users").doc(requestData.userId).get()
+    if (!userDoc.exists) {
+      console.error(`💰 CHECKOUT ERROR: User ${requestData.userId} does not exist in Firestore`)
+      return NextResponse.json({ error: "User not found" }, { status: 404 })
+    }
+
     // Initialize Stripe with proper error handling
     let stripe: Stripe
     try {

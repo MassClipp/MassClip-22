@@ -127,15 +127,37 @@ export async function POST(request: Request) {
         }
       }
 
+      // If we still don't have a user ID, try to find by email
+      if (!userId && email) {
+        try {
+          const userQuery = await firestore.collection("users").where("email", "==", email).limit(1).get()
+
+          if (!userQuery.empty) {
+            userId = userQuery.docs[0].id
+            console.log(`🪝 WEBHOOK: Found user ID ${userId} by email ${email}`)
+          }
+        } catch (error) {
+          console.error("🪝 WEBHOOK ERROR: Failed to query user by email:", error)
+        }
+      }
+
       // If we have a user ID, update their permissions
       if (userId) {
         try {
-          // Update user permissions in Firestore
+          // First, check if the user exists
+          const userDoc = await firestore.collection("users").doc(userId).get()
+
+          if (!userDoc.exists) {
+            console.error(`🪝 WEBHOOK ERROR: User ${userId} does not exist in Firestore`)
+            return NextResponse.json({ error: "User not found" }, { status: 404 })
+          }
+
+          // Update user permissions in Firestore - USING creator_pro with underscore for consistency
           await firestore
             .collection("users")
             .doc(userId)
             .update({
-              plan: "creator-pro",
+              plan: "creator_pro", // CHANGED: Using underscore instead of hyphen
               permissions: {
                 download: true,
                 premium: true,
@@ -144,7 +166,7 @@ export async function POST(request: Request) {
               paymentStatus: "active",
             })
 
-          console.log(`🪝 WEBHOOK: Updated permissions for user ${userId} to creator-pro`)
+          console.log(`🪝 WEBHOOK: Updated permissions for user ${userId} to creator_pro`)
 
           // Store the subscription info
           if (session.subscription) {
@@ -155,7 +177,7 @@ export async function POST(request: Request) {
               subscriptionId,
               status: "active",
               createdAt: new Date(),
-              plan: "creator-pro",
+              plan: "creator_pro", // CHANGED: Using underscore instead of hyphen
               customerId: session.customer,
             })
 
