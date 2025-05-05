@@ -1,50 +1,47 @@
 "use client"
 
 import type React from "react"
+
 import { useState } from "react"
 import { useRouter } from "next/navigation"
-import { useToast } from "@/hooks/use-toast"
+import { Button } from "@/components/ui/button"
+import { cn } from "@/lib/utils"
 import { useAuth } from "@/contexts/auth-context"
+import { useUserPlan } from "@/hooks/use-user-plan"
 
 interface UpgradeButtonProps {
-  className?: string
   children?: React.ReactNode
+  className?: string
   onClick?: () => void
-  navigateOnly?: boolean // New prop to control behavior
+  navigateOnly?: boolean
 }
 
-export default function UpgradeButton({
-  className = "",
-  children,
-  onClick,
-  navigateOnly = false, // Default to false for backward compatibility
-}: UpgradeButtonProps) {
+export default function UpgradeButton({ children, className, onClick, navigateOnly = false }: UpgradeButtonProps) {
   const [isLoading, setIsLoading] = useState(false)
   const router = useRouter()
-  const { toast } = useToast()
   const { user } = useAuth()
+  const { isProUser } = useUserPlan()
 
-  const handleUpgrade = async () => {
+  // If user is already a pro user, don't show the button
+  if (isProUser) {
+    return null
+  }
+
+  const handleClick = async () => {
     if (onClick) {
       onClick()
-      return
     }
 
-    // If navigateOnly is true, just go to the membership plans page
+    // If navigateOnly is true, just navigate to the membership plans page
     if (navigateOnly) {
       router.push("/membership-plans")
       return
     }
 
-    if (!user) {
-      router.push("/login?redirect=/membership-plans")
-      return
-    }
-
-    setIsLoading(true)
-
     try {
-      // Log the click for analytics
+      setIsLoading(true)
+
+      // Log the payment click for analytics
       try {
         await fetch("/api/log-payment-click", {
           method: "POST",
@@ -52,62 +49,60 @@ export default function UpgradeButton({
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            userId: user.uid,
-            action: "upgrade_click",
-            timestamp: new Date().toISOString(),
+            userId: user?.uid || "anonymous",
+            source: "upgrade_button",
           }),
         })
       } catch (error) {
         console.error("Failed to log payment click:", error)
-        // Continue anyway, as this is not critical
       }
 
       // Create checkout session
-      console.log(`Creating checkout session for user ${user.uid} with email ${user.email}`)
       const response = await fetch("/api/create-checkout-session", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          userId: user.uid,
-          email: user.email,
-          siteUrl: "https://massclip.pro", // Always use massclip.pro
+          userId: user?.uid,
+          userEmail: user?.email,
         }),
       })
 
       if (!response.ok) {
         const errorData = await response.json()
-        throw new Error(errorData.error || "Failed to create checkout session")
+        throw new Error(errorData.message || "Failed to create checkout session")
       }
 
-      const { url } = await response.json()
-
-      if (url) {
-        console.log(`Redirecting to checkout URL: ${url}`)
-        // Use window.location.href for a full page navigation to Stripe
-        window.location.href = url
-      } else {
-        throw new Error("No checkout URL returned")
-      }
-    } catch (error: any) {
-      console.error("Upgrade error:", error)
-      toast({
-        title: "Checkout Error",
-        description: error.message || "Failed to start checkout process",
-        variant: "destructive",
-      })
+      const data = await response.json()
+      router.push(data.url)
+    } catch (error) {
+      console.error("Error creating checkout session:", error)
+      // If there's an error, redirect to the membership plans page as a fallback
+      router.push("/membership-plans")
+    } finally {
       setIsLoading(false)
     }
   }
 
   return (
-    <button
-      onClick={handleUpgrade}
+    <Button
+      onClick={handleClick}
+      className={cn(
+        "bg-crimson hover:bg-crimson-dark text-white",
+        isLoading && "opacity-70 cursor-not-allowed",
+        className,
+      )}
       disabled={isLoading}
-      className={`premium-button bg-crimson hover:bg-crimson-dark text-white font-light text-sm py-2 px-4 rounded-md transition-all duration-300 ${className}`}
     >
-      {isLoading ? "Loading..." : children || "Upgrade to Creator Pro"}
-    </button>
+      {isLoading ? (
+        <div className="flex items-center">
+          <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
+          <span>Loading...</span>
+        </div>
+      ) : (
+        children || "Upgrade to Pro"
+      )}
+    </Button>
   )
 }

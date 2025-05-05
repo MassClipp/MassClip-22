@@ -3,15 +3,9 @@ import Stripe from "stripe"
 
 export async function GET() {
   try {
-    // Check if we have the Stripe key
+    // Check if Stripe API key is set
     if (!process.env.STRIPE_SECRET_KEY) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Missing STRIPE_SECRET_KEY environment variable",
-        },
-        { status: 500 },
-      )
+      return NextResponse.json({ success: false, message: "Stripe API key is not configured" }, { status: 500 })
     }
 
     // Initialize Stripe
@@ -19,54 +13,51 @@ export async function GET() {
       apiVersion: "2023-10-16",
     })
 
-    // Test the connection by listing a customer
-    const customers = await stripe.customers.list({ limit: 1 })
+    // Test connection by fetching account details
+    const account = await stripe.accounts.retrieve()
 
-    // Check if we have the price ID
-    const hasPriceId = !!process.env.STRIPE_PRICE_ID
-
-    // If we have a price ID, verify it exists
-    let priceValid = false
+    // Check if price ID is set
+    const priceId = process.env.STRIPE_PRICE_ID
     let priceDetails = null
 
-    if (hasPriceId) {
+    if (priceId) {
       try {
-        const price = await stripe.prices.retrieve(process.env.STRIPE_PRICE_ID!)
-        priceValid = true
-        priceDetails = {
-          id: price.id,
-          active: price.active,
-          currency: price.currency,
-          unit_amount: price.unit_amount,
-          type: price.type,
-          recurring: price.recurring
-            ? {
-                interval: price.recurring.interval,
-                interval_count: price.recurring.interval_count,
-              }
-            : null,
-        }
-      } catch (priceError) {
-        // Price doesn't exist or is invalid
+        priceDetails = await stripe.prices.retrieve(priceId)
+      } catch (error) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: "Stripe connection successful, but price ID is invalid",
+            error: error instanceof Error ? error.message : "Unknown error",
+            accountId: account.id,
+          },
+          { status: 200 },
+        )
       }
     }
 
     return NextResponse.json({
       success: true,
-      stripeConnected: true,
-      hasPriceId,
-      priceValid,
-      priceDetails: priceValid ? priceDetails : null,
-      timestamp: new Date().toISOString(),
+      message: "Stripe connection successful",
+      accountId: account.id,
+      priceId: priceId || "Not configured",
+      priceDetails: priceDetails
+        ? {
+            id: priceDetails.id,
+            active: priceDetails.active,
+            currency: priceDetails.currency,
+            product: priceDetails.product,
+            unitAmount: priceDetails.unit_amount,
+          }
+        : null,
     })
-  } catch (error: any) {
+  } catch (error) {
+    console.error("Error testing Stripe connection:", error)
     return NextResponse.json(
       {
         success: false,
-        stripeConnected: false,
-        error: error.message,
-        stack: error.stack,
-        timestamp: new Date().toISOString(),
+        message: "Failed to connect to Stripe",
+        error: error instanceof Error ? error.message : "Unknown error",
       },
       { status: 500 },
     )

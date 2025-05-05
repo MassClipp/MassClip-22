@@ -3,195 +3,225 @@
 import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { CheckCircle, XCircle, AlertCircle } from "lucide-react"
+import { useAuth } from "@/contexts/auth-context"
 
 export default function StripeTestPage() {
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [result, setResult] = useState<any>(null)
-  const [testingCheckout, setTestingCheckout] = useState(false)
-  const [checkoutResult, setCheckoutResult] = useState<any>(null)
+  const [connectionStatus, setConnectionStatus] = useState<"loading" | "success" | "error">("loading")
+  const [connectionDetails, setConnectionDetails] = useState<any>(null)
+  const [checkoutStatus, setCheckoutStatus] = useState<"idle" | "loading" | "success" | "error">("idle")
+  const [checkoutDetails, setCheckoutDetails] = useState<any>(null)
+  const { user } = useAuth()
 
   useEffect(() => {
-    testStripeConnection()
+    async function checkStripeConnection() {
+      try {
+        const response = await fetch("/api/test-stripe-connection")
+        const data = await response.json()
+
+        if (data.success) {
+          setConnectionStatus("success")
+        } else {
+          setConnectionStatus("error")
+        }
+
+        setConnectionDetails(data)
+      } catch (error) {
+        setConnectionStatus("error")
+        setConnectionDetails({ error: error instanceof Error ? error.message : "Unknown error" })
+      }
+    }
+
+    checkStripeConnection()
   }, [])
 
-  const testStripeConnection = async () => {
-    setLoading(true)
-    setError(null)
-
-    try {
-      const response = await fetch("/api/test-stripe-connection")
-      const data = await response.json()
-
-      setResult(data)
-    } catch (err: any) {
-      setError(err.message || "Failed to test Stripe connection")
-    } finally {
-      setLoading(false)
-    }
-  }
-
   const testCheckoutSession = async () => {
-    setTestingCheckout(true)
-    setCheckoutResult(null)
+    setCheckoutStatus("loading")
 
     try {
-      // Create a test checkout session
       const response = await fetch("/api/create-checkout-session", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          userId: "test-user-id",
-          email: "test@example.com",
-          siteUrl: "https://massclip.pro",
+          userId: user?.uid,
+          userEmail: user?.email,
+          test: true, // Flag to indicate this is a test
         }),
       })
 
       const data = await response.json()
-      setCheckoutResult(data)
 
-      // If successful and we have a URL, open it in a new tab
-      if (data.url) {
-        window.open(data.url, "_blank")
+      if (response.ok) {
+        setCheckoutStatus("success")
+        setCheckoutDetails(data)
+      } else {
+        setCheckoutStatus("error")
+        setCheckoutDetails(data)
       }
-    } catch (err: any) {
-      setCheckoutResult({
-        error: err.message || "Failed to create test checkout session",
-      })
-    } finally {
-      setTestingCheckout(false)
+    } catch (error) {
+      setCheckoutStatus("error")
+      setCheckoutDetails({ error: error instanceof Error ? error.message : "Unknown error" })
     }
   }
 
   return (
-    <div className="container mx-auto py-8">
-      <h1 className="text-2xl font-bold mb-6">Stripe Connection Test</h1>
+    <div className="container mx-auto py-12 px-4">
+      <h1 className="text-3xl font-bold mb-8">Stripe Connection Test</h1>
 
-      <Card className="mb-8">
-        <CardHeader>
-          <CardTitle>Stripe API Connection</CardTitle>
-          <CardDescription>Tests the connection to the Stripe API</CardDescription>
-        </CardHeader>
-        <CardContent>
-          {loading ? (
-            <div className="flex items-center space-x-2">
-              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-900"></div>
-              <p>Testing connection...</p>
-            </div>
-          ) : error ? (
-            <div className="flex items-center space-x-2 text-red-500">
-              <XCircle size={20} />
-              <p>{error}</p>
-            </div>
-          ) : result ? (
-            <div className="space-y-4">
-              <div className="flex items-center space-x-2">
-                {result.success ? (
-                  <CheckCircle size={20} className="text-green-500" />
-                ) : (
-                  <XCircle size={20} className="text-red-500" />
-                )}
-                <p>{result.success ? "Successfully connected to Stripe API" : "Failed to connect to Stripe API"}</p>
+      <div className="grid gap-6 md:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle>Stripe API Connection</CardTitle>
+            <CardDescription>Test connection to Stripe API</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {connectionStatus === "loading" && (
+              <div className="flex items-center justify-center py-8">
+                <div className="w-8 h-8 border-t-2 border-crimson border-solid rounded-full animate-spin"></div>
+                <span className="ml-3">Testing connection...</span>
               </div>
+            )}
 
-              <div className="flex items-center space-x-2">
-                {result.hasPriceId ? (
-                  <CheckCircle size={20} className="text-green-500" />
-                ) : (
-                  <AlertCircle size={20} className="text-yellow-500" />
-                )}
-                <p>{result.hasPriceId ? "STRIPE_PRICE_ID is configured" : "STRIPE_PRICE_ID is missing"}</p>
+            {connectionStatus === "success" && (
+              <div className="space-y-4">
+                <div className="flex items-center text-green-500">
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    className="h-6 w-6 mr-2"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                  <span>Connection successful</span>
+                </div>
+
+                <div className="bg-gray-100 p-4 rounded-md">
+                  <pre className="text-sm overflow-auto">{JSON.stringify(connectionDetails, null, 2)}</pre>
+                </div>
               </div>
+            )}
 
-              {result.hasPriceId && (
-                <div className="flex items-center space-x-2">
-                  {result.priceValid ? (
-                    <CheckCircle size={20} className="text-green-500" />
-                  ) : (
-                    <XCircle size={20} className="text-red-500" />
-                  )}
-                  <p>{result.priceValid ? "Price ID is valid" : "Price ID is invalid or doesn't exist"}</p>
+            {connectionStatus === "error" && (
+              <div className="space-y-4">
+                <div className="flex items-center text-red-500">
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    className="h-6 w-6 mr-2"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                  <span>Connection failed</span>
                 </div>
-              )}
 
-              {result.priceDetails && (
-                <div className="mt-4 p-4 bg-gray-100 rounded-md">
-                  <h3 className="font-medium mb-2">Price Details:</h3>
-                  <pre className="text-xs overflow-auto">{JSON.stringify(result.priceDetails, null, 2)}</pre>
+                <div className="bg-red-50 p-4 rounded-md">
+                  <pre className="text-sm overflow-auto text-red-700">{JSON.stringify(connectionDetails, null, 2)}</pre>
                 </div>
-              )}
-            </div>
-          ) : null}
-        </CardContent>
-        <CardFooter>
-          <Button onClick={testStripeConnection} disabled={loading}>
-            {loading ? "Testing..." : "Test Connection Again"}
-          </Button>
-        </CardFooter>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle>Test Checkout Session</CardTitle>
-          <CardDescription>Creates a test checkout session with Stripe</CardDescription>
-        </CardHeader>
-        <CardContent>
-          {testingCheckout ? (
-            <div className="flex items-center space-x-2">
-              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-900"></div>
-              <p>Creating checkout session...</p>
-            </div>
-          ) : checkoutResult ? (
-            <div className="space-y-4">
-              <div className="flex items-center space-x-2">
-                {checkoutResult.url ? (
-                  <CheckCircle size={20} className="text-green-500" />
-                ) : (
-                  <XCircle size={20} className="text-red-500" />
-                )}
-                <p>
-                  {checkoutResult.url ? "Successfully created checkout session" : "Failed to create checkout session"}
-                </p>
               </div>
+            )}
+          </CardContent>
+          <CardFooter>
+            <Button
+              onClick={() => {
+                setConnectionStatus("loading")
+                window.location.reload()
+              }}
+              variant="outline"
+            >
+              Refresh
+            </Button>
+          </CardFooter>
+        </Card>
 
-              {checkoutResult.error && (
-                <div className="p-4 bg-red-50 text-red-700 rounded-md">
-                  <h3 className="font-medium mb-2">Error:</h3>
-                  <p>{checkoutResult.error}</p>
+        <Card>
+          <CardHeader>
+            <CardTitle>Checkout Session Test</CardTitle>
+            <CardDescription>Test creating a Stripe checkout session</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {checkoutStatus === "idle" && (
+              <div className="py-8 text-center">
+                <p className="mb-4">Click the button below to test creating a checkout session</p>
+                <Button onClick={testCheckoutSession}>Test Checkout Session</Button>
+              </div>
+            )}
+
+            {checkoutStatus === "loading" && (
+              <div className="flex items-center justify-center py-8">
+                <div className="w-8 h-8 border-t-2 border-crimson border-solid rounded-full animate-spin"></div>
+                <span className="ml-3">Creating checkout session...</span>
+              </div>
+            )}
+
+            {checkoutStatus === "success" && (
+              <div className="space-y-4">
+                <div className="flex items-center text-green-500">
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    className="h-6 w-6 mr-2"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                  <span>Checkout session created successfully</span>
                 </div>
-              )}
 
-              {checkoutResult.url && (
-                <div>
-                  <p className="mb-2">Checkout URL:</p>
-                  <div className="p-2 bg-gray-100 rounded-md overflow-x-auto">
-                    <code className="text-xs break-all">{checkoutResult.url}</code>
+                <div className="bg-gray-100 p-4 rounded-md">
+                  <pre className="text-sm overflow-auto">{JSON.stringify(checkoutDetails, null, 2)}</pre>
+                </div>
+
+                {checkoutDetails?.url && (
+                  <div className="text-center">
+                    <a
+                      href={checkoutDetails.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-block bg-crimson hover:bg-crimson-dark text-white px-4 py-2 rounded-md"
+                    >
+                      Open Checkout Page
+                    </a>
                   </div>
-                </div>
-              )}
+                )}
+              </div>
+            )}
 
-              {checkoutResult.sessionId && (
-                <div>
-                  <p className="mb-2">Session ID:</p>
-                  <div className="p-2 bg-gray-100 rounded-md">
-                    <code>{checkoutResult.sessionId}</code>
-                  </div>
+            {checkoutStatus === "error" && (
+              <div className="space-y-4">
+                <div className="flex items-center text-red-500">
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    className="h-6 w-6 mr-2"
+                    fill="none"
+                    viewBox="0 0 24 24"
+                    stroke="currentColor"
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                  </svg>
+                  <span>Failed to create checkout session</span>
                 </div>
-              )}
-            </div>
-          ) : (
-            <p>Click the button below to create a test checkout session.</p>
-          )}
-        </CardContent>
-        <CardFooter>
-          <Button onClick={testCheckoutSession} disabled={testingCheckout}>
-            {testingCheckout ? "Creating..." : "Create Test Checkout Session"}
-          </Button>
-        </CardFooter>
-      </Card>
+
+                <div className="bg-red-50 p-4 rounded-md">
+                  <pre className="text-sm overflow-auto text-red-700">{JSON.stringify(checkoutDetails, null, 2)}</pre>
+                </div>
+              </div>
+            )}
+          </CardContent>
+          <CardFooter>
+            {checkoutStatus !== "idle" && (
+              <Button onClick={() => setCheckoutStatus("idle")} variant="outline">
+                Reset
+              </Button>
+            )}
+          </CardFooter>
+        </Card>
+      </div>
     </div>
   )
 }
