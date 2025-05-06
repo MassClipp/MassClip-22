@@ -2,6 +2,8 @@
  * Utility to check and validate Stripe environment variables
  */
 
+import { getProductionUrl } from "./url-utils"
+
 export function checkStripeEnvVars(): {
   valid: boolean
   missing: string[]
@@ -33,6 +35,16 @@ export function checkStripeEnvVars(): {
     }
   })
 
+  // Special check for production URL
+  if (
+    process.env.NODE_ENV === "production" &&
+    process.env.NEXT_PUBLIC_SITE_URL &&
+    !process.env.NEXT_PUBLIC_SITE_URL.includes("massclip.pro")
+  ) {
+    invalid.push("NEXT_PUBLIC_SITE_URL")
+    messages["NEXT_PUBLIC_SITE_URL"] = "Not using production URL in production environment"
+  }
+
   return {
     valid: missing.length === 0 && invalid.length === 0,
     missing,
@@ -51,7 +63,7 @@ export function getStripeEnvInstructions(varName: string): string {
     case "STRIPE_PRICE_ID":
       return "Get this from Stripe Dashboard > Products > Your Product > API ID. Format: price_..."
     case "NEXT_PUBLIC_SITE_URL":
-      return "Set to your site URL (e.g., http://localhost:3000 for development or your production URL)"
+      return `Set to your site URL (${getProductionUrl()} for production)`
     default:
       return "Check your Stripe dashboard for this value"
   }

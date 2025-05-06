@@ -1,0 +1,68 @@
+/* TikTok-specific restrictions */
+
+/* Hide fullscreen button in TikTok browser */
+.tiktok-browser .vp-sidedock,
+.tiktok-browser .vp-title,
+.tiktok-browser .vp-fullscreen,
+.tiktok-browser .vp-picture-in-picture {
+  display: none !important;
+}
+
+/* Hide fullscreen button in Vimeo player when in TikTok */
+.tiktok-browser .vp-controls .fullscreen,
+.tiktok-browser .vp-controls [data-fullscreen],
+.tiktok-browser .vp-controls [aria-label*="fullscreen"],
+.tiktok-browser .vp-controls [title*="fullscreen"],
+.tiktok-browser .vp-controls [aria-label*="Fullscreen"],
+.tiktok-browser .vp-controls [title*="Fullscreen"] {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+}
+
+/* Ensure videos can play but not go fullscreen */
+.tiktok-browser iframe[src*="vimeo"] {
+  max-width: 100% !important;
+  max-height: 100% !important;
+}
+
+/* Ensure watermark stays visible in fullscreen */
+.tiktok-browser .video-watermark {
+  z-index: 9999 !important;
+}
+
+/* Blur effect for TikTok browser */
+.tiktok-browser .video-container iframe,
+.tiktok-browser .video-card-thumbnail {
+  filter: blur(10px) !important;
+  -webkit-filter: blur(10px) !important;
+}
+
+/* Add an overlay with text for TikTok browser */
+.tiktok-browser .video-container::before {
+  content: "Open in browser for full quality";
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background-color: rgba(0, 0, 0, 0.7);
+  color: white;
+  padding: 8px 12px;
+  border-radius: 4px;
+  font-size: 12px;
+  z-index: 30;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
+/* Add a small overlay in the corner to block fullscreen button interactions */
+.tiktok-browser .video-container::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  width: 40px;
+  height: 40px;
+  z-index: 10;
+}

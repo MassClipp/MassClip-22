@@ -1,111 +1,110 @@
 "use client"
 
 import type React from "react"
+
 import { useState } from "react"
 import { useRouter } from "next/navigation"
-import { Button } from "@/components/ui/button"
 import { useAuth } from "@/contexts/auth-context"
 import { useToast } from "@/hooks/use-toast"
 
-export function SubscribeButton({ className, children }: { className?: string; children?: React.ReactNode }) {
+interface SubscribeButtonProps {
+  className?: string
+  children?: React.ReactNode
+  navigateOnly?: boolean // New prop to control behavior
+}
+
+export function SubscribeButton({
+  className = "",
+  children,
+  navigateOnly = false, // Default to false for backward compatibility
+}: SubscribeButtonProps) {
   const [isLoading, setIsLoading] = useState(false)
-  const { user } = useAuth()
   const router = useRouter()
+  const { user } = useAuth()
   const { toast } = useToast()
 
-  const handleSubscription = async () => {
-    if (!user) {
-      console.log("No user found, redirecting to login")
-      router.push("/login?redirect=/pricing")
+  const handleSubscribe = async () => {
+    // If navigateOnly is true, just go to the membership plans page
+    if (navigateOnly) {
+      router.push("/membership-plans")
       return
     }
 
-    // Update any plan checks
-    const isProUser = user?.plan === "creator_pro"
+    if (!user) {
+      router.push("/login?redirect=/membership-plans")
+      return
+    }
+
+    setIsLoading(true)
 
     try {
-      setIsLoading(true)
-
-      // Get fresh user data directly from the auth context
-      const userId = user.uid
-      const userEmail = user.email
-
-      console.log("🔐 CHECKOUT: Creating session with fresh user data:")
-      console.log(`🔐 CHECKOUT: User ID: ${userId}`)
-      console.log(`🔐 CHECKOUT: User Email: ${userEmail}`)
-
-      // Validate user data before proceeding
-      if (!userId || !userEmail) {
-        const errorMsg = `Missing required user data: ${!userId ? "User ID" : ""} ${!userEmail ? "Email" : ""}`
-        console.error(errorMsg)
-        toast({
-          title: "Authentication Error",
-          description: "Your account information is incomplete. Please try logging out and back in.",
-          variant: "destructive",
+      // Log the click for analytics
+      try {
+        await fetch("/api/log-payment-click", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            userId: user.uid,
+            action: "subscribe_click",
+            timestamp: new Date().toISOString(),
+          }),
         })
-        return
+      } catch (error) {
+        console.error("Failed to log payment click:", error)
+        // Continue anyway, as this is not critical
       }
 
-      // Create a fresh payload with current timestamp to prevent caching
-      const payload = {
-        userId,
-        userEmail,
-        timestamp: new Date().toISOString(),
-        clientId: Math.random().toString(36).substring(2, 15), // Add random client ID to ensure uniqueness
-      }
-
-      console.log("🔐 CHECKOUT: Sending payload to API:", JSON.stringify(payload))
-
+      // Create checkout session
+      console.log(`Creating checkout session for user ${user.uid} with email ${user.email}`)
       const response = await fetch("/api/create-checkout-session", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "Cache-Control": "no-cache, no-store", // Prevent caching
         },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({
+          userId: user.uid,
+          email: user.email,
+          siteUrl: "https://massclip.pro", // Always use massclip.pro
+        }),
       })
 
       if (!response.ok) {
-        const errorText = await response.text()
-        console.error("🔐 CHECKOUT ERROR:", response.status, errorText)
-        throw new Error(`Server returned ${response.status}: ${errorText}`)
+        const errorData = await response.json()
+        throw new Error(errorData.error || "Failed to create checkout session")
       }
 
-      const data = await response.json()
+      const { url } = await response.json()
 
-      if (data.url && data.sessionId) {
-        console.log(`🔐 CHECKOUT SUCCESS: Session ID: ${data.sessionId}`)
-        console.log(`🔐 CHECKOUT SUCCESS: Redirecting to: ${data.url}`)
-
-        // Store the session ID in localStorage for debugging
-        localStorage.setItem("lastCheckoutSessionId", data.sessionId)
-        localStorage.setItem("lastCheckoutTime", new Date().toISOString())
-
-        // Redirect to Stripe checkout
-        window.location.href = data.url
+      if (url) {
+        console.log(`Redirecting to checkout URL: ${url}`)
+        // Use window.location.href for a full page navigation to Stripe
+        window.location.href = url
       } else {
-        console.error("🔐 CHECKOUT ERROR: No URL in response:", data)
-        toast({
-          title: "Checkout Error",
-          description: "Unable to start checkout process. Please try again.",
-          variant: "destructive",
-        })
+        throw new Error("No checkout URL returned")
       }
-    } catch (error) {
-      console.error("🔐 CHECKOUT ERROR:", error)
+    } catch (error: any) {
+      console.error("Subscribe error:", error)
       toast({
         title: "Checkout Error",
-        description: error instanceof Error ? error.message : "Failed to start checkout process",
+        description: error.message || "Failed to start checkout process",
         variant: "destructive",
       })
-    } finally {
       setIsLoading(false)
     }
   }
 
   return (
-    <Button onClick={handleSubscription} disabled={isLoading} className={className || "w-full"} variant="default">
+    <button
+      onClick={handleSubscribe}
+      disabled={isLoading}
+      className={`bg-crimson hover:bg-crimson-dark text-white font-medium py-2 px-4 rounded-md transition-all duration-300 ${className}`}
+    >
       {isLoading ? "Loading..." : children || "Subscribe Now"}
-    </Button>
+    </button>
   )
 }
+
+// Default export for backward compatibility
+export default SubscribeButton

@@ -1,3 +1,5 @@
+"use client"
+
 import { initializeApp, getApps } from "firebase/app"
 import { getAuth } from "firebase/auth"
 import { getFirestore } from "firebase/firestore"
@@ -22,6 +24,28 @@ const firebaseConfig = {
 
 // Initialize Firebase
 let app, auth, db, storage
+
+export function initializeFirebaseApp() {
+  try {
+    if (!getApps().length) {
+      app = initializeApp(firebaseConfig)
+    } else {
+      app = getApps()[0]
+    }
+
+    // Initialize Firebase services
+    auth = getAuth(app)
+    db = getFirestore(app)
+    storage = getStorage(app)
+  } catch (error) {
+    console.error("Firebase initialization error:", error)
+
+    // Create dummy implementations for development/preview
+    auth = {} as any
+    db = {} as any
+    storage = {} as any
+  }
+}
 
 try {
   if (!getApps().length) {

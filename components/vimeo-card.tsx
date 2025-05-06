@@ -1,9 +1,8 @@
 "use client"
 
 import type React from "react"
-
 import { useState, useRef, useEffect } from "react"
-import { Download, Lock, Heart } from "lucide-react"
+import { Download, Lock, Heart, ExternalLink } from "lucide-react"
 import type { VimeoVideo } from "@/lib/types"
 import { useAuth } from "@/contexts/auth-context"
 import { db } from "@/lib/firebase"
@@ -24,6 +23,8 @@ import { useToast } from "@/hooks/use-toast"
 import { useUserPlan } from "@/hooks/use-user-plan"
 import { useMobile } from "@/hooks/use-mobile"
 import { useDownloadLimit } from "@/contexts/download-limit-context"
+import { isInTikTokBrowser } from "@/lib/browser-detection"
+import { VideoWatermark } from "@/components/video-watermark"
 
 interface VimeoCardProps {
   video: VimeoVideo
@@ -41,6 +42,7 @@ export default function VimeoCard({ video }: VimeoCardProps) {
   const [downloadLink, setDownloadLink] = useState<string | null>(null)
   const [isFavorite, setIsFavorite] = useState(false)
   const [isCheckingFavorite, setIsCheckingFavorite] = useState(true)
+  const [isTikTokBrowser, setIsTikTokBrowser] = useState(false)
 
   const { user } = useAuth()
   const { toast } = useToast()
@@ -51,9 +53,16 @@ export default function VimeoCard({ video }: VimeoCardProps) {
   const videoRef = useRef<HTMLIFrameElement>(null)
   const viewTrackedRef = useRef(false)
   const downloadFrameRef = useRef<HTMLIFrameElement | null>(null)
+  const downloadLinkRef = useRef<HTMLAnchorElement | null>(null)
+  const videoContainerRef = useRef<HTMLDivElement>(null)
 
   // Extract video ID from URI (format: "/videos/12345678") with null check
   const videoId = video?.uri ? video.uri.split("/").pop() : null
+
+  // Check if we're in TikTok browser on mount
+  useEffect(() => {
+    setIsTikTokBrowser(isInTikTokBrowser())
+  }, [])
 
   // Get the highest quality thumbnail
   const getHighQualityThumbnail = () => {
@@ -106,6 +115,21 @@ export default function VimeoCard({ video }: VimeoCardProps) {
     return () => {
       if (downloadFrameRef.current && downloadFrameRef.current.parentNode) {
         downloadFrameRef.current.parentNode.removeChild(downloadFrameRef.current)
+      }
+    }
+  }, [])
+
+  // Create a hidden download link element
+  useEffect(() => {
+    // Create a hidden anchor element for downloads
+    const downloadLink = document.createElement("a")
+    downloadLink.style.display = "none"
+    document.body.appendChild(downloadLink)
+    downloadLinkRef.current = downloadLink
+
+    return () => {
+      if (downloadLink.parentNode) {
+        downloadLink.parentNode.removeChild(downloadLink)
       }
     }
   }, [])
@@ -241,6 +265,38 @@ export default function VimeoCard({ video }: VimeoCardProps) {
     }
   }
 
+  // Direct download function for desktop
+  const startDirectDownload = async (url: string, filename: string) => {
+    try {
+      // Fetch the file
+      const response = await fetch(url)
+      if (!response.ok) throw new Error("Network response was not ok")
+
+      // Get the blob
+      const blob = await response.blob()
+
+      // Create object URL
+      const objectUrl = URL.createObjectURL(blob)
+
+      // Use the hidden anchor to download
+      if (downloadLinkRef.current) {
+        downloadLinkRef.current.href = objectUrl
+        downloadLinkRef.current.download = filename
+        downloadLinkRef.current.click()
+
+        // Clean up
+        setTimeout(() => {
+          URL.revokeObjectURL(objectUrl)
+        }, 100)
+      }
+
+      return true
+    } catch (error) {
+      console.error("Direct download failed:", error)
+      return false
+    }
+  }
+
   // Handle download button click with strict permission enforcement
   const handleDownload = async (e: React.MouseEvent) => {
     e.preventDefault()
@@ -305,8 +361,10 @@ export default function VimeoCard({ video }: VimeoCardProps) {
       }
 
       // 6. Only now, trigger the actual download
+      const filename = `${video?.name?.replace(/[^\w\s]/gi, "") || "video"}.mp4`
+
       if (isMobile) {
-        // Mobile download approach
+        // Mobile download approach - keep using iframe for mobile
         const iframe = document.createElement("iframe")
         iframe.style.display = "none"
         document.body.appendChild(iframe)
@@ -321,19 +379,17 @@ export default function VimeoCard({ video }: VimeoCardProps) {
           downloadFrameRef.current = null
         }, 5000)
       } else {
-        // Desktop download approach
-        const a = document.createElement("a")
-        a.href = downloadLink
-        a.download = `${video?.name?.replace(/[^\w\s]/gi, "") || "video"}.mp4`
-        a.target = "_blank"
-        a.rel = "noopener noreferrer"
-        document.body.appendChild(a)
-        a.click()
+        // Desktop download - use direct download approach
+        const success = await startDirectDownload(downloadLink, filename)
 
-        // Clean up
-        setTimeout(() => {
-          document.body.removeChild(a)
-        }, 100)
+        if (!success) {
+          // Fallback to traditional method if direct download fails
+          if (downloadLinkRef.current) {
+            downloadLinkRef.current.href = downloadLink
+            downloadLinkRef.current.download = filename
+            downloadLinkRef.current.click()
+          }
+        }
       }
 
       // 7. If pro user, record the download after (doesn't affect permissions)
@@ -372,6 +428,16 @@ export default function VimeoCard({ video }: VimeoCardProps) {
     setThumbnailLoaded(true)
   }
 
+  // Handle opening in external browser
+  const handleOpenExternal = (e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+
+    // Try to open the current URL in the device's default browser
+    const currentUrl = window.location.href
+    window.open(currentUrl, "_blank")
+  }
+
   // If video is null or undefined, render a placeholder
   if (!video) {
     return (
@@ -396,6 +462,18 @@ export default function VimeoCard({ video }: VimeoCardProps) {
   }
 
   const thumbnailUrl = getHighQualityThumbnail()
+
+  // Modify the iframe src for TikTok browsers to disable fullscreen
+  const getVideoSrc = () => {
+    const baseUrl = `https://player.vimeo.com/video/${videoId}?title=0&byline=0&portrait=0&badge=0&autopause=0&player_id=0&app_id=58479&quality=1080p`
+
+    // For TikTok browsers, add parameters to restrict behavior
+    if (isTikTokBrowser) {
+      return `${baseUrl}&playsinline=1&transparent=0`
+    }
+
+    return baseUrl
+  }
 
   return (
     <div className="flex-shrink-0 w-[160px]">
@@ -465,8 +543,25 @@ export default function VimeoCard({ video }: VimeoCardProps) {
           </button>
         </div>
 
+        {/* TikTok-specific "Open in browser" button */}
+        {isTikTokBrowser && (
+          <div className="absolute top-2 right-2 z-30">
+            <button
+              onClick={handleOpenExternal}
+              className="bg-white/90 hover:bg-white text-black text-xs px-2 py-1 rounded-full flex items-center space-x-1"
+              aria-label="Open in browser"
+            >
+              <ExternalLink size={10} />
+              <span className="text-[10px]">Open</span>
+            </button>
+          </div>
+        )}
+
         {videoId ? (
-          <div className="absolute inset-0">
+          <div className="absolute inset-0 video-container" ref={videoContainerRef}>
+            {/* Watermark - Added here */}
+            <VideoWatermark position="bottom-right" className="video-watermark" />
+
             {/* High-quality thumbnail with dark overlay */}
             {thumbnailUrl && (
               <div
@@ -505,7 +600,7 @@ export default function VimeoCard({ video }: VimeoCardProps) {
             {isActive && (
               <iframe
                 ref={videoRef}
-                src={`https://player.vimeo.com/video/${videoId}?title=0&byline=0&portrait=0&badge=0&autopause=0&player_id=0&app_id=58479&quality=1080p`}
+                src={getVideoSrc()}
                 style={{
                   position: "absolute",
                   top: 0,
@@ -516,10 +611,15 @@ export default function VimeoCard({ video }: VimeoCardProps) {
                   opacity: isIframeLoaded ? 1 : 0,
                   transition: "opacity 300ms ease-in-out",
                 }}
-                allow="autoplay; fullscreen; picture-in-picture; clipboard-write; encrypted-media"
+                allow={
+                  isTikTokBrowser
+                    ? "autoplay; picture-in-picture; clipboard-write; encrypted-media"
+                    : "autoplay; fullscreen; picture-in-picture; clipboard-write; encrypted-media"
+                }
                 title={video.name || "Video"}
                 loading="lazy"
                 onLoad={handleIframeLoad}
+                className={isTikTokBrowser ? "tiktok-restricted-iframe" : ""}
               ></iframe>
             )}
           </div>

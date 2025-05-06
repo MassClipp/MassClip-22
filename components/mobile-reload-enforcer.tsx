@@ -43,6 +43,14 @@ export function MobileReloadEnforcer() {
 
     // Set up a periodic check for mobile devices
     const intervalId = setInterval(() => {
+      // Don't reload if a mobile menu is open (check for common class names)
+      const mobileMenuOpen = document.querySelector(".mobile-menu[style*='translate-x-0']") !== null
+
+      if (mobileMenuOpen) {
+        console.log("Mobile reload enforcer: Menu is open, skipping reload check")
+        return
+      }
+
       // Check if we have the download limit reached flag
       const limitReached = localStorage.getItem("downloadLimitReached")
 
