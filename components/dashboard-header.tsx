@@ -5,7 +5,7 @@ import type React from "react"
 import { useState, useEffect, useRef } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
-import { User, LogOut, X, Search, Download, Home, Grid, Heart, Clock, Crown } from "lucide-react"
+import { User, LogOut, X, Search, Download, Home, Grid, Heart, Clock, Crown, Upload } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useAuth } from "@/contexts/auth-context"
 import {
@@ -77,6 +77,7 @@ export default function DashboardHeader({ initialSearchQuery = "" }) {
     { name: "Categories", href: "/dashboard/categories", icon: <Grid className="h-4 w-4" /> },
     { name: "Favorites", href: "/dashboard/favorites", icon: <Heart className="h-4 w-4" /> },
     { name: "History", href: "/dashboard/history", icon: <Clock className="h-4 w-4" /> },
+    { name: "Upload Content", href: "/dashboard/upload", icon: <Upload className="h-4 w-4" /> },
     { name: "Membership", href: "/membership-plans", icon: <Crown className="h-4 w-4" /> },
   ]
 
@@ -93,7 +94,7 @@ export default function DashboardHeader({ initialSearchQuery = "" }) {
 
             {/* Desktop Navigation */}
             <nav className="hidden md:flex items-center gap-6">
-              {navigationItems.slice(0, 3).map((item) => (
+              {navigationItems.slice(0, 4).map((item) => (
                 <Link
                   key={item.name}
                   href={item.href}
