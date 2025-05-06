@@ -1,0 +1,26 @@
+name: V0 Code Deployment
+
+on:
+  repository_dispatch:
+    types: [ai-code-update]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          ref: ${{ github.event.client_payload.branch }}
+      
+      - name: Update file
+        run: |
+          mkdir -p $(dirname "${{ github.event.client_payload.file_path }}")
+          echo '${{ github.event.client_payload.file_content }}' > "${{ github.event.client_payload.file_path }}"
+      
+      - name: Commit changes
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add "${{ github.event.client_payload.file_path }}"
+          git commit -m "${{ github.event.client_payload.commit_message }}"
+          git push
