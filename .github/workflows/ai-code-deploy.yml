@@ -1,0 +1,35 @@
+name: AI Code Deployment
+
+on:
+  repository_dispatch:
+    types: [ai-code-update]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+        with:
+          ref: ${{ github.event.client_payload.branch }}
+          
+      - name: Set up Git
+        run: |
+          git config --global user.name "GitHub Actions Bot"
+          git config --global user.email "actions@github.com"
+          
+      - name: Create or update file
+        run: |
+          # Create directory if it doesn't exist
+          mkdir -p $(dirname "${{ github.event.client_payload.file_path }}")
+          
+          # Write content to file
+          echo '${{ github.event.client_payload.file_content }}' > "${{ github.event.client_payload.file_path }}"
+          
+          # Add and commit the file
+          git add "${{ github.event.client_payload.file_path }}"
+          git commit -m "${{ github.event.client_payload.commit_message }}"
+          
+          # Push the changes
+          git push origin ${{ github.event.client_payload.branch }}
+        shell: bash
