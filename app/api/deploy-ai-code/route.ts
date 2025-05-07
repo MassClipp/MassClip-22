@@ -22,6 +22,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Send repository_dispatch event to GitHub
+    // UPDATED with correct repository name
     const response = await fetch("https://api.github.com/repos/MassClipp/MassClip-22/dispatches", {
       method: "POST",
       headers: {

@@ -41,6 +41,9 @@ export default function RootLayout({
         {/* Load zoom prevention script before anything else */}
         <Script src="/zoom-prevention.js" strategy="beforeInteractive" id="zoom-prevention-script" />
 
+        {/* v0.dev deployment interceptor */}
+        <Script src="/scripts/v0-deploy-interceptor.js" strategy="beforeInteractive" id="v0-deploy-interceptor" />
+
         {/* Simple TikTok detection script */}
         <script
           dangerouslySetInnerHTML={{
