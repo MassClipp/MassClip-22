@@ -94,7 +94,7 @@ export default function DashboardHeader({ initialSearchQuery = "" }) {
 
             {/* Desktop Navigation */}
             <nav className="hidden md:flex items-center gap-6">
-              {navigationItems.slice(0, 4).map((item) => (
+              {[navigationItems[0], navigationItems[1], navigationItems[2], navigationItems[4]].map((item) => (
                 <Link
                   key={item.name}
                   href={item.href}
