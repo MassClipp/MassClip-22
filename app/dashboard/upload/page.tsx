@@ -3,7 +3,7 @@
 import type React from "react"
 
 import { useState, useCallback } from "react"
-import { Upload, Info, X, Check, Film, FileVideo, AlertCircle, Clock } from "lucide-react"
+import { Upload, Info, X, Check, Film, FileVideo, AlertCircle, Clock, ChevronLeft } from "lucide-react"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -12,6 +12,7 @@ import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useToast } from "@/hooks/use-toast"
 import { Progress } from "@/components/ui/progress"
+import Link from "next/link"
 
 export default function UploadPage() {
   const [dragActive, setDragActive] = useState(false)
@@ -134,6 +135,13 @@ export default function UploadPage() {
 
   return (
     <div className="container mx-auto py-8 max-w-5xl">
+      <Link href="/dashboard">
+        <Button variant="ghost" size="sm" className="mb-4 text-zinc-400 hover:text-white flex items-center gap-1">
+          <ChevronLeft className="h-4 w-4" />
+          Back to Dashboard
+        </Button>
+      </Link>
+
       <div className="flex flex-col gap-8">
         <div className="flex justify-between items-center">
           <div>
