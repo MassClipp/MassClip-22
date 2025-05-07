@@ -8,6 +8,7 @@ import { ArrowLeft, Upload, FileVideo, X, Check, Tag, Info, ChevronDown, Trash2 
 import { useToast } from "@/hooks/use-toast"
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
+import { useMobile } from "@/hooks/use-mobile"
 
 // Simple animation component to avoid adding framer-motion dependency
 const FadeIn = ({
@@ -42,21 +43,7 @@ export default function UploadPage() {
   const [isPremium, setIsPremium] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const { toast } = useToast()
-
-  // Check if we're on mobile (without adding a new dependency)
-  const [isMobile, setIsMobile] = useState(false)
-
-  // Set mobile state on mount
-  useState(() => {
-    setIsMobile(window.innerWidth < 768)
-
-    const handleResize = () => {
-      setIsMobile(window.innerWidth < 768)
-    }
-
-    window.addEventListener("resize", handleResize)
-    return () => window.removeEventListener("resize", handleResize)
-  })
+  const isMobile = useMobile()
 
   // Handle drag events
   const handleDrag = useCallback((e: React.DragEvent) => {
