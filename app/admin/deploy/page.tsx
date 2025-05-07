@@ -7,7 +7,7 @@ import { useRouter } from "next/navigation"
 import { useAuth } from "@/contexts/auth-context"
 
 export default function DeploymentAdmin() {
-  const [branch, setBranch] = useState<string>("preview")
+  const [branch, setBranch] = useState<string>("v0dev")
   const [filePath, setFilePath] = useState<string>("")
   const [fileContent, setFileContent] = useState<string>("")
   const [commitMessage, setCommitMessage] = useState<string>("")
@@ -96,7 +96,7 @@ export default function DeploymentAdmin() {
                 className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md"
                 required
               >
-                <option value="preview">Preview</option>
+                <option value="v0dev">Preview (v0dev)</option>
                 <option value="main">Production (main)</option>
               </select>
             </div>
