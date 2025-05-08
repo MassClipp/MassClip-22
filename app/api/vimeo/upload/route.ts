@@ -48,6 +48,9 @@ export async function POST(request: NextRequest) {
       }),
     })
 
+    // Log the raw response for debugging
+    console.log("Vimeo API response status:", createResponse.status)
+
     if (!createResponse.ok) {
       const errorText = await createResponse.text()
       console.error("Vimeo API error:", errorText)
@@ -72,18 +75,19 @@ export async function POST(request: NextRequest) {
     }
 
     const uploadData = await createResponse.json()
-    console.log("Vimeo upload created successfully:", uploadData.uri)
 
     // Log the full response for debugging
-    console.log("Full Vimeo response:", JSON.stringify(uploadData, null, 2))
+    console.log("Vimeo upload created successfully:", uploadData.uri)
+    console.log("Upload link from Vimeo:", uploadData.upload?.upload_link)
 
     // Ensure we have the upload link
     if (!uploadData.upload?.upload_link) {
-      console.error("Missing upload_link in Vimeo response:", uploadData)
+      console.error("Missing upload_link in Vimeo response:", JSON.stringify(uploadData, null, 2))
       return NextResponse.json(
         {
           error: "Invalid response from Vimeo API",
           details: "Missing upload link in response",
+          debug: JSON.stringify(uploadData, null, 2),
         },
         { status: 500 },
       )

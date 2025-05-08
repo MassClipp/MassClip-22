@@ -39,7 +39,7 @@ export default function UploadPage() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [isDragging, setIsDragging] = useState(false)
   const [uploadProgress, setUploadProgress] = useState(0)
-  const [isUploading, setIsUploading] = useState(false)
+  const [isUploading, setIsUploading] = useState(isUploading)
   const [tags, setTags] = useState<string[]>([])
   const [tagInput, setTagInput] = useState("")
   const [showAdvanced, setShowAdvanced] = useState(false)
@@ -239,13 +239,34 @@ export default function UploadPage() {
       return
     }
 
-    if (!vimeoData?.uploadUrl) {
+    // Add detailed debug info about the vimeoData
+    const debugData = {
+      vimeoDataExists: !!vimeoData,
+      uploadUrlExists: !!vimeoData?.uploadUrl,
+      vimeoId: vimeoData?.vimeoId || "missing",
+      uploadId: vimeoData?.uploadId || "missing",
+      fileInfo: selectedFile
+        ? {
+            name: selectedFile.name,
+            size: selectedFile.size,
+            type: selectedFile.type,
+          }
+        : "no file",
+    }
+
+    setDebugInfo(JSON.stringify(debugData, null, 2))
+
+    if (!vimeoData) {
+      const error = "Missing Vimeo upload data. Please try again."
+      setErrorMessage(error)
+      setUploadStage("error")
+      return
+    }
+
+    if (!vimeoData.uploadUrl) {
       const error = "Missing Vimeo upload URL. Please try again."
       setErrorMessage(error)
       setUploadStage("error")
-
-      // Add debug info
-      setDebugInfo(JSON.stringify(vimeoData, null, 2))
       return
     }
 
@@ -330,19 +351,26 @@ export default function UploadPage() {
         body: formData,
       })
 
+      const data = await initResponse.json()
+      console.log("Vimeo initialization response:", data)
+
       if (!initResponse.ok) {
-        const errorData = await initResponse.json()
         throw new Error(
-          errorData.details ||
+          data.details ||
             `Failed to initialize Vimeo upload (${initResponse.status}). Please try again later or contact support.`,
         )
       }
 
-      const data = await initResponse.json()
-      console.log("Vimeo initialization response:", data)
+      if (!data.uploadUrl) {
+        console.error("Missing uploadUrl in response:", data)
+        setDebugInfo(JSON.stringify(data, null, 2))
+        throw new Error("Invalid response from Vimeo. Missing upload URL.")
+      }
 
-      if (!data.uploadUrl || !data.vimeoId) {
-        throw new Error("Invalid response from Vimeo. Missing upload URL or video ID.")
+      if (!data.vimeoId) {
+        console.error("Missing vimeoId in response:", data)
+        setDebugInfo(JSON.stringify(data, null, 2))
+        throw new Error("Invalid response from Vimeo. Missing video ID.")
       }
 
       console.log("Vimeo upload initialized successfully. Upload URL:", data.uploadUrl)
@@ -417,6 +445,11 @@ export default function UploadPage() {
         throw new Error("Failed to initialize Vimeo upload")
       }
 
+      if (!vimeoUploadData.uploadUrl) {
+        setDebugInfo(JSON.stringify(vimeoUploadData, null, 2))
+        throw new Error("Missing upload URL in Vimeo response")
+      }
+
       // Update Firestore with Vimeo ID
       await updateDoc(doc(db, "uploads", uploadId), {
         vimeoId: vimeoUploadData.vimeoId,
@@ -425,7 +458,7 @@ export default function UploadPage() {
       })
 
       // Store the upload data for potential retries
-      const completeVimeoData: VimeoUploadData = {
+      const completeVimeoData = {
         ...vimeoUploadData,
         uploadId,
       }
