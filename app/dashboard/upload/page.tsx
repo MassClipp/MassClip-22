@@ -2,13 +2,17 @@
 
 import type React from "react"
 
-import { useState, useCallback, useRef } from "react"
+import { useState, useCallback, useRef, useEffect } from "react"
 import Link from "next/link"
 import { ArrowLeft, Upload, FileVideo, X, Check, Tag, Info, ChevronDown, Trash2 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
 import { useMobile } from "@/hooks/use-mobile"
+import { useAuth } from "@/contexts/auth-context"
+import { useRouter } from "next/navigation"
+import { db } from "@/lib/firebase"
+import { collection, addDoc, serverTimestamp } from "firebase/firestore"
 
 export default function UploadPage() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
@@ -23,9 +27,21 @@ export default function UploadPage() {
   const [category, setCategory] = useState("")
   const [visibility, setVisibility] = useState("public")
   const [isPremium, setIsPremium] = useState(false)
+  const [videoPreviewUrl, setVideoPreviewUrl] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const { toast } = useToast()
   const isMobile = useMobile()
+  const { user } = useAuth()
+  const router = useRouter()
+
+  // Clean up object URL on unmount or when file changes
+  useEffect(() => {
+    return () => {
+      if (videoPreviewUrl) {
+        URL.revokeObjectURL(videoPreviewUrl)
+      }
+    }
+  }, [videoPreviewUrl])
 
   // Handle drag events
   const handleDrag = useCallback((e: React.DragEvent) => {
@@ -38,6 +54,21 @@ export default function UploadPage() {
     }
   }, [])
 
+  // Create preview URL for video
+  const createVideoPreview = useCallback(
+    (file: File) => {
+      // Clean up previous preview URL
+      if (videoPreviewUrl) {
+        URL.revokeObjectURL(videoPreviewUrl)
+      }
+
+      // Create new preview URL
+      const url = URL.createObjectURL(file)
+      setVideoPreviewUrl(url)
+    },
+    [videoPreviewUrl],
+  )
+
   // Handle drop event
   const handleDrop = useCallback(
     (e: React.DragEvent) => {
@@ -49,6 +80,7 @@ export default function UploadPage() {
         const file = e.dataTransfer.files[0]
         if (file.type.startsWith("video/")) {
           setSelectedFile(file)
+          createVideoPreview(file)
           toast({
             title: "File selected",
             description: `${file.name} has been selected for upload.`,
@@ -62,7 +94,7 @@ export default function UploadPage() {
         }
       }
     },
-    [toast],
+    [toast, createVideoPreview],
   )
 
   // Handle file input change
@@ -72,6 +104,7 @@ export default function UploadPage() {
         const file = e.target.files[0]
         if (file.type.startsWith("video/")) {
           setSelectedFile(file)
+          createVideoPreview(file)
           toast({
             title: "File selected",
             description: `${file.name} has been selected for upload.`,
@@ -85,7 +118,7 @@ export default function UploadPage() {
         }
       }
     },
-    [toast],
+    [toast, createVideoPreview],
   )
 
   // Handle tag input
@@ -141,46 +174,82 @@ export default function UploadPage() {
     return true
   }, [selectedFile, title, toast])
 
-  // Mock upload function with progress simulation
-  const handleUpload = useCallback(() => {
+  // Upload function that saves to Firestore
+  const handleUpload = useCallback(async () => {
     if (!validateForm()) return
+    if (!user) {
+      toast({
+        title: "Authentication required",
+        description: "Please log in to upload content.",
+        variant: "destructive",
+      })
+      return
+    }
 
     setIsUploading(true)
     setUploadProgress(0)
 
-    // Simulate upload progress
-    const interval = setInterval(() => {
-      setUploadProgress((prev) => {
-        if (prev >= 100) {
-          clearInterval(interval)
-          setIsUploading(false)
-
-          // Collect form data for submission
-          const formData = {
-            file: selectedFile,
-            title,
-            description,
-            tags,
-            category,
-            visibility,
-            isPremium,
+    try {
+      // Simulate upload progress
+      const progressInterval = setInterval(() => {
+        setUploadProgress((prev) => {
+          if (prev >= 95) {
+            clearInterval(progressInterval)
+            return 95 // Hold at 95% until processing completes
           }
+          return prev + 5
+        })
+      }, 200)
 
-          console.log("Upload complete, form data:", formData)
+      // Prepare upload data
+      const uploadData = {
+        title,
+        description,
+        tags,
+        category: category || "uncategorized",
+        visibility,
+        isPremium,
+        fileName: selectedFile?.name,
+        fileSize: selectedFile?.size,
+        fileType: selectedFile?.type,
+        createdAt: serverTimestamp(),
+        userId: user.uid,
+        status: "processing", // Initial status
+      }
 
-          toast({
-            title: "Upload complete",
-            description: "Your content has been successfully uploaded.",
-          })
-          return 100
-        }
-        return prev + 2
+      // Save to Firestore
+      const docRef = await addDoc(collection(db, "uploads"), uploadData)
+
+      // Also save to user's uploads collection
+      await addDoc(collection(db, `users/${user.uid}/uploads`), {
+        ...uploadData,
+        uploadId: docRef.id,
       })
-    }, 100)
 
-    // Cleanup interval on component unmount
-    return () => clearInterval(interval)
-  }, [selectedFile, title, description, tags, category, visibility, isPremium, validateForm, toast])
+      // Complete the upload
+      clearInterval(progressInterval)
+      setUploadProgress(100)
+
+      setTimeout(() => {
+        setIsUploading(false)
+        toast({
+          title: "Upload complete",
+          description: "Your content has been successfully uploaded and is being processed.",
+        })
+
+        // Redirect to uploads page
+        router.push("/dashboard/uploads")
+      }, 1000)
+    } catch (error) {
+      console.error("Upload error:", error)
+      setIsUploading(false)
+      toast({
+        title: "Upload failed",
+        description: "There was an error uploading your content. Please try again.",
+        variant: "destructive",
+      })
+    }
+  }, [selectedFile, title, description, tags, category, visibility, isPremium, validateForm, user, toast, router])
 
   // Handle browse files click
   const handleBrowseClick = useCallback(() => {
@@ -255,7 +324,10 @@ export default function UploadPage() {
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => setSelectedFile(null)}
+                        onClick={() => {
+                          setSelectedFile(null)
+                          setVideoPreviewUrl(null)
+                        }}
                         className="text-zinc-400 hover:text-white"
                       >
                         <Trash2 className="w-4 h-4 mr-2" />
@@ -449,7 +521,14 @@ export default function UploadPage() {
               <div className="p-6">
                 <h3 className="text-lg font-medium mb-4">Preview</h3>
                 <div className="aspect-video bg-black rounded-lg overflow-hidden flex items-center justify-center mb-4">
-                  {selectedFile ? (
+                  {videoPreviewUrl ? (
+                    <video
+                      src={videoPreviewUrl}
+                      className="w-full h-full object-contain"
+                      controls
+                      controlsList="nodownload"
+                    />
+                  ) : selectedFile ? (
                     <div className="w-full h-full flex items-center justify-center bg-zinc-900">
                       <FileVideo className="w-12 h-12 text-zinc-700" />
                     </div>
