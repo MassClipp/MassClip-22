@@ -4,7 +4,19 @@ import type React from "react"
 
 import { useState, useCallback, useRef, useEffect } from "react"
 import Link from "next/link"
-import { ArrowLeft, Upload, FileVideo, X, Check, Tag, Info, ChevronDown, Trash2, AlertCircle } from "lucide-react"
+import {
+  ArrowLeft,
+  Upload,
+  FileVideo,
+  X,
+  Check,
+  Tag,
+  Info,
+  ChevronDown,
+  Trash2,
+  AlertCircle,
+  RefreshCw,
+} from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
@@ -30,9 +42,11 @@ export default function UploadPage() {
   const [isPremium, setIsPremium] = useState(false)
   const [videoPreviewUrl, setVideoPreviewUrl] = useState<string | null>(null)
   const [uploadStage, setUploadStage] = useState<
-    "idle" | "preparing" | "uploading" | "processing" | "complete" | "error"
+    "idle" | "preparing" | "uploading" | "stalled" | "processing" | "complete" | "error"
   >("idle")
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const [uploadAttempts, setUploadAttempts] = useState(0)
+  const [vimeoData, setVimeoData] = useState<{ uploadUrl?: string; vimeoId?: string; uploadId?: string } | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const { toast } = useToast()
   const isMobile = useMobile()
@@ -187,12 +201,129 @@ export default function UploadPage() {
         const errorData = await response.json()
         throw new Error(errorData.details || "Failed to connect to Vimeo")
       }
+
+      toast({
+        title: "Vimeo connection successful",
+        description: "Your Vimeo integration is working properly.",
+      })
+
       return true
     } catch (error) {
       console.error("Vimeo connection test failed:", error)
+
+      toast({
+        title: "Vimeo connection failed",
+        description: error instanceof Error ? error.message : "Could not connect to Vimeo",
+        variant: "destructive",
+      })
+
       return false
     }
-  }, [])
+  }, [toast])
+
+  // Start the actual file upload to Vimeo
+  const startFileUpload = useCallback(async () => {
+    if (!selectedFile || !vimeoData?.uploadUrl || !vimeoData.uploadId) {
+      setErrorMessage("Missing file or upload URL")
+      setUploadStage("error")
+      return
+    }
+
+    try {
+      setUploadStage("uploading")
+      setUploadAttempts((prev) => prev + 1)
+
+      await uploadToVimeo({
+        file: selectedFile,
+        uploadUrl: vimeoData.uploadUrl,
+        onProgress: (progress) => {
+          setUploadProgress(progress)
+        },
+        onStalled: () => {
+          setUploadStage("stalled")
+          toast({
+            title: "Upload stalled",
+            description: "Upload appears to be stalled. Attempting to resume...",
+          })
+        },
+        onError: (error) => {
+          throw error
+        },
+      })
+
+      // File is uploaded, now it's processing on Vimeo
+      setUploadStage("processing")
+      setUploadProgress(100)
+
+      // Update status in Firestore
+      await updateDoc(doc(db, "uploads", vimeoData.uploadId), {
+        status: "processing",
+        uploadedAt: serverTimestamp(),
+      })
+
+      // Show success message
+      toast({
+        title: "Upload complete",
+        description: "Your video has been uploaded and is now processing. This may take some time.",
+      })
+
+      // Redirect to uploads page
+      router.push("/dashboard/uploads")
+    } catch (error) {
+      console.error("File upload error:", error)
+      setUploadStage("error")
+      setErrorMessage(error instanceof Error ? error.message : "Failed to upload file to Vimeo")
+
+      toast({
+        title: "Upload failed",
+        description: "There was an error uploading your file. Please try again.",
+        variant: "destructive",
+      })
+    }
+  }, [selectedFile, vimeoData, toast, router])
+
+  // Initialize the Vimeo upload
+  const initializeVimeoUpload = useCallback(async () => {
+    if (!user || !selectedFile) return null
+
+    try {
+      // Create form data for the API request
+      const formData = new FormData()
+      formData.append("name", title)
+      formData.append("description", description || "")
+      formData.append("privacy", visibility === "private" ? "nobody" : "anybody")
+      formData.append("userId", user.uid)
+      formData.append("size", selectedFile.size.toString())
+
+      console.log("Initializing Vimeo upload with size:", selectedFile.size)
+
+      const initResponse = await fetch("/api/vimeo/upload", {
+        method: "POST",
+        body: formData,
+      })
+
+      if (!initResponse.ok) {
+        const errorData = await initResponse.json()
+        throw new Error(
+          errorData.details ||
+            `Failed to initialize Vimeo upload (${initResponse.status}). Please try again later or contact support.`,
+        )
+      }
+
+      const data = await initResponse.json()
+
+      if (!data.uploadUrl || !data.vimeoId) {
+        throw new Error("Invalid response from Vimeo. Missing upload URL or video ID.")
+      }
+
+      console.log("Vimeo upload initialized successfully. Upload URL:", data.uploadUrl)
+
+      return data
+    } catch (error) {
+      console.error("Failed to initialize Vimeo upload:", error)
+      throw error
+    }
+  }, [title, description, visibility, user, selectedFile])
 
   // Upload function that uploads to Vimeo
   const handleUpload = useCallback(async () => {
@@ -213,6 +344,7 @@ export default function UploadPage() {
     setIsUploading(true)
     setUploadProgress(0)
     setUploadStage("preparing")
+    setVimeoData(null)
 
     try {
       // First, check Vimeo connection
@@ -249,73 +381,27 @@ export default function UploadPage() {
       })
 
       // Step 2: Initialize the Vimeo upload
-      setUploadStage("preparing")
+      const vimeoUploadData = await initializeVimeoUpload()
 
-      // Create form data for the API request
-      const formData = new FormData()
-      formData.append("name", title)
-      formData.append("description", description || "")
-      formData.append("privacy", visibility === "private" ? "nobody" : "anybody")
-      formData.append("userId", user.uid)
-      formData.append("size", selectedFile.size.toString())
-
-      const initResponse = await fetch("/api/vimeo/upload", {
-        method: "POST",
-        body: formData,
-      })
-
-      if (!initResponse.ok) {
-        const errorData = await initResponse.json()
-        throw new Error(
-          errorData.details ||
-            `Failed to initialize Vimeo upload (${initResponse.status}). Please try again later or contact support.`,
-        )
-      }
-
-      const { uploadUrl, vimeoId, link } = await initResponse.json()
-
-      if (!uploadUrl || !vimeoId) {
-        throw new Error("Invalid response from Vimeo. Missing upload URL or video ID.")
+      if (!vimeoUploadData) {
+        throw new Error("Failed to initialize Vimeo upload")
       }
 
       // Update Firestore with Vimeo ID
       await updateDoc(doc(db, "uploads", uploadId), {
-        vimeoId,
-        vimeoLink: link,
+        vimeoId: vimeoUploadData.vimeoId,
+        vimeoLink: vimeoUploadData.link,
         status: "uploading",
       })
 
+      // Store the upload data for potential retries
+      setVimeoData({
+        ...vimeoUploadData,
+        uploadId,
+      })
+
       // Step 3: Upload the file to Vimeo using TUS protocol
-      setUploadStage("uploading")
-      await uploadToVimeo({
-        file: selectedFile,
-        uploadUrl,
-        onProgress: (progress) => {
-          setUploadProgress(progress)
-        },
-        onError: (error) => {
-          throw error
-        },
-      })
-
-      // Step 4: File is uploaded, now it's processing on Vimeo
-      setUploadStage("processing")
-      setUploadProgress(100)
-
-      // Update status in Firestore
-      await updateDoc(doc(db, "uploads", uploadId), {
-        status: "processing",
-        uploadedAt: serverTimestamp(),
-      })
-
-      // Show success message
-      toast({
-        title: "Upload complete",
-        description: "Your video has been uploaded and is now processing. This may take some time.",
-      })
-
-      // Redirect to uploads page
-      router.push("/dashboard/uploads")
+      await startFileUpload()
     } catch (error) {
       console.error("Upload error:", error)
       setIsUploading(false)
@@ -339,9 +425,20 @@ export default function UploadPage() {
     validateForm,
     user,
     toast,
-    router,
     checkVimeoConnection,
+    initializeVimeoUpload,
+    startFileUpload,
   ])
+
+  // Retry the upload
+  const retryUpload = useCallback(() => {
+    if (vimeoData && selectedFile) {
+      startFileUpload()
+    } else {
+      // If we don't have the Vimeo data anymore, start from scratch
+      handleUpload()
+    }
+  }, [vimeoData, selectedFile, startFileUpload, handleUpload])
 
   // Handle browse files click
   const handleBrowseClick = useCallback(() => {
@@ -357,6 +454,8 @@ export default function UploadPage() {
         return "Preparing upload..."
       case "uploading":
         return `Uploading ${selectedFile?.name} (${uploadProgress.toFixed(0)}%)`
+      case "stalled":
+        return "Upload stalled. Attempting to resume..."
       case "processing":
         return "Processing video on Vimeo..."
       case "complete":
@@ -374,6 +473,8 @@ export default function UploadPage() {
     setErrorMessage(null)
     setIsUploading(false)
     setUploadProgress(0)
+    setVimeoData(null)
+    setUploadAttempts(0)
   }, [])
 
   return (
@@ -415,6 +516,7 @@ export default function UploadPage() {
                 ${selectedFile ? "bg-zinc-900/50 border border-zinc-800" : "bg-gradient-to-b from-zinc-900/50 to-black border border-zinc-800 hover:border-zinc-700"}
                 ${isDragging ? "border-crimson/50 shadow-lg shadow-crimson/10 scale-[1.01]" : ""}
                 ${uploadStage === "error" ? "border-red-500/50" : ""}
+                ${uploadStage === "stalled" ? "border-yellow-500/50" : ""}
               `}
               onDragEnter={handleDrag}
               onDragLeave={handleDrag}
@@ -431,9 +533,33 @@ export default function UploadPage() {
                         </div>
                         <p className="text-lg font-medium mb-2 text-red-500">Upload Failed</p>
                         <p className="text-sm text-zinc-400 mb-4">{errorMessage}</p>
-                        <Button onClick={resetUpload} variant="outline" className="mt-2">
-                          Try Again
-                        </Button>
+                        <div className="flex gap-3">
+                          <Button onClick={retryUpload} variant="default" className="mt-2">
+                            Try Again
+                          </Button>
+                          <Button onClick={resetUpload} variant="outline" className="mt-2">
+                            Cancel
+                          </Button>
+                        </div>
+                      </>
+                    ) : uploadStage === "stalled" ? (
+                      <>
+                        <div className="w-12 h-12 rounded-full bg-yellow-500/10 flex items-center justify-center mb-4">
+                          <RefreshCw className="w-6 h-6 text-yellow-500 animate-spin" />
+                        </div>
+                        <p className="text-lg font-medium mb-2 text-yellow-500">Upload Stalled</p>
+                        <p className="text-sm text-zinc-400 mb-4">
+                          The upload appears to be stalled. Attempting to resume automatically...
+                        </p>
+                        <Progress value={uploadProgress} className="w-full h-2 mb-4" />
+                        <div className="flex gap-3">
+                          <Button onClick={retryUpload} variant="default" className="mt-2">
+                            Retry Upload
+                          </Button>
+                          <Button onClick={resetUpload} variant="outline" className="mt-2">
+                            Cancel
+                          </Button>
+                        </div>
                       </>
                     ) : (
                       <>
@@ -446,6 +572,11 @@ export default function UploadPage() {
                               ? `${uploadProgress.toFixed(0)}% complete`
                               : ""}
                         </p>
+                        {uploadProgress === 0 && uploadStage === "uploading" && uploadAttempts > 1 && (
+                          <p className="text-xs text-yellow-400 mt-2">
+                            Upload is initializing. This may take a moment for large files...
+                          </p>
+                        )}
                       </>
                     )}
                   </div>

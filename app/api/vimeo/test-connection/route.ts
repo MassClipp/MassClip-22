@@ -3,8 +3,8 @@ import { vimeoConfig } from "@/lib/vimeo-config"
 
 export async function GET() {
   try {
-    // Test the Vimeo API connection
-    const response = await fetch(`https://api.vimeo.com/users/${vimeoConfig.userId}`, {
+    // Test the Vimeo connection by making a simple API call
+    const response = await fetch("https://api.vimeo.com/me", {
       headers: {
         Authorization: `Bearer ${vimeoConfig.accessToken}`,
         "Content-Type": "application/json",
@@ -14,13 +14,21 @@ export async function GET() {
 
     if (!response.ok) {
       const errorText = await response.text()
-      console.error("Vimeo API error:", errorText)
+      console.error("Vimeo API connection test failed:", errorText)
+
+      let errorDetails = errorText
+      try {
+        const errorJson = JSON.parse(errorText)
+        errorDetails = errorJson.error || errorJson.developer_message || errorText
+      } catch (e) {
+        // If parsing fails, use the original error text
+      }
+
       return NextResponse.json(
         {
           success: false,
-          error: "Failed to connect to Vimeo API",
           status: response.status,
-          details: errorText,
+          details: errorDetails,
         },
         { status: response.status },
       )
@@ -30,12 +38,10 @@ export async function GET() {
 
     return NextResponse.json({
       success: true,
-      message: "Successfully connected to Vimeo API",
       user: {
         name: userData.name,
         uri: userData.uri,
         link: userData.link,
-        uploadQuota: userData.upload_quota,
       },
     })
   } catch (error) {
@@ -43,7 +49,6 @@ export async function GET() {
     return NextResponse.json(
       {
         success: false,
-        error: "Failed to connect to Vimeo API",
         details: error instanceof Error ? error.message : String(error),
       },
       { status: 500 },

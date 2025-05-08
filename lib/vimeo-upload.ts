@@ -6,6 +6,7 @@ interface UploadOptions {
   onProgress?: (progress: number) => void
   onSuccess?: (response: any) => void
   onError?: (error: Error) => void
+  onStalled?: () => void
 }
 
 export async function uploadToVimeo({
@@ -14,33 +15,94 @@ export async function uploadToVimeo({
   onProgress = () => {},
   onSuccess = () => {},
   onError = () => {},
+  onStalled = () => {},
 }: UploadOptions) {
   return new Promise<void>((resolve, reject) => {
     // Create a new tus upload
+    console.log("Starting TUS upload to:", uploadUrl)
+
+    // Track stalled uploads
+    let lastProgress = 0
+    let stalledTimer: NodeJS.Timeout | null = null
+
     const upload = new tus.Upload(file, {
       endpoint: uploadUrl,
-      retryDelays: [0, 3000, 5000, 10000, 20000],
+      retryDelays: [0, 1000, 3000, 5000, 10000, 20000],
       metadata: {
         filename: file.name,
         filetype: file.type,
       },
+      headers: {
+        "X-Upload-Content-Type": file.type,
+      },
+      chunkSize: 5 * 1024 * 1024, // 5MB chunks
       onError: (error) => {
         console.error("Failed to upload to Vimeo:", error)
+        if (stalledTimer) clearTimeout(stalledTimer)
         onError(error)
         reject(error)
       },
       onProgress: (bytesUploaded, bytesTotal) => {
         const percentage = (bytesUploaded / bytesTotal) * 100
+        console.log(`Upload progress: ${percentage.toFixed(2)}% (${bytesUploaded}/${bytesTotal} bytes)`)
+
+        // Check if progress is actually happening
+        if (percentage > lastProgress) {
+          lastProgress = percentage
+
+          // Reset stalled timer if we're making progress
+          if (stalledTimer) {
+            clearTimeout(stalledTimer)
+            stalledTimer = null
+          }
+        }
+
+        // Set a timer to detect stalled uploads
+        if (!stalledTimer && percentage < 100 && percentage > 0) {
+          stalledTimer = setTimeout(() => {
+            console.warn("Upload appears to be stalled, attempting to resume...")
+            try {
+              upload.abort()
+              setTimeout(() => {
+                upload.start()
+              }, 1000)
+              onStalled()
+            } catch (e) {
+              console.error("Failed to resume stalled upload:", e)
+            }
+          }, 30000) // 30 seconds without progress is considered stalled
+        }
+
         onProgress(percentage)
       },
       onSuccess: () => {
         console.log("Upload to Vimeo completed successfully")
+        if (stalledTimer) clearTimeout(stalledTimer)
         onSuccess(upload.url)
         resolve()
       },
+      onShouldRetry: (err, retryAttempt, options) => {
+        console.log(`Retry attempt ${retryAttempt} due to error:`, err)
+        return true // Always retry on error
+      },
     })
 
-    // Start the upload
-    upload.start()
+    // Log upload events for debugging
+    upload
+      .findPreviousUploads()
+      .then((previousUploads) => {
+        if (previousUploads.length) {
+          console.log("Found previous upload attempt, resuming...")
+          upload.resumeFromPreviousUpload(previousUploads[0])
+        }
+
+        // Start the upload
+        console.log("Starting upload of file:", file.name, "size:", file.size)
+        upload.start()
+      })
+      .catch((err) => {
+        console.error("Error finding previous uploads:", err)
+        upload.start()
+      })
   })
 }
