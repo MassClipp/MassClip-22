@@ -11,30 +11,73 @@ export function normalizeCategory(categoryName: string): string {
 }
 
 /**
- * Predefined list of category tags that match the dropdown options
+ * Predefined list of niches that match the dropdown options
  */
-export const PREDEFINED_TAGS = ["Motivation", "Meme", "Sports", "Streamer Clip", "Other"]
+export const PREDEFINED_NICHES = ["Motivation", "Meme", "Sports", "Streamer Clip", "Other"]
 
 /**
- * Checks if a tag is in the predefined list (case-insensitive)
- * @param tag The tag to check
- * @returns Boolean indicating if the tag is predefined
+ * Initial mapping of niches to their associated tags
+ * This will be dynamically updated with data from the showcases
  */
-export function isValidTag(tag: string): boolean {
-  if (!tag) return false
-  return PREDEFINED_TAGS.some((predefinedTag) => normalizeCategory(predefinedTag) === normalizeCategory(tag))
+export const NICHE_TO_TAGS_MAPPING: Record<string, string[]> = {
+  Motivation: [
+    "Introspection",
+    "Hustle Mentality",
+    "High Energy Motivation",
+    "Faith",
+    "Money & Wealth",
+    "Motivational Speeches",
+  ],
+  Meme: ["Funny", "Viral", "Trending"],
+  Sports: ["Basketball", "Football", "Soccer", "Highlights"],
+  "Streamer Clip": ["Gaming", "IRL", "Reaction", "Commentary"],
+  Other: ["Miscellaneous", "Uncategorized"],
 }
 
 /**
- * Gets the proper case version of a tag from the predefined list
- * @param tag The tag to normalize
- * @returns The properly cased tag from the predefined list, or the original if not found
+ * Checks if a niche is in the predefined list (case-insensitive)
+ * @param niche The niche to check
+ * @returns Boolean indicating if the niche is predefined
  */
-export function getProperCaseTag(tag: string): string {
-  if (!tag) return ""
+export function isValidNiche(niche: string): boolean {
+  if (!niche) return false
+  return PREDEFINED_NICHES.some((predefinedNiche) => normalizeCategory(predefinedNiche) === normalizeCategory(niche))
+}
 
-  const normalizedTag = normalizeCategory(tag)
-  const matchedTag = PREDEFINED_TAGS.find((predefinedTag) => normalizeCategory(predefinedTag) === normalizedTag)
+/**
+ * Gets the proper case version of a niche from the predefined list
+ * @param niche The niche to normalize
+ * @returns The properly cased niche from the predefined list, or the original if not found
+ */
+export function getProperCaseNiche(niche: string): string {
+  if (!niche) return ""
 
-  return matchedTag || tag
+  const normalizedNiche = normalizeCategory(niche)
+  const matchedNiche = PREDEFINED_NICHES.find(
+    (predefinedNiche) => normalizeCategory(predefinedNiche) === normalizedNiche,
+  )
+
+  return matchedNiche || niche
+}
+
+/**
+ * Gets the list of tags associated with a specific niche
+ * @param niche The niche to get tags for
+ * @returns Array of tags for the niche, or empty array if niche not found
+ */
+export function getTagsForNiche(niche: string): string[] {
+  const properCaseNiche = getProperCaseNiche(niche)
+  return NICHE_TO_TAGS_MAPPING[properCaseNiche] || []
+}
+
+/**
+ * Updates the tags for a specific niche
+ * @param niche The niche to update tags for
+ * @param tags Array of tags to associate with the niche
+ */
+export function updateTagsForNiche(niche: string, tags: string[]): void {
+  const properCaseNiche = getProperCaseNiche(niche)
+  if (properCaseNiche && PREDEFINED_NICHES.includes(properCaseNiche)) {
+    NICHE_TO_TAGS_MAPPING[properCaseNiche] = [...tags]
+  }
 }

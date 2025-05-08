@@ -15,22 +15,18 @@ import { collection, addDoc, serverTimestamp, updateDoc, doc } from "firebase/fi
 import { directUploadToVimeo } from "@/lib/direct-vimeo-upload"
 import { useMobile } from "@/hooks/use-mobile"
 import { assignVideoToCategory } from "@/app/actions/category-actions"
+import { useShowcaseTags } from "@/hooks/use-showcase-tags"
 
 export default function UploadPage() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [isDragging, setIsDragging] = useState(false)
   const [uploadProgress, setUploadProgress] = useState(0)
   const [isUploading, setIsUploading] = useState(false)
-  // Remove these lines:
-  // const [tags, setTags] = useState<string[]>([])
-  // const [tagInput, setTagInput] = useState("")
-
-  // Add this line:
+  const [selectedNiche, setSelectedNiche] = useState<string>("")
   const [selectedTag, setSelectedTag] = useState<string>("")
   const [showAdvanced, setShowAdvanced] = useState(false)
   const [title, setTitle] = useState("")
   const [description, setDescription] = useState("")
-  const [category, setCategory] = useState("")
   const [visibility, setVisibility] = useState("public")
   const [isPremium, setIsPremium] = useState(false)
   const [videoPreviewUrl, setVideoPreviewUrl] = useState<string | null>(null)
@@ -43,6 +39,14 @@ export default function UploadPage() {
   const { user } = useAuth()
   const router = useRouter()
   const isMobile = useMobile()
+
+  // Get the niche-to-tags mapping
+  const { nicheTagsMap, isLoading: tagsLoading, niches } = useShowcaseTags()
+
+  // Reset tag when niche changes
+  useEffect(() => {
+    setSelectedTag("")
+  }, [selectedNiche])
 
   // Clean up object URL on unmount or when file changes
   useEffect(() => {
@@ -133,8 +137,6 @@ export default function UploadPage() {
     [toast, createVideoPreview],
   )
 
-  // Remove the tag input handlers (handleTagKeyDown, handleAddTag, removeTag) as they won't be needed with the dropdown approach.
-
   // Validate form
   const validateForm = useCallback(() => {
     if (!selectedFile) {
@@ -155,17 +157,26 @@ export default function UploadPage() {
       return false
     }
 
+    if (!selectedNiche) {
+      toast({
+        title: "Niche required",
+        description: "Please select a niche for your content.",
+        variant: "destructive",
+      })
+      return false
+    }
+
     if (!selectedTag) {
       toast({
         title: "Tag required",
-        description: "Please select a category tag for your content.",
+        description: "Please select a tag for your content.",
         variant: "destructive",
       })
       return false
     }
 
     return true
-  }, [selectedFile, title, selectedTag, toast])
+  }, [selectedFile, title, selectedNiche, selectedTag, toast])
 
   // Handle browse files click
   const handleBrowseClick = useCallback(() => {
@@ -198,8 +209,8 @@ export default function UploadPage() {
       const uploadData = {
         title: title || selectedFile.name,
         description,
-        tag: selectedTag, // Replace tags with single tag
-        category: selectedTag.toLowerCase(), // Use the tag as the category, normalized to lowercase
+        niche: selectedNiche,
+        tag: selectedTag,
         visibility,
         isPremium,
         fileName: selectedFile.name,
@@ -228,7 +239,8 @@ export default function UploadPage() {
       formData.append("size", selectedFile.size.toString())
       formData.append("privacy", visibility === "private" ? "nobody" : "anybody")
       formData.append("userId", user.uid)
-      formData.append("tag", selectedTag) // Add the tag to the form data
+      formData.append("niche", selectedNiche)
+      formData.append("tag", selectedTag)
 
       const initResponse = await fetch("/api/vimeo/direct-upload", {
         method: "POST",
@@ -269,17 +281,15 @@ export default function UploadPage() {
         uploadedAt: serverTimestamp(),
       })
 
-      // Add this section to assign the video to a category
-      if (selectedTag) {
-        try {
-          const result = await assignVideoToCategory(uploadId, selectedTag, user.uid)
-          if (!result.success) {
-            console.warn("Failed to assign video to category:", result.error)
-          }
-        } catch (error) {
-          console.error("Error assigning category:", error)
-          // Don't fail the upload if category assignment fails
+      // Assign the video to the appropriate category
+      try {
+        const result = await assignVideoToCategory(uploadId, selectedNiche, selectedTag, user.uid)
+        if (!result.success) {
+          console.warn("Failed to assign video to category:", result.error)
         }
+      } catch (error) {
+        console.error("Error assigning category:", error)
+        // Don't fail the upload if category assignment fails
       }
 
       setUploadStage("processing")
@@ -305,7 +315,19 @@ export default function UploadPage() {
 
       setIsUploading(false)
     }
-  }, [selectedFile, title, description, selectedTag, visibility, isPremium, validateForm, user, toast, router])
+  }, [
+    selectedFile,
+    title,
+    description,
+    selectedNiche,
+    selectedTag,
+    visibility,
+    isPremium,
+    validateForm,
+    user,
+    toast,
+    router,
+  ])
 
   // Get upload stage text
   const getUploadStageText = useCallback(() => {
@@ -494,24 +516,54 @@ export default function UploadPage() {
                   ></textarea>
                 </div>
 
+                {/* Niche Selection */}
+                <div>
+                  <label htmlFor="niche" className="block text-sm font-medium text-zinc-400 mb-2">
+                    Niche <span className="text-crimson">*</span>
+                  </label>
+                  <select
+                    id="niche"
+                    value={selectedNiche}
+                    onChange={(e) => setSelectedNiche(e.target.value)}
+                    className="w-full bg-zinc-800/50 border border-zinc-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-crimson/50 focus:border-transparent transition-all appearance-none"
+                  >
+                    <option value="">Select a niche</option>
+                    {niches.map((niche) => (
+                      <option key={niche} value={niche}>
+                        {niche}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-zinc-500 mt-2">Select the primary category for your content</p>
+                </div>
+
+                {/* Tag Selection (dependent on niche) */}
                 <div>
                   <label htmlFor="tag" className="block text-sm font-medium text-zinc-400 mb-2">
-                    Category Tag <span className="text-crimson">*</span>
+                    Tag <span className="text-crimson">*</span>
                   </label>
                   <select
                     id="tag"
                     value={selectedTag}
                     onChange={(e) => setSelectedTag(e.target.value)}
-                    className="w-full bg-zinc-800/50 border border-zinc-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-crimson/50 focus:border-transparent transition-all appearance-none"
+                    disabled={!selectedNiche || tagsLoading}
+                    className="w-full bg-zinc-800/50 border border-zinc-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-crimson/50 focus:border-transparent transition-all appearance-none disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    <option value="">Select a category tag</option>
-                    <option value="Motivation">Motivation</option>
-                    <option value="Meme">Meme</option>
-                    <option value="Sports">Sports</option>
-                    <option value="Streamer Clip">Streamer Clip</option>
-                    <option value="Other">Other</option>
+                    <option value="">
+                      {tagsLoading ? "Loading tags..." : !selectedNiche ? "Select a niche first" : "Select a tag"}
+                    </option>
+                    {selectedNiche &&
+                      nicheTagsMap[selectedNiche]?.map((tag) => (
+                        <option key={tag} value={tag}>
+                          {tag}
+                        </option>
+                      ))}
                   </select>
-                  <p className="text-xs text-zinc-500 mt-2">This tag will be used to categorize your content</p>
+                  <p className="text-xs text-zinc-500 mt-2">
+                    {selectedNiche
+                      ? "Select a specific tag within this niche"
+                      : "First select a niche to see available tags"}
+                  </p>
                 </div>
               </div>
             </div>
@@ -536,24 +588,6 @@ export default function UploadPage() {
               {showAdvanced && (
                 <div className="p-6 md:p-8 pt-0 border-t border-zinc-800">
                   <div className="space-y-6">
-                    <div>
-                      <label htmlFor="category" className="block text-sm font-medium text-zinc-400 mb-2">
-                        Category
-                      </label>
-                      <select
-                        id="category"
-                        value={category}
-                        onChange={(e) => setCategory(e.target.value)}
-                        className="w-full bg-zinc-800/50 border border-zinc-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-crimson/50 focus:border-transparent transition-all appearance-none"
-                      >
-                        <option value="">Select a category</option>
-                        <option value="motivation">Motivation</option>
-                        <option value="fitness">Fitness</option>
-                        <option value="business">Business</option>
-                        <option value="lifestyle">Lifestyle</option>
-                      </select>
-                    </div>
-
                     <div>
                       <label htmlFor="visibility" className="block text-sm font-medium text-zinc-400 mb-2">
                         Visibility
