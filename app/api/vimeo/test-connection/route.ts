@@ -3,7 +3,7 @@ import { vimeoConfig } from "@/lib/vimeo-config"
 
 export async function GET() {
   try {
-    // Test the Vimeo connection by making a simple API call
+    // Test the Vimeo API connection by making a simple request
     const response = await fetch("https://api.vimeo.com/me", {
       headers: {
         Authorization: `Bearer ${vimeoConfig.accessToken}`,
@@ -27,6 +27,7 @@ export async function GET() {
       return NextResponse.json(
         {
           success: false,
+          error: "Failed to connect to Vimeo API",
           status: response.status,
           details: errorDetails,
         },
@@ -34,21 +35,23 @@ export async function GET() {
       )
     }
 
-    const userData = await response.json()
+    const data = await response.json()
 
     return NextResponse.json({
       success: true,
+      message: "Successfully connected to Vimeo API",
       user: {
-        name: userData.name,
-        uri: userData.uri,
-        link: userData.link,
+        name: data.name,
+        uri: data.uri,
       },
     })
   } catch (error) {
     console.error("Error testing Vimeo connection:", error)
+
     return NextResponse.json(
       {
         success: false,
+        error: "Failed to connect to Vimeo API",
         details: error instanceof Error ? error.message : String(error),
       },
       { status: 500 },

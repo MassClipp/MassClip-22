@@ -27,6 +27,14 @@ import { db } from "@/lib/firebase"
 import { collection, addDoc, serverTimestamp, updateDoc, doc } from "firebase/firestore"
 import { uploadToVimeo } from "@/lib/vimeo-upload"
 
+// Define the Vimeo data interface
+interface VimeoUploadData {
+  uploadUrl: string
+  vimeoId: string
+  uploadId: string
+  link?: string
+}
+
 export default function UploadPage() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [isDragging, setIsDragging] = useState(false)
@@ -46,7 +54,8 @@ export default function UploadPage() {
   >("idle")
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [uploadAttempts, setUploadAttempts] = useState(0)
-  const [vimeoData, setVimeoData] = useState<{ uploadUrl?: string; vimeoId?: string; uploadId?: string } | null>(null)
+  const [vimeoData, setVimeoData] = useState<VimeoUploadData | null>(null)
+  const [debugInfo, setDebugInfo] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const { toast } = useToast()
   const isMobile = useMobile()
@@ -223,15 +232,32 @@ export default function UploadPage() {
 
   // Start the actual file upload to Vimeo
   const startFileUpload = useCallback(async () => {
-    if (!selectedFile || !vimeoData?.uploadUrl || !vimeoData.uploadId) {
-      setErrorMessage("Missing file or upload URL")
+    if (!selectedFile) {
+      const error = "No file selected for upload"
+      setErrorMessage(error)
       setUploadStage("error")
+      return
+    }
+
+    if (!vimeoData?.uploadUrl) {
+      const error = "Missing Vimeo upload URL. Please try again."
+      setErrorMessage(error)
+      setUploadStage("error")
+
+      // Add debug info
+      setDebugInfo(JSON.stringify(vimeoData, null, 2))
       return
     }
 
     try {
       setUploadStage("uploading")
       setUploadAttempts((prev) => prev + 1)
+
+      console.log("Starting file upload with:", {
+        fileName: selectedFile.name,
+        fileSize: selectedFile.size,
+        uploadUrl: vimeoData.uploadUrl,
+      })
 
       await uploadToVimeo({
         file: selectedFile,
@@ -284,7 +310,9 @@ export default function UploadPage() {
 
   // Initialize the Vimeo upload
   const initializeVimeoUpload = useCallback(async () => {
-    if (!user || !selectedFile) return null
+    if (!user || !selectedFile) {
+      return null
+    }
 
     try {
       // Create form data for the API request
@@ -311,6 +339,7 @@ export default function UploadPage() {
       }
 
       const data = await initResponse.json()
+      console.log("Vimeo initialization response:", data)
 
       if (!data.uploadUrl || !data.vimeoId) {
         throw new Error("Invalid response from Vimeo. Missing upload URL or video ID.")
@@ -341,6 +370,7 @@ export default function UploadPage() {
 
     // Reset any previous errors
     setErrorMessage(null)
+    setDebugInfo(null)
     setIsUploading(true)
     setUploadProgress(0)
     setUploadStage("preparing")
@@ -395,10 +425,13 @@ export default function UploadPage() {
       })
 
       // Store the upload data for potential retries
-      setVimeoData({
+      const completeVimeoData: VimeoUploadData = {
         ...vimeoUploadData,
         uploadId,
-      })
+      }
+
+      setVimeoData(completeVimeoData)
+      console.log("Setting vimeoData:", completeVimeoData)
 
       // Step 3: Upload the file to Vimeo using TUS protocol
       await startFileUpload()
@@ -471,6 +504,7 @@ export default function UploadPage() {
   const resetUpload = useCallback(() => {
     setUploadStage("idle")
     setErrorMessage(null)
+    setDebugInfo(null)
     setIsUploading(false)
     setUploadProgress(0)
     setVimeoData(null)
@@ -533,6 +567,16 @@ export default function UploadPage() {
                         </div>
                         <p className="text-lg font-medium mb-2 text-red-500">Upload Failed</p>
                         <p className="text-sm text-zinc-400 mb-4">{errorMessage}</p>
+
+                        {debugInfo && (
+                          <div className="mb-4 w-full">
+                            <p className="text-xs text-zinc-500 mb-1">Debug Information:</p>
+                            <pre className="text-xs text-left bg-zinc-900 p-2 rounded-md overflow-auto max-h-32">
+                              {debugInfo}
+                            </pre>
+                          </div>
+                        )}
+
                         <div className="flex gap-3">
                           <Button onClick={retryUpload} variant="default" className="mt-2">
                             Try Again
@@ -564,6 +608,7 @@ export default function UploadPage() {
                     ) : (
                       <>
                         <Progress value={uploadProgress} className="w-full h-2 mb-4" />
+                        <p className="text-sm font-medium mb-1" className="w-full h-2 mb-4" />
                         <p className="text-sm font-medium mb-1">{getUploadStageText()}</p>
                         <p className="text-xs text-zinc-400">
                           {uploadStage === "processing"

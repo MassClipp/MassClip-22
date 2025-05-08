@@ -18,8 +18,27 @@ export async function uploadToVimeo({
   onStalled = () => {},
 }: UploadOptions) {
   return new Promise<void>((resolve, reject) => {
+    if (!file) {
+      const error = new Error("No file provided for upload")
+      console.error(error)
+      onError(error)
+      return reject(error)
+    }
+
+    if (!uploadUrl) {
+      const error = new Error("No upload URL provided")
+      console.error(error)
+      onError(error)
+      return reject(error)
+    }
+
     // Create a new tus upload
     console.log("Starting TUS upload to:", uploadUrl)
+    console.log("File details:", {
+      name: file.name,
+      size: file.size,
+      type: file.type,
+    })
 
     // Track stalled uploads
     let lastProgress = 0

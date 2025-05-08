@@ -74,6 +74,21 @@ export async function POST(request: NextRequest) {
     const uploadData = await createResponse.json()
     console.log("Vimeo upload created successfully:", uploadData.uri)
 
+    // Log the full response for debugging
+    console.log("Full Vimeo response:", JSON.stringify(uploadData, null, 2))
+
+    // Ensure we have the upload link
+    if (!uploadData.upload?.upload_link) {
+      console.error("Missing upload_link in Vimeo response:", uploadData)
+      return NextResponse.json(
+        {
+          error: "Invalid response from Vimeo API",
+          details: "Missing upload link in response",
+        },
+        { status: 500 },
+      )
+    }
+
     // Return the upload URL and other data needed for the client
     return NextResponse.json({
       uploadUrl: uploadData.upload.upload_link,
