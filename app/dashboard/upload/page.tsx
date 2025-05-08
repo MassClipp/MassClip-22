@@ -39,7 +39,7 @@ export default function UploadPage() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [isDragging, setIsDragging] = useState(false)
   const [uploadProgress, setUploadProgress] = useState(0)
-  const [isUploading, setIsUploading] = useState(isUploading)
+  const [isUploading, setIsUploading] = useState(false) // Fixed: was using isUploading before initialization
   const [tags, setTags] = useState<string[]>([])
   const [tagInput, setTagInput] = useState("")
   const [showAdvanced, setShowAdvanced] = useState(false)
@@ -641,7 +641,6 @@ export default function UploadPage() {
                     ) : (
                       <>
                         <Progress value={uploadProgress} className="w-full h-2 mb-4" />
-                        <p className="text-sm font-medium mb-1" className="w-full h-2 mb-4" />
                         <p className="text-sm font-medium mb-1">{getUploadStageText()}</p>
                         <p className="text-xs text-zinc-400">
                           {uploadStage === "processing"
