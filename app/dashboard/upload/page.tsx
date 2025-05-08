@@ -12,7 +12,8 @@ import { useMobile } from "@/hooks/use-mobile"
 import { useAuth } from "@/contexts/auth-context"
 import { useRouter } from "next/navigation"
 import { db } from "@/lib/firebase"
-import { collection, addDoc, serverTimestamp } from "firebase/firestore"
+import { collection, addDoc, serverTimestamp, updateDoc, doc } from "firebase/firestore"
+import { uploadToVimeo } from "@/lib/vimeo-upload"
 
 export default function UploadPage() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
@@ -28,6 +29,7 @@ export default function UploadPage() {
   const [visibility, setVisibility] = useState("public")
   const [isPremium, setIsPremium] = useState(false)
   const [videoPreviewUrl, setVideoPreviewUrl] = useState<string | null>(null)
+  const [uploadStage, setUploadStage] = useState<"idle" | "preparing" | "uploading" | "processing" | "complete">("idle")
   const fileInputRef = useRef<HTMLInputElement>(null)
   const { toast } = useToast()
   const isMobile = useMobile()
@@ -174,7 +176,65 @@ export default function UploadPage() {
     return true
   }, [selectedFile, title, toast])
 
-  // Upload function that saves to Firestore
+  // Check video processing status
+  const checkVideoStatus = useCallback(
+    async (vimeoId: string, uploadId: string) => {
+      try {
+        const response = await fetch(`/api/vimeo/video-status/${vimeoId}`)
+        if (!response.ok) {
+          throw new Error("Failed to check video status")
+        }
+
+        const statusData = await response.json()
+
+        // Update Firestore with the latest status
+        await updateDoc(doc(db, "uploads", uploadId), {
+          status: statusData.isPlayable ? "ready" : "processing",
+          vimeoStatus: statusData.status,
+          transcodeStatus: statusData.transcode,
+          isPlayable: statusData.isPlayable,
+          thumbnail: statusData.pictures?.sizes?.[3]?.link || null,
+          duration: statusData.duration,
+          width: statusData.width,
+          height: statusData.height,
+          updatedAt: serverTimestamp(),
+        })
+
+        // Also update user's uploads collection
+        if (user) {
+          const userUploadQuery = await db
+            .collection("users")
+            .doc(user.uid)
+            .collection("uploads")
+            .where("uploadId", "==", uploadId)
+            .limit(1)
+            .get()
+
+          if (!userUploadQuery.empty) {
+            await updateDoc(userUploadQuery.docs[0].ref, {
+              status: statusData.isPlayable ? "ready" : "processing",
+              vimeoStatus: statusData.status,
+              transcodeStatus: statusData.transcode,
+              isPlayable: statusData.isPlayable,
+              thumbnail: statusData.pictures?.sizes?.[3]?.link || null,
+              duration: statusData.duration,
+              width: statusData.width,
+              height: statusData.height,
+              updatedAt: serverTimestamp(),
+            })
+          }
+        }
+
+        return statusData.isPlayable
+      } catch (error) {
+        console.error("Error checking video status:", error)
+        return false
+      }
+    },
+    [user],
+  )
+
+  // Upload function that uploads to Vimeo
   const handleUpload = useCallback(async () => {
     if (!validateForm()) return
     if (!user) {
@@ -186,22 +246,14 @@ export default function UploadPage() {
       return
     }
 
+    if (!selectedFile) return
+
     setIsUploading(true)
     setUploadProgress(0)
+    setUploadStage("preparing")
 
     try {
-      // Simulate upload progress
-      const progressInterval = setInterval(() => {
-        setUploadProgress((prev) => {
-          if (prev >= 95) {
-            clearInterval(progressInterval)
-            return 95 // Hold at 95% until processing completes
-          }
-          return prev + 5
-        })
-      }, 200)
-
-      // Prepare upload data
+      // Step 1: Create a document in Firestore to track the upload
       const uploadData = {
         title,
         description,
@@ -209,47 +261,112 @@ export default function UploadPage() {
         category: category || "uncategorized",
         visibility,
         isPremium,
-        fileName: selectedFile?.name,
-        fileSize: selectedFile?.size,
-        fileType: selectedFile?.type,
+        fileName: selectedFile.name,
+        fileSize: selectedFile.size,
+        fileType: selectedFile.type,
         createdAt: serverTimestamp(),
         userId: user.uid,
-        status: "processing", // Initial status
+        status: "preparing", // Initial status
+        vimeoId: null,
+        vimeoLink: null,
       }
 
-      // Save to Firestore
       const docRef = await addDoc(collection(db, "uploads"), uploadData)
+      const uploadId = docRef.id
 
       // Also save to user's uploads collection
       await addDoc(collection(db, `users/${user.uid}/uploads`), {
         ...uploadData,
-        uploadId: docRef.id,
+        uploadId: uploadId,
       })
 
-      // Complete the upload
-      clearInterval(progressInterval)
+      // Step 2: Initialize the Vimeo upload
+      setUploadStage("preparing")
+
+      // Create form data for the API request
+      const formData = new FormData()
+      formData.append("name", title)
+      formData.append("description", description || "")
+      formData.append("privacy", visibility === "private" ? "nobody" : "anybody")
+      formData.append("userId", user.uid)
+      formData.append("size", selectedFile.size.toString())
+
+      const initResponse = await fetch("/api/vimeo/upload", {
+        method: "POST",
+        body: formData,
+      })
+
+      if (!initResponse.ok) {
+        throw new Error("Failed to initialize Vimeo upload")
+      }
+
+      const { uploadUrl, vimeoId, link } = await initResponse.json()
+
+      // Update Firestore with Vimeo ID
+      await updateDoc(doc(db, "uploads", uploadId), {
+        vimeoId,
+        vimeoLink: link,
+        status: "uploading",
+      })
+
+      // Step 3: Upload the file to Vimeo using TUS protocol
+      setUploadStage("uploading")
+      await uploadToVimeo({
+        file: selectedFile,
+        uploadUrl,
+        onProgress: (progress) => {
+          setUploadProgress(progress)
+        },
+        onError: (error) => {
+          throw error
+        },
+      })
+
+      // Step 4: File is uploaded, now it's processing on Vimeo
+      setUploadStage("processing")
       setUploadProgress(100)
 
-      setTimeout(() => {
-        setIsUploading(false)
-        toast({
-          title: "Upload complete",
-          description: "Your content has been successfully uploaded and is being processed.",
-        })
+      // Update status in Firestore
+      await updateDoc(doc(db, "uploads", uploadId), {
+        status: "processing",
+        uploadedAt: serverTimestamp(),
+      })
 
-        // Redirect to uploads page
-        router.push("/dashboard/uploads")
-      }, 1000)
+      // Check status once immediately
+      await checkVideoStatus(vimeoId, uploadId)
+
+      // Show success message
+      toast({
+        title: "Upload complete",
+        description: "Your video has been uploaded and is now processing. This may take some time.",
+      })
+
+      // Redirect to uploads page
+      router.push("/dashboard/uploads")
     } catch (error) {
       console.error("Upload error:", error)
       setIsUploading(false)
+      setUploadStage("idle")
       toast({
         title: "Upload failed",
-        description: "There was an error uploading your content. Please try again.",
+        description: error instanceof Error ? error.message : "There was an error uploading your content.",
         variant: "destructive",
       })
     }
-  }, [selectedFile, title, description, tags, category, visibility, isPremium, validateForm, user, toast, router])
+  }, [
+    selectedFile,
+    title,
+    description,
+    tags,
+    category,
+    visibility,
+    isPremium,
+    validateForm,
+    user,
+    toast,
+    router,
+    checkVideoStatus,
+  ])
 
   // Handle browse files click
   const handleBrowseClick = useCallback(() => {
@@ -257,6 +374,22 @@ export default function UploadPage() {
       fileInputRef.current.click()
     }
   }, [])
+
+  // Get upload stage text
+  const getUploadStageText = useCallback(() => {
+    switch (uploadStage) {
+      case "preparing":
+        return "Preparing upload..."
+      case "uploading":
+        return `Uploading ${selectedFile?.name} (${uploadProgress.toFixed(0)}%)`
+      case "processing":
+        return "Processing video on Vimeo..."
+      case "complete":
+        return "Upload complete!"
+      default:
+        return ""
+    }
+  }, [uploadStage, selectedFile, uploadProgress])
 
   return (
     <div className="min-h-screen bg-black text-white">
@@ -306,8 +439,14 @@ export default function UploadPage() {
                 <div className="p-8 md:p-12">
                   <div className="flex flex-col items-center justify-center text-center">
                     <Progress value={uploadProgress} className="w-full h-2 mb-4" />
-                    <p className="text-sm font-medium mb-1">Uploading {selectedFile.name}</p>
-                    <p className="text-xs text-zinc-400">{uploadProgress}% complete</p>
+                    <p className="text-sm font-medium mb-1">{getUploadStageText()}</p>
+                    <p className="text-xs text-zinc-400">
+                      {uploadStage === "processing"
+                        ? "This may take several minutes depending on the file size"
+                        : uploadStage === "uploading"
+                          ? `${uploadProgress.toFixed(0)}% complete`
+                          : ""}
+                    </p>
                   </div>
                 </div>
               ) : selectedFile ? (

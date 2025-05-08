@@ -2,8 +2,9 @@
 
 import { useState, useEffect } from "react"
 import Link from "next/link"
+import Image from "next/image"
 import { useRouter } from "next/navigation"
-import { ArrowLeft, Upload, FileVideo, Clock, Filter, Search, Plus } from "lucide-react"
+import { ArrowLeft, Upload, FileVideo, Clock, Filter, Search, Plus, ExternalLink } from "lucide-react"
 import { useAuth } from "@/contexts/auth-context"
 import { db } from "@/lib/firebase"
 import { collection, query, orderBy, getDocs } from "firebase/firestore"
@@ -22,6 +23,10 @@ interface UploadType {
   tags: string[]
   isPremium: boolean
   visibility: string
+  vimeoId: string | null
+  vimeoLink: string | null
+  thumbnail: string | null
+  duration: number | null
 }
 
 export default function UploadsPage() {
@@ -59,6 +64,10 @@ export default function UploadsPage() {
             tags: data.tags || [],
             isPremium: data.isPremium || false,
             visibility: data.visibility || "public",
+            vimeoId: data.vimeoId || null,
+            vimeoLink: data.vimeoLink || null,
+            thumbnail: data.thumbnail || null,
+            duration: data.duration || null,
           })
         })
 
@@ -104,6 +113,16 @@ export default function UploadsPage() {
     } catch (error) {
       return "Invalid date"
     }
+  }
+
+  // Format duration
+  const formatDuration = (seconds: number | null) => {
+    if (!seconds) return "Unknown"
+
+    const minutes = Math.floor(seconds / 60)
+    const remainingSeconds = Math.floor(seconds % 60)
+
+    return `${minutes}:${remainingSeconds.toString().padStart(2, "0")}`
   }
 
   // Get status badge color
@@ -232,8 +251,24 @@ export default function UploadsPage() {
               >
                 <div className="flex flex-col md:flex-row gap-4 md:items-center">
                   <div className="w-full md:w-auto md:flex-shrink-0">
-                    <div className="aspect-video w-full md:w-48 bg-black rounded-lg flex items-center justify-center">
-                      <FileVideo className="w-8 h-8 text-zinc-700" />
+                    <div className="aspect-video w-full md:w-48 bg-black rounded-lg flex items-center justify-center overflow-hidden relative">
+                      {upload.thumbnail ? (
+                        <Image
+                          src={upload.thumbnail || "/placeholder.svg"}
+                          alt={upload.title}
+                          width={192}
+                          height={108}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <FileVideo className="w-8 h-8 text-zinc-700" />
+                      )}
+
+                      {upload.duration && (
+                        <div className="absolute bottom-1 right-1 bg-black/70 text-white text-xs px-1.5 py-0.5 rounded">
+                          {formatDuration(upload.duration)}
+                        </div>
+                      )}
                     </div>
                   </div>
 
@@ -289,6 +324,18 @@ export default function UploadsPage() {
                     >
                       View Details
                     </Button>
+
+                    {upload.status === "ready" && upload.vimeoLink && (
+                      <a
+                        href={upload.vimeoLink}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 border border-zinc-800 bg-zinc-900/50 text-white hover:bg-zinc-800 h-9 px-3"
+                      >
+                        <ExternalLink className="w-4 h-4 mr-2" />
+                        View on Vimeo
+                      </a>
+                    )}
                   </div>
                 </div>
               </div>
