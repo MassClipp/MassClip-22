@@ -42,47 +42,11 @@ export async function uploadToVimeo({
 
     // Track stalled uploads
     let lastProgress = 0
-    let lastProgressTime = Date.now()
     let stalledTimer: NodeJS.Timeout | null = null
-    let stalledCount = 0
-    const maxStalledRetries = 3
-
-    const resetStalledTimer = () => {
-      if (stalledTimer) {
-        clearTimeout(stalledTimer)
-        stalledTimer = null
-      }
-
-      // Set a timer to detect stalled uploads - 30 seconds without progress is considered stalled
-      stalledTimer = setTimeout(() => {
-        console.warn("Upload appears to be stalled, attempting to resume...")
-
-        if (stalledCount >= maxStalledRetries) {
-          const error = new Error(`Upload stalled after ${maxStalledRetries} resume attempts`)
-          console.error(error)
-          onError(error)
-          reject(error)
-          return
-        }
-
-        stalledCount++
-        onStalled()
-
-        try {
-          upload.abort()
-          setTimeout(() => {
-            lastProgressTime = Date.now() // Reset the stalled detection timer
-            upload.start()
-          }, 1000)
-        } catch (e) {
-          console.error("Failed to resume stalled upload:", e)
-        }
-      }, 30000)
-    }
 
     const upload = new tus.Upload(file, {
       endpoint: uploadUrl,
-      retryDelays: [0, 1000, 3000, 5000, 10000, 20000, 30000],
+      retryDelays: [0, 1000, 3000, 5000, 10000, 20000],
       metadata: {
         filename: file.name,
         filetype: file.type,
@@ -104,15 +68,28 @@ export async function uploadToVimeo({
         // Check if progress is actually happening
         if (percentage > lastProgress) {
           lastProgress = percentage
-          lastProgressTime = Date.now()
 
           // Reset stalled timer if we're making progress
-          resetStalledTimer()
+          if (stalledTimer) {
+            clearTimeout(stalledTimer)
+            stalledTimer = null
+          }
         }
 
-        // Set initial stalled timer if not already set
+        // Set a timer to detect stalled uploads
         if (!stalledTimer && percentage < 100 && percentage > 0) {
-          resetStalledTimer()
+          stalledTimer = setTimeout(() => {
+            console.warn("Upload appears to be stalled, attempting to resume...")
+            try {
+              upload.abort()
+              setTimeout(() => {
+                upload.start()
+              }, 1000)
+              onStalled()
+            } catch (e) {
+              console.error("Failed to resume stalled upload:", e)
+            }
+          }, 30000) // 30 seconds without progress is considered stalled
         }
 
         onProgress(percentage)
@@ -141,16 +118,10 @@ export async function uploadToVimeo({
         // Start the upload
         console.log("Starting upload of file:", file.name, "size:", file.size)
         upload.start()
-
-        // Initialize the stalled timer
-        resetStalledTimer()
       })
       .catch((err) => {
         console.error("Error finding previous uploads:", err)
         upload.start()
-
-        // Initialize the stalled timer
-        resetStalledTimer()
       })
   })
 }

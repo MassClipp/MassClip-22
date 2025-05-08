@@ -64,68 +64,102 @@ export default function UploadPage() {
 
   // Function to start the file upload using TUS
   const startFileUpload = useCallback(async () => {
-    if (!selectedFile || !vimeoData?.uploadUrl) {
-      console.error("Missing file or upload URL")
+    if (!selectedFile) {
+      const error = "No file selected for upload"
+      setErrorMessage(error)
+      setUploadStage("error")
       return
     }
 
-    setUploadStage("uploading")
+    // Add detailed debug info about the vimeoData
+    const debugData = {
+      vimeoDataExists: !!vimeoData,
+      uploadUrlExists: !!vimeoData?.uploadUrl,
+      vimeoId: vimeoData?.vimeoId || "missing",
+      uploadId: vimeoData?.uploadId || "missing",
+      fileInfo: selectedFile
+        ? {
+            name: selectedFile.name,
+            size: selectedFile.size,
+            type: selectedFile.type,
+          }
+        : "no file",
+    }
+
+    setDebugInfo(JSON.stringify(debugData, null, 2))
+
+    if (!vimeoData) {
+      const error = "Missing Vimeo upload data. Please try again."
+      setErrorMessage(error)
+      setUploadStage("error")
+      return
+    }
+
+    if (!vimeoData.uploadUrl) {
+      const error = "Missing Vimeo upload URL. Please try again."
+      setErrorMessage(error)
+      setUploadStage("error")
+      return
+    }
 
     try {
-      const upload = await uploadToVimeo(selectedFile, vimeoData.uploadUrl, (progress) => {
-        setUploadProgress(progress * 100)
+      setUploadStage("uploading")
+      setUploadAttempts((prev) => prev + 1)
+
+      console.log("Starting file upload with:", {
+        fileName: selectedFile.name,
+        fileSize: selectedFile.size,
+        uploadUrl: vimeoData.uploadUrl,
       })
 
-      if (upload) {
-        console.log("Upload completed:", upload)
-        setUploadStage("processing")
-
-        // Update Firestore to mark the upload as complete
-        await updateDoc(doc(db, "uploads", vimeoData.uploadId), {
-          status: "processing",
-        })
-
-        // Simulate processing (replace with actual processing check)
-        setTimeout(async () => {
-          setUploadStage("complete")
-          setIsUploading(false)
-
-          // Update Firestore to mark the upload as complete
-          await updateDoc(doc(db, "uploads", vimeoData.uploadId), {
-            status: "complete",
-          })
-
+      await uploadToVimeo({
+        file: selectedFile,
+        uploadUrl: vimeoData.uploadUrl,
+        onProgress: (progress) => {
+          setUploadProgress(progress)
+        },
+        onStalled: () => {
+          setUploadStage("stalled")
           toast({
-            title: "Upload Complete",
-            description: `${selectedFile.name} has been successfully uploaded and is now processing on Vimeo.`,
+            title: "Upload stalled",
+            description: "Upload appears to be stalled. Attempting to resume...",
           })
+        },
+        onError: (error) => {
+          throw error
+        },
+      })
 
-          // Redirect to dashboard
-          router.push("/dashboard")
-        }, 3000)
-      } else {
-        console.error("Upload failed")
-        setUploadStage("error")
-        setIsUploading(false)
-        toast({
-          title: "Upload Failed",
-          description: "There was an error uploading your video. Please try again.",
-          variant: "destructive",
-        })
-      }
+      // File is uploaded, now it's processing on Vimeo
+      setUploadStage("processing")
+      setUploadProgress(100)
+
+      // Update status in Firestore
+      await updateDoc(doc(db, "uploads", vimeoData.uploadId), {
+        status: "processing",
+        uploadedAt: serverTimestamp(),
+      })
+
+      // Show success message
+      toast({
+        title: "Upload complete",
+        description: "Your video has been uploaded and is now processing. This may take some time.",
+      })
+
+      // Redirect to uploads page
+      router.push("/dashboard/uploads")
     } catch (error) {
-      console.error("TUS upload error:", error)
-      setIsUploading(false)
+      console.error("File upload error:", error)
       setUploadStage("error")
-      const errorMsg = error instanceof Error ? error.message : "There was an error uploading your content."
-      setErrorMessage(errorMsg)
+      setErrorMessage(error instanceof Error ? error.message : "Failed to upload file to Vimeo")
+
       toast({
         title: "Upload failed",
-        description: errorMsg,
+        description: "There was an error uploading your file. Please try again.",
         variant: "destructive",
       })
     }
-  }, [selectedFile, vimeoData, setUploadProgress, setUploadStage, setIsUploading, toast, router])
+  }, [selectedFile, vimeoData, toast, router])
 
   // Handle drag events
   const handleDrag = useCallback((e: React.DragEvent) => {
