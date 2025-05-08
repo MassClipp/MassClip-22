@@ -4,37 +4,16 @@ import type React from "react"
 
 import { useState, useCallback, useRef, useEffect } from "react"
 import Link from "next/link"
-import {
-  ArrowLeft,
-  Upload,
-  FileVideo,
-  X,
-  Check,
-  Tag,
-  Info,
-  ChevronDown,
-  Trash2,
-  AlertCircle,
-  RefreshCw,
-  Bug,
-} from "lucide-react"
+import { ArrowLeft, Upload, FileVideo, AlertCircle, RefreshCw, X, Tag, Info, ChevronDown, Check } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
-import { useMobile } from "@/hooks/use-mobile"
 import { useAuth } from "@/contexts/auth-context"
 import { useRouter } from "next/navigation"
 import { db } from "@/lib/firebase"
 import { collection, addDoc, serverTimestamp, updateDoc, doc } from "firebase/firestore"
-import { uploadToVimeo } from "@/lib/vimeo-upload"
-
-// Define the Vimeo data interface
-interface VimeoUploadData {
-  uploadUrl: string
-  vimeoId: string
-  uploadId: string
-  link?: string
-}
+import { directUploadToVimeo } from "@/lib/direct-vimeo-upload"
+import { useMobile } from "@/hooks/use-mobile"
 
 export default function UploadPage() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
@@ -51,18 +30,14 @@ export default function UploadPage() {
   const [isPremium, setIsPremium] = useState(false)
   const [videoPreviewUrl, setVideoPreviewUrl] = useState<string | null>(null)
   const [uploadStage, setUploadStage] = useState<
-    "idle" | "preparing" | "uploading" | "stalled" | "processing" | "complete" | "error"
+    "idle" | "preparing" | "uploading" | "processing" | "complete" | "error"
   >("idle")
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
-  const [errorCode, setErrorCode] = useState<string | null>(null)
-  const [uploadAttempts, setUploadAttempts] = useState(0)
-  const [vimeoData, setVimeoData] = useState<VimeoUploadData | null>(null)
-  const [debugInfo, setDebugInfo] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const { toast } = useToast()
-  const isMobile = useMobile()
   const { user } = useAuth()
   const router = useRouter()
+  const isMobile = useMobile()
 
   // Clean up object URL on unmount or when file changes
   useEffect(() => {
@@ -111,6 +86,7 @@ export default function UploadPage() {
         if (file.type.startsWith("video/")) {
           setSelectedFile(file)
           createVideoPreview(file)
+          setTitle(file.name.replace(/\.[^/.]+$/, "")) // Set title to filename without extension
           toast({
             title: "File selected",
             description: `${file.name} has been selected for upload.`,
@@ -135,6 +111,7 @@ export default function UploadPage() {
         if (file.type.startsWith("video/")) {
           setSelectedFile(file)
           createVideoPreview(file)
+          setTitle(file.name.replace(/\.[^/.]+$/, "")) // Set title to filename without extension
           toast({
             title: "File selected",
             description: `${file.name} has been selected for upload.`,
@@ -204,208 +181,14 @@ export default function UploadPage() {
     return true
   }, [selectedFile, title, toast])
 
-  // Check Vimeo connection
-  const checkVimeoConnection = useCallback(async () => {
-    try {
-      console.log("Testing Vimeo connection...")
-      const response = await fetch("/api/vimeo/test-connection", {
-        method: "GET",
-        headers: {
-          "Cache-Control": "no-cache, no-store, must-revalidate",
-        },
-      })
-
-      const data = await response.json()
-
-      if (!response.ok) {
-        console.error("Vimeo connection test failed:", data)
-        throw new Error(data.details || "Failed to connect to Vimeo")
-      }
-
-      console.log("Vimeo connection test successful:", data)
-      toast({
-        title: "Vimeo connection successful",
-        description: "Your Vimeo integration is working properly.",
-      })
-
-      return true
-    } catch (error) {
-      console.error("Vimeo connection test failed:", error)
-
-      toast({
-        title: "Vimeo connection failed",
-        description: error instanceof Error ? error.message : "Could not connect to Vimeo",
-        variant: "destructive",
-      })
-
-      return false
+  // Handle browse files click
+  const handleBrowseClick = useCallback(() => {
+    if (fileInputRef.current) {
+      fileInputRef.current.click()
     }
-  }, [toast])
+  }, [])
 
-  // Function to start the file upload using TUS
-  const startFileUpload = useCallback(async () => {
-    if (!selectedFile) {
-      const error = "No file selected for upload"
-      setErrorMessage(error)
-      setUploadStage("error")
-      return
-    }
-
-    // Add detailed debug info about the vimeoData
-    const debugData = {
-      vimeoDataExists: !!vimeoData,
-      uploadUrlExists: !!vimeoData?.uploadUrl,
-      vimeoId: vimeoData?.vimeoId || "missing",
-      uploadId: vimeoData?.uploadId || "missing",
-      fileInfo: selectedFile
-        ? {
-            name: selectedFile.name,
-            size: selectedFile.size,
-            type: selectedFile.type,
-          }
-        : "no file",
-    }
-
-    setDebugInfo(JSON.stringify(debugData, null, 2))
-
-    if (!vimeoData) {
-      const error = "Missing Vimeo upload data. Please try again."
-      setErrorMessage(error)
-      setUploadStage("error")
-      return
-    }
-
-    if (!vimeoData.uploadUrl) {
-      const error = "Missing Vimeo upload URL. Please try again."
-      setErrorMessage(error)
-      setUploadStage("error")
-      return
-    }
-
-    try {
-      setUploadStage("uploading")
-      setUploadAttempts((prev) => prev + 1)
-
-      console.log("Starting file upload with:", {
-        fileName: selectedFile.name,
-        fileSize: selectedFile.size,
-        uploadUrl: vimeoData.uploadUrl,
-      })
-
-      await uploadToVimeo({
-        file: selectedFile,
-        uploadUrl: vimeoData.uploadUrl,
-        onProgress: (progress) => {
-          setUploadProgress(progress)
-        },
-        onStalled: () => {
-          setUploadStage("stalled")
-          toast({
-            title: "Upload stalled",
-            description: "Upload appears to be stalled. Attempting to resume...",
-          })
-        },
-        onError: (error) => {
-          throw error
-        },
-      })
-
-      // File is uploaded, now it's processing on Vimeo
-      setUploadStage("processing")
-      setUploadProgress(100)
-
-      // Update status in Firestore
-      await updateDoc(doc(db, "uploads", vimeoData.uploadId), {
-        status: "processing",
-        uploadedAt: serverTimestamp(),
-      })
-
-      // Show success message
-      toast({
-        title: "Upload complete",
-        description: "Your video has been uploaded and is now processing. This may take some time.",
-      })
-
-      // Redirect to uploads page
-      router.push("/dashboard/uploads")
-    } catch (error) {
-      console.error("File upload error:", error)
-      setUploadStage("error")
-      setErrorMessage(error instanceof Error ? error.message : "Failed to upload file to Vimeo")
-
-      toast({
-        title: "Upload failed",
-        description: "There was an error uploading your file. Please try again.",
-        variant: "destructive",
-      })
-    }
-  }, [selectedFile, vimeoData, toast, router])
-
-  // Initialize the Vimeo upload
-  const initializeVimeoUpload = useCallback(async () => {
-    if (!user || !selectedFile) {
-      console.error("Missing user or file for Vimeo upload initialization")
-      return null
-    }
-
-    try {
-      // Create form data for the API request
-      const formData = new FormData()
-      formData.append("name", title || selectedFile.name)
-      formData.append("description", description || "")
-      formData.append("privacy", visibility === "private" ? "nobody" : "anybody")
-      formData.append("userId", user.uid)
-      formData.append("size", selectedFile.size.toString())
-
-      console.log("Initializing Vimeo upload with params:", {
-        name: title || selectedFile.name,
-        size: selectedFile.size,
-        privacy: visibility === "private" ? "nobody" : "anybody",
-        userId: user.uid,
-      })
-
-      const initResponse = await fetch("/api/vimeo/upload", {
-        method: "POST",
-        body: formData,
-        headers: {
-          "Cache-Control": "no-cache, no-store, must-revalidate",
-        },
-      })
-
-      const data = await initResponse.json()
-      console.log("Vimeo initialization response:", data)
-
-      if (!initResponse.ok) {
-        console.error("Vimeo initialization failed:", data)
-        setErrorCode(data.code || null)
-        throw new Error(
-          data.details ||
-            `Failed to initialize Vimeo upload (${initResponse.status}): ${data.error || "Unknown error"}. Please try again later or contact support.`,
-        )
-      }
-
-      if (!data.uploadUrl) {
-        console.error("Missing uploadUrl in response:", data)
-        setDebugInfo(JSON.stringify(data, null, 2))
-        throw new Error("Invalid response from Vimeo. Missing upload URL.")
-      }
-
-      if (!data.vimeoId) {
-        console.error("Missing vimeoId in response:", data)
-        setDebugInfo(JSON.stringify(data, null, 2))
-        throw new Error("Invalid response from Vimeo. Missing video ID.")
-      }
-
-      console.log("Vimeo upload initialized successfully. Upload URL:", data.uploadUrl)
-
-      return data
-    } catch (error) {
-      console.error("Failed to initialize Vimeo upload:", error)
-      throw error
-    }
-  }, [title, description, visibility, user, selectedFile])
-
-  // Upload function that uploads to Vimeo
+  // Upload function
   const handleUpload = useCallback(async () => {
     if (!validateForm()) return
     if (!user) {
@@ -419,22 +202,12 @@ export default function UploadPage() {
 
     if (!selectedFile) return
 
-    // Reset any previous errors
-    setErrorMessage(null)
-    setErrorCode(null)
-    setDebugInfo(null)
     setIsUploading(true)
     setUploadProgress(0)
     setUploadStage("preparing")
-    setVimeoData(null)
+    setErrorMessage(null)
 
     try {
-      // First, check Vimeo connection
-      const connectionOk = await checkVimeoConnection()
-      if (!connectionOk) {
-        throw new Error("Could not connect to Vimeo. Please check your internet connection and try again later.")
-      }
-
       // Step 1: Create a document in Firestore to track the upload
       const uploadData = {
         title: title || selectedFile.name,
@@ -448,15 +221,13 @@ export default function UploadPage() {
         fileType: selectedFile.type,
         createdAt: serverTimestamp(),
         userId: user.uid,
-        status: "preparing", // Initial status
+        status: "preparing",
         vimeoId: null,
         vimeoLink: null,
       }
 
-      console.log("Creating Firestore document for upload tracking")
       const docRef = await addDoc(collection(db, "uploads"), uploadData)
       const uploadId = docRef.id
-      console.log("Created upload document with ID:", uploadId)
 
       // Also save to user's uploads collection
       await addDoc(collection(db, `users/${user.uid}/uploads`), {
@@ -464,100 +235,77 @@ export default function UploadPage() {
         uploadId: uploadId,
       })
 
-      // Step 2: Initialize the Vimeo upload with retry logic
-      let vimeoUploadData = null
-      let retryCount = 0
-      const maxRetries = 3
+      // Step 2: Initialize the Vimeo upload using the direct upload approach
+      const formData = new FormData()
+      formData.append("name", title || selectedFile.name)
+      formData.append("description", description || "")
+      formData.append("size", selectedFile.size.toString())
+      formData.append("privacy", visibility === "private" ? "nobody" : "anybody")
+      formData.append("userId", user.uid)
 
-      while (!vimeoUploadData && retryCount < maxRetries) {
-        try {
-          console.log(`Initializing Vimeo upload (attempt ${retryCount + 1}/${maxRetries})`)
-          vimeoUploadData = await initializeVimeoUpload()
-          break
-        } catch (error) {
-          retryCount++
-          console.error(`Vimeo initialization attempt ${retryCount} failed:`, error)
+      const initResponse = await fetch("/api/vimeo/direct-upload", {
+        method: "POST",
+        body: formData,
+      })
 
-          if (retryCount >= maxRetries) {
-            throw error
-          }
-
-          // Wait before retrying
-          await new Promise((resolve) => setTimeout(resolve, 2000))
-        }
+      if (!initResponse.ok) {
+        const errorData = await initResponse.json()
+        throw new Error(errorData.details || "Failed to initialize upload")
       }
 
-      if (!vimeoUploadData) {
-        throw new Error("Failed to initialize Vimeo upload after multiple attempts")
-      }
-
-      if (!vimeoUploadData.uploadUrl) {
-        setDebugInfo(JSON.stringify(vimeoUploadData, null, 2))
-        throw new Error("Missing upload URL in Vimeo response")
-      }
+      const vimeoData = await initResponse.json()
 
       // Update Firestore with Vimeo ID
       await updateDoc(doc(db, "uploads", uploadId), {
-        vimeoId: vimeoUploadData.vimeoId,
-        vimeoLink: vimeoUploadData.link,
+        vimeoId: vimeoData.vimeoId,
+        vimeoLink: vimeoData.link,
         status: "uploading",
       })
 
-      // Store the upload data for potential retries
-      const completeVimeoData = {
-        ...vimeoUploadData,
-        uploadId,
-      }
+      // Step 3: Upload the file
+      setUploadStage("uploading")
 
-      setVimeoData(completeVimeoData)
-      console.log("Setting vimeoData:", completeVimeoData)
+      await directUploadToVimeo({
+        file: selectedFile,
+        uploadUrl: vimeoData.uploadUrl,
+        onProgress: (progress) => {
+          setUploadProgress(progress)
+        },
+        onError: (error) => {
+          throw error
+        },
+      })
 
-      // Step 3: Upload the file to Vimeo using TUS protocol
-      await startFileUpload()
+      // Update status in Firestore
+      await updateDoc(doc(db, "uploads", uploadId), {
+        status: "processing",
+        uploadedAt: serverTimestamp(),
+      })
+
+      setUploadStage("processing")
+      setUploadProgress(100)
+
+      toast({
+        title: "Upload complete",
+        description: "Your video has been uploaded and is now processing.",
+      })
+
+      // Redirect to uploads page
+      router.push("/dashboard/uploads")
     } catch (error) {
       console.error("Upload error:", error)
-      setIsUploading(false)
       setUploadStage("error")
-      const errorMsg = error instanceof Error ? error.message : "There was an error uploading your content."
-      setErrorMessage(errorMsg)
+      setErrorMessage(error instanceof Error ? error.message : "Failed to upload video")
+
       toast({
         title: "Upload failed",
-        description: errorMsg,
+        description: error instanceof Error ? error.message : "There was an error uploading your video",
         variant: "destructive",
       })
-    }
-  }, [
-    selectedFile,
-    title,
-    description,
-    tags,
-    category,
-    visibility,
-    isPremium,
-    validateForm,
-    user,
-    toast,
-    checkVimeoConnection,
-    initializeVimeoUpload,
-    startFileUpload,
-  ])
 
-  // Retry the upload
-  const retryUpload = useCallback(() => {
-    if (vimeoData && selectedFile) {
-      startFileUpload()
-    } else {
-      // If we don't have the Vimeo data anymore, start from scratch
-      handleUpload()
+      setIsUploading(false)
     }
-  }, [vimeoData, selectedFile, startFileUpload, handleUpload])
-
-  // Handle browse files click
-  const handleBrowseClick = useCallback(() => {
-    if (fileInputRef.current) {
-      fileInputRef.current.click()
-    }
-  }, [])
+  }, [selectedFile, title, description, tags, category, visibility, isPremium, validateForm, user, toast, router])
 
   // Get upload stage text
   const getUploadStageText = useCallback(() => {
@@ -578,34 +326,6 @@ export default function UploadPage() {
         return ""
     }
   }, [uploadStage, selectedFile, uploadProgress])
-
-  // Reset the upload state
-  const resetUpload = useCallback(() => {
-    setUploadStage("idle")
-    setErrorMessage(null)
-    setErrorCode(null)
-    setDebugInfo(null)
-    setIsUploading(false)
-    setUploadProgress(0)
-    setVimeoData(null)
-    setUploadAttempts(0)
-  }, [])
-
-  // Get troubleshooting message based on error code
-  const getTroubleshootingMessage = useCallback(() => {
-    switch (errorCode) {
-      case "CONFIG_ERROR":
-        return "Vimeo API credentials are not properly configured. Please check your environment variables."
-      case "AUTH_ERROR":
-        return "Your Vimeo access token may be invalid or expired. Please check your credentials."
-      case "RATE_LIMIT":
-        return "You've hit Vimeo's rate limit. Please wait a few minutes and try again."
-      case "MISSING_UPLOAD_LINK":
-        return "Vimeo didn't provide an upload link. This may be due to quota issues or API changes."
-      default:
-        return "There was an error connecting to Vimeo. Please check your connection and try again."
-    }
-  }, [errorCode])
 
   return (
     <div className="min-h-screen bg-black text-white">
@@ -646,7 +366,6 @@ export default function UploadPage() {
                 ${selectedFile ? "bg-zinc-900/50 border border-zinc-800" : "bg-gradient-to-b from-zinc-900/50 to-black border border-zinc-800 hover:border-zinc-700"}
                 ${isDragging ? "border-crimson/50 shadow-lg shadow-crimson/10 scale-[1.01]" : ""}
                 ${uploadStage === "error" ? "border-red-500/50" : ""}
-                ${uploadStage === "stalled" ? "border-yellow-500/50" : ""}
               `}
               onDragEnter={handleDrag}
               onDragLeave={handleDrag}
@@ -663,54 +382,9 @@ export default function UploadPage() {
                         </div>
                         <p className="text-lg font-medium mb-2 text-red-500">Upload Failed</p>
                         <p className="text-sm text-zinc-400 mb-4">{errorMessage}</p>
-
-                        {debugInfo && (
-                          <div className="mb-4 w-full">
-                            <p className="text-xs text-zinc-500 mb-1">Debug Information:</p>
-                            <pre className="text-xs text-left bg-zinc-900 p-2 rounded-md overflow-auto max-h-32">
-                              {debugInfo}
-                            </pre>
-                          </div>
-                        )}
-
-                        <div className="bg-zinc-900/50 border border-zinc-800 rounded-lg p-4 mb-4 text-left w-full">
-                          <p className="text-sm font-medium mb-2">Troubleshooting:</p>
-                          <p className="text-xs text-zinc-400">{getTroubleshootingMessage()}</p>
-                        </div>
-
-                        <div className="flex gap-3">
-                          <Button onClick={retryUpload} variant="default" className="mt-2">
-                            Try Again
-                          </Button>
-                          <Button onClick={resetUpload} variant="outline" className="mt-2">
-                            Cancel
-                          </Button>
-                          <Link href="/dashboard/debug/vimeo">
-                            <Button variant="outline" className="mt-2 flex items-center gap-2">
-                              <Bug className="w-4 h-4" />
-                              Debug Vimeo
-                            </Button>
-                          </Link>
-                        </div>
-                      </>
-                    ) : uploadStage === "stalled" ? (
-                      <>
-                        <div className="w-12 h-12 rounded-full bg-yellow-500/10 flex items-center justify-center mb-4">
-                          <RefreshCw className="w-6 h-6 text-yellow-500 animate-spin" />
-                        </div>
-                        <p className="text-lg font-medium mb-2 text-yellow-500">Upload Stalled</p>
-                        <p className="text-sm text-zinc-400 mb-4">
-                          The upload appears to be stalled. Attempting to resume automatically...
-                        </p>
-                        <Progress value={uploadProgress} className="w-full h-2 mb-4" />
-                        <div className="flex gap-3">
-                          <Button onClick={retryUpload} variant="default" className="mt-2">
-                            Retry Upload
-                          </Button>
-                          <Button onClick={resetUpload} variant="outline" className="mt-2">
-                            Cancel
-                          </Button>
-                        </div>
+                        <Button onClick={() => setIsUploading(false)} variant="outline" className="mt-2">
+                          Try Again
+                        </Button>
                       </>
                     ) : (
                       <>
@@ -723,10 +397,11 @@ export default function UploadPage() {
                               ? `${uploadProgress.toFixed(0)}% complete`
                               : ""}
                         </p>
-                        {uploadProgress === 0 && uploadStage === "uploading" && uploadAttempts > 1 && (
-                          <p className="text-xs text-yellow-400 mt-2">
-                            Upload is initializing. This may take a moment for large files...
-                          </p>
+                        {uploadProgress === 0 && uploadStage === "uploading" && (
+                          <div className="flex items-center justify-center mt-2">
+                            <RefreshCw className="w-4 h-4 animate-spin mr-2" />
+                            <span className="text-xs text-zinc-400">Starting upload...</span>
+                          </div>
                         )}
                       </>
                     )}
@@ -752,7 +427,7 @@ export default function UploadPage() {
                         }}
                         className="text-zinc-400 hover:text-white"
                       >
-                        <Trash2 className="w-4 h-4 mr-2" />
+                        <X className="w-4 h-4 mr-2" />
                         Remove file
                       </Button>
                     </div>
@@ -942,7 +617,7 @@ export default function UploadPage() {
             <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl overflow-hidden">
               <div className="p-6">
                 <h3 className="text-lg font-medium mb-4">Preview</h3>
-                <div className="aspect-video bg-black rounded-lg overflow-hidden flex items-center justify-center mb-4">
+                <div className="aspect-[9/16] bg-black rounded-lg overflow-hidden flex items-center justify-center mb-4 mx-auto max-w-[240px]">
                   {videoPreviewUrl ? (
                     <video
                       src={videoPreviewUrl}
@@ -1011,24 +686,30 @@ export default function UploadPage() {
               </ul>
             </div>
 
-            {/* Vimeo Connection Status */}
+            {/* Mobile Optimization */}
             <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-6">
-              <h3 className="text-lg font-medium mb-4">Vimeo Integration</h3>
-              <p className="text-sm text-zinc-400 mb-4">
-                Your videos are securely uploaded to Vimeo for processing and storage. Make sure your Vimeo account has
-                sufficient upload quota.
-              </p>
-              <div className="flex gap-2">
-                <Button onClick={checkVimeoConnection} variant="outline" size="sm" className="flex-1">
-                  Test Vimeo Connection
-                </Button>
-                <Link href="/dashboard/debug/vimeo" className="flex-1">
-                  <Button variant="outline" size="sm" className="w-full flex items-center justify-center gap-2">
-                    <Bug className="w-4 h-4" />
-                    Debug Vimeo
-                  </Button>
-                </Link>
-              </div>
+              <h3 className="text-lg font-medium mb-4">Mobile Optimization</h3>
+              <p className="text-sm text-zinc-400 mb-4">Optimize your content for mobile viewing with these tips:</p>
+              <ul className="space-y-3 text-sm">
+                <li className="flex items-start gap-3">
+                  <div className="w-5 h-5 rounded-full bg-zinc-800 flex items-center justify-center flex-shrink-0 mt-0.5">
+                    <Check className="w-3 h-3 text-crimson" />
+                  </div>
+                  <span className="text-zinc-300">Vertical format (9:16) is ideal for mobile platforms</span>
+                </li>
+                <li className="flex items-start gap-3">
+                  <div className="w-5 h-5 rounded-full bg-zinc-800 flex items-center justify-center flex-shrink-0 mt-0.5">
+                    <Check className="w-3 h-3 text-crimson" />
+                  </div>
+                  <span className="text-zinc-300">Keep text large and readable on small screens</span>
+                </li>
+                <li className="flex items-start gap-3">
+                  <div className="w-5 h-5 rounded-full bg-zinc-800 flex items-center justify-center flex-shrink-0 mt-0.5">
+                    <Check className="w-3 h-3 text-crimson" />
+                  </div>
+                  <span className="text-zinc-300">Use high contrast visuals for better visibility</span>
+                </li>
+              </ul>
             </div>
           </div>
         </div>
