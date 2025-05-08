@@ -1,35 +1,40 @@
-// Vimeo API configuration
-export const vimeoConfig = {
-  // Vimeo user ID
-  userId: process.env.VIMEO_USER_ID || "238844896",
-  // Vimeo access token (must have upload permissions)
-  accessToken: process.env.VIMEO_ACCESS_TOKEN || "4c9c08b23b9f4241983f643fbcea75e6",
-  // Ensure the token is properly formatted with Bearer prefix if needed
-  get authHeader() {
-    return `Bearer ${this.accessToken}`
-  },
+interface VimeoConfigType {
+  accessToken: string
+  userId: string
+  clientId?: string
+  clientSecret?: string
 }
 
-// Validate Vimeo config
-export function validateVimeoConfig() {
-  const issues = []
+// Get Vimeo credentials from environment variables
+export const vimeoConfig: VimeoConfigType = {
+  accessToken: process.env.VIMEO_ACCESS_TOKEN || "",
+  userId: process.env.VIMEO_USER_ID || "",
+  clientId: process.env.VIMEO_CLIENT_ID,
+  clientSecret: process.env.VIMEO_CLIENT_SECRET,
+}
 
-  if (!vimeoConfig.userId) {
-    issues.push("Missing Vimeo User ID")
+// Helper function to check if Vimeo is properly configured
+export function isVimeoConfigured(): boolean {
+  return Boolean(vimeoConfig.accessToken && vimeoConfig.userId)
+}
+
+// Function to validate Vimeo configuration
+export function validateVimeoConfig(): { isValid: boolean; issues: string[]; config: VimeoConfigType } {
+  const issues: string[] = []
+
+  if (!process.env.VIMEO_ACCESS_TOKEN) {
+    issues.push("VIMEO_ACCESS_TOKEN is missing")
   }
 
-  if (!vimeoConfig.accessToken) {
-    issues.push("Missing Vimeo Access Token")
-  } else if (vimeoConfig.accessToken.length < 20) {
-    issues.push("Vimeo Access Token appears to be invalid (too short)")
+  if (!process.env.VIMEO_USER_ID) {
+    issues.push("VIMEO_USER_ID is missing")
   }
+
+  const isValid = issues.length === 0
 
   return {
-    isValid: issues.length === 0,
-    issues,
-    config: {
-      userId: vimeoConfig.userId,
-      accessToken: vimeoConfig.accessToken.substring(0, 5) + "...", // Show only first 5 chars for security
-    },
+    isValid: isValid,
+    issues: issues,
+    config: vimeoConfig,
   }
 }

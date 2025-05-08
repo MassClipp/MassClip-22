@@ -1,8 +1,21 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { vimeoConfig } from "@/lib/vimeo-config"
+import { vimeoConfig, isVimeoConfigured } from "@/lib/vimeo-config"
 
 export async function POST(request: NextRequest) {
   try {
+    // First, check if Vimeo is properly configured
+    if (!isVimeoConfigured()) {
+      console.error("Vimeo is not properly configured")
+      return NextResponse.json(
+        {
+          error: "Vimeo configuration error",
+          details: "Vimeo API credentials are not properly configured. Please check your environment variables.",
+          code: "CONFIG_ERROR",
+        },
+        { status: 500 },
+      )
+    }
+
     // Get upload details from request
     const formData = await request.formData()
     const name = formData.get("name") as string
@@ -17,17 +30,6 @@ export async function POST(request: NextRequest) {
 
     if (!size || isNaN(Number(size))) {
       return NextResponse.json({ error: "Valid file size is required" }, { status: 400 })
-    }
-
-    if (!vimeoConfig.accessToken) {
-      console.error("Missing Vimeo access token in configuration")
-      return NextResponse.json(
-        {
-          error: "Vimeo configuration error",
-          details: "Missing access token",
-        },
-        { status: 500 },
-      )
     }
 
     console.log("Creating Vimeo upload with params:", {
@@ -85,6 +87,7 @@ export async function POST(request: NextRequest) {
             details: "Invalid or expired access token. Please check your Vimeo credentials.",
             status: createResponse.status,
             raw: errorJson || errorText,
+            code: "AUTH_ERROR",
           },
           { status: 401 },
         )
@@ -97,6 +100,7 @@ export async function POST(request: NextRequest) {
             details: "Too many requests to Vimeo API. Please try again later.",
             status: createResponse.status,
             raw: errorJson || errorText,
+            code: "RATE_LIMIT",
           },
           { status: 429 },
         )
@@ -108,6 +112,7 @@ export async function POST(request: NextRequest) {
           status: createResponse.status,
           details: errorDetails,
           raw: errorJson || errorText,
+          code: "API_ERROR",
         },
         { status: createResponse.status },
       )
@@ -127,6 +132,7 @@ export async function POST(request: NextRequest) {
           error: "Invalid response from Vimeo API",
           details: "Missing upload link in response",
           debug: JSON.stringify(uploadData, null, 2),
+          code: "MISSING_UPLOAD_LINK",
         },
         { status: 500 },
       )
@@ -146,6 +152,7 @@ export async function POST(request: NextRequest) {
       {
         error: "Failed to initialize Vimeo upload",
         details: error instanceof Error ? error.message : String(error),
+        code: "UNKNOWN_ERROR",
       },
       { status: 500 },
     )
