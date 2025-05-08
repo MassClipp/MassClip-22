@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState, useCallback, useRef, useEffect } from "react"
+import { useState, useCallback, useRef } from "react"
 import Link from "next/link"
 import {
   ArrowLeft,
@@ -62,14 +62,70 @@ export default function UploadPage() {
   const { user } = useAuth()
   const router = useRouter()
 
-  // Clean up object URL on unmount or when file changes
-  useEffect(() => {
-    return () => {
-      if (videoPreviewUrl) {
-        URL.revokeObjectURL(videoPreviewUrl)
-      }
+  // Function to start the file upload using TUS
+  const startFileUpload = useCallback(async () => {
+    if (!selectedFile || !vimeoData?.uploadUrl) {
+      console.error("Missing file or upload URL")
+      return
     }
-  }, [videoPreviewUrl])
+
+    setUploadStage("uploading")
+
+    try {
+      const upload = await uploadToVimeo(selectedFile, vimeoData.uploadUrl, (progress) => {
+        setUploadProgress(progress * 100)
+      })
+
+      if (upload) {
+        console.log("Upload completed:", upload)
+        setUploadStage("processing")
+
+        // Update Firestore to mark the upload as complete
+        await updateDoc(doc(db, "uploads", vimeoData.uploadId), {
+          status: "processing",
+        })
+
+        // Simulate processing (replace with actual processing check)
+        setTimeout(async () => {
+          setUploadStage("complete")
+          setIsUploading(false)
+
+          // Update Firestore to mark the upload as complete
+          await updateDoc(doc(db, "uploads", vimeoData.uploadId), {
+            status: "complete",
+          })
+
+          toast({
+            title: "Upload Complete",
+            description: `${selectedFile.name} has been successfully uploaded and is now processing on Vimeo.`,
+          })
+
+          // Redirect to dashboard
+          router.push("/dashboard")
+        }, 3000)
+      } else {
+        console.error("Upload failed")
+        setUploadStage("error")
+        setIsUploading(false)
+        toast({
+          title: "Upload Failed",
+          description: "There was an error uploading your video. Please try again.",
+          variant: "destructive",
+        })
+      }
+    } catch (error) {
+      console.error("TUS upload error:", error)
+      setIsUploading(false)
+      setUploadStage("error")
+      const errorMsg = error instanceof Error ? error.message : "There was an error uploading your content."
+      setErrorMessage(errorMsg)
+      toast({
+        title: "Upload failed",
+        description: errorMsg,
+        variant: "destructive",
+      })
+    }
+  }, [selectedFile, vimeoData, setUploadProgress, setUploadStage, setIsUploading, toast, router])
 
   // Handle drag events
   const handleDrag = useCallback((e: React.DragEvent) => {
@@ -205,12 +261,22 @@ export default function UploadPage() {
   // Check Vimeo connection
   const checkVimeoConnection = useCallback(async () => {
     try {
-      const response = await fetch("/api/vimeo/test-connection")
+      console.log("Testing Vimeo connection...")
+      const response = await fetch("/api/vimeo/test-connection", {
+        method: "GET",
+        headers: {
+          "Cache-Control": "no-cache, no-store, must-revalidate",
+        },
+      })
+
+      const data = await response.json()
+
       if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.details || "Failed to connect to Vimeo")
+        console.error("Vimeo connection test failed:", data)
+        throw new Error(data.details || "Failed to connect to Vimeo")
       }
 
+      console.log("Vimeo connection test successful:", data)
       toast({
         title: "Vimeo connection successful",
         description: "Your Vimeo integration is working properly.",
@@ -230,134 +296,45 @@ export default function UploadPage() {
     }
   }, [toast])
 
-  // Start the actual file upload to Vimeo
-  const startFileUpload = useCallback(async () => {
-    if (!selectedFile) {
-      const error = "No file selected for upload"
-      setErrorMessage(error)
-      setUploadStage("error")
-      return
-    }
-
-    // Add detailed debug info about the vimeoData
-    const debugData = {
-      vimeoDataExists: !!vimeoData,
-      uploadUrlExists: !!vimeoData?.uploadUrl,
-      vimeoId: vimeoData?.vimeoId || "missing",
-      uploadId: vimeoData?.uploadId || "missing",
-      fileInfo: selectedFile
-        ? {
-            name: selectedFile.name,
-            size: selectedFile.size,
-            type: selectedFile.type,
-          }
-        : "no file",
-    }
-
-    setDebugInfo(JSON.stringify(debugData, null, 2))
-
-    if (!vimeoData) {
-      const error = "Missing Vimeo upload data. Please try again."
-      setErrorMessage(error)
-      setUploadStage("error")
-      return
-    }
-
-    if (!vimeoData.uploadUrl) {
-      const error = "Missing Vimeo upload URL. Please try again."
-      setErrorMessage(error)
-      setUploadStage("error")
-      return
-    }
-
-    try {
-      setUploadStage("uploading")
-      setUploadAttempts((prev) => prev + 1)
-
-      console.log("Starting file upload with:", {
-        fileName: selectedFile.name,
-        fileSize: selectedFile.size,
-        uploadUrl: vimeoData.uploadUrl,
-      })
-
-      await uploadToVimeo({
-        file: selectedFile,
-        uploadUrl: vimeoData.uploadUrl,
-        onProgress: (progress) => {
-          setUploadProgress(progress)
-        },
-        onStalled: () => {
-          setUploadStage("stalled")
-          toast({
-            title: "Upload stalled",
-            description: "Upload appears to be stalled. Attempting to resume...",
-          })
-        },
-        onError: (error) => {
-          throw error
-        },
-      })
-
-      // File is uploaded, now it's processing on Vimeo
-      setUploadStage("processing")
-      setUploadProgress(100)
-
-      // Update status in Firestore
-      await updateDoc(doc(db, "uploads", vimeoData.uploadId), {
-        status: "processing",
-        uploadedAt: serverTimestamp(),
-      })
-
-      // Show success message
-      toast({
-        title: "Upload complete",
-        description: "Your video has been uploaded and is now processing. This may take some time.",
-      })
-
-      // Redirect to uploads page
-      router.push("/dashboard/uploads")
-    } catch (error) {
-      console.error("File upload error:", error)
-      setUploadStage("error")
-      setErrorMessage(error instanceof Error ? error.message : "Failed to upload file to Vimeo")
-
-      toast({
-        title: "Upload failed",
-        description: "There was an error uploading your file. Please try again.",
-        variant: "destructive",
-      })
-    }
-  }, [selectedFile, vimeoData, toast, router])
-
   // Initialize the Vimeo upload
   const initializeVimeoUpload = useCallback(async () => {
     if (!user || !selectedFile) {
+      console.error("Missing user or file for Vimeo upload initialization")
       return null
     }
 
     try {
       // Create form data for the API request
       const formData = new FormData()
-      formData.append("name", title)
+      formData.append("name", title || selectedFile.name)
       formData.append("description", description || "")
       formData.append("privacy", visibility === "private" ? "nobody" : "anybody")
       formData.append("userId", user.uid)
       formData.append("size", selectedFile.size.toString())
 
-      console.log("Initializing Vimeo upload with size:", selectedFile.size)
+      console.log("Initializing Vimeo upload with params:", {
+        name: title || selectedFile.name,
+        size: selectedFile.size,
+        privacy: visibility === "private" ? "nobody" : "anybody",
+        userId: user.uid,
+      })
 
       const initResponse = await fetch("/api/vimeo/upload", {
         method: "POST",
         body: formData,
+        headers: {
+          "Cache-Control": "no-cache, no-store, must-revalidate",
+        },
       })
 
       const data = await initResponse.json()
       console.log("Vimeo initialization response:", data)
 
       if (!initResponse.ok) {
+        console.error("Vimeo initialization failed:", data)
         throw new Error(
           data.details ||
-            `Failed to initialize Vimeo upload (${initResponse.status}). Please try again later or contact support.`,
+            `Failed to initialize Vimeo upload (${initResponse.status}): ${data.error || "Unknown error"}. Please try again later or contact support.`,
         )
       }
 
@@ -408,12 +385,12 @@ export default function UploadPage() {
       // First, check Vimeo connection
       const connectionOk = await checkVimeoConnection()
       if (!connectionOk) {
-        throw new Error("Could not connect to Vimeo. Please try again later or contact support.")
+        throw new Error("Could not connect to Vimeo. Please check your internet connection and try again later.")
       }
 
       // Step 1: Create a document in Firestore to track the upload
       const uploadData = {
-        title,
+        title: title || selectedFile.name,
         description,
         tags,
         category: category || "uncategorized",
@@ -429,8 +406,10 @@ export default function UploadPage() {
         vimeoLink: null,
       }
 
+      console.log("Creating Firestore document for upload tracking")
       const docRef = await addDoc(collection(db, "uploads"), uploadData)
       const uploadId = docRef.id
+      console.log("Created upload document with ID:", uploadId)
 
       // Also save to user's uploads collection
       await addDoc(collection(db, `users/${user.uid}/uploads`), {
@@ -438,11 +417,31 @@ export default function UploadPage() {
         uploadId: uploadId,
       })
 
-      // Step 2: Initialize the Vimeo upload
-      const vimeoUploadData = await initializeVimeoUpload()
+      // Step 2: Initialize the Vimeo upload with retry logic
+      let vimeoUploadData = null
+      let retryCount = 0
+      const maxRetries = 3
+
+      while (!vimeoUploadData && retryCount < maxRetries) {
+        try {
+          console.log(`Initializing Vimeo upload (attempt ${retryCount + 1}/${maxRetries})`)
+          vimeoUploadData = await initializeVimeoUpload()
+          break
+        } catch (error) {
+          retryCount++
+          console.error(`Vimeo initialization attempt ${retryCount} failed:`, error)
+
+          if (retryCount >= maxRetries) {
+            throw error
+          }
+
+          // Wait before retrying
+          await new Promise((resolve) => setTimeout(resolve, 2000))
+        }
+      }
 
       if (!vimeoUploadData) {
-        throw new Error("Failed to initialize Vimeo upload")
+        throw new Error("Failed to initialize Vimeo upload after multiple attempts")
       }
 
       if (!vimeoUploadData.uploadUrl) {

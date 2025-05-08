@@ -19,6 +19,17 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Valid file size is required" }, { status: 400 })
     }
 
+    if (!vimeoConfig.accessToken) {
+      console.error("Missing Vimeo access token in configuration")
+      return NextResponse.json(
+        {
+          error: "Vimeo configuration error",
+          details: "Missing access token",
+        },
+        { status: 500 },
+      )
+    }
+
     console.log("Creating Vimeo upload with params:", {
       name,
       description: description || "(No description)",
@@ -57,11 +68,38 @@ export async function POST(request: NextRequest) {
 
       // Try to parse the error for more details
       let errorDetails = errorText
+      let errorJson = null
+
       try {
-        const errorJson = JSON.parse(errorText)
+        errorJson = JSON.parse(errorText)
         errorDetails = errorJson.error || errorJson.developer_message || errorText
       } catch (e) {
         // If parsing fails, use the original error text
+      }
+
+      // Check for specific error conditions
+      if (createResponse.status === 401) {
+        return NextResponse.json(
+          {
+            error: "Vimeo authentication failed",
+            details: "Invalid or expired access token. Please check your Vimeo credentials.",
+            status: createResponse.status,
+            raw: errorJson || errorText,
+          },
+          { status: 401 },
+        )
+      }
+
+      if (createResponse.status === 429) {
+        return NextResponse.json(
+          {
+            error: "Vimeo rate limit exceeded",
+            details: "Too many requests to Vimeo API. Please try again later.",
+            status: createResponse.status,
+            raw: errorJson || errorText,
+          },
+          { status: 429 },
+        )
       }
 
       return NextResponse.json(
@@ -69,6 +107,7 @@ export async function POST(request: NextRequest) {
           error: "Failed to initialize Vimeo upload",
           status: createResponse.status,
           details: errorDetails,
+          raw: errorJson || errorText,
         },
         { status: createResponse.status },
       )
