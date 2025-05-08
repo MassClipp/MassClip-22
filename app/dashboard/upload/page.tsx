@@ -12,10 +12,16 @@ import { useAuth } from "@/contexts/auth-context"
 import { useRouter } from "next/navigation"
 import { db } from "@/lib/firebase"
 import { collection, addDoc, serverTimestamp, updateDoc, doc } from "firebase/firestore"
-import { directUploadToVimeo } from "@/lib/direct-vimeo-upload"
 import { useMobile } from "@/hooks/use-mobile"
 import { assignVideoToCategory } from "@/app/actions/category-actions"
 import { useShowcaseTags } from "@/hooks/use-showcase-tags"
+
+// Import the new resumable upload function
+import { resumableUploadToVimeo } from "@/lib/resumable-vimeo-upload"
+import { directUploadToVimeo } from "@/lib/direct-vimeo-upload"
+
+// Import the diagnostic component
+import { UploadNetworkDiagnostic } from "@/components/upload-network-diagnostic"
 
 export default function UploadPage() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
@@ -31,7 +37,7 @@ export default function UploadPage() {
   const [isPremium, setIsPremium] = useState(false)
   const [videoPreviewUrl, setVideoPreviewUrl] = useState<string | null>(null)
   const [uploadStage, setUploadStage] = useState<
-    "idle" | "preparing" | "uploading" | "processing" | "complete" | "error"
+    "idle" | "preparing" | "uploading" | "processing" | "complete" | "error" | "stalled"
   >("idle")
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -242,6 +248,10 @@ export default function UploadPage() {
       formData.append("niche", selectedNiche)
       formData.append("tag", selectedTag)
 
+      // Add upload method to form data for server-side logging
+      formData.append("uploadMethod", "resumable")
+
+      console.log("Initializing upload with Vimeo API...")
       const initResponse = await fetch("/api/vimeo/direct-upload", {
         method: "POST",
         body: formData,
@@ -249,10 +259,16 @@ export default function UploadPage() {
 
       if (!initResponse.ok) {
         const errorData = await initResponse.json()
+        console.error("Vimeo API initialization error:", errorData)
         throw new Error(errorData.details || "Failed to initialize upload")
       }
 
       const vimeoData = await initResponse.json()
+      console.log("Vimeo upload initialized:", vimeoData)
+
+      if (!vimeoData.uploadUrl) {
+        throw new Error("No upload URL received from Vimeo")
+      }
 
       // Update Firestore with Vimeo ID
       await updateDoc(doc(db, "uploads", uploadId), {
@@ -264,16 +280,56 @@ export default function UploadPage() {
       // Step 3: Upload the file
       setUploadStage("uploading")
 
-      await directUploadToVimeo({
-        file: selectedFile,
-        uploadUrl: vimeoData.uploadUrl,
-        onProgress: (progress) => {
-          setUploadProgress(progress)
-        },
-        onError: (error) => {
-          throw error
-        },
-      })
+      // Add a small delay to ensure the UI updates before starting the upload
+      await new Promise((resolve) => setTimeout(resolve, 500))
+
+      // Try the resumable upload first
+      try {
+        console.log("Starting resumable upload...")
+        await resumableUploadToVimeo({
+          file: selectedFile,
+          uploadUrl: vimeoData.uploadUrl,
+          onProgress: (progress) => {
+            setUploadProgress(progress)
+          },
+          onError: (error) => {
+            console.error("Resumable upload error:", error)
+            throw error
+          },
+          onStalled: () => {
+            console.log("Upload stalled, UI will show warning")
+            setUploadStage("stalled")
+            // The upload will try to auto-resume
+          },
+        })
+      } catch (resumableError) {
+        console.error("Resumable upload failed, falling back to direct upload:", resumableError)
+
+        // If resumable upload fails, try direct upload as fallback
+        toast({
+          title: "Resumable upload failed",
+          description: "Trying alternative upload method...",
+          variant: "warning",
+        })
+
+        // Reset progress for the fallback method
+        setUploadProgress(0)
+
+        await directUploadToVimeo({
+          file: selectedFile,
+          uploadUrl: vimeoData.uploadUrl,
+          onProgress: (progress) => {
+            setUploadProgress(progress)
+          },
+          onError: (error) => {
+            throw error
+          },
+          onStalled: () => {
+            console.log("Direct upload stalled, UI will show warning")
+            setUploadStage("stalled")
+          },
+        })
+      }
 
       // Update status in Firestore
       await updateDoc(doc(db, "uploads", uploadId), {
@@ -722,6 +778,8 @@ export default function UploadPage() {
                 </li>
               </ul>
             </div>
+
+            <UploadNetworkDiagnostic />
           </div>
         </div>
       </main>

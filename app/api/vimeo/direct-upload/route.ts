@@ -13,12 +13,13 @@ export async function POST(request: NextRequest) {
     const size = formData.get("size") as string
     const niche = (formData.get("niche") as string) || ""
     const tag = (formData.get("tag") as string) || ""
+    const uploadMethod = (formData.get("uploadMethod") as string) || "direct"
 
     if (!name || !size) {
       return NextResponse.json({ error: "Missing required parameters" }, { status: 400 })
     }
 
-    console.log("Creating direct Vimeo upload with params:", {
+    console.log("Creating Vimeo upload with params:", {
       name,
       description: description || "(No description)",
       privacy,
@@ -26,9 +27,29 @@ export async function POST(request: NextRequest) {
       userId,
       niche,
       tag,
+      uploadMethod,
     })
 
+    // Validate file size
+    const sizeNum = Number.parseInt(size, 10)
+    if (isNaN(sizeNum) || sizeNum <= 0) {
+      return NextResponse.json({ error: "Invalid file size" }, { status: 400 })
+    }
+
+    // Check if file size exceeds Vimeo limits
+    const maxSizeBytes = 500 * 1024 * 1024 // 500MB
+    if (sizeNum > maxSizeBytes) {
+      return NextResponse.json(
+        {
+          error: "File size exceeds limit",
+          details: `Maximum file size is 500MB, got ${(sizeNum / (1024 * 1024)).toFixed(2)}MB`,
+        },
+        { status: 400 },
+      )
+    }
+
     // Create a new video on Vimeo with direct upload approach
+    console.log("Sending request to Vimeo API...")
     const createResponse = await fetch(`https://api.vimeo.com/me/videos`, {
       method: "POST",
       headers: {
@@ -39,7 +60,7 @@ export async function POST(request: NextRequest) {
       body: JSON.stringify({
         upload: {
           approach: "tus",
-          size: Number.parseInt(size, 10),
+          size: sizeNum,
         },
         name,
         description: description || "",
@@ -50,6 +71,8 @@ export async function POST(request: NextRequest) {
         tags: [...(niche ? [{ name: niche }] : []), ...(tag ? [{ name: tag }] : [])],
       }),
     })
+
+    console.log("Vimeo API response status:", createResponse.status)
 
     if (!createResponse.ok) {
       const errorText = await createResponse.text()
@@ -78,6 +101,20 @@ export async function POST(request: NextRequest) {
     }
 
     const uploadData = await createResponse.json()
+    console.log("Vimeo API response success, upload link:", uploadData.upload?.upload_link ? "Present" : "Missing")
+
+    // Validate the response contains the upload link
+    if (!uploadData.upload?.upload_link) {
+      console.error("Missing upload_link in Vimeo response:", JSON.stringify(uploadData, null, 2))
+      return NextResponse.json(
+        {
+          error: "Invalid response from Vimeo API",
+          details: "Missing upload link in response",
+          debug: JSON.stringify(uploadData, null, 2),
+        },
+        { status: 500 },
+      )
+    }
 
     // Return the upload URL and other data needed for the client
     return NextResponse.json({
