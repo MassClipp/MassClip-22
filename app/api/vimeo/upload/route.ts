@@ -9,13 +9,26 @@ export async function POST(request: NextRequest) {
     const description = formData.get("description") as string
     const privacy = (formData.get("privacy") as string) || "anybody"
     const userId = formData.get("userId") as string
+    const size = formData.get("size") as string
 
     if (!name) {
       return NextResponse.json({ error: "Video name is required" }, { status: 400 })
     }
 
+    if (!size || isNaN(Number(size))) {
+      return NextResponse.json({ error: "Valid file size is required" }, { status: 400 })
+    }
+
+    console.log("Creating Vimeo upload with params:", {
+      name,
+      description: description || "(No description)",
+      privacy,
+      size,
+      userId,
+    })
+
     // Create a new video on Vimeo (without the file yet)
-    const createResponse = await fetch(`https://api.vimeo.com/users/${vimeoConfig.userId}/videos`, {
+    const createResponse = await fetch(`https://api.vimeo.com/me/videos`, {
       method: "POST",
       headers: {
         Authorization: `Bearer ${vimeoConfig.accessToken}`,
@@ -25,7 +38,7 @@ export async function POST(request: NextRequest) {
       body: JSON.stringify({
         upload: {
           approach: "tus",
-          size: formData.get("size") as string,
+          size: Number.parseInt(size, 10),
         },
         name,
         description: description || "",
@@ -38,13 +51,28 @@ export async function POST(request: NextRequest) {
     if (!createResponse.ok) {
       const errorText = await createResponse.text()
       console.error("Vimeo API error:", errorText)
+
+      // Try to parse the error for more details
+      let errorDetails = errorText
+      try {
+        const errorJson = JSON.parse(errorText)
+        errorDetails = errorJson.error || errorJson.developer_message || errorText
+      } catch (e) {
+        // If parsing fails, use the original error text
+      }
+
       return NextResponse.json(
-        { error: "Failed to initialize Vimeo upload", details: errorText },
+        {
+          error: "Failed to initialize Vimeo upload",
+          status: createResponse.status,
+          details: errorDetails,
+        },
         { status: createResponse.status },
       )
     }
 
     const uploadData = await createResponse.json()
+    console.log("Vimeo upload created successfully:", uploadData.uri)
 
     // Return the upload URL and other data needed for the client
     return NextResponse.json({
@@ -57,7 +85,10 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error("Error creating Vimeo upload:", error)
     return NextResponse.json(
-      { error: "Failed to initialize Vimeo upload", details: error instanceof Error ? error.message : String(error) },
+      {
+        error: "Failed to initialize Vimeo upload",
+        details: error instanceof Error ? error.message : String(error),
+      },
       { status: 500 },
     )
   }
