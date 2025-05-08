@@ -15,13 +15,7 @@ import { collection, addDoc, serverTimestamp, updateDoc, doc } from "firebase/fi
 import { useMobile } from "@/hooks/use-mobile"
 import { assignVideoToCategory } from "@/app/actions/category-actions"
 import { useShowcaseTags } from "@/hooks/use-showcase-tags"
-
-// Import the new resumable upload function
-import { resumableUploadToVimeo } from "@/lib/resumable-vimeo-upload"
-import { directUploadToVimeo } from "@/lib/direct-vimeo-upload"
-
-// Import the diagnostic component
-import { UploadNetworkDiagnostic } from "@/components/upload-network-diagnostic"
+import { simpleVimeoUpload, fallbackVimeoUpload } from "@/lib/simple-vimeo-upload"
 
 export default function UploadPage() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
@@ -40,6 +34,7 @@ export default function UploadPage() {
     "idle" | "preparing" | "uploading" | "processing" | "complete" | "error" | "stalled"
   >("idle")
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const [retryCount, setRetryCount] = useState(0)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const { toast } = useToast()
   const { user } = useAuth()
@@ -238,7 +233,7 @@ export default function UploadPage() {
         uploadId: uploadId,
       })
 
-      // Step 2: Initialize the Vimeo upload using the direct upload approach
+      // Step 2: Initialize the Vimeo upload
       const formData = new FormData()
       formData.append("name", title || selectedFile.name)
       formData.append("description", description || "")
@@ -248,11 +243,8 @@ export default function UploadPage() {
       formData.append("niche", selectedNiche)
       formData.append("tag", selectedTag)
 
-      // Add upload method to form data for server-side logging
-      formData.append("uploadMethod", "resumable")
-
       console.log("Initializing upload with Vimeo API...")
-      const initResponse = await fetch("/api/vimeo/direct-upload", {
+      const initResponse = await fetch("/api/vimeo/simple-upload", {
         method: "POST",
         body: formData,
       })
@@ -283,31 +275,25 @@ export default function UploadPage() {
       // Add a small delay to ensure the UI updates before starting the upload
       await new Promise((resolve) => setTimeout(resolve, 500))
 
-      // Try the resumable upload first
       try {
-        console.log("Starting resumable upload...")
-        await resumableUploadToVimeo({
+        // Try the simple upload first
+        await simpleVimeoUpload({
           file: selectedFile,
           uploadUrl: vimeoData.uploadUrl,
           onProgress: (progress) => {
             setUploadProgress(progress)
           },
           onError: (error) => {
-            console.error("Resumable upload error:", error)
+            console.error("Simple upload error:", error)
             throw error
           },
-          onStalled: () => {
-            console.log("Upload stalled, UI will show warning")
-            setUploadStage("stalled")
-            // The upload will try to auto-resume
-          },
         })
-      } catch (resumableError) {
-        console.error("Resumable upload failed, falling back to direct upload:", resumableError)
+      } catch (uploadError) {
+        console.error("Simple upload failed, trying fallback method:", uploadError)
 
-        // If resumable upload fails, try direct upload as fallback
+        // If simple upload fails, try fallback method
         toast({
-          title: "Resumable upload failed",
+          title: "Primary upload method failed",
           description: "Trying alternative upload method...",
           variant: "warning",
         })
@@ -315,7 +301,7 @@ export default function UploadPage() {
         // Reset progress for the fallback method
         setUploadProgress(0)
 
-        await directUploadToVimeo({
+        await fallbackVimeoUpload({
           file: selectedFile,
           uploadUrl: vimeoData.uploadUrl,
           onProgress: (progress) => {
@@ -323,10 +309,6 @@ export default function UploadPage() {
           },
           onError: (error) => {
             throw error
-          },
-          onStalled: () => {
-            console.log("Direct upload stalled, UI will show warning")
-            setUploadStage("stalled")
           },
         })
       }
@@ -384,6 +366,20 @@ export default function UploadPage() {
     toast,
     router,
   ])
+
+  // Retry upload
+  const handleRetry = useCallback(() => {
+    setRetryCount((prev) => prev + 1)
+    setIsUploading(false)
+    setUploadProgress(0)
+    setUploadStage("idle")
+    setErrorMessage(null)
+
+    // Add a small delay before retrying
+    setTimeout(() => {
+      handleUpload()
+    }, 1000)
+  }, [handleUpload])
 
   // Get upload stage text
   const getUploadStageText = useCallback(() => {
@@ -460,9 +456,14 @@ export default function UploadPage() {
                         </div>
                         <p className="text-lg font-medium mb-2 text-red-500">Upload Failed</p>
                         <p className="text-sm text-zinc-400 mb-4">{errorMessage}</p>
-                        <Button onClick={() => setIsUploading(false)} variant="outline" className="mt-2">
-                          Try Again
-                        </Button>
+                        <div className="flex gap-3">
+                          <Button onClick={handleRetry} variant="default" className="mt-2">
+                            Retry Upload
+                          </Button>
+                          <Button onClick={() => setIsUploading(false)} variant="outline" className="mt-2">
+                            Cancel
+                          </Button>
+                        </div>
                       </>
                     ) : (
                       <>
@@ -753,33 +754,36 @@ export default function UploadPage() {
               </ul>
             </div>
 
-            {/* Mobile Optimization */}
+            {/* Troubleshooting Tips */}
             <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-6">
-              <h3 className="text-lg font-medium mb-4">Mobile Optimization</h3>
-              <p className="text-sm text-zinc-400 mb-4">Optimize your content for mobile viewing with these tips:</p>
+              <h3 className="text-lg font-medium mb-4">Troubleshooting Tips</h3>
               <ul className="space-y-3 text-sm">
                 <li className="flex items-start gap-3">
                   <div className="w-5 h-5 rounded-full bg-zinc-800 flex items-center justify-center flex-shrink-0 mt-0.5">
                     <Check className="w-3 h-3 text-crimson" />
                   </div>
-                  <span className="text-zinc-300">Vertical format (9:16) is ideal for mobile platforms</span>
+                  <span className="text-zinc-300">Use a stable internet connection for reliable uploads</span>
                 </li>
                 <li className="flex items-start gap-3">
                   <div className="w-5 h-5 rounded-full bg-zinc-800 flex items-center justify-center flex-shrink-0 mt-0.5">
                     <Check className="w-3 h-3 text-crimson" />
                   </div>
-                  <span className="text-zinc-300">Keep text large and readable on small screens</span>
+                  <span className="text-zinc-300">Try using Chrome or Firefox for best upload performance</span>
                 </li>
                 <li className="flex items-start gap-3">
                   <div className="w-5 h-5 rounded-full bg-zinc-800 flex items-center justify-center flex-shrink-0 mt-0.5">
                     <Check className="w-3 h-3 text-crimson" />
                   </div>
-                  <span className="text-zinc-300">Use high contrast visuals for better visibility</span>
+                  <span className="text-zinc-300">If upload fails, try a smaller file or different format</span>
+                </li>
+                <li className="flex items-start gap-3">
+                  <div className="w-5 h-5 rounded-full bg-zinc-800 flex items-center justify-center flex-shrink-0 mt-0.5">
+                    <Check className="w-3 h-3 text-crimson" />
+                  </div>
+                  <span className="text-zinc-300">Clear browser cache if experiencing persistent issues</span>
                 </li>
               </ul>
             </div>
-
-            <UploadNetworkDiagnostic />
           </div>
         </div>
       </main>
