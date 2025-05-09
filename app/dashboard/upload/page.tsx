@@ -15,14 +15,14 @@ import { collection, addDoc, serverTimestamp, updateDoc, doc } from "firebase/fi
 import { directUploadToVimeo } from "@/lib/direct-vimeo-upload"
 import { useMobile } from "@/hooks/use-mobile"
 
-// Predefined niche options
+// Updated niche options as specified
 const NICHE_OPTIONS = [
   { value: "motivation", label: "Motivation" },
   { value: "memes", label: "Memes" },
   { value: "sports", label: "Sports" },
   { value: "streamer-clips", label: "Streamer Clips" },
-  { value: "money-wealth", label: "Money & Wealth" },
-  { value: "viral-takes", label: "Viral Takes" },
+  { value: "funny", label: "Funny" },
+  { value: "other", label: "Other" },
 ]
 
 export default function UploadPage() {

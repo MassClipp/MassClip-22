@@ -47,7 +47,7 @@ export async function POST(request: NextRequest) {
       tags: tags.length > 0 ? tags.map((t) => t.name).join(", ") : "none",
     })
 
-    // Create a new video on Vimeo (without the file yet)
+    // Create a new video on Vimeo with direct upload approach
     const createResponse = await fetch(`https://api.vimeo.com/me/videos`, {
       method: "POST",
       headers: {
