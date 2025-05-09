@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Menu, X, ChevronRight, Instagram } from "lucide-react"
 import Logo from "@/components/logo"
 import { useScrollLock } from "@/hooks/use-scroll-lock"
+import DesktopMegaMenu from "./desktop-mega-menu"
 
 export default function LandingHeader() {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
@@ -42,9 +43,7 @@ export default function LandingHeader() {
 
   const navigationItems = [
     { name: "Home", href: "/" },
-    { name: "Explore", href: "/dashboard" },
     { name: "Pricing", href: "/membership-plans" },
-    { name: "Categories", href: "/dashboard/categories" },
   ]
 
   return (
@@ -59,6 +58,10 @@ export default function LandingHeader() {
 
           {/* Desktop Navigation */}
           <nav className="hidden md:flex items-center ml-10 space-x-8">
+            {/* Mega Menu */}
+            <DesktopMegaMenu />
+
+            {/* Other Nav Items */}
             {navigationItems.map((item) => (
               <Link
                 key={item.name}
@@ -149,6 +152,16 @@ export default function LandingHeader() {
                   <ChevronRight className="h-4 w-4 text-zinc-500 group-hover:text-white/70 transition-colors" />
                 </Link>
               ))}
+
+              {/* Categories Link */}
+              <Link
+                href="/dashboard/categories"
+                className="flex items-center justify-between py-3 px-4 text-white/90 hover:text-white hover:bg-white/5 rounded-lg transition-colors group"
+                onClick={() => setIsMenuOpen(false)}
+              >
+                <span className="text-sm font-light tracking-wide">Categories</span>
+                <ChevronRight className="h-4 w-4 text-zinc-500 group-hover:text-white/70 transition-colors" />
+              </Link>
 
               {/* Beta Notice Link in Mobile Menu */}
               <Link

@@ -2,268 +2,206 @@
 
 import type React from "react"
 
-import { useState, useEffect, useRef } from "react"
-import { useRouter } from "next/navigation"
+import { useState, useEffect } from "react"
 import Link from "next/link"
-import { User, LogOut, X, Search, Download, Home, Grid, Heart, Clock, Crown, Upload } from "lucide-react"
-import { Button } from "@/components/ui/button"
-import { useAuth } from "@/contexts/auth-context"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
-import UpgradeButton from "@/components/upgrade-button"
+import { usePathname, useRouter } from "next/navigation"
+import { Search, Menu, X, LogOut } from "lucide-react"
+import { signOut } from "firebase/auth"
+import { auth } from "@/lib/firebase"
 import Logo from "@/components/logo"
-import UserDownloadInfo from "@/components/user-download-info"
-import { useUserPlan } from "@/hooks/use-user-plan"
-import { useDownloadLimit } from "@/contexts/download-limit-context"
+import { Button } from "@/components/ui/button"
 import { useMobile } from "@/hooks/use-mobile"
+import DesktopMegaMenu from "./desktop-mega-menu"
 
-export default function DashboardHeader({ initialSearchQuery = "" }) {
+export default function DashboardHeader() {
+  const [isMenuOpen, setIsMenuOpen] = useState(false)
+  const [searchQuery, setSearchQuery] = useState("")
   const [isScrolled, setIsScrolled] = useState(false)
-  const [searchQuery, setSearchQuery] = useState(initialSearchQuery)
-  const [isSearchOpen, setIsSearchOpen] = useState(false)
-  const { user, logOut } = useAuth()
-  const { isProUser } = useUserPlan()
-  const { remainingDownloads, hasReachedLimit } = useDownloadLimit()
+  const pathname = usePathname()
   const router = useRouter()
-  const searchInputRef = useRef<HTMLInputElement>(null)
   const isMobile = useMobile()
 
+  // Handle search submission
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (searchQuery.trim()) {
+      localStorage.setItem("lastSearchQuery", searchQuery.trim())
+      router.push(`/dashboard?search=${encodeURIComponent(searchQuery.trim())}`)
+      setIsMenuOpen(false)
+    }
+  }
+
+  // Handle scroll detection for header styling
   useEffect(() => {
     const handleScroll = () => {
-      if (window.scrollY > 10) {
-        setIsScrolled(true)
-      } else {
-        setIsScrolled(false)
-      }
+      setIsScrolled(window.scrollY > 10)
     }
-
     window.addEventListener("scroll", handleScroll)
     return () => window.removeEventListener("scroll", handleScroll)
   }, [])
 
-  // Focus search input when search is opened
-  useEffect(() => {
-    if (isSearchOpen && searchInputRef.current) {
-      searchInputRef.current.focus()
-    }
-  }, [isSearchOpen])
-
-  const handleLogout = async () => {
-    const result = await logOut()
-    if (result.success) {
+  // Handle sign out
+  const handleSignOut = async () => {
+    try {
+      await signOut(auth)
       router.push("/login")
+    } catch (error) {
+      console.error("Error signing out:", error)
     }
   }
 
-  const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault()
-    if (searchQuery.trim()) {
-      // Save the search query to localStorage for potential use in other components
-      localStorage.setItem("lastSearchQuery", searchQuery)
-      router.push(`/dashboard?search=${encodeURIComponent(searchQuery)}`)
-      setIsSearchOpen(false)
+  // Restore search query from localStorage
+  useEffect(() => {
+    const savedQuery = localStorage.getItem("lastSearchQuery")
+    if (savedQuery && pathname === "/dashboard") {
+      setSearchQuery(savedQuery)
+    } else {
+      setSearchQuery("")
     }
-  }
-
-  // Navigation items for both desktop and mobile
-  const navigationItems = [
-    { name: "Home", href: "/dashboard", icon: <Home className="h-4 w-4" /> },
-    { name: "Categories", href: "/dashboard/categories", icon: <Grid className="h-4 w-4" /> },
-    { name: "Favorites", href: "/dashboard/favorites", icon: <Heart className="h-4 w-4" /> },
-    { name: "History", href: "/dashboard/history", icon: <Clock className="h-4 w-4" /> },
-    { name: "Upload Content", href: "/dashboard/upload", icon: <Upload className="h-4 w-4" /> },
-    { name: "Membership", href: "/membership-plans", icon: <Crown className="h-4 w-4" /> },
-  ]
+  }, [pathname])
 
   return (
-    <>
-      <header
-        className={`fixed top-0 w-full z-50 transition-all duration-300 ${
-          isScrolled ? "bg-black/90 backdrop-blur-sm border-b border-zinc-900" : "bg-transparent"
-        }`}
-      >
-        <div className="container mx-auto px-4 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-8">
-            <Logo href="/dashboard" />
+    <header
+      className={`sticky top-0 z-40 w-full transition-all duration-200 ${
+        isScrolled ? "bg-black/80 backdrop-blur-md shadow-md" : "bg-black"
+      }`}
+    >
+      <div className="container mx-auto px-4">
+        <div className="flex items-center justify-between h-16">
+          {/* Logo and Desktop Navigation */}
+          <div className="flex items-center">
+            <Logo href="/dashboard" size="md" />
 
-            {/* Desktop Navigation */}
-            <nav className="hidden md:flex items-center gap-6">
-              {[navigationItems[0], navigationItems[1], navigationItems[2], navigationItems[4]].map((item) => (
-                <Link
-                  key={item.name}
-                  href={item.href}
-                  className={`${
-                    item.current ? "text-white" : "text-zinc-400"
-                  } hover:text-white transition-colors text-sm font-light tracking-wide`}
-                >
-                  {item.name}
-                </Link>
-              ))}
-            </nav>
+            {/* Desktop Mega Menu */}
+            <div className="hidden md:ml-6 md:flex">
+              <DesktopMegaMenu />
+            </div>
           </div>
 
-          {/* BETA Tag - Now visible on all screen sizes */}
-          <div className="absolute left-1/2 transform -translate-x-1/2">
-            <span className="text-xs font-extralight tracking-widest text-amber-400">BETA</span>
+          {/* Search Bar - Desktop */}
+          <div className="hidden md:block flex-1 max-w-md mx-4">
+            <form onSubmit={handleSearch} className="relative">
+              <input
+                type="text"
+                placeholder="Search clips..."
+                className="w-full py-1.5 pl-9 pr-4 bg-zinc-800/50 border border-zinc-700/50 rounded-md text-white placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-crimson focus:border-crimson"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-zinc-500" size={16} />
+            </form>
           </div>
 
-          {/* Desktop Action Buttons */}
-          <div className="hidden md:flex items-center gap-4">
-            {/* Search Button */}
+          {/* Desktop Right Navigation */}
+          <div className="hidden md:flex items-center space-x-1">
+            <Link href="/dashboard/upload">
+              <Button variant="default" size="sm" className="bg-crimson hover:bg-crimson-dark text-white text-xs px-4">
+                Upload
+              </Button>
+            </Link>
             <button
-              onClick={() => setIsSearchOpen(!isSearchOpen)}
-              className="text-zinc-400 hover:text-white transition-colors p-2"
-              aria-label="Search"
+              onClick={handleSignOut}
+              className="p-2 text-zinc-400 hover:text-white hover:bg-zinc-800 rounded-full transition-colors"
+              aria-label="Sign out"
             >
-              <Search className="h-5 w-5" />
+              <LogOut size={18} />
             </button>
-
-            {/* Downloads Counter */}
-            {isProUser ? (
-              <div className="flex items-center text-zinc-400 text-sm">
-                <Download className="h-4 w-4 mr-1" />
-                <span className="font-light">Unlimited</span>
-              </div>
-            ) : (
-              <div className="flex items-center bg-zinc-900/80 border border-zinc-800 rounded-full px-3 py-1">
-                <Download className={`h-4 w-4 mr-1 ${hasReachedLimit ? "text-amber-500" : "text-crimson"}`} />
-                <span className={`text-sm font-medium ${hasReachedLimit ? "text-amber-500" : "text-white"}`}>
-                  {remainingDownloads} left
-                </span>
-              </div>
-            )}
-
-            {/* Upgrade Button (non-Pro users) */}
-            {!isProUser && (
-              <UpgradeButton navigateOnly={true} className="hidden md:flex">
-                Upgrade
-              </UpgradeButton>
-            )}
-
-            {/* User Menu */}
-            {user && (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-full"
-                  >
-                    <User className="h-5 w-5" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent className="w-56 bg-zinc-900/95 backdrop-blur-sm border-zinc-800 text-white">
-                  <DropdownMenuLabel className="font-light">
-                    {user.displayName ? user.displayName : "My Account"}
-                  </DropdownMenuLabel>
-                  <UserDownloadInfo />
-                  <DropdownMenuSeparator className="bg-zinc-800" />
-                  <DropdownMenuItem
-                    className="hover:bg-zinc-800 focus:bg-zinc-800"
-                    onClick={() => router.push("/dashboard/user")}
-                  >
-                    Dashboard
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    className="hover:bg-zinc-800 focus:bg-zinc-800"
-                    onClick={() => router.push("/dashboard/profile")}
-                  >
-                    Profile
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator className="bg-zinc-800" />
-                  <DropdownMenuItem className="hover:bg-zinc-800 focus:bg-zinc-800" onClick={handleLogout}>
-                    <LogOut className="h-4 w-4 mr-2" />
-                    Log out
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            )}
           </div>
 
-          {/* Mobile Header Actions */}
-          <div className="flex md:hidden items-center gap-2">
-            {/* Mobile Search Button */}
+          {/* Mobile Menu Button */}
+          <div className="md:hidden flex items-center">
             <button
-              onClick={() => setIsSearchOpen(!isSearchOpen)}
-              className="text-zinc-400 hover:text-white transition-colors p-2"
-              aria-label="Search"
+              onClick={() => setIsMenuOpen(!isMenuOpen)}
+              className="p-2 text-zinc-400 hover:text-white rounded-md"
+              aria-label={isMenuOpen ? "Close menu" : "Open menu"}
             >
-              <Search className="h-5 w-5" />
+              {isMenuOpen ? <X size={24} /> : <Menu size={24} />}
             </button>
-
-            {/* Mobile Download Counter for Free Users */}
-            {!isProUser && (
-              <div className="flex items-center bg-zinc-900/80 border border-zinc-800 rounded-full px-2 py-0.5">
-                <Download className={`h-3 w-3 mr-1 ${hasReachedLimit ? "text-amber-500" : "text-crimson"}`} />
-                <span className={`text-xs font-medium ${hasReachedLimit ? "text-amber-500" : "text-white"}`}>
-                  {remainingDownloads}
-                </span>
-              </div>
-            )}
-
-            {/* User Profile Button */}
-            <Button
-              variant="ghost"
-              size="icon"
-              className="text-zinc-400 hover:text-white hover:bg-transparent"
-              onClick={() => router.push("/dashboard/user")}
-              aria-label="User profile"
-            >
-              <User className="h-5 w-5" />
-            </Button>
           </div>
         </div>
 
-        {/* Search Overlay */}
-        {isSearchOpen && (
-          <div className="absolute top-16 left-0 right-0 bg-black/95 backdrop-blur-md border-b border-zinc-900 p-4 z-50">
-            <form onSubmit={handleSearch} className="max-w-2xl mx-auto">
-              <div className="relative">
-                <input
-                  ref={searchInputRef}
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Search for clips..."
-                  className="w-full bg-zinc-900/50 border border-zinc-800 text-white px-4 py-2 pl-10 rounded-md focus:outline-none focus:ring-1 focus:ring-crimson"
-                />
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-zinc-500" />
+        {/* Mobile Menu */}
+        {isMenuOpen && (
+          <div className="md:hidden py-4 border-t border-zinc-800">
+            {/* Mobile Search */}
+            <form onSubmit={handleSearch} className="relative mb-4">
+              <input
+                type="text"
+                placeholder="Search clips..."
+                className="w-full py-2 pl-10 pr-4 bg-zinc-800/50 border border-zinc-700/50 rounded-md text-white placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-crimson focus:border-crimson"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+              />
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-zinc-500" size={18} />
+            </form>
+
+            {/* Mobile Navigation Links */}
+            <nav className="space-y-1">
+              <Link
+                href="/dashboard"
+                className="block px-3 py-2 text-white hover:bg-zinc-800 rounded-md"
+                onClick={() => setIsMenuOpen(false)}
+              >
+                Home
+              </Link>
+              <Link
+                href="/dashboard/categories"
+                className="block px-3 py-2 text-white hover:bg-zinc-800 rounded-md"
+                onClick={() => setIsMenuOpen(false)}
+              >
+                Categories
+              </Link>
+              <Link
+                href="/dashboard/favorites"
+                className="block px-3 py-2 text-white hover:bg-zinc-800 rounded-md"
+                onClick={() => setIsMenuOpen(false)}
+              >
+                Favorites
+              </Link>
+              <Link
+                href="/dashboard/history"
+                className="block px-3 py-2 text-white hover:bg-zinc-800 rounded-md"
+                onClick={() => setIsMenuOpen(false)}
+              >
+                History
+              </Link>
+              <Link
+                href="/dashboard/uploads"
+                className="block px-3 py-2 text-white hover:bg-zinc-800 rounded-md"
+                onClick={() => setIsMenuOpen(false)}
+              >
+                My Uploads
+              </Link>
+              <Link
+                href="/dashboard/profile"
+                className="block px-3 py-2 text-white hover:bg-zinc-800 rounded-md"
+                onClick={() => setIsMenuOpen(false)}
+              >
+                Profile
+              </Link>
+              <div className="pt-2 mt-2 border-t border-zinc-800">
                 <button
-                  type="button"
-                  onClick={() => setIsSearchOpen(false)}
-                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-zinc-500 hover:text-white"
+                  onClick={handleSignOut}
+                  className="block w-full text-left px-3 py-2 text-crimson hover:bg-zinc-800 rounded-md"
                 >
-                  <X className="h-4 w-4" />
+                  Sign Out
                 </button>
               </div>
-            </form>
+            </nav>
+
+            {/* Mobile Upload Button */}
+            <div className="mt-4 pt-4 border-t border-zinc-800">
+              <Link
+                href="/dashboard/upload"
+                className="block w-full py-2.5 bg-crimson hover:bg-crimson-dark text-white text-center font-medium rounded-md"
+                onClick={() => setIsMenuOpen(false)}
+              >
+                Upload New Video
+              </Link>
+            </div>
           </div>
         )}
-      </header>
-
-      {/* Mobile Bottom Navigation Bar */}
-      {isMobile && (
-        <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-black/95 backdrop-blur-md border-t border-zinc-800 z-50">
-          <div className="flex justify-around items-center h-16">
-            {navigationItems.map((item) => (
-              <Link
-                key={item.name}
-                href={item.href}
-                className="flex flex-col items-center justify-center w-full h-full text-zinc-400 hover:text-white transition-colors"
-              >
-                <div className="flex items-center justify-center">{item.icon}</div>
-                <span className="text-xs mt-1">{item.name}</span>
-              </Link>
-            ))}
-          </div>
-        </nav>
-      )}
-    </>
+      </div>
+    </header>
   )
 }
