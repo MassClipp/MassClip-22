@@ -15,6 +15,16 @@ import { collection, addDoc, serverTimestamp, updateDoc, doc } from "firebase/fi
 import { directUploadToVimeo } from "@/lib/direct-vimeo-upload"
 import { useMobile } from "@/hooks/use-mobile"
 
+// Predefined niche options
+const NICHE_OPTIONS = [
+  { value: "motivation", label: "Motivation" },
+  { value: "memes", label: "Memes" },
+  { value: "sports", label: "Sports" },
+  { value: "streamer-clips", label: "Streamer Clips" },
+  { value: "money-wealth", label: "Money & Wealth" },
+  { value: "viral-takes", label: "Viral Takes" },
+]
+
 export default function UploadPage() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [isDragging, setIsDragging] = useState(false)
@@ -25,6 +35,7 @@ export default function UploadPage() {
   const [showAdvanced, setShowAdvanced] = useState(false)
   const [title, setTitle] = useState("")
   const [description, setDescription] = useState("")
+  const [selectedNiche, setSelectedNiche] = useState("")
   const [category, setCategory] = useState("")
   const [visibility, setVisibility] = useState("public")
   const [isPremium, setIsPremium] = useState(false)
@@ -178,8 +189,17 @@ export default function UploadPage() {
       return false
     }
 
+    if (!selectedNiche) {
+      toast({
+        title: "Niche selection required",
+        description: "Please select a niche category for your content.",
+        variant: "destructive",
+      })
+      return false
+    }
+
     return true
-  }, [selectedFile, title, toast])
+  }, [selectedFile, title, selectedNiche, toast])
 
   // Handle browse files click
   const handleBrowseClick = useCallback(() => {
@@ -213,6 +233,7 @@ export default function UploadPage() {
         title: title || selectedFile.name,
         description,
         tags,
+        niche: selectedNiche, // Store the selected niche
         category: category || "uncategorized",
         visibility,
         isPremium,
@@ -305,7 +326,20 @@ export default function UploadPage() {
 
       setIsUploading(false)
     }
-  }, [selectedFile, title, description, tags, category, visibility, isPremium, validateForm, user, toast, router])
+  }, [
+    selectedFile,
+    title,
+    description,
+    tags,
+    selectedNiche,
+    category,
+    visibility,
+    isPremium,
+    validateForm,
+    user,
+    toast,
+    router,
+  ])
 
   // Get upload stage text
   const getUploadStageText = useCallback(() => {
@@ -492,6 +526,30 @@ export default function UploadPage() {
                     rows={4}
                     className="w-full bg-zinc-800/50 border border-zinc-700 rounded-lg px-4 py-3 text-white placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-crimson/50 focus:border-transparent transition-all resize-none"
                   ></textarea>
+                </div>
+
+                {/* Niche Selection Dropdown */}
+                <div>
+                  <label htmlFor="niche" className="block text-sm font-medium text-zinc-400 mb-2">
+                    Niche <span className="text-crimson">*</span>
+                  </label>
+                  <select
+                    id="niche"
+                    value={selectedNiche}
+                    onChange={(e) => setSelectedNiche(e.target.value)}
+                    className="w-full bg-zinc-800/50 border border-zinc-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-crimson/50 focus:border-transparent transition-all appearance-none"
+                    required
+                  >
+                    <option value="" disabled>
+                      Select a niche for your content
+                    </option>
+                    {NICHE_OPTIONS.map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-zinc-500 mt-2">Select the niche that best describes your content</p>
                 </div>
 
                 <div>
