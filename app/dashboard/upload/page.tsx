@@ -41,14 +41,18 @@ export default function UploadPage() {
   const [isPremium, setIsPremium] = useState(false)
   const [videoPreviewUrl, setVideoPreviewUrl] = useState<string | null>(null)
   const [uploadStage, setUploadStage] = useState<
-    "idle" | "preparing" | "uploading" | "processing" | "complete" | "error"
+    "idle" | "preparing" | "uploading" | "processing" | "complete" | "error" | "stalled"
   >("idle")
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const [uploadAttempts, setUploadAttempts] = useState(0)
+  const [currentUploadId, setCurrentUploadId] = useState<string | null>(null)
+  const [vimeoData, setVimeoData] = useState<any>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const { toast } = useToast()
   const { user } = useAuth()
   const router = useRouter()
   const isMobile = useMobile()
+  const MAX_UPLOAD_ATTEMPTS = 3
 
   // Clean up object URL on unmount or when file changes
   useEffect(() => {
@@ -208,6 +212,110 @@ export default function UploadPage() {
     }
   }, [])
 
+  // Initialize upload in Vimeo
+  const initializeVimeoUpload = useCallback(async () => {
+    if (!selectedFile || !user) return null
+
+    // Create form data for the API request
+    const formData = new FormData()
+    formData.append("name", title || selectedFile.name)
+    formData.append("description", description || "")
+    formData.append("size", selectedFile.size.toString())
+    formData.append("privacy", visibility === "private" ? "nobody" : "anybody")
+    formData.append("userId", user.uid)
+
+    // Add the selected niche as a tag
+    if (selectedNiche) {
+      formData.append("niche", selectedNiche)
+    }
+
+    console.log("Initializing Vimeo upload with niche:", selectedNiche)
+
+    // Make the API request
+    const initResponse = await fetch("/api/vimeo/direct-upload", {
+      method: "POST",
+      body: formData,
+    })
+
+    if (!initResponse.ok) {
+      const errorData = await initResponse.json()
+      throw new Error(errorData.details || "Failed to initialize upload")
+    }
+
+    return await initResponse.json()
+  }, [selectedFile, user, title, description, visibility, selectedNiche])
+
+  // Retry upload function
+  const retryUpload = useCallback(async () => {
+    if (!selectedFile || !user || !currentUploadId) return
+
+    setUploadAttempts((prev) => prev + 1)
+    setUploadStage("preparing")
+    setErrorMessage(null)
+
+    try {
+      // Re-initialize the Vimeo upload
+      const newVimeoData = await initializeVimeoUpload()
+      if (!newVimeoData) {
+        throw new Error("Failed to initialize Vimeo upload")
+      }
+
+      setVimeoData(newVimeoData)
+
+      // Update Firestore with new Vimeo ID
+      await updateDoc(doc(db, "uploads", currentUploadId), {
+        vimeoId: newVimeoData.vimeoId,
+        vimeoLink: newVimeoData.link,
+        status: "uploading",
+        retryCount: uploadAttempts + 1,
+      })
+
+      // Start the upload
+      setUploadStage("uploading")
+
+      await directUploadToVimeo({
+        file: selectedFile,
+        uploadUrl: newVimeoData.uploadUrl,
+        onProgress: (progress) => {
+          setUploadProgress(progress)
+        },
+        onError: (error) => {
+          throw error
+        },
+        onStalled: () => {
+          setUploadStage("stalled")
+        },
+      })
+
+      // Update status in Firestore
+      await updateDoc(doc(db, "uploads", currentUploadId), {
+        status: "processing",
+        uploadedAt: serverTimestamp(),
+      })
+
+      setUploadStage("processing")
+      setUploadProgress(100)
+
+      toast({
+        title: "Upload complete",
+        description: "Your video has been uploaded and is now processing.",
+      })
+
+      // Redirect to uploads page
+      router.push("/dashboard/uploads")
+    } catch (error) {
+      console.error("Retry upload error:", error)
+      setUploadStage("error")
+      setErrorMessage(error instanceof Error ? error.message : "Failed to upload video")
+
+      toast({
+        title: "Upload failed",
+        description: error instanceof Error ? error.message : "There was an error uploading your video",
+        variant: "destructive",
+      })
+    }
+  }, [selectedFile, user, currentUploadId, uploadAttempts, initializeVimeoUpload, db, toast, router])
+
   // Upload function
   const handleUpload = useCallback(async () => {
     if (!validateForm()) return
@@ -226,6 +334,7 @@ export default function UploadPage() {
     setUploadProgress(0)
     setUploadStage("preparing")
     setErrorMessage(null)
+    setUploadAttempts(0)
 
     try {
       // Step 1: Create a document in Firestore to track the upload
@@ -245,10 +354,12 @@ export default function UploadPage() {
         status: "preparing",
         vimeoId: null,
         vimeoLink: null,
+        retryCount: 0,
       }
 
       const docRef = await addDoc(collection(db, "uploads"), uploadData)
       const uploadId = docRef.id
+      setCurrentUploadId(uploadId)
 
       // Also save to user's uploads collection
       await addDoc(collection(db, `users/${user.uid}/uploads`), {
@@ -256,30 +367,13 @@ export default function UploadPage() {
         uploadId: uploadId,
       })
 
-      // Step 2: Initialize the Vimeo upload using the direct upload approach
-      const formData = new FormData()
-      formData.append("name", title || selectedFile.name)
-      formData.append("description", description || "")
-      formData.append("size", selectedFile.size.toString())
-      formData.append("privacy", visibility === "private" ? "nobody" : "anybody")
-      formData.append("userId", user.uid)
-
-      // Add the selected niche as a tag
-      if (selectedNiche) {
-        formData.append("niche", selectedNiche)
+      // Step 2: Initialize the Vimeo upload
+      const vimeoData = await initializeVimeoUpload()
+      if (!vimeoData) {
+        throw new Error("Failed to initialize Vimeo upload")
       }
 
-      const initResponse = await fetch("/api/vimeo/direct-upload", {
-        method: "POST",
-        body: formData,
-      })
-
-      if (!initResponse.ok) {
-        const errorData = await initResponse.json()
-        throw new Error(errorData.details || "Failed to initialize upload")
-      }
-
-      const vimeoData = await initResponse.json()
+      setVimeoData(vimeoData)
 
       // Update Firestore with Vimeo ID
       await updateDoc(doc(db, "uploads", uploadId), {
@@ -299,6 +393,9 @@ export default function UploadPage() {
         },
         onError: (error) => {
           throw error
+        },
+        onStalled: () => {
+          setUploadStage("stalled")
         },
       })
 
@@ -344,6 +441,7 @@ export default function UploadPage() {
     user,
     toast,
     router,
+    initializeVimeoUpload,
   ])
 
   // Get upload stage text
@@ -405,6 +503,7 @@ export default function UploadPage() {
                 ${selectedFile ? "bg-zinc-900/50 border border-zinc-800" : "bg-gradient-to-b from-zinc-900/50 to-black border border-zinc-800 hover:border-zinc-700"}
                 ${isDragging ? "border-crimson/50 shadow-lg shadow-crimson/10 scale-[1.01]" : ""}
                 ${uploadStage === "error" ? "border-red-500/50" : ""}
+                ${uploadStage === "stalled" ? "border-yellow-500/50" : ""}
               `}
               onDragEnter={handleDrag}
               onDragLeave={handleDrag}
@@ -421,9 +520,36 @@ export default function UploadPage() {
                         </div>
                         <p className="text-lg font-medium mb-2 text-red-500">Upload Failed</p>
                         <p className="text-sm text-zinc-400 mb-4">{errorMessage}</p>
-                        <Button onClick={() => setIsUploading(false)} variant="outline" className="mt-2">
-                          Try Again
-                        </Button>
+                        {uploadAttempts < MAX_UPLOAD_ATTEMPTS ? (
+                          <Button onClick={retryUpload} variant="outline" className="mt-2">
+                            Retry Upload
+                          </Button>
+                        ) : (
+                          <>
+                            <p className="text-sm text-zinc-400 mb-4">Maximum retry attempts reached.</p>
+                            <Button onClick={() => setIsUploading(false)} variant="outline" className="mt-2">
+                              Start Over
+                            </Button>
+                          </>
+                        )}
+                      </>
+                    ) : uploadStage === "stalled" ? (
+                      <>
+                        <div className="w-12 h-12 rounded-full bg-yellow-500/10 flex items-center justify-center mb-4">
+                          <AlertCircle className="w-6 h-6 text-yellow-500" />
+                        </div>
+                        <p className="text-lg font-medium mb-2 text-yellow-500">Upload Stalled</p>
+                        <p className="text-sm text-zinc-400 mb-4">
+                          The upload appears to be stuck. You can wait or try again.
+                        </p>
+                        <div className="flex gap-3">
+                          <Button onClick={retryUpload} variant="outline" className="mt-2">
+                            Restart Upload
+                          </Button>
+                          <Button onClick={() => setUploadStage("uploading")} variant="ghost" className="mt-2">
+                            Continue Waiting
+                          </Button>
+                        </div>
                       </>
                     ) : (
                       <>
