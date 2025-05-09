@@ -11,11 +11,14 @@ import {
   Upload,
   User,
   History,
+  TrendingUp,
+  DollarSign,
   Laugh,
   Dumbbell,
   Tv,
+  Brain,
+  Zap,
   Menu,
-  HelpCircle,
 } from "lucide-react"
 
 export default function DesktopMegaMenu() {
@@ -39,14 +42,24 @@ export default function DesktopMegaMenu() {
     }
   }, [isOpen])
 
-  // Niche categories with icons - updated to match the specified niches
+  // Niche categories with icons
   const niches = [
     { name: "Motivation", icon: <Flame className="w-4 h-4 text-crimson" />, path: "/category/motivation" },
     { name: "Memes", icon: <Laugh className="w-4 h-4 text-crimson" />, path: "/category/memes" },
     { name: "Sports", icon: <Dumbbell className="w-4 h-4 text-crimson" />, path: "/category/sports" },
     { name: "Streamer Clips", icon: <Tv className="w-4 h-4 text-crimson" />, path: "/category/streamer-clips" },
-    { name: "Funny", icon: <Laugh className="w-4 h-4 text-crimson" />, path: "/category/funny" },
-    { name: "Other", icon: <HelpCircle className="w-4 h-4 text-crimson" />, path: "/category/other" },
+    {
+      name: "Money & Wealth",
+      icon: <DollarSign className="w-4 h-4 text-crimson" />,
+      path: "/category/money-and-wealth",
+    },
+    { name: "Viral Takes", icon: <Zap className="w-4 h-4 text-crimson" />, path: "/category/viral-takes" },
+    {
+      name: "Hustle Mentality",
+      icon: <TrendingUp className="w-4 h-4 text-crimson" />,
+      path: "/category/hustle-mentality",
+    },
+    { name: "Introspection", icon: <Brain className="w-4 h-4 text-crimson" />, path: "/category/introspection" },
   ]
 
   // User features
@@ -55,7 +68,7 @@ export default function DesktopMegaMenu() {
     { name: "My Favorites", icon: <Bookmark className="w-4 h-4 text-zinc-400" />, path: "/dashboard/favorites" },
     { name: "My Uploads", icon: <Upload className="w-4 h-4 text-zinc-400" />, path: "/dashboard/uploads" },
     { name: "History", icon: <History className="w-4 h-4 text-zinc-400" />, path: "/dashboard/history" },
-    { name: "Your Account", icon: <User className="w-4 h-4 text-zinc-400" />, path: "/dashboard/user" },
+    { name: "Your Account", icon: <User className="w-4 h-4 text-zinc-400" />, path: "/dashboard/user" }, // Changed from Settings to Your Account and path to /dashboard/user
   ]
 
   return (
