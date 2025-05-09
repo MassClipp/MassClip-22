@@ -30,7 +30,7 @@ interface VimeoCardProps {
   video: VimeoVideo
 }
 
-export function VimeoCard({ video }: VimeoCardProps) {
+export default function VimeoCard({ video }: VimeoCardProps) {
   const [isActive, setIsActive] = useState(false)
   const [isHovered, setIsHovered] = useState(false)
   const [downloadError, setDownloadError] = useState(false)
@@ -652,6 +652,3 @@ export function VimeoCard({ video }: VimeoCardProps) {
     </div>
   )
 }
-
-// Add this at the end of the file, after the component definition
-export default VimeoCard

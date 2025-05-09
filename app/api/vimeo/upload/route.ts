@@ -24,9 +24,6 @@ export async function POST(request: NextRequest) {
     const userId = formData.get("userId") as string
     const size = formData.get("size") as string
 
-    // Get tags from form data (can be multiple)
-    const tags = formData.getAll("tag") as string[]
-
     if (!name) {
       return NextResponse.json({ error: "Video name is required" }, { status: 400 })
     }
@@ -41,11 +38,7 @@ export async function POST(request: NextRequest) {
       privacy,
       size,
       userId,
-      tags,
     })
-
-    // Prepare tags for Vimeo API
-    const vimeoTags = tags.map((tag) => ({ name: tag }))
 
     // Create a new video on Vimeo (without the file yet)
     const createResponse = await fetch(`https://api.vimeo.com/me/videos`, {
@@ -65,7 +58,6 @@ export async function POST(request: NextRequest) {
         privacy: {
           view: privacy,
         },
-        tags: vimeoTags.length > 0 ? vimeoTags : undefined,
       }),
     })
 
