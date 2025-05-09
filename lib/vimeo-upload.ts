@@ -43,7 +43,6 @@ export async function uploadToVimeo({
     // Track stalled uploads
     let lastProgress = 0
     let stalledTimer: NodeJS.Timeout | null = null
-    let lastProgressTime = Date.now()
 
     const upload = new tus.Upload(file, {
       endpoint: uploadUrl,
@@ -69,7 +68,6 @@ export async function uploadToVimeo({
         // Check if progress is actually happening
         if (percentage > lastProgress) {
           lastProgress = percentage
-          lastProgressTime = Date.now()
 
           // Reset stalled timer if we're making progress
           if (stalledTimer) {
@@ -81,20 +79,13 @@ export async function uploadToVimeo({
         // Set a timer to detect stalled uploads
         if (!stalledTimer && percentage < 100 && percentage > 0) {
           stalledTimer = setTimeout(() => {
-            const timeSinceLastProgress = Date.now() - lastProgressTime
-            console.warn(`Upload appears to be stalled for ${timeSinceLastProgress / 1000}s, attempting to resume...`)
-
+            console.warn("Upload appears to be stalled, attempting to resume...")
             try {
-              // Notify about stalled upload
-              onStalled()
-
-              // Try to resume by aborting and restarting
               upload.abort()
-
               setTimeout(() => {
-                console.log("Restarting upload after stall...")
                 upload.start()
-              }, 2000)
+              }, 1000)
+              onStalled()
             } catch (e) {
               console.error("Failed to resume stalled upload:", e)
             }

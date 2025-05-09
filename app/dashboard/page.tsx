@@ -13,7 +13,6 @@ import { useRouter } from "next/navigation"
 import { filterCategoriesBySearch } from "@/lib/search-utils"
 import VimeoCard from "@/components/vimeo-card"
 import { shuffleArray } from "@/lib/utils"
-import Link from "next/link"
 
 export default function Dashboard() {
   // Get search query from URL
@@ -151,9 +150,6 @@ export default function Dashboard() {
       </div>
 
       <DashboardHeader initialSearchQuery={searchQuery} />
-      <Link href="/dashboard/upload-simple" className="text-sm text-blue-500 hover:underline">
-        Simple Upload (No Categories)
-      </Link>
 
       <main className="pt-20 pb-16 relative z-10">
         {/* Search Results Header (if searching) */}

@@ -4,7 +4,7 @@ import type React from "react"
 
 import { useState, useCallback, useRef, useEffect } from "react"
 import Link from "next/link"
-import { ArrowLeft, Upload, FileVideo, AlertCircle, RefreshCw, X, Info, ChevronDown, Check } from "lucide-react"
+import { ArrowLeft, Upload, FileVideo, AlertCircle, RefreshCw, X, Tag, Info, ChevronDown, Check } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
@@ -12,47 +12,32 @@ import { useAuth } from "@/contexts/auth-context"
 import { useRouter } from "next/navigation"
 import { db } from "@/lib/firebase"
 import { collection, addDoc, serverTimestamp, updateDoc, doc } from "firebase/firestore"
+import { directUploadToVimeo } from "@/lib/direct-vimeo-upload"
 import { useMobile } from "@/hooks/use-mobile"
-import { uploadToVimeo } from "@/lib/vimeo-upload"
 
 export default function UploadPage() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [isDragging, setIsDragging] = useState(false)
   const [uploadProgress, setUploadProgress] = useState(0)
   const [isUploading, setIsUploading] = useState(false)
-  const [selectedNiche, setSelectedNiche] = useState<string>("")
-  const [selectedTag, setSelectedTag] = useState<string>("")
+  const [tags, setTags] = useState<string[]>([])
+  const [tagInput, setTagInput] = useState("")
   const [showAdvanced, setShowAdvanced] = useState(false)
   const [title, setTitle] = useState("")
   const [description, setDescription] = useState("")
+  const [category, setCategory] = useState("")
   const [visibility, setVisibility] = useState("public")
   const [isPremium, setIsPremium] = useState(false)
   const [videoPreviewUrl, setVideoPreviewUrl] = useState<string | null>(null)
   const [uploadStage, setUploadStage] = useState<
-    "idle" | "preparing" | "uploading" | "processing" | "complete" | "error" | "stalled"
+    "idle" | "preparing" | "uploading" | "processing" | "complete" | "error"
   >("idle")
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
-  const [retryCount, setRetryCount] = useState(0)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const { toast } = useToast()
   const { user } = useAuth()
   const router = useRouter()
   const isMobile = useMobile()
-
-  // Predefined niches and tags
-  const niches = ["Motivation", "Meme", "Sports", "Streamer Clip", "Other"]
-  const nicheTags = {
-    Motivation: ["Introspection", "Hustle Mentality", "High Energy", "Faith", "Money & Wealth"],
-    Meme: ["Funny", "Viral", "Trending"],
-    Sports: ["Basketball", "Football", "Soccer", "Highlights"],
-    "Streamer Clip": ["Gaming", "IRL", "Reaction", "Commentary"],
-    Other: ["Miscellaneous", "Uncategorized"],
-  }
-
-  // Reset tag when niche changes
-  useEffect(() => {
-    setSelectedTag("")
-  }, [selectedNiche])
 
   // Clean up object URL on unmount or when file changes
   useEffect(() => {
@@ -143,6 +128,36 @@ export default function UploadPage() {
     [toast, createVideoPreview],
   )
 
+  // Handle tag input
+  const handleTagKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (e.key === "Enter" && tagInput.trim() !== "") {
+        e.preventDefault()
+        if (!tags.includes(tagInput.trim())) {
+          setTags([...tags, tagInput.trim()])
+          setTagInput("")
+        }
+      }
+    },
+    [tagInput, tags],
+  )
+
+  // Add tag button handler
+  const handleAddTag = useCallback(() => {
+    if (tagInput.trim() !== "" && !tags.includes(tagInput.trim())) {
+      setTags([...tags, tagInput.trim()])
+      setTagInput("")
+    }
+  }, [tagInput, tags])
+
+  // Remove tag
+  const removeTag = useCallback(
+    (tagToRemove: string) => {
+      setTags(tags.filter((tag) => tag !== tagToRemove))
+    },
+    [tags],
+  )
+
   // Validate form
   const validateForm = useCallback(() => {
     if (!selectedFile) {
@@ -197,8 +212,8 @@ export default function UploadPage() {
       const uploadData = {
         title: title || selectedFile.name,
         description,
-        niche: selectedNiche,
-        tag: selectedTag,
+        tags,
+        category: category || "uncategorized",
         visibility,
         isPremium,
         fileName: selectedFile.name,
@@ -220,7 +235,7 @@ export default function UploadPage() {
         uploadId: uploadId,
       })
 
-      // Step 2: Initialize the Vimeo upload
+      // Step 2: Initialize the Vimeo upload using the direct upload approach
       const formData = new FormData()
       formData.append("name", title || selectedFile.name)
       formData.append("description", description || "")
@@ -228,28 +243,17 @@ export default function UploadPage() {
       formData.append("privacy", visibility === "private" ? "nobody" : "anybody")
       formData.append("userId", user.uid)
 
-      // Only add niche and tag if they're selected
-      if (selectedNiche) formData.append("niche", selectedNiche)
-      if (selectedTag) formData.append("tag", selectedTag)
-
-      console.log("Initializing upload with Vimeo API...")
-      const initResponse = await fetch("/api/vimeo/upload", {
+      const initResponse = await fetch("/api/vimeo/direct-upload", {
         method: "POST",
         body: formData,
       })
 
       if (!initResponse.ok) {
         const errorData = await initResponse.json()
-        console.error("Vimeo API initialization error:", errorData)
         throw new Error(errorData.details || "Failed to initialize upload")
       }
 
       const vimeoData = await initResponse.json()
-      console.log("Vimeo upload initialized:", vimeoData)
-
-      if (!vimeoData.uploadUrl) {
-        throw new Error("No upload URL received from Vimeo")
-      }
 
       // Update Firestore with Vimeo ID
       await updateDoc(doc(db, "uploads", uploadId), {
@@ -261,10 +265,7 @@ export default function UploadPage() {
       // Step 3: Upload the file
       setUploadStage("uploading")
 
-      // Add a small delay to ensure the UI updates before starting the upload
-      await new Promise((resolve) => setTimeout(resolve, 500))
-
-      await uploadToVimeo({
+      await directUploadToVimeo({
         file: selectedFile,
         uploadUrl: vimeoData.uploadUrl,
         onProgress: (progress) => {
@@ -272,9 +273,6 @@ export default function UploadPage() {
         },
         onError: (error) => {
           throw error
-        },
-        onStalled: () => {
-          setUploadStage("stalled")
         },
       })
 
@@ -307,33 +305,7 @@ export default function UploadPage() {
 
       setIsUploading(false)
     }
-  }, [
-    selectedFile,
-    title,
-    description,
-    selectedNiche,
-    selectedTag,
-    visibility,
-    isPremium,
-    validateForm,
-    user,
-    toast,
-    router,
-  ])
-
-  // Retry upload
-  const handleRetry = useCallback(() => {
-    setRetryCount((prev) => prev + 1)
-    setIsUploading(false)
-    setUploadProgress(0)
-    setUploadStage("idle")
-    setErrorMessage(null)
-
-    // Add a small delay before retrying
-    setTimeout(() => {
-      handleUpload()
-    }, 1000)
-  }, [handleUpload])
+  }, [selectedFile, title, description, tags, category, visibility, isPremium, validateForm, user, toast, router])
 
   // Get upload stage text
   const getUploadStageText = useCallback(() => {
@@ -410,14 +382,9 @@ export default function UploadPage() {
                         </div>
                         <p className="text-lg font-medium mb-2 text-red-500">Upload Failed</p>
                         <p className="text-sm text-zinc-400 mb-4">{errorMessage}</p>
-                        <div className="flex gap-3">
-                          <Button onClick={handleRetry} variant="default" className="mt-2">
-                            Retry Upload
-                          </Button>
-                          <Button onClick={() => setIsUploading(false)} variant="outline" className="mt-2">
-                            Cancel
-                          </Button>
-                        </div>
+                        <Button onClick={() => setIsUploading(false)} variant="outline" className="mt-2">
+                          Try Again
+                        </Button>
                       </>
                     ) : (
                       <>
@@ -527,52 +494,47 @@ export default function UploadPage() {
                   ></textarea>
                 </div>
 
-                {/* Niche Selection */}
                 <div>
-                  <label htmlFor="niche" className="block text-sm font-medium text-zinc-400 mb-2">
-                    Niche
-                  </label>
-                  <select
-                    id="niche"
-                    value={selectedNiche}
-                    onChange={(e) => setSelectedNiche(e.target.value)}
-                    className="w-full bg-zinc-800/50 border border-zinc-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-crimson/50 focus:border-transparent transition-all appearance-none"
-                  >
-                    <option value="">Select a niche (optional)</option>
-                    {niches.map((niche) => (
-                      <option key={niche} value={niche}>
-                        {niche}
-                      </option>
+                  <label className="block text-sm font-medium text-zinc-400 mb-2">Tags</label>
+                  <div className="flex flex-wrap gap-2 mb-3">
+                    {tags.map((tag) => (
+                      <span
+                        key={tag}
+                        className="inline-flex items-center gap-1 bg-zinc-800 text-white text-xs px-3 py-1.5 rounded-full"
+                      >
+                        #{tag}
+                        <button
+                          onClick={() => removeTag(tag)}
+                          className="w-4 h-4 rounded-full inline-flex items-center justify-center hover:bg-zinc-700 transition-colors"
+                        >
+                          <X className="w-3 h-3" />
+                          <span className="sr-only">Remove {tag}</span>
+                        </button>
+                      </span>
                     ))}
-                  </select>
-                  <p className="text-xs text-zinc-500 mt-2">Select the primary category for your content</p>
-                </div>
-
-                {/* Tag Selection (dependent on niche) */}
-                <div>
-                  <label htmlFor="tag" className="block text-sm font-medium text-zinc-400 mb-2">
-                    Tag
-                  </label>
-                  <select
-                    id="tag"
-                    value={selectedTag}
-                    onChange={(e) => setSelectedTag(e.target.value)}
-                    disabled={!selectedNiche}
-                    className="w-full bg-zinc-800/50 border border-zinc-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-crimson/50 focus:border-transparent transition-all appearance-none disabled:opacity-50 disabled:cursor-not-allowed"
-                  >
-                    <option value="">{!selectedNiche ? "Select a niche first" : "Select a tag (optional)"}</option>
-                    {selectedNiche &&
-                      nicheTags[selectedNiche]?.map((tag) => (
-                        <option key={tag} value={tag}>
-                          {tag}
-                        </option>
-                      ))}
-                  </select>
-                  <p className="text-xs text-zinc-500 mt-2">
-                    {selectedNiche
-                      ? "Select a specific tag within this niche"
-                      : "First select a niche to see available tags"}
-                  </p>
+                    {tags.length === 0 && <span className="text-xs text-zinc-500 italic">No tags added yet</span>}
+                  </div>
+                  <div className="relative flex">
+                    <div className="relative flex-1">
+                      <Tag className="absolute left-4 top-3.5 w-4 h-4 text-zinc-500" />
+                      <input
+                        type="text"
+                        placeholder="Add tags"
+                        value={tagInput}
+                        onChange={(e) => setTagInput(e.target.value)}
+                        onKeyDown={handleTagKeyDown}
+                        className="w-full bg-zinc-800/50 border border-zinc-700 rounded-lg pl-12 pr-4 py-3 text-white placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-crimson/50 focus:border-transparent transition-all"
+                      />
+                    </div>
+                    <Button
+                      onClick={handleAddTag}
+                      disabled={!tagInput.trim()}
+                      className="ml-2 bg-zinc-800 hover:bg-zinc-700 text-white"
+                    >
+                      Add
+                    </Button>
+                  </div>
+                  <p className="text-xs text-zinc-500 mt-2">Press Enter to add multiple tags</p>
                 </div>
               </div>
             </div>
@@ -597,6 +559,24 @@ export default function UploadPage() {
               {showAdvanced && (
                 <div className="p-6 md:p-8 pt-0 border-t border-zinc-800">
                   <div className="space-y-6">
+                    <div>
+                      <label htmlFor="category" className="block text-sm font-medium text-zinc-400 mb-2">
+                        Category
+                      </label>
+                      <select
+                        id="category"
+                        value={category}
+                        onChange={(e) => setCategory(e.target.value)}
+                        className="w-full bg-zinc-800/50 border border-zinc-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-crimson/50 focus:border-transparent transition-all appearance-none"
+                      >
+                        <option value="">Select a category</option>
+                        <option value="motivation">Motivation</option>
+                        <option value="fitness">Fitness</option>
+                        <option value="business">Business</option>
+                        <option value="lifestyle">Lifestyle</option>
+                      </select>
+                    </div>
+
                     <div>
                       <label htmlFor="visibility" className="block text-sm font-medium text-zinc-400 mb-2">
                         Visibility
@@ -706,33 +686,28 @@ export default function UploadPage() {
               </ul>
             </div>
 
-            {/* Troubleshooting Tips */}
+            {/* Mobile Optimization */}
             <div className="bg-zinc-900/50 border border-zinc-800 rounded-xl p-6">
-              <h3 className="text-lg font-medium mb-4">Troubleshooting Tips</h3>
+              <h3 className="text-lg font-medium mb-4">Mobile Optimization</h3>
+              <p className="text-sm text-zinc-400 mb-4">Optimize your content for mobile viewing with these tips:</p>
               <ul className="space-y-3 text-sm">
                 <li className="flex items-start gap-3">
                   <div className="w-5 h-5 rounded-full bg-zinc-800 flex items-center justify-center flex-shrink-0 mt-0.5">
                     <Check className="w-3 h-3 text-crimson" />
                   </div>
-                  <span className="text-zinc-300">Use a stable internet connection for reliable uploads</span>
+                  <span className="text-zinc-300">Vertical format (9:16) is ideal for mobile platforms</span>
                 </li>
                 <li className="flex items-start gap-3">
                   <div className="w-5 h-5 rounded-full bg-zinc-800 flex items-center justify-center flex-shrink-0 mt-0.5">
                     <Check className="w-3 h-3 text-crimson" />
                   </div>
-                  <span className="text-zinc-300">Try using Chrome or Firefox for best upload performance</span>
+                  <span className="text-zinc-300">Keep text large and readable on small screens</span>
                 </li>
                 <li className="flex items-start gap-3">
                   <div className="w-5 h-5 rounded-full bg-zinc-800 flex items-center justify-center flex-shrink-0 mt-0.5">
                     <Check className="w-3 h-3 text-crimson" />
                   </div>
-                  <span className="text-zinc-300">If upload fails, try a smaller file or different format</span>
-                </li>
-                <li className="flex items-start gap-3">
-                  <div className="w-5 h-5 rounded-full bg-zinc-800 flex items-center justify-center flex-shrink-0 mt-0.5">
-                    <Check className="w-3 h-3 text-crimson" />
-                  </div>
-                  <span className="text-zinc-300">Clear browser cache if experiencing persistent issues</span>
+                  <span className="text-zinc-300">Use high contrast visuals for better visibility</span>
                 </li>
               </ul>
             </div>
