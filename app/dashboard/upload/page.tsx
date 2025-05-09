@@ -12,7 +12,7 @@ import { useAuth } from "@/contexts/auth-context"
 import { useRouter } from "next/navigation"
 import { db } from "@/lib/firebase"
 import { collection, addDoc, serverTimestamp, updateDoc, doc } from "firebase/firestore"
-import { directUploadToVimeo } from "@/lib/direct-vimeo-upload"
+import { tusUploadToVimeo } from "@/lib/tus-vimeo-upload"
 import { useMobile } from "@/hooks/use-mobile"
 
 // Updated niche options as specified
@@ -232,7 +232,7 @@ export default function UploadPage() {
     console.log("Initializing Vimeo upload with niche:", selectedNiche)
 
     // Make the API request
-    const initResponse = await fetch("/api/vimeo/direct-upload", {
+    const initResponse = await fetch("/api/vimeo/upload", {
       method: "POST",
       body: formData,
     })
@@ -273,7 +273,7 @@ export default function UploadPage() {
       // Start the upload
       setUploadStage("uploading")
 
-      await directUploadToVimeo({
+      await tusUploadToVimeo({
         file: selectedFile,
         uploadUrl: newVimeoData.uploadUrl,
         onProgress: (progress) => {
@@ -285,6 +285,10 @@ export default function UploadPage() {
         onStalled: () => {
           setUploadStage("stalled")
         },
+        onSuccess: () => {
+          setUploadStage("processing")
+          setUploadProgress(100)
+        },
       })
 
       // Update status in Firestore
@@ -292,9 +296,6 @@ export default function UploadPage() {
         status: "processing",
         uploadedAt: serverTimestamp(),
       })
-
-      setUploadStage("processing")
-      setUploadProgress(100)
 
       toast({
         title: "Upload complete",
@@ -385,7 +386,7 @@ export default function UploadPage() {
       // Step 3: Upload the file
       setUploadStage("uploading")
 
-      await directUploadToVimeo({
+      await tusUploadToVimeo({
         file: selectedFile,
         uploadUrl: vimeoData.uploadUrl,
         onProgress: (progress) => {
@@ -397,6 +398,10 @@ export default function UploadPage() {
         onStalled: () => {
           setUploadStage("stalled")
         },
+        onSuccess: () => {
+          setUploadStage("processing")
+          setUploadProgress(100)
+        },
       })
 
       // Update status in Firestore
@@ -404,9 +409,6 @@ export default function UploadPage() {
         status: "processing",
         uploadedAt: serverTimestamp(),
       })
-
-      setUploadStage("processing")
-      setUploadProgress(100)
 
       toast({
         title: "Upload complete",
