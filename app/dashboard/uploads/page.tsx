@@ -4,12 +4,14 @@ import { useState, useEffect } from "react"
 import Link from "next/link"
 import Image from "next/image"
 import { useRouter } from "next/navigation"
-import { ArrowLeft, Upload, FileVideo, Clock, Filter, Search, Plus, ExternalLink } from "lucide-react"
+import { ArrowLeft, Upload, FileVideo, Clock, Filter, Search, Plus, ExternalLink, Trash2 } from "lucide-react"
 import { useAuth } from "@/contexts/auth-context"
 import { db } from "@/lib/firebase"
-import { collection, query, orderBy, getDocs } from "firebase/firestore"
+import { collection, query, orderBy, getDocs, doc, deleteDoc } from "firebase/firestore"
 import { Button } from "@/components/ui/button"
 import { formatDistanceToNow } from "date-fns"
+import { useToast } from "@/hooks/use-toast"
+import { DeleteConfirmationModal } from "@/components/delete-confirmation-modal"
 
 interface UploadType {
   id: string
@@ -34,8 +36,11 @@ export default function UploadsPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [searchQuery, setSearchQuery] = useState("")
   const [statusFilter, setStatusFilter] = useState("all")
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false)
+  const [uploadToDelete, setUploadToDelete] = useState<UploadType | null>(null)
   const { user } = useAuth()
   const router = useRouter()
+  const { toast } = useToast()
 
   useEffect(() => {
     const fetchUploads = async () => {
@@ -74,13 +79,18 @@ export default function UploadsPage() {
         setUploads(uploadData)
       } catch (error) {
         console.error("Error fetching uploads:", error)
+        toast({
+          title: "Error",
+          description: "Failed to load your uploads. Please try again.",
+          variant: "destructive",
+        })
       } finally {
         setIsLoading(false)
       }
     }
 
     fetchUploads()
-  }, [user])
+  }, [user, toast])
 
   // Filter uploads based on search query and status filter
   const filteredUploads = uploads.filter((upload) => {
@@ -139,6 +149,68 @@ export default function UploadsPage() {
     }
   }
 
+  // Handle delete button click
+  const handleDeleteClick = (upload: UploadType) => {
+    setUploadToDelete(upload)
+    setDeleteModalOpen(true)
+  }
+
+  // Handle delete confirmation
+  const handleDeleteConfirm = async (deleteFromVimeo: boolean) => {
+    if (!user || !uploadToDelete) return
+
+    try {
+      // Delete from Firestore
+      await deleteDoc(doc(db, `users/${user.uid}/uploads`, uploadToDelete.id))
+
+      // If requested and we have a Vimeo ID, also delete from Vimeo
+      if (deleteFromVimeo && uploadToDelete.vimeoId) {
+        try {
+          const response = await fetch(`/api/vimeo/delete-video?videoId=${uploadToDelete.vimeoId}`, {
+            method: "DELETE",
+          })
+
+          if (!response.ok) {
+            const errorData = await response.json()
+            console.error("Error deleting from Vimeo:", errorData)
+
+            // Show a warning but don't fail the whole operation
+            toast({
+              title: "Partial success",
+              description: "Video removed from your uploads but could not be deleted from Vimeo.",
+              variant: "default",
+            })
+          }
+        } catch (vimeoError) {
+          console.error("Error deleting from Vimeo:", vimeoError)
+          // Show a warning but don't fail the whole operation
+          toast({
+            title: "Partial success",
+            description: "Video removed from your uploads but could not be deleted from Vimeo.",
+            variant: "default",
+          })
+        }
+      }
+
+      // Update local state
+      setUploads(uploads.filter((upload) => upload.id !== uploadToDelete.id))
+
+      toast({
+        title: "Video deleted",
+        description: deleteFromVimeo
+          ? "The video has been removed from your uploads and Vimeo."
+          : "The video has been removed from your uploads.",
+      })
+    } catch (error) {
+      console.error("Error deleting upload:", error)
+      toast({
+        title: "Error",
+        description: "Failed to delete the video. Please try again.",
+        variant: "destructive",
+      })
+    }
+  }
+
   if (!user) {
     return (
       <div className="min-h-screen bg-black flex items-center justify-center">
@@ -153,6 +225,16 @@ export default function UploadsPage() {
 
   return (
     <div className="min-h-screen bg-black text-white">
+      {/* Delete Confirmation Modal */}
+      <DeleteConfirmationModal
+        isOpen={deleteModalOpen}
+        onClose={() => setDeleteModalOpen(false)}
+        onConfirm={handleDeleteConfirm}
+        title="Delete Video"
+        description={`Are you sure you want to delete "${uploadToDelete?.title}"? This action cannot be undone.`}
+        showVimeoOption={!!uploadToDelete?.vimeoId}
+      />
+
       {/* Header */}
       <header className="fixed top-0 left-0 right-0 z-50 bg-black/80 backdrop-blur-md border-b border-zinc-800/50">
         <div className="container mx-auto px-4 h-16 flex items-center justify-between">
@@ -336,6 +418,16 @@ export default function UploadsPage() {
                         View on Vimeo
                       </a>
                     )}
+
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="border-red-900/30 bg-red-950/20 text-red-500 hover:bg-red-950/50 hover:text-red-400"
+                      onClick={() => handleDeleteClick(upload)}
+                    >
+                      <Trash2 className="w-4 h-4 mr-2" />
+                      Delete
+                    </Button>
                   </div>
                 </div>
               </div>
