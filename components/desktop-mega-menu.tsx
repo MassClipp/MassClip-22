@@ -13,9 +13,6 @@ import {
   History,
   TrendingUp,
   DollarSign,
-  Laugh,
-  Dumbbell,
-  Tv,
   Brain,
   Zap,
   Menu,
@@ -45,21 +42,18 @@ export default function DesktopMegaMenu() {
   // Niche categories with icons
   const niches = [
     { name: "Motivation", icon: <Flame className="w-4 h-4 text-crimson" />, path: "/category/motivation" },
-    { name: "Memes", icon: <Laugh className="w-4 h-4 text-crimson" />, path: "/category/memes" },
-    { name: "Sports", icon: <Dumbbell className="w-4 h-4 text-crimson" />, path: "/category/sports" },
-    { name: "Streamer Clips", icon: <Tv className="w-4 h-4 text-crimson" />, path: "/category/streamer-clips" },
-    {
-      name: "Money & Wealth",
-      icon: <DollarSign className="w-4 h-4 text-crimson" />,
-      path: "/category/money-and-wealth",
-    },
-    { name: "Viral Takes", icon: <Zap className="w-4 h-4 text-crimson" />, path: "/category/viral-takes" },
     {
       name: "Hustle Mentality",
       icon: <TrendingUp className="w-4 h-4 text-crimson" />,
       path: "/category/hustle-mentality",
     },
+    {
+      name: "Money & Wealth",
+      icon: <DollarSign className="w-4 h-4 text-crimson" />,
+      path: "/category/money-and-wealth",
+    },
     { name: "Introspection", icon: <Brain className="w-4 h-4 text-crimson" />, path: "/category/introspection" },
+    { name: "Viral Takes", icon: <Zap className="w-4 h-4 text-crimson" />, path: "/category/viral-takes" },
   ]
 
   // User features

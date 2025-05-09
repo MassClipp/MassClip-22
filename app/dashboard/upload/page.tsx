@@ -15,13 +15,12 @@ import { collection, addDoc, serverTimestamp, updateDoc, doc } from "firebase/fi
 import { directUploadToVimeo } from "@/lib/direct-vimeo-upload"
 import { useMobile } from "@/hooks/use-mobile"
 
-// Predefined niche options
-const NICHE_OPTIONS = [
+// Replace the NICHE_OPTIONS constant with CATEGORY_OPTIONS
+const CATEGORY_OPTIONS = [
   { value: "motivation", label: "Motivation" },
-  { value: "memes", label: "Memes" },
-  { value: "sports", label: "Sports" },
-  { value: "streamer-clips", label: "Streamer Clips" },
-  { value: "money-wealth", label: "Money & Wealth" },
+  { value: "hustle-mentality", label: "Hustle Mentality" },
+  { value: "money-and-wealth", label: "Money & Wealth" },
+  { value: "introspection", label: "Introspection" },
   { value: "viral-takes", label: "Viral Takes" },
 ]
 
@@ -35,7 +34,6 @@ export default function UploadPage() {
   const [showAdvanced, setShowAdvanced] = useState(false)
   const [title, setTitle] = useState("")
   const [description, setDescription] = useState("")
-  const [selectedNiche, setSelectedNiche] = useState("")
   const [category, setCategory] = useState("")
   const [visibility, setVisibility] = useState("public")
   const [isPremium, setIsPremium] = useState(false)
@@ -169,7 +167,7 @@ export default function UploadPage() {
     [tags],
   )
 
-  // Validate form
+  // In the validateForm function, replace the niche check with category check
   const validateForm = useCallback(() => {
     if (!selectedFile) {
       toast({
@@ -189,17 +187,17 @@ export default function UploadPage() {
       return false
     }
 
-    if (!selectedNiche) {
+    if (!category) {
       toast({
-        title: "Niche selection required",
-        description: "Please select a niche category for your content.",
+        title: "Category selection required",
+        description: "Please select a category tag for your content.",
         variant: "destructive",
       })
       return false
     }
 
     return true
-  }, [selectedFile, title, selectedNiche, toast])
+  }, [selectedFile, title, category, toast])
 
   // Handle browse files click
   const handleBrowseClick = useCallback(() => {
@@ -229,12 +227,12 @@ export default function UploadPage() {
 
     try {
       // Step 1: Create a document in Firestore to track the upload
+      // In the handleUpload function, replace niche with category in the uploadData object
       const uploadData = {
         title: title || selectedFile.name,
         description,
         tags,
-        niche: selectedNiche, // Store the selected niche
-        category: category || "uncategorized",
+        category: category || "motivation", // Default to motivation if somehow not selected
         visibility,
         isPremium,
         fileName: selectedFile.name,
@@ -326,20 +324,7 @@ export default function UploadPage() {
 
       setIsUploading(false)
     }
-  }, [
-    selectedFile,
-    title,
-    description,
-    tags,
-    selectedNiche,
-    category,
-    visibility,
-    isPremium,
-    validateForm,
-    user,
-    toast,
-    router,
-  ])
+  }, [selectedFile, title, description, tags, category, visibility, isPremium, validateForm, user, toast, router])
 
   // Get upload stage text
   const getUploadStageText = useCallback(() => {
@@ -528,28 +513,30 @@ export default function UploadPage() {
                   ></textarea>
                 </div>
 
-                {/* Niche Selection Dropdown */}
+                {/* Category Selection Dropdown */}
                 <div>
-                  <label htmlFor="niche" className="block text-sm font-medium text-zinc-400 mb-2">
-                    Niche <span className="text-crimson">*</span>
+                  <label htmlFor="category" className="block text-sm font-medium text-zinc-400 mb-2">
+                    Category Tag <span className="text-crimson">*</span>
                   </label>
                   <select
-                    id="niche"
-                    value={selectedNiche}
-                    onChange={(e) => setSelectedNiche(e.target.value)}
+                    id="category"
+                    value={category}
+                    onChange={(e) => setCategory(e.target.value)}
                     className="w-full bg-zinc-800/50 border border-zinc-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-crimson/50 focus:border-transparent transition-all appearance-none"
                     required
                   >
                     <option value="" disabled>
-                      Select a niche for your content
+                      Select a category tag for your content
                     </option>
-                    {NICHE_OPTIONS.map((option) => (
+                    {CATEGORY_OPTIONS.map((option) => (
                       <option key={option.value} value={option.value}>
                         {option.label}
                       </option>
                     ))}
                   </select>
-                  <p className="text-xs text-zinc-500 mt-2">Select the niche that best describes your content</p>
+                  <p className="text-xs text-zinc-500 mt-2">
+                    This tag determines where your content appears in the app
+                  </p>
                 </div>
 
                 <div>
@@ -617,24 +604,6 @@ export default function UploadPage() {
               {showAdvanced && (
                 <div className="p-6 md:p-8 pt-0 border-t border-zinc-800">
                   <div className="space-y-6">
-                    <div>
-                      <label htmlFor="category" className="block text-sm font-medium text-zinc-400 mb-2">
-                        Category
-                      </label>
-                      <select
-                        id="category"
-                        value={category}
-                        onChange={(e) => setCategory(e.target.value)}
-                        className="w-full bg-zinc-800/50 border border-zinc-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-crimson/50 focus:border-transparent transition-all appearance-none"
-                      >
-                        <option value="">Select a category</option>
-                        <option value="motivation">Motivation</option>
-                        <option value="fitness">Fitness</option>
-                        <option value="business">Business</option>
-                        <option value="lifestyle">Lifestyle</option>
-                      </select>
-                    </div>
-
                     <div>
                       <label htmlFor="visibility" className="block text-sm font-medium text-zinc-400 mb-2">
                         Visibility
