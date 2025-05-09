@@ -9,7 +9,7 @@ import {
   Clock,
   Bookmark,
   Upload,
-  Settings,
+  User,
   History,
   TrendingUp,
   DollarSign,
@@ -68,7 +68,7 @@ export default function DesktopMegaMenu() {
     { name: "My Favorites", icon: <Bookmark className="w-4 h-4 text-zinc-400" />, path: "/dashboard/favorites" },
     { name: "My Uploads", icon: <Upload className="w-4 h-4 text-zinc-400" />, path: "/dashboard/uploads" },
     { name: "History", icon: <History className="w-4 h-4 text-zinc-400" />, path: "/dashboard/history" },
-    { name: "Settings", icon: <Settings className="w-4 h-4 text-zinc-400" />, path: "/dashboard/profile" },
+    { name: "Your Account", icon: <User className="w-4 h-4 text-zinc-400" />, path: "/dashboard/user" }, // Changed from Settings to Your Account and path to /dashboard/user
   ]
 
   return (

@@ -5,7 +5,7 @@ import type React from "react"
 import { useState, useEffect } from "react"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
-import { Search, Menu, X, LogOut } from "lucide-react"
+import { Search, Menu, X, LogOut, Crown } from "lucide-react"
 import { signOut } from "firebase/auth"
 import { auth } from "@/lib/firebase"
 import Logo from "@/components/logo"
@@ -93,12 +93,25 @@ export default function DashboardHeader() {
           </div>
 
           {/* Desktop Right Navigation */}
-          <div className="hidden md:flex items-center space-x-1">
+          <div className="hidden md:flex items-center space-x-2">
+            {/* Upgrade Button - Added */}
+            <Link href="/pricing">
+              <Button
+                variant="outline"
+                size="sm"
+                className="border-amber-500/50 text-amber-400 hover:bg-amber-500/10 text-xs px-3"
+              >
+                <Crown size={14} className="mr-1.5" />
+                Upgrade
+              </Button>
+            </Link>
+
             <Link href="/dashboard/upload">
               <Button variant="default" size="sm" className="bg-crimson hover:bg-crimson-dark text-white text-xs px-4">
                 Upload
               </Button>
             </Link>
+
             <button
               onClick={handleSignOut}
               className="p-2 text-zinc-400 hover:text-white hover:bg-zinc-800 rounded-full transition-colors"
@@ -173,11 +186,19 @@ export default function DashboardHeader() {
                 My Uploads
               </Link>
               <Link
-                href="/dashboard/profile"
+                href="/dashboard/user"
                 className="block px-3 py-2 text-white hover:bg-zinc-800 rounded-md"
                 onClick={() => setIsMenuOpen(false)}
               >
-                Profile
+                Your Account
+              </Link>
+              <Link
+                href="/pricing"
+                className="block px-3 py-2 text-amber-400 hover:bg-zinc-800 rounded-md flex items-center"
+                onClick={() => setIsMenuOpen(false)}
+              >
+                <Crown size={16} className="mr-2" />
+                Upgrade Membership
               </Link>
               <div className="pt-2 mt-2 border-t border-zinc-800">
                 <button
