@@ -62,7 +62,7 @@ export async function POST(request: NextRequest) {
         privacy: {
           view: privacy,
         },
-        // Include both niche and tag in Vimeo tags
+        // Include both niche and tag in Vimeo tags if they exist
         tags: [...(niche ? [{ name: niche }] : []), ...(tag ? [{ name: tag }] : [])],
       }),
     })

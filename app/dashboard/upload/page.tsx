@@ -13,9 +13,7 @@ import { useRouter } from "next/navigation"
 import { db } from "@/lib/firebase"
 import { collection, addDoc, serverTimestamp, updateDoc, doc } from "firebase/firestore"
 import { useMobile } from "@/hooks/use-mobile"
-import { assignVideoToCategory } from "@/app/actions/category-actions"
-import { useShowcaseTags } from "@/hooks/use-showcase-tags"
-import { simpleVimeoUpload, fallbackVimeoUpload } from "@/lib/simple-vimeo-upload"
+import { uploadToVimeo } from "@/lib/vimeo-upload"
 
 export default function UploadPage() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
@@ -41,8 +39,15 @@ export default function UploadPage() {
   const router = useRouter()
   const isMobile = useMobile()
 
-  // Get the niche-to-tags mapping
-  const { nicheTagsMap, isLoading: tagsLoading, niches } = useShowcaseTags()
+  // Predefined niches and tags
+  const niches = ["Motivation", "Meme", "Sports", "Streamer Clip", "Other"]
+  const nicheTags = {
+    Motivation: ["Introspection", "Hustle Mentality", "High Energy", "Faith", "Money & Wealth"],
+    Meme: ["Funny", "Viral", "Trending"],
+    Sports: ["Basketball", "Football", "Soccer", "Highlights"],
+    "Streamer Clip": ["Gaming", "IRL", "Reaction", "Commentary"],
+    Other: ["Miscellaneous", "Uncategorized"],
+  }
 
   // Reset tag when niche changes
   useEffect(() => {
@@ -158,26 +163,8 @@ export default function UploadPage() {
       return false
     }
 
-    if (!selectedNiche) {
-      toast({
-        title: "Niche required",
-        description: "Please select a niche for your content.",
-        variant: "destructive",
-      })
-      return false
-    }
-
-    if (!selectedTag) {
-      toast({
-        title: "Tag required",
-        description: "Please select a tag for your content.",
-        variant: "destructive",
-      })
-      return false
-    }
-
     return true
-  }, [selectedFile, title, selectedNiche, selectedTag, toast])
+  }, [selectedFile, title, toast])
 
   // Handle browse files click
   const handleBrowseClick = useCallback(() => {
@@ -240,11 +227,13 @@ export default function UploadPage() {
       formData.append("size", selectedFile.size.toString())
       formData.append("privacy", visibility === "private" ? "nobody" : "anybody")
       formData.append("userId", user.uid)
-      formData.append("niche", selectedNiche)
-      formData.append("tag", selectedTag)
+
+      // Only add niche and tag if they're selected
+      if (selectedNiche) formData.append("niche", selectedNiche)
+      if (selectedTag) formData.append("tag", selectedTag)
 
       console.log("Initializing upload with Vimeo API...")
-      const initResponse = await fetch("/api/vimeo/simple-upload", {
+      const initResponse = await fetch("/api/vimeo/upload", {
         method: "POST",
         body: formData,
       })
@@ -275,60 +264,25 @@ export default function UploadPage() {
       // Add a small delay to ensure the UI updates before starting the upload
       await new Promise((resolve) => setTimeout(resolve, 500))
 
-      try {
-        // Try the simple upload first
-        await simpleVimeoUpload({
-          file: selectedFile,
-          uploadUrl: vimeoData.uploadUrl,
-          onProgress: (progress) => {
-            setUploadProgress(progress)
-          },
-          onError: (error) => {
-            console.error("Simple upload error:", error)
-            throw error
-          },
-        })
-      } catch (uploadError) {
-        console.error("Simple upload failed, trying fallback method:", uploadError)
-
-        // If simple upload fails, try fallback method
-        toast({
-          title: "Primary upload method failed",
-          description: "Trying alternative upload method...",
-          variant: "warning",
-        })
-
-        // Reset progress for the fallback method
-        setUploadProgress(0)
-
-        await fallbackVimeoUpload({
-          file: selectedFile,
-          uploadUrl: vimeoData.uploadUrl,
-          onProgress: (progress) => {
-            setUploadProgress(progress)
-          },
-          onError: (error) => {
-            throw error
-          },
-        })
-      }
+      await uploadToVimeo({
+        file: selectedFile,
+        uploadUrl: vimeoData.uploadUrl,
+        onProgress: (progress) => {
+          setUploadProgress(progress)
+        },
+        onError: (error) => {
+          throw error
+        },
+        onStalled: () => {
+          setUploadStage("stalled")
+        },
+      })
 
       // Update status in Firestore
       await updateDoc(doc(db, "uploads", uploadId), {
         status: "processing",
         uploadedAt: serverTimestamp(),
       })
-
-      // Assign the video to the appropriate category
-      try {
-        const result = await assignVideoToCategory(uploadId, selectedNiche, selectedTag, user.uid)
-        if (!result.success) {
-          console.warn("Failed to assign video to category:", result.error)
-        }
-      } catch (error) {
-        console.error("Error assigning category:", error)
-        // Don't fail the upload if category assignment fails
-      }
 
       setUploadStage("processing")
       setUploadProgress(100)
@@ -576,7 +530,7 @@ export default function UploadPage() {
                 {/* Niche Selection */}
                 <div>
                   <label htmlFor="niche" className="block text-sm font-medium text-zinc-400 mb-2">
-                    Niche <span className="text-crimson">*</span>
+                    Niche
                   </label>
                   <select
                     id="niche"
@@ -584,7 +538,7 @@ export default function UploadPage() {
                     onChange={(e) => setSelectedNiche(e.target.value)}
                     className="w-full bg-zinc-800/50 border border-zinc-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-crimson/50 focus:border-transparent transition-all appearance-none"
                   >
-                    <option value="">Select a niche</option>
+                    <option value="">Select a niche (optional)</option>
                     {niches.map((niche) => (
                       <option key={niche} value={niche}>
                         {niche}
@@ -597,20 +551,18 @@ export default function UploadPage() {
                 {/* Tag Selection (dependent on niche) */}
                 <div>
                   <label htmlFor="tag" className="block text-sm font-medium text-zinc-400 mb-2">
-                    Tag <span className="text-crimson">*</span>
+                    Tag
                   </label>
                   <select
                     id="tag"
                     value={selectedTag}
                     onChange={(e) => setSelectedTag(e.target.value)}
-                    disabled={!selectedNiche || tagsLoading}
+                    disabled={!selectedNiche}
                     className="w-full bg-zinc-800/50 border border-zinc-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-crimson/50 focus:border-transparent transition-all appearance-none disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    <option value="">
-                      {tagsLoading ? "Loading tags..." : !selectedNiche ? "Select a niche first" : "Select a tag"}
-                    </option>
+                    <option value="">{!selectedNiche ? "Select a niche first" : "Select a tag (optional)"}</option>
                     {selectedNiche &&
-                      nicheTagsMap[selectedNiche]?.map((tag) => (
+                      nicheTags[selectedNiche]?.map((tag) => (
                         <option key={tag} value={tag}>
                           {tag}
                         </option>
