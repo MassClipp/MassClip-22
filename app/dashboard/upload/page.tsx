@@ -264,6 +264,11 @@ export default function UploadPage() {
       formData.append("privacy", visibility === "private" ? "nobody" : "anybody")
       formData.append("userId", user.uid)
 
+      // Add the selected niche as a tag
+      if (selectedNiche) {
+        formData.append("niche", selectedNiche)
+      }
+
       const initResponse = await fetch("/api/vimeo/direct-upload", {
         method: "POST",
         body: formData,

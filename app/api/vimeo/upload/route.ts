@@ -24,6 +24,12 @@ export async function POST(request: NextRequest) {
     const userId = formData.get("userId") as string
     const size = formData.get("size") as string
 
+    // Get niche as tag
+    const niche = formData.get("niche") as string
+
+    // Create tags array with niche if provided
+    const tags = niche ? [{ name: niche }] : []
+
     if (!name) {
       return NextResponse.json({ error: "Video name is required" }, { status: 400 })
     }
@@ -38,6 +44,7 @@ export async function POST(request: NextRequest) {
       privacy,
       size,
       userId,
+      tags: tags.length > 0 ? tags.map((t) => t.name).join(", ") : "none",
     })
 
     // Create a new video on Vimeo (without the file yet)
@@ -58,6 +65,7 @@ export async function POST(request: NextRequest) {
         privacy: {
           view: privacy,
         },
+        tags: tags.length > 0 ? tags : undefined,
       }),
     })
 
