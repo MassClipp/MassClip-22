@@ -4,7 +4,7 @@ import type React from "react"
 
 import { useState, useCallback, useRef, useEffect } from "react"
 import Link from "next/link"
-import { ArrowLeft, Upload, FileVideo, AlertCircle, RefreshCw, X, Tag, Info, ChevronDown, Check } from "lucide-react"
+import { ArrowLeft, Upload, FileVideo, AlertCircle, RefreshCw, X, Info, ChevronDown, Check } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { Button } from "@/components/ui/button"
 import { Progress } from "@/components/ui/progress"
@@ -14,18 +14,17 @@ import { db } from "@/lib/firebase"
 import { collection, addDoc, serverTimestamp, updateDoc, doc } from "firebase/firestore"
 import { directUploadToVimeo } from "@/lib/direct-vimeo-upload"
 import { useMobile } from "@/hooks/use-mobile"
+import { CategorySelector } from "@/components/category-selector"
 
 export default function UploadPage() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [isDragging, setIsDragging] = useState(false)
   const [uploadProgress, setUploadProgress] = useState(0)
   const [isUploading, setIsUploading] = useState(false)
-  const [tags, setTags] = useState<string[]>([])
-  const [tagInput, setTagInput] = useState("")
+  const [selectedCategories, setSelectedCategories] = useState<string[]>([])
   const [showAdvanced, setShowAdvanced] = useState(false)
   const [title, setTitle] = useState("")
   const [description, setDescription] = useState("")
-  const [category, setCategory] = useState("")
   const [visibility, setVisibility] = useState("public")
   const [isPremium, setIsPremium] = useState(false)
   const [videoPreviewUrl, setVideoPreviewUrl] = useState<string | null>(null)
@@ -128,36 +127,6 @@ export default function UploadPage() {
     [toast, createVideoPreview],
   )
 
-  // Handle tag input
-  const handleTagKeyDown = useCallback(
-    (e: React.KeyboardEvent) => {
-      if (e.key === "Enter" && tagInput.trim() !== "") {
-        e.preventDefault()
-        if (!tags.includes(tagInput.trim())) {
-          setTags([...tags, tagInput.trim()])
-          setTagInput("")
-        }
-      }
-    },
-    [tagInput, tags],
-  )
-
-  // Add tag button handler
-  const handleAddTag = useCallback(() => {
-    if (tagInput.trim() !== "" && !tags.includes(tagInput.trim())) {
-      setTags([...tags, tagInput.trim()])
-      setTagInput("")
-    }
-  }, [tagInput, tags])
-
-  // Remove tag
-  const removeTag = useCallback(
-    (tagToRemove: string) => {
-      setTags(tags.filter((tag) => tag !== tagToRemove))
-    },
-    [tags],
-  )
-
   // Validate form
   const validateForm = useCallback(() => {
     if (!selectedFile) {
@@ -212,8 +181,7 @@ export default function UploadPage() {
       const uploadData = {
         title: title || selectedFile.name,
         description,
-        tags,
-        category: category || "uncategorized",
+        categories: selectedCategories, // Store selected categories instead of tags
         visibility,
         isPremium,
         fileName: selectedFile.name,
@@ -243,7 +211,12 @@ export default function UploadPage() {
       formData.append("privacy", visibility === "private" ? "nobody" : "anybody")
       formData.append("userId", user.uid)
 
-      const initResponse = await fetch("/api/vimeo/direct-upload", {
+      // Add selected categories as tags
+      selectedCategories.forEach((category) => {
+        formData.append("tag", category)
+      })
+
+      const initResponse = await fetch("/api/vimeo/upload", {
         method: "POST",
         body: formData,
       })
@@ -305,7 +278,7 @@ export default function UploadPage() {
 
       setIsUploading(false)
     }
-  }, [selectedFile, title, description, tags, category, visibility, isPremium, validateForm, user, toast, router])
+  }, [selectedFile, title, description, selectedCategories, visibility, isPremium, validateForm, user, toast, router])
 
   // Get upload stage text
   const getUploadStageText = useCallback(() => {
@@ -495,46 +468,17 @@ export default function UploadPage() {
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium text-zinc-400 mb-2">Tags</label>
-                  <div className="flex flex-wrap gap-2 mb-3">
-                    {tags.map((tag) => (
-                      <span
-                        key={tag}
-                        className="inline-flex items-center gap-1 bg-zinc-800 text-white text-xs px-3 py-1.5 rounded-full"
-                      >
-                        #{tag}
-                        <button
-                          onClick={() => removeTag(tag)}
-                          className="w-4 h-4 rounded-full inline-flex items-center justify-center hover:bg-zinc-700 transition-colors"
-                        >
-                          <X className="w-3 h-3" />
-                          <span className="sr-only">Remove {tag}</span>
-                        </button>
-                      </span>
-                    ))}
-                    {tags.length === 0 && <span className="text-xs text-zinc-500 italic">No tags added yet</span>}
-                  </div>
-                  <div className="relative flex">
-                    <div className="relative flex-1">
-                      <Tag className="absolute left-4 top-3.5 w-4 h-4 text-zinc-500" />
-                      <input
-                        type="text"
-                        placeholder="Add tags"
-                        value={tagInput}
-                        onChange={(e) => setTagInput(e.target.value)}
-                        onKeyDown={handleTagKeyDown}
-                        className="w-full bg-zinc-800/50 border border-zinc-700 rounded-lg pl-12 pr-4 py-3 text-white placeholder:text-zinc-500 focus:outline-none focus:ring-2 focus:ring-crimson/50 focus:border-transparent transition-all"
-                      />
-                    </div>
-                    <Button
-                      onClick={handleAddTag}
-                      disabled={!tagInput.trim()}
-                      className="ml-2 bg-zinc-800 hover:bg-zinc-700 text-white"
-                    >
-                      Add
-                    </Button>
-                  </div>
-                  <p className="text-xs text-zinc-500 mt-2">Press Enter to add multiple tags</p>
+                  <label className="block text-sm font-medium text-zinc-400 mb-2">
+                    Categories <span className="text-crimson">*</span>
+                  </label>
+                  <CategorySelector
+                    selectedCategories={selectedCategories}
+                    onChange={setSelectedCategories}
+                    disabled={isUploading}
+                  />
+                  <p className="text-xs text-zinc-500 mt-2">
+                    Select one or more categories that best describe your content
+                  </p>
                 </div>
               </div>
             </div>
@@ -559,24 +503,6 @@ export default function UploadPage() {
               {showAdvanced && (
                 <div className="p-6 md:p-8 pt-0 border-t border-zinc-800">
                   <div className="space-y-6">
-                    <div>
-                      <label htmlFor="category" className="block text-sm font-medium text-zinc-400 mb-2">
-                        Category
-                      </label>
-                      <select
-                        id="category"
-                        value={category}
-                        onChange={(e) => setCategory(e.target.value)}
-                        className="w-full bg-zinc-800/50 border border-zinc-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-crimson/50 focus:border-transparent transition-all appearance-none"
-                      >
-                        <option value="">Select a category</option>
-                        <option value="motivation">Motivation</option>
-                        <option value="fitness">Fitness</option>
-                        <option value="business">Business</option>
-                        <option value="lifestyle">Lifestyle</option>
-                      </select>
-                    </div>
-
                     <div>
                       <label htmlFor="visibility" className="block text-sm font-medium text-zinc-400 mb-2">
                         Visibility

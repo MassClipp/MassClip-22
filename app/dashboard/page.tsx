@@ -3,7 +3,7 @@
 import { useRef, useEffect, useState } from "react"
 import { useSearchParams } from "next/navigation"
 import { motion } from "framer-motion"
-import { Search, Clock, Brain, Rocket, ChevronRight, TrendingUp } from "lucide-react"
+import { Search, Clock, Brain, Rocket, ChevronRight, TrendingUp, Grid } from "lucide-react"
 import DashboardHeader from "@/components/dashboard-header"
 import VideoRow from "@/components/video-row"
 import { useVimeoShowcases } from "@/hooks/use-vimeo-showcases"
@@ -115,27 +115,12 @@ export default function Dashboard() {
     },
   }
 
-  // Check if we have the specific showcases
-  const hasIntrospection = showcaseNames.some(
-    (name) =>
-      name.toLowerCase().includes("introspection") ||
-      name.toLowerCase().includes("reflection") ||
-      name.toLowerCase().includes("mindfulness"),
-  )
-
-  const hasHustleMentality = showcaseNames.some(
-    (name) =>
-      name.toLowerCase().includes("hustle") ||
-      name.toLowerCase().includes("grind") ||
-      name.toLowerCase().includes("entrepreneur"),
-  )
-
-  // Quick category navigation
+  // Quick category navigation - updated to use niches
   const quickCategories = [
-    { name: "Introspection", icon: <Brain className="h-4 w-4 md:h-5 md:w-5" />, href: "/category/introspection" },
-    { name: "Hustle", icon: <Rocket className="h-4 w-4 md:h-5 md:w-5" />, href: "/category/hustle-mentality" },
+    { name: "Motivation", icon: <Brain className="h-4 w-4 md:h-5 md:w-5" />, href: "/dashboard/niches/motivation" },
+    { name: "Sports", icon: <Rocket className="h-4 w-4 md:h-5 md:w-5" />, href: "/dashboard/niches/sports" },
     { name: "Recent", icon: <Clock className="h-4 w-4 md:h-5 md:w-5" />, href: "/category/recently-added" },
-    { name: "All", icon: <Search className="h-4 w-4 md:h-5 md:w-5" />, href: "/dashboard/categories" },
+    { name: "All Niches", icon: <Grid className="h-4 w-4 md:h-5 md:w-5" />, href: "/dashboard/niches" },
   ]
 
   return (
@@ -218,7 +203,7 @@ export default function Dashboard() {
               className="text-xl font-light tracking-tight text-white mb-4 flex items-center"
             >
               <TrendingUp className="h-4 w-4 mr-2 text-zinc-400" />
-              Trending Categories
+              Browse Categories
             </motion.h3>
 
             <motion.div variants={itemVariants} className="grid grid-cols-2 md:grid-cols-4 gap-4">
