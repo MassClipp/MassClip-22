@@ -24,6 +24,7 @@ export default function Dashboard() {
   const [hasSearchResults, setHasSearchResults] = useState(false)
   const [featuredVideos, setFeaturedVideos] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [shuffledShowcaseVideos, setShuffledShowcaseVideos] = useState<Record<string, any[]>>({})
 
   // Fetch showcase-based videos
   const { showcaseVideos, showcaseIds, loading: loadingShowcases, error: showcaseError } = useVimeoShowcases()
@@ -33,11 +34,30 @@ export default function Dashboard() {
 
   const router = useRouter()
 
+  // Shuffle all videos within each showcase
+  useEffect(() => {
+    if (!loadingShowcases && Object.keys(showcaseVideos).length > 0) {
+      const shuffled: Record<string, any[]> = {}
+
+      // Shuffle each showcase's videos independently
+      Object.keys(showcaseVideos).forEach((showcaseName) => {
+        // Create a deep copy of the videos array to avoid mutating the original
+        const videosToShuffle = [...showcaseVideos[showcaseName]]
+        shuffled[showcaseName] = shuffleArray(videosToShuffle)
+      })
+
+      setShuffledShowcaseVideos(shuffled)
+    }
+  }, [showcaseVideos, loadingShowcases])
+
   // Filter videos based on search query
   useEffect(() => {
     if (searchQuery && !loadingShowcases && !loadingVideos) {
       // Filter showcase videos
-      const filteredShowcases = filterCategoriesBySearch(showcaseVideos, searchQuery)
+      const filteredShowcases = filterCategoriesBySearch(
+        shuffledShowcaseVideos.length > 0 ? shuffledShowcaseVideos : showcaseVideos,
+        searchQuery,
+      )
       setFilteredShowcaseVideos(filteredShowcases)
 
       // Check if we have any search results
@@ -52,13 +72,17 @@ export default function Dashboard() {
       }
     } else {
       // If no search query, show all showcase videos
-      setFilteredShowcaseVideos(showcaseVideos)
-      setHasSearchResults(Object.keys(showcaseVideos).length > 0)
+      setFilteredShowcaseVideos(shuffledShowcaseVideos.length > 0 ? shuffledShowcaseVideos : showcaseVideos)
+      setHasSearchResults(
+        Object.keys(shuffledShowcaseVideos.length > 0 ? shuffledShowcaseVideos : showcaseVideos).length > 0,
+      )
     }
-  }, [searchQuery, showcaseVideos, loadingShowcases, loadingVideos, videosByTag, videos])
+  }, [searchQuery, showcaseVideos, shuffledShowcaseVideos, loadingShowcases, loadingVideos, videosByTag, videos])
 
   // Get showcase names based on whether we're searching or not
-  const showcaseNames = Object.keys(searchQuery ? filteredShowcaseVideos : showcaseVideos)
+  const showcaseNames = Object.keys(
+    searchQuery ? filteredShowcaseVideos : shuffledShowcaseVideos.length > 0 ? shuffledShowcaseVideos : showcaseVideos,
+  )
 
   // Prepare featured videos from all showcases
   useEffect(() => {
@@ -199,7 +223,10 @@ export default function Dashboard() {
         {showcaseNames.length > 0 && (
           <motion.div variants={containerVariants} initial="hidden" animate="visible" className="space-y-12">
             {showcaseNames.map((showcaseName, index) => {
-              const videosToShow = searchQuery ? filteredShowcaseVideos[showcaseName] : showcaseVideos[showcaseName]
+              const videosToShow = searchQuery
+                ? filteredShowcaseVideos[showcaseName]
+                : shuffledShowcaseVideos[showcaseName] || showcaseVideos[showcaseName]
+
               return (
                 <motion.div key={`showcase-${showcaseName}`} variants={itemVariants}>
                   <VideoRow
