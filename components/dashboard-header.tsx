@@ -5,16 +5,16 @@ import type React from "react"
 import { useState, useEffect } from "react"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
-import { Search, Menu, X, LogOut, Crown } from "lucide-react"
+import { Search, Menu, X, Crown, User, ChevronDown } from "lucide-react"
 import { signOut } from "firebase/auth"
 import { auth } from "@/lib/firebase"
 import Logo from "@/components/logo"
 import { Button } from "@/components/ui/button"
 import { useMobile } from "@/hooks/use-mobile"
-import DesktopMegaMenu from "./desktop-mega-menu"
 
 export default function DashboardHeader() {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
+  const [isUserMenuOpen, setIsUserMenuOpen] = useState(false)
   const [searchQuery, setSearchQuery] = useState("")
   const [isScrolled, setIsScrolled] = useState(false)
   const pathname = usePathname()
@@ -50,6 +50,19 @@ export default function DashboardHeader() {
     }
   }
 
+  // Close user menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const userMenu = document.getElementById("user-menu")
+      if (userMenu && !userMenu.contains(event.target as Node) && isUserMenuOpen) {
+        setIsUserMenuOpen(false)
+      }
+    }
+
+    document.addEventListener("mousedown", handleClickOutside)
+    return () => document.removeEventListener("mousedown", handleClickOutside)
+  }, [isUserMenuOpen])
+
   // Restore search query from localStorage
   useEffect(() => {
     const savedQuery = localStorage.getItem("lastSearchQuery")
@@ -72,9 +85,24 @@ export default function DashboardHeader() {
           <div className="flex items-center">
             <Logo href="/dashboard" size="md" />
 
-            {/* Desktop Mega Menu */}
-            <div className="hidden md:ml-6 md:flex">
-              <DesktopMegaMenu />
+            {/* Simple Navigation Links */}
+            <div className="hidden md:flex ml-6 space-x-6">
+              <Link
+                href="/dashboard"
+                className={`text-sm font-medium transition-colors hover:text-white ${
+                  pathname === "/dashboard" ? "text-white" : "text-zinc-400"
+                }`}
+              >
+                Homepage
+              </Link>
+              <Link
+                href="/dashboard/categories"
+                className={`text-sm font-medium transition-colors hover:text-white ${
+                  pathname === "/dashboard/categories" ? "text-white" : "text-zinc-400"
+                }`}
+              >
+                Categories
+              </Link>
             </div>
           </div>
 
@@ -94,7 +122,7 @@ export default function DashboardHeader() {
 
           {/* Desktop Right Navigation */}
           <div className="hidden md:flex items-center space-x-2">
-            {/* Upgrade Button - Added */}
+            {/* Upgrade Button */}
             <Link href="/pricing">
               <Button
                 variant="outline"
@@ -112,13 +140,59 @@ export default function DashboardHeader() {
               </Button>
             </Link>
 
-            <button
-              onClick={handleSignOut}
-              className="p-2 text-zinc-400 hover:text-white hover:bg-zinc-800 rounded-full transition-colors"
-              aria-label="Sign out"
-            >
-              <LogOut size={18} />
-            </button>
+            {/* User Dropdown */}
+            <div className="relative" id="user-menu">
+              <button
+                onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
+                className="flex items-center space-x-1 p-2 text-zinc-400 hover:text-white hover:bg-zinc-800 rounded-md transition-colors"
+              >
+                <User size={18} />
+                <ChevronDown size={14} className={`transition-transform ${isUserMenuOpen ? "rotate-180" : ""}`} />
+              </button>
+
+              {isUserMenuOpen && (
+                <div className="absolute right-0 mt-1 w-48 bg-zinc-900 border border-zinc-800 rounded-md shadow-lg py-1 z-50">
+                  <Link
+                    href="/dashboard/user"
+                    className="block px-4 py-2 text-sm text-zinc-300 hover:bg-zinc-800"
+                    onClick={() => setIsUserMenuOpen(false)}
+                  >
+                    Your Account
+                  </Link>
+                  <Link
+                    href="/dashboard/uploads"
+                    className="block px-4 py-2 text-sm text-zinc-300 hover:bg-zinc-800"
+                    onClick={() => setIsUserMenuOpen(false)}
+                  >
+                    My Uploads
+                  </Link>
+                  <Link
+                    href="/dashboard/favorites"
+                    className="block px-4 py-2 text-sm text-zinc-300 hover:bg-zinc-800"
+                    onClick={() => setIsUserMenuOpen(false)}
+                  >
+                    Favorites
+                  </Link>
+                  <Link
+                    href="/dashboard/history"
+                    className="block px-4 py-2 text-sm text-zinc-300 hover:bg-zinc-800"
+                    onClick={() => setIsUserMenuOpen(false)}
+                  >
+                    History
+                  </Link>
+                  <div className="border-t border-zinc-800 my-1"></div>
+                  <button
+                    onClick={() => {
+                      setIsUserMenuOpen(false)
+                      handleSignOut()
+                    }}
+                    className="block w-full text-left px-4 py-2 text-sm text-crimson hover:bg-zinc-800"
+                  >
+                    Sign Out
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Mobile Menu Button */}
@@ -155,7 +229,7 @@ export default function DashboardHeader() {
                 className="block px-3 py-2 text-white hover:bg-zinc-800 rounded-md"
                 onClick={() => setIsMenuOpen(false)}
               >
-                Home
+                Homepage
               </Link>
               <Link
                 href="/dashboard/categories"
