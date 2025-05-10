@@ -16,6 +16,8 @@ import { directUploadToVimeo } from "@/lib/direct-vimeo-upload"
 import { useMobile } from "@/hooks/use-mobile"
 // Import the category manager
 import { assignCategoryToVideo } from "@/lib/category-manager"
+// Import the video catalog manager
+import { addVideoToCatalog } from "@/lib/video-catalog-manager"
 
 // Update the CATEGORY_OPTIONS constant with the new categories
 const CATEGORY_OPTIONS = [
@@ -321,6 +323,25 @@ export default function UploadPage() {
       } catch (categoryError) {
         console.error("Error assigning category (non-critical):", categoryError)
         // Don't throw error here - we don't want to fail the upload if category assignment fails
+      }
+
+      // Add the video to our app's catalog
+      try {
+        await addVideoToCatalog({
+          vimeoId: vimeoData.vimeoId,
+          vimeoData: vimeoData,
+          userId: user.uid,
+          title: title || selectedFile.name,
+          description: description || "",
+          category,
+          tags,
+          isPremium,
+          visibility,
+        })
+        console.log(`Video ${vimeoData.vimeoId} added to app catalog`)
+      } catch (catalogError) {
+        console.error("Error adding video to catalog (non-critical):", catalogError)
+        // Don't throw error here - we don't want to fail the upload if catalog addition fails
       }
 
       toast({
