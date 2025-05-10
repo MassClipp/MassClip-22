@@ -1,9 +1,9 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
+import { useRef, useEffect, useState } from "react"
 import { useSearchParams } from "next/navigation"
 import { motion } from "framer-motion"
-import { Search, Clock, Brain, Rocket, ChevronRight, TrendingUp, Loader2 } from "lucide-react"
+import { Search, Clock, Brain, Rocket, ChevronRight, TrendingUp } from "lucide-react"
 import DashboardHeader from "@/components/dashboard-header"
 import VideoRow from "@/components/video-row"
 import { useVimeoShowcases } from "@/hooks/use-vimeo-showcases"
@@ -13,23 +13,8 @@ import { useRouter } from "next/navigation"
 import { filterCategoriesBySearch } from "@/lib/search-utils"
 import VimeoCard from "@/components/vimeo-card"
 import { shuffleArray } from "@/lib/utils"
-import { useAuth } from "@/contexts/auth-context"
-
-// Define our categories
-const CATEGORIES = [
-  { slug: "hustle-mentality", title: "Hustle Mentality" },
-  { slug: "money-and-wealth", title: "Money & Wealth" },
-  { slug: "introspection", title: "Introspection" },
-  { slug: "faith", title: "Faith" },
-  { slug: "high-energy-motivation", title: "High Energy Motivation" },
-  { slug: "motivational-speeches", title: "Motivational Speeches" },
-]
 
 export default function Dashboard() {
-  const { user, loading: authLoading } = useAuth()
-  const [recentlyAdded, setRecentlyAdded] = useState<any[]>([])
-  const [loading, setLoading] = useState(true)
-
   // Get search query from URL
   const searchParams = useSearchParams()
   const searchQuery = searchParams?.get("search") || ""
@@ -153,16 +138,8 @@ export default function Dashboard() {
     { name: "All", icon: <Search className="h-4 w-4 md:h-5 md:w-5" />, href: "/dashboard/categories" },
   ]
 
-  if (authLoading) {
-    return (
-      <div className="min-h-screen bg-black text-white flex items-center justify-center">
-        <Loader2 className="w-8 h-8 animate-spin text-red-500" />
-      </div>
-    )
-  }
-
   return (
-    <div className="min-h-screen bg-black text-white">
+    <div className="relative min-h-screen bg-black text-white">
       {/* Premium Gradient Background */}
       <div className="fixed inset-0 z-0">
         <div className="absolute inset-0 bg-gradient-to-br from-black via-black to-zinc-900">

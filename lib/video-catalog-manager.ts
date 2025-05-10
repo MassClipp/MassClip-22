@@ -12,7 +12,6 @@ import {
   serverTimestamp,
   updateDoc,
   increment,
-  type Timestamp,
 } from "firebase/firestore"
 import type { VimeoVideo } from "@/lib/types"
 
@@ -52,7 +51,7 @@ export async function addVideoToCatalog({
       vimeoId,
       title,
       description: description || "",
-      category, // Store the category slug directly
+      category,
       tags,
       isPremium,
       visibility,
@@ -101,11 +100,6 @@ export async function addVideoToCatalog({
  */
 export async function getVideosByCategory(category: string, limitCount = 20) {
   try {
-    // Special case for "recently-added" - return all videos sorted by upload date
-    if (category === "recently-added") {
-      return getRecentVideos(limitCount)
-    }
-
     const q = query(
       collection(db, "videos"),
       where("category", "==", category),
@@ -120,9 +114,6 @@ export async function getVideosByCategory(category: string, limitCount = 20) {
     return querySnapshot.docs.map((doc) => ({
       id: doc.id,
       ...doc.data(),
-      // Convert Firestore Timestamps to regular dates for easier handling in components
-      uploadedAt: formatTimestamp(doc.data().uploadedAt),
-      updatedAt: formatTimestamp(doc.data().updatedAt),
     }))
   } catch (error) {
     console.error("Error getting videos by category:", error)
@@ -148,9 +139,6 @@ export async function getRecentVideos(limitCount = 20) {
     return querySnapshot.docs.map((doc) => ({
       id: doc.id,
       ...doc.data(),
-      // Convert Firestore Timestamps to regular dates for easier handling in components
-      uploadedAt: formatTimestamp(doc.data().uploadedAt),
-      updatedAt: formatTimestamp(doc.data().updatedAt),
     }))
   } catch (error) {
     console.error("Error getting recent videos:", error)
@@ -166,13 +154,9 @@ export async function getVideoById(videoId: string) {
     const videoDoc = await getDoc(doc(db, "videos", videoId))
 
     if (videoDoc.exists()) {
-      const data = videoDoc.data()
       return {
         id: videoDoc.id,
-        ...data,
-        // Convert Firestore Timestamps to regular dates for easier handling in components
-        uploadedAt: formatTimestamp(data.uploadedAt),
-        updatedAt: formatTimestamp(data.updatedAt),
+        ...videoDoc.data(),
       }
     }
 
@@ -231,18 +215,5 @@ export async function incrementVideoViews(videoId: string) {
   } catch (error) {
     console.error("Error incrementing video views:", error)
     return { success: false, error }
-  }
-}
-
-/**
- * Helper function to format Firestore timestamps
- */
-function formatTimestamp(timestamp: Timestamp | null | undefined) {
-  if (!timestamp) return null
-
-  try {
-    return timestamp.toDate()
-  } catch (e) {
-    return null
   }
 }

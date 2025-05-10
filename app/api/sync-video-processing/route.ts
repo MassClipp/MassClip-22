@@ -1,43 +1,68 @@
 import { NextResponse } from "next/server"
 import { db } from "@/lib/firebase"
-import { collection, query, where, getDocs } from "firebase/firestore"
+import { collection, query, where, getDocs, limit } from "firebase/firestore"
+import { vimeoConfig } from "@/lib/vimeo-config"
 import { updateVideoVimeoData } from "@/lib/video-catalog-manager"
 
-export async function GET(request: Request) {
+// This endpoint will sync the processing status of recently uploaded videos
+export async function GET() {
   try {
-    // Get videos that are in processing status
-    const q = query(collection(db, "videos"), where("status", "==", "processing"))
-    const querySnapshot = await getDocs(q)
+    // Get videos that might still be processing (uploaded in the last 24 hours)
+    const yesterday = new Date()
+    yesterday.setDate(yesterday.getDate() - 1)
 
-    const processingVideos = querySnapshot.docs.map((doc) => ({
+    const q = query(
+      collection(db, "videos"),
+      where("status", "==", "processing"),
+      limit(10), // Process 10 at a time to avoid overloading
+    )
+
+    const querySnapshot = await getDocs(q)
+    const videos = querySnapshot.docs.map((doc) => ({
       id: doc.id,
       ...doc.data(),
     }))
 
-    console.log(`Found ${processingVideos.length} videos in processing status`)
+    console.log(`Found ${videos.length} videos to check processing status`)
 
-    // For each processing video, check its status on Vimeo
     const results = await Promise.all(
-      processingVideos.map(async (video) => {
+      videos.map(async (video) => {
         try {
-          const response = await fetch(`/api/vimeo/video-status/${video.vimeoId}`)
+          // Fetch the latest data from Vimeo
+          const response = await fetch(`https://api.vimeo.com/videos/${video.vimeoId}`, {
+            headers: {
+              Authorization: `Bearer ${vimeoConfig.accessToken}`,
+              "Content-Type": "application/json",
+              Accept: "application/vnd.vimeo.*+json;version=3.4",
+            },
+          })
 
           if (!response.ok) {
-            throw new Error(`Failed to fetch video status: ${response.statusText}`)
+            console.error(`Error fetching video ${video.vimeoId} from Vimeo:`, await response.text())
+            return {
+              id: video.id,
+              success: false,
+              error: `Vimeo API error: ${response.status}`,
+            }
           }
 
           const vimeoData = await response.json()
 
-          // If the video is ready, update its status in our catalog
-          if (vimeoData.status === "available") {
-            await updateVideoVimeoData(video.id, vimeoData)
-            return { id: video.id, status: "updated" }
-          }
+          // Update our catalog with the latest Vimeo data
+          await updateVideoVimeoData(video.id, vimeoData)
 
-          return { id: video.id, status: "still-processing" }
+          return {
+            id: video.id,
+            success: true,
+            status: vimeoData.transcode.status,
+          }
         } catch (error) {
-          console.error(`Error checking video ${video.id}:`, error)
-          return { id: video.id, status: "error", error }
+          console.error(`Error processing video ${video.id}:`, error)
+          return {
+            id: video.id,
+            success: false,
+            error: error instanceof Error ? error.message : String(error),
+          }
         }
       }),
     )
@@ -48,11 +73,11 @@ export async function GET(request: Request) {
       results,
     })
   } catch (error) {
-    console.error("Error syncing video processing status:", error)
+    console.error("Error in sync-video-processing:", error)
     return NextResponse.json(
       {
         success: false,
-        error: error instanceof Error ? error.message : "Unknown error",
+        error: error instanceof Error ? error.message : String(error),
       },
       { status: 500 },
     )
