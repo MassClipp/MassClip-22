@@ -232,7 +232,7 @@ export default function UploadPage() {
         title: title || selectedFile.name,
         description,
         tags,
-        category: category || "motivation", // Ensure category is stored from the dropdown selection
+        category: category || "motivation", // Default to motivation if somehow not selected
         visibility,
         isPremium,
         fileName: selectedFile.name,
@@ -261,7 +261,6 @@ export default function UploadPage() {
       formData.append("size", selectedFile.size.toString())
       formData.append("privacy", visibility === "private" ? "nobody" : "anybody")
       formData.append("userId", user.uid)
-      formData.append("category", category) // Add category as a parameter to be sent to Vimeo
 
       const initResponse = await fetch("/api/vimeo/direct-upload", {
         method: "POST",
