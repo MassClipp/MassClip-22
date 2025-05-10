@@ -318,6 +318,7 @@ export default function UploadPage() {
           userId: user.uid,
           videoTitle: title || selectedFile.name,
           videoThumbnail: vimeoData.link ? `https://vumbnail.com/${vimeoData.vimeoId}.jpg` : undefined,
+          isUserGenerated: true, // Mark this as user-generated content
         })
         console.log(`Category ${category} assigned to video ${vimeoData.vimeoId}`)
       } catch (categoryError) {

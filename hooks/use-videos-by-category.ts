@@ -2,9 +2,10 @@
 
 import { useState, useEffect } from "react"
 import { getVideosByCategory, getAllVideosByCategory } from "@/lib/category-manager"
+import { getShowcaseIdForCategory } from "@/lib/vimeo-helpers"
 
 /**
- * Hook to fetch videos for a specific category
+ * Hook to fetch videos for a specific category from both Firestore and Vimeo showcases
  */
 export function useVideosByCategory(category: string) {
   const [videos, setVideos] = useState<any[]>([])
@@ -15,7 +16,13 @@ export function useVideosByCategory(category: string) {
     async function fetchVideos() {
       try {
         setLoading(true)
-        const categoryVideos = await getVideosByCategory(category)
+
+        // Get the showcase ID for this category (if it exists)
+        const showcaseId = getShowcaseIdForCategory(category)
+
+        // Fetch videos from both sources with fallback logic
+        const categoryVideos = await getVideosByCategory(category, showcaseId)
+
         setVideos(categoryVideos)
         setError(null)
       } catch (err) {

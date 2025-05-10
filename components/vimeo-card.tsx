@@ -57,7 +57,7 @@ export default function VimeoCard({ video }: VimeoCardProps) {
   const videoContainerRef = useRef<HTMLDivElement>(null)
 
   // Extract video ID from URI (format: "/videos/12345678") with null check
-  const videoId = video?.uri ? video.uri.split("/").pop() : null
+  const videoId = video?.uri ? video.uri.split("/").pop() : video?.videoId || null
 
   // Check if we're in TikTok browser on mount
   useEffect(() => {

@@ -1,6 +1,7 @@
 import { Suspense } from "react"
 import { notFound } from "next/navigation"
 import CategoryVideoGrid from "@/components/category-video-grid"
+import { getShowcaseIdForCategory } from "@/lib/vimeo-helpers"
 
 // Map URL-friendly tags to display names
 const categoryMap: Record<string, string> = {
@@ -18,8 +19,8 @@ export default function CategoryPage({
 }: { params: { tag: string }; searchParams: { showcaseId?: string } }) {
   const { tag } = params
 
-  // Get the showcaseId from the searchParams
-  const showcaseId = searchParams.showcaseId || params.tag
+  // Get the showcaseId from the searchParams or from our mapping
+  const showcaseId = searchParams.showcaseId || getShowcaseIdForCategory(tag)
 
   // Check if the category exists
   if (!categoryMap[tag]) {
@@ -33,7 +34,8 @@ export default function CategoryPage({
       <h1 className="text-3xl font-bold mb-8">{categoryTitle}</h1>
 
       <Suspense fallback={<div>Loading videos...</div>}>
-        <CategoryVideoGrid category={showcaseId} limit={24} />
+        {/* Pass both category and showcaseId to support both systems */}
+        <CategoryVideoGrid category={tag} showcaseId={showcaseId} limit={24} />
       </Suspense>
     </div>
   )
