@@ -14,6 +14,10 @@ import { filterCategoriesBySearch } from "@/lib/search-utils"
 import VimeoCard from "@/components/vimeo-card"
 import { shuffleArray } from "@/lib/utils"
 
+// Firebase imports (assuming you're using Firebase)
+import { collection, query, where, getDocs } from "firebase/firestore"
+import { db } from "@/firebase" // Adjust the path as necessary
+
 export default function Dashboard() {
   // Get search query from URL
   const searchParams = useSearchParams()
@@ -137,6 +141,19 @@ export default function Dashboard() {
     { name: "Recent", icon: <Clock className="h-4 w-4 md:h-5 md:w-5" />, href: "/category/recently-added" },
     { name: "All", icon: <Search className="h-4 w-4 md:h-5 md:w-5" />, href: "/dashboard/categories" },
   ]
+
+  // Example (adjust based on your actual implementation):
+  const fetchVideosByCategory = async (category) => {
+    // Use the category to filter videos from our database, not from Vimeo
+    const videosRef = collection(db, "uploads")
+    const q = query(videosRef, where("category", "==", category))
+    const querySnapshot = await getDocs(q)
+
+    return querySnapshot.docs.map((doc) => ({
+      id: doc.id,
+      ...doc.data(),
+    }))
+  }
 
   return (
     <div className="relative min-h-screen bg-black text-white">

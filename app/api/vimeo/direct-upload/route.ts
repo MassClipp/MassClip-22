@@ -11,6 +11,7 @@ export async function POST(request: NextRequest) {
     const privacy = (formData.get("privacy") as string) || "anybody"
     const userId = formData.get("userId") as string
     const size = formData.get("size") as string
+    const category = formData.get("category") as string // Extract category
 
     if (!name || !size) {
       return NextResponse.json({ error: "Missing required parameters" }, { status: 400 })
@@ -34,7 +35,7 @@ export async function POST(request: NextRequest) {
       },
       body: JSON.stringify({
         upload: {
-          approach: "post",
+          approach: "tus",
           size: Number.parseInt(size, 10),
         },
         name,
@@ -42,6 +43,8 @@ export async function POST(request: NextRequest) {
         privacy: {
           view: privacy,
         },
+        // Add category as a tag if it exists
+        ...(category && { tags: [category] }),
       }),
     })
 
