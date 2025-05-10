@@ -1,33 +1,22 @@
-/**
- * Integration with the upload flow
- */
-
 import { assignCategoryToVideo } from "./category-db"
 
-/**
- * Assign a category to a video after upload
- */
-export async function assignCategoryAfterUpload({
-  videoId,
-  categoryId,
-}: {
+interface AssignCategoryParams {
   videoId: string
   categoryId: string
-}): Promise<{ success: boolean; error?: any }> {
+  userId?: string
+}
+
+/**
+ * Assigns a category to a video after upload
+ * This is a separate function to avoid interfering with the upload flow
+ */
+export async function assignCategoryAfterUpload({ videoId, categoryId, userId }: AssignCategoryParams): Promise<void> {
   try {
-    // Validate inputs
-    if (!videoId || !categoryId) {
-      console.warn("Missing required parameters for category assignment")
-      return { success: false, error: "Missing required parameters" }
-    }
-
-    // Assign the category
-    await assignCategoryToVideo(videoId, categoryId, true)
-
-    console.log(`Category ${categoryId} assigned to video ${videoId}`)
-    return { success: true }
+    console.log(`Assigning category ${categoryId} to video ${videoId}`)
+    await assignCategoryToVideo(videoId, categoryId, true, "user_upload")
+    console.log(`Successfully assigned category ${categoryId} to video ${videoId}`)
   } catch (error) {
-    console.error("Error assigning category after upload:", error)
-    return { success: false, error }
+    console.error(`Error assigning category ${categoryId} to video ${videoId}:`, error)
+    throw error
   }
 }

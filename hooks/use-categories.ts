@@ -1,20 +1,9 @@
 "use client"
 
-/**
- * React hooks for working with categories
- */
-
-import { useState, useEffect, useCallback } from "react"
-import {
-  getActiveCategoriesWithCounts,
-  getFullCategoriesForVideo,
-  getFullPrimaryCategoryForVideo,
-  assignCategoryFromUpload,
-  removeCategoryFromVideo,
-  setPrimaryCategoryForVideo,
-} from "@/lib/category-system/category-service"
-import type { Category, CategoryWithVideos } from "@/lib/category-system/types"
+import { useState, useEffect } from "react"
 import { getAllCategories } from "@/lib/category-system/category-db"
+import type { Category, CategoryWithVideos } from "@/lib/category-system/types"
+import { STANDARD_CATEGORIES } from "@/lib/category-system/constants"
 
 // Hook for getting all active categories
 export function useCategories() {
@@ -26,11 +15,39 @@ export function useCategories() {
     async function fetchCategories() {
       try {
         setLoading(true)
+
+        // Try to fetch from Firestore
         const fetchedCategories = await getAllCategories()
-        setCategories(fetchedCategories.filter((cat) => cat.isActive))
+
+        // If we got categories, use them
+        if (fetchedCategories && fetchedCategories.length > 0) {
+          console.log("Fetched categories from Firestore:", fetchedCategories)
+          setCategories(fetchedCategories.filter((cat) => cat.isActive))
+        }
+        // Otherwise, use the standard categories as a fallback
+        else {
+          console.log("No categories found in Firestore, using standard categories")
+          // Convert standard categories to full Category objects
+          const fallbackCategories: Category[] = STANDARD_CATEGORIES.map((cat) => ({
+            ...cat,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          }))
+          setCategories(fallbackCategories.filter((cat) => cat.isActive))
+        }
+
         setError(null)
       } catch (err) {
         console.error("Error fetching categories:", err)
+
+        // Use standard categories as fallback on error
+        const fallbackCategories: Category[] = STANDARD_CATEGORIES.map((cat) => ({
+          ...cat,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        }))
+        setCategories(fallbackCategories.filter((cat) => cat.isActive))
+
         setError(err instanceof Error ? err : new Error("Failed to fetch categories"))
       } finally {
         setLoading(false)
@@ -53,11 +70,34 @@ export function useCategoriesWithCounts() {
     async function fetchCategoriesWithCounts() {
       try {
         setLoading(true)
-        const data = await getActiveCategoriesWithCounts()
-        setCategories(data)
+
+        // For now, just return categories without counts
+        // This can be enhanced later to actually count videos per category
+        const allCategories = await getAllCategories()
+
+        const categoriesWithCounts: CategoryWithVideos[] = allCategories
+          .filter((cat) => cat.isActive)
+          .map((cat) => ({
+            ...cat,
+            videoCount: 0, // Default to 0 for now
+          }))
+
+        setCategories(categoriesWithCounts)
         setError(null)
       } catch (err) {
         console.error("Error fetching categories with counts:", err)
+
+        // Use standard categories as fallback
+        const fallbackCategories: CategoryWithVideos[] = STANDARD_CATEGORIES.filter((cat) => cat.isActive).map(
+          (cat) => ({
+            ...cat,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+            videoCount: 0,
+          }),
+        )
+
+        setCategories(fallbackCategories)
         setError(err instanceof Error ? err : new Error(String(err)))
       } finally {
         setLoading(false)
@@ -68,121 +108,4 @@ export function useCategoriesWithCounts() {
   }, [])
 
   return { categories, loading, error }
-}
-
-// Hook for getting categories for a specific video
-export function useVideoCategories(videoId: string) {
-  const [categories, setCategories] = useState<Category[]>([])
-  const [primaryCategory, setPrimaryCategory] = useState<Category | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<Error | null>(null)
-
-  useEffect(() => {
-    async function fetchVideoCategories() {
-      if (!videoId) {
-        setCategories([])
-        setPrimaryCategory(null)
-        setLoading(false)
-        return
-      }
-
-      try {
-        setLoading(true)
-
-        // Fetch all categories for the video
-        const allCategories = await getFullCategoriesForVideo(videoId)
-        setCategories(allCategories)
-
-        // Fetch the primary category
-        const primary = await getFullPrimaryCategoryForVideo(videoId)
-        setPrimaryCategory(primary)
-
-        setError(null)
-      } catch (err) {
-        console.error(`Error fetching categories for video ${videoId}:`, err)
-        setError(err instanceof Error ? err : new Error(String(err)))
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    fetchVideoCategories()
-  }, [videoId])
-
-  // Function to assign a category to the video
-  const assignCategory = useCallback(
-    async (categoryId: string, isPrimary = false) => {
-      if (!videoId) return
-
-      try {
-        await assignCategoryFromUpload(videoId, categoryId, isPrimary)
-
-        // Refresh the categories
-        const allCategories = await getFullCategoriesForVideo(videoId)
-        setCategories(allCategories)
-
-        // If this was set as primary, update the primary category
-        if (isPrimary) {
-          const primary = await getFullPrimaryCategoryForVideo(videoId)
-          setPrimaryCategory(primary)
-        }
-      } catch (err) {
-        console.error(`Error assigning category ${categoryId} to video ${videoId}:`, err)
-        throw err
-      }
-    },
-    [videoId],
-  )
-
-  // Function to remove a category from the video
-  const removeCategory = useCallback(
-    async (categoryId: string) => {
-      if (!videoId) return
-
-      try {
-        await removeCategoryFromVideo(videoId, categoryId)
-
-        // Refresh the categories
-        const allCategories = await getFullCategoriesForVideo(videoId)
-        setCategories(allCategories)
-
-        // Refresh the primary category
-        const primary = await getFullPrimaryCategoryForVideo(videoId)
-        setPrimaryCategory(primary)
-      } catch (err) {
-        console.error(`Error removing category ${categoryId} from video ${videoId}:`, err)
-        throw err
-      }
-    },
-    [videoId],
-  )
-
-  // Function to set the primary category
-  const setPrimary = useCallback(
-    async (categoryId: string) => {
-      if (!videoId) return
-
-      try {
-        await setPrimaryCategoryForVideo(videoId, categoryId)
-
-        // Refresh the primary category
-        const primary = await getFullPrimaryCategoryForVideo(videoId)
-        setPrimaryCategory(primary)
-      } catch (err) {
-        console.error(`Error setting primary category ${categoryId} for video ${videoId}:`, err)
-        throw err
-      }
-    },
-    [videoId],
-  )
-
-  return {
-    categories,
-    primaryCategory,
-    loading,
-    error,
-    assignCategory,
-    removeCategory,
-    setPrimary,
-  }
 }

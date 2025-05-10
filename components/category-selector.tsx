@@ -1,6 +1,7 @@
 "use client"
 
 import { useCategories } from "@/hooks/use-categories"
+import { useEffect } from "react"
 
 interface CategorySelectorProps {
   value: string
@@ -21,6 +22,29 @@ export default function CategorySelector({
 }: CategorySelectorProps) {
   const { categories, loading, error } = useCategories()
 
+  // Debug logging
+  useEffect(() => {
+    console.log("CategorySelector - Categories:", categories)
+    console.log("CategorySelector - Loading:", loading)
+    console.log("CategorySelector - Error:", error)
+  }, [categories, loading, error])
+
+  // Fallback categories in case Firestore fails
+  const fallbackCategories = [
+    { id: "hustle-mentality", name: "Hustle Mentality" },
+    { id: "money-and-wealth", name: "Money & Wealth" },
+    { id: "introspection", name: "Introspection" },
+    { id: "faith", name: "Faith" },
+    { id: "high-energy-motivation", name: "High Energy Motivation" },
+    { id: "motivational-speeches", name: "Motivational Speeches" },
+    { id: "fitness", name: "Fitness" },
+    { id: "business", name: "Business" },
+    { id: "lifestyle", name: "Lifestyle" },
+  ]
+
+  // Use fallback categories if there's an error or no categories loaded
+  const displayCategories = categories.length > 0 ? categories : fallbackCategories
+
   return (
     <div className={className}>
       <label htmlFor="category" className="block text-sm font-medium text-zinc-400 mb-2">
@@ -39,7 +63,7 @@ export default function CategorySelector({
           {loading ? "Loading categories..." : "Select a category for your content"}
         </option>
 
-        {categories.map((category) => (
+        {displayCategories.map((category) => (
           <option key={category.id} value={category.id}>
             {category.name}
           </option>

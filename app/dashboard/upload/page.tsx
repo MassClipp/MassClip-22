@@ -20,6 +20,7 @@ import { addVideoToCatalog } from "@/lib/video-catalog-manager"
 // Import the new category system
 import { assignCategoryAfterUpload } from "@/lib/category-system/upload-integration"
 import CategorySelector from "@/components/category-selector"
+import { initializeCategorySystem } from "@/lib/category-system/category-db"
 
 export default function UploadPage() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
@@ -44,6 +45,13 @@ export default function UploadPage() {
   const { user } = useAuth()
   const router = useRouter()
   const isMobile = useMobile()
+
+  // Initialize categories when the component mounts
+  useEffect(() => {
+    initializeCategorySystem().catch((err) => {
+      console.error("Failed to initialize categories:", err)
+    })
+  }, [])
 
   // Clean up object URL on unmount or when file changes
   useEffect(() => {
