@@ -1,53 +1,71 @@
 import { Suspense } from "react"
 import { notFound } from "next/navigation"
 import CategoryVideoGrid from "@/components/category-video-grid"
-import { getShowcaseIdForCategory } from "@/lib/vimeo-helpers"
+import { getCategoryById } from "@/lib/category-system/category-db"
 
-// Map URL-friendly tags to display names
-const categoryMap: Record<string, string> = {
-  "hustle-mentality": "Hustle Mentality",
-  "money-and-wealth": "Money & Wealth",
-  introspection: "Introspection",
-  faith: "Faith",
-  "high-energy-motivation": "High Energy Motivation",
-  "motivational-speeches": "Motivational Speeches",
+// Map URL-friendly slugs to category IDs
+const slugToCategoryMap: Record<string, string> = {
+  "hustle-mentality": "hustle-mentality",
+  "money-and-wealth": "money-and-wealth",
+  introspection: "introspection",
+  faith: "faith",
+  "high-energy-motivation": "high-energy-motivation",
+  "motivational-speeches": "motivational-speeches",
 }
 
-export default function CategoryPage({
-  params,
-  searchParams,
-}: { params: { tag: string }; searchParams: { showcaseId?: string } }) {
+export default async function CategoryPage({ params }: { params: { tag: string } }) {
   const { tag } = params
 
-  // Get the showcaseId from the searchParams or from our mapping
-  const showcaseId = searchParams.showcaseId || getShowcaseIdForCategory(tag)
+  // Get the category ID from the slug
+  const categoryId = slugToCategoryMap[tag]
 
-  // Check if the category exists
-  if (!categoryMap[tag]) {
+  if (!categoryId) {
     return notFound()
   }
 
-  const categoryTitle = categoryMap[tag]
+  // Get the category details
+  const category = await getCategoryById(categoryId)
+
+  if (!category || !category.isActive) {
+    return notFound()
+  }
 
   return (
     <div className="container mx-auto px-4 py-8">
-      <h1 className="text-3xl font-bold mb-8">{categoryTitle}</h1>
+      <h1 className="text-3xl font-bold mb-8">{category.name}</h1>
+
+      {category.description && <p className="text-zinc-400 mb-8">{category.description}</p>}
 
       <Suspense fallback={<div>Loading videos...</div>}>
-        {/* Pass both category and showcaseId to support both systems */}
-        <CategoryVideoGrid category={tag} showcaseId={showcaseId} limit={24} />
+        <CategoryVideoGrid categoryId={categoryId} limit={24} />
       </Suspense>
     </div>
   )
 }
 
 // Generate metadata for the page
-export function generateMetadata({ params }: { params: { tag: string } }) {
+export async function generateMetadata({ params }: { params: { tag: string } }) {
   const { tag } = params
-  const categoryTitle = categoryMap[tag] || "Category"
+  const categoryId = slugToCategoryMap[tag]
+
+  if (!categoryId) {
+    return {
+      title: "Category Not Found",
+      description: "The requested category does not exist.",
+    }
+  }
+
+  const category = await getCategoryById(categoryId)
+
+  if (!category) {
+    return {
+      title: "Category Not Found",
+      description: "The requested category does not exist.",
+    }
+  }
 
   return {
-    title: `${categoryTitle} Videos | MassClip`,
-    description: `Browse our collection of ${categoryTitle.toLowerCase()} videos.`,
+    title: `${category.name} Videos | MassClip`,
+    description: category.description || `Browse our collection of ${category.name.toLowerCase()} videos.`,
   }
 }

@@ -1,32 +1,78 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import { getVideosByCategory, getAllVideosByCategory } from "@/lib/category-manager"
-import { getShowcaseIdForCategory } from "@/lib/vimeo-helpers"
-
 /**
- * Hook to fetch videos for a specific category from both Firestore and Vimeo showcases
+ * React hook for fetching videos by category
  */
-export function useVideosByCategory(category: string) {
+
+import { useState, useEffect } from "react"
+import { getVideosForCategory } from "@/lib/category-system/category-db"
+import { db } from "@/lib/firebase"
+import { doc, getDoc } from "firebase/firestore"
+
+// Hook for fetching videos by category
+export function useVideosByCategory(categoryId: string, limit = 24) {
   const [videos, setVideos] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<Error | null>(null)
 
   useEffect(() => {
     async function fetchVideos() {
+      if (!categoryId) {
+        setVideos([])
+        setLoading(false)
+        return
+      }
+
       try {
         setLoading(true)
 
-        // Get the showcase ID for this category (if it exists)
-        const showcaseId = getShowcaseIdForCategory(category)
+        // Get video IDs for this category
+        const videoIds = await getVideosForCategory(categoryId, limit)
 
-        // Fetch videos from both sources with fallback logic
-        const categoryVideos = await getVideosByCategory(category, showcaseId)
+        if (videoIds.length === 0) {
+          setVideos([])
+          setLoading(false)
+          return
+        }
 
-        setVideos(categoryVideos)
+        // Fetch each video's data from Firestore
+        const videoPromises = videoIds.map(async (videoId) => {
+          // Try to get from videos collection first
+          const videoRef = doc(db, "videos", videoId)
+          const videoDoc = await getDoc(videoRef)
+
+          if (videoDoc.exists()) {
+            return {
+              id: videoDoc.id,
+              ...videoDoc.data(),
+            }
+          }
+
+          // If not found, try uploads collection
+          const uploadRef = doc(db, "uploads", videoId)
+          const uploadDoc = await getDoc(uploadRef)
+
+          if (uploadDoc.exists()) {
+            return {
+              id: uploadDoc.id,
+              ...uploadDoc.data(),
+            }
+          }
+
+          // If still not found, return a minimal object
+          return {
+            id: videoId,
+            videoId: videoId,
+            title: "Unknown Video",
+            description: "Video details not found",
+          }
+        })
+
+        const videoData = await Promise.all(videoPromises)
+        setVideos(videoData)
         setError(null)
       } catch (err) {
-        console.error(`Error fetching videos for category ${category}:`, err)
+        console.error(`Error fetching videos for category ${categoryId}:`, err)
         setError(err instanceof Error ? err : new Error(String(err)))
       } finally {
         setLoading(false)
@@ -34,36 +80,67 @@ export function useVideosByCategory(category: string) {
     }
 
     fetchVideos()
-  }, [category])
+  }, [categoryId, limit])
 
   return { videos, loading, error }
 }
 
-/**
- * Hook to fetch all videos grouped by category
- */
-export function useAllVideosByCategory() {
-  const [videosByCategory, setVideosByCategory] = useState<Record<string, any[]>>({})
+// Hook for fetching a single video with its categories
+export function useVideoWithCategories(videoId: string) {
+  const [video, setVideo] = useState<any | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<Error | null>(null)
 
   useEffect(() => {
-    async function fetchAllVideos() {
+    async function fetchVideo() {
+      if (!videoId) {
+        setVideo(null)
+        setLoading(false)
+        return
+      }
+
       try {
         setLoading(true)
-        const allVideosByCategory = await getAllVideosByCategory()
-        setVideosByCategory(allVideosByCategory)
-        setError(null)
+
+        // Try to get from videos collection first
+        const videoRef = doc(db, "videos", videoId)
+        const videoDoc = await getDoc(videoRef)
+
+        if (videoDoc.exists()) {
+          setVideo({
+            id: videoDoc.id,
+            ...videoDoc.data(),
+          })
+          setLoading(false)
+          return
+        }
+
+        // If not found, try uploads collection
+        const uploadRef = doc(db, "uploads", videoId)
+        const uploadDoc = await getDoc(uploadRef)
+
+        if (uploadDoc.exists()) {
+          setVideo({
+            id: uploadDoc.id,
+            ...uploadDoc.data(),
+          })
+          setLoading(false)
+          return
+        }
+
+        // If still not found, set video to null
+        setVideo(null)
+        setError(new Error(`Video ${videoId} not found`))
       } catch (err) {
-        console.error("Error fetching all videos by category:", err)
+        console.error(`Error fetching video ${videoId}:`, err)
         setError(err instanceof Error ? err : new Error(String(err)))
       } finally {
         setLoading(false)
       }
     }
 
-    fetchAllVideos()
-  }, [])
+    fetchVideo()
+  }, [videoId])
 
-  return { videosByCategory, loading, error }
+  return { video, loading, error }
 }

@@ -14,10 +14,12 @@ import { db } from "@/lib/firebase"
 import { collection, addDoc, serverTimestamp, updateDoc, doc } from "firebase/firestore"
 import { directUploadToVimeo } from "@/lib/direct-vimeo-upload"
 import { useMobile } from "@/hooks/use-mobile"
-// Import the category manager
-import { assignCategoryToVideo } from "@/lib/category-manager"
 // Import the video catalog manager
 import { addVideoToCatalog } from "@/lib/video-catalog-manager"
+
+// Import the new category system
+import { assignCategoryAfterUpload } from "@/lib/category-system/upload-integration"
+import CategorySelector from "@/components/category-selector"
 
 // Update the CATEGORY_OPTIONS constant with the new categories
 const CATEGORY_OPTIONS = [
@@ -312,13 +314,11 @@ export default function UploadPage() {
       // AFTER successful upload, assign the category to the video
       // This doesn't interfere with the upload flow
       try {
-        await assignCategoryToVideo({
+        await assignCategoryAfterUpload({
           videoId: vimeoData.vimeoId,
-          category,
+          categoryId: category,
           userId: user.uid,
           videoTitle: title || selectedFile.name,
-          videoThumbnail: vimeoData.link ? `https://vumbnail.com/${vimeoData.vimeoId}.jpg` : undefined,
-          isUserGenerated: true, // Mark this as user-generated content
         })
         console.log(`Category ${category} assigned to video ${vimeoData.vimeoId}`)
       } catch (categoryError) {
@@ -555,30 +555,14 @@ export default function UploadPage() {
                 </div>
 
                 {/* Category Selection Dropdown */}
-                <div>
-                  <label htmlFor="category" className="block text-sm font-medium text-zinc-400 mb-2">
-                    Category Tag <span className="text-crimson">*</span>
-                  </label>
-                  <select
-                    id="category"
-                    value={category}
-                    onChange={(e) => setCategory(e.target.value)}
-                    className="w-full bg-zinc-800/50 border border-zinc-700 rounded-lg px-4 py-3 text-white focus:outline-none focus:ring-2 focus:ring-crimson/50 focus:border-transparent transition-all appearance-none"
-                    required
-                  >
-                    <option value="" disabled>
-                      Select a category tag for your content
-                    </option>
-                    {CATEGORY_OPTIONS.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                  <p className="text-xs text-zinc-500 mt-2">
-                    This tag determines where your content appears in the app
-                  </p>
-                </div>
+                <CategorySelector
+                  value={category}
+                  onChange={setCategory}
+                  required
+                  className="mb-6"
+                  label="Category Tag"
+                  helpText="This tag determines where your content appears in the app"
+                />
 
                 <div>
                   <label className="block text-sm font-medium text-zinc-400 mb-2">Tags</label>
