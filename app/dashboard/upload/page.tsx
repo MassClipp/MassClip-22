@@ -14,6 +14,8 @@ import { db } from "@/lib/firebase"
 import { collection, addDoc, serverTimestamp, updateDoc, doc } from "firebase/firestore"
 import { directUploadToVimeo } from "@/lib/direct-vimeo-upload"
 import { useMobile } from "@/hooks/use-mobile"
+// Import the category manager
+import { assignCategoryToVideo } from "@/lib/category-manager"
 
 // Update the CATEGORY_OPTIONS constant with the new categories
 const CATEGORY_OPTIONS = [
@@ -304,6 +306,22 @@ export default function UploadPage() {
 
       setUploadStage("processing")
       setUploadProgress(100)
+
+      // AFTER successful upload, assign the category to the video
+      // This doesn't interfere with the upload flow
+      try {
+        await assignCategoryToVideo({
+          videoId: vimeoData.vimeoId,
+          category,
+          userId: user.uid,
+          videoTitle: title || selectedFile.name,
+          videoThumbnail: vimeoData.link ? `https://vumbnail.com/${vimeoData.vimeoId}.jpg` : undefined,
+        })
+        console.log(`Category ${category} assigned to video ${vimeoData.vimeoId}`)
+      } catch (categoryError) {
+        console.error("Error assigning category (non-critical):", categoryError)
+        // Don't throw error here - we don't want to fail the upload if category assignment fails
+      }
 
       toast({
         title: "Upload complete",
