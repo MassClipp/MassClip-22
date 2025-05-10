@@ -1,9 +1,9 @@
 "use client"
 
-import { useRef, useEffect, useState } from "react"
+import { useEffect, useState } from "react"
 import { useSearchParams } from "next/navigation"
 import { motion } from "framer-motion"
-import { Search, Clock, Brain, Rocket, ChevronRight, TrendingUp } from "lucide-react"
+import { Search, ChevronRight } from "lucide-react"
 import DashboardHeader from "@/components/dashboard-header"
 import VideoRow from "@/components/video-row"
 import { useVimeoShowcases } from "@/hooks/use-vimeo-showcases"
@@ -13,8 +13,6 @@ import { useRouter } from "next/navigation"
 import { filterCategoriesBySearch } from "@/lib/search-utils"
 import VimeoCard from "@/components/vimeo-card"
 import { shuffleArray } from "@/lib/utils"
-// Import the CategoryVideoSection component
-import CategoryVideoSection from "@/components/category-video-section"
 
 export default function Dashboard() {
   // Get search query from URL
@@ -26,7 +24,6 @@ export default function Dashboard() {
   const [hasSearchResults, setHasSearchResults] = useState(false)
   const [featuredVideos, setFeaturedVideos] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(true)
-  const [activeCategory, setActiveCategory] = useState<string | null>(null)
 
   // Fetch showcase-based videos
   const { showcaseVideos, showcaseIds, loading: loadingShowcases, error: showcaseError } = useVimeoShowcases()
@@ -35,16 +32,6 @@ export default function Dashboard() {
   const { videos, videosByTag, loading: loadingVideos } = useVimeoVideos()
 
   const router = useRouter()
-
-  // Cleanup observer on unmount
-  const observer = useRef<IntersectionObserver | null>(null)
-  useEffect(() => {
-    return () => {
-      if (observer.current) {
-        observer.current.disconnect()
-      }
-    }
-  }, [])
 
   // Filter videos based on search query
   useEffect(() => {
@@ -117,29 +104,6 @@ export default function Dashboard() {
     },
   }
 
-  // Check if we have the specific showcases
-  const hasIntrospection = showcaseNames.some(
-    (name) =>
-      name.toLowerCase().includes("introspection") ||
-      name.toLowerCase().includes("reflection") ||
-      name.toLowerCase().includes("mindfulness"),
-  )
-
-  const hasHustleMentality = showcaseNames.some(
-    (name) =>
-      name.toLowerCase().includes("hustle") ||
-      name.toLowerCase().includes("grind") ||
-      name.toLowerCase().includes("entrepreneur"),
-  )
-
-  // Quick category navigation
-  const quickCategories = [
-    { name: "Introspection", icon: <Brain className="h-4 w-4 md:h-5 md:w-5" />, href: "/category/introspection" },
-    { name: "Hustle", icon: <Rocket className="h-4 w-4 md:h-5 md:w-5" />, href: "/category/hustle-mentality" },
-    { name: "Recent", icon: <Clock className="h-4 w-4 md:h-5 md:w-5" />, href: "/category/recently-added" },
-    { name: "All", icon: <Search className="h-4 w-4 md:h-5 md:w-5" />, href: "/dashboard/categories" },
-  ]
-
   return (
     <div className="relative min-h-screen bg-black text-white">
       {/* Premium Gradient Background */}
@@ -176,13 +140,6 @@ export default function Dashboard() {
           </motion.div>
         )}
 
-        {/* Category Sections */}
-        <CategoryVideoSection category="hustle-mentality" title="Hustle Mentality" />
-        <CategoryVideoSection category="money-and-wealth" title="Money & Wealth" />
-        <CategoryVideoSection category="introspection" title="Introspection" />
-        <CategoryVideoSection category="faith" title="Faith" />
-        <CategoryVideoSection category="high-energy-motivation" title="High Energy Motivation" />
-
         {/* Featured Section (if not searching) */}
         {!searchQuery && !isLoadingData && (
           <motion.div variants={containerVariants} initial="hidden" animate="visible" className="px-6 mb-12">
@@ -215,42 +172,6 @@ export default function Dashboard() {
                       <VimeoCard video={video} />
                     </div>
                   ))}
-            </motion.div>
-          </motion.div>
-        )}
-
-        {/* Category Quick Links (if not searching) */}
-        {!searchQuery && !isLoadingData && (
-          <motion.div variants={containerVariants} initial="hidden" animate="visible" className="px-6 mb-12">
-            <motion.h3
-              variants={itemVariants}
-              className="text-xl font-light tracking-tight text-white mb-4 flex items-center"
-            >
-              <TrendingUp className="h-4 w-4 mr-2 text-zinc-400" />
-              Trending Categories
-            </motion.h3>
-
-            <motion.div variants={itemVariants} className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              {quickCategories.map((category, index) => (
-                <Button
-                  key={category.name}
-                  onClick={() => {
-                    setActiveCategory(category.name)
-                    router.push(category.href)
-                  }}
-                  variant="outline"
-                  className={`flex items-center justify-start h-auto py-4 px-5 bg-zinc-900/30 backdrop-blur-sm border-zinc-800/50 hover:bg-zinc-900/50 hover:border-zinc-700 rounded-xl transition-all duration-300 ${
-                    activeCategory === category.name ? "border-crimson/50 bg-crimson/5" : ""
-                  }`}
-                >
-                  <div
-                    className={`p-2 rounded-full bg-black/30 mr-3 ${activeCategory === category.name ? "text-crimson" : "text-crimson"}`}
-                  >
-                    {category.icon}
-                  </div>
-                  <span className="text-left font-light text-sm md:text-base">{category.name}</span>
-                </Button>
-              ))}
             </motion.div>
           </motion.div>
         )}

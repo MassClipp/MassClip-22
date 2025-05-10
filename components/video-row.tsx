@@ -2,69 +2,30 @@
 
 import { useState, useRef, useEffect } from "react"
 import Link from "next/link"
-import { motion } from "framer-motion"
-import { ChevronRight, ChevronLeft, ArrowRight } from "lucide-react"
-import type { VimeoVideo } from "@/lib/types"
-import VimeoCard from "@/components/vimeo-card"
-import VideoSkeleton from "@/components/video-skeleton"
-import { shuffleArray } from "@/lib/utils"
-import { Button } from "@/components/ui/button"
+import { ChevronLeft, ChevronRight } from "lucide-react"
+import VimeoCard from "./vimeo-card"
 
 interface VideoRowProps {
   title: string
-  videos: VimeoVideo[]
+  videos: any[]
   limit?: number
   isShowcase?: boolean
   showcaseId?: string
 }
 
-export default function VideoRow({ title, videos, limit = 10, isShowcase = false, showcaseId }: VideoRowProps) {
-  const [visibleVideos, setVisibleVideos] = useState<VimeoVideo[]>([])
-  const [isIntersecting, setIsIntersecting] = useState(false)
+export default function VideoRow({ title, videos = [], limit = 10, isShowcase = false, showcaseId }: VideoRowProps) {
   const [scrollPosition, setScrollPosition] = useState(0)
   const [maxScroll, setMaxScroll] = useState(0)
-  const [isHovered, setIsHovered] = useState(false)
-  const rowRef = useRef<HTMLDivElement>(null)
+  const [visibleVideos, setVisibleVideos] = useState<any[]>([])
   const scrollContainerRef = useRef<HTMLDivElement>(null)
 
-  // Create a URL-friendly name
-  const slug = encodeURIComponent(title.toLowerCase().replace(/\s+/g, "-"))
-
-  // Determine the correct link path based on whether this is a showcase or tag
-  const linkPath = isShowcase && showcaseId ? `/showcase/${showcaseId}` : `/category/${slug}`
-
-  // Determine button text based on category name
-  const buttonText = title.toLowerCase() === "browse all" ? "Browse all" : "See all"
-
-  // Use Intersection Observer to load videos only when row is visible
+  // Calculate how many videos to show based on screen size
   useEffect(() => {
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (entries[0].isIntersecting) {
-          setIsIntersecting(true)
-          observer.disconnect()
-        }
-      },
-      { rootMargin: "200px" }, // Load when within 200px of viewport
-    )
-
-    if (rowRef.current) {
-      observer.observe(rowRef.current)
+    if (videos.length > 0) {
+      // Limit the number of videos to display
+      setVisibleVideos(videos.slice(0, limit))
     }
-
-    return () => {
-      observer.disconnect()
-    }
-  }, [])
-
-  // Load videos when row becomes visible
-  useEffect(() => {
-    if (isIntersecting && videos) {
-      // Shuffle videos instead of sorting alphabetically
-      const shuffledVideos = shuffleArray([...videos]).slice(0, limit)
-      setVisibleVideos(shuffledVideos)
-    }
-  }, [isIntersecting, videos, limit])
+  }, [videos, limit])
 
   // Calculate max scroll position
   useEffect(() => {
@@ -78,22 +39,17 @@ export default function VideoRow({ title, videos, limit = 10, isShowcase = false
 
     calculateMaxScroll()
     window.addEventListener("resize", calculateMaxScroll)
-
-    return () => {
-      window.removeEventListener("resize", calculateMaxScroll)
-    }
+    return () => window.removeEventListener("resize", calculateMaxScroll)
   }, [visibleVideos])
 
   // Handle scroll buttons
   const handleScroll = (direction: "left" | "right") => {
     if (scrollContainerRef.current) {
       const containerWidth = scrollContainerRef.current.clientWidth
-      const scrollAmount = containerWidth * 0.8
-
       const newPosition =
         direction === "left"
-          ? Math.max(0, scrollPosition - scrollAmount)
-          : Math.min(maxScroll, scrollPosition + scrollAmount)
+          ? Math.max(0, scrollPosition - containerWidth / 2)
+          : Math.min(maxScroll, scrollPosition + containerWidth / 2)
 
       scrollContainerRef.current.scrollTo({
         left: newPosition,
@@ -104,89 +60,76 @@ export default function VideoRow({ title, videos, limit = 10, isShowcase = false
     }
   }
 
-  // Update scroll position on manual scroll
-  const handleManualScroll = () => {
+  // Update scroll position when scrolling manually
+  const handleScrollEvent = () => {
     if (scrollContainerRef.current) {
       setScrollPosition(scrollContainerRef.current.scrollLeft)
     }
   }
 
-  if (!videos || videos.length === 0) {
+  useEffect(() => {
+    const scrollContainer = scrollContainerRef.current
+    if (scrollContainer) {
+      scrollContainer.addEventListener("scroll", handleScrollEvent)
+      return () => scrollContainer.removeEventListener("scroll", handleScrollEvent)
+    }
+  }, [])
+
+  // If no videos, don't render anything
+  if (visibleVideos.length === 0) {
     return null
   }
 
-  const hasMore = videos.length > limit
-
   return (
-    <section
-      className="mb-12 category-section"
-      ref={rowRef}
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
-    >
-      <div className="px-6 mb-4 flex items-center justify-between">
-        <h2 className="text-2xl font-extralight tracking-wider text-white category-title group-hover:text-crimson transition-colors duration-300">
-          {title}
-        </h2>
-        {hasMore && (
+    <div className="px-6 mb-12">
+      <div className="flex items-center justify-between mb-4">
+        <h2 className="text-xl font-light text-white">{title}</h2>
+        {isShowcase && showcaseId && (
           <Link
-            href={linkPath}
-            className="text-zinc-400 hover:text-white flex items-center group bg-zinc-900/30 hover:bg-zinc-900/50 px-3 py-1 rounded-full transition-all duration-300"
+            href={`/showcase/${showcaseId}`}
+            className="text-sm text-zinc-400 hover:text-white flex items-center gap-1 transition-colors"
           >
-            <span className="mr-1 text-sm">{buttonText}</span>
-            <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
+            View All <ChevronRight className="h-4 w-4" />
           </Link>
         )}
       </div>
-      <div className="relative">
+
+      <div className="relative group">
         {/* Left scroll button */}
         {scrollPosition > 0 && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: isHovered ? 1 : 0 }} transition={{ duration: 0.2 }}>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="absolute left-1 top-1/2 -translate-y-1/2 z-10 bg-black/50 backdrop-blur-sm hover:bg-black/70 rounded-full h-8 w-8 shadow-lg"
-              onClick={() => handleScroll("left")}
-            >
-              <ChevronLeft className="h-4 w-4" />
-            </Button>
-          </motion.div>
+          <button
+            onClick={() => handleScroll("left")}
+            className="absolute left-0 top-1/2 transform -translate-y-1/2 z-10 bg-black/70 hover:bg-black/90 text-white rounded-full p-2 shadow-lg opacity-0 group-hover:opacity-100 transition-opacity"
+            aria-label="Scroll left"
+          >
+            <ChevronLeft className="h-6 w-6" />
+          </button>
         )}
 
-        {/* Right scroll button */}
-        {scrollPosition < maxScroll && maxScroll > 0 && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: isHovered ? 1 : 0 }} transition={{ duration: 0.2 }}>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="absolute right-1 top-1/2 -translate-y-1/2 z-10 bg-black/50 backdrop-blur-sm hover:bg-black/70 rounded-full h-8 w-8 shadow-lg"
-              onClick={() => handleScroll("right")}
-            >
-              <ChevronRight className="h-4 w-4" />
-            </Button>
-          </motion.div>
-        )}
-
+        {/* Videos container */}
         <div
           ref={scrollContainerRef}
-          className="flex overflow-x-auto scrollbar-hide gap-4 px-6 pb-4"
-          onScroll={handleManualScroll}
+          className="flex overflow-x-auto scrollbar-hide gap-4 pb-4"
+          style={{ scrollBehavior: "smooth" }}
         >
-          {isIntersecting
-            ? visibleVideos.map((video) => (
-                <motion.div
-                  key={video.uri}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.5 }}
-                >
-                  <VimeoCard video={video} />
-                </motion.div>
-              ))
-            : // Show skeleton loaders while waiting for intersection
-              Array.from({ length: Math.min(limit, 10) }).map((_, index) => <VideoSkeleton key={index} />)}
+          {visibleVideos.map((video, index) => (
+            <div key={`${video.uri || video.id || index}`} className="flex-shrink-0 w-[280px]">
+              <VimeoCard video={video} />
+            </div>
+          ))}
         </div>
+
+        {/* Right scroll button */}
+        {scrollPosition < maxScroll && (
+          <button
+            onClick={() => handleScroll("right")}
+            className="absolute right-0 top-1/2 transform -translate-y-1/2 z-10 bg-black/70 hover:bg-black/90 text-white rounded-full p-2 shadow-lg opacity-0 group-hover:opacity-100 transition-opacity"
+            aria-label="Scroll right"
+          >
+            <ChevronRight className="h-6 w-6" />
+          </button>
+        )}
       </div>
-    </section>
+    </div>
   )
 }
