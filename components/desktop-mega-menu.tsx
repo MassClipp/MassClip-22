@@ -45,23 +45,37 @@ export default function DesktopMegaMenu() {
       name: "Hustle Mentality",
       icon: <TrendingUp className="w-4 h-4 text-crimson" />,
       path: "/category/hustle-mentality",
+      showcaseId: "hustle-mentality", // Ensure this matches the showcase ID in Vimeo
     },
     {
       name: "Money & Wealth",
       icon: <DollarSign className="w-4 h-4 text-crimson" />,
       path: "/category/money-and-wealth",
+      showcaseId: "money-and-wealth", // Ensure this matches the showcase ID in Vimeo
     },
-    { name: "Introspection", icon: <Brain className="w-4 h-4 text-crimson" />, path: "/category/introspection" },
-    { name: "Faith", icon: <Flame className="w-4 h-4 text-crimson" />, path: "/category/faith" },
+    {
+      name: "Introspection",
+      icon: <Brain className="w-4 h-4 text-crimson" />,
+      path: "/category/introspection",
+      showcaseId: "introspection", // Ensure this matches the showcase ID in Vimeo
+    },
+    {
+      name: "Faith",
+      icon: <Flame className="w-4 h-4 text-crimson" />,
+      path: "/category/faith",
+      showcaseId: "faith", // Ensure this matches the showcase ID in Vimeo
+    },
     {
       name: "High Energy Motivation",
       icon: <Zap className="w-4 h-4 text-crimson" />,
       path: "/category/high-energy-motivation",
+      showcaseId: "high-energy-motivation", // Ensure this matches the showcase ID in Vimeo
     },
     {
       name: "Motivational Speeches",
       icon: <Flame className="w-4 h-4 text-crimson" />,
       path: "/category/motivational-speeches",
+      showcaseId: "motivational-speeches", // Ensure this matches the showcase ID in Vimeo
     },
   ]
 
@@ -97,7 +111,7 @@ export default function DesktopMegaMenu() {
                 {niches.map((niche) => (
                   <Link
                     key={niche.name}
-                    href={niche.path}
+                    href={`${niche.path}?showcaseId=${niche.showcaseId}`}
                     className="flex items-center gap-3 p-2 text-white/80 hover:text-white hover:bg-white/5 rounded-md transition-colors"
                     onClick={() => setIsOpen(false)}
                   >

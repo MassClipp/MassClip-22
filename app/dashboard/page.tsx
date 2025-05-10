@@ -13,6 +13,8 @@ import { useRouter } from "next/navigation"
 import { filterCategoriesBySearch } from "@/lib/search-utils"
 import VimeoCard from "@/components/vimeo-card"
 import { shuffleArray } from "@/lib/utils"
+// Import the CategoryVideoSection component
+import CategoryVideoSection from "@/components/category-video-section"
 
 export default function Dashboard() {
   // Get search query from URL
@@ -173,6 +175,13 @@ export default function Dashboard() {
             </div>
           </motion.div>
         )}
+
+        {/* Category Sections */}
+        <CategoryVideoSection category="hustle-mentality" title="Hustle Mentality" />
+        <CategoryVideoSection category="money-and-wealth" title="Money & Wealth" />
+        <CategoryVideoSection category="introspection" title="Introspection" />
+        <CategoryVideoSection category="faith" title="Faith" />
+        <CategoryVideoSection category="high-energy-motivation" title="High Energy Motivation" />
 
         {/* Featured Section (if not searching) */}
         {!searchQuery && !isLoadingData && (

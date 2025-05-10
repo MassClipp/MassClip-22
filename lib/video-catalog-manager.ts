@@ -217,3 +217,34 @@ export async function incrementVideoViews(videoId: string) {
     return { success: false, error }
   }
 }
+
+/**
+ * Get videos by category from the catalog
+ * @param category The category to filter by
+ * @returns Array of videos in the specified category
+ */
+// export async function getVideosByCategory(category: string): Promise<any[]> {
+//   try {
+//     const videosRef = collection(db, "videos");
+
+//     // Query videos where category matches
+//     const q = query(
+//       videosRef,
+//       where("category", "==", category),
+//       where("status", "==", "active"),
+//       orderBy("uploadedAt", "desc")
+//     );
+
+//     const querySnapshot = await getDocs(q);
+//     const videos: any[] = [];
+
+//     querySnapshot.forEach((doc) => {
+//       videos.push({ id: doc.id, ...doc.data() });
+//     });
+
+//     return videos;
+//   } catch (error) {
+//     console.error("Error getting videos by category:", error);
+//     return [];
+//   }
+// }

@@ -12,8 +12,14 @@ const categoryMap: Record<string, string> = {
   "motivational-speeches": "Motivational Speeches",
 }
 
-export default function CategoryPage({ params }: { params: { tag: string } }) {
+export default function CategoryPage({
+  params,
+  searchParams,
+}: { params: { tag: string }; searchParams: { showcaseId?: string } }) {
   const { tag } = params
+
+  // Get the showcaseId from the searchParams
+  const showcaseId = searchParams.showcaseId || params.tag
 
   // Check if the category exists
   if (!categoryMap[tag]) {
@@ -27,7 +33,7 @@ export default function CategoryPage({ params }: { params: { tag: string } }) {
       <h1 className="text-3xl font-bold mb-8">{categoryTitle}</h1>
 
       <Suspense fallback={<div>Loading videos...</div>}>
-        <CategoryVideoGrid category={tag} limit={24} />
+        <CategoryVideoGrid category={showcaseId} limit={24} />
       </Suspense>
     </div>
   )
