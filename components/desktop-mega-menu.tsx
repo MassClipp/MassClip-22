@@ -41,7 +41,6 @@ export default function DesktopMegaMenu() {
 
   // Niche categories with icons
   const niches = [
-    { name: "Motivation", icon: <Flame className="w-4 h-4 text-crimson" />, path: "/category/motivation" },
     {
       name: "Hustle Mentality",
       icon: <TrendingUp className="w-4 h-4 text-crimson" />,
@@ -53,7 +52,17 @@ export default function DesktopMegaMenu() {
       path: "/category/money-and-wealth",
     },
     { name: "Introspection", icon: <Brain className="w-4 h-4 text-crimson" />, path: "/category/introspection" },
-    { name: "Viral Takes", icon: <Zap className="w-4 h-4 text-crimson" />, path: "/category/viral-takes" },
+    { name: "Faith", icon: <Flame className="w-4 h-4 text-crimson" />, path: "/category/faith" },
+    {
+      name: "High Energy Motivation",
+      icon: <Zap className="w-4 h-4 text-crimson" />,
+      path: "/category/high-energy-motivation",
+    },
+    {
+      name: "Motivational Speeches",
+      icon: <Flame className="w-4 h-4 text-crimson" />,
+      path: "/category/motivational-speeches",
+    },
   ]
 
   // User features

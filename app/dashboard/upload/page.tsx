@@ -15,13 +15,14 @@ import { collection, addDoc, serverTimestamp, updateDoc, doc } from "firebase/fi
 import { directUploadToVimeo } from "@/lib/direct-vimeo-upload"
 import { useMobile } from "@/hooks/use-mobile"
 
-// Replace the NICHE_OPTIONS constant with CATEGORY_OPTIONS
+// Update the CATEGORY_OPTIONS constant with the new categories
 const CATEGORY_OPTIONS = [
-  { value: "motivation", label: "Motivation" },
   { value: "hustle-mentality", label: "Hustle Mentality" },
   { value: "money-and-wealth", label: "Money & Wealth" },
   { value: "introspection", label: "Introspection" },
-  { value: "viral-takes", label: "Viral Takes" },
+  { value: "faith", label: "Faith" },
+  { value: "high-energy-motivation", label: "High Energy Motivation" },
+  { value: "motivational-speeches", label: "Motivational Speeches" },
 ]
 
 export default function UploadPage() {
