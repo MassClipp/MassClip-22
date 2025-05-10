@@ -13,11 +13,10 @@ import {
   where,
   orderBy,
   limit,
-  deleteDoc,
   serverTimestamp,
   type Timestamp,
+  deleteDoc,
   updateDoc,
-  writeBatch,
 } from "firebase/firestore"
 import type { Category, VideoCategory, CategoryWithVideos } from "./types"
 import { STANDARD_CATEGORIES } from "./constants"
@@ -25,91 +24,116 @@ import { STANDARD_CATEGORIES } from "./constants"
 // Collection names
 const CATEGORIES_COLLECTION = "categories"
 const VIDEO_CATEGORIES_COLLECTION = "videoCategories"
-const CATEGORY_ASSIGNMENTS_COLLECTION = "categoryAssignments"
 
 /**
- * Initialize the category system by ensuring all standard categories exist
+ * Initializes Firebase with standard categories
  */
-export async function initializeCategorySystem() {
-  const batch = writeBatch(db)
-  const now = new Date()
+export async function initializeCategorySystem(): Promise<void> {
+  try {
+    const categoriesRef = collection(db, CATEGORIES_COLLECTION)
+    const querySnapshot = await getDocs(categoriesRef)
 
-  for (const category of STANDARD_CATEGORIES) {
-    const categoryRef = doc(db, CATEGORIES_COLLECTION, category.id)
-    const categoryDoc = await getDoc(categoryRef)
-
-    if (!categoryDoc.exists()) {
-      batch.set(categoryRef, {
-        ...category,
-        createdAt: serverTimestamp(),
-        updatedAt: serverTimestamp(),
-      })
+    if (querySnapshot.empty) {
+      for (const category of STANDARD_CATEGORIES) {
+        const categoryRef = doc(db, CATEGORIES_COLLECTION, category.id)
+        await setDoc(categoryRef, {
+          ...category,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        })
+      }
+      console.log("Categories initialized successfully")
+    } else {
+      console.log("Categories already initialized")
     }
+  } catch (error) {
+    console.error("Error initializing categories:", error)
+    throw error
   }
-
-  await batch.commit()
-  console.log("Category system initialized")
 }
 
 /**
  * Get all categories
  */
 export async function getAllCategories(): Promise<Category[]> {
-  const categoriesRef = collection(db, CATEGORIES_COLLECTION)
-  const q = query(categoriesRef, orderBy("order", "asc"))
-  const querySnapshot = await getDocs(q)
+  try {
+    const categoriesRef = collection(db, CATEGORIES_COLLECTION)
+    const q = query(categoriesRef, orderBy("order", "asc"))
+    const querySnapshot = await getDocs(q)
 
-  return querySnapshot.docs.map((doc) => {
-    const data = doc.data()
-    return {
-      ...data,
-      id: doc.id,
-      createdAt: (data.createdAt as Timestamp).toDate(),
-      updatedAt: (data.updatedAt as Timestamp).toDate(),
-    } as Category
-  })
-}
-
-/**
- * Get a category by ID
- */
-export async function getCategoryById(categoryId: string): Promise<Category | null> {
-  const categoryRef = doc(db, CATEGORIES_COLLECTION, categoryId)
-  const categoryDoc = await getDoc(categoryRef)
-
-  if (!categoryDoc.exists()) {
-    return null
+    return querySnapshot.docs.map((doc) => {
+      const data = doc.data()
+      return {
+        ...data,
+        id: doc.id,
+        createdAt: data.createdAt ? (data.createdAt as Timestamp).toDate() : new Date(),
+        updatedAt: data.updatedAt ? (data.updatedAt as Timestamp).toDate() : new Date(),
+      } as Category
+    })
+  } catch (error) {
+    console.error("Error getting categories:", error)
+    return []
   }
-
-  const data = categoryDoc.data()
-  return {
-    ...data,
-    id: categoryDoc.id,
-    createdAt: (data.createdAt as Timestamp).toDate(),
-    updatedAt: (data.updatedAt as Timestamp).toDate(),
-  } as Category
 }
 
 /**
  * Get categories with video counts
  */
 export async function getCategoriesWithCounts(): Promise<CategoryWithVideos[]> {
-  // First get all categories
-  const categories = await getAllCategories()
+  try {
+    const categories = await getAllCategories()
+    const categoriesWithCounts: CategoryWithVideos[] = []
 
-  // Then get counts for each category
-  const countPromises = categories.map(async (category) => {
+    for (const category of categories) {
+      const videoCount = await getVideoCountForCategory(category.id)
+      categoriesWithCounts.push({
+        ...category,
+        videoCount,
+      })
+    }
+
+    return categoriesWithCounts
+  } catch (error) {
+    console.error("Error getting categories with counts:", error)
+    return []
+  }
+}
+
+/**
+ * Get the number of videos for a category
+ */
+async function getVideoCountForCategory(categoryId: string): Promise<number> {
+  try {
     const videoCategoriesRef = collection(db, VIDEO_CATEGORIES_COLLECTION)
-    const q = query(videoCategoriesRef, where("categoryId", "==", category.id))
+    const q = query(videoCategoriesRef, where("categoryId", "==", categoryId))
+    const querySnapshot = await getDocs(q)
+    return querySnapshot.size
+  } catch (error) {
+    console.error(`Error getting video count for category ${categoryId}:`, error)
+    return 0
+  }
+}
+
+/**
+ * Get all videos for a category
+ */
+export async function getVideosForCategory(categoryId: string, limitCount = 100): Promise<string[]> {
+  try {
+    const videoCategoriesRef = collection(db, VIDEO_CATEGORIES_COLLECTION)
+    const q = query(
+      videoCategoriesRef,
+      where("categoryId", "==", categoryId),
+      orderBy("createdAt", "desc"),
+      limit(limitCount),
+    )
+
     const querySnapshot = await getDocs(q)
 
-    return {
-      ...category,
-      videoCount: querySnapshot.size,
-    }
-  })
-
-  return Promise.all(countPromises)
+    return querySnapshot.docs.map((doc) => doc.data().videoId)
+  } catch (error) {
+    console.error(`Error getting videos for category ${categoryId}:`, error)
+    return []
+  }
 }
 
 /**
@@ -119,87 +143,35 @@ export async function assignCategoryToVideo(
   videoId: string,
   categoryId: string,
   isPrimary = true,
-  source: "showcase" | "firestore" | "manual" = "manual",
+  source = "manual",
 ): Promise<void> {
-  // First, check if the category exists
-  const categoryRef = doc(db, CATEGORIES_COLLECTION, categoryId)
-  const categoryDoc = await getDoc(categoryRef)
-
-  if (!categoryDoc.exists()) {
-    throw new Error(`Category ${categoryId} does not exist`)
-  }
-
-  // Create a unique ID for the video-category relationship
-  const videoCategoryId = `${videoId}_${categoryId}`
-  const videoCategoryRef = doc(db, VIDEO_CATEGORIES_COLLECTION, videoCategoryId)
-
-  // Create or update the video-category relationship
-  await setDoc(videoCategoryRef, {
-    videoId,
-    categoryId,
-    isPrimary,
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
-  })
-
-  // Also record the assignment with its source
-  const assignmentId = `${videoId}_${categoryId}_${source}`
-  const assignmentRef = doc(db, CATEGORY_ASSIGNMENTS_COLLECTION, assignmentId)
-
-  await setDoc(assignmentRef, {
-    videoId,
-    categoryId,
-    source,
-    isPrimary,
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
-  })
-
-  // If this is the primary category, ensure no other categories for this video are primary
-  if (isPrimary) {
+  try {
     const videoCategoriesRef = collection(db, VIDEO_CATEGORIES_COLLECTION)
-    const q = query(
-      videoCategoriesRef,
-      where("videoId", "==", videoId),
-      where("isPrimary", "==", true),
-      where("categoryId", "!=", categoryId),
-    )
-
+    const q = query(videoCategoriesRef, where("videoId", "==", videoId), where("categoryId", "==", categoryId))
     const querySnapshot = await getDocs(q)
 
-    const batch = writeBatch(db)
-    querySnapshot.docs.forEach((doc) => {
-      batch.update(doc.ref, { isPrimary: false, updatedAt: serverTimestamp() })
-    })
-
-    if (querySnapshot.size > 0) {
-      await batch.commit()
+    if (querySnapshot.empty) {
+      await setDoc(doc(collection(db, VIDEO_CATEGORIES_COLLECTION)), {
+        videoId,
+        categoryId,
+        isPrimary,
+        source,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      })
+    } else {
+      querySnapshot.forEach(async (docSnapshot) => {
+        await updateDoc(doc(db, VIDEO_CATEGORIES_COLLECTION, docSnapshot.id), {
+          isPrimary,
+          updatedAt: serverTimestamp(),
+        })
+      })
     }
-  }
-}
 
-/**
- * Remove a category from a video
- */
-export async function removeCategoryFromVideo(videoId: string, categoryId: string): Promise<void> {
-  const videoCategoryId = `${videoId}_${categoryId}`
-  const videoCategoryRef = doc(db, VIDEO_CATEGORIES_COLLECTION, videoCategoryId)
-
-  await deleteDoc(videoCategoryRef)
-
-  // Also remove all assignments for this video-category pair
-  const assignmentsRef = collection(db, CATEGORY_ASSIGNMENTS_COLLECTION)
-  const q = query(assignmentsRef, where("videoId", "==", videoId), where("categoryId", "==", categoryId))
-
-  const querySnapshot = await getDocs(q)
-
-  const batch = writeBatch(db)
-  querySnapshot.docs.forEach((doc) => {
-    batch.delete(doc.ref)
-  })
-
-  if (querySnapshot.size > 0) {
-    await batch.commit()
+    console.log(`Category ${categoryId} assigned to video ${videoId}`)
+  } catch (error) {
+    console.error("Error assigning category to video:", error)
+    throw error
   }
 }
 
@@ -207,93 +179,125 @@ export async function removeCategoryFromVideo(videoId: string, categoryId: strin
  * Get all categories for a video
  */
 export async function getCategoriesForVideo(videoId: string): Promise<VideoCategory[]> {
-  const videoCategoriesRef = collection(db, VIDEO_CATEGORIES_COLLECTION)
-  const q = query(videoCategoriesRef, where("videoId", "==", videoId))
-  const querySnapshot = await getDocs(q)
+  try {
+    const videoCategoriesRef = collection(db, VIDEO_CATEGORIES_COLLECTION)
+    const q = query(videoCategoriesRef, where("videoId", "==", videoId))
+    const querySnapshot = await getDocs(q)
 
-  return querySnapshot.docs.map((doc) => {
-    const data = doc.data()
-    return {
-      videoId: data.videoId,
-      categoryId: data.categoryId,
-      isPrimary: data.isPrimary,
-      createdAt: (data.createdAt as Timestamp).toDate(),
-      updatedAt: (data.updatedAt as Timestamp).toDate(),
-    } as VideoCategory
-  })
+    return querySnapshot.docs.map((doc) => ({
+      id: doc.id,
+      ...(doc.data() as Omit<VideoCategory, "id">),
+    })) as VideoCategory[]
+  } catch (error) {
+    console.error("Error getting categories for video:", error)
+    return []
+  }
 }
 
 /**
- * Get all videos for a category
+ * Get a category by ID
  */
-export async function getVideosForCategory(categoryId: string, limitCount = 100): Promise<string[]> {
-  const videoCategoriesRef = collection(db, VIDEO_CATEGORIES_COLLECTION)
-  const q = query(
-    videoCategoriesRef,
-    where("categoryId", "==", categoryId),
-    orderBy("createdAt", "desc"),
-    limit(limitCount),
-  )
+export async function getCategoryById(categoryId: string): Promise<Category | null> {
+  try {
+    const categoryRef = doc(db, CATEGORIES_COLLECTION, categoryId)
+    const categoryDoc = await getDoc(categoryRef)
 
-  const querySnapshot = await getDocs(q)
+    if (categoryDoc.exists()) {
+      const data = categoryDoc.data()
+      return {
+        ...data,
+        id: categoryDoc.id,
+        createdAt: data.createdAt ? (data.createdAt as Timestamp).toDate() : new Date(),
+        updatedAt: data.updatedAt ? (data.updatedAt as Timestamp).toDate() : new Date(),
+      } as Category
+    }
 
-  return querySnapshot.docs.map((doc) => doc.data().videoId)
+    return null
+  } catch (error) {
+    console.error("Error getting category by ID:", error)
+    return null
+  }
 }
 
 /**
  * Get the primary category for a video
  */
 export async function getPrimaryCategoryForVideo(videoId: string): Promise<string | null> {
-  const videoCategoriesRef = collection(db, VIDEO_CATEGORIES_COLLECTION)
-  const q = query(videoCategoriesRef, where("videoId", "==", videoId), where("isPrimary", "==", true), limit(1))
+  try {
+    const videoCategoriesRef = collection(db, VIDEO_CATEGORIES_COLLECTION)
+    const q = query(videoCategoriesRef, where("videoId", "==", videoId), where("isPrimary", "==", true), limit(1))
+    const querySnapshot = await getDocs(q)
 
-  const querySnapshot = await getDocs(q)
+    if (!querySnapshot.empty) {
+      return querySnapshot.docs[0].data().categoryId
+    }
 
-  if (querySnapshot.empty) {
+    return null
+  } catch (error) {
+    console.error("Error getting primary category for video:", error)
     return null
   }
-
-  return querySnapshot.docs[0].data().categoryId
 }
 
 /**
- * Set the primary category for a video
+ * Remove a category from a video
+ */
+export async function removeCategoryFromVideo(videoId: string, categoryId: string): Promise<void> {
+  try {
+    const videoCategoriesRef = collection(db, VIDEO_CATEGORIES_COLLECTION)
+    const q = query(
+      videoCategoriesRef,
+      where("videoId", "==", videoId),
+      where("categoryId", "==", categoryId),
+      limit(1),
+    )
+    const querySnapshot = await getDocs(q)
+
+    if (!querySnapshot.empty) {
+      await deleteDoc(doc(db, VIDEO_CATEGORIES_COLLECTION, querySnapshot.docs[0].id))
+      console.log(`Category ${categoryId} removed from video ${videoId}`)
+    } else {
+      console.warn(`Category ${categoryId} not found for video ${videoId}`)
+    }
+  } catch (error) {
+    console.error("Error removing category from video:", error)
+    throw error
+  }
+}
+
+/**
+ * Set a category as the primary category for a video
  */
 export async function setPrimaryCategoryForVideo(videoId: string, categoryId: string): Promise<void> {
-  // First, ensure the video-category relationship exists
-  const videoCategoryId = `${videoId}_${categoryId}`
-  const videoCategoryRef = doc(db, VIDEO_CATEGORIES_COLLECTION, videoCategoryId)
-  const videoCategoryDoc = await getDoc(videoCategoryRef)
+  try {
+    // First, unset the isPrimary flag for all other categories for this video
+    const videoCategoriesRef = collection(db, VIDEO_CATEGORIES_COLLECTION)
+    const q = query(videoCategoriesRef, where("videoId", "==", videoId))
+    const querySnapshot = await getDocs(q)
 
-  if (!videoCategoryDoc.exists()) {
-    // Create the relationship if it doesn't exist
-    await assignCategoryToVideo(videoId, categoryId, true)
-    return
-  }
+    for (const docSnapshot of querySnapshot.docs) {
+      await updateDoc(doc(db, VIDEO_CATEGORIES_COLLECTION, docSnapshot.id), {
+        isPrimary: docSnapshot.data().categoryId === categoryId,
+        updatedAt: serverTimestamp(),
+      })
+    }
 
-  // Update the existing relationship to be primary
-  await updateDoc(videoCategoryRef, {
-    isPrimary: true,
-    updatedAt: serverTimestamp(),
-  })
+    // If the category doesn't exist for this video yet, create it
+    const q2 = query(
+      videoCategoriesRef,
+      where("videoId", "==", videoId),
+      where("categoryId", "==", categoryId),
+      limit(1),
+    )
+    const querySnapshot2 = await getDocs(q2)
 
-  // Ensure no other categories for this video are primary
-  const videoCategoriesRef = collection(db, VIDEO_CATEGORIES_COLLECTION)
-  const q = query(
-    videoCategoriesRef,
-    where("videoId", "==", videoId),
-    where("isPrimary", "==", true),
-    where("categoryId", "!=", categoryId),
-  )
+    if (querySnapshot2.empty) {
+      await assignCategoryToVideo(videoId, categoryId, true)
+    }
 
-  const querySnapshot = await getDocs(q)
-
-  const batch = writeBatch(db)
-  querySnapshot.docs.forEach((doc) => {
-    batch.update(doc.ref, { isPrimary: false, updatedAt: serverTimestamp() })
-  })
-
-  if (querySnapshot.size > 0) {
-    await batch.commit()
+    console.log(`Category ${categoryId} set as primary for video ${videoId}`)
+  } catch (error) {
+    console.error("Error setting primary category for video:", error)
+    throw error
   }
 }

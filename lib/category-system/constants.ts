@@ -1,76 +1,72 @@
 /**
- * Predefined categories and configuration
+ * Constants for the category system
  */
 
-import type { Category } from "./types"
-
 // Standard categories that are available in the system
-export const STANDARD_CATEGORIES: Omit<Category, "createdAt" | "updatedAt">[] = [
+export const STANDARD_CATEGORIES = [
   {
     id: "hustle-mentality",
     name: "Hustle Mentality",
     slug: "hustle-mentality",
-    description: "Videos about hustle culture, work ethic, and grinding to success",
+    description: "Content focused on hustle culture and work ethic",
     isActive: true,
-    order: 1,
+    order: 10,
   },
   {
     id: "money-and-wealth",
     name: "Money & Wealth",
     slug: "money-and-wealth",
-    description: "Content related to finance, wealth building, and money management",
+    description: "Content about financial success and wealth building",
     isActive: true,
-    order: 2,
+    order: 20,
   },
   {
     id: "introspection",
     name: "Introspection",
     slug: "introspection",
-    description: "Thoughtful content about self-reflection and personal growth",
+    description: "Content focused on self-reflection and personal growth",
     isActive: true,
-    order: 3,
+    order: 30,
   },
   {
     id: "faith",
     name: "Faith",
     slug: "faith",
-    description: "Spiritual and faith-based motivational content",
+    description: "Content related to spirituality and faith",
     isActive: true,
-    order: 4,
+    order: 40,
   },
   {
     id: "high-energy-motivation",
     name: "High Energy Motivation",
     slug: "high-energy-motivation",
-    description: "Energetic and intense motivational videos",
+    description: "Energetic motivational content",
     isActive: true,
-    order: 5,
+    order: 50,
   },
   {
     id: "motivational-speeches",
     name: "Motivational Speeches",
     slug: "motivational-speeches",
-    description: "Inspirational speeches and talks from motivational speakers",
+    description: "Inspirational speeches and talks",
     isActive: true,
-    order: 6,
+    order: 60,
   },
 ]
 
-// Legacy showcase ID to category ID mapping
+// Map between showcase IDs and category IDs (for admin uploads)
 export const SHOWCASE_TO_CATEGORY_MAP: Record<string, string> = {
-  "12345678": "hustle-mentality", // Replace with actual showcase IDs
-  "23456789": "money-and-wealth",
-  "34567890": "introspection",
-  "45678901": "faith",
-  "56789012": "high-energy-motivation",
-  "67890123": "motivational-speeches",
+  // Add your showcase ID to category ID mappings here
+  // Example: "12345": "hustle-mentality",
 }
 
-// Category ID to showcase ID mapping (reverse of above)
-export const CATEGORY_TO_SHOWCASE_MAP: Record<string, string> = Object.entries(SHOWCASE_TO_CATEGORY_MAP).reduce(
-  (acc, [showcaseId, categoryId]) => {
-    acc[categoryId] = showcaseId
-    return acc
-  },
-  {} as Record<string, string>,
-)
+// Map between category IDs and showcase IDs (for backward compatibility)
+export const CATEGORY_TO_SHOWCASE_MAP: Record<string, string> = {
+  // This is the inverse of SHOWCASE_TO_CATEGORY_MAP
+  // Will be populated automatically
+}
+
+// Populate CATEGORY_TO_SHOWCASE_MAP
+Object.entries(SHOWCASE_TO_CATEGORY_MAP).forEach(([showcaseId, categoryId]) => {
+  CATEGORY_TO_SHOWCASE_MAP[categoryId] = showcaseId
+})

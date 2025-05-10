@@ -21,16 +21,6 @@ import { addVideoToCatalog } from "@/lib/video-catalog-manager"
 import { assignCategoryAfterUpload } from "@/lib/category-system/upload-integration"
 import CategorySelector from "@/components/category-selector"
 
-// Update the CATEGORY_OPTIONS constant with the new categories
-const CATEGORY_OPTIONS = [
-  { value: "hustle-mentality", label: "Hustle Mentality" },
-  { value: "money-and-wealth", label: "Money & Wealth" },
-  { value: "introspection", label: "Introspection" },
-  { value: "faith", label: "Faith" },
-  { value: "high-energy-motivation", label: "High Energy Motivation" },
-  { value: "motivational-speeches", label: "Motivational Speeches" },
-]
-
 export default function UploadPage() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [isDragging, setIsDragging] = useState(false)
@@ -234,12 +224,11 @@ export default function UploadPage() {
 
     try {
       // Step 1: Create a document in Firestore to track the upload
-      // In the handleUpload function, replace niche with category in the uploadData object
       const uploadData = {
         title: title || selectedFile.name,
         description,
         tags,
-        category: category || "motivation", // Default to motivation if somehow not selected
+        category, // Store the selected category
         visibility,
         isPremium,
         fileName: selectedFile.name,
@@ -317,8 +306,6 @@ export default function UploadPage() {
         await assignCategoryAfterUpload({
           videoId: vimeoData.vimeoId,
           categoryId: category,
-          userId: user.uid,
-          videoTitle: title || selectedFile.name,
         })
         console.log(`Category ${category} assigned to video ${vimeoData.vimeoId}`)
       } catch (categoryError) {
@@ -554,7 +541,7 @@ export default function UploadPage() {
                   ></textarea>
                 </div>
 
-                {/* Category Selection Dropdown */}
+                {/* Category Selection Dropdown - Using our new CategorySelector component */}
                 <CategorySelector
                   value={category}
                   onChange={setCategory}

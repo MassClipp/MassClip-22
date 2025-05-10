@@ -1,4 +1,5 @@
 "use client"
+
 import { useCategories } from "@/hooks/use-categories"
 
 interface CategorySelectorProps {

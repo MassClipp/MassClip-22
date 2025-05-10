@@ -6,7 +6,6 @@
 
 import { useState, useEffect, useCallback } from "react"
 import {
-  getActiveCategories,
   getActiveCategoriesWithCounts,
   getFullCategoriesForVideo,
   getFullPrimaryCategoryForVideo,
@@ -15,6 +14,7 @@ import {
   setPrimaryCategoryForVideo,
 } from "@/lib/category-system/category-service"
 import type { Category, CategoryWithVideos } from "@/lib/category-system/types"
+import { getAllCategories } from "@/lib/category-system/category-db"
 
 // Hook for getting all active categories
 export function useCategories() {
@@ -26,12 +26,12 @@ export function useCategories() {
     async function fetchCategories() {
       try {
         setLoading(true)
-        const data = await getActiveCategories()
-        setCategories(data)
+        const fetchedCategories = await getAllCategories()
+        setCategories(fetchedCategories.filter((cat) => cat.isActive))
         setError(null)
       } catch (err) {
         console.error("Error fetching categories:", err)
-        setError(err instanceof Error ? err : new Error(String(err)))
+        setError(err instanceof Error ? err : new Error("Failed to fetch categories"))
       } finally {
         setLoading(false)
       }
