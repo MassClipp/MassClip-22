@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react"
 import { useSearchParams } from "next/navigation"
 import { motion } from "framer-motion"
-import { Search, ChevronRight } from "lucide-react"
+import { Search, ChevronRight, Circle, Zap, Clock, Grid } from "lucide-react"
 import DashboardHeader from "@/components/dashboard-header"
 import VideoRow from "@/components/video-row"
 import { useVimeoShowcases } from "@/hooks/use-vimeo-showcases"
@@ -14,7 +14,7 @@ import { filterCategoriesBySearch } from "@/lib/search-utils"
 import VimeoCard from "@/components/vimeo-card"
 import { shuffleArray } from "@/lib/utils"
 import OvalSectionDivider from "@/components/oval-section-divider"
-import RecommendedCategories from "@/components/recommended-categories"
+import TrendingCategories from "@/components/trending-categories"
 
 export default function Dashboard() {
   // Get search query from URL
@@ -130,6 +130,30 @@ export default function Dashboard() {
     },
   }
 
+  // Define trending categories
+  const trendingCategories = [
+    {
+      name: "Introspection",
+      slug: "introspection",
+      icon: <Circle className="h-4 w-4 text-red-500" />,
+    },
+    {
+      name: "Hustle",
+      slug: "hustle-mentality",
+      icon: <Zap className="h-4 w-4 text-amber-500" />,
+    },
+    {
+      name: "Recent",
+      slug: "recently-added",
+      icon: <Clock className="h-4 w-4 text-green-500" />,
+    },
+    {
+      name: "All",
+      slug: "browse-all",
+      icon: <Grid className="h-4 w-4 text-blue-500" />,
+    },
+  ]
+
   return (
     <div className="relative min-h-screen bg-black text-white">
       {/* Premium Gradient Background */}
@@ -168,10 +192,10 @@ export default function Dashboard() {
 
         {/* Featured Section (if not searching) */}
         {!searchQuery && !isLoadingData && (
-          <motion.div variants={containerVariants} initial="hidden" animate="visible" className="px-6 mb-12">
+          <motion.div variants={containerVariants} initial="hidden" animate="visible" className="px-6 mb-8">
             <motion.div variants={itemVariants} className="flex items-center justify-between mb-6">
               <h1 className="text-3xl font-extralight tracking-tight text-white">
-                Find Your Next <span className="text-gradient-accent">Viral Clip</span>
+                Find Your Next <span className="text-crimson">Viral Clip</span>
               </h1>
               <Button
                 onClick={() => router.push("/category/browse-all")}
@@ -202,33 +226,11 @@ export default function Dashboard() {
           </motion.div>
         )}
 
-        {/* Add the oval section divider and recommended categories */}
-        <OvalSectionDivider title="Recommended Categories" viewAllLink="/dashboard/categories" />
-
-        <RecommendedCategories
-          categories={[
-            {
-              name: "Money & Wealth",
-              slug: "money-and-wealth",
-              description: "Financial success and wealth building",
-            },
-            {
-              name: "Hustle Mentality",
-              slug: "hustle-mentality",
-              description: "Motivation for entrepreneurs",
-            },
-            {
-              name: "Introspection",
-              slug: "introspection",
-              description: "Self-reflection and growth",
-            },
-            {
-              name: "Recently Added",
-              slug: "recently-added",
-              description: "New content added this week",
-            },
-          ]}
-        />
+        {/* Add the trending categories section */}
+        <div className="px-6">
+          <OvalSectionDivider title="Trending Categories" viewAllLink="/category/browse-all" />
+          <TrendingCategories categories={trendingCategories} />
+        </div>
 
         {/* Error state */}
         {error && (
