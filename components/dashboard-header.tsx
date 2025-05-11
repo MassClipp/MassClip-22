@@ -5,7 +5,20 @@ import type React from "react"
 import { useState, useEffect, useRef } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
-import { User, LogOut, X, Search, Download, Home, Grid, Heart, Clock, Crown, Menu, ChevronRight } from "lucide-react"
+import {
+  User,
+  LogOut,
+  X,
+  Search,
+  Download,
+  Home,
+  Grid,
+  Heart,
+  Clock,
+  Menu,
+  ChevronRight,
+  DollarSign,
+} from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useAuth } from "@/contexts/auth-context"
 import {
@@ -98,7 +111,7 @@ export default function DashboardHeader({ initialSearchQuery = "" }) {
     { name: "Categories", href: "/dashboard/categories", icon: <Grid className="h-4 w-4" /> },
     { name: "Favorites", href: "/dashboard/favorites", icon: <Heart className="h-4 w-4" /> },
     { name: "History", href: "/dashboard/history", icon: <Clock className="h-4 w-4" /> },
-    { name: "Membership", href: "/membership-plans", icon: <Crown className="h-4 w-4" /> },
+    { name: "Pricing", href: "/membership-plans", icon: <DollarSign className="h-4 w-4" /> },
   ]
 
   return (
@@ -114,7 +127,7 @@ export default function DashboardHeader({ initialSearchQuery = "" }) {
 
             {/* Desktop Navigation */}
             <nav className="hidden md:flex items-center gap-6">
-              {[navigationItems[0], navigationItems[1], navigationItems[2]].map((item) => (
+              {[navigationItems[0], navigationItems[1], navigationItems[2], navigationItems[4]].map((item) => (
                 <Link
                   key={item.name}
                   href={item.href}
@@ -144,32 +157,14 @@ export default function DashboardHeader({ initialSearchQuery = "" }) {
               <Search className="h-5 w-5" />
             </button>
 
-            {/* Downloads Counter - Only show when not loading */}
-            {!loading && (
-              <>
-                {isProUser ? (
-                  <div className="flex items-center text-zinc-400 text-sm">
-                    <Download className="h-4 w-4 mr-1" />
-                    <span className="font-light">Unlimited</span>
-                  </div>
-                ) : (
-                  <div className="flex items-center bg-zinc-900/80 border border-zinc-800 rounded-full px-3 py-1">
-                    <Download className={`h-4 w-4 mr-1 ${hasReachedLimit ? "text-amber-500" : "text-crimson"}`} />
-                    <span className={`text-sm font-medium ${hasReachedLimit ? "text-amber-500" : "text-white"}`}>
-                      {remainingDownloads} left
-                    </span>
-                  </div>
-                )}
-
-                {/* Amber Upgrade Button (non-Pro users) */}
-                {!isProUser && (
-                  <Link href="/membership-plans">
-                    <Button className="bg-amber-500 hover:bg-amber-600 text-black font-medium text-sm px-4 py-2">
-                      Upgrade
-                    </Button>
-                  </Link>
-                )}
-              </>
+            {/* Downloads Counter - Only show when not loading and not pro */}
+            {!loading && !isProUser && (
+              <div className="flex items-center bg-zinc-900/80 border border-zinc-800 rounded-full px-3 py-1">
+                <Download className={`h-4 w-4 mr-1 ${hasReachedLimit ? "text-amber-500" : "text-crimson"}`} />
+                <span className={`text-sm font-medium ${hasReachedLimit ? "text-amber-500" : "text-white"}`}>
+                  {remainingDownloads} left
+                </span>
+              </div>
             )}
 
             {/* User Menu */}
@@ -352,15 +347,6 @@ export default function DashboardHeader({ initialSearchQuery = "" }) {
 
           {/* Action Buttons */}
           <div className="p-5 border-t border-zinc-800/50 space-y-3 bg-black">
-            {!isProUser && (
-              <Link
-                href="/membership-plans"
-                className="flex items-center justify-center w-full py-2.5 text-sm text-black font-medium bg-amber-500 hover:bg-amber-600 rounded-lg transition-colors"
-                onClick={() => setIsMobileMenuOpen(false)}
-              >
-                Upgrade
-              </Link>
-            )}
             <button
               onClick={() => {
                 handleLogout()
