@@ -18,22 +18,22 @@ export default function TrendingCategories({ categories }: TrendingCategoriesPro
     {
       name: "Introspection",
       slug: "introspection",
-      icon: <Circle className="h-4 w-4 text-red-500" />,
+      icon: <Brain className="h-4 w-4 text-red-500" />,
     },
     {
       name: "Hustle",
       slug: "hustle-mentality",
-      icon: <Zap className="h-4 w-4 text-amber-500" />,
+      icon: <Zap className="h-4 w-4 text-red-500" />,
     },
     {
       name: "Recent",
       slug: "recently-added",
-      icon: <Clock className="h-4 w-4 text-green-500" />,
+      icon: <Clock className="h-4 w-4 text-red-500" />,
     },
     {
       name: "All",
       slug: "browse-all",
-      icon: <Grid className="h-4 w-4 text-blue-500" />,
+      icon: <Grid className="h-4 w-4 text-red-500" />,
     },
   ]
 
