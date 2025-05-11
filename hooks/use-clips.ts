@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { collection, query, orderBy, getDocs } from "firebase/firestore"
+import { collection, query, orderBy, getDocs, type Timestamp } from "firebase/firestore"
 import { db } from "@/lib/firebase"
 
 export interface Clip {
@@ -12,7 +12,7 @@ export interface Clip {
   thumbnailUrl?: string
   category?: string
   tags?: string[]
-  uploadedAt?: any
+  uploadedAt?: Timestamp
 }
 
 export function useClips() {
@@ -38,6 +38,7 @@ export function useClips() {
           ...(doc.data() as Omit<Clip, "id">),
         }))
 
+        console.log("Fetched clips:", fetchedClips)
         setClips(fetchedClips)
       } catch (err) {
         console.error("Error fetching clips:", err)
