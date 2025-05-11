@@ -1,7 +1,8 @@
 import { Suspense } from "react"
 import { notFound } from "next/navigation"
-import CategoryVideoGrid from "@/components/category-video-grid"
-import { getCategoryById } from "@/lib/category-system/category-db"
+import { getShowcaseIdForCategory } from "@/lib/showcase-category-mapping"
+import { fetchVimeoShowcaseVideos } from "@/lib/vimeo-helpers"
+import { VimeoCard } from "@/components/vimeo-card"
 
 // Map URL-friendly slugs to category IDs
 const slugToCategoryMap: Record<string, string> = {
@@ -23,21 +24,35 @@ export default async function CategoryPage({ params }: { params: { tag: string }
     return notFound()
   }
 
-  // Get the category details
-  const category = await getCategoryById(categoryId)
+  // Get the showcase ID for this category
+  const showcaseId = getShowcaseIdForCategory(categoryId)
 
-  if (!category || !category.isActive) {
-    return notFound()
+  if (!showcaseId) {
+    return (
+      <div className="container mx-auto px-4 py-8">
+        <h1 className="text-3xl font-bold mb-8">{categoryId}</h1>
+        <p className="text-zinc-400">No showcase found for this category.</p>
+      </div>
+    )
   }
+
+  // Fetch videos from the showcase
+  const videos = await fetchVimeoShowcaseVideos(showcaseId)
 
   return (
     <div className="container mx-auto px-4 py-8">
-      <h1 className="text-3xl font-bold mb-8">{category.name}</h1>
-
-      {category.description && <p className="text-zinc-400 mb-8">{category.description}</p>}
+      <h1 className="text-3xl font-bold mb-8">{categoryId}</h1>
 
       <Suspense fallback={<div>Loading videos...</div>}>
-        <CategoryVideoGrid categoryId={categoryId} limit={24} />
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
+          {videos.map((video: any) => (
+            <VimeoCard key={video.uri} video={video} />
+          ))}
+
+          {videos.length === 0 && (
+            <div className="col-span-full text-center py-8 text-zinc-500">No videos found in this category.</div>
+          )}
+        </div>
       </Suspense>
     </div>
   )
@@ -55,17 +70,8 @@ export async function generateMetadata({ params }: { params: { tag: string } }) 
     }
   }
 
-  const category = await getCategoryById(categoryId)
-
-  if (!category) {
-    return {
-      title: "Category Not Found",
-      description: "The requested category does not exist.",
-    }
-  }
-
   return {
-    title: `${category.name} Videos | MassClip`,
-    description: category.description || `Browse our collection of ${category.name.toLowerCase()} videos.`,
+    title: `${categoryId} Videos | MassClip`,
+    description: `Browse our collection of ${categoryId.toLowerCase()} videos.`,
   }
 }

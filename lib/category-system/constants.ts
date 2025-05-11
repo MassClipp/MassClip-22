@@ -1,60 +1,60 @@
 import type { Category } from "./types"
 
-// Standard categories for the app
+// Standard categories that are available in the system
 export const STANDARD_CATEGORIES: Omit<Category, "createdAt" | "updatedAt">[] = [
   {
     id: "hustle-mentality",
     name: "Hustle Mentality",
-    description: "Content focused on hustle culture, grinding, and work ethic",
     slug: "hustle-mentality",
-    order: 10,
+    description: "Content focused on hustle culture and work ethic",
     isActive: true,
+    order: 10,
   },
   {
     id: "money-and-wealth",
     name: "Money & Wealth",
-    description: "Content about financial success, wealth building, and money management",
     slug: "money-and-wealth",
-    order: 20,
+    description: "Content about financial success and wealth building",
     isActive: true,
+    order: 20,
   },
   {
     id: "introspection",
     name: "Introspection",
-    description: "Content focused on self-reflection, mindfulness, and personal growth",
     slug: "introspection",
-    order: 30,
+    description: "Content focused on self-reflection and personal growth",
     isActive: true,
+    order: 30,
   },
   {
     id: "faith",
     name: "Faith",
-    description: "Content related to spirituality, religion, and faith-based motivation",
     slug: "faith",
-    order: 40,
+    description: "Content related to spirituality and faith",
     isActive: true,
+    order: 40,
   },
   {
     id: "high-energy-motivation",
     name: "High Energy Motivation",
-    description: "Energetic and intense motivational content",
     slug: "high-energy-motivation",
-    order: 50,
+    description: "Energetic motivational content",
     isActive: true,
+    order: 50,
   },
   {
     id: "motivational-speeches",
     name: "Motivational Speeches",
-    description: "Inspirational talks and speeches from motivational speakers",
     slug: "motivational-speeches",
-    order: 60,
+    description: "Inspirational speeches and talks",
     isActive: true,
+    order: 60,
   },
 ]
 
 // Map between showcase IDs and category IDs (for admin uploads)
 export const SHOWCASE_TO_CATEGORY_MAP: Record<string, string> = {
-  // This is empty by default, but can be populated as needed
+  // Add your showcase ID to category ID mappings here
   // Example: "12345": "hustle-mentality",
 }
 
@@ -64,7 +64,7 @@ export const CATEGORY_TO_SHOWCASE_MAP: Record<string, string> = {
   // Will be populated automatically
 }
 
-// Populate CATEGORY_TO_SHOWCASE_MAP based on SHOWCASE_TO_CATEGORY_MAP
+// Populate CATEGORY_TO_SHOWCASE_MAP
 Object.entries(SHOWCASE_TO_CATEGORY_MAP).forEach(([showcaseId, categoryId]) => {
   CATEGORY_TO_SHOWCASE_MAP[categoryId] = showcaseId
 })

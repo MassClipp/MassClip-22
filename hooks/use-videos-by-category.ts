@@ -1,13 +1,8 @@
 "use client"
 
-/**
- * React hook for fetching videos by category
- */
-
 import { useState, useEffect } from "react"
-import { getVideosForCategory } from "@/lib/category-system/category-db"
-import { db } from "@/lib/firebase"
-import { doc, getDoc } from "firebase/firestore"
+import { getShowcaseIdForCategory } from "@/lib/showcase-category-mapping"
+import { fetchVimeoShowcaseVideos } from "@/lib/vimeo-helpers"
 
 // Hook for fetching videos by category
 export function useVideosByCategory(categoryId: string, limit = 24) {
@@ -26,50 +21,22 @@ export function useVideosByCategory(categoryId: string, limit = 24) {
       try {
         setLoading(true)
 
-        // Get video IDs for this category
-        const videoIds = await getVideosForCategory(categoryId, limit)
+        // Get the showcase ID for this category
+        const showcaseId = getShowcaseIdForCategory(categoryId)
 
-        if (videoIds.length === 0) {
+        if (!showcaseId) {
           setVideos([])
           setLoading(false)
           return
         }
 
-        // Fetch each video's data from Firestore
-        const videoPromises = videoIds.map(async (videoId) => {
-          // Try to get from videos collection first
-          const videoRef = doc(db, "videos", videoId)
-          const videoDoc = await getDoc(videoRef)
+        // Fetch videos from the showcase
+        const showcaseVideos = await fetchVimeoShowcaseVideos(showcaseId)
 
-          if (videoDoc.exists()) {
-            return {
-              id: videoDoc.id,
-              ...videoDoc.data(),
-            }
-          }
+        // Limit the number of videos if needed
+        const limitedVideos = showcaseVideos.slice(0, limit)
 
-          // If not found, try uploads collection
-          const uploadRef = doc(db, "uploads", videoId)
-          const uploadDoc = await getDoc(uploadRef)
-
-          if (uploadDoc.exists()) {
-            return {
-              id: uploadDoc.id,
-              ...uploadDoc.data(),
-            }
-          }
-
-          // If still not found, return a minimal object
-          return {
-            id: videoId,
-            videoId: videoId,
-            title: "Unknown Video",
-            description: "Video details not found",
-          }
-        })
-
-        const videoData = await Promise.all(videoPromises)
-        setVideos(videoData)
+        setVideos(limitedVideos)
         setError(null)
       } catch (err) {
         console.error(`Error fetching videos for category ${categoryId}:`, err)
@@ -102,35 +69,17 @@ export function useVideoWithCategories(videoId: string) {
       try {
         setLoading(true)
 
-        // Try to get from videos collection first
-        const videoRef = doc(db, "videos", videoId)
-        const videoDoc = await getDoc(videoRef)
+        // Fetch the video from Vimeo API
+        const response = await fetch(`/api/vimeo/video-status/${videoId}`)
 
-        if (videoDoc.exists()) {
-          setVideo({
-            id: videoDoc.id,
-            ...videoDoc.data(),
-          })
-          setLoading(false)
-          return
+        if (!response.ok) {
+          throw new Error(`Failed to fetch video: ${response.statusText}`)
         }
 
-        // If not found, try uploads collection
-        const uploadRef = doc(db, "uploads", videoId)
-        const uploadDoc = await getDoc(uploadRef)
+        const videoData = await response.json()
 
-        if (uploadDoc.exists()) {
-          setVideo({
-            id: uploadDoc.id,
-            ...uploadDoc.data(),
-          })
-          setLoading(false)
-          return
-        }
-
-        // If still not found, set video to null
-        setVideo(null)
-        setError(new Error(`Video ${videoId} not found`))
+        setVideo(videoData)
+        setError(null)
       } catch (err) {
         console.error(`Error fetching video ${videoId}:`, err)
         setError(err instanceof Error ? err : new Error(String(err)))
