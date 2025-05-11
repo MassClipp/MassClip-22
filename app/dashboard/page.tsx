@@ -3,14 +3,14 @@
 import { useRef, useEffect, useState } from "react"
 import { useSearchParams } from "next/navigation"
 import { motion } from "framer-motion"
-import { Search, Clock, Brain, Rocket, ChevronRight, TrendingUp } from "lucide-react"
+import { Search, Clock, Brain, Rocket, ChevronRight, TrendingUp, Play } from "lucide-react"
 import DashboardHeader from "@/components/dashboard-header"
 import { Button } from "@/components/ui/button"
 import { useRouter } from "next/navigation"
 import { useClips } from "@/hooks/use-clips"
-import { ClipsDisplay } from "@/components/clips-display"
 import { shuffleArray } from "@/lib/utils"
 import ClipPlayer from "@/components/ClipPlayer"
+import VideoRow from "@/components/video-row"
 
 export default function Dashboard() {
   // Get search query from URL
@@ -22,7 +22,7 @@ export default function Dashboard() {
   const [featuredClips, setFeaturedClips] = useState<any[]>([])
 
   // Fetch clips from Firebase
-  const { clips, categories, loading, error } = useClips()
+  const { clips, clipsByCategory, loading, error } = useClips()
 
   const router = useRouter()
 
@@ -75,6 +75,22 @@ export default function Dashboard() {
     { name: "All", icon: <Search className="h-4 w-4 md:h-5 md:w-5" />, href: "/dashboard/categories" },
   ]
 
+  // Define placeholder categories to maintain layout
+  const placeholderCategories = ["Motivation", "Fitness", "Mindfulness", "Productivity", "Success", "Lifestyle"]
+
+  // Function to render placeholder video cards in 9:16 format
+  const renderPlaceholderCards = (count: number) => {
+    return Array.from({ length: count }).map((_, index) => (
+      <div key={`placeholder-${index}`} className="group relative">
+        <div className="aspect-[9/16] bg-zinc-900/50 rounded-xl overflow-hidden relative">
+          <div className="absolute inset-0 flex items-center justify-center">
+            <Play className="h-12 w-12 text-zinc-700/50" />
+          </div>
+        </div>
+      </div>
+    ))
+  }
+
   return (
     <div className="relative min-h-screen bg-black text-white">
       {/* Premium Gradient Background */}
@@ -112,7 +128,7 @@ export default function Dashboard() {
         )}
 
         {/* Featured Section (if not searching) */}
-        {!searchQuery && !loading && featuredClips.length > 0 && (
+        {!searchQuery && (
           <motion.div variants={containerVariants} initial="hidden" animate="visible" className="px-6 mb-12">
             <motion.div variants={itemVariants} className="flex items-center justify-between mb-6">
               <h1 className="text-3xl font-extralight tracking-tight text-white">
@@ -128,23 +144,20 @@ export default function Dashboard() {
             </motion.div>
 
             {/* Featured Videos Grid */}
-            <motion.div variants={itemVariants} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {loading
-                ? // Skeleton loaders
-                  Array.from({ length: 6 }).map((_, index) => (
-                    <div
-                      key={`skeleton-${index}`}
-                      className="aspect-video rounded-xl bg-zinc-900/50 animate-pulse"
-                    ></div>
-                  ))
+            <motion.div variants={itemVariants} className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+              {loading || clips.length === 0
+                ? // Placeholder cards in 9:16 format
+                  renderPlaceholderCards(6)
                 : // Featured clips
                   featuredClips.map((clip) => (
-                    <div key={clip.id} className="group space-y-3">
-                      <div className="relative overflow-hidden rounded-xl">
+                    <div key={clip.id} className="group relative">
+                      <div className="aspect-[9/16] bg-zinc-900 rounded-xl overflow-hidden">
                         <ClipPlayer src={clip.url} />
                       </div>
-                      <h3 className="text-lg font-medium text-white">{clip.title}</h3>
-                      <p className="text-sm text-zinc-400">{clip.category}</p>
+                      <div className="mt-2">
+                        <h3 className="text-sm font-medium text-white truncate">{clip.title}</h3>
+                        <p className="text-xs text-zinc-400">{clip.category}</p>
+                      </div>
                     </div>
                   ))}
             </motion.div>
@@ -152,7 +165,7 @@ export default function Dashboard() {
         )}
 
         {/* Category Quick Links (if not searching) */}
-        {!searchQuery && !loading && (
+        {!searchQuery && (
           <motion.div variants={containerVariants} initial="hidden" animate="visible" className="px-6 mb-12">
             <motion.h3
               variants={itemVariants}
@@ -194,37 +207,36 @@ export default function Dashboard() {
           </div>
         )}
 
-        {/* Loading state (initial) */}
-        {loading && (
-          <div className="px-6 py-10">
-            <div className="h-8 w-48 bg-zinc-900/50 rounded-md animate-pulse mb-8"></div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {Array.from({ length: 6 }).map((_, index) => (
-                <div key={`skeleton-${index}`} className="aspect-video rounded-xl bg-zinc-900/50 animate-pulse"></div>
+        {/* Category Rows - Always show even if empty */}
+        <motion.div variants={containerVariants} initial="hidden" animate="visible" className="space-y-12">
+          {/* If we have actual categories from clips, use those */}
+          {Object.keys(clipsByCategory).length > 0
+            ? Object.entries(clipsByCategory).map(([category, categoryClips]) => (
+                <motion.div key={`category-${category}`} variants={itemVariants}>
+                  <VideoRow title={category} videos={categoryClips} limit={10} isShowcase={false} showcaseId="" />
+                </motion.div>
+              ))
+            : // Otherwise use placeholder categories
+              placeholderCategories.map((category) => (
+                <motion.div key={`placeholder-category-${category}`} variants={itemVariants}>
+                  <div className="px-6">
+                    <div className="flex items-center justify-between mb-4">
+                      <h2 className="text-xl font-medium text-white">{category}</h2>
+                      <Button
+                        variant="ghost"
+                        className="text-zinc-400 hover:text-white text-sm"
+                        onClick={() => router.push(`/category/${category.toLowerCase()}`)}
+                      >
+                        View All <ChevronRight className="h-4 w-4 ml-1" />
+                      </Button>
+                    </div>
+                    <div className="grid grid-flow-col auto-cols-[80%] md:auto-cols-[40%] lg:auto-cols-[25%] xl:auto-cols-[20%] gap-4 overflow-x-auto pb-4 snap-x">
+                      {renderPlaceholderCards(5)}
+                    </div>
+                  </div>
+                </motion.div>
               ))}
-            </div>
-          </div>
-        )}
-
-        {/* Main clips display */}
-        {!loading && clips.length > 0 && (
-          <div className="px-6">
-            <ClipsDisplay clips={clips} searchQuery={searchQuery} groupByCategory={true} />
-          </div>
-        )}
-
-        {/* No clips state */}
-        {!loading && clips.length === 0 && !error && (
-          <div className="px-6 py-10 text-center">
-            {searchQuery ? (
-              <p className="text-zinc-400">No clips found matching "{searchQuery}". Try a different search term.</p>
-            ) : (
-              <p className="text-zinc-400">
-                No clips found. Add some clips to your Firebase collection to get started.
-              </p>
-            )}
-          </div>
-        )}
+        </motion.div>
       </main>
     </div>
   )
