@@ -109,13 +109,13 @@ export default function LandingPage() {
               >
                 <Button
                   onClick={handleExploreClips}
-                  className="flex-1 py-6 bg-white/5 hover:bg-white/10 text-white text-lg border border-white/10 premium-button"
+                  className="flex-1 py-3 sm:py-6 bg-white/5 hover:bg-white/10 text-white text-sm sm:text-lg border border-white/10 premium-button"
                 >
                   EXPLORE CLIPS
                 </Button>
                 <Button
                   onClick={handleStartFree}
-                  className="flex-1 py-6 bg-crimson hover:bg-crimson-dark text-white text-lg premium-button"
+                  className="flex-1 py-3 sm:py-6 bg-crimson hover:bg-crimson-dark text-white text-sm sm:text-lg premium-button"
                 >
                   START FREE
                 </Button>
@@ -281,7 +281,7 @@ export default function LandingPage() {
               >
                 <Button
                   onClick={handleExploreClips}
-                  className="bg-transparent hover:bg-white/5 text-white border border-white/10 px-8 py-6 premium-button"
+                  className="bg-transparent hover:bg-white/5 text-white border border-white/10 px-6 sm:px-8 py-3 sm:py-6 text-sm sm:text-base premium-button"
                 >
                   VIEW ALL CATEGORIES <ArrowRight className="ml-2 h-4 w-4" />
                 </Button>
@@ -302,7 +302,7 @@ export default function LandingPage() {
               </p>
               <Button
                 onClick={handleStartFree}
-                className="bg-crimson hover:bg-crimson-dark text-white text-lg px-12 py-6 premium-button"
+                className="bg-crimson hover:bg-crimson-dark text-white text-sm sm:text-lg px-8 sm:px-12 py-3 sm:py-6 premium-button"
               >
                 START FREE TODAY
               </Button>

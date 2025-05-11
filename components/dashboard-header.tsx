@@ -210,6 +210,13 @@ export default function DashboardHeader({ initialSearchQuery = "" }) {
               </div>
             )}
 
+            {/* Mobile Upgrade Button */}
+            {!loading && !isProUser && (
+              <UpgradeButton navigateOnly={true} className="text-xs px-2 py-1">
+                Upgrade
+              </UpgradeButton>
+            )}
+
             {/* User Profile Button */}
             <Button
               variant="ghost"
