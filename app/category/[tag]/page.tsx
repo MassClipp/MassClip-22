@@ -1,7 +1,7 @@
 "use client"
 
 import { useRef, useCallback, useEffect, useState } from "react"
-import { useRouter } from "next/navigation"
+import { useParams, useRouter } from "next/navigation"
 import Link from "next/link"
 import { ChevronLeft, Search, Filter, ArrowUpRight, Lock } from "lucide-react"
 import { motion, AnimatePresence } from "framer-motion"
@@ -15,11 +15,12 @@ import { shuffleArray } from "@/lib/utils"
 import { UpgradePrompt } from "@/components/upgrade-prompt"
 import { useUserPlan } from "@/hooks/use-user-plan"
 
-export default function CategoryPage({ params }: { params: { tag: string } }) {
+export default function CategoryPage() {
+  const params = useParams()
   const router = useRouter()
-  const tagSlug = params.tag
+  const tagSlug = params.tag as string
   const tag = decodeURIComponent(tagSlug.replace(/-/g, " "))
-  const { videos, loading, error, hasMore, loadMore, isLimited, totalVideos } = useVimeoTagVideos(tag)
+  const { videos, loading, error, hasMore, loadMore, totalCount, hasMoreVideos } = useVimeoTagVideos(tag)
   const { showcaseIds, categoryToShowcaseMap } = useVimeoShowcases()
   const [isLoading, setIsLoading] = useState(true)
   const [noContentMessage, setNoContentMessage] = useState<string | null>(null)
@@ -247,6 +248,27 @@ export default function CategoryPage({ params }: { params: { tag: string } }) {
             </div>
           </div>
 
+          {/* Free user info banner */}
+          {!isProUser && hasMoreVideos && (
+            <div className="mb-6 p-3 bg-gradient-to-r from-amber-900/20 to-amber-800/20 border border-amber-800/30 rounded-lg">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center">
+                  <Lock className="h-4 w-4 text-amber-500 mr-2" />
+                  <span className="text-sm text-amber-200">
+                    Free users can view 5 of {totalCount} videos in this category
+                  </span>
+                </div>
+                <Button
+                  size="sm"
+                  className="bg-amber-700 hover:bg-amber-600 text-white text-xs"
+                  onClick={() => router.push("/pricing")}
+                >
+                  Upgrade for All Videos
+                </Button>
+              </div>
+            </div>
+          )}
+
           {/* Error state */}
           {error && (
             <motion.div
@@ -287,26 +309,6 @@ export default function CategoryPage({ params }: { params: { tag: string } }) {
                       Found {filteredVideos.length} results for "{searchQuery}"
                     </div>
                   )}
-
-                  {/* Show plan info for free users */}
-                  {!isProUser && totalVideos > 5 && (
-                    <div className="mb-6 flex items-center justify-between bg-gray-900/50 border border-gray-800 rounded-lg p-3">
-                      <div className="flex items-center">
-                        <Lock className="h-4 w-4 text-amber-500 mr-2" />
-                        <span className="text-sm text-gray-300">
-                          Free users can view 5 of {totalVideos} videos in this category
-                        </span>
-                      </div>
-                      <Button
-                        size="sm"
-                        className="bg-rose-700 hover:bg-rose-600 text-white text-xs"
-                        onClick={() => router.push("/pricing")}
-                      >
-                        Upgrade
-                      </Button>
-                    </div>
-                  )}
-
                   <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-6">
                     {filteredVideos.map((video, index) => (
                       <motion.div
@@ -352,8 +354,8 @@ export default function CategoryPage({ params }: { params: { tag: string } }) {
             </div>
           )}
 
-          {/* Manual load more button - only show for pro users or if free users haven't reached limit */}
-          {!loading && filteredVideos.length > 0 && hasMore && (
+          {/* Manual load more button - only show for pro users */}
+          {!loading && filteredVideos.length > 0 && hasMore && isProUser && (
             <div className="py-8 text-center">
               <Button onClick={loadMore} className="bg-red-600 hover:bg-red-700 text-white px-8">
                 Load More Videos
@@ -361,10 +363,10 @@ export default function CategoryPage({ params }: { params: { tag: string } }) {
             </div>
           )}
 
-          {/* Show upgrade prompt for free users who have reached their limit */}
-          {isLimited && (
+          {/* Show upgrade prompt for free users who have more videos available */}
+          {!isProUser && hasMoreVideos && (
             <div className="mt-8">
-              <UpgradePrompt className="max-w-2xl mx-auto" />
+              <UpgradePrompt totalCount={totalCount} />
             </div>
           )}
         </motion.div>
