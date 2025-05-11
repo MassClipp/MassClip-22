@@ -1,7 +1,7 @@
 "use client"
 
 import type React from "react"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 
 interface ClipPlayerProps {
   src: string
@@ -13,15 +13,31 @@ interface ClipPlayerProps {
 export default function ClipPlayer({ src, title, poster, aspectRatio = "16/9" }: ClipPlayerProps) {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [videoSrc, setVideoSrc] = useState<string>(src)
+
+  // Ensure URL is properly encoded
+  useEffect(() => {
+    // Only re-encode if it's not already encoded
+    if (src && !src.includes("%20") && src.includes(" ")) {
+      setVideoSrc(encodeURI(src))
+    } else {
+      setVideoSrc(src)
+    }
+
+    // Log the URL for debugging
+    console.log("Video source:", src)
+    console.log("Encoded video source:", videoSrc)
+  }, [src])
 
   const handleLoadedData = () => {
     setIsLoading(false)
+    console.log("Video loaded successfully:", videoSrc)
   }
 
   const handleError = (e: React.SyntheticEvent<HTMLVideoElement, Event>) => {
     setIsLoading(false)
     setError("Failed to load video. Please try again later.")
-    console.error("Video error:", e)
+    console.error("Video error:", e, "URL:", videoSrc)
   }
 
   return (
@@ -54,7 +70,7 @@ export default function ClipPlayer({ src, title, poster, aspectRatio = "16/9" }:
         onLoadedData={handleLoadedData}
         onError={handleError}
       >
-        <source src={src} type="video/mp4" />
+        <source src={videoSrc} type="video/mp4" />
         Your browser does not support the video tag.
       </video>
 
