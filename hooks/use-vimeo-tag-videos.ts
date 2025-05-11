@@ -1,172 +1,84 @@
 "use client"
 
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect, useRef, useCallback } from "react"
 import type { VimeoVideo } from "@/lib/types"
-import { useVimeoShowcases } from "./use-vimeo-showcases"
+import { useUserPlan } from "@/hooks/use-user-plan"
 
 export function useVimeoTagVideos(tag: string) {
   const [videos, setVideos] = useState<VimeoVideo[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [hasMore, setHasMore] = useState(false)
+  const [page, setPage] = useState(1)
+  const [hasMore, setHasMore] = useState(true)
+  const { isProUser } = useUserPlan()
+  const FREE_USER_VIDEO_LIMIT = 5 // Limit for free users
+
   const isMounted = useRef(true)
+  const allVideosRef = useRef<VimeoVideo[]>([])
+  const normalizedTag = tag.toLowerCase().replace(/-/g, " ")
 
-  // Get showcase videos
-  const { showcaseVideos, loading: loadingShowcases } = useVimeoShowcases()
+  const fetchVideos = useCallback(
+    async (pageNum: number) => {
+      try {
+        setLoading(true)
+        console.log(`Fetching videos for tag "${normalizedTag}", page ${pageNum}`)
 
-  // Helper function to normalize tag names
-  const normalizeTagName = (tagName: string): string => {
-    return tagName.trim().toLowerCase().replace(/\s+/g, " ")
-  }
+        const response = await fetch(`/api/vimeo?tag=${encodeURIComponent(normalizedTag)}&page=${pageNum}&per_page=20`)
 
-  // Get related tags for special categories
-  const getRelatedTags = (categoryName: string): string[] => {
-    const normalizedCategory = normalizeTagName(categoryName)
+        if (!response.ok) {
+          const errorData = await response.json()
+          throw new Error(errorData.details || "Failed to fetch videos")
+        }
 
-    // Define related tags for special categories
-    const relatedTagsMap: Record<string, string[]> = {
-      introspection: [
-        "introspection",
-        "reflection",
-        "meditation",
-        "self",
-        "awareness",
-        "consciousness",
-        "mindfulness",
-        "inner",
-        "peace",
-      ],
-      "hustle mentality": [
-        "hustle",
-        "grind",
-        "work ethic",
-        "success",
-        "entrepreneur",
-        "business",
-        "ambition",
-        "drive",
-        "determination",
-      ],
-      // Keep other categories
-      "high energy motivation": [
-        "high energy",
-        "motivation",
-        "energy",
-        "motivational",
-        "inspire",
-        "inspiration",
-        "success",
-        "achievement",
-        "drive",
-        "ambition",
-        "hustle",
-        "grind",
-        "determination",
-      ],
-      mindset: ["mindset", "growth", "positive", "thinking", "mental", "attitude", "psychology", "focus", "discipline"],
-      "money and wealth": [
-        "money",
-        "wealth",
-        "finance",
-        "financial",
-        "rich",
-        "success",
-        "abundance",
-        "prosperity",
-        "investment",
-      ],
-      "motivational speeches": [
-        "speech",
-        "motivational",
-        "speaker",
-        "inspiration",
-        "inspire",
-        "talk",
-        "lecture",
-        "presentation",
-        "keynote",
-        "motivation",
-      ],
+        const data = await response.json()
+        console.log(`Received ${data.data.length} videos for tag "${normalizedTag}"`)
+
+        if (!isMounted.current) return
+
+        // Store all videos in our ref
+        allVideosRef.current = [...allVideosRef.current, ...data.data]
+
+        // For free users, limit the number of videos
+        const videosToShow = isProUser ? allVideosRef.current : allVideosRef.current.slice(0, FREE_USER_VIDEO_LIMIT)
+
+        setVideos(videosToShow)
+        setHasMore(!!data.paging?.next && (isProUser || allVideosRef.current.length < FREE_USER_VIDEO_LIMIT))
+      } catch (err) {
+        console.error("Error fetching videos:", err)
+        if (isMounted.current) {
+          setError(err instanceof Error ? err.message : "Failed to fetch videos")
+        }
+      } finally {
+        if (isMounted.current) {
+          setLoading(false)
+        }
+      }
+    },
+    [normalizedTag, isProUser],
+  )
+
+  const loadMore = useCallback(() => {
+    if (!loading && hasMore) {
+      const nextPage = page + 1
+      setPage(nextPage)
+      fetchVideos(nextPage)
     }
-
-    return relatedTagsMap[normalizedCategory] || [normalizedCategory]
-  }
-
-  // Helper function to check if a video matches the tag
-  const videoMatchesTag = (video: VimeoVideo, searchTag: string): boolean => {
-    if (!video.tags || video.tags.length === 0) return false
-
-    const relatedTags = getRelatedTags(searchTag)
-
-    // Check if any video tag matches any of our related tags
-    return video.tags.some((videoTag) => {
-      const normalizedVideoTag = normalizeTagName(videoTag.name)
-      return relatedTags.some((relatedTag) => normalizedVideoTag.includes(relatedTag))
-    })
-  }
-
-  // Helper function to check if a video matches by name or description
-  const videoMatchesByContent = (video: VimeoVideo, searchTag: string): boolean => {
-    if (!video.name && !video.description) return false
-
-    const relatedTerms = getRelatedTags(searchTag)
-    const videoName = (video.name || "").toLowerCase()
-    const videoDescription = (video.description || "").toLowerCase()
-
-    // Check if video name or description contains any related terms
-    return relatedTerms.some((term) => videoName.includes(term) || videoDescription.includes(term))
-  }
-
-  // Load more videos function
-  const loadMore = () => {
-    // This is a placeholder - in a real implementation, you would fetch more videos
-    // For now, we'll just set hasMore to false to indicate no more videos
-    setHasMore(false)
-  }
+  }, [loading, hasMore, page, fetchVideos])
 
   useEffect(() => {
     // Reset state when tag changes
     setVideos([])
+    setPage(1)
+    setHasMore(true)
     setError(null)
-    setLoading(true)
+    allVideosRef.current = []
 
-    // Wait for showcases to load
-    if (!loadingShowcases && Object.keys(showcaseVideos).length > 0) {
-      try {
-        // Get all videos from all showcases
-        const allShowcaseVideos = Object.values(showcaseVideos).flat()
+    fetchVideos(1)
 
-        // Filter videos by tag
-        const taggedVideos = allShowcaseVideos.filter(
-          (video) => videoMatchesTag(video, tag) || videoMatchesByContent(video, tag),
-        )
-
-        // Sort videos alphabetically by name
-        const sortedVideos = [...taggedVideos].sort((a, b) => {
-          const nameA = (a.name || "").toLowerCase()
-          const nameB = (b.name || "").toLowerCase()
-          return nameA.localeCompare(nameB)
-        })
-
-        if (isMounted.current) {
-          setVideos(sortedVideos)
-          setHasMore(false) // No more videos to load in this implementation
-          setLoading(false)
-        }
-      } catch (err) {
-        console.error("Error processing videos:", err)
-        if (isMounted.current) {
-          setError(err instanceof Error ? err.message : "Failed to process videos")
-          setLoading(false)
-        }
-      }
-    }
-
-    // Cleanup function
     return () => {
       isMounted.current = false
     }
-  }, [tag, showcaseVideos, loadingShowcases])
+  }, [normalizedTag, fetchVideos])
 
   return {
     videos,
@@ -174,5 +86,7 @@ export function useVimeoTagVideos(tag: string) {
     error,
     hasMore,
     loadMore,
+    isLimited: !isProUser && videos.length >= FREE_USER_VIDEO_LIMIT,
+    totalVideos: allVideosRef.current.length,
   }
 }

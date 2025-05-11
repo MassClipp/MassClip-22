@@ -3,7 +3,7 @@
 import { useRef, useCallback, useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
-import { ChevronLeft, Search, Filter, ArrowUpRight } from "lucide-react"
+import { ChevronLeft, Search, Filter, ArrowUpRight, Lock } from "lucide-react"
 import { motion, AnimatePresence } from "framer-motion"
 import DashboardHeader from "@/components/dashboard-header"
 import VimeoCard from "@/components/vimeo-card"
@@ -16,11 +16,10 @@ import { UpgradePrompt } from "@/components/upgrade-prompt"
 import { useUserPlan } from "@/hooks/use-user-plan"
 
 export default function CategoryPage({ params }: { params: { tag: string } }) {
-  const { tag: tagSlug } = params
-  const decodedTag = decodeURIComponent(tagSlug)
-  const { videos, loading, error, hasMore, loadMore } = useVimeoTagVideos(decodedTag)
   const router = useRouter()
+  const tagSlug = params.tag
   const tag = decodeURIComponent(tagSlug.replace(/-/g, " "))
+  const { videos, loading, error, hasMore, loadMore, isLimited, totalVideos } = useVimeoTagVideos(tag)
   const { showcaseIds, categoryToShowcaseMap } = useVimeoShowcases()
   const [isLoading, setIsLoading] = useState(true)
   const [noContentMessage, setNoContentMessage] = useState<string | null>(null)
@@ -288,6 +287,26 @@ export default function CategoryPage({ params }: { params: { tag: string } }) {
                       Found {filteredVideos.length} results for "{searchQuery}"
                     </div>
                   )}
+
+                  {/* Show plan info for free users */}
+                  {!isProUser && totalVideos > 5 && (
+                    <div className="mb-6 flex items-center justify-between bg-gray-900/50 border border-gray-800 rounded-lg p-3">
+                      <div className="flex items-center">
+                        <Lock className="h-4 w-4 text-amber-500 mr-2" />
+                        <span className="text-sm text-gray-300">
+                          Free users can view 5 of {totalVideos} videos in this category
+                        </span>
+                      </div>
+                      <Button
+                        size="sm"
+                        className="bg-rose-700 hover:bg-rose-600 text-white text-xs"
+                        onClick={() => router.push("/pricing")}
+                      >
+                        Upgrade
+                      </Button>
+                    </div>
+                  )}
+
                   <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-6">
                     {filteredVideos.map((video, index) => (
                       <motion.div
@@ -333,7 +352,7 @@ export default function CategoryPage({ params }: { params: { tag: string } }) {
             </div>
           )}
 
-          {/* Manual load more button */}
+          {/* Manual load more button - only show for pro users or if free users haven't reached limit */}
           {!loading && filteredVideos.length > 0 && hasMore && (
             <div className="py-8 text-center">
               <Button onClick={loadMore} className="bg-red-600 hover:bg-red-700 text-white px-8">
@@ -341,20 +360,14 @@ export default function CategoryPage({ params }: { params: { tag: string } }) {
               </Button>
             </div>
           )}
-        </motion.div>
-        {/* Videos grid */}
-        {/* <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 mt-6">
-        {videos.map((video) => (
-          <VimeoCard key={video.uri} video={video} />
-        ))}
-      </div> */}
 
-        {/* Show upgrade prompt for free users */}
-        {!isProUser && videos.length === 5 && (
-          <div className="mt-8">
-            <UpgradePrompt />
-          </div>
-        )}
+          {/* Show upgrade prompt for free users who have reached their limit */}
+          {isLimited && (
+            <div className="mt-8">
+              <UpgradePrompt className="max-w-2xl mx-auto" />
+            </div>
+          )}
+        </motion.div>
       </main>
     </div>
   )

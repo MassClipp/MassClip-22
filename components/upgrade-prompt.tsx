@@ -2,12 +2,14 @@
 
 import { Button } from "@/components/ui/button"
 import { useRouter } from "next/navigation"
+import { Lock } from "lucide-react"
 
 interface UpgradePromptProps {
   className?: string
+  totalVideos?: number
 }
 
-export function UpgradePrompt({ className = "" }: UpgradePromptProps) {
+export function UpgradePrompt({ className = "", totalVideos }: UpgradePromptProps) {
   const router = useRouter()
 
   const handleUpgrade = () => {
@@ -16,15 +18,31 @@ export function UpgradePrompt({ className = "" }: UpgradePromptProps) {
 
   return (
     <div
-      className={`p-4 rounded-lg bg-gradient-to-r from-rose-900/20 to-rose-800/20 border border-rose-800/30 ${className}`}
+      className={`p-6 rounded-lg bg-gradient-to-r from-rose-900/20 to-rose-800/20 border border-rose-800/30 ${className}`}
     >
-      <h3 className="text-sm font-medium text-rose-200 mb-2">Unlock Full Access</h3>
-      <p className="text-xs text-zinc-300 mb-3">
-        Free users can only view 5 videos per category. Upgrade to Creator Pro for unlimited access to all videos.
+      <div className="flex items-center mb-3">
+        <Lock className="h-5 w-5 text-rose-400 mr-2" />
+        <h3 className="text-lg font-medium text-rose-200">Unlock Full Access</h3>
+      </div>
+
+      <p className="text-sm text-zinc-300 mb-4">
+        {totalVideos
+          ? `Free users can only view 5 of ${totalVideos} videos in this category. Upgrade to Creator Pro for unlimited access.`
+          : `Free users can only view 5 videos per category. Upgrade to Creator Pro for unlimited access to all videos.`}
       </p>
-      <Button onClick={handleUpgrade} className="w-full bg-rose-800 hover:bg-rose-700 text-white text-xs py-1 px-3">
-        Upgrade to Creator Pro
-      </Button>
+
+      <div className="flex flex-col sm:flex-row gap-3">
+        <Button onClick={handleUpgrade} className="flex-1 bg-rose-700 hover:bg-rose-600 text-white">
+          Upgrade to Creator Pro
+        </Button>
+        <Button
+          variant="outline"
+          onClick={() => router.push("/dashboard/categories")}
+          className="flex-1 border-rose-800/50 hover:bg-rose-900/20 text-rose-200"
+        >
+          Browse Other Categories
+        </Button>
+      </div>
     </div>
   )
 }
