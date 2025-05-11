@@ -18,6 +18,7 @@ import {
   Menu,
   ChevronRight,
   DollarSign,
+  Infinity,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useAuth } from "@/contexts/auth-context"
@@ -157,14 +158,24 @@ export default function DashboardHeader({ initialSearchQuery = "" }) {
               <Search className="h-5 w-5" />
             </button>
 
-            {/* Downloads Counter - Only show when not loading and not pro */}
-            {!loading && !isProUser && (
-              <div className="flex items-center bg-zinc-900/80 border border-zinc-800 rounded-full px-3 py-1">
-                <Download className={`h-4 w-4 mr-1 ${hasReachedLimit ? "text-amber-500" : "text-crimson"}`} />
-                <span className={`text-sm font-medium ${hasReachedLimit ? "text-amber-500" : "text-white"}`}>
-                  {remainingDownloads} left
-                </span>
-              </div>
+            {/* Downloads Counter - Show for both pro and free users */}
+            {!loading && (
+              <>
+                {isProUser ? (
+                  <div className="flex items-center bg-zinc-900/80 border border-zinc-800 rounded-full px-3 py-1">
+                    <Download className="h-4 w-4 mr-1 text-green-500" />
+                    <span className="text-sm font-medium text-green-500 mr-1">Unlimited</span>
+                    <Infinity className="h-3 w-3 text-green-500" />
+                  </div>
+                ) : (
+                  <div className="flex items-center bg-zinc-900/80 border border-zinc-800 rounded-full px-3 py-1">
+                    <Download className={`h-4 w-4 mr-1 ${hasReachedLimit ? "text-amber-500" : "text-crimson"}`} />
+                    <span className={`text-sm font-medium ${hasReachedLimit ? "text-amber-500" : "text-white"}`}>
+                      {remainingDownloads} left
+                    </span>
+                  </div>
+                )}
+              </>
             )}
 
             {/* User Menu */}
@@ -218,14 +229,23 @@ export default function DashboardHeader({ initialSearchQuery = "" }) {
               <Search className="h-5 w-5" />
             </button>
 
-            {/* Mobile Download Counter for Free Users - Only show when not loading */}
-            {!loading && !isProUser && (
-              <div className="flex items-center bg-zinc-900/80 border border-zinc-800 rounded-full px-2 py-0.5">
-                <Download className={`h-3 w-3 mr-1 ${hasReachedLimit ? "text-amber-500" : "text-crimson"}`} />
-                <span className={`text-xs font-medium ${hasReachedLimit ? "text-amber-500" : "text-white"}`}>
-                  {remainingDownloads}
-                </span>
-              </div>
+            {/* Mobile Download Counter - Show for both pro and free users */}
+            {!loading && (
+              <>
+                {isProUser ? (
+                  <div className="flex items-center bg-zinc-900/80 border border-zinc-800 rounded-full px-2 py-0.5">
+                    <Download className="h-3 w-3 mr-1 text-green-500" />
+                    <Infinity className="h-3 w-3 text-green-500" />
+                  </div>
+                ) : (
+                  <div className="flex items-center bg-zinc-900/80 border border-zinc-800 rounded-full px-2 py-0.5">
+                    <Download className={`h-3 w-3 mr-1 ${hasReachedLimit ? "text-amber-500" : "text-crimson"}`} />
+                    <span className={`text-xs font-medium ${hasReachedLimit ? "text-amber-500" : "text-white"}`}>
+                      {remainingDownloads}
+                    </span>
+                  </div>
+                )}
+              </>
             )}
 
             {/* Mobile Menu Button */}
