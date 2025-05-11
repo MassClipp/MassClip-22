@@ -2,6 +2,7 @@
 
 import type React from "react"
 import { useState, useEffect, useRef } from "react"
+import { isVideoFormatSupported, checkVideoFormat } from "@/lib/video-utils"
 
 interface ClipPlayerProps {
   src: string
@@ -14,8 +15,10 @@ export default function ClipPlayer({ src, title, poster, aspectRatio = "16/9" }:
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [videoSrc, setVideoSrc] = useState<string>(src)
+  const [formatInfo, setFormatInfo] = useState<string | null>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
   const [hasInteracted, setHasInteracted] = useState(false)
+  const [useFallback, setUseFallback] = useState(false)
 
   // Process the URL to handle spaces and special characters
   useEffect(() => {
@@ -24,21 +27,31 @@ export default function ClipPlayer({ src, title, poster, aspectRatio = "16/9" }:
       const processedUrl = src.includes("%20") ? src : encodeURI(src)
       setVideoSrc(processedUrl)
 
+      // Check format support
+      const mp4Supported = isVideoFormatSupported("video/mp4")
+      setFormatInfo(`MP4 support: ${mp4Supported ? "Yes" : "No"}`)
+
       // Log for debugging
       console.log("Original URL:", src)
       console.log("Processed URL:", processedUrl)
+      console.log("Browser MP4 support:", mp4Supported)
+
+      // Check the actual video format
+      checkVideoFormat(processedUrl)
+        .then((format) => {
+          console.log("Detected video format:", format)
+          if (format && !isVideoFormatSupported(format)) {
+            console.warn(`Browser does not support format: ${format}`)
+          }
+        })
+        .catch((err) => {
+          console.error("Error checking format:", err)
+        })
     } catch (err) {
       console.error("URL processing error:", err)
       setError("Invalid video URL format")
     }
   }, [src])
-
-  // Add CORS headers via proxy if needed
-  const handleCorsError = () => {
-    // If we detect a CORS error, we could try a proxy or alternative URL
-    console.log("Attempting to handle CORS error")
-    // This is a fallback that could be implemented if needed
-  }
 
   const handleLoadedData = () => {
     setIsLoading(false)
@@ -66,13 +79,16 @@ export default function ClipPlayer({ src, title, poster, aspectRatio = "16/9" }:
           break
         case MediaError.MEDIA_ERR_NETWORK:
           setError("A network error caused the video download to fail.")
-          handleCorsError()
           break
         case MediaError.MEDIA_ERR_DECODE:
           setError("The video could not be decoded. The file might be corrupted.")
           break
         case MediaError.MEDIA_ERR_SRC_NOT_SUPPORTED:
           setError("The video format is not supported by your browser.")
+          // Try fallback if not already using it
+          if (!useFallback) {
+            setUseFallback(true)
+          }
           break
         default:
           setError("An unknown error occurred. Please try again later.")
@@ -86,6 +102,7 @@ export default function ClipPlayer({ src, title, poster, aspectRatio = "16/9" }:
   const handleRetry = () => {
     setIsLoading(true)
     setError(null)
+    setUseFallback(false)
 
     // Force reload by temporarily removing the source
     if (videoRef.current) {
@@ -106,6 +123,45 @@ export default function ClipPlayer({ src, title, poster, aspectRatio = "16/9" }:
     }
   }
 
+  // Render a fallback player using an iframe
+  const renderFallbackPlayer = () => {
+    return (
+      <div className="relative w-full h-full">
+        <iframe
+          src={`https://iframe.mediadelivery.net/embed/player?url=${encodeURIComponent(videoSrc)}`}
+          className="absolute inset-0 w-full h-full"
+          allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture"
+          allowFullScreen
+        ></iframe>
+      </div>
+    )
+  }
+
+  // Render a direct link to the video
+  const renderDirectLink = () => {
+    return (
+      <div className="absolute inset-0 flex items-center justify-center bg-black/80 text-white text-center p-4 z-20">
+        <div>
+          <p className="text-red-400 mb-2">Your browser doesn't support this video format.</p>
+          <a
+            href={videoSrc}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="px-4 py-2 bg-crimson text-white text-sm rounded hover:bg-crimson-dark transition-colors inline-block"
+          >
+            Download Video
+          </a>
+          <button
+            onClick={handleRetry}
+            className="px-4 py-2 bg-zinc-700 text-white text-sm rounded hover:bg-zinc-600 transition-colors ml-2"
+          >
+            Retry
+          </button>
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="relative w-full overflow-hidden" style={{ aspectRatio }} onClick={handleInteraction}>
       {isLoading && (
@@ -114,40 +170,37 @@ export default function ClipPlayer({ src, title, poster, aspectRatio = "16/9" }:
         </div>
       )}
 
-      {error && (
-        <div className="absolute inset-0 flex items-center justify-center bg-black/80 text-white text-center p-4 z-20">
-          <div>
-            <p className="text-red-400 mb-2">{error}</p>
-            <button
-              onClick={handleRetry}
-              className="px-4 py-2 bg-crimson text-white text-sm rounded hover:bg-crimson-dark transition-colors"
-            >
-              Retry
-            </button>
-          </div>
-        </div>
-      )}
+      {error && !useFallback && renderDirectLink()}
 
-      <video
-        ref={videoRef}
-        className="w-full h-full object-cover rounded-lg bg-black"
-        controls
-        preload="metadata"
-        poster={poster}
-        onLoadStart={handleLoadStart}
-        onLoadedData={handleLoadedData}
-        onError={handleError}
-        playsInline
-        crossOrigin="anonymous"
-      >
-        <source src={videoSrc} type="video/mp4" />
-        Your browser does not support the video tag.
-      </video>
+      {useFallback ? (
+        renderFallbackPlayer()
+      ) : (
+        <video
+          ref={videoRef}
+          className="w-full h-full object-cover rounded-lg bg-black"
+          controls
+          preload="metadata"
+          poster={poster}
+          onLoadStart={handleLoadStart}
+          onLoadedData={handleLoadedData}
+          onError={handleError}
+          playsInline
+          crossOrigin="anonymous"
+        >
+          <source src={videoSrc} type="video/mp4" />
+          <source src={videoSrc.replace(".mp4", ".webm")} type="video/webm" />
+          Your browser does not support the video tag.
+        </video>
+      )}
 
       {title && (
         <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-4">
           <h3 className="text-white font-medium truncate">{title}</h3>
         </div>
+      )}
+
+      {formatInfo && (
+        <div className="absolute top-2 right-2 bg-black/70 text-xs text-white px-2 py-1 rounded">{formatInfo}</div>
       )}
     </div>
   )

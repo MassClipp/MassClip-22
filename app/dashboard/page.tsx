@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button"
 import { useRouter } from "next/navigation"
 import ClipPlayer from "@/components/ClipPlayer"
 import DirectVideoTest from "@/components/direct-video-test"
+import VideoFormatTest from "@/components/video-format-test"
 
 export default function Dashboard() {
   // Get search query from URL
@@ -129,8 +130,9 @@ export default function Dashboard() {
 
         {/* Debug Video Test (if enabled) */}
         {showDebug && (
-          <div className="px-6 mb-8">
+          <div className="px-6 mb-8 space-y-4">
             <DirectVideoTest src={sampleClip.url} />
+            <VideoFormatTest videoUrl={sampleClip.url} />
           </div>
         )}
 
