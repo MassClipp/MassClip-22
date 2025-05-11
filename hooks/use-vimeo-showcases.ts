@@ -1,197 +1,105 @@
 "use client"
 
-import { useState, useEffect, useRef, useMemo, useCallback } from "react"
-import type { VimeoShowcasesResponse, VimeoShowcase, VimeoVideo, VimeoApiResponse } from "@/lib/types"
+import { useState, useEffect } from "react"
 
+// Define minimal types to maintain compatibility
+interface VimeoShowcase {
+  name: string
+  uri: string
+}
+
+interface VimeoVideo {
+  id: string
+  title: string
+  description?: string
+  thumbnailUrl: string
+  videoUrl: string
+  downloadUrl?: string
+  tags?: string[]
+  uri: string
+  name: string
+}
+
+// Mock data structure to maintain compatibility with existing code
 export function useVimeoShowcases() {
   const [showcases, setShowcases] = useState<VimeoShowcase[]>([])
   const [showcaseVideos, setShowcaseVideos] = useState<Record<string, VimeoVideo[]>>({})
   const [showcaseIds, setShowcaseIds] = useState<Record<string, string>>({})
   const [categoryToShowcaseMap, setCategoryToShowcaseMap] = useState<Record<string, string>>({})
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const isMounted = useRef(true)
-  const fetchedShowcases = useRef(false)
-  const maxVideosPerShowcase = 20
 
-  // Define the exact categories we want to display
-  const allowedCategories = useMemo(
-    () => [
-      "Introspection",
-      "Hustle Mentality",
-      "High Energy Motivation",
-      "Faith",
-      "Money & Wealth",
-      "Motivational Speeches",
-    ],
-    [],
-  )
-
-  // Helper function to normalize category names - memoized to prevent recreation
-  const normalizeCategory = useCallback((category: string): string => {
-    return category.trim().toLowerCase().replace(/\s+/g, " ")
-  }, [])
-
-  // Define exact mapping for our specific categories
-  const exactCategoryMapping = useMemo(
-    () => ({
-      introspection: "Introspection",
-      "hustle mentality": "Hustle Mentality",
-      "high energy motivation": "High Energy Motivation",
-      faith: "Faith",
-      "money & wealth": "Money & Wealth",
-      "motivational speeches": "Motivational Speeches",
-    }),
-    [],
-  )
-
-  // Fetch videos for a specific showcase
-  const fetchShowcaseVideos = useCallback(
-    async (showcaseId: string, showcaseName: string) => {
-      // Only fetch videos for allowed categories
-      if (!allowedCategories.includes(showcaseName)) {
-        return
-      }
-
+  useEffect(() => {
+    const fetchShowcases = async () => {
       try {
-        console.log(`Fetching videos for showcase ${showcaseName}`)
+        setLoading(true)
 
-        const response = await fetch(`/api/vimeo/showcases/${showcaseId}/videos?per_page=${maxVideosPerShowcase}`)
+        // Fetch from our new API endpoint instead of Vimeo
+        const response = await fetch("/api/videos/categories")
 
-        // Check if response is OK
         if (!response.ok) {
-          console.error(`Error fetching videos for showcase ${showcaseName}: Status ${response.status}`)
-          return
+          throw new Error("Failed to fetch video categories")
         }
 
-        // Try to parse as JSON
-        let data: VimeoApiResponse
-        try {
-          data = await response.json()
-        } catch (jsonError) {
-          console.error(`Error parsing JSON for showcase ${showcaseName}:`, jsonError)
-          return
-        }
+        const data = await response.json()
 
-        // Only update state if component is still mounted
-        if (!isMounted.current) return
+        // Transform the data to match the expected format
+        const showcasesList: VimeoShowcase[] = data.categories.map((category: string) => ({
+          name: category,
+          uri: `/categories/${category}`,
+        }))
 
-        console.log(`Received ${data.data.length} videos for showcase ${showcaseName}`)
+        setShowcases(showcasesList)
 
-        // Sort videos alphabetically by title
-        const sortedVideos = [...data.data].sort((a, b) => {
-          const nameA = (a.name || "").toLowerCase()
-          const nameB = (b.name || "").toLowerCase()
-          return nameA.localeCompare(nameB)
+        // Create mappings similar to what the original hook provided
+        const idMap: Record<string, string> = {}
+        const categoryMap: Record<string, string> = {}
+        const videosMap: Record<string, VimeoVideo[]> = {}
+
+        showcasesList.forEach((showcase) => {
+          const id = showcase.uri.split("/").pop() || ""
+          idMap[showcase.name] = id
+          categoryMap[showcase.name.toLowerCase()] = showcase.name
+
+          // Initialize empty array for each category
+          videosMap[showcase.name] = []
         })
 
-        // Update showcaseVideos state
-        setShowcaseVideos((prev) => ({
-          ...prev,
-          [showcaseName]: sortedVideos,
-        }))
-      } catch (err) {
-        console.error(`Error fetching videos for showcase ${showcaseName}:`, err)
-        // Don't set global error, just log it
-      }
-    },
-    [maxVideosPerShowcase, allowedCategories],
-  )
+        setShowcaseIds(idMap)
+        setCategoryToShowcaseMap(categoryMap)
 
-  // Fetch all showcases
-  const fetchShowcases = useCallback(async () => {
-    // Prevent multiple fetches
-    if (fetchedShowcases.current) return
-    fetchedShowcases.current = true
+        // Fetch videos for each category
+        const videosResponse = await fetch("/api/videos")
 
-    try {
-      setLoading(true)
-      console.log("Fetching showcases")
+        if (videosResponse.ok) {
+          const videosData = await videosResponse.json()
 
-      const response = await fetch("/api/vimeo/showcases")
-
-      if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.details || "Failed to fetch showcases")
-      }
-
-      const data: VimeoShowcasesResponse = await response.json()
-
-      // Only update state if component is still mounted
-      if (!isMounted.current) return
-
-      // Get all showcases
-      const allShowcases = data.data
-
-      // Filter to only the showcases we care about
-      const relevantShowcases = allShowcases.filter((showcase) => allowedCategories.includes(showcase.name))
-
-      setShowcases(relevantShowcases)
-      console.log(`Received ${relevantShowcases.length} relevant showcases`)
-
-      // Create mappings
-      const idMap: Record<string, string> = {}
-      const categoryMap: Record<string, string> = {}
-
-      // Process each showcase
-      relevantShowcases.forEach((showcase) => {
-        const showcaseId = showcase.uri.split("/").pop()
-        if (showcaseId) {
-          // Store the showcase ID mapped to the name
-          idMap[showcase.name] = showcaseId
-
-          // Map normalized category name to showcase name
-          const normalizedName = normalizeCategory(showcase.name)
-          categoryMap[normalizedName] = showcase.name
-
-          // Also ensure our exact mapping is in place
-          Object.entries(exactCategoryMapping).forEach(([category, mappedShowcase]) => {
-            if (normalizeCategory(mappedShowcase) === normalizedName) {
-              categoryMap[category] = showcase.name
-            }
+          // Group videos by category
+          videosData.videos.forEach((video: any) => {
+            const categories = video.categories || []
+            categories.forEach((category: string) => {
+              if (videosMap[category]) {
+                videosMap[category].push({
+                  ...video,
+                  uri: `/videos/${video.id}`,
+                  name: video.title,
+                })
+              }
+            })
           })
+
+          setShowcaseVideos(videosMap)
         }
-      })
-
-      // Store the mappings
-      setShowcaseIds(idMap)
-      setCategoryToShowcaseMap(categoryMap)
-
-      console.log("Category to showcase mapping:", categoryMap)
-      console.log("Showcase IDs mapping:", idMap)
-
-      // Fetch videos for each showcase
-      const showcasePromises = relevantShowcases.map(async (showcase) => {
-        const showcaseId = showcase.uri.split("/").pop()
-        if (showcaseId) {
-          await fetchShowcaseVideos(showcaseId, showcase.name)
-        }
-        return Promise.resolve()
-      })
-
-      // Wait for all showcase video fetches to complete
-      await Promise.allSettled(showcasePromises)
-    } catch (err) {
-      console.error("Error fetching showcases:", err)
-      if (isMounted.current) {
+      } catch (err) {
+        console.error("Error fetching showcases:", err)
         setError(err instanceof Error ? err.message : "Failed to fetch showcases")
-      }
-    } finally {
-      if (isMounted.current) {
+      } finally {
         setLoading(false)
       }
     }
-  }, [normalizeCategory, exactCategoryMapping, fetchShowcaseVideos, allowedCategories])
 
-  useEffect(() => {
-    // Only fetch on initial mount
     fetchShowcases()
-
-    // Cleanup function
-    return () => {
-      isMounted.current = false
-    }
-  }, [fetchShowcases]) // Include fetchShowcases in the dependency array since it's memoized
+  }, [])
 
   return {
     showcases,

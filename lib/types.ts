@@ -63,14 +63,44 @@ export interface Category {
 export interface Video {
   id: string
   title: string
-  description: string
-  thumbnail: string
-  previewUrl: string
-  downloadUrl: string
-  duration: string
-  category: string
-  tags: string[]
-  vimeoId: string
+  description?: string
+  thumbnailUrl: string
+  videoUrl: string
+  downloadUrl?: string
+  category?: string
+  tags?: string[]
+}
+
+// User-related types
+export interface UserProfile {
+  uid: string
+  email: string
+  displayName?: string
+  photoURL?: string
+  createdAt?: string
+  lastLogin?: string
+  downloads?: number
+  plan?: string
+  stripeCustomerId?: string
+  stripeSubscriptionId?: string
+}
+
+export interface UserPlanData {
+  plan: string
+  isActive: boolean
+  downloads: number
+  maxDownloads: number
+  hasReachedLimit: boolean
+  expiresAt?: string
+  createdAt?: string
+}
+
+// API response types
+export interface ApiResponse<T> {
+  success: boolean
+  data?: T
+  error?: string
+  message?: string
 }
 
 // Update the VimeoVideo interface to include download property

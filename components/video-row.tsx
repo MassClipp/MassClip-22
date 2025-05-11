@@ -4,22 +4,31 @@ import { useState, useRef, useEffect } from "react"
 import Link from "next/link"
 import { motion } from "framer-motion"
 import { ChevronRight, ChevronLeft, ArrowRight } from "lucide-react"
-import type { VimeoVideo } from "@/lib/types"
-import VimeoCard from "@/components/vimeo-card"
+import VideoCard from "@/components/video-card"
 import VideoSkeleton from "@/components/video-skeleton"
 import { shuffleArray } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 
+interface Video {
+  id: string
+  title: string
+  description?: string
+  thumbnailUrl: string
+  videoUrl: string
+  downloadUrl?: string
+  tags?: string[]
+}
+
 interface VideoRowProps {
   title: string
-  videos: VimeoVideo[]
+  videos: Video[]
   limit?: number
   isShowcase?: boolean
   showcaseId?: string
 }
 
 export default function VideoRow({ title, videos, limit = 10, isShowcase = false, showcaseId }: VideoRowProps) {
-  const [visibleVideos, setVisibleVideos] = useState<VimeoVideo[]>([])
+  const [visibleVideos, setVisibleVideos] = useState<Video[]>([])
   const [isIntersecting, setIsIntersecting] = useState(false)
   const [scrollPosition, setScrollPosition] = useState(0)
   const [maxScroll, setMaxScroll] = useState(0)
@@ -175,12 +184,12 @@ export default function VideoRow({ title, videos, limit = 10, isShowcase = false
           {isIntersecting
             ? visibleVideos.map((video) => (
                 <motion.div
-                  key={video.uri}
+                  key={video.id}
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.5 }}
                 >
-                  <VimeoCard video={video} />
+                  <VideoCard video={video} />
                 </motion.div>
               ))
             : // Show skeleton loaders while waiting for intersection

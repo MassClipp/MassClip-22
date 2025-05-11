@@ -1,0 +1,250 @@
+"use client"
+
+import { useState, useEffect, useRef } from "react"
+import type { Video } from "@/lib/types"
+
+export function useVideos() {
+  const [videos, setVideos] = useState<Video[]>([])
+  const [videosByTag, setVideosByTag] = useState<Record<string, Video[]>>({})
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [page, setPage] = useState(1)
+  const [hasMore, setHasMore] = useState(true)
+  const isMounted = useRef(true)
+  const isInitialLoad = useRef(true)
+  const perPage = 20
+
+  // Helper function to normalize tag names
+  const normalizeTagName = (tagName: string): string => {
+    return tagName.trim().toLowerCase().replace(/\s+/g, " ")
+  }
+
+  // Get related tags for special categories
+  const getRelatedTags = (categoryName: string): string[] => {
+    const normalizedCategory = normalizeTagName(categoryName)
+
+    // Define related tags for special categories
+    const relatedTagsMap: Record<string, string[]> = {
+      "high energy motivation": [
+        "high energy",
+        "motivation",
+        "energy",
+        "motivational",
+        "inspire",
+        "inspiration",
+        "success",
+        "achievement",
+        "drive",
+        "ambition",
+        "hustle",
+        "grind",
+        "determination",
+      ],
+      "hustle mentality": [
+        "hustle",
+        "grind",
+        "work ethic",
+        "success",
+        "entrepreneur",
+        "business",
+        "ambition",
+        "drive",
+        "determination",
+      ],
+      mindset: ["mindset", "growth", "positive", "thinking", "mental", "attitude", "psychology", "focus", "discipline"],
+      introspection: [
+        "introspection",
+        "reflection",
+        "meditation",
+        "self",
+        "awareness",
+        "consciousness",
+        "mindfulness",
+        "inner",
+        "peace",
+      ],
+      "money and wealth": [
+        "money",
+        "wealth",
+        "finance",
+        "financial",
+        "rich",
+        "success",
+        "abundance",
+        "prosperity",
+        "investment",
+      ],
+      "motivational speeches": [
+        "speech",
+        "motivational",
+        "speaker",
+        "inspiration",
+        "inspire",
+        "talk",
+        "lecture",
+        "presentation",
+        "keynote",
+        "motivation",
+      ],
+    }
+
+    return relatedTagsMap[normalizedCategory] || [normalizedCategory]
+  }
+
+  const fetchVideos = async (pageNum: number) => {
+    try {
+      setLoading(true)
+      console.log(`Fetching videos page ${pageNum}, ${perPage} per page`)
+
+      // Replace with your actual API endpoint for fetching videos from Cloudflare R2
+      const response = await fetch(`/api/videos?page=${pageNum}&per_page=${perPage}`)
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.details || "Failed to fetch videos")
+      }
+
+      const data = await response.json()
+      console.log(`Received ${data.videos.length} videos from API`)
+
+      // Only update state if component is still mounted
+      if (!isMounted.current) return
+
+      // Update videos
+      setVideos((prev) => [...prev, ...data.videos])
+
+      // Check if there are more videos to load
+      setHasMore(data.hasMore)
+
+      // Group videos by tag with normalized tag names
+      const newVideosByTag: Record<string, Video[]> = { ...videosByTag }
+
+      // Create a "browse all" category that contains all videos
+      if (!newVideosByTag["browse all"]) {
+        newVideosByTag["browse all"] = []
+      }
+
+      // Add all videos to the "browse all" category
+      newVideosByTag["browse all"] = [...(newVideosByTag["browse all"] || []), ...data.videos]
+
+      // Create a set to track processed tags to avoid duplicates
+      const processedTags = new Set<string>()
+
+      // Process standard tags from videos
+      data.videos.forEach((video: Video) => {
+        if (video.tags && video.tags.length > 0) {
+          video.tags.forEach((tag) => {
+            // Normalize the tag name to prevent duplicates
+            const normalizedTagName = normalizeTagName(tag)
+
+            // Skip if we've already processed this tag for this video
+            if (processedTags.has(`${video.id}-${normalizedTagName}`)) return
+            processedTags.add(`${video.id}-${normalizedTagName}`)
+
+            // Create a key using the normalized name
+            if (!newVideosByTag[normalizedTagName]) {
+              newVideosByTag[normalizedTagName] = []
+            }
+
+            // Store the video with this tag
+            newVideosByTag[normalizedTagName].push(video)
+          })
+        }
+      })
+
+      // Process special categories
+      const specialCategories = [
+        "high energy motivation",
+        "hustle mentality",
+        "mindset",
+        "introspection",
+        "money and wealth",
+        "motivational speeches",
+      ]
+
+      specialCategories.forEach((category) => {
+        if (!newVideosByTag[category]) {
+          newVideosByTag[category] = []
+        }
+
+        // Get related tags for this category
+        const relatedTags = getRelatedTags(category)
+
+        // Find videos that match any related tag
+        data.videos.forEach((video: Video) => {
+          // Skip if we've already processed this video for this category
+          if (processedTags.has(`${video.id}-${category}`)) return
+
+          // Check if video has any related tags
+          const hasRelatedTag = video.tags?.some((videoTag) => {
+            const normalizedVideoTag = normalizeTagName(videoTag)
+            return relatedTags.some((relatedTag) => normalizedVideoTag.includes(relatedTag))
+          })
+
+          // Check if video name or description contains related terms
+          const nameOrDescriptionMatches = relatedTags.some((term) => {
+            const videoName = (video.title || "").toLowerCase()
+            const videoDescription = (video.description || "").toLowerCase()
+            return videoName.includes(term) || videoDescription.includes(term)
+          })
+
+          // If video matches, add it to this category
+          if (hasRelatedTag || nameOrDescriptionMatches) {
+            processedTags.add(`${video.id}-${category}`)
+            newVideosByTag[category].push(video)
+          }
+        })
+      })
+
+      // Sort videos in each category alphabetically by title
+      Object.keys(newVideosByTag).forEach((tag) => {
+        newVideosByTag[tag].sort((a, b) => {
+          const nameA = (a.title || "").toLowerCase()
+          const nameB = (b.title || "").toLowerCase()
+          return nameA.localeCompare(nameB)
+        })
+      })
+
+      setVideosByTag(newVideosByTag)
+    } catch (err) {
+      console.error("Error fetching videos:", err)
+      if (isMounted.current) {
+        setError(err instanceof Error ? err.message : "Failed to fetch videos")
+      }
+    } finally {
+      if (isMounted.current) {
+        setLoading(false)
+        isInitialLoad.current = false
+      }
+    }
+  }
+
+  const loadMore = () => {
+    if (!loading && hasMore) {
+      const nextPage = page + 1
+      setPage(nextPage)
+      fetchVideos(nextPage)
+    }
+  }
+
+  useEffect(() => {
+    // Only fetch on initial mount
+    if (isInitialLoad.current) {
+      fetchVideos(page)
+    }
+
+    // Cleanup function
+    return () => {
+      isMounted.current = false
+    }
+  }, []) // Empty dependency array to only run on mount
+
+  return {
+    videos,
+    videosByTag,
+    loading,
+    error,
+    hasMore,
+    loadMore,
+  }
+}
