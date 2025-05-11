@@ -1,7 +1,7 @@
 "use client"
 
 import { useRef, useCallback, useEffect, useState } from "react"
-import { useParams, useRouter } from "next/navigation"
+import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { ChevronLeft, Search, Filter, ArrowUpRight } from "lucide-react"
 import { motion, AnimatePresence } from "framer-motion"
@@ -12,11 +12,14 @@ import { useVimeoShowcases } from "@/hooks/use-vimeo-showcases"
 import { Button } from "@/components/ui/button"
 import VideoSkeleton from "@/components/video-skeleton"
 import { shuffleArray } from "@/lib/utils"
+import { UpgradePrompt } from "@/components/upgrade-prompt"
+import { useUserPlan } from "@/hooks/use-user-plan"
 
-export default function CategoryPage() {
-  const params = useParams()
+export default function CategoryPage({ params }: { params: { tag: string } }) {
+  const { tag: tagSlug } = params
+  const decodedTag = decodeURIComponent(tagSlug)
+  const { videos, loading, error, hasMore, loadMore } = useVimeoTagVideos(decodedTag)
   const router = useRouter()
-  const tagSlug = params.tag as string
   const tag = decodeURIComponent(tagSlug.replace(/-/g, " "))
   const { showcaseIds, categoryToShowcaseMap } = useVimeoShowcases()
   const [isLoading, setIsLoading] = useState(true)
@@ -26,6 +29,7 @@ export default function CategoryPage() {
   const [searchQuery, setSearchQuery] = useState("")
   const [filteredVideos, setFilteredVideos] = useState<any[]>([])
   const [showSearch, setShowSearch] = useState(false)
+  const { isProUser } = useUserPlan()
 
   // Special case for "browse all"
   useEffect(() => {
@@ -78,7 +82,6 @@ export default function CategoryPage() {
     checkForShowcase()
   }, [tag, showcaseIds, categoryToShowcaseMap, router, redirectInProgress])
 
-  const { videos, loading, error, hasMore, loadMore } = useVimeoTagVideos(tag)
   const observer = useRef<IntersectionObserver | null>(null)
 
   // Shuffle videos when they change
@@ -339,6 +342,19 @@ export default function CategoryPage() {
             </div>
           )}
         </motion.div>
+        {/* Videos grid */}
+        {/* <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 mt-6">
+        {videos.map((video) => (
+          <VimeoCard key={video.uri} video={video} />
+        ))}
+      </div> */}
+
+        {/* Show upgrade prompt for free users */}
+        {!isProUser && videos.length === 5 && (
+          <div className="mt-8">
+            <UpgradePrompt />
+          </div>
+        )}
       </main>
     </div>
   )

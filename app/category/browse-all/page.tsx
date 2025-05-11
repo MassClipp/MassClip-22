@@ -10,6 +10,8 @@ import VideoSkeleton from "@/components/video-skeleton"
 import { Button } from "@/components/ui/button"
 import type { VimeoApiResponse, VimeoVideo } from "@/lib/types"
 import { shuffleArray } from "@/lib/utils"
+import { UpgradePrompt } from "@/components/upgrade-prompt"
+import { useUserPlan } from "@/hooks/use-user-plan"
 
 export default function BrowseAllPage() {
   const [videos, setVideos] = useState<VimeoVideo[]>([])
@@ -21,6 +23,7 @@ export default function BrowseAllPage() {
   const [searchQuery, setSearchQuery] = useState("")
   const [filteredVideos, setFilteredVideos] = useState<VimeoVideo[]>([])
   const [showSearch, setShowSearch] = useState(false)
+  const { isProUser } = useUserPlan()
 
   const observer = useRef<IntersectionObserver | null>(null)
   const pageSize = 36
@@ -279,6 +282,20 @@ export default function BrowseAllPage() {
               ) : null}
             </>
           ) : null}
+
+          {/* Videos grid */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 mt-6">
+            {videos.map((video) => (
+              <VimeoCard key={video.uri} video={video} />
+            ))}
+          </div>
+
+          {/* Show upgrade prompt for free users */}
+          {!isProUser && videos.length === 5 && (
+            <div className="mt-8">
+              <UpgradePrompt />
+            </div>
+          )}
 
           {/* Loading more indicator */}
           {loading && filteredVideos.length > 0 && (

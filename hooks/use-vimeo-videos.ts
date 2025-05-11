@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react"
 import type { VimeoApiResponse, VimeoVideo } from "@/lib/types"
+import { useUserPlan } from "@/hooks/use-user-plan"
 
 export function useVimeoVideos() {
   const [videos, setVideos] = useState<VimeoVideo[]>([])
@@ -13,6 +14,8 @@ export function useVimeoVideos() {
   const isMounted = useRef(true)
   const isInitialLoad = useRef(true)
   const perPage = 20 // Increased from 12 to 20 for better content coverage
+  const { isProUser } = useUserPlan() // Get user plan information
+  const FREE_USER_VIDEO_LIMIT = 5 // Limit for free users
 
   // Helper function to normalize tag names
   const normalizeTagName = (tagName: string): string => {
@@ -123,8 +126,15 @@ export function useVimeoVideos() {
         newVideosByTag["browse all"] = []
       }
 
-      // Add all videos to the "browse all" category
-      newVideosByTag["browse all"] = [...(newVideosByTag["browse all"] || []), ...data.data]
+      // Add videos to the "browse all" category, respecting free user limits
+      if (isProUser || newVideosByTag["browse all"].length < FREE_USER_VIDEO_LIMIT) {
+        // For free users, only add up to the limit
+        const remainingSlots = isProUser
+          ? data.data.length
+          : Math.min(FREE_USER_VIDEO_LIMIT - newVideosByTag["browse all"].length, data.data.length)
+
+        newVideosByTag["browse all"] = [...newVideosByTag["browse all"], ...data.data.slice(0, remainingSlots)]
+      }
 
       // Create a set to track processed tags to avoid duplicates
       const processedTags = new Set<string>()
@@ -145,8 +155,11 @@ export function useVimeoVideos() {
               newVideosByTag[normalizedTagName] = []
             }
 
-            // Store the video with this tag
-            newVideosByTag[normalizedTagName].push(video)
+            // For free users, only add if we haven't reached the limit yet
+            if (isProUser || newVideosByTag[normalizedTagName].length < FREE_USER_VIDEO_LIMIT) {
+              // Store the video with this tag
+              newVideosByTag[normalizedTagName].push(video)
+            }
           })
         }
       })
@@ -173,6 +186,9 @@ export function useVimeoVideos() {
         data.data.forEach((video) => {
           // Skip if we've already processed this video for this category
           if (processedTags.has(`${video.uri}-${category}`)) return
+
+          // For free users, check if we've already reached the limit
+          if (!isProUser && newVideosByTag[category].length >= FREE_USER_VIDEO_LIMIT) return
 
           // Check if video has any related tags
           const hasRelatedTag = video.tags?.some((videoTag) => {
