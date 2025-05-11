@@ -1,70 +1,65 @@
 "use client"
 
 import { useState, useEffect } from "react"
-
-interface VimeoVideo {
-  id: string
-  title: string
-  description?: string
-  thumbnailUrl: string
-  videoUrl: string
-  downloadUrl?: string
-  tags?: string[]
-  uri: string
-  name: string
-}
+import { useClips } from "@/hooks/use-clips"
+import type { Clip } from "@/hooks/use-clips"
 
 export function useVimeoTagVideos(tag: string) {
-  const [videos, setVideos] = useState<VimeoVideo[]>([])
+  const [videos, setVideos] = useState<Clip[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [hasMore, setHasMore] = useState(false)
-  const [page, setPage] = useState(1)
+
+  // Use our new clips hook
+  const { clips, loading: clipsLoading, error: clipsError } = useClips()
 
   useEffect(() => {
-    const fetchVideos = async () => {
-      try {
-        setLoading(true)
-
-        // Fetch from our new API endpoint instead of Vimeo
-        const response = await fetch(`/api/videos/tag/${encodeURIComponent(tag)}?page=${page}`)
-
-        if (!response.ok) {
-          throw new Error("Failed to fetch videos for tag")
-        }
-
-        const data = await response.json()
-
-        // Transform the data to match the expected format
-        const transformedVideos: VimeoVideo[] = data.videos.map((video: any) => ({
-          ...video,
-          uri: `/videos/${video.id}`,
-          name: video.title,
-        }))
-
-        setVideos((prev) => (page === 1 ? transformedVideos : [...prev, ...transformedVideos]))
-        setHasMore(data.hasMore || false)
-      } catch (err) {
-        console.error(`Error fetching videos for tag ${tag}:`, err)
-        setError(err instanceof Error ? err.message : "Failed to fetch videos")
-      } finally {
-        setLoading(false)
-      }
+    if (clipsLoading) {
+      setLoading(true)
+      return
     }
 
-    fetchVideos()
-  }, [tag, page])
+    if (clipsError) {
+      setError(clipsError)
+      setLoading(false)
+      return
+    }
+
+    try {
+      // Filter clips by tag
+      const normalizedTag = tag.toLowerCase().trim()
+
+      // Special case for "browse all"
+      if (normalizedTag === "browse all" || normalizedTag === "browse-all") {
+        setVideos(clips)
+      } else {
+        // Filter by tag or category
+        const filteredClips = clips.filter(
+          (clip) =>
+            clip.category?.toLowerCase() === normalizedTag || clip.tags?.some((t) => t.toLowerCase() === normalizedTag),
+        )
+
+        setVideos(filteredClips)
+      }
+
+      setHasMore(false) // No pagination for now
+      setLoading(false)
+    } catch (err) {
+      console.error(`Error processing videos for tag ${tag}:`, err)
+      setError("Failed to process videos for this tag")
+      setLoading(false)
+    }
+  }, [clipsLoading, clipsError, clips, tag])
 
   const loadMore = () => {
-    if (!loading && hasMore) {
-      setPage((prev) => prev + 1)
-    }
+    // No-op for now since we're not implementing pagination
+    setHasMore(false)
   }
 
   return {
     videos,
-    loading,
-    error,
+    loading: loading || clipsLoading,
+    error: error || clipsError,
     hasMore,
     loadMore,
   }

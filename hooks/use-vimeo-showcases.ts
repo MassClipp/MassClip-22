@@ -1,6 +1,8 @@
 "use client"
 
 import { useState, useEffect } from "react"
+import { useClips } from "@/hooks/use-clips"
+import type { Clip } from "@/hooks/use-clips"
 
 // Define minimal types to maintain compatibility
 interface VimeoShowcase {
@@ -8,105 +10,69 @@ interface VimeoShowcase {
   uri: string
 }
 
-interface VimeoVideo {
-  id: string
-  title: string
-  description?: string
-  thumbnailUrl: string
-  videoUrl: string
-  downloadUrl?: string
-  tags?: string[]
-  uri: string
-  name: string
-}
-
 // Mock data structure to maintain compatibility with existing code
 export function useVimeoShowcases() {
   const [showcases, setShowcases] = useState<VimeoShowcase[]>([])
-  const [showcaseVideos, setShowcaseVideos] = useState<Record<string, VimeoVideo[]>>({})
+  const [showcaseVideos, setShowcaseVideos] = useState<Record<string, Clip[]>>({})
   const [showcaseIds, setShowcaseIds] = useState<Record<string, string>>({})
   const [categoryToShowcaseMap, setCategoryToShowcaseMap] = useState<Record<string, string>>({})
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
+  // Use our new clips hook
+  const { clips, clipsByCategory, loading: clipsLoading, error: clipsError } = useClips()
+
   useEffect(() => {
-    const fetchShowcases = async () => {
-      try {
-        setLoading(true)
-
-        // Fetch from our new API endpoint instead of Vimeo
-        const response = await fetch("/api/videos/categories")
-
-        if (!response.ok) {
-          throw new Error("Failed to fetch video categories")
-        }
-
-        const data = await response.json()
-
-        // Transform the data to match the expected format
-        const showcasesList: VimeoShowcase[] = data.categories.map((category: string) => ({
-          name: category,
-          uri: `/categories/${category}`,
-        }))
-
-        setShowcases(showcasesList)
-
-        // Create mappings similar to what the original hook provided
-        const idMap: Record<string, string> = {}
-        const categoryMap: Record<string, string> = {}
-        const videosMap: Record<string, VimeoVideo[]> = {}
-
-        showcasesList.forEach((showcase) => {
-          const id = showcase.uri.split("/").pop() || ""
-          idMap[showcase.name] = id
-          categoryMap[showcase.name.toLowerCase()] = showcase.name
-
-          // Initialize empty array for each category
-          videosMap[showcase.name] = []
-        })
-
-        setShowcaseIds(idMap)
-        setCategoryToShowcaseMap(categoryMap)
-
-        // Fetch videos for each category
-        const videosResponse = await fetch("/api/videos")
-
-        if (videosResponse.ok) {
-          const videosData = await videosResponse.json()
-
-          // Group videos by category
-          videosData.videos.forEach((video: any) => {
-            const categories = video.categories || []
-            categories.forEach((category: string) => {
-              if (videosMap[category]) {
-                videosMap[category].push({
-                  ...video,
-                  uri: `/videos/${video.id}`,
-                  name: video.title,
-                })
-              }
-            })
-          })
-
-          setShowcaseVideos(videosMap)
-        }
-      } catch (err) {
-        console.error("Error fetching showcases:", err)
-        setError(err instanceof Error ? err.message : "Failed to fetch showcases")
-      } finally {
-        setLoading(false)
-      }
+    if (clipsLoading) {
+      setLoading(true)
+      return
     }
 
-    fetchShowcases()
-  }, [])
+    if (clipsError) {
+      setError(clipsError)
+      setLoading(false)
+      return
+    }
+
+    try {
+      // Get unique categories
+      const categories = Object.keys(clipsByCategory)
+
+      // Create showcase objects
+      const showcasesList: VimeoShowcase[] = categories.map((category) => ({
+        name: category,
+        uri: `/category/${category.toLowerCase().replace(/\s+/g, "-")}`,
+      }))
+
+      setShowcases(showcasesList)
+
+      // Create mappings
+      const idMap: Record<string, string> = {}
+      const categoryMap: Record<string, string> = {}
+
+      showcasesList.forEach((showcase) => {
+        const id = showcase.uri.split("/").pop() || ""
+        idMap[showcase.name] = id
+        categoryMap[showcase.name.toLowerCase()] = showcase.name
+      })
+
+      setShowcaseIds(idMap)
+      setCategoryToShowcaseMap(categoryMap)
+      setShowcaseVideos(clipsByCategory)
+      setLoading(false)
+    } catch (err) {
+      console.error("Error processing showcases:", err)
+      setError("Failed to process showcases")
+      setLoading(false)
+    }
+  }, [clipsLoading, clipsError, clipsByCategory])
 
   return {
     showcases,
     showcaseVideos,
     showcaseIds,
     categoryToShowcaseMap,
-    loading,
-    error,
+    loading: loading || clipsLoading,
+    error: error || clipsError,
   }
 }

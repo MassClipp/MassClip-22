@@ -57,18 +57,18 @@ export interface VimeoApiResponse {
 export interface Category {
   id: string
   name: string
-  videos: Video[]
+  clips: Clip[]
 }
 
-export interface Video {
+export interface Clip {
   id: string
   title: string
   description?: string
-  thumbnailUrl: string
-  videoUrl: string
-  downloadUrl?: string
+  url: string
+  thumbnailUrl?: string
   category?: string
   tags?: string[]
+  uploadedAt?: any
 }
 
 // User-related types
