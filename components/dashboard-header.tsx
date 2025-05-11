@@ -5,7 +5,7 @@ import type React from "react"
 import { useState, useEffect, useRef } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
-import { User, LogOut, X, Search, Download, Home, Grid, Heart, Clock, Crown, Upload } from "lucide-react"
+import { User, LogOut, X, Search, Download, Home, Grid, Heart, Clock, Crown } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useAuth } from "@/contexts/auth-context"
 import {
@@ -28,7 +28,7 @@ export default function DashboardHeader({ initialSearchQuery = "" }) {
   const [searchQuery, setSearchQuery] = useState(initialSearchQuery)
   const [isSearchOpen, setIsSearchOpen] = useState(false)
   const { user, logOut } = useAuth()
-  const { isProUser } = useUserPlan()
+  const { isProUser, loading } = useUserPlan()
   const { remainingDownloads, hasReachedLimit } = useDownloadLimit()
   const router = useRouter()
   const searchInputRef = useRef<HTMLInputElement>(null)
@@ -77,7 +77,6 @@ export default function DashboardHeader({ initialSearchQuery = "" }) {
     { name: "Categories", href: "/dashboard/categories", icon: <Grid className="h-4 w-4" /> },
     { name: "Favorites", href: "/dashboard/favorites", icon: <Heart className="h-4 w-4" /> },
     { name: "History", href: "/dashboard/history", icon: <Clock className="h-4 w-4" /> },
-    { name: "Upload Content", href: "/dashboard/upload", icon: <Upload className="h-4 w-4" /> },
     { name: "Membership", href: "/membership-plans", icon: <Crown className="h-4 w-4" /> },
   ]
 
@@ -94,7 +93,7 @@ export default function DashboardHeader({ initialSearchQuery = "" }) {
 
             {/* Desktop Navigation */}
             <nav className="hidden md:flex items-center gap-6">
-              {[navigationItems[0], navigationItems[1], navigationItems[2], navigationItems[4]].map((item) => (
+              {[navigationItems[0], navigationItems[1], navigationItems[2]].map((item) => (
                 <Link
                   key={item.name}
                   href={item.href}
@@ -124,26 +123,30 @@ export default function DashboardHeader({ initialSearchQuery = "" }) {
               <Search className="h-5 w-5" />
             </button>
 
-            {/* Downloads Counter */}
-            {isProUser ? (
-              <div className="flex items-center text-zinc-400 text-sm">
-                <Download className="h-4 w-4 mr-1" />
-                <span className="font-light">Unlimited</span>
-              </div>
-            ) : (
-              <div className="flex items-center bg-zinc-900/80 border border-zinc-800 rounded-full px-3 py-1">
-                <Download className={`h-4 w-4 mr-1 ${hasReachedLimit ? "text-amber-500" : "text-crimson"}`} />
-                <span className={`text-sm font-medium ${hasReachedLimit ? "text-amber-500" : "text-white"}`}>
-                  {remainingDownloads} left
-                </span>
-              </div>
-            )}
+            {/* Downloads Counter - Only show when not loading */}
+            {!loading && (
+              <>
+                {isProUser ? (
+                  <div className="flex items-center text-zinc-400 text-sm">
+                    <Download className="h-4 w-4 mr-1" />
+                    <span className="font-light">Unlimited</span>
+                  </div>
+                ) : (
+                  <div className="flex items-center bg-zinc-900/80 border border-zinc-800 rounded-full px-3 py-1">
+                    <Download className={`h-4 w-4 mr-1 ${hasReachedLimit ? "text-amber-500" : "text-crimson"}`} />
+                    <span className={`text-sm font-medium ${hasReachedLimit ? "text-amber-500" : "text-white"}`}>
+                      {remainingDownloads} left
+                    </span>
+                  </div>
+                )}
 
-            {/* Upgrade Button (non-Pro users) */}
-            {!isProUser && (
-              <UpgradeButton navigateOnly={true} className="hidden md:flex">
-                Upgrade
-              </UpgradeButton>
+                {/* Upgrade Button (non-Pro users) */}
+                {!isProUser && (
+                  <UpgradeButton navigateOnly={true} className="hidden md:flex">
+                    Upgrade
+                  </UpgradeButton>
+                )}
+              </>
             )}
 
             {/* User Menu */}
@@ -197,8 +200,8 @@ export default function DashboardHeader({ initialSearchQuery = "" }) {
               <Search className="h-5 w-5" />
             </button>
 
-            {/* Mobile Download Counter for Free Users */}
-            {!isProUser && (
+            {/* Mobile Download Counter for Free Users - Only show when not loading */}
+            {!loading && !isProUser && (
               <div className="flex items-center bg-zinc-900/80 border border-zinc-800 rounded-full px-2 py-0.5">
                 <Download className={`h-3 w-3 mr-1 ${hasReachedLimit ? "text-amber-500" : "text-crimson"}`} />
                 <span className={`text-xs font-medium ${hasReachedLimit ? "text-amber-500" : "text-white"}`}>

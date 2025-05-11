@@ -20,10 +20,10 @@ export default function UpgradeButton({ children, className, onClick, navigateOn
   const [isLoading, setIsLoading] = useState(false)
   const router = useRouter()
   const { user } = useAuth()
-  const { isProUser } = useUserPlan()
+  const { isProUser, loading: planLoading } = useUserPlan()
 
-  // If user is already a pro user, don't show the button
-  if (isProUser) {
+  // If loading or user is already a pro user, don't show the button
+  if (planLoading || isProUser) {
     return null
   }
 
