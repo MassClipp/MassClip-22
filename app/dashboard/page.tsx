@@ -3,23 +3,34 @@
 import { useRef, useEffect, useState } from "react"
 import { useSearchParams } from "next/navigation"
 import { motion } from "framer-motion"
-import { Search, Clock, Brain, Rocket, ChevronRight, TrendingUp, Play } from "lucide-react"
+import { Search, Clock, Brain, Rocket, ChevronRight, TrendingUp } from "lucide-react"
 import DashboardHeader from "@/components/dashboard-header"
+import VideoRow from "@/components/video-row"
+import { useVimeoShowcases } from "@/hooks/use-vimeo-showcases"
+import { useVimeoVideos } from "@/hooks/use-vimeo-videos"
 import { Button } from "@/components/ui/button"
 import { useRouter } from "next/navigation"
-import ClipPlayer from "@/components/ClipPlayer"
-import DirectVideoTest from "@/components/direct-video-test"
-import VideoFormatTest from "@/components/video-format-test"
+import { filterCategoriesBySearch } from "@/lib/search-utils"
+import VimeoCard from "@/components/vimeo-card"
+import { shuffleArray } from "@/lib/utils"
 
 export default function Dashboard() {
   // Get search query from URL
   const searchParams = useSearchParams()
   const searchQuery = searchParams?.get("search") || ""
 
-  // State for active category
+  // State to store the filtered videos
+  const [filteredShowcaseVideos, setFilteredShowcaseVideos] = useState<Record<string, any[]>>({})
+  const [hasSearchResults, setHasSearchResults] = useState(false)
+  const [featuredVideos, setFeaturedVideos] = useState<any[]>([])
+  const [isLoading, setIsLoading] = useState(true)
   const [activeCategory, setActiveCategory] = useState<string | null>(null)
-  const [isLoading, setIsLoading] = useState(false)
-  const [showDebug, setShowDebug] = useState(false)
+
+  // Fetch showcase-based videos
+  const { showcaseVideos, showcaseIds, loading: loadingShowcases, error: showcaseError } = useVimeoShowcases()
+
+  // Fetch all videos for comprehensive search
+  const { videos, videosByTag, loading: loadingVideos } = useVimeoVideos()
 
   const router = useRouter()
 
@@ -32,6 +43,54 @@ export default function Dashboard() {
       }
     }
   }, [])
+
+  // Filter videos based on search query
+  useEffect(() => {
+    if (searchQuery && !loadingShowcases && !loadingVideos) {
+      // Filter showcase videos
+      const filteredShowcases = filterCategoriesBySearch(showcaseVideos, searchQuery)
+      setFilteredShowcaseVideos(filteredShowcases)
+
+      // Check if we have any search results
+      const hasResults = Object.keys(filteredShowcases).length > 0
+      setHasSearchResults(hasResults)
+
+      // If no results in showcases but we have the search query from localStorage,
+      // we can also search through all videos as a fallback
+      if (!hasResults && localStorage.getItem("lastSearchQuery") === searchQuery) {
+        // This would be a place to implement a more comprehensive search
+        // through all videos if needed
+      }
+    } else {
+      // If no search query, show all showcase videos
+      setFilteredShowcaseVideos(showcaseVideos)
+      setHasSearchResults(Object.keys(showcaseVideos).length > 0)
+    }
+  }, [searchQuery, showcaseVideos, loadingShowcases, loadingVideos, videosByTag, videos])
+
+  // Get showcase names based on whether we're searching or not
+  const showcaseNames = Object.keys(searchQuery ? filteredShowcaseVideos : showcaseVideos)
+
+  // Prepare featured videos from all showcases
+  useEffect(() => {
+    if (!loadingShowcases && !loadingVideos && Object.keys(showcaseVideos).length > 0) {
+      // Collect videos from all showcases
+      const allVideos = Object.values(showcaseVideos).flat()
+
+      // Shuffle and take the first 6 for featured section
+      if (allVideos.length > 0) {
+        setFeaturedVideos(shuffleArray(allVideos).slice(0, 6))
+      }
+
+      setIsLoading(false)
+    }
+  }, [showcaseVideos, loadingShowcases, loadingVideos])
+
+  // Check if we're still loading initial data
+  const isLoadingData = (loadingShowcases || loadingVideos) && showcaseNames.length === 0
+
+  // Check for errors
+  const error = showcaseError
 
   // Animation variants
   const containerVariants = {
@@ -56,6 +115,21 @@ export default function Dashboard() {
     },
   }
 
+  // Check if we have the specific showcases
+  const hasIntrospection = showcaseNames.some(
+    (name) =>
+      name.toLowerCase().includes("introspection") ||
+      name.toLowerCase().includes("reflection") ||
+      name.toLowerCase().includes("mindfulness"),
+  )
+
+  const hasHustleMentality = showcaseNames.some(
+    (name) =>
+      name.toLowerCase().includes("hustle") ||
+      name.toLowerCase().includes("grind") ||
+      name.toLowerCase().includes("entrepreneur"),
+  )
+
   // Quick category navigation
   const quickCategories = [
     { name: "Introspection", icon: <Brain className="h-4 w-4 md:h-5 md:w-5" />, href: "/category/introspection" },
@@ -63,31 +137,6 @@ export default function Dashboard() {
     { name: "Recent", icon: <Clock className="h-4 w-4 md:h-5 md:w-5" />, href: "/category/recently-added" },
     { name: "All", icon: <Search className="h-4 w-4 md:h-5 md:w-5" />, href: "/dashboard/categories" },
   ]
-
-  // Define placeholder categories to maintain layout
-  const placeholderCategories = ["Motivation", "Fitness", "Mindfulness", "Productivity", "Success", "Lifestyle"]
-
-  // Function to render placeholder video cards in 9:16 format
-  const renderPlaceholderCards = (count: number) => {
-    return Array.from({ length: count }).map((_, index) => (
-      <div key={`placeholder-${index}`} className="group relative">
-        <div className="aspect-[9/16] bg-zinc-900/50 rounded-xl overflow-hidden relative">
-          <div className="absolute inset-0 flex items-center justify-center">
-            <Play className="h-12 w-12 text-zinc-700/50" />
-          </div>
-        </div>
-      </div>
-    ))
-  }
-
-  // Sample clip data with the exact URL
-  const sampleClip = {
-    id: "sample-clip",
-    title: "2819 | Deceived",
-    category: "Faith",
-    tags: ["truth", "discipline"],
-    url: "https://pub-0b3ce0bc519f469c81f8ed504a1ee451.r2.dev/2819%20%20Deceived.mp4",
-  }
 
   return (
     <div className="relative min-h-screen bg-black text-white">
@@ -116,28 +165,17 @@ export default function Dashboard() {
                 <Search className="h-5 w-5 mr-2 text-zinc-400" />
                 Results for "{searchQuery}"
               </h2>
-              <p className="text-zinc-400">No results found. Try a different search term.</p>
+              <p className="text-zinc-400">
+                {hasSearchResults
+                  ? `Found results in ${Object.keys(filteredShowcaseVideos).length} categories`
+                  : "No results found. Try a different search term."}
+              </p>
             </div>
           </motion.div>
         )}
 
-        {/* Debug toggle */}
-        <div className="px-6 mb-4">
-          <button onClick={() => setShowDebug(!showDebug)} className="text-xs text-zinc-500 hover:text-zinc-300">
-            {showDebug ? "Hide Debug" : "Show Debug"}
-          </button>
-        </div>
-
-        {/* Debug Video Test (if enabled) */}
-        {showDebug && (
-          <div className="px-6 mb-8 space-y-4">
-            <DirectVideoTest src={sampleClip.url} />
-            <VideoFormatTest videoUrl={sampleClip.url} />
-          </div>
-        )}
-
-        {/* Featured Section with Direct Video */}
-        {!searchQuery && (
+        {/* Featured Section (if not searching) */}
+        {!searchQuery && !isLoadingData && (
           <motion.div variants={containerVariants} initial="hidden" animate="visible" className="px-6 mb-12">
             <motion.div variants={itemVariants} className="flex items-center justify-between mb-6">
               <h1 className="text-3xl font-extralight tracking-tight text-white">
@@ -152,44 +190,28 @@ export default function Dashboard() {
               </Button>
             </motion.div>
 
-            {/* Direct Video Display */}
-            <motion.div variants={itemVariants} className="mb-8">
-              <div className="bg-zinc-900/30 backdrop-blur-sm border border-zinc-800/50 rounded-xl p-6 shadow-xl">
-                <h2 className="text-2xl font-medium text-white mb-4">{sampleClip.title}</h2>
-                <div className="max-w-3xl mx-auto">
-                  <ClipPlayer src={sampleClip.url} aspectRatio="16/9" />
-                </div>
-                <div className="mt-4 flex flex-wrap gap-2">
-                  <span className="bg-zinc-800 text-zinc-200 px-3 py-1 rounded-full text-sm">
-                    {sampleClip.category}
-                  </span>
-                  {sampleClip.tags.map((tag) => (
-                    <span key={tag} className="bg-zinc-800/50 text-zinc-300 px-3 py-1 rounded-full text-sm">
-                      #{tag}
-                    </span>
-                  ))}
-                </div>
-              </div>
-            </motion.div>
-
             {/* Featured Videos Grid */}
             <motion.div variants={itemVariants} className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-              <div className="group relative">
-                <div className="aspect-[9/16] bg-zinc-900 rounded-xl overflow-hidden">
-                  <ClipPlayer src={sampleClip.url} aspectRatio="9/16" />
-                </div>
-                <div className="mt-2">
-                  <h3 className="text-sm font-medium text-white truncate">{sampleClip.title}</h3>
-                  <p className="text-xs text-zinc-400">{sampleClip.category}</p>
-                </div>
-              </div>
-              {renderPlaceholderCards(5)}
+              {isLoading
+                ? // Skeleton loaders
+                  Array.from({ length: 6 }).map((_, index) => (
+                    <div
+                      key={`skeleton-${index}`}
+                      className="aspect-[9/16] rounded-xl bg-zinc-900/50 animate-pulse"
+                    ></div>
+                  ))
+                : // Featured videos
+                  featuredVideos.map((video, index) => (
+                    <div key={`featured-${video.uri || index}`} className="group">
+                      <VimeoCard video={video} />
+                    </div>
+                  ))}
             </motion.div>
           </motion.div>
         )}
 
         {/* Category Quick Links (if not searching) */}
-        {!searchQuery && (
+        {!searchQuery && !isLoadingData && (
           <motion.div variants={containerVariants} initial="hidden" animate="visible" className="px-6 mb-12">
             <motion.h3
               variants={itemVariants}
@@ -200,7 +222,7 @@ export default function Dashboard() {
             </motion.h3>
 
             <motion.div variants={itemVariants} className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              {quickCategories.map((category) => (
+              {quickCategories.map((category, index) => (
                 <Button
                   key={category.name}
                   onClick={() => {
@@ -224,58 +246,57 @@ export default function Dashboard() {
           </motion.div>
         )}
 
-        {/* Faith Category with Direct Video */}
-        <motion.div variants={containerVariants} initial="hidden" animate="visible" className="space-y-12">
-          <motion.div variants={itemVariants}>
-            <div className="px-6">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-xl font-medium text-white">Faith</h2>
-                <Button
-                  variant="ghost"
-                  className="text-zinc-400 hover:text-white text-sm"
-                  onClick={() => router.push(`/category/faith`)}
-                >
-                  View All <ChevronRight className="h-4 w-4 ml-1" />
-                </Button>
-              </div>
-              <div className="grid grid-flow-col auto-cols-[80%] md:auto-cols-[40%] lg:auto-cols-[25%] xl:auto-cols-[20%] gap-4 overflow-x-auto pb-4 snap-x">
-                <div className="group relative">
-                  <div className="aspect-[9/16] bg-zinc-900 rounded-xl overflow-hidden">
-                    <ClipPlayer src={sampleClip.url} aspectRatio="9/16" />
-                  </div>
-                  <div className="mt-2">
-                    <h3 className="text-sm font-medium text-white truncate">{sampleClip.title}</h3>
-                    <p className="text-xs text-zinc-400">{sampleClip.category}</p>
-                  </div>
-                </div>
-                {renderPlaceholderCards(4)}
-              </div>
-            </div>
-          </motion.div>
+        {/* Error state */}
+        {error && (
+          <div className="px-6 py-10 text-center">
+            <p className="text-red-500">Error loading videos: {error}</p>
+          </div>
+        )}
 
-          {/* Other placeholder categories */}
-          {placeholderCategories
-            .filter((cat) => cat !== "Faith")
-            .map((category) => (
-              <motion.div key={`placeholder-category-${category}`} variants={itemVariants}>
-                <div className="px-6">
-                  <div className="flex items-center justify-between mb-4">
-                    <h2 className="text-xl font-medium text-white">{category}</h2>
-                    <Button
-                      variant="ghost"
-                      className="text-zinc-400 hover:text-white text-sm"
-                      onClick={() => router.push(`/category/${category.toLowerCase()}`)}
-                    >
-                      View All <ChevronRight className="h-4 w-4 ml-1" />
-                    </Button>
-                  </div>
-                  <div className="grid grid-flow-col auto-cols-[80%] md:auto-cols-[40%] lg:auto-cols-[25%] xl:auto-cols-[20%] gap-4 overflow-x-auto pb-4 snap-x">
-                    {renderPlaceholderCards(5)}
-                  </div>
-                </div>
-              </motion.div>
-            ))}
-        </motion.div>
+        {/* Loading state (initial) */}
+        {isLoadingData && (
+          <div className="px-6 py-10">
+            <div className="h-8 w-48 bg-zinc-900/50 rounded-md animate-pulse mb-8"></div>
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+              {Array.from({ length: 6 }).map((_, index) => (
+                <div key={`skeleton-${index}`} className="aspect-[9/16] rounded-xl bg-zinc-900/50 animate-pulse"></div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Showcase-based categories */}
+        {showcaseNames.length > 0 && (
+          <motion.div variants={containerVariants} initial="hidden" animate="visible" className="space-y-12">
+            {showcaseNames.map((showcaseName, index) => {
+              const videosToShow = searchQuery ? filteredShowcaseVideos[showcaseName] : showcaseVideos[showcaseName]
+              return (
+                <motion.div key={`showcase-${showcaseName}`} variants={itemVariants}>
+                  <VideoRow
+                    title={showcaseName}
+                    videos={videosToShow}
+                    limit={10}
+                    isShowcase={true}
+                    showcaseId={showcaseIds[showcaseName]}
+                  />
+                </motion.div>
+              )
+            })}
+          </motion.div>
+        )}
+
+        {/* No videos state */}
+        {!isLoadingData && showcaseNames.length === 0 && (
+          <div className="px-6 py-10 text-center">
+            {searchQuery ? (
+              <p className="text-zinc-400">No videos found matching "{searchQuery}". Try a different search term.</p>
+            ) : (
+              <p className="text-zinc-400">
+                No videos found. Make sure your Vimeo account has videos and your API credentials are correct.
+              </p>
+            )}
+          </div>
+        )}
       </main>
     </div>
   )

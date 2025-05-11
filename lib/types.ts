@@ -57,50 +57,20 @@ export interface VimeoApiResponse {
 export interface Category {
   id: string
   name: string
-  clips: Clip[]
+  videos: Video[]
 }
 
-export interface Clip {
+export interface Video {
   id: string
   title: string
-  description?: string
-  url: string
-  thumbnailUrl?: string
-  category?: string
-  tags?: string[]
-  uploadedAt?: any
-}
-
-// User-related types
-export interface UserProfile {
-  uid: string
-  email: string
-  displayName?: string
-  photoURL?: string
-  createdAt?: string
-  lastLogin?: string
-  downloads?: number
-  plan?: string
-  stripeCustomerId?: string
-  stripeSubscriptionId?: string
-}
-
-export interface UserPlanData {
-  plan: string
-  isActive: boolean
-  downloads: number
-  maxDownloads: number
-  hasReachedLimit: boolean
-  expiresAt?: string
-  createdAt?: string
-}
-
-// API response types
-export interface ApiResponse<T> {
-  success: boolean
-  data?: T
-  error?: string
-  message?: string
+  description: string
+  thumbnail: string
+  previewUrl: string
+  downloadUrl: string
+  duration: string
+  category: string
+  tags: string[]
+  vimeoId: string
 }
 
 // Update the VimeoVideo interface to include download property
@@ -423,5 +393,3 @@ export interface VimeoVideo {
     md5?: string
   }>
 }
-
-export type Video = VimeoVideo | Clip
