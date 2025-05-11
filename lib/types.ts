@@ -423,3 +423,5 @@ export interface VimeoVideo {
     md5?: string
   }>
 }
+
+export type Video = VimeoVideo | Clip
