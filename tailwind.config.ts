@@ -19,6 +19,10 @@ const config = {
       },
     },
     extend: {
+      fontFamily: {
+        sans: ["Inter", "sans-serif"],
+        manrope: ["Manrope", "sans-serif"],
+      },
       colors: {
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
@@ -199,7 +203,7 @@ const config = {
         "gradient-conic": "conic-gradient(from 180deg at 50% 50%, var(--tw-gradient-stops))",
         "gradient-diagonal": "linear-gradient(to bottom right, var(--tw-gradient-stops))",
         "gradient-shine": "linear-gradient(45deg, transparent 25%, rgba(255, 255, 255, 0.05) 50%, transparent 75%)",
-        "noise-pattern": "url('/noise.svg')",
+        "noise-pattern": "url('/noise.png')",
       },
       typography: {
         DEFAULT: {
@@ -313,12 +317,6 @@ const config = {
               fontWeight: "700",
               color: "var(--tw-prose-headings)",
             },
-            // These styles are already in place from earlier, so they're commented out here
-            // img: {},
-            // video: {},
-            // figure: {},
-            // 'figure > *': {},
-            // figcaption: {},
             code: {
               color: "var(--tw-prose-code)",
               fontWeight: "600",
