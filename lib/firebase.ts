@@ -37,6 +37,9 @@ export function initializeFirebaseApp() {
     auth = getAuth(app)
     db = getFirestore(app)
     storage = getStorage(app)
+
+    // Log success
+    console.log("Firebase initialized successfully with project:", firebaseConfig.projectId)
   } catch (error) {
     console.error("Firebase initialization error:", error)
 
@@ -58,6 +61,9 @@ try {
   auth = getAuth(app)
   db = getFirestore(app)
   storage = getStorage(app)
+
+  // Log success
+  console.log("Firebase initialized successfully with project:", firebaseConfig.projectId)
 } catch (error) {
   console.error("Firebase initialization error:", error)
 
