@@ -177,10 +177,22 @@ export function AuthProvider({ children }: AuthProviderProps) {
     try {
       const auth = getAuth()
       await firebaseSignOut(auth)
+
+      // Clear any cached user data
+      setUser(null)
+
+      // Force navigation to login page
       router.push("/login")
+
+      // For a more forceful redirect, you can also use window.location
+      if (typeof window !== "undefined") {
+        window.location.href = "/login"
+      }
+
+      return Promise.resolve()
     } catch (error) {
       console.error("Error signing out:", error)
-      throw error
+      return Promise.reject(error)
     }
   }
 

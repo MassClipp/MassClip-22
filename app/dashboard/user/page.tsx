@@ -13,16 +13,25 @@ import DownloadStats from "@/components/download-stats"
 import { useUserPlan } from "@/hooks/use-user-plan"
 import { CancelSubscriptionButton } from "@/components/cancel-subscription-button"
 import { CheckCircle2 } from "lucide-react"
+import { useState } from "react"
 
 export default function UserDashboardPage() {
-  const { user, logOut } = useAuth()
+  const { user, signOut } = useAuth()
   const router = useRouter()
   const { isProUser } = useUserPlan()
+  const [isLoggingOut, setIsLoggingOut] = useState(false)
 
   const handleLogout = async () => {
-    const result = await logOut()
-    if (result.success) {
+    try {
+      setIsLoggingOut(true)
+      await signOut()
+      // The redirect is handled in the auth context
+    } catch (error) {
+      console.error("Error during logout:", error)
+      // Fallback redirect
       router.push("/login")
+    } finally {
+      setIsLoggingOut(false)
     }
   }
 
@@ -340,8 +349,9 @@ export default function UserDashboardPage() {
                           variant="outline"
                           className="border-zinc-800 bg-zinc-900/30 text-white hover:bg-zinc-900/50 hover:border-zinc-700"
                           onClick={handleLogout}
+                          disabled={isLoggingOut}
                         >
-                          <LogOut className="mr-2 h-4 w-4" /> Log Out
+                          <LogOut className="mr-2 h-4 w-4" /> {isLoggingOut ? "Logging out..." : "Log Out"}
                         </Button>
                       </div>
                     </CardContent>

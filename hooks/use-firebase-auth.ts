@@ -96,12 +96,24 @@ export function useFirebaseAuth() {
     if (!isFirebaseConfigured) {
       console.warn("Firebase is not properly configured. Using demo mode.")
       setUser(null)
+
+      // Force redirect to login page
+      if (typeof window !== "undefined") {
+        window.location.href = "/login"
+      }
+
       return { success: true, demo: true }
     }
 
     setError(null)
     try {
       await signOut(auth)
+
+      // Force redirect to login page
+      if (typeof window !== "undefined") {
+        window.location.href = "/login"
+      }
+
       return { success: true }
     } catch (err) {
       console.error("Error signing out:", err)

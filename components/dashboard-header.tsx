@@ -42,7 +42,8 @@ export default function DashboardHeader({ initialSearchQuery = "" }) {
   const [searchQuery, setSearchQuery] = useState(initialSearchQuery)
   const [isSearchOpen, setIsSearchOpen] = useState(false)
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
-  const { user, logOut } = useAuth()
+  const [isLoggingOut, setIsLoggingOut] = useState(false)
+  const { user, signOut } = useAuth()
   const { isProUser, loading } = useUserPlan()
   const { remainingDownloads, hasReachedLimit } = useDownloadLimit()
   const router = useRouter()
@@ -90,9 +91,16 @@ export default function DashboardHeader({ initialSearchQuery = "" }) {
   }, [isMobileMenuOpen])
 
   const handleLogout = async () => {
-    const result = await logOut()
-    if (result.success) {
+    try {
+      setIsLoggingOut(true)
+      await signOut()
+      // The redirect is handled in the auth context
+    } catch (error) {
+      console.error("Error during logout:", error)
+      // Fallback redirect
       router.push("/login")
+    } finally {
+      setIsLoggingOut(false)
     }
   }
 
@@ -209,9 +217,13 @@ export default function DashboardHeader({ initialSearchQuery = "" }) {
                     Profile
                   </DropdownMenuItem>
                   <DropdownMenuSeparator className="bg-zinc-800" />
-                  <DropdownMenuItem className="hover:bg-zinc-800 focus:bg-zinc-800" onClick={handleLogout}>
+                  <DropdownMenuItem
+                    className="hover:bg-zinc-800 focus:bg-zinc-800"
+                    onClick={handleLogout}
+                    disabled={isLoggingOut}
+                  >
                     <LogOut className="h-4 w-4 mr-2" />
-                    Log out
+                    {isLoggingOut ? "Logging out..." : "Log out"}
                   </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
@@ -368,14 +380,12 @@ export default function DashboardHeader({ initialSearchQuery = "" }) {
           {/* Action Buttons */}
           <div className="p-5 border-t border-zinc-800/50 space-y-3 bg-black">
             <button
-              onClick={() => {
-                handleLogout()
-                setIsMobileMenuOpen(false)
-              }}
-              className="flex items-center justify-center w-full py-2.5 text-sm text-white/90 hover:text-white bg-zinc-800/50 hover:bg-zinc-800 rounded-lg transition-colors"
+              onClick={handleLogout}
+              disabled={isLoggingOut}
+              className="flex items-center justify-center w-full py-2.5 text-sm text-white/90 hover:text-white bg-zinc-800/50 hover:bg-zinc-800 rounded-lg transition-colors disabled:opacity-50"
             >
               <LogOut className="h-4 w-4 mr-2" />
-              Log out
+              {isLoggingOut ? "Logging out..." : "Log out"}
             </button>
           </div>
         </div>
