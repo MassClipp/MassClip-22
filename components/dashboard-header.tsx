@@ -162,6 +162,13 @@ export default function DashboardHeader({ initialSearchQuery = "" }) {
                     Your Account
                   </Link>
                   <Link
+                    href="/dashboard/uploads"
+                    className="block px-4 py-2 text-sm text-zinc-300 hover:bg-zinc-800"
+                    onClick={() => setIsUserMenuOpen(false)}
+                  >
+                    My Uploads
+                  </Link>
+                  <Link
                     href="/dashboard/history"
                     className="block px-4 py-2 text-sm text-zinc-300 hover:bg-zinc-800"
                     onClick={() => setIsUserMenuOpen(false)}
@@ -241,6 +248,13 @@ export default function DashboardHeader({ initialSearchQuery = "" }) {
                 History
               </Link>
               <Link
+                href="/dashboard/uploads"
+                className="block px-3 py-2 text-white hover:bg-zinc-800 rounded-md"
+                onClick={() => setIsMenuOpen(false)}
+              >
+                My Uploads
+              </Link>
+              <Link
                 href="/dashboard/user"
                 className="block px-3 py-2 text-white hover:bg-zinc-800 rounded-md"
                 onClick={() => setIsMenuOpen(false)}
@@ -264,6 +278,8 @@ export default function DashboardHeader({ initialSearchQuery = "" }) {
                 </button>
               </div>
             </nav>
+
+            {/* Mobile Upload Button */}
           </div>
         )}
       </div>

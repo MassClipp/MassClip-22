@@ -7,7 +7,7 @@ import DashboardHeader from "@/components/dashboard-header"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
-import { Edit, Crown, LogOut, Check, User2, Clock, Heart, Download, Shield } from "lucide-react"
+import { Edit, Crown, LogOut, Check, User2, Clock, Heart, Download, Shield, Upload } from "lucide-react"
 import UpgradeButton from "@/components/upgrade-button"
 import DownloadStats from "@/components/download-stats"
 import { useUserPlan } from "@/hooks/use-user-plan"
@@ -214,6 +214,14 @@ export default function UserDashboardPage() {
                         >
                           <User2 className="h-6 w-6 text-crimson" />
                           <span>Profile</span>
+                        </Button>
+                        <Button
+                          variant="outline"
+                          className="h-auto py-6 flex flex-col items-center justify-center gap-3 border-zinc-800 bg-zinc-900/30 text-white hover:bg-zinc-900/50 hover:border-zinc-700"
+                          onClick={() => router.push("/dashboard/uploads")}
+                        >
+                          <Upload className="h-6 w-6 text-crimson" />
+                          <span>My Uploads</span>
                         </Button>
                       </div>
                     </CardContent>
