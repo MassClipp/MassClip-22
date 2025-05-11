@@ -103,6 +103,14 @@ export default function DashboardHeader({ initialSearchQuery = "" }) {
               >
                 Categories
               </Link>
+              <Link
+                href="/dashboard/favorites"
+                className={`text-sm font-medium transition-colors hover:text-white ${
+                  pathname === "/dashboard/favorites" ? "text-white" : "text-zinc-400"
+                }`}
+              >
+                Favorites
+              </Link>
             </div>
           </div>
 
@@ -134,12 +142,6 @@ export default function DashboardHeader({ initialSearchQuery = "" }) {
               </Button>
             </Link>
 
-            <Link href="/dashboard/upload">
-              <Button variant="default" size="sm" className="bg-crimson hover:bg-crimson-dark text-white text-xs px-4">
-                Upload
-              </Button>
-            </Link>
-
             {/* User Dropdown */}
             <div className="relative" id="user-menu">
               <button
@@ -165,13 +167,6 @@ export default function DashboardHeader({ initialSearchQuery = "" }) {
                     onClick={() => setIsUserMenuOpen(false)}
                   >
                     My Uploads
-                  </Link>
-                  <Link
-                    href="/dashboard/favorites"
-                    className="block px-4 py-2 text-sm text-zinc-300 hover:bg-zinc-800"
-                    onClick={() => setIsUserMenuOpen(false)}
-                  >
-                    Favorites
                   </Link>
                   <Link
                     href="/dashboard/history"
@@ -285,15 +280,6 @@ export default function DashboardHeader({ initialSearchQuery = "" }) {
             </nav>
 
             {/* Mobile Upload Button */}
-            <div className="mt-4 pt-4 border-t border-zinc-800">
-              <Link
-                href="/dashboard/upload"
-                className="block w-full py-2.5 bg-crimson hover:bg-crimson-dark text-white text-center font-medium rounded-md"
-                onClick={() => setIsMenuOpen(false)}
-              >
-                Upload New Video
-              </Link>
-            </div>
           </div>
         )}
       </div>

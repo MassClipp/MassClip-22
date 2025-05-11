@@ -13,6 +13,8 @@ import { useRouter } from "next/navigation"
 import { filterCategoriesBySearch } from "@/lib/search-utils"
 import VimeoCard from "@/components/vimeo-card"
 import { shuffleArray } from "@/lib/utils"
+import OvalSectionDivider from "@/components/oval-section-divider"
+import RecommendedCategories from "@/components/recommended-categories"
 
 export default function Dashboard() {
   // Get search query from URL
@@ -199,6 +201,34 @@ export default function Dashboard() {
             </motion.div>
           </motion.div>
         )}
+
+        {/* Add the oval section divider and recommended categories */}
+        <OvalSectionDivider title="Recommended Categories" viewAllLink="/dashboard/categories" />
+
+        <RecommendedCategories
+          categories={[
+            {
+              name: "Money & Wealth",
+              slug: "money-and-wealth",
+              description: "Financial success and wealth building",
+            },
+            {
+              name: "Hustle Mentality",
+              slug: "hustle-mentality",
+              description: "Motivation for entrepreneurs",
+            },
+            {
+              name: "Introspection",
+              slug: "introspection",
+              description: "Self-reflection and growth",
+            },
+            {
+              name: "Recently Added",
+              slug: "recently-added",
+              description: "New content added this week",
+            },
+          ]}
+        />
 
         {/* Error state */}
         {error && (
