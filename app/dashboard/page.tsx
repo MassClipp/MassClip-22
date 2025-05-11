@@ -8,6 +8,7 @@ import DashboardHeader from "@/components/dashboard-header"
 import { Button } from "@/components/ui/button"
 import { useRouter } from "next/navigation"
 import ClipPlayer from "@/components/ClipPlayer"
+import DirectVideoTest from "@/components/direct-video-test"
 
 export default function Dashboard() {
   // Get search query from URL
@@ -17,6 +18,7 @@ export default function Dashboard() {
   // State for active category
   const [activeCategory, setActiveCategory] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
+  const [showDebug, setShowDebug] = useState(false)
 
   const router = useRouter()
 
@@ -77,7 +79,7 @@ export default function Dashboard() {
     ))
   }
 
-  // Sample clip data
+  // Sample clip data with the exact URL
   const sampleClip = {
     id: "sample-clip",
     title: "2819 | Deceived",
@@ -116,6 +118,20 @@ export default function Dashboard() {
               <p className="text-zinc-400">No results found. Try a different search term.</p>
             </div>
           </motion.div>
+        )}
+
+        {/* Debug toggle */}
+        <div className="px-6 mb-4">
+          <button onClick={() => setShowDebug(!showDebug)} className="text-xs text-zinc-500 hover:text-zinc-300">
+            {showDebug ? "Hide Debug" : "Show Debug"}
+          </button>
+        </div>
+
+        {/* Debug Video Test (if enabled) */}
+        {showDebug && (
+          <div className="px-6 mb-8">
+            <DirectVideoTest src={sampleClip.url} />
+          </div>
         )}
 
         {/* Featured Section with Direct Video */}
