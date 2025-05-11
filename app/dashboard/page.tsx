@@ -1,9 +1,9 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useRef, useEffect, useState } from "react"
 import { useSearchParams } from "next/navigation"
 import { motion } from "framer-motion"
-import { Search, ChevronRight, Circle, Zap, Clock, Grid } from "lucide-react"
+import { Search, Clock, Brain, Rocket, ChevronRight, TrendingUp } from "lucide-react"
 import DashboardHeader from "@/components/dashboard-header"
 import VideoRow from "@/components/video-row"
 import { useVimeoShowcases } from "@/hooks/use-vimeo-showcases"
@@ -13,8 +13,6 @@ import { useRouter } from "next/navigation"
 import { filterCategoriesBySearch } from "@/lib/search-utils"
 import VimeoCard from "@/components/vimeo-card"
 import { shuffleArray } from "@/lib/utils"
-import OvalSectionDivider from "@/components/oval-section-divider"
-import TrendingCategories from "@/components/trending-categories"
 
 export default function Dashboard() {
   // Get search query from URL
@@ -26,7 +24,7 @@ export default function Dashboard() {
   const [hasSearchResults, setHasSearchResults] = useState(false)
   const [featuredVideos, setFeaturedVideos] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(true)
-  const [shuffledShowcaseVideos, setShuffledShowcaseVideos] = useState<Record<string, any[]>>({})
+  const [activeCategory, setActiveCategory] = useState<string | null>(null)
 
   // Fetch showcase-based videos
   const { showcaseVideos, showcaseIds, loading: loadingShowcases, error: showcaseError } = useVimeoShowcases()
@@ -36,30 +34,21 @@ export default function Dashboard() {
 
   const router = useRouter()
 
-  // Shuffle all videos within each showcase
+  // Cleanup observer on unmount
+  const observer = useRef<IntersectionObserver | null>(null)
   useEffect(() => {
-    if (!loadingShowcases && Object.keys(showcaseVideos).length > 0) {
-      const shuffled: Record<string, any[]> = {}
-
-      // Shuffle each showcase's videos independently
-      Object.keys(showcaseVideos).forEach((showcaseName) => {
-        // Create a deep copy of the videos array to avoid mutating the original
-        const videosToShuffle = [...showcaseVideos[showcaseName]]
-        shuffled[showcaseName] = shuffleArray(videosToShuffle)
-      })
-
-      setShuffledShowcaseVideos(shuffled)
+    return () => {
+      if (observer.current) {
+        observer.current.disconnect()
+      }
     }
-  }, [showcaseVideos, loadingShowcases])
+  }, [])
 
   // Filter videos based on search query
   useEffect(() => {
     if (searchQuery && !loadingShowcases && !loadingVideos) {
       // Filter showcase videos
-      const filteredShowcases = filterCategoriesBySearch(
-        shuffledShowcaseVideos.length > 0 ? shuffledShowcaseVideos : showcaseVideos,
-        searchQuery,
-      )
+      const filteredShowcases = filterCategoriesBySearch(showcaseVideos, searchQuery)
       setFilteredShowcaseVideos(filteredShowcases)
 
       // Check if we have any search results
@@ -74,17 +63,13 @@ export default function Dashboard() {
       }
     } else {
       // If no search query, show all showcase videos
-      setFilteredShowcaseVideos(shuffledShowcaseVideos.length > 0 ? shuffledShowcaseVideos : showcaseVideos)
-      setHasSearchResults(
-        Object.keys(shuffledShowcaseVideos.length > 0 ? shuffledShowcaseVideos : showcaseVideos).length > 0,
-      )
+      setFilteredShowcaseVideos(showcaseVideos)
+      setHasSearchResults(Object.keys(showcaseVideos).length > 0)
     }
-  }, [searchQuery, showcaseVideos, shuffledShowcaseVideos, loadingShowcases, loadingVideos, videosByTag, videos])
+  }, [searchQuery, showcaseVideos, loadingShowcases, loadingVideos, videosByTag, videos])
 
   // Get showcase names based on whether we're searching or not
-  const showcaseNames = Object.keys(
-    searchQuery ? filteredShowcaseVideos : shuffledShowcaseVideos.length > 0 ? shuffledShowcaseVideos : showcaseVideos,
-  )
+  const showcaseNames = Object.keys(searchQuery ? filteredShowcaseVideos : showcaseVideos)
 
   // Prepare featured videos from all showcases
   useEffect(() => {
@@ -130,28 +115,27 @@ export default function Dashboard() {
     },
   }
 
-  // Define trending categories
-  const trendingCategories = [
-    {
-      name: "Introspection",
-      slug: "introspection",
-      icon: <Circle className="h-4 w-4 text-red-500" />,
-    },
-    {
-      name: "Hustle",
-      slug: "hustle-mentality",
-      icon: <Zap className="h-4 w-4 text-amber-500" />,
-    },
-    {
-      name: "Recent",
-      slug: "recently-added",
-      icon: <Clock className="h-4 w-4 text-green-500" />,
-    },
-    {
-      name: "All",
-      slug: "browse-all",
-      icon: <Grid className="h-4 w-4 text-blue-500" />,
-    },
+  // Check if we have the specific showcases
+  const hasIntrospection = showcaseNames.some(
+    (name) =>
+      name.toLowerCase().includes("introspection") ||
+      name.toLowerCase().includes("reflection") ||
+      name.toLowerCase().includes("mindfulness"),
+  )
+
+  const hasHustleMentality = showcaseNames.some(
+    (name) =>
+      name.toLowerCase().includes("hustle") ||
+      name.toLowerCase().includes("grind") ||
+      name.toLowerCase().includes("entrepreneur"),
+  )
+
+  // Quick category navigation
+  const quickCategories = [
+    { name: "Introspection", icon: <Brain className="h-4 w-4 md:h-5 md:w-5" />, href: "/category/introspection" },
+    { name: "Hustle", icon: <Rocket className="h-4 w-4 md:h-5 md:w-5" />, href: "/category/hustle-mentality" },
+    { name: "Recent", icon: <Clock className="h-4 w-4 md:h-5 md:w-5" />, href: "/category/recently-added" },
+    { name: "All", icon: <Search className="h-4 w-4 md:h-5 md:w-5" />, href: "/dashboard/categories" },
   ]
 
   return (
@@ -192,10 +176,10 @@ export default function Dashboard() {
 
         {/* Featured Section (if not searching) */}
         {!searchQuery && !isLoadingData && (
-          <motion.div variants={containerVariants} initial="hidden" animate="visible" className="px-6 mb-8">
+          <motion.div variants={containerVariants} initial="hidden" animate="visible" className="px-6 mb-12">
             <motion.div variants={itemVariants} className="flex items-center justify-between mb-6">
               <h1 className="text-3xl font-extralight tracking-tight text-white">
-                Find Your Next <span className="text-crimson">Viral Clip</span>
+                Find Your Next <span className="text-gradient-accent">Viral Clip</span>
               </h1>
               <Button
                 onClick={() => router.push("/category/browse-all")}
@@ -226,11 +210,41 @@ export default function Dashboard() {
           </motion.div>
         )}
 
-        {/* Add the trending categories section */}
-        <div className="px-6">
-          <OvalSectionDivider title="Trending Categories" viewAllLink="/category/browse-all" />
-          <TrendingCategories categories={trendingCategories} />
-        </div>
+        {/* Category Quick Links (if not searching) */}
+        {!searchQuery && !isLoadingData && (
+          <motion.div variants={containerVariants} initial="hidden" animate="visible" className="px-6 mb-12">
+            <motion.h3
+              variants={itemVariants}
+              className="text-xl font-light tracking-tight text-white mb-4 flex items-center"
+            >
+              <TrendingUp className="h-4 w-4 mr-2 text-zinc-400" />
+              Trending Categories
+            </motion.h3>
+
+            <motion.div variants={itemVariants} className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              {quickCategories.map((category, index) => (
+                <Button
+                  key={category.name}
+                  onClick={() => {
+                    setActiveCategory(category.name)
+                    router.push(category.href)
+                  }}
+                  variant="outline"
+                  className={`flex items-center justify-start h-auto py-4 px-5 bg-zinc-900/30 backdrop-blur-sm border-zinc-800/50 hover:bg-zinc-900/50 hover:border-zinc-700 rounded-xl transition-all duration-300 ${
+                    activeCategory === category.name ? "border-crimson/50 bg-crimson/5" : ""
+                  }`}
+                >
+                  <div
+                    className={`p-2 rounded-full bg-black/30 mr-3 ${activeCategory === category.name ? "text-crimson" : "text-crimson"}`}
+                  >
+                    {category.icon}
+                  </div>
+                  <span className="text-left font-light text-sm md:text-base">{category.name}</span>
+                </Button>
+              ))}
+            </motion.div>
+          </motion.div>
+        )}
 
         {/* Error state */}
         {error && (
@@ -255,10 +269,7 @@ export default function Dashboard() {
         {showcaseNames.length > 0 && (
           <motion.div variants={containerVariants} initial="hidden" animate="visible" className="space-y-12">
             {showcaseNames.map((showcaseName, index) => {
-              const videosToShow = searchQuery
-                ? filteredShowcaseVideos[showcaseName]
-                : shuffledShowcaseVideos[showcaseName] || showcaseVideos[showcaseName]
-
+              const videosToShow = searchQuery ? filteredShowcaseVideos[showcaseName] : showcaseVideos[showcaseName]
               return (
                 <motion.div key={`showcase-${showcaseName}`} variants={itemVariants}>
                   <VideoRow

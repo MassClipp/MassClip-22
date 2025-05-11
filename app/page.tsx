@@ -92,7 +92,7 @@ export default function LandingPage() {
                   <Search className="absolute left-5 top-1/2 transform -translate-y-1/2 text-white/30" size={20} />
                   <input
                     type="text"
-                    placeholder="Try 'Codie Sanchez' or 'Damii motivation'..."
+                    placeholder="Find your next viral post..."
                     className="w-full py-4 pl-14 pr-4 bg-white/5 border border-white/10 text-white placeholder-white/30 focus:outline-none focus:border-crimson focus:ring-1 focus:ring-crimson transition-all"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}

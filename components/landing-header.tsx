@@ -42,8 +42,9 @@ export default function LandingHeader() {
 
   const navigationItems = [
     { name: "Home", href: "/" },
-    { name: "Categories", href: "/dashboard/categories" },
+    { name: "Explore", href: "/dashboard" },
     { name: "Pricing", href: "/membership-plans" },
+    { name: "Categories", href: "/dashboard/categories" },
   ]
 
   return (
@@ -58,7 +59,6 @@ export default function LandingHeader() {
 
           {/* Desktop Navigation */}
           <nav className="hidden md:flex items-center ml-10 space-x-8">
-            {/* Regular Nav Items */}
             {navigationItems.map((item) => (
               <Link
                 key={item.name}

@@ -37,12 +37,12 @@ export default function VimeoCard({ video }: VimeoCardProps) {
   const [isTitleOverflowing, setIsTitleOverflowing] = useState(false)
   const [hasTrackedView, setHasTrackedView] = useState(false)
   const [isIframeLoaded, setIsIframeLoaded] = useState(false)
+  const [thumbnailLoaded, setThumbnailLoaded] = useState(false)
   const [isDownloading, setIsDownloading] = useState(false)
   const [downloadLink, setDownloadLink] = useState<string | null>(null)
   const [isFavorite, setIsFavorite] = useState(false)
   const [isCheckingFavorite, setIsCheckingFavorite] = useState(true)
   const [isTikTokBrowser, setIsTikTokBrowser] = useState(false)
-  const [thumbnailLoaded, setThumbnailLoaded] = useState(false)
 
   const { user } = useAuth()
   const { toast } = useToast()
@@ -57,7 +57,7 @@ export default function VimeoCard({ video }: VimeoCardProps) {
   const videoContainerRef = useRef<HTMLDivElement>(null)
 
   // Extract video ID from URI (format: "/videos/12345678") with null check
-  const videoId = video?.uri ? video.uri.split("/").pop() : video?.videoId || null
+  const videoId = video?.uri ? video.uri.split("/").pop() : null
 
   // Check if we're in TikTok browser on mount
   useEffect(() => {
@@ -245,34 +245,15 @@ export default function VimeoCard({ video }: VimeoCardProps) {
     if (isProUser) return { success: true }
 
     try {
-      // CRITICAL: Check if user has reached their limit BEFORE incrementing
-      if (hasReachedLimit) {
-        return {
-          success: false,
-          message: "You've reached your monthly download limit. Upgrade to Creator Pro for unlimited downloads.",
-        }
-      }
-
       const userDocRef = doc(db, "users", user.uid)
-
-      // Check if we need to reset downloads (new month)
-      const now = new Date()
-      const lastReset = planData?.lastReset
-
-      if (lastReset && (lastReset.getMonth() !== now.getMonth() || lastReset.getFullYear() !== now.getFullYear())) {
-        // Reset for new month
-        await updateDoc(userDocRef, {
-          downloads: 1, // Set to 1 because we're counting this download
-          lastReset: serverTimestamp(),
-        })
-
-        return { success: true }
-      }
 
       // Increment download count
       await updateDoc(userDocRef, {
         downloads: increment(1),
       })
+
+      // Force refresh the global limit status
+      forceRefresh()
 
       return { success: true }
     } catch (err) {
@@ -306,9 +287,6 @@ export default function VimeoCard({ video }: VimeoCardProps) {
         // Clean up
         setTimeout(() => {
           URL.revokeObjectURL(objectUrl)
-          if (downloadLinkRef.current?.parentNode) {
-            downloadLinkRef.current.parentNode.removeChild(downloadLinkRef.current)
-          }
         }, 100)
       }
 
@@ -674,6 +652,3 @@ export default function VimeoCard({ video }: VimeoCardProps) {
     </div>
   )
 }
-
-// Add this line at the end of the file, after the component definition
-export { VimeoCard }

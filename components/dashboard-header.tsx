@@ -2,287 +2,268 @@
 
 import type React from "react"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
+import { useRouter } from "next/navigation"
 import Link from "next/link"
-import { usePathname, useRouter } from "next/navigation"
-import { Search, Menu, X, Crown, User, ChevronDown } from "lucide-react"
-import { signOut } from "firebase/auth"
-import { auth } from "@/lib/firebase"
-import Logo from "@/components/logo"
+import { User, LogOut, X, Search, Download, Home, Grid, Heart, Clock, Crown, Upload } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { useAuth } from "@/contexts/auth-context"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu"
+import UpgradeButton from "@/components/upgrade-button"
+import Logo from "@/components/logo"
+import UserDownloadInfo from "@/components/user-download-info"
+import { useUserPlan } from "@/hooks/use-user-plan"
+import { useDownloadLimit } from "@/contexts/download-limit-context"
 import { useMobile } from "@/hooks/use-mobile"
 
 export default function DashboardHeader({ initialSearchQuery = "" }) {
-  const [isMenuOpen, setIsMenuOpen] = useState(false)
-  const [isUserMenuOpen, setIsUserMenuOpen] = useState(false)
-  const [searchQuery, setSearchQuery] = useState(initialSearchQuery)
   const [isScrolled, setIsScrolled] = useState(false)
-  const pathname = usePathname()
+  const [searchQuery, setSearchQuery] = useState(initialSearchQuery)
+  const [isSearchOpen, setIsSearchOpen] = useState(false)
+  const { user, logOut } = useAuth()
+  const { isProUser } = useUserPlan()
+  const { remainingDownloads, hasReachedLimit } = useDownloadLimit()
   const router = useRouter()
+  const searchInputRef = useRef<HTMLInputElement>(null)
   const isMobile = useMobile()
 
-  // Handle search submission
-  const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault()
-    if (searchQuery.trim()) {
-      localStorage.setItem("lastSearchQuery", searchQuery.trim())
-      router.push(`/dashboard?search=${encodeURIComponent(searchQuery.trim())}`)
-      setIsMenuOpen(false)
-    }
-  }
-
-  // Handle scroll detection for header styling
   useEffect(() => {
     const handleScroll = () => {
-      setIsScrolled(window.scrollY > 10)
+      if (window.scrollY > 10) {
+        setIsScrolled(true)
+      } else {
+        setIsScrolled(false)
+      }
     }
+
     window.addEventListener("scroll", handleScroll)
     return () => window.removeEventListener("scroll", handleScroll)
   }, [])
 
-  // Handle sign out
-  const handleSignOut = async () => {
-    try {
-      await signOut(auth)
+  // Focus search input when search is opened
+  useEffect(() => {
+    if (isSearchOpen && searchInputRef.current) {
+      searchInputRef.current.focus()
+    }
+  }, [isSearchOpen])
+
+  const handleLogout = async () => {
+    const result = await logOut()
+    if (result.success) {
       router.push("/login")
-    } catch (error) {
-      console.error("Error signing out:", error)
     }
   }
 
-  // Close user menu when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      const userMenu = document.getElementById("user-menu")
-      if (userMenu && !userMenu.contains(event.target as Node) && isUserMenuOpen) {
-        setIsUserMenuOpen(false)
-      }
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (searchQuery.trim()) {
+      // Save the search query to localStorage for potential use in other components
+      localStorage.setItem("lastSearchQuery", searchQuery)
+      router.push(`/dashboard?search=${encodeURIComponent(searchQuery)}`)
+      setIsSearchOpen(false)
     }
+  }
 
-    document.addEventListener("mousedown", handleClickOutside)
-    return () => document.removeEventListener("mousedown", handleClickOutside)
-  }, [isUserMenuOpen])
-
-  // Restore search query from localStorage
-  useEffect(() => {
-    const savedQuery = localStorage.getItem("lastSearchQuery")
-    if (savedQuery && pathname === "/dashboard") {
-      setSearchQuery(savedQuery)
-    } else {
-      setSearchQuery("")
-    }
-  }, [pathname])
+  // Navigation items for both desktop and mobile
+  const navigationItems = [
+    { name: "Home", href: "/dashboard", icon: <Home className="h-4 w-4" /> },
+    { name: "Categories", href: "/dashboard/categories", icon: <Grid className="h-4 w-4" /> },
+    { name: "Favorites", href: "/dashboard/favorites", icon: <Heart className="h-4 w-4" /> },
+    { name: "History", href: "/dashboard/history", icon: <Clock className="h-4 w-4" /> },
+    { name: "Upload Content", href: "/dashboard/upload", icon: <Upload className="h-4 w-4" /> },
+    { name: "Membership", href: "/membership-plans", icon: <Crown className="h-4 w-4" /> },
+  ]
 
   return (
-    <header
-      className={`sticky top-0 z-40 w-full transition-all duration-200 ${
-        isScrolled ? "bg-black/80 backdrop-blur-md shadow-md" : "bg-black"
-      }`}
-    >
-      <div className="container mx-auto px-4">
-        <div className="flex items-center justify-between h-16">
-          {/* Logo and Desktop Navigation */}
-          <div className="flex items-center">
-            <Logo href="/dashboard" size="md" />
+    <>
+      <header
+        className={`fixed top-0 w-full z-50 transition-all duration-300 ${
+          isScrolled ? "bg-black/90 backdrop-blur-sm border-b border-zinc-900" : "bg-transparent"
+        }`}
+      >
+        <div className="container mx-auto px-4 h-16 flex items-center justify-between">
+          <div className="flex items-center gap-8">
+            <Logo href="/dashboard" />
 
-            {/* Simple Navigation Links */}
-            <div className="hidden md:flex ml-6 space-x-6">
-              <Link
-                href="/dashboard"
-                className={`text-sm font-medium transition-colors hover:text-white ${
-                  pathname === "/dashboard" ? "text-white" : "text-zinc-400"
-                }`}
-              >
-                Homepage
-              </Link>
-              <Link
-                href="/dashboard/categories"
-                className={`text-sm font-medium transition-colors hover:text-white ${
-                  pathname === "/dashboard/categories" ? "text-white" : "text-zinc-400"
-                }`}
-              >
-                Categories
-              </Link>
-              <Link
-                href="/dashboard/favorites"
-                className={`text-sm font-medium transition-colors hover:text-white ${
-                  pathname === "/dashboard/favorites" ? "text-white" : "text-zinc-400"
-                }`}
-              >
-                Favorites
-              </Link>
-            </div>
+            {/* Desktop Navigation */}
+            <nav className="hidden md:flex items-center gap-6">
+              {[navigationItems[0], navigationItems[1], navigationItems[2], navigationItems[4]].map((item) => (
+                <Link
+                  key={item.name}
+                  href={item.href}
+                  className={`${
+                    item.current ? "text-white" : "text-zinc-400"
+                  } hover:text-white transition-colors text-sm font-light tracking-wide`}
+                >
+                  {item.name}
+                </Link>
+              ))}
+            </nav>
           </div>
 
-          {/* Search Bar - Desktop */}
-          <div className="hidden md:block flex-1 max-w-md mx-4">
-            <form onSubmit={handleSearch} className="relative">
-              <input
-                type="text"
-                placeholder="Search clips..."
-                className="w-full py-1.5 pl-9 pr-4 bg-zinc-800/50 border border-zinc-700/50 rounded-md text-white placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-crimson focus:border-crimson"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-zinc-500" size={16} />
-            </form>
+          {/* BETA Tag - Now visible on all screen sizes */}
+          <div className="absolute left-1/2 transform -translate-x-1/2">
+            <span className="text-xs font-extralight tracking-widest text-amber-400">BETA</span>
           </div>
 
-          {/* Desktop Right Navigation */}
-          <div className="hidden md:flex items-center space-x-2">
-            {/* Upgrade Button */}
-            <Link href="/pricing">
-              <Button
-                variant="outline"
-                size="sm"
-                className="border-amber-500/50 text-amber-400 hover:bg-amber-500/10 text-xs px-3"
-              >
-                <Crown size={14} className="mr-1.5" />
-                Upgrade
-              </Button>
-            </Link>
-
-            {/* User Dropdown */}
-            <div className="relative" id="user-menu">
-              <button
-                onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
-                className="flex items-center space-x-1 p-2 text-zinc-400 hover:text-white hover:bg-zinc-800 rounded-md transition-colors"
-              >
-                <User size={18} />
-                <ChevronDown size={14} className={`transition-transform ${isUserMenuOpen ? "rotate-180" : ""}`} />
-              </button>
-
-              {isUserMenuOpen && (
-                <div className="absolute right-0 mt-1 w-48 bg-zinc-900 border border-zinc-800 rounded-md shadow-lg py-1 z-50">
-                  <Link
-                    href="/dashboard/user"
-                    className="block px-4 py-2 text-sm text-zinc-300 hover:bg-zinc-800"
-                    onClick={() => setIsUserMenuOpen(false)}
-                  >
-                    Your Account
-                  </Link>
-                  <Link
-                    href="/dashboard/uploads"
-                    className="block px-4 py-2 text-sm text-zinc-300 hover:bg-zinc-800"
-                    onClick={() => setIsUserMenuOpen(false)}
-                  >
-                    My Uploads
-                  </Link>
-                  <Link
-                    href="/dashboard/history"
-                    className="block px-4 py-2 text-sm text-zinc-300 hover:bg-zinc-800"
-                    onClick={() => setIsUserMenuOpen(false)}
-                  >
-                    History
-                  </Link>
-                  <div className="border-t border-zinc-800 my-1"></div>
-                  <button
-                    onClick={() => {
-                      setIsUserMenuOpen(false)
-                      handleSignOut()
-                    }}
-                    className="block w-full text-left px-4 py-2 text-sm text-crimson hover:bg-zinc-800"
-                  >
-                    Sign Out
-                  </button>
-                </div>
-              )}
-            </div>
-          </div>
-
-          {/* Mobile Menu Button */}
-          <div className="md:hidden flex items-center">
+          {/* Desktop Action Buttons */}
+          <div className="hidden md:flex items-center gap-4">
+            {/* Search Button */}
             <button
-              onClick={() => setIsMenuOpen(!isMenuOpen)}
-              className="p-2 text-zinc-400 hover:text-white rounded-md"
-              aria-label={isMenuOpen ? "Close menu" : "Open menu"}
+              onClick={() => setIsSearchOpen(!isSearchOpen)}
+              className="text-zinc-400 hover:text-white transition-colors p-2"
+              aria-label="Search"
             >
-              {isMenuOpen ? <X size={24} /> : <Menu size={24} />}
+              <Search className="h-5 w-5" />
             </button>
+
+            {/* Downloads Counter */}
+            {isProUser ? (
+              <div className="flex items-center text-zinc-400 text-sm">
+                <Download className="h-4 w-4 mr-1" />
+                <span className="font-light">Unlimited</span>
+              </div>
+            ) : (
+              <div className="flex items-center bg-zinc-900/80 border border-zinc-800 rounded-full px-3 py-1">
+                <Download className={`h-4 w-4 mr-1 ${hasReachedLimit ? "text-amber-500" : "text-crimson"}`} />
+                <span className={`text-sm font-medium ${hasReachedLimit ? "text-amber-500" : "text-white"}`}>
+                  {remainingDownloads} left
+                </span>
+              </div>
+            )}
+
+            {/* Upgrade Button (non-Pro users) */}
+            {!isProUser && (
+              <UpgradeButton navigateOnly={true} className="hidden md:flex">
+                Upgrade
+              </UpgradeButton>
+            )}
+
+            {/* User Menu */}
+            {user && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-full"
+                  >
+                    <User className="h-5 w-5" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent className="w-56 bg-zinc-900/95 backdrop-blur-sm border-zinc-800 text-white">
+                  <DropdownMenuLabel className="font-light">
+                    {user.displayName ? user.displayName : "My Account"}
+                  </DropdownMenuLabel>
+                  <UserDownloadInfo />
+                  <DropdownMenuSeparator className="bg-zinc-800" />
+                  <DropdownMenuItem
+                    className="hover:bg-zinc-800 focus:bg-zinc-800"
+                    onClick={() => router.push("/dashboard/user")}
+                  >
+                    Dashboard
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    className="hover:bg-zinc-800 focus:bg-zinc-800"
+                    onClick={() => router.push("/dashboard/profile")}
+                  >
+                    Profile
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator className="bg-zinc-800" />
+                  <DropdownMenuItem className="hover:bg-zinc-800 focus:bg-zinc-800" onClick={handleLogout}>
+                    <LogOut className="h-4 w-4 mr-2" />
+                    Log out
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
+          </div>
+
+          {/* Mobile Header Actions */}
+          <div className="flex md:hidden items-center gap-2">
+            {/* Mobile Search Button */}
+            <button
+              onClick={() => setIsSearchOpen(!isSearchOpen)}
+              className="text-zinc-400 hover:text-white transition-colors p-2"
+              aria-label="Search"
+            >
+              <Search className="h-5 w-5" />
+            </button>
+
+            {/* Mobile Download Counter for Free Users */}
+            {!isProUser && (
+              <div className="flex items-center bg-zinc-900/80 border border-zinc-800 rounded-full px-2 py-0.5">
+                <Download className={`h-3 w-3 mr-1 ${hasReachedLimit ? "text-amber-500" : "text-crimson"}`} />
+                <span className={`text-xs font-medium ${hasReachedLimit ? "text-amber-500" : "text-white"}`}>
+                  {remainingDownloads}
+                </span>
+              </div>
+            )}
+
+            {/* User Profile Button */}
+            <Button
+              variant="ghost"
+              size="icon"
+              className="text-zinc-400 hover:text-white hover:bg-transparent"
+              onClick={() => router.push("/dashboard/user")}
+              aria-label="User profile"
+            >
+              <User className="h-5 w-5" />
+            </Button>
           </div>
         </div>
 
-        {/* Mobile Menu */}
-        {isMenuOpen && (
-          <div className="md:hidden py-4 border-t border-zinc-800">
-            {/* Mobile Search */}
-            <form onSubmit={handleSearch} className="relative mb-4">
-              <input
-                type="text"
-                placeholder="Search clips..."
-                className="w-full py-2 pl-10 pr-4 bg-zinc-800/50 border border-zinc-700/50 rounded-md text-white placeholder-zinc-500 focus:outline-none focus:ring-1 focus:ring-crimson focus:border-crimson"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-zinc-500" size={18} />
-            </form>
-
-            {/* Mobile Navigation Links */}
-            <nav className="space-y-1">
-              <Link
-                href="/dashboard"
-                className="block px-3 py-2 text-white hover:bg-zinc-800 rounded-md"
-                onClick={() => setIsMenuOpen(false)}
-              >
-                Homepage
-              </Link>
-              <Link
-                href="/dashboard/categories"
-                className="block px-3 py-2 text-white hover:bg-zinc-800 rounded-md"
-                onClick={() => setIsMenuOpen(false)}
-              >
-                Categories
-              </Link>
-              <Link
-                href="/dashboard/favorites"
-                className="block px-3 py-2 text-white hover:bg-zinc-800 rounded-md"
-                onClick={() => setIsMenuOpen(false)}
-              >
-                Favorites
-              </Link>
-              <Link
-                href="/dashboard/history"
-                className="block px-3 py-2 text-white hover:bg-zinc-800 rounded-md"
-                onClick={() => setIsMenuOpen(false)}
-              >
-                History
-              </Link>
-              <Link
-                href="/dashboard/uploads"
-                className="block px-3 py-2 text-white hover:bg-zinc-800 rounded-md"
-                onClick={() => setIsMenuOpen(false)}
-              >
-                My Uploads
-              </Link>
-              <Link
-                href="/dashboard/user"
-                className="block px-3 py-2 text-white hover:bg-zinc-800 rounded-md"
-                onClick={() => setIsMenuOpen(false)}
-              >
-                Your Account
-              </Link>
-              <Link
-                href="/pricing"
-                className="block px-3 py-2 text-amber-400 hover:bg-zinc-800 rounded-md flex items-center"
-                onClick={() => setIsMenuOpen(false)}
-              >
-                <Crown size={16} className="mr-2" />
-                Upgrade Membership
-              </Link>
-              <div className="pt-2 mt-2 border-t border-zinc-800">
+        {/* Search Overlay */}
+        {isSearchOpen && (
+          <div className="absolute top-16 left-0 right-0 bg-black/95 backdrop-blur-md border-b border-zinc-900 p-4 z-50">
+            <form onSubmit={handleSearch} className="max-w-2xl mx-auto">
+              <div className="relative">
+                <input
+                  ref={searchInputRef}
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search for clips..."
+                  className="w-full bg-zinc-900/50 border border-zinc-800 text-white px-4 py-2 pl-10 rounded-md focus:outline-none focus:ring-1 focus:ring-crimson"
+                />
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-zinc-500" />
                 <button
-                  onClick={handleSignOut}
-                  className="block w-full text-left px-3 py-2 text-crimson hover:bg-zinc-800 rounded-md"
+                  type="button"
+                  onClick={() => setIsSearchOpen(false)}
+                  className="absolute right-3 top-1/2 transform -translate-y-1/2 text-zinc-500 hover:text-white"
                 >
-                  Sign Out
+                  <X className="h-4 w-4" />
                 </button>
               </div>
-            </nav>
-
-            {/* Mobile Upload Button */}
+            </form>
           </div>
         )}
-      </div>
-    </header>
+      </header>
+
+      {/* Mobile Bottom Navigation Bar */}
+      {isMobile && (
+        <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-black/95 backdrop-blur-md border-t border-zinc-800 z-50">
+          <div className="flex justify-around items-center h-16">
+            {navigationItems.map((item) => (
+              <Link
+                key={item.name}
+                href={item.href}
+                className="flex flex-col items-center justify-center w-full h-full text-zinc-400 hover:text-white transition-colors"
+              >
+                <div className="flex items-center justify-center">{item.icon}</div>
+                <span className="text-xs mt-1">{item.name}</span>
+              </Link>
+            ))}
+          </div>
+        </nav>
+      )}
+    </>
   )
 }
