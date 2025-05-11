@@ -7,10 +7,7 @@ import { Search, Clock, Brain, Rocket, ChevronRight, TrendingUp, Play } from "lu
 import DashboardHeader from "@/components/dashboard-header"
 import { Button } from "@/components/ui/button"
 import { useRouter } from "next/navigation"
-import { useClips } from "@/hooks/use-clips"
-import { shuffleArray } from "@/lib/utils"
 import ClipPlayer from "@/components/ClipPlayer"
-import VideoRow from "@/components/video-row"
 
 export default function Dashboard() {
   // Get search query from URL
@@ -19,10 +16,7 @@ export default function Dashboard() {
 
   // State for active category
   const [activeCategory, setActiveCategory] = useState<string | null>(null)
-  const [featuredClips, setFeaturedClips] = useState<any[]>([])
-
-  // Fetch clips from Firebase
-  const { clips, clipsByCategory, loading, error } = useClips()
+  const [isLoading, setIsLoading] = useState(false)
 
   const router = useRouter()
 
@@ -35,14 +29,6 @@ export default function Dashboard() {
       }
     }
   }, [])
-
-  // Prepare featured clips
-  useEffect(() => {
-    if (!loading && clips.length > 0) {
-      // Shuffle and take the first 6 for featured section
-      setFeaturedClips(shuffleArray([...clips]).slice(0, 6))
-    }
-  }, [clips, loading])
 
   // Animation variants
   const containerVariants = {
@@ -91,6 +77,15 @@ export default function Dashboard() {
     ))
   }
 
+  // Sample clip data
+  const sampleClip = {
+    id: "sample-clip",
+    title: "2819 | Deceived",
+    category: "Faith",
+    tags: ["truth", "discipline"],
+    url: "https://pub-0b3ce0bc519f469c81f8ed504a1ee451.r2.dev/2819%20%20Deceived.mp4",
+  }
+
   return (
     <div className="relative min-h-screen bg-black text-white">
       {/* Premium Gradient Background */}
@@ -118,16 +113,12 @@ export default function Dashboard() {
                 <Search className="h-5 w-5 mr-2 text-zinc-400" />
                 Results for "{searchQuery}"
               </h2>
-              <p className="text-zinc-400">
-                {clips.length > 0
-                  ? `Found ${clips.length} clips matching your search`
-                  : "No results found. Try a different search term."}
-              </p>
+              <p className="text-zinc-400">No results found. Try a different search term.</p>
             </div>
           </motion.div>
         )}
 
-        {/* Featured Section (if not searching) */}
+        {/* Featured Section with Direct Video */}
         {!searchQuery && (
           <motion.div variants={containerVariants} initial="hidden" animate="visible" className="px-6 mb-12">
             <motion.div variants={itemVariants} className="flex items-center justify-between mb-6">
@@ -143,23 +134,38 @@ export default function Dashboard() {
               </Button>
             </motion.div>
 
+            {/* Direct Video Display */}
+            <motion.div variants={itemVariants} className="mb-8">
+              <div className="bg-zinc-900/30 backdrop-blur-sm border border-zinc-800/50 rounded-xl p-6 shadow-xl">
+                <h2 className="text-2xl font-medium text-white mb-4">{sampleClip.title}</h2>
+                <div className="max-w-3xl mx-auto">
+                  <ClipPlayer src={sampleClip.url} aspectRatio="16/9" />
+                </div>
+                <div className="mt-4 flex flex-wrap gap-2">
+                  <span className="bg-zinc-800 text-zinc-200 px-3 py-1 rounded-full text-sm">
+                    {sampleClip.category}
+                  </span>
+                  {sampleClip.tags.map((tag) => (
+                    <span key={tag} className="bg-zinc-800/50 text-zinc-300 px-3 py-1 rounded-full text-sm">
+                      #{tag}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </motion.div>
+
             {/* Featured Videos Grid */}
             <motion.div variants={itemVariants} className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-              {loading || clips.length === 0
-                ? // Placeholder cards in 9:16 format
-                  renderPlaceholderCards(6)
-                : // Featured clips
-                  featuredClips.map((clip) => (
-                    <div key={clip.id} className="group relative">
-                      <div className="aspect-[9/16] bg-zinc-900 rounded-xl overflow-hidden">
-                        <ClipPlayer src={clip.url} />
-                      </div>
-                      <div className="mt-2">
-                        <h3 className="text-sm font-medium text-white truncate">{clip.title}</h3>
-                        <p className="text-xs text-zinc-400">{clip.category}</p>
-                      </div>
-                    </div>
-                  ))}
+              <div className="group relative">
+                <div className="aspect-[9/16] bg-zinc-900 rounded-xl overflow-hidden">
+                  <ClipPlayer src={sampleClip.url} aspectRatio="9/16" />
+                </div>
+                <div className="mt-2">
+                  <h3 className="text-sm font-medium text-white truncate">{sampleClip.title}</h3>
+                  <p className="text-xs text-zinc-400">{sampleClip.category}</p>
+                </div>
+              </div>
+              {renderPlaceholderCards(5)}
             </motion.div>
           </motion.div>
         )}
@@ -200,42 +206,57 @@ export default function Dashboard() {
           </motion.div>
         )}
 
-        {/* Error state */}
-        {error && (
-          <div className="px-6 py-10 text-center">
-            <p className="text-red-500">Error loading clips: {error}</p>
-          </div>
-        )}
-
-        {/* Category Rows - Always show even if empty */}
+        {/* Faith Category with Direct Video */}
         <motion.div variants={containerVariants} initial="hidden" animate="visible" className="space-y-12">
-          {/* If we have actual categories from clips, use those */}
-          {Object.keys(clipsByCategory).length > 0
-            ? Object.entries(clipsByCategory).map(([category, categoryClips]) => (
-                <motion.div key={`category-${category}`} variants={itemVariants}>
-                  <VideoRow title={category} videos={categoryClips} limit={10} isShowcase={false} showcaseId="" />
-                </motion.div>
-              ))
-            : // Otherwise use placeholder categories
-              placeholderCategories.map((category) => (
-                <motion.div key={`placeholder-category-${category}`} variants={itemVariants}>
-                  <div className="px-6">
-                    <div className="flex items-center justify-between mb-4">
-                      <h2 className="text-xl font-medium text-white">{category}</h2>
-                      <Button
-                        variant="ghost"
-                        className="text-zinc-400 hover:text-white text-sm"
-                        onClick={() => router.push(`/category/${category.toLowerCase()}`)}
-                      >
-                        View All <ChevronRight className="h-4 w-4 ml-1" />
-                      </Button>
-                    </div>
-                    <div className="grid grid-flow-col auto-cols-[80%] md:auto-cols-[40%] lg:auto-cols-[25%] xl:auto-cols-[20%] gap-4 overflow-x-auto pb-4 snap-x">
-                      {renderPlaceholderCards(5)}
-                    </div>
+          <motion.div variants={itemVariants}>
+            <div className="px-6">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-xl font-medium text-white">Faith</h2>
+                <Button
+                  variant="ghost"
+                  className="text-zinc-400 hover:text-white text-sm"
+                  onClick={() => router.push(`/category/faith`)}
+                >
+                  View All <ChevronRight className="h-4 w-4 ml-1" />
+                </Button>
+              </div>
+              <div className="grid grid-flow-col auto-cols-[80%] md:auto-cols-[40%] lg:auto-cols-[25%] xl:auto-cols-[20%] gap-4 overflow-x-auto pb-4 snap-x">
+                <div className="group relative">
+                  <div className="aspect-[9/16] bg-zinc-900 rounded-xl overflow-hidden">
+                    <ClipPlayer src={sampleClip.url} aspectRatio="9/16" />
                   </div>
-                </motion.div>
-              ))}
+                  <div className="mt-2">
+                    <h3 className="text-sm font-medium text-white truncate">{sampleClip.title}</h3>
+                    <p className="text-xs text-zinc-400">{sampleClip.category}</p>
+                  </div>
+                </div>
+                {renderPlaceholderCards(4)}
+              </div>
+            </div>
+          </motion.div>
+
+          {/* Other placeholder categories */}
+          {placeholderCategories
+            .filter((cat) => cat !== "Faith")
+            .map((category) => (
+              <motion.div key={`placeholder-category-${category}`} variants={itemVariants}>
+                <div className="px-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <h2 className="text-xl font-medium text-white">{category}</h2>
+                    <Button
+                      variant="ghost"
+                      className="text-zinc-400 hover:text-white text-sm"
+                      onClick={() => router.push(`/category/${category.toLowerCase()}`)}
+                    >
+                      View All <ChevronRight className="h-4 w-4 ml-1" />
+                    </Button>
+                  </div>
+                  <div className="grid grid-flow-col auto-cols-[80%] md:auto-cols-[40%] lg:auto-cols-[25%] xl:auto-cols-[20%] gap-4 overflow-x-auto pb-4 snap-x">
+                    {renderPlaceholderCards(5)}
+                  </div>
+                </div>
+              </motion.div>
+            ))}
         </motion.div>
       </main>
     </div>
