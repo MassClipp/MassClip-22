@@ -314,23 +314,39 @@ export default function CategoryPage() {
                       Found {filteredVideos.length} results for "{searchQuery}"
                     </div>
                   )}
+
+                  {/* Free user restriction banner */}
+                  {!isProUser && filteredVideos.length > 5 && (
+                    <div className="mb-6 p-4 bg-gradient-to-r from-red-900/20 to-red-900/10 border border-red-900/30 rounded-lg">
+                      <div className="flex flex-col sm:flex-row items-center justify-between">
+                        <div className="flex items-center mb-3 sm:mb-0">
+                          <Lock className="h-5 w-5 text-red-500 mr-2" />
+                          <span className="text-sm text-white">
+                            Free users can view 5 of {filteredVideos.length} videos in this category
+                          </span>
+                        </div>
+                        <Button
+                          onClick={() => router.push("/pricing")}
+                          className="bg-red-600 hover:bg-red-700 text-white text-sm"
+                        >
+                          Upgrade to Pro
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+
                   <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-6">
                     {filteredVideos.map((video, index) => {
                       // For free users, show locked cards after the first 5 videos
                       if (!isProUser && index >= 5) {
-                        // Get thumbnail URL for the locked card background
-                        const thumbnailUrl = video?.pictures?.sizes
-                          ? [...video.pictures.sizes].sort((a, b) => b.width - a.width)[0].link
-                          : undefined
-
                         return (
                           <motion.div
-                            key={`locked-${video.uri || index}`}
+                            key={`locked-${index}`}
                             initial={{ opacity: 0, y: 20 }}
                             animate={{ opacity: 1, y: 0 }}
                             transition={{ duration: 0.3, delay: Math.min(index * 0.05, 1) }}
                           >
-                            <LockedClipCard thumbnailUrl={thumbnailUrl} />
+                            <LockedClipCard />
                           </motion.div>
                         )
                       }
@@ -381,7 +397,7 @@ export default function CategoryPage() {
             </div>
           )}
 
-          {/* Manual load more button - only show for pro users or if free users haven't reached the limit */}
+          {/* Manual load more button */}
           {!loading && filteredVideos.length > 0 && hasMore && (isProUser || filteredVideos.length <= 5) && (
             <div className="py-8 text-center">
               <Button onClick={loadMore} className="bg-red-600 hover:bg-red-700 text-white px-8">

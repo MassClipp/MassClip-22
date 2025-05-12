@@ -3,7 +3,7 @@
 import { useRef, useCallback, useState, useEffect } from "react"
 import { useParams, useRouter } from "next/navigation"
 import Link from "next/link"
-import { ChevronLeft, Search, Filter, ArrowUpRight } from "lucide-react"
+import { ChevronLeft, Search, Filter, ArrowUpRight, Lock } from "lucide-react"
 import { motion, AnimatePresence } from "framer-motion"
 import DashboardHeader from "@/components/dashboard-header"
 import VimeoCard from "@/components/vimeo-card"
@@ -11,11 +11,14 @@ import VideoSkeleton from "@/components/video-skeleton"
 import { Button } from "@/components/ui/button"
 import type { VimeoApiResponse, VimeoVideo } from "@/lib/types"
 import { shuffleArray } from "@/lib/utils"
+import LockedClipCard from "@/components/locked-clip-card"
+import { useUserPlan } from "@/hooks/use-user-plan"
 
 export default function ShowcasePage() {
   const params = useParams()
   const router = useRouter()
   const showcaseId = params.id as string
+  const { isProUser } = useUserPlan()
 
   const [videos, setVideos] = useState<VimeoVideo[]>([])
   const [loading, setLoading] = useState(true)
@@ -273,18 +276,55 @@ export default function ShowcasePage() {
                       Found {filteredVideos.length} results for "{searchQuery}"
                     </div>
                   )}
+
+                  {/* Free user restriction banner */}
+                  {!isProUser && filteredVideos.length > 5 && (
+                    <div className="mb-6 p-4 bg-gradient-to-r from-red-900/20 to-red-900/10 border border-red-900/30 rounded-lg">
+                      <div className="flex flex-col sm:flex-row items-center justify-between">
+                        <div className="flex items-center mb-3 sm:mb-0">
+                          <Lock className="h-5 w-5 text-red-500 mr-2" />
+                          <span className="text-sm text-white">
+                            Free users can view 5 of {filteredVideos.length} videos in this showcase
+                          </span>
+                        </div>
+                        <Button
+                          onClick={() => router.push("/pricing")}
+                          className="bg-red-600 hover:bg-red-700 text-white text-sm"
+                        >
+                          Upgrade to Pro
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+
                   <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-6">
-                    {filteredVideos.map((video, index) => (
-                      <motion.div
-                        key={video.uri}
-                        ref={index === filteredVideos.length - 1 ? lastVideoElementRef : undefined}
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ duration: 0.3, delay: Math.min(index * 0.05, 1) }}
-                      >
-                        <VimeoCard video={video} />
-                      </motion.div>
-                    ))}
+                    {filteredVideos.map((video, index) => {
+                      // For free users, show locked cards after the first 5 videos
+                      if (!isProUser && index >= 5) {
+                        return (
+                          <motion.div
+                            key={`locked-${index}`}
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ duration: 0.3, delay: Math.min(index * 0.05, 1) }}
+                          >
+                            <LockedClipCard />
+                          </motion.div>
+                        )
+                      }
+
+                      return (
+                        <motion.div
+                          key={video.uri}
+                          ref={index === filteredVideos.length - 1 ? lastVideoElementRef : undefined}
+                          initial={{ opacity: 0, y: 20 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ duration: 0.3, delay: Math.min(index * 0.05, 1) }}
+                        >
+                          <VimeoCard video={video} />
+                        </motion.div>
+                      )
+                    })}
 
                     {/* Show skeleton loaders while loading more */}
                     {loading &&
@@ -329,7 +369,7 @@ export default function ShowcasePage() {
           )}
 
           {/* Manual load more button */}
-          {!loading && videos.length > 0 && hasMore && !isFetching && (
+          {!loading && videos.length > 0 && hasMore && !isFetching && (isProUser || filteredVideos.length <= 5) && (
             <div className="py-8 text-center">
               <Button onClick={loadMore} className="bg-red-600 hover:bg-red-700 text-white px-8">
                 Load More Videos

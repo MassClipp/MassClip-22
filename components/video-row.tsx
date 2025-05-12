@@ -9,6 +9,8 @@ import VimeoCard from "@/components/vimeo-card"
 import VideoSkeleton from "@/components/video-skeleton"
 import { shuffleArray } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
+import LockedClipCard from "@/components/locked-clip-card"
+import { useUserPlan } from "@/hooks/use-user-plan"
 
 interface VideoRowProps {
   title: string
@@ -26,6 +28,7 @@ export default function VideoRow({ title, videos, limit = 10, isShowcase = false
   const [isHovered, setIsHovered] = useState(false)
   const rowRef = useRef<HTMLDivElement>(null)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
+  const { isProUser } = useUserPlan()
 
   // Create a URL-friendly name
   const slug = encodeURIComponent(title.toLowerCase().replace(/\s+/g, "-"))
@@ -173,16 +176,32 @@ export default function VideoRow({ title, videos, limit = 10, isShowcase = false
           onScroll={handleManualScroll}
         >
           {isIntersecting
-            ? visibleVideos.map((video) => (
-                <motion.div
-                  key={video.uri}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.5 }}
-                >
-                  <VimeoCard video={video} />
-                </motion.div>
-              ))
+            ? visibleVideos.map((video, index) => {
+                // For free users, show locked cards after the first 5 videos
+                if (!isProUser && index >= 5) {
+                  return (
+                    <motion.div
+                      key={`locked-${index}`}
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.5 }}
+                    >
+                      <LockedClipCard />
+                    </motion.div>
+                  )
+                }
+
+                return (
+                  <motion.div
+                    key={video.uri}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.5 }}
+                  >
+                    <VimeoCard video={video} />
+                  </motion.div>
+                )
+              })
             : // Show skeleton loaders while waiting for intersection
               Array.from({ length: Math.min(limit, 10) }).map((_, index) => <VideoSkeleton key={index} />)}
         </div>
