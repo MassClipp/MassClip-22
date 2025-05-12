@@ -27,7 +27,7 @@ import { isInTikTokBrowser } from "@/lib/browser-detection"
 import { VideoWatermark } from "@/components/video-watermark"
 
 interface VimeoCardProps {
-  video: VimeoVideo
+  video: VimeoVideo & { isAccessible?: boolean }
 }
 
 export default function VimeoCard({ video }: VimeoCardProps) {
@@ -55,6 +55,9 @@ export default function VimeoCard({ video }: VimeoCardProps) {
   const downloadFrameRef = useRef<HTMLIFrameElement | null>(null)
   const downloadLinkRef = useRef<HTMLAnchorElement | null>(null)
   const videoContainerRef = useRef<HTMLDivElement>(null)
+
+  // Check if the video is accessible based on the user's plan
+  const isAccessible = video.isAccessible !== false // Default to true if not specified
 
   // Extract video ID from URI (format: "/videos/12345678") with null check
   const videoId = video?.uri ? video.uri.split("/").pop() : null
@@ -302,6 +305,16 @@ export default function VimeoCard({ video }: VimeoCardProps) {
     e.preventDefault()
     e.stopPropagation()
 
+    // If video is not accessible, show upgrade prompt
+    if (!isAccessible) {
+      toast({
+        title: "Premium Content",
+        description: "Upgrade to Creator Pro to access this video",
+        variant: "destructive",
+      })
+      return
+    }
+
     // Prevent multiple clicks
     if (isDownloading) return
 
@@ -438,6 +451,15 @@ export default function VimeoCard({ video }: VimeoCardProps) {
     window.open(currentUrl, "_blank")
   }
 
+  // Handle upgrade click for locked videos
+  const handleUpgradeClick = (e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+
+    // Navigate to pricing page
+    window.location.href = "/pricing"
+  }
+
   // If video is null or undefined, render a placeholder
   if (!video) {
     return (
@@ -478,13 +500,14 @@ export default function VimeoCard({ video }: VimeoCardProps) {
   return (
     <div className="flex-shrink-0 w-[160px]">
       <div
-        className="group relative premium-hover-effect"
+        className={`group relative premium-hover-effect ${!isAccessible ? "locked-video" : ""}`}
         style={{
           position: "relative",
           paddingBottom: "177.78%", // 9:16 aspect ratio
           height: 0,
           borderRadius: "8px",
           overflow: "hidden",
+          backgroundColor: !isAccessible ? "rgba(59, 130, 246, 0.1)" : "#111", // Blue tint for locked videos
         }}
         onMouseEnter={() => {
           setIsActive(true)
@@ -494,8 +517,21 @@ export default function VimeoCard({ video }: VimeoCardProps) {
           setIsActive(false)
           setIsHovered(false)
         }}
-        onClick={() => setIsActive(true)}
+        onClick={() => isAccessible && setIsActive(true)}
       >
+        {/* Lock overlay for inaccessible videos */}
+        {!isAccessible && (
+          <div className="absolute inset-0 z-30 bg-blue-900/40 flex flex-col items-center justify-center">
+            <Lock className="h-8 w-8 text-white mb-2 opacity-90" />
+            <button
+              onClick={handleUpgradeClick}
+              className="bg-blue-600 hover:bg-blue-700 text-white text-xs py-1 px-3 rounded-full transition-colors"
+            >
+              Upgrade to Unlock
+            </button>
+          </div>
+        )}
+
         {/* Border overlay that appears on hover/click */}
         <div
           className="absolute inset-0 z-10 pointer-events-none transition-opacity duration-300"
@@ -512,17 +548,25 @@ export default function VimeoCard({ video }: VimeoCardProps) {
           className="absolute bottom-2 left-2 right-2 z-20 flex items-center justify-between transition-opacity duration-300"
           style={{ opacity: isHovered ? 1 : 0 }}
         >
-          {/* Download button - visually disabled when limit reached */}
+          {/* Download button - visually disabled when limit reached or video is not accessible */}
           <button
             className={`${
-              hasReachedLimit ? "bg-zinc-800/90 cursor-not-allowed" : "bg-black/70 hover:bg-black/90"
+              hasReachedLimit || !isAccessible ? "bg-zinc-800/90 cursor-not-allowed" : "bg-black/70 hover:bg-black/90"
             } p-1.5 rounded-full transition-all duration-300 ${downloadError ? "ring-1 ring-red-500" : ""}`}
             onClick={handleDownload}
-            aria-label={hasReachedLimit ? "Download limit reached" : "Download video"}
-            disabled={isDownloading || hasReachedLimit}
-            title={hasReachedLimit ? "Upgrade to Creator Pro for unlimited downloads" : "Download video"}
+            aria-label={
+              !isAccessible ? "Premium content" : hasReachedLimit ? "Download limit reached" : "Download video"
+            }
+            disabled={isDownloading || hasReachedLimit || !isAccessible}
+            title={
+              !isAccessible
+                ? "Upgrade to Creator Pro to access this video"
+                : hasReachedLimit
+                  ? "Upgrade to Creator Pro for unlimited downloads"
+                  : "Download video"
+            }
           >
-            {hasReachedLimit ? (
+            {!isAccessible || hasReachedLimit ? (
               <Lock className="h-3.5 w-3.5 text-zinc-400" />
             ) : (
               <Download className={`h-3.5 w-3.5 ${downloadError ? "text-red-500" : "text-white"}`} />
@@ -596,8 +640,8 @@ export default function VimeoCard({ video }: VimeoCardProps) {
               </div>
             )}
 
-            {/* Video iframe with fade-in effect */}
-            {isActive && (
+            {/* Video iframe with fade-in effect - only for accessible videos */}
+            {isActive && isAccessible && (
               <iframe
                 ref={videoRef}
                 src={getVideoSrc()}
@@ -644,9 +688,14 @@ export default function VimeoCard({ video }: VimeoCardProps) {
       {/* Updated title div to allow wrapping */}
       <div
         ref={titleRef}
-        className="mt-2 text-xs text-zinc-300 min-h-[2.5rem] line-clamp-2 font-light"
+        className={`mt-2 text-xs ${isAccessible ? "text-zinc-300" : "text-blue-300"} min-h-[2.5rem] line-clamp-2 font-light`}
         title={video.name || "Untitled video"}
       >
+        {!isAccessible && (
+          <span className="inline-block mr-1 text-blue-400">
+            <Lock className="h-3 w-3 inline-block -mt-0.5" />
+          </span>
+        )}
         {video.name || "Untitled video"}
       </div>
     </div>

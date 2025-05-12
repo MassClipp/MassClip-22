@@ -5,8 +5,13 @@ import type { VimeoVideo } from "@/lib/types"
 import { useVimeoShowcases } from "./use-vimeo-showcases"
 import { useUserPlan } from "@/hooks/use-user-plan"
 
+// Extend VimeoVideo type to include accessibility flag
+export interface EnhancedVimeoVideo extends VimeoVideo {
+  isAccessible?: boolean
+}
+
 export function useVimeoTagVideos(tag: string) {
-  const [videos, setVideos] = useState<VimeoVideo[]>([])
+  const [videos, setVideos] = useState<EnhancedVimeoVideo[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [hasMore, setHasMore] = useState(false)
@@ -16,9 +21,6 @@ export function useVimeoTagVideos(tag: string) {
 
   // Get showcase videos
   const { showcaseVideos, loading: loadingShowcases } = useVimeoShowcases()
-
-  // Store the full set of videos before limiting
-  const [allVideos, setAllVideos] = useState<VimeoVideo[]>([])
 
   // Helper function to normalize tag names
   const normalizeTagName = (tagName: string): string => {
@@ -125,11 +127,6 @@ export function useVimeoTagVideos(tag: string) {
 
   // Load more videos function - this is now a no-op for free users who have reached their limit
   const loadMore = () => {
-    // For free users who have reached their limit, don't do anything
-    if (!isProUser && videos.length >= FREE_USER_LIMIT) {
-      return
-    }
-
     // This is a placeholder - in a real implementation, you would fetch more videos
     // For now, we'll just set hasMore to false to indicate no more videos
     setHasMore(false)
@@ -138,7 +135,6 @@ export function useVimeoTagVideos(tag: string) {
   useEffect(() => {
     // Reset state when tag changes
     setVideos([])
-    setAllVideos([])
     setError(null)
     setLoading(true)
 
@@ -160,19 +156,15 @@ export function useVimeoTagVideos(tag: string) {
           return nameA.localeCompare(nameB)
         })
 
-        // Store all matching videos
-        setAllVideos(sortedVideos)
-
-        // For free users, limit to 5 videos
-        if (!isProUser) {
-          setVideos(sortedVideos.slice(0, FREE_USER_LIMIT))
-          setHasMore(false) // Free users can't load more
-        } else {
-          setVideos(sortedVideos)
-          setHasMore(false) // No more videos to load in this implementation
-        }
+        // Mark videos as accessible or not based on user plan
+        const enhancedVideos: EnhancedVimeoVideo[] = sortedVideos.map((video, index) => ({
+          ...video,
+          isAccessible: isProUser || index < FREE_USER_LIMIT,
+        }))
 
         if (isMounted.current) {
+          setVideos(enhancedVideos)
+          setHasMore(false) // No more videos to load in this implementation
           setLoading(false)
         }
       } catch (err) {
@@ -191,12 +183,14 @@ export function useVimeoTagVideos(tag: string) {
   }, [tag, showcaseVideos, loadingShowcases, isProUser])
 
   return {
-    videos, // This is now limited for free users
+    videos, // Now includes both accessible and inaccessible videos with flags
     loading,
     error,
     hasMore,
     loadMore,
-    totalCount: allVideos.length, // Total number of videos before limiting
-    hasMoreVideos: !isProUser && allVideos.length > FREE_USER_LIMIT, // Flag to indicate if there are more videos available with upgrade
+    totalCount: videos.length,
+    accessibleCount: videos.filter((video) => video.isAccessible).length,
+    inaccessibleCount: videos.filter((video) => !video.isAccessible).length,
+    hasInaccessibleVideos: videos.some((video) => !video.isAccessible),
   }
 }

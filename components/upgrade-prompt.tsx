@@ -18,27 +18,27 @@ export function UpgradePrompt({ className = "", totalCount }: UpgradePromptProps
 
   return (
     <div
-      className={`p-4 rounded-lg bg-gradient-to-r from-rose-900/20 to-rose-800/20 border border-rose-800/30 ${className}`}
+      className={`p-4 rounded-lg bg-gradient-to-r from-blue-900/20 to-blue-800/20 border border-blue-800/30 ${className}`}
     >
       <div className="flex items-center mb-2">
-        <Lock className="h-5 w-5 text-rose-400 mr-2" />
-        <h3 className="text-base font-medium text-rose-200">Unlock Full Access</h3>
+        <Lock className="h-5 w-5 text-blue-400 mr-2" />
+        <h3 className="text-base font-medium text-blue-200">Unlock Premium Content</h3>
       </div>
 
       <p className="text-sm text-zinc-300 mb-3">
         {totalCount
-          ? `Free users can only view 5 of ${totalCount} videos in this category. Upgrade to Creator Pro for unlimited access.`
-          : `Free users can only view 5 videos per category. Upgrade to Creator Pro for unlimited access to all videos.`}
+          ? `Free users can only access 5 of ${totalCount} videos in this category. Upgrade to Creator Pro for unlimited access.`
+          : `Free users can only access 5 videos per category. Upgrade to Creator Pro for unlimited access to all videos.`}
       </p>
 
       <div className="flex flex-col sm:flex-row gap-2">
-        <Button onClick={handleUpgrade} className="flex-1 bg-rose-700 hover:bg-rose-600 text-white text-sm">
+        <Button onClick={handleUpgrade} className="flex-1 bg-blue-700 hover:bg-blue-600 text-white text-sm">
           Upgrade to Creator Pro
         </Button>
         <Button
           variant="outline"
           onClick={() => router.push("/dashboard/categories")}
-          className="flex-1 border-rose-800/50 hover:bg-rose-900/20 text-rose-200 text-sm"
+          className="flex-1 border-blue-800/50 hover:bg-blue-900/20 text-blue-200 text-sm"
         >
           Browse Other Categories
         </Button>

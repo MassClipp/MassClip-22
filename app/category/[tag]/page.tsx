@@ -20,7 +20,17 @@ export default function CategoryPage() {
   const router = useRouter()
   const tagSlug = params.tag as string
   const tag = decodeURIComponent(tagSlug.replace(/-/g, " "))
-  const { videos, loading, error, hasMore, loadMore, totalCount, hasMoreVideos } = useVimeoTagVideos(tag)
+  const {
+    videos,
+    loading,
+    error,
+    hasMore,
+    loadMore,
+    totalCount,
+    accessibleCount,
+    inaccessibleCount,
+    hasInaccessibleVideos,
+  } = useVimeoTagVideos(tag)
   const { showcaseIds, categoryToShowcaseMap } = useVimeoShowcases()
   const [isLoading, setIsLoading] = useState(true)
   const [noContentMessage, setNoContentMessage] = useState<string | null>(null)
@@ -249,18 +259,18 @@ export default function CategoryPage() {
           </div>
 
           {/* Free user info banner */}
-          {!isProUser && hasMoreVideos && (
-            <div className="mb-6 p-3 bg-gradient-to-r from-amber-900/20 to-amber-800/20 border border-amber-800/30 rounded-lg">
+          {!isProUser && hasInaccessibleVideos && (
+            <div className="mb-6 p-3 bg-gradient-to-r from-blue-900/20 to-blue-800/20 border border-blue-800/30 rounded-lg">
               <div className="flex items-center justify-between">
                 <div className="flex items-center">
-                  <Lock className="h-4 w-4 text-amber-500 mr-2" />
-                  <span className="text-sm text-amber-200">
-                    Free users can view 5 of {totalCount} videos in this category
+                  <Lock className="h-4 w-4 text-blue-400 mr-2" />
+                  <span className="text-sm text-blue-200">
+                    Free users can access {accessibleCount} of {totalCount} videos in this category
                   </span>
                 </div>
                 <Button
                   size="sm"
-                  className="bg-amber-700 hover:bg-amber-600 text-white text-xs"
+                  className="bg-blue-600 hover:bg-blue-700 text-white text-xs"
                   onClick={() => router.push("/pricing")}
                 >
                   Upgrade for All Videos
@@ -364,7 +374,7 @@ export default function CategoryPage() {
           )}
 
           {/* Show upgrade prompt for free users who have more videos available */}
-          {!isProUser && hasMoreVideos && (
+          {!isProUser && hasInaccessibleVideos && (
             <div className="mt-8">
               <UpgradePrompt totalCount={totalCount} />
             </div>
