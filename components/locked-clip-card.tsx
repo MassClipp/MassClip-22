@@ -1,16 +1,12 @@
-"use client"
-
-import { useRouter } from "next/navigation"
 import { Lock } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import Link from "next/link"
 
 interface LockedClipCardProps {
   thumbnailUrl?: string
 }
 
 export default function LockedClipCard({ thumbnailUrl }: LockedClipCardProps) {
-  const router = useRouter()
-
   return (
     <div className="flex-shrink-0 w-[160px]">
       <div
@@ -23,34 +19,26 @@ export default function LockedClipCard({ thumbnailUrl }: LockedClipCardProps) {
           overflow: "hidden",
         }}
       >
-        {/* Background with blur effect */}
         <div
           className="absolute inset-0 bg-cover bg-center"
           style={{
             backgroundImage: thumbnailUrl ? `url(${thumbnailUrl})` : "none",
-            backgroundColor: "#111",
+            backgroundColor: thumbnailUrl ? "transparent" : "#111",
             filter: "blur(3px)",
-            opacity: 0.5,
           }}
-        />
-
-        {/* Dark overlay */}
-        <div className="absolute inset-0 bg-black/60" />
-
-        {/* Lock content */}
-        <div className="absolute inset-0 flex flex-col items-center justify-center p-3 text-center">
-          <Lock className="w-8 h-8 text-gray-300 mb-2" />
-          <p className="text-xs text-gray-300 mb-3">Locked – Upgrade to Pro</p>
-          <Button
-            onClick={() => router.push("/pricing")}
-            size="sm"
-            className="bg-red-600 hover:bg-red-700 text-white text-xs px-4"
-          >
-            Upgrade
-          </Button>
+        ></div>
+        <div className="absolute inset-0 bg-black/60"></div>
+        <div className="absolute inset-0 flex flex-col items-center justify-center p-4 text-center">
+          <Lock className="h-8 w-8 text-crimson mb-2" />
+          <p className="text-white text-xs mb-3">Locked – Upgrade to Pro</p>
+          <Link href="/pricing">
+            <Button size="sm" className="bg-crimson hover:bg-crimson/80 text-white text-xs px-3 py-1 h-auto">
+              Upgrade
+            </Button>
+          </Link>
         </div>
       </div>
-      <div className="mt-2 text-xs text-gray-400 min-h-[2.5rem] line-clamp-2 font-light">Premium Content</div>
+      <div className="mt-2 text-xs text-zinc-400 min-h-[2.5rem] line-clamp-2">Premium Content</div>
     </div>
   )
 }
