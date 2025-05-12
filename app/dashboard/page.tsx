@@ -3,7 +3,7 @@
 import { useRef, useEffect, useState } from "react"
 import { useSearchParams } from "next/navigation"
 import { motion } from "framer-motion"
-import { Search, Clock, Brain, Rocket, TrendingUp, Lock } from "lucide-react"
+import { Search, Clock, Brain, Rocket, ChevronRight, TrendingUp, Lock } from "lucide-react"
 import DashboardHeader from "@/components/dashboard-header"
 import VideoRow from "@/components/video-row"
 import { useVimeoShowcases } from "@/hooks/use-vimeo-showcases"
@@ -11,9 +11,9 @@ import { useVimeoVideos } from "@/hooks/use-vimeo-videos"
 import { Button } from "@/components/ui/button"
 import { useRouter } from "next/navigation"
 import { filterCategoriesBySearch } from "@/lib/search-utils"
+import VimeoCard from "@/components/vimeo-card"
 import { shuffleArray } from "@/lib/utils"
 import { useUserPlan } from "@/hooks/use-user-plan"
-import ViralClipsSection from "@/components/viral-clips-section"
 
 export default function Dashboard() {
   // Get search query from URL
@@ -212,7 +212,40 @@ export default function Dashboard() {
         )}
 
         {/* Featured Section (if not searching) */}
-        {!searchQuery && !isLoadingData && <ViralClipsSection videos={featuredVideos} isLoading={isLoading} />}
+        {!searchQuery && !isLoadingData && (
+          <motion.div variants={containerVariants} initial="hidden" animate="visible" className="px-6 mb-12">
+            <motion.div variants={itemVariants} className="flex items-center justify-between mb-6">
+              <h1 className="text-3xl font-extralight tracking-tight text-white">
+                Find Your Next <span className="text-gradient-accent">Viral Clip</span>
+              </h1>
+              <Button
+                onClick={() => router.push("/category/browse-all")}
+                variant="ghost"
+                className="text-zinc-400 hover:text-white hover:bg-zinc-900/50 rounded-full px-4 py-2 transition-all duration-300"
+              >
+                View All <ChevronRight className="h-4 w-4 ml-1" />
+              </Button>
+            </motion.div>
+
+            {/* Featured Videos Grid */}
+            <motion.div variants={itemVariants} className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+              {isLoading
+                ? // Skeleton loaders
+                  Array.from({ length: 6 }).map((_, index) => (
+                    <div
+                      key={`skeleton-${index}`}
+                      className="aspect-[9/16] rounded-xl bg-zinc-900/50 animate-pulse"
+                    ></div>
+                  ))
+                : // Featured videos
+                  featuredVideos.map((video, index) => (
+                    <div key={`featured-${video.uri || index}`} className="group">
+                      <VimeoCard video={video} />
+                    </div>
+                  ))}
+            </motion.div>
+          </motion.div>
+        )}
 
         {/* Category Quick Links (if not searching) */}
         {!searchQuery && !isLoadingData && (
