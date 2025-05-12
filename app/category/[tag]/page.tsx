@@ -3,7 +3,7 @@
 import { useRef, useCallback, useEffect, useState } from "react"
 import { useParams, useRouter } from "next/navigation"
 import Link from "next/link"
-import { ChevronLeft, Search, Filter, ArrowUpRight, Lock } from "lucide-react"
+import { ChevronLeft, Search, Filter, ArrowUpRight } from "lucide-react"
 import { motion, AnimatePresence } from "framer-motion"
 import DashboardHeader from "@/components/dashboard-header"
 import VimeoCard from "@/components/vimeo-card"
@@ -12,25 +12,12 @@ import { useVimeoShowcases } from "@/hooks/use-vimeo-showcases"
 import { Button } from "@/components/ui/button"
 import VideoSkeleton from "@/components/video-skeleton"
 import { shuffleArray } from "@/lib/utils"
-import { UpgradePrompt } from "@/components/upgrade-prompt"
-import { useUserPlan } from "@/hooks/use-user-plan"
 
 export default function CategoryPage() {
   const params = useParams()
   const router = useRouter()
   const tagSlug = params.tag as string
   const tag = decodeURIComponent(tagSlug.replace(/-/g, " "))
-  const {
-    videos,
-    loading,
-    error,
-    hasMore,
-    loadMore,
-    totalCount,
-    accessibleCount,
-    inaccessibleCount,
-    hasInaccessibleVideos,
-  } = useVimeoTagVideos(tag)
   const { showcaseIds, categoryToShowcaseMap } = useVimeoShowcases()
   const [isLoading, setIsLoading] = useState(true)
   const [noContentMessage, setNoContentMessage] = useState<string | null>(null)
@@ -39,7 +26,6 @@ export default function CategoryPage() {
   const [searchQuery, setSearchQuery] = useState("")
   const [filteredVideos, setFilteredVideos] = useState<any[]>([])
   const [showSearch, setShowSearch] = useState(false)
-  const { isProUser } = useUserPlan()
 
   // Special case for "browse all"
   useEffect(() => {
@@ -92,6 +78,7 @@ export default function CategoryPage() {
     checkForShowcase()
   }, [tag, showcaseIds, categoryToShowcaseMap, router, redirectInProgress])
 
+  const { videos, loading, error, hasMore, loadMore } = useVimeoTagVideos(tag)
   const observer = useRef<IntersectionObserver | null>(null)
 
   // Shuffle videos when they change
@@ -258,27 +245,6 @@ export default function CategoryPage() {
             </div>
           </div>
 
-          {/* Free user info banner */}
-          {!isProUser && hasInaccessibleVideos && (
-            <div className="mb-6 p-3 bg-gradient-to-r from-blue-900/20 to-blue-800/20 border border-blue-800/30 rounded-lg">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center">
-                  <Lock className="h-4 w-4 text-blue-400 mr-2" />
-                  <span className="text-sm text-blue-200">
-                    Free users can access {accessibleCount} of {totalCount} videos in this category
-                  </span>
-                </div>
-                <Button
-                  size="sm"
-                  className="bg-blue-600 hover:bg-blue-700 text-white text-xs"
-                  onClick={() => router.push("/pricing")}
-                >
-                  Upgrade for All Videos
-                </Button>
-              </div>
-            </div>
-          )}
-
           {/* Error state */}
           {error && (
             <motion.div
@@ -364,19 +330,12 @@ export default function CategoryPage() {
             </div>
           )}
 
-          {/* Manual load more button - only show for pro users */}
-          {!loading && filteredVideos.length > 0 && hasMore && isProUser && (
+          {/* Manual load more button */}
+          {!loading && filteredVideos.length > 0 && hasMore && (
             <div className="py-8 text-center">
               <Button onClick={loadMore} className="bg-red-600 hover:bg-red-700 text-white px-8">
                 Load More Videos
               </Button>
-            </div>
-          )}
-
-          {/* Show upgrade prompt for free users who have more videos available */}
-          {!isProUser && hasInaccessibleVideos && (
-            <div className="mt-8">
-              <UpgradePrompt totalCount={totalCount} />
             </div>
           )}
         </motion.div>

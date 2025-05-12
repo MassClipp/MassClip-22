@@ -3,21 +3,13 @@
 import { useState, useEffect, useRef } from "react"
 import type { VimeoVideo } from "@/lib/types"
 import { useVimeoShowcases } from "./use-vimeo-showcases"
-import { useUserPlan } from "@/hooks/use-user-plan"
-
-// Extend VimeoVideo type to include accessibility flag
-export interface EnhancedVimeoVideo extends VimeoVideo {
-  isAccessible?: boolean
-}
 
 export function useVimeoTagVideos(tag: string) {
-  const [videos, setVideos] = useState<EnhancedVimeoVideo[]>([])
+  const [videos, setVideos] = useState<VimeoVideo[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [hasMore, setHasMore] = useState(false)
   const isMounted = useRef(true)
-  const { isProUser } = useUserPlan()
-  const FREE_USER_LIMIT = 5
 
   // Get showcase videos
   const { showcaseVideos, loading: loadingShowcases } = useVimeoShowcases()
@@ -125,7 +117,7 @@ export function useVimeoTagVideos(tag: string) {
     return relatedTerms.some((term) => videoName.includes(term) || videoDescription.includes(term))
   }
 
-  // Load more videos function - this is now a no-op for free users who have reached their limit
+  // Load more videos function
   const loadMore = () => {
     // This is a placeholder - in a real implementation, you would fetch more videos
     // For now, we'll just set hasMore to false to indicate no more videos
@@ -156,14 +148,8 @@ export function useVimeoTagVideos(tag: string) {
           return nameA.localeCompare(nameB)
         })
 
-        // Mark videos as accessible or not based on user plan
-        const enhancedVideos: EnhancedVimeoVideo[] = sortedVideos.map((video, index) => ({
-          ...video,
-          isAccessible: isProUser || index < FREE_USER_LIMIT,
-        }))
-
         if (isMounted.current) {
-          setVideos(enhancedVideos)
+          setVideos(sortedVideos)
           setHasMore(false) // No more videos to load in this implementation
           setLoading(false)
         }
@@ -180,17 +166,13 @@ export function useVimeoTagVideos(tag: string) {
     return () => {
       isMounted.current = false
     }
-  }, [tag, showcaseVideos, loadingShowcases, isProUser])
+  }, [tag, showcaseVideos, loadingShowcases])
 
   return {
-    videos, // Now includes both accessible and inaccessible videos with flags
+    videos,
     loading,
     error,
     hasMore,
     loadMore,
-    totalCount: videos.length,
-    accessibleCount: videos.filter((video) => video.isAccessible).length,
-    inaccessibleCount: videos.filter((video) => !video.isAccessible).length,
-    hasInaccessibleVideos: videos.some((video) => !video.isAccessible),
   }
 }
