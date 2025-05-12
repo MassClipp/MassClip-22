@@ -94,6 +94,10 @@ export default function MembershipPlansPage() {
                     <CheckCircle2 className="h-5 w-5 text-green-500 mr-2 flex-shrink-0 mt-0.5" />
                     <span className="font-light">Standard video quality</span>
                   </li>
+                  <li className="flex items-start">
+                    <CheckCircle2 className="h-5 w-5 text-green-500 mr-2 flex-shrink-0 mt-0.5" />
+                    <span className="font-light">Limited organization features</span>
+                  </li>
                 </ul>
 
                 {isProUser ? (
@@ -154,6 +158,10 @@ export default function MembershipPlansPage() {
                     <CheckCircle2 className="h-5 w-5 text-green-500 mr-2 flex-shrink-0 mt-0.5" />
                     <span className="font-light">Priority support</span>
                   </li>
+                  <li className="flex items-start">
+                    <CheckCircle2 className="h-5 w-5 text-green-500 mr-2 flex-shrink-0 mt-0.5" />
+                    <span className="font-light">Advanced organization features</span>
+                  </li>
                 </ul>
 
                 {isProUser ? (
@@ -195,9 +203,9 @@ export default function MembershipPlansPage() {
 
               <div className="bg-zinc-900/30 border border-zinc-800/50 rounded-lg p-6 backdrop-blur-sm">
                 <Shield className="h-8 w-8 text-crimson mb-4" />
-                <h4 className="text-lg font-medium text-white mb-2">Priority Support</h4>
+                <h4 className="text-lg font-medium text-white mb-2">Advanced Organization</h4>
                 <p className="text-zinc-400 font-light">
-                  Get faster responses and dedicated assistance for any questions
+                  Enjoy dynamic content organization with shuffled videos for a fresh experience
                 </p>
               </div>
             </div>
