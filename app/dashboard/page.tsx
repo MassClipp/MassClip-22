@@ -3,7 +3,7 @@
 import { useRef, useEffect, useState } from "react"
 import { useSearchParams } from "next/navigation"
 import { motion } from "framer-motion"
-import { Search, Clock, Brain, Rocket, ChevronRight, TrendingUp } from "lucide-react"
+import { Search, Clock, Brain, Rocket, TrendingUp, Lock } from "lucide-react"
 import DashboardHeader from "@/components/dashboard-header"
 import VideoRow from "@/components/video-row"
 import { useVimeoShowcases } from "@/hooks/use-vimeo-showcases"
@@ -11,8 +11,9 @@ import { useVimeoVideos } from "@/hooks/use-vimeo-videos"
 import { Button } from "@/components/ui/button"
 import { useRouter } from "next/navigation"
 import { filterCategoriesBySearch } from "@/lib/search-utils"
-import VimeoCard from "@/components/vimeo-card"
 import { shuffleArray } from "@/lib/utils"
+import { useUserPlan } from "@/hooks/use-user-plan"
+import ViralClipsSection from "@/components/viral-clips-section"
 
 export default function Dashboard() {
   // Get search query from URL
@@ -25,6 +26,9 @@ export default function Dashboard() {
   const [featuredVideos, setFeaturedVideos] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [activeCategory, setActiveCategory] = useState<string | null>(null)
+
+  // Get user plan
+  const { isProUser } = useUserPlan()
 
   // Fetch showcase-based videos
   const { showcaseVideos, showcaseIds, loading: loadingShowcases, error: showcaseError } = useVimeoShowcases()
@@ -77,14 +81,27 @@ export default function Dashboard() {
       // Collect videos from all showcases
       const allVideos = Object.values(showcaseVideos).flat()
 
-      // Shuffle and take the first 6 for featured section
+      // For free users, sort alphabetically by name
+      // For pro users, shuffle for a dynamic experience
       if (allVideos.length > 0) {
-        setFeaturedVideos(shuffleArray(allVideos).slice(0, 6))
+        if (isProUser) {
+          setFeaturedVideos(shuffleArray(allVideos).slice(0, 6))
+        } else {
+          const sortedVideos = [...allVideos]
+            .sort((a, b) => {
+              // Sort by name if available, otherwise by URI
+              const nameA = a.name?.toLowerCase() || a.uri
+              const nameB = b.name?.toLowerCase() || b.uri
+              return nameA.localeCompare(nameB)
+            })
+            .slice(0, 6)
+          setFeaturedVideos(sortedVideos)
+        }
       }
 
       setIsLoading(false)
     }
-  }, [showcaseVideos, loadingShowcases, loadingVideos])
+  }, [showcaseVideos, loadingShowcases, loadingVideos, isProUser])
 
   // Check if we're still loading initial data
   const isLoadingData = (loadingShowcases || loadingVideos) && showcaseNames.length === 0
@@ -132,10 +149,30 @@ export default function Dashboard() {
 
   // Quick category navigation
   const quickCategories = [
-    { name: "Introspection", icon: <Brain className="h-4 w-4 md:h-5 md:w-5" />, href: "/category/introspection" },
-    { name: "Hustle", icon: <Rocket className="h-4 w-4 md:h-5 md:w-5" />, href: "/category/hustle-mentality" },
-    { name: "Recent", icon: <Clock className="h-4 w-4 md:h-5 md:w-5" />, href: "/category/recently-added" },
-    { name: "All", icon: <Search className="h-4 w-4 md:h-5 md:w-5" />, href: "/dashboard/categories" },
+    {
+      name: "Introspection",
+      icon: <Brain className="h-4 w-4 md:h-5 md:w-5" />,
+      href: "/category/introspection",
+      premium: false,
+    },
+    {
+      name: "Hustle",
+      icon: <Rocket className="h-4 w-4 md:h-5 md:w-5" />,
+      href: "/category/hustle-mentality",
+      premium: false,
+    },
+    {
+      name: "Recent",
+      icon: <Clock className="h-4 w-4 md:h-5 md:w-5" />,
+      href: "/category/recently-added",
+      premium: true, // Mark this as premium
+    },
+    {
+      name: "All",
+      icon: <Search className="h-4 w-4 md:h-5 md:w-5" />,
+      href: "/dashboard/categories",
+      premium: false,
+    },
   ]
 
   return (
@@ -175,40 +212,7 @@ export default function Dashboard() {
         )}
 
         {/* Featured Section (if not searching) */}
-        {!searchQuery && !isLoadingData && (
-          <motion.div variants={containerVariants} initial="hidden" animate="visible" className="px-6 mb-12">
-            <motion.div variants={itemVariants} className="flex items-center justify-between mb-6">
-              <h1 className="text-3xl font-extralight tracking-tight text-white">
-                Find Your Next <span className="text-gradient-accent">Viral Clip</span>
-              </h1>
-              <Button
-                onClick={() => router.push("/category/browse-all")}
-                variant="ghost"
-                className="text-zinc-400 hover:text-white hover:bg-zinc-900/50 rounded-full px-4 py-2 transition-all duration-300"
-              >
-                View All <ChevronRight className="h-4 w-4 ml-1" />
-              </Button>
-            </motion.div>
-
-            {/* Featured Videos Grid */}
-            <motion.div variants={itemVariants} className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-              {isLoading
-                ? // Skeleton loaders
-                  Array.from({ length: 6 }).map((_, index) => (
-                    <div
-                      key={`skeleton-${index}`}
-                      className="aspect-[9/16] rounded-xl bg-zinc-900/50 animate-pulse"
-                    ></div>
-                  ))
-                : // Featured videos
-                  featuredVideos.map((video, index) => (
-                    <div key={`featured-${video.uri || index}`} className="group">
-                      <VimeoCard video={video} />
-                    </div>
-                  ))}
-            </motion.div>
-          </motion.div>
-        )}
+        {!searchQuery && !isLoadingData && <ViralClipsSection videos={featuredVideos} isLoading={isLoading} />}
 
         {/* Category Quick Links (if not searching) */}
         {!searchQuery && !isLoadingData && (
@@ -222,26 +226,49 @@ export default function Dashboard() {
             </motion.h3>
 
             <motion.div variants={itemVariants} className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              {quickCategories.map((category, index) => (
-                <Button
-                  key={category.name}
-                  onClick={() => {
-                    setActiveCategory(category.name)
-                    router.push(category.href)
-                  }}
-                  variant="outline"
-                  className={`flex items-center justify-start h-auto py-4 px-5 bg-zinc-900/30 backdrop-blur-sm border-zinc-800/50 hover:bg-zinc-900/50 hover:border-zinc-700 rounded-xl transition-all duration-300 ${
-                    activeCategory === category.name ? "border-crimson/50 bg-crimson/5" : ""
-                  }`}
-                >
-                  <div
-                    className={`p-2 rounded-full bg-black/30 mr-3 ${activeCategory === category.name ? "text-crimson" : "text-crimson"}`}
+              {quickCategories.map((category, index) => {
+                // If category is premium and user is not pro, show locked version
+                if (category.premium && !isProUser) {
+                  return (
+                    <Button
+                      key={category.name}
+                      onClick={() => router.push("/pricing")}
+                      variant="outline"
+                      className="flex items-center justify-start h-auto py-4 px-5 bg-zinc-900/30 backdrop-blur-sm border-zinc-800/50 hover:bg-zinc-900/50 hover:border-zinc-700 rounded-xl transition-all duration-300"
+                    >
+                      <div className="p-2 rounded-full bg-black/30 mr-3 text-crimson">
+                        <Lock className="h-4 w-4 md:h-5 md:w-5" />
+                      </div>
+                      <div className="text-left">
+                        <span className="font-light text-sm md:text-base">{category.name}</span>
+                        <span className="block text-xs text-zinc-500">Pro Only</span>
+                      </div>
+                    </Button>
+                  )
+                }
+
+                // Otherwise show normal category button
+                return (
+                  <Button
+                    key={category.name}
+                    onClick={() => {
+                      setActiveCategory(category.name)
+                      router.push(category.href)
+                    }}
+                    variant="outline"
+                    className={`flex items-center justify-start h-auto py-4 px-5 bg-zinc-900/30 backdrop-blur-sm border-zinc-800/50 hover:bg-zinc-900/50 hover:border-zinc-700 rounded-xl transition-all duration-300 ${
+                      activeCategory === category.name ? "border-crimson/50 bg-crimson/5" : ""
+                    }`}
                   >
-                    {category.icon}
-                  </div>
-                  <span className="text-left font-light text-sm md:text-base">{category.name}</span>
-                </Button>
-              ))}
+                    <div
+                      className={`p-2 rounded-full bg-black/30 mr-3 ${activeCategory === category.name ? "text-crimson" : "text-crimson"}`}
+                    >
+                      {category.icon}
+                    </div>
+                    <span className="text-left font-light text-sm md:text-base">{category.name}</span>
+                  </Button>
+                )
+              })}
             </motion.div>
           </motion.div>
         )}
