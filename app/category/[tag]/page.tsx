@@ -24,7 +24,7 @@ export default function CategoryPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [noContentMessage, setNoContentMessage] = useState<string | null>(null)
   const [redirectInProgress, setRedirectInProgress] = useState(false)
-  const [shuffledVideos, setShuffledVideos] = useState<any[]>([])
+  const [processedVideos, setProcessedVideos] = useState<any[]>([])
   const [searchQuery, setSearchQuery] = useState("")
   const [filteredVideos, setFilteredVideos] = useState<any[]>([])
   const [showSearch, setShowSearch] = useState(false)
@@ -84,22 +84,35 @@ export default function CategoryPage() {
   const { videos, loading, error, hasMore, loadMore } = useVimeoTagVideos(tag)
   const observer = useRef<IntersectionObserver | null>(null)
 
-  // Shuffle videos when they change
+  // Process videos when they change - only shuffle for pro users
   useEffect(() => {
     if (videos && videos.length > 0) {
-      const shuffled = shuffleArray([...videos])
-      setShuffledVideos(shuffled)
-      setFilteredVideos(shuffled)
+      if (isProUser) {
+        // Pro users get shuffled videos
+        const shuffled = shuffleArray([...videos])
+        setProcessedVideos(shuffled)
+      } else {
+        // Free users get consistently sorted videos (by name)
+        const sorted = [...videos].sort((a, b) => {
+          // Sort by name, or if names are equal, by URI
+          if (a.name && b.name) {
+            const nameCompare = a.name.localeCompare(b.name)
+            if (nameCompare !== 0) return nameCompare
+          }
+          return a.uri?.localeCompare(b.uri || "") || 0
+        })
+        setProcessedVideos(sorted)
+      }
     }
-  }, [videos])
+  }, [videos, isProUser])
 
   // Filter videos based on search query
   useEffect(() => {
     if (searchQuery.trim() === "") {
-      setFilteredVideos(shuffledVideos)
+      setFilteredVideos(processedVideos)
     } else {
       const query = searchQuery.toLowerCase()
-      const filtered = shuffledVideos.filter(
+      const filtered = processedVideos.filter(
         (video) =>
           video.name?.toLowerCase().includes(query) ||
           video.description?.toLowerCase().includes(query) ||
@@ -107,7 +120,7 @@ export default function CategoryPage() {
       )
       setFilteredVideos(filtered)
     }
-  }, [searchQuery, shuffledVideos])
+  }, [searchQuery, processedVideos])
 
   // Reference for infinite scrolling
   const lastVideoElementRef = useCallback(
@@ -256,17 +269,17 @@ export default function CategoryPage() {
 
           {/* Upgrade banner for free users */}
           {showUpgradeBanner && (
-            <div className="mb-6 p-4 bg-gradient-to-r from-crimson/20 to-crimson/10 border border-crimson/30 rounded-lg">
+            <div className="mb-6 p-4 bg-gradient-to-r from-red-900/20 to-red-900/10 border border-red-900/30 rounded-lg">
               <div className="flex flex-col sm:flex-row items-center justify-between">
                 <div className="flex items-center mb-3 sm:mb-0">
-                  <Lock className="h-5 w-5 text-crimson mr-2" />
+                  <Lock className="h-5 w-5 text-red-500 mr-2" />
                   <span className="text-sm text-white">
                     Free users can view 5 of {totalVideosCount} videos in this category
                   </span>
                 </div>
                 <Button
                   onClick={() => router.push("/pricing")}
-                  className="bg-crimson hover:bg-crimson-dark text-white text-sm"
+                  className="bg-red-600 hover:bg-red-700 text-white text-sm"
                 >
                   Upgrade to Pro
                 </Button>
@@ -315,38 +328,23 @@ export default function CategoryPage() {
                     </div>
                   )}
 
-                  {/* Free user restriction banner */}
-                  {!isProUser && filteredVideos.length > 5 && (
-                    <div className="mb-6 p-4 bg-gradient-to-r from-red-900/20 to-red-900/10 border border-red-900/30 rounded-lg">
-                      <div className="flex flex-col sm:flex-row items-center justify-between">
-                        <div className="flex items-center mb-3 sm:mb-0">
-                          <Lock className="h-5 w-5 text-red-500 mr-2" />
-                          <span className="text-sm text-white">
-                            Free users can view 5 of {filteredVideos.length} videos in this category
-                          </span>
-                        </div>
-                        <Button
-                          onClick={() => router.push("/pricing")}
-                          className="bg-red-600 hover:bg-red-700 text-white text-sm"
-                        >
-                          Upgrade to Pro
-                        </Button>
-                      </div>
-                    </div>
-                  )}
-
                   <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-6">
                     {filteredVideos.map((video, index) => {
                       // For free users, show locked cards after the first 5 videos
                       if (!isProUser && index >= 5) {
+                        // Get thumbnail URL for the locked card background
+                        const thumbnailUrl = video?.pictures?.sizes
+                          ? [...video.pictures.sizes].sort((a, b) => b.width - a.width)[0].link
+                          : undefined
+
                         return (
                           <motion.div
-                            key={`locked-${index}`}
+                            key={`locked-${video.uri || index}`}
                             initial={{ opacity: 0, y: 20 }}
                             animate={{ opacity: 1, y: 0 }}
                             transition={{ duration: 0.3, delay: Math.min(index * 0.05, 1) }}
                           >
-                            <LockedClipCard />
+                            <LockedClipCard thumbnailUrl={thumbnailUrl} />
                           </motion.div>
                         )
                       }

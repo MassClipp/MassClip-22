@@ -63,11 +63,26 @@ export default function VideoRow({ title, videos, limit = 10, isShowcase = false
   // Load videos when row becomes visible
   useEffect(() => {
     if (isIntersecting && videos) {
-      // Shuffle videos instead of sorting alphabetically
-      const shuffledVideos = shuffleArray([...videos]).slice(0, limit)
-      setVisibleVideos(shuffledVideos)
+      if (isProUser) {
+        // Pro users get shuffled videos
+        const shuffledVideos = shuffleArray([...videos]).slice(0, limit)
+        setVisibleVideos(shuffledVideos)
+      } else {
+        // Free users get consistently sorted videos (by name)
+        const sortedVideos = [...videos]
+          .sort((a, b) => {
+            // Sort by name, or if names are equal, by URI
+            if (a.name && b.name) {
+              const nameCompare = a.name.localeCompare(b.name)
+              if (nameCompare !== 0) return nameCompare
+            }
+            return a.uri?.localeCompare(b.uri || "") || 0
+          })
+          .slice(0, limit)
+        setVisibleVideos(sortedVideos)
+      }
     }
-  }, [isIntersecting, videos, limit])
+  }, [isIntersecting, videos, limit, isProUser])
 
   // Calculate max scroll position
   useEffect(() => {
@@ -179,6 +194,11 @@ export default function VideoRow({ title, videos, limit = 10, isShowcase = false
             ? visibleVideos.map((video, index) => {
                 // For free users, show locked cards after the first 5 videos
                 if (!isProUser && index >= 5) {
+                  // Get thumbnail URL for the locked card background
+                  const thumbnailUrl = video?.pictures?.sizes
+                    ? [...video.pictures.sizes].sort((a, b) => b.width - a.width)[0].link
+                    : undefined
+
                   return (
                     <motion.div
                       key={`locked-${index}`}
@@ -186,7 +206,7 @@ export default function VideoRow({ title, videos, limit = 10, isShowcase = false
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ duration: 0.5 }}
                     >
-                      <LockedClipCard />
+                      <LockedClipCard thumbnailUrl={thumbnailUrl} />
                     </motion.div>
                   )
                 }

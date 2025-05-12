@@ -79,9 +79,22 @@ export default function ShowcasePage() {
           return true
         })
 
-        // Combine and shuffle videos instead of sorting
+        // Combine videos
         const combinedVideos = [...prev, ...newVideos]
-        return shuffleArray(combinedVideos)
+
+        // Only shuffle for pro users, sort consistently for free users
+        if (isProUser) {
+          return shuffleArray(combinedVideos)
+        } else {
+          return combinedVideos.sort((a, b) => {
+            // Sort by name, or if names are equal, by URI
+            if (a.name && b.name) {
+              const nameCompare = a.name.localeCompare(b.name)
+              if (nameCompare !== 0) return nameCompare
+            }
+            return a.uri?.localeCompare(b.uri || "") || 0
+          })
+        }
       })
 
       // Check if there are more videos to load
@@ -301,14 +314,19 @@ export default function ShowcasePage() {
                     {filteredVideos.map((video, index) => {
                       // For free users, show locked cards after the first 5 videos
                       if (!isProUser && index >= 5) {
+                        // Get thumbnail URL for the locked card background
+                        const thumbnailUrl = video?.pictures?.sizes
+                          ? [...video.pictures.sizes].sort((a, b) => b.width - a.width)[0].link
+                          : undefined
+
                         return (
                           <motion.div
-                            key={`locked-${index}`}
+                            key={`locked-${video.uri || index}`}
                             initial={{ opacity: 0, y: 20 }}
                             animate={{ opacity: 1, y: 0 }}
                             transition={{ duration: 0.3, delay: Math.min(index * 0.05, 1) }}
                           >
-                            <LockedClipCard />
+                            <LockedClipCard thumbnailUrl={thumbnailUrl} />
                           </motion.div>
                         )
                       }
