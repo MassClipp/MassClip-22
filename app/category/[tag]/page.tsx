@@ -3,15 +3,17 @@
 import { useRef, useCallback, useEffect, useState } from "react"
 import { useParams, useRouter } from "next/navigation"
 import Link from "next/link"
-import { ChevronLeft, Search, Filter, ArrowUpRight } from "lucide-react"
+import { ChevronLeft, Search, Filter, ArrowUpRight, Lock } from "lucide-react"
 import { motion, AnimatePresence } from "framer-motion"
 import DashboardHeader from "@/components/dashboard-header"
 import VimeoCard from "@/components/vimeo-card"
+import LockedClipCard from "@/components/locked-clip-card"
 import { useVimeoTagVideos } from "@/hooks/use-vimeo-tag-videos"
 import { useVimeoShowcases } from "@/hooks/use-vimeo-showcases"
 import { Button } from "@/components/ui/button"
 import VideoSkeleton from "@/components/video-skeleton"
 import { shuffleArray } from "@/lib/utils"
+import { useUserPlan } from "@/hooks/use-user-plan"
 
 export default function CategoryPage() {
   const params = useParams()
@@ -26,6 +28,7 @@ export default function CategoryPage() {
   const [searchQuery, setSearchQuery] = useState("")
   const [filteredVideos, setFilteredVideos] = useState<any[]>([])
   const [showSearch, setShowSearch] = useState(false)
+  const { isProUser } = useUserPlan()
 
   // Special case for "browse all"
   useEffect(() => {
@@ -167,6 +170,12 @@ export default function CategoryPage() {
     )
   }
 
+  // Get the total number of videos
+  const totalVideosCount = filteredVideos.length
+
+  // Determine if we need to show the upgrade banner
+  const showUpgradeBanner = !isProUser && totalVideosCount > 5
+
   return (
     <div className="relative min-h-screen bg-black text-white">
       {/* Premium Gradient Background */}
@@ -245,6 +254,26 @@ export default function CategoryPage() {
             </div>
           </div>
 
+          {/* Upgrade banner for free users */}
+          {showUpgradeBanner && (
+            <div className="mb-6 p-4 bg-gradient-to-r from-crimson/20 to-crimson/10 border border-crimson/30 rounded-lg">
+              <div className="flex flex-col sm:flex-row items-center justify-between">
+                <div className="flex items-center mb-3 sm:mb-0">
+                  <Lock className="h-5 w-5 text-crimson mr-2" />
+                  <span className="text-sm text-white">
+                    Free users can view 5 of {totalVideosCount} videos in this category
+                  </span>
+                </div>
+                <Button
+                  onClick={() => router.push("/pricing")}
+                  className="bg-crimson hover:bg-crimson-dark text-white text-sm"
+                >
+                  Upgrade to Pro
+                </Button>
+              </div>
+            </div>
+          )}
+
           {/* Error state */}
           {error && (
             <motion.div
@@ -286,17 +315,39 @@ export default function CategoryPage() {
                     </div>
                   )}
                   <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-6">
-                    {filteredVideos.map((video, index) => (
-                      <motion.div
-                        key={video.uri}
-                        ref={index === filteredVideos.length - 1 ? lastVideoElementRef : undefined}
-                        initial={{ opacity: 0, y: 20 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ duration: 0.3, delay: Math.min(index * 0.05, 1) }}
-                      >
-                        <VimeoCard video={video} />
-                      </motion.div>
-                    ))}
+                    {filteredVideos.map((video, index) => {
+                      // For free users, show locked cards after the first 5 videos
+                      if (!isProUser && index >= 5) {
+                        // Get thumbnail URL for the locked card background
+                        const thumbnailUrl = video?.pictures?.sizes
+                          ? [...video.pictures.sizes].sort((a, b) => b.width - a.width)[0].link
+                          : undefined
+
+                        return (
+                          <motion.div
+                            key={`locked-${video.uri || index}`}
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ duration: 0.3, delay: Math.min(index * 0.05, 1) }}
+                          >
+                            <LockedClipCard thumbnailUrl={thumbnailUrl} />
+                          </motion.div>
+                        )
+                      }
+
+                      // Regular video card for all users (or first 5 for free users)
+                      return (
+                        <motion.div
+                          key={video.uri}
+                          ref={index === filteredVideos.length - 1 ? lastVideoElementRef : undefined}
+                          initial={{ opacity: 0, y: 20 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          transition={{ duration: 0.3, delay: Math.min(index * 0.05, 1) }}
+                        >
+                          <VimeoCard video={video} />
+                        </motion.div>
+                      )
+                    })}
 
                     {/* Show skeleton loaders while loading more */}
                     {loading &&
@@ -330,8 +381,8 @@ export default function CategoryPage() {
             </div>
           )}
 
-          {/* Manual load more button */}
-          {!loading && filteredVideos.length > 0 && hasMore && (
+          {/* Manual load more button - only show for pro users or if free users haven't reached the limit */}
+          {!loading && filteredVideos.length > 0 && hasMore && (isProUser || filteredVideos.length <= 5) && (
             <div className="py-8 text-center">
               <Button onClick={loadMore} className="bg-red-600 hover:bg-red-700 text-white px-8">
                 Load More Videos
