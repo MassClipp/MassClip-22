@@ -81,27 +81,14 @@ export default function Dashboard() {
       // Collect videos from all showcases
       const allVideos = Object.values(showcaseVideos).flat()
 
-      // For free users, sort alphabetically by name
-      // For pro users, shuffle for a dynamic experience
+      // Shuffle for both free and pro users to show variety
       if (allVideos.length > 0) {
-        if (isProUser) {
-          setFeaturedVideos(shuffleArray(allVideos).slice(0, 6))
-        } else {
-          const sortedVideos = [...allVideos]
-            .sort((a, b) => {
-              // Sort by name if available, otherwise by URI
-              const nameA = a.name?.toLowerCase() || a.uri
-              const nameB = b.name?.toLowerCase() || b.uri
-              return nameA.localeCompare(nameB)
-            })
-            .slice(0, 6)
-          setFeaturedVideos(sortedVideos)
-        }
+        setFeaturedVideos(shuffleArray(allVideos).slice(0, 6))
       }
 
       setIsLoading(false)
     }
-  }, [showcaseVideos, loadingShowcases, loadingVideos, isProUser])
+  }, [showcaseVideos, loadingShowcases, loadingVideos])
 
   // Check if we're still loading initial data
   const isLoadingData = (loadingShowcases || loadingVideos) && showcaseNames.length === 0
@@ -219,11 +206,19 @@ export default function Dashboard() {
                 Find Your Next <span className="text-gradient-accent">Viral Clip</span>
               </h1>
               <Button
-                onClick={() => router.push("/category/browse-all")}
+                onClick={() => router.push(isProUser ? "/category/browse-all" : "/pricing")}
                 variant="ghost"
                 className="text-zinc-400 hover:text-white hover:bg-zinc-900/50 rounded-full px-4 py-2 transition-all duration-300"
               >
-                View All <ChevronRight className="h-4 w-4 ml-1" />
+                {isProUser ? (
+                  <>
+                    View All <ChevronRight className="h-4 w-4 ml-1" />
+                  </>
+                ) : (
+                  <>
+                    Upgrade <ChevronRight className="h-4 w-4 ml-1" />
+                  </>
+                )}
               </Button>
             </motion.div>
 
