@@ -24,6 +24,7 @@ export default function CategoriesPage() {
       "Faith",
       "Money & Wealth",
       "Motivational Speeches",
+      "Cinema",
     ],
     [],
   )
