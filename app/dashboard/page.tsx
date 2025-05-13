@@ -120,8 +120,9 @@ export default function Dashboard() {
   }
 
   // Check if we have the specific showcases
-  const hasIntrospection = showcaseNames.some(
+  const hasMindset = showcaseNames.some(
     (name) =>
+      name.toLowerCase().includes("mindset") ||
       name.toLowerCase().includes("introspection") ||
       name.toLowerCase().includes("reflection") ||
       name.toLowerCase().includes("mindfulness"),
@@ -141,9 +142,9 @@ export default function Dashboard() {
   // Quick category navigation
   const quickCategories = [
     {
-      name: "Introspection",
+      name: "Mindset",
       icon: <Brain className="h-4 w-4 md:h-5 md:w-5" />,
-      href: "/category/introspection",
+      href: "/category/mindset",
       premium: false,
     },
     {
