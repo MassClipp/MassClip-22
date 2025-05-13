@@ -17,13 +17,13 @@ export function useVimeoShowcases() {
   // Define the exact categories we want to display
   const allowedCategories = useMemo(
     () => [
-      "Introspection",
+      "Mindset", // Changed from "Introspection" to "Mindset"
       "Hustle Mentality",
       "High Energy Motivation",
       "Faith",
       "Money & Wealth",
       "Motivational Speeches",
-      "Cinema", // Added the new Cinema category
+      "Cinema",
     ],
     [],
   )
@@ -36,13 +36,14 @@ export function useVimeoShowcases() {
   // Define exact mapping for our specific categories
   const exactCategoryMapping = useMemo(
     () => ({
-      introspection: "Introspection",
+      mindset: "Mindset", // Changed from "introspection": "Introspection"
+      introspection: "Mindset", // Added this mapping to handle existing data
       "hustle mentality": "Hustle Mentality",
       "high energy motivation": "High Energy Motivation",
       faith: "Faith",
       "money & wealth": "Money & Wealth",
       "motivational speeches": "Motivational Speeches",
-      cinema: "Cinema", // Added the new Cinema category mapping
+      cinema: "Cinema",
     }),
     [],
   )
@@ -50,13 +51,16 @@ export function useVimeoShowcases() {
   // Fetch videos for a specific showcase
   const fetchShowcaseVideos = useCallback(
     async (showcaseId: string, showcaseName: string) => {
-      // Only fetch videos for allowed categories
-      if (!allowedCategories.includes(showcaseName)) {
+      // Special case: if the showcase name is "Introspection", rename it to "Mindset"
+      const displayName = showcaseName === "Introspection" ? "Mindset" : showcaseName
+
+      // Only fetch videos for allowed categories or if it's "Introspection" (which we'll rename to "Mindset")
+      if (!allowedCategories.includes(displayName) && showcaseName !== "Introspection") {
         return
       }
 
       try {
-        console.log(`Fetching videos for showcase ${showcaseName}`)
+        console.log(`Fetching videos for showcase ${showcaseName} (display as: ${displayName})`)
 
         const response = await fetch(`/api/vimeo/showcases/${showcaseId}/videos?per_page=${maxVideosPerShowcase}`)
 
@@ -87,10 +91,10 @@ export function useVimeoShowcases() {
           return nameA.localeCompare(nameB)
         })
 
-        // Update showcaseVideos state
+        // Update showcaseVideos state - use displayName (Mindset) instead of showcaseName (Introspection)
         setShowcaseVideos((prev) => ({
           ...prev,
-          [showcaseName]: sortedVideos,
+          [displayName]: sortedVideos,
         }))
       } catch (err) {
         console.error(`Error fetching videos for showcase ${showcaseName}:`, err)
@@ -125,8 +129,10 @@ export function useVimeoShowcases() {
       // Get all showcases
       const allShowcases = data.data
 
-      // Filter to only the showcases we care about
-      const relevantShowcases = allShowcases.filter((showcase) => allowedCategories.includes(showcase.name))
+      // Filter to only the showcases we care about - include both "Introspection" and "Mindset"
+      const relevantShowcases = allShowcases.filter(
+        (showcase) => allowedCategories.includes(showcase.name) || showcase.name === "Introspection",
+      )
 
       setShowcases(relevantShowcases)
       console.log(`Received ${relevantShowcases.length} relevant showcases`)
@@ -139,17 +145,20 @@ export function useVimeoShowcases() {
       relevantShowcases.forEach((showcase) => {
         const showcaseId = showcase.uri.split("/").pop()
         if (showcaseId) {
+          // For "Introspection", store it as "Mindset" in the maps
+          const displayName = showcase.name === "Introspection" ? "Mindset" : showcase.name
+
           // Store the showcase ID mapped to the name
-          idMap[showcase.name] = showcaseId
+          idMap[displayName] = showcaseId
 
           // Map normalized category name to showcase name
-          const normalizedName = normalizeCategory(showcase.name)
-          categoryMap[normalizedName] = showcase.name
+          const normalizedName = normalizeCategory(displayName)
+          categoryMap[normalizedName] = displayName
 
           // Also ensure our exact mapping is in place
           Object.entries(exactCategoryMapping).forEach(([category, mappedShowcase]) => {
             if (normalizeCategory(mappedShowcase) === normalizedName) {
-              categoryMap[category] = showcase.name
+              categoryMap[category] = displayName
             }
           })
         }
