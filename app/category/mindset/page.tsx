@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button"
 import VimeoCard from "@/components/vimeo-card"
 import { useVimeoShowcases } from "@/hooks/use-vimeo-showcases"
 
-export default function IntrospectionCategory() {
+export default function MindsetCategory() {
   const router = useRouter()
   const [videos, setVideos] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
@@ -17,47 +17,52 @@ export default function IntrospectionCategory() {
   const { showcaseVideos, loading: loadingShowcases } = useVimeoShowcases()
 
   useEffect(() => {
-    // When showcases are loaded, find videos that match introspection theme
+    // When showcases are loaded, find videos that match mindset theme
     if (!loadingShowcases && Object.keys(showcaseVideos).length > 0) {
-      // Look for showcases with introspection-related names
-      const introspectionShowcases = Object.keys(showcaseVideos).filter(
+      // Look for showcases with mindset-related names
+      const mindsetShowcases = Object.keys(showcaseVideos).filter(
         (name) =>
+          name.toLowerCase().includes("mindset") ||
+          name.toLowerCase().includes("growth") ||
           name.toLowerCase().includes("introspection") ||
-          name.toLowerCase().includes("reflection") ||
-          name.toLowerCase().includes("mindfulness"),
+          name.toLowerCase().includes("reflection"),
       )
 
       let matchedVideos: any[] = []
 
       // If we have direct showcase matches, use those videos
-      if (introspectionShowcases.length > 0) {
-        introspectionShowcases.forEach((showcase) => {
+      if (mindsetShowcases.length > 0) {
+        mindsetShowcases.forEach((showcase) => {
           matchedVideos = [...matchedVideos, ...showcaseVideos[showcase]]
         })
       } else {
-        // Otherwise, search through all showcases for videos with introspection-related tags or titles
+        // Otherwise, search through all showcases for videos with mindset-related tags or titles
         Object.values(showcaseVideos).forEach((showcaseVideoArray) => {
           const filteredVideos = showcaseVideoArray.filter((video) => {
             // Check video title and description
-            const hasIntrospectionTitle =
+            const hasMindsetTitle =
+              video.name?.toLowerCase().includes("mindset") ||
+              video.name?.toLowerCase().includes("growth") ||
+              video.name?.toLowerCase().includes("mental") ||
               video.name?.toLowerCase().includes("introspection") ||
-              video.name?.toLowerCase().includes("reflection") ||
-              video.name?.toLowerCase().includes("mindful") ||
-              video.description?.toLowerCase().includes("introspection") ||
-              video.description?.toLowerCase().includes("reflection") ||
-              video.description?.toLowerCase().includes("mindful")
+              video.description?.toLowerCase().includes("mindset") ||
+              video.description?.toLowerCase().includes("growth") ||
+              video.description?.toLowerCase().includes("mental") ||
+              video.description?.toLowerCase().includes("introspection")
 
             // Check video tags
-            const hasIntrospectionTags = video.tags?.some(
+            const hasMindsetTags = video.tags?.some(
               (tag: any) =>
+                tag.name?.toLowerCase().includes("mindset") ||
+                tag.name?.toLowerCase().includes("growth") ||
+                tag.name?.toLowerCase().includes("mental") ||
                 tag.name?.toLowerCase().includes("introspection") ||
                 tag.name?.toLowerCase().includes("reflection") ||
-                tag.name?.toLowerCase().includes("mindful") ||
                 tag.name?.toLowerCase().includes("meditation") ||
                 tag.name?.toLowerCase().includes("awareness"),
             )
 
-            return hasIntrospectionTitle || hasIntrospectionTags
+            return hasMindsetTitle || hasMindsetTags
           })
 
           matchedVideos = [...matchedVideos, ...filteredVideos]
@@ -126,10 +131,10 @@ export default function IntrospectionCategory() {
           transition={{ duration: 0.5 }}
           className="mb-8"
         >
-          <h1 className="text-4xl font-light tracking-tight text-white mb-2">Introspection</h1>
+          <h1 className="text-4xl font-light tracking-tight text-white mb-2">Mindset</h1>
           <p className="text-white/60 max-w-2xl">
-            Explore clips that inspire deep reflection, self-awareness, and mindfulness. Perfect for creating content
-            that encourages viewers to look inward and grow.
+            Explore clips that inspire growth, positive thinking, and mental strength. Perfect for creating content that
+            encourages viewers to develop a winning mindset and achieve their goals.
           </p>
         </motion.div>
 
@@ -156,7 +161,7 @@ export default function IntrospectionCategory() {
 
         {!loading && videos.length === 0 && (
           <div className="text-center py-20">
-            <p className="text-white/60">No introspection videos found. Check back soon for updates.</p>
+            <p className="text-white/60">No mindset videos found. Check back soon for updates.</p>
           </div>
         )}
       </main>

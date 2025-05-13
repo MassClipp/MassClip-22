@@ -25,14 +25,22 @@ export function useVimeoTagVideos(tag: string) {
 
     // Define related tags for special categories
     const relatedTagsMap: Record<string, string[]> = {
-      introspection: [
+      mindset: [
+        "mindset",
+        "growth",
+        "positive",
+        "thinking",
+        "mental",
+        "attitude",
+        "psychology",
+        "focus",
+        "discipline",
         "introspection",
         "reflection",
         "meditation",
         "self",
         "awareness",
         "consciousness",
-        "mindfulness",
         "inner",
         "peace",
       ],
@@ -63,7 +71,6 @@ export function useVimeoTagVideos(tag: string) {
         "grind",
         "determination",
       ],
-      mindset: ["mindset", "growth", "positive", "thinking", "mental", "attitude", "psychology", "focus", "discipline"],
       "money and wealth": [
         "money",
         "wealth",
