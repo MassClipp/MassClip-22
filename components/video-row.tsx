@@ -64,11 +64,11 @@ export default function VideoRow({ title, videos, limit = 10, isShowcase = false
   useEffect(() => {
     if (isIntersecting && videos) {
       if (isProUser) {
-        // Pro users get shuffled videos
+        // Pro users get shuffled videos from the entire showcase/category
         const shuffledVideos = shuffleArray([...videos]).slice(0, limit)
         setVisibleVideos(shuffledVideos)
       } else {
-        // Free users get consistently sorted videos (by name)
+        // Free users get alphabetically sorted videos
         const sortedVideos = [...videos]
           .sort((a, b) => {
             // Sort by name, or if names are equal, by URI

@@ -3,7 +3,7 @@
 import { useRef, useEffect, useState } from "react"
 import { useSearchParams } from "next/navigation"
 import { motion } from "framer-motion"
-import { Search, Clock, Brain, Rocket, ChevronRight, TrendingUp, Lock } from "lucide-react"
+import { Search, Clock, Brain, Rocket, ChevronRight, TrendingUp, Lock, Film } from "lucide-react"
 import DashboardHeader from "@/components/dashboard-header"
 import VideoRow from "@/components/video-row"
 import { useVimeoShowcases } from "@/hooks/use-vimeo-showcases"
@@ -78,12 +78,12 @@ export default function Dashboard() {
   // Prepare featured videos from all showcases
   useEffect(() => {
     if (!loadingShowcases && !loadingVideos && Object.keys(showcaseVideos).length > 0) {
-      // Collect videos from all showcases
-      const allVideos = Object.values(showcaseVideos).flat()
+      // Collect videos from all showcases (not all videos from account)
+      const allShowcaseVideos = Object.values(showcaseVideos).flat()
 
-      // Shuffle for both free and pro users to show variety
-      if (allVideos.length > 0) {
-        setFeaturedVideos(shuffleArray(allVideos).slice(0, 6))
+      // Both free and pro users get shuffled videos in the featured section
+      if (allShowcaseVideos.length > 0) {
+        setFeaturedVideos(shuffleArray(allShowcaseVideos).slice(0, 6))
       }
 
       setIsLoading(false)
@@ -134,6 +134,10 @@ export default function Dashboard() {
       name.toLowerCase().includes("entrepreneur"),
   )
 
+  const hasCinema = showcaseNames.some(
+    (name) => name.toLowerCase().includes("cinema") || name.toLowerCase().includes("film"),
+  )
+
   // Quick category navigation
   const quickCategories = [
     {
@@ -149,16 +153,16 @@ export default function Dashboard() {
       premium: false,
     },
     {
+      name: "Cinema",
+      icon: <Film className="h-4 w-4 md:h-5 md:w-5" />,
+      href: "/category/cinema",
+      premium: false,
+    },
+    {
       name: "Recent",
       icon: <Clock className="h-4 w-4 md:h-5 md:w-5" />,
       href: "/category/recently-added",
       premium: true, // Mark this as premium
-    },
-    {
-      name: "All",
-      icon: <Search className="h-4 w-4 md:h-5 md:w-5" />,
-      href: "/dashboard/categories",
-      premium: false,
     },
   ]
 
