@@ -23,6 +23,7 @@ export function useVimeoShowcases() {
       "Faith",
       "Money & Wealth",
       "Motivational Speeches",
+      "Cinema", // Added the new Cinema category
     ],
     [],
   )
@@ -41,6 +42,7 @@ export function useVimeoShowcases() {
       faith: "Faith",
       "money & wealth": "Money & Wealth",
       "motivational speeches": "Motivational Speeches",
+      cinema: "Cinema", // Added the new Cinema category mapping
     }),
     [],
   )
