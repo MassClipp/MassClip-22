@@ -1,8 +1,10 @@
 "use client"
 
+import { useState, useMemo } from "react"
+import Link from "next/link"
 import { motion } from "framer-motion"
-import { useRouter } from "next/navigation"
-import { Brain, Dumbbell, Flame, Heart, Search, Sparkles, Film } from "lucide-react"
+import { useVimeoShowcases } from "@/hooks/use-vimeo-showcases"
+import { ArrowUpRight } from "lucide-react"
 
 interface MinimalCategoryListProps {
   categories: string[]
@@ -10,37 +12,71 @@ interface MinimalCategoryListProps {
 }
 
 export default function MinimalCategoryList({ categories, showcaseIds = {} }: MinimalCategoryListProps) {
-  const router = useRouter()
+  const [hoveredIndex, setHoveredIndex] = useState<number | null>(null)
+  const { categoryToShowcaseMap } = useVimeoShowcases()
 
-  const getCategoryIcon = (category: string) => {
-    switch (category.toLowerCase()) {
-      case "browse all":
-        return <Search className="w-5 h-5 text-gray-400" />
-      case "mindset":
-      case "introspection":
-        return <Brain className="w-5 h-5 text-blue-400" />
-      case "hustle mentality":
-        return <Flame className="w-5 h-5 text-orange-400" />
-      case "high energy motivation":
-        return <Dumbbell className="w-5 h-5 text-red-400" />
-      case "faith":
-        return <Heart className="w-5 h-5 text-purple-400" />
-      case "cinema":
-        return <Film className="w-5 h-5 text-green-400" />
-      default:
-        return <Sparkles className="w-5 h-5 text-yellow-400" />
-    }
+  // Helper function to normalize category names - memoized to prevent recreation
+  const normalizeCategory = useMemo(
+    () =>
+      (category: string): string => {
+        return category.trim().toLowerCase().replace(/\s+/g, " ")
+      },
+    [],
+  )
+
+  // Memoize the getCategoryLink function to prevent recreation on every render
+  const getCategoryLink = useMemo(
+    () =>
+      (category: string): string => {
+        // Special case for "Browse All"
+        if (normalizeCategory(category) === "browse all") {
+          return "/category/browse-all"
+        }
+
+        // Map Introspection to Mindset for URL purposes
+        if (normalizeCategory(category) === "introspection") {
+          return "/category/mindset"
+        }
+
+        // Check if we have a direct showcase mapping in showcaseIds
+        const directShowcaseId = Object.entries(showcaseIds).find(
+          ([name]) => normalizeCategory(name) === normalizeCategory(category),
+        )?.[1]
+
+        if (directShowcaseId) {
+          return `/showcase/${directShowcaseId}`
+        }
+
+        // Check if we have a mapping in categoryToShowcaseMap
+        const mappedShowcaseName = Object.entries(categoryToShowcaseMap || {}).find(
+          ([mappedCategory]) => normalizeCategory(mappedCategory) === normalizeCategory(category),
+        )?.[1]
+
+        if (mappedShowcaseName && showcaseIds[mappedShowcaseName]) {
+          return `/showcase/${showcaseIds[mappedShowcaseName]}`
+        }
+
+        // Fallback to category slug
+        const categorySlug = category.toLowerCase().replace(/\s+/g, "-")
+        return `/category/${categorySlug}`
+      },
+    [showcaseIds, categoryToShowcaseMap, normalizeCategory],
+  )
+
+  // Function to display the category name, mapping Introspection to Mindset
+  const displayCategoryName = (category: string) => {
+    return category.toLowerCase() === "introspection" ? "Mindset" : category
   }
 
-  const handleCategoryClick = (category: string) => {
-    // Map Introspection to Mindset for URL purposes
-    const categoryForUrl = category.toLowerCase() === "introspection" ? "mindset" : category.toLowerCase()
-
-    if (category.toLowerCase() === "browse all") {
-      router.push("/category/browse-all")
-    } else {
-      router.push(`/category/${categoryForUrl.toLowerCase().replace(/\s+/g, "-")}`)
-    }
+  // Animation variants
+  const container = {
+    hidden: { opacity: 0 },
+    show: {
+      opacity: 1,
+      transition: {
+        staggerChildren: 0.1,
+      },
+    },
   }
 
   const item = {
@@ -48,35 +84,47 @@ export default function MinimalCategoryList({ categories, showcaseIds = {} }: Mi
     show: { opacity: 1, y: 0 },
   }
 
-  // Function to display the category name, mapping Introspection to Mindset
-  const displayCategoryName = (category: string) => {
-    return category.toLowerCase() === "introspection" ? "Mindset" : category
-  }
-
   return (
-    <div className="space-y-2">
-      {categories.map((category) => (
-        <motion.div
-          key={category}
-          variants={item}
-          className="bg-gray-900/60 border border-gray-800 rounded-lg p-4 flex items-center justify-between cursor-pointer hover:bg-gray-800/60 transition-colors"
-          onClick={() => handleCategoryClick(category)}
-        >
-          <div className="flex items-center space-x-3">
-            <div className="p-2 bg-gray-800 rounded-full">{getCategoryIcon(category)}</div>
-            <span className="text-white font-light">{displayCategoryName(category)}</span>
-          </div>
-          <div className="text-gray-500">
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
-              <path
-                fillRule="evenodd"
-                d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z"
-                clipRule="evenodd"
+    <motion.div className="w-full max-w-md mx-auto" variants={container} initial="hidden" animate="show">
+      <ul className="space-y-6">
+        {categories.map((category, index) => (
+          <motion.li
+            key={category}
+            variants={item}
+            className="relative"
+            onMouseEnter={() => setHoveredIndex(index)}
+            onMouseLeave={() => setHoveredIndex(null)}
+          >
+            {/* Use Link component for direct navigation */}
+            <Link
+              href={getCategoryLink(category)}
+              className="block w-full text-left py-3 px-1 group transition-all duration-300"
+            >
+              <div className="flex items-center justify-between">
+                <span className="inline-block font-extralight text-2xl tracking-wide text-gray-300 group-hover:text-white transition-colors duration-300">
+                  {displayCategoryName(category)}
+                </span>
+
+                <motion.div
+                  initial={{ opacity: 0, x: -10 }}
+                  animate={{ opacity: hoveredIndex === index ? 1 : 0, x: hoveredIndex === index ? 0 : -10 }}
+                  transition={{ duration: 0.2 }}
+                >
+                  <ArrowUpRight className="h-5 w-5 text-red-500" />
+                </motion.div>
+              </div>
+
+              {/* Animated line that appears on hover */}
+              <motion.div
+                className="absolute left-0 bottom-0 h-[0.5px] bg-gray-500"
+                initial={{ width: "0%" }}
+                animate={{ width: hoveredIndex === index ? "100%" : "0%" }}
+                transition={{ duration: 0.3 }}
               />
-            </svg>
-          </div>
-        </motion.div>
-      ))}
-    </div>
+            </Link>
+          </motion.li>
+        ))}
+      </ul>
+    </motion.div>
   )
 }
