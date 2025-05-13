@@ -82,10 +82,11 @@ export default function ShowcasePage() {
         // Combine videos
         const combinedVideos = [...prev, ...newVideos]
 
-        // Only shuffle for pro users, sort consistently for free users
+        // For pro users, always shuffle to ensure complete randomness
         if (isProUser) {
           return shuffleArray(combinedVideos)
         } else {
+          // For free users, sort alphabetically
           return combinedVideos.sort((a, b) => {
             // Sort by name, or if names are equal, by URI
             if (a.name && b.name) {
@@ -125,9 +126,15 @@ export default function ShowcasePage() {
           video.description?.toLowerCase().includes(query) ||
           video.tags?.some((tag: any) => tag.name.toLowerCase().includes(query)),
       )
-      setFilteredVideos(filtered)
+
+      // For pro users, keep search results randomly ordered
+      if (isProUser) {
+        setFilteredVideos(shuffleArray(filtered))
+      } else {
+        setFilteredVideos(filtered)
+      }
     }
-  }, [searchQuery, videos])
+  }, [searchQuery, videos, isProUser])
 
   const loadMore = () => {
     if (!loading && !isFetching && hasMore) {

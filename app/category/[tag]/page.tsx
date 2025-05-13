@@ -84,11 +84,11 @@ export default function CategoryPage() {
   const { videos, loading, error, hasMore, loadMore } = useVimeoTagVideos(tag)
   const observer = useRef<IntersectionObserver | null>(null)
 
-  // Process videos when they change - only shuffle for pro users
+  // Process videos when they change - completely random for pro users
   useEffect(() => {
     if (videos && videos.length > 0) {
       if (isProUser) {
-        // Pro users get shuffled videos
+        // Pro users get completely random videos - no organization at all
         const shuffled = shuffleArray([...videos])
         setProcessedVideos(shuffled)
       } else {
@@ -118,9 +118,15 @@ export default function CategoryPage() {
           video.description?.toLowerCase().includes(query) ||
           video.tags?.some((tag: any) => tag.name.toLowerCase().includes(query)),
       )
-      setFilteredVideos(filtered)
+
+      // For pro users, keep search results randomly ordered
+      if (isProUser) {
+        setFilteredVideos(shuffleArray(filtered))
+      } else {
+        setFilteredVideos(filtered)
+      }
     }
-  }, [searchQuery, processedVideos])
+  }, [searchQuery, processedVideos, isProUser])
 
   // Reference for infinite scrolling
   const lastVideoElementRef = useCallback(

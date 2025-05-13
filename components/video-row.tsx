@@ -64,7 +64,8 @@ export default function VideoRow({ title, videos, limit = 10, isShowcase = false
   useEffect(() => {
     if (isIntersecting && videos) {
       if (isProUser) {
-        // Pro users get shuffled videos from the entire showcase/category
+        // Pro users get completely random videos - no organization at all
+        // Shuffle the entire array and take the first 'limit' videos
         const shuffledVideos = shuffleArray([...videos]).slice(0, limit)
         setVisibleVideos(shuffledVideos)
       } else {
