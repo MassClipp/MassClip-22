@@ -250,10 +250,10 @@ export default function LandingPage() {
                   </div>
                 </motion.div>
 
-                {/* Introspection Category */}
+                {/* Mindset Category (previously Introspection) */}
                 <motion.div
                   className="relative overflow-hidden group cursor-pointer bg-black/20 border border-white/5 aspect-video flex items-center justify-center"
-                  onClick={() => handleCategoryClick("introspection")}
+                  onClick={() => handleCategoryClick("mindset")}
                   initial={{ opacity: 0, y: 20 }}
                   whileInView={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.6, delay: 0.4 }}
@@ -262,7 +262,7 @@ export default function LandingPage() {
                   <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/30 to-transparent opacity-70 group-hover:opacity-40 transition-opacity duration-300"></div>
                   <div className="relative z-10 text-center px-4">
                     <h3 className="text-lg md:text-xl lg:text-2xl font-light text-white mb-2 group-hover:text-crimson transition-colors duration-300">
-                      Introspection
+                      Mindset
                     </h3>
                     <div className="flex items-center justify-center text-white/50 text-xs md:text-sm">
                       <Play className="h-3 w-3 md:h-4 md:w-4 mr-1 md:mr-2" />
