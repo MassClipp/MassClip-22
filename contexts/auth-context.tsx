@@ -9,6 +9,8 @@ import {
   signOut as firebaseSignOut,
   type User as FirebaseUser,
   sendPasswordResetEmail,
+  GoogleAuthProvider,
+  signInWithPopup,
 } from "firebase/auth"
 import { doc, getDoc, setDoc, getFirestore } from "firebase/firestore"
 import { useRouter, usePathname } from "next/navigation"
@@ -28,6 +30,7 @@ interface AuthContextType {
   user: User | null
   loading: boolean
   signIn: (email: string, password: string) => Promise<void>
+  signInWithGoogle: () => Promise<void>
   signUp: (email: string, password: string) => Promise<void>
   signOut: () => Promise<void>
   resetPassword: (email: string) => Promise<void>
@@ -76,6 +79,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
               // Create a new user document if it doesn't exist
               const newUserData = {
                 email: firebaseUser.email,
+                displayName: firebaseUser.displayName,
+                photoURL: firebaseUser.photoURL,
                 createdAt: new Date(),
                 plan: "free",
                 permissions: { download: false, premium: false },
@@ -119,6 +124,52 @@ export function AuthProvider({ children }: AuthProviderProps) {
       setLoading(false)
     }
   }, [pathname, router])
+
+  // Sign in with Google
+  const signInWithGoogle = async () => {
+    try {
+      setLoading(true)
+      const auth = getAuth()
+      const provider = new GoogleAuthProvider()
+      const db = getFirestore()
+
+      const result = await signInWithPopup(auth, provider)
+      const user = result.user
+
+      // Check if user document exists in Firestore
+      const userDoc = await getDoc(doc(db, "users", user.uid))
+
+      // If user doesn't exist in Firestore, create a new document
+      if (!userDoc.exists()) {
+        await setDoc(doc(db, "users", user.uid), {
+          email: user.email,
+          displayName: user.displayName,
+          photoURL: user.photoURL,
+          createdAt: new Date(),
+          plan: "free",
+          permissions: { download: false, premium: false },
+        })
+      }
+
+      // Get redirect URL from query params if we're in the browser
+      let redirectTo = "/dashboard"
+
+      if (typeof window !== "undefined") {
+        const params = new URLSearchParams(window.location.search)
+        const redirect = params.get("redirect")
+        if (redirect) {
+          redirectTo = redirect
+        }
+      }
+
+      router.push(redirectTo)
+    } catch (error) {
+      console.error("Error signing in with Google:", error)
+      throw error
+    } finally {
+      setLoading(false)
+    }
+  }
 
   // Sign in function
   const signIn = async (email: string, password: string) => {
@@ -209,7 +260,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   // Provide the auth context to children
   return (
-    <AuthContext.Provider value={{ user, loading, signIn, signUp, signOut, resetPassword }}>
+    <AuthContext.Provider value={{ user, loading, signIn, signInWithGoogle, signUp, signOut, resetPassword }}>
       {children}
     </AuthContext.Provider>
   )

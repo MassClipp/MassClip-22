@@ -13,6 +13,7 @@ import { useFirebaseAuth } from "@/hooks/use-firebase-auth"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import Logo from "@/components/logo"
 import { Loader2, ArrowRight } from "lucide-react"
+import { GoogleAuthButton } from "@/components/google-auth-button"
 
 export default function SignupPage() {
   const [name, setName] = useState("")
@@ -21,7 +22,8 @@ export default function SignupPage() {
   const [termsAccepted, setTermsAccepted] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
-  const { signUp } = useFirebaseAuth()
+  const [isGoogleLoading, setIsGoogleLoading] = useState(false)
+  const { signUp, signInWithGoogle } = useFirebaseAuth()
   const router = useRouter()
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -54,6 +56,31 @@ export default function SignupPage() {
       console.error(error)
     } finally {
       setIsLoading(false)
+    }
+  }
+
+  const handleGoogleSignUp = async () => {
+    if (!termsAccepted) {
+      setErrorMessage("You must accept the terms and conditions")
+      return
+    }
+
+    setErrorMessage(null)
+    setIsGoogleLoading(true)
+
+    try {
+      const result = await signInWithGoogle()
+
+      if (result.success) {
+        router.push("/dashboard")
+      } else {
+        setErrorMessage(result.error || "Failed to sign up with Google")
+      }
+    } catch (error) {
+      setErrorMessage("An unexpected error occurred")
+      console.error(error)
+    } finally {
+      setIsGoogleLoading(false)
     }
   }
 
@@ -101,12 +128,56 @@ export default function SignupPage() {
           </motion.div>
         )}
 
+        <motion.div
+          className="flex items-start space-x-2"
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.35, duration: 0.5 }}
+        >
+          <Checkbox
+            id="terms"
+            checked={termsAccepted}
+            onCheckedChange={(checked) => setTermsAccepted(checked === true)}
+            className="data-[state=checked]:bg-red-600 data-[state=checked]:border-red-600"
+          />
+          <Label htmlFor="terms" className="text-sm leading-tight text-white">
+            I agree to the{" "}
+            <Link href="/terms" className="text-red-500 hover:text-red-400 transition-colors">
+              Terms of Service
+            </Link>{" "}
+            and{" "}
+            <Link href="/privacy" className="text-red-500 hover:text-red-400 transition-colors">
+              Privacy Policy
+            </Link>
+          </Label>
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.4, duration: 0.5 }}
+        >
+          <GoogleAuthButton onClick={handleGoogleSignUp} isLoading={isGoogleLoading} text="Sign up with Google" />
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.45, duration: 0.5 }}
+          className="relative flex items-center justify-center"
+        >
+          <div className="absolute inset-0 flex items-center">
+            <div className="w-full border-t border-gray-700"></div>
+          </div>
+          <div className="relative px-4 bg-black text-xs text-gray-500">or sign up with email</div>
+        </motion.div>
+
         <form onSubmit={handleSubmit} className="space-y-6">
           <motion.div
             className="space-y-2"
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.4, duration: 0.5 }}
+            transition={{ delay: 0.5, duration: 0.5 }}
           >
             <Label htmlFor="name" className="text-white">
               Full Name
@@ -126,7 +197,7 @@ export default function SignupPage() {
             className="space-y-2"
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.5, duration: 0.5 }}
+            transition={{ delay: 0.6, duration: 0.5 }}
           >
             <Label htmlFor="email" className="text-white">
               Email
@@ -146,7 +217,7 @@ export default function SignupPage() {
             className="space-y-2"
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.6, duration: 0.5 }}
+            transition={{ delay: 0.7, duration: 0.5 }}
           >
             <Label htmlFor="password" className="text-white">
               Password
@@ -161,30 +232,6 @@ export default function SignupPage() {
               required
             />
             <p className="text-xs text-gray-400">Must be at least 8 characters</p>
-          </motion.div>
-
-          <motion.div
-            className="flex items-start space-x-2"
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.7, duration: 0.5 }}
-          >
-            <Checkbox
-              id="terms"
-              checked={termsAccepted}
-              onCheckedChange={(checked) => setTermsAccepted(checked === true)}
-              className="data-[state=checked]:bg-red-600 data-[state=checked]:border-red-600"
-            />
-            <Label htmlFor="terms" className="text-sm leading-tight text-white">
-              I agree to the{" "}
-              <Link href="/terms" className="text-red-500 hover:text-red-400 transition-colors">
-                Terms of Service
-              </Link>{" "}
-              and{" "}
-              <Link href="/privacy" className="text-red-500 hover:text-red-400 transition-colors">
-                Privacy Policy
-              </Link>
-            </Label>
           </motion.div>
 
           <motion.div

@@ -8,8 +8,11 @@ import {
   signOut,
   onAuthStateChanged,
   sendPasswordResetEmail,
+  GoogleAuthProvider,
+  signInWithPopup,
 } from "firebase/auth"
-import { auth, isFirebaseConfigured } from "@/lib/firebase"
+import { doc, getDoc, setDoc } from "firebase/firestore"
+import { auth, isFirebaseConfigured, db } from "@/lib/firebase"
 
 export function useFirebaseAuth() {
   const [user, setUser] = useState<User | null>(null)
@@ -63,6 +66,46 @@ export function useFirebaseAuth() {
       console.error("Error signing in:", err)
       setError(err instanceof Error ? err.message : "Failed to sign in")
       return { success: false, error: err instanceof Error ? err.message : "Failed to sign in" }
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // Sign in with Google
+  const signInWithGoogle = async () => {
+    if (!isFirebaseConfigured) {
+      console.warn("Firebase is not properly configured. Using demo mode.")
+      setLoading(false)
+      return { success: true, demo: true }
+    }
+
+    setError(null)
+    try {
+      setLoading(true)
+      const provider = new GoogleAuthProvider()
+      const result = await signInWithPopup(auth, provider)
+      const user = result.user
+
+      // Check if user document exists in Firestore
+      const userDoc = await getDoc(doc(db, "users", user.uid))
+
+      // If user doesn't exist in Firestore, create a new document
+      if (!userDoc.exists()) {
+        await setDoc(doc(db, "users", user.uid), {
+          email: user.email,
+          displayName: user.displayName,
+          photoURL: user.photoURL,
+          createdAt: new Date(),
+          plan: "free",
+          permissions: { download: false, premium: false },
+        })
+      }
+
+      return { success: true }
+    } catch (err) {
+      console.error("Error signing in with Google:", err)
+      setError(err instanceof Error ? err.message : "Failed to sign in with Google")
+      return { success: false, error: err instanceof Error ? err.message : "Failed to sign in with Google" }
     } finally {
       setLoading(false)
     }
@@ -146,6 +189,7 @@ export function useFirebaseAuth() {
     error,
     signIn,
     signUp,
+    signInWithGoogle,
     logOut,
     resetPassword,
     isFirebaseConfigured,
