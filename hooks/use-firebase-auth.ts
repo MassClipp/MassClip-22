@@ -14,6 +14,49 @@ import {
 import { doc, getDoc, setDoc } from "firebase/firestore"
 import { auth, isFirebaseConfigured, db } from "@/lib/firebase"
 
+// Map Firebase error codes to generic user-friendly messages
+const getGenericErrorMessage = (error: any): string => {
+  const errorCode = error?.code || ""
+
+  // Authentication errors
+  if (errorCode.includes("auth/user-cancelled") || errorCode.includes("auth/popup-closed-by-user")) {
+    return "Login cancelled. Please try again."
+  }
+  if (errorCode.includes("auth/account-exists-with-different-credential")) {
+    return "An account already exists with the same email address but different sign-in credentials."
+  }
+  if (errorCode.includes("auth/invalid-email")) {
+    return "Please enter a valid email address."
+  }
+  if (errorCode.includes("auth/user-disabled")) {
+    return "This account has been disabled. Please contact support."
+  }
+  if (errorCode.includes("auth/user-not-found") || errorCode.includes("auth/wrong-password")) {
+    return "Invalid email or password. Please try again."
+  }
+  if (errorCode.includes("auth/too-many-requests")) {
+    return "Too many unsuccessful login attempts. Please try again later."
+  }
+  if (errorCode.includes("auth/email-already-in-use")) {
+    return "An account with this email already exists."
+  }
+  if (errorCode.includes("auth/weak-password")) {
+    return "Password is too weak. Please use a stronger password."
+  }
+  if (errorCode.includes("auth/popup-blocked")) {
+    return "Login popup was blocked by your browser. Please allow popups for this site."
+  }
+  if (errorCode.includes("auth/network-request-failed")) {
+    return "Network error. Please check your connection and try again."
+  }
+  if (errorCode.includes("auth/internal-error")) {
+    return "An error occurred during authentication. Please try again."
+  }
+
+  // Default generic error
+  return "Authentication error. Please try again."
+}
+
 export function useFirebaseAuth() {
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
@@ -23,7 +66,7 @@ export function useFirebaseAuth() {
   useEffect(() => {
     // Skip if Firebase is not configured
     if (!isFirebaseConfigured) {
-      console.warn("Firebase is not properly configured. Auth functionality will be limited.")
+      console.warn("Authentication service is not properly configured. Auth functionality will be limited.")
       setLoading(false)
       return () => {}
     }
@@ -40,7 +83,7 @@ export function useFirebaseAuth() {
       },
       (error) => {
         console.error("Auth state change error:", error)
-        setError(error.message)
+        setError(getGenericErrorMessage(error))
         setLoading(false)
       },
     )
@@ -51,7 +94,7 @@ export function useFirebaseAuth() {
   // Sign in with email and password
   const signIn = async (email: string, password: string) => {
     if (!isFirebaseConfigured) {
-      console.warn("Firebase is not properly configured. Using demo mode.")
+      console.warn("Authentication service is not properly configured. Using demo mode.")
       // Simulate successful login for demo/preview purposes
       setLoading(false)
       return { success: true, demo: true }
@@ -64,8 +107,9 @@ export function useFirebaseAuth() {
       return { success: true }
     } catch (err) {
       console.error("Error signing in:", err)
-      setError(err instanceof Error ? err.message : "Failed to sign in")
-      return { success: false, error: err instanceof Error ? err.message : "Failed to sign in" }
+      const genericMessage = getGenericErrorMessage(err)
+      setError(genericMessage)
+      return { success: false, error: genericMessage }
     } finally {
       setLoading(false)
     }
@@ -74,7 +118,7 @@ export function useFirebaseAuth() {
   // Sign in with Google
   const signInWithGoogle = async () => {
     if (!isFirebaseConfigured) {
-      console.warn("Firebase is not properly configured. Using demo mode.")
+      console.warn("Authentication service is not properly configured. Using demo mode.")
       setLoading(false)
       return { success: true, demo: true }
     }
@@ -104,8 +148,9 @@ export function useFirebaseAuth() {
       return { success: true }
     } catch (err) {
       console.error("Error signing in with Google:", err)
-      setError(err instanceof Error ? err.message : "Failed to sign in with Google")
-      return { success: false, error: err instanceof Error ? err.message : "Failed to sign in with Google" }
+      const genericMessage = getGenericErrorMessage(err)
+      setError(genericMessage)
+      return { success: false, error: genericMessage }
     } finally {
       setLoading(false)
     }
@@ -114,7 +159,7 @@ export function useFirebaseAuth() {
   // Sign up with email and password
   const signUp = async (email: string, password: string) => {
     if (!isFirebaseConfigured) {
-      console.warn("Firebase is not properly configured. Using demo mode.")
+      console.warn("Authentication service is not properly configured. Using demo mode.")
       // Simulate successful signup for demo/preview purposes
       setLoading(false)
       return { success: true, demo: true }
@@ -127,8 +172,9 @@ export function useFirebaseAuth() {
       return { success: true }
     } catch (err) {
       console.error("Error signing up:", err)
-      setError(err instanceof Error ? err.message : "Failed to sign up")
-      return { success: false, error: err instanceof Error ? err.message : "Failed to sign up" }
+      const genericMessage = getGenericErrorMessage(err)
+      setError(genericMessage)
+      return { success: false, error: genericMessage }
     } finally {
       setLoading(false)
     }
@@ -137,7 +183,7 @@ export function useFirebaseAuth() {
   // Sign out
   const logOut = async () => {
     if (!isFirebaseConfigured) {
-      console.warn("Firebase is not properly configured. Using demo mode.")
+      console.warn("Authentication service is not properly configured. Using demo mode.")
       setUser(null)
 
       // Force redirect to login page
@@ -160,15 +206,16 @@ export function useFirebaseAuth() {
       return { success: true }
     } catch (err) {
       console.error("Error signing out:", err)
-      setError(err instanceof Error ? err.message : "Failed to sign out")
-      return { success: false, error: err instanceof Error ? err.message : "Failed to sign out" }
+      const genericMessage = getGenericErrorMessage(err)
+      setError(genericMessage)
+      return { success: false, error: genericMessage }
     }
   }
 
   // Reset password
   const resetPassword = async (email: string) => {
     if (!isFirebaseConfigured) {
-      console.warn("Firebase is not properly configured. Using demo mode.")
+      console.warn("Authentication service is not properly configured. Using demo mode.")
       return { success: true, demo: true }
     }
 
@@ -178,8 +225,9 @@ export function useFirebaseAuth() {
       return { success: true }
     } catch (err) {
       console.error("Error resetting password:", err)
-      setError(err instanceof Error ? err.message : "Failed to reset password")
-      return { success: false, error: err instanceof Error ? err.message : "Failed to reset password" }
+      const genericMessage = getGenericErrorMessage(err)
+      setError(genericMessage)
+      return { success: false, error: genericMessage }
     }
   }
 
