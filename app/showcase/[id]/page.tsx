@@ -30,6 +30,7 @@ export default function ShowcasePage() {
   const [searchQuery, setSearchQuery] = useState("")
   const [filteredVideos, setFilteredVideos] = useState<VimeoVideo[]>([])
   const [showSearch, setShowSearch] = useState(false)
+  const [randomSeed, setRandomSeed] = useState(Date.now()) // Random seed for consistent shuffling within a session
 
   const observer = useRef<IntersectionObserver | null>(null)
   const isMounted = useRef(true)
@@ -83,8 +84,9 @@ export default function ShowcasePage() {
         const combinedVideos = [...prev, ...newVideos]
 
         // For pro users, always shuffle to ensure complete randomness
+        // Use a different random seed each time for maximum randomness
         if (isProUser) {
-          return shuffleArray(combinedVideos)
+          return shuffleArray(combinedVideos, Math.random())
         } else {
           // For free users, sort alphabetically
           return combinedVideos.sort((a, b) => {
@@ -114,6 +116,19 @@ export default function ShowcasePage() {
     }
   }
 
+  // Reshuffle videos periodically for pro users to ensure maximum randomness
+  useEffect(() => {
+    if (!isProUser || videos.length === 0) return
+
+    // Reshuffle every 60 seconds for pro users
+    const reshuffleInterval = setInterval(() => {
+      setRandomSeed(Date.now())
+      setVideos((prevVideos) => shuffleArray([...prevVideos], Math.random()))
+    }, 60000)
+
+    return () => clearInterval(reshuffleInterval)
+  }, [videos, isProUser])
+
   // Filter videos based on search query
   useEffect(() => {
     if (searchQuery.trim() === "") {
@@ -127,14 +142,14 @@ export default function ShowcasePage() {
           video.tags?.some((tag: any) => tag.name.toLowerCase().includes(query)),
       )
 
-      // For pro users, keep search results randomly ordered
+      // For pro users, keep search results randomly ordered with a new shuffle
       if (isProUser) {
-        setFilteredVideos(shuffleArray(filtered))
+        setFilteredVideos(shuffleArray(filtered, Math.random()))
       } else {
         setFilteredVideos(filtered)
       }
     }
-  }, [searchQuery, videos, isProUser])
+  }, [searchQuery, videos, isProUser, randomSeed])
 
   const loadMore = () => {
     if (!loading && !isFetching && hasMore) {
@@ -178,6 +193,14 @@ export default function ShowcasePage() {
     }
   }, [showcaseId]) // Run when showcase ID changes
 
+  // Function to reshuffle videos for pro users
+  const handleReshuffle = () => {
+    if (isProUser) {
+      setRandomSeed(Date.now())
+      setVideos((prevVideos) => shuffleArray([...prevVideos], Math.random()))
+    }
+  }
+
   return (
     <div className="relative min-h-screen bg-black text-white">
       {/* Premium Gradient Background */}
@@ -207,6 +230,17 @@ export default function ShowcasePage() {
             </div>
 
             <div className="flex items-center gap-2">
+              {isProUser && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="border-gray-800 bg-gray-900/80 hover:bg-gray-800 text-gray-300"
+                  onClick={handleReshuffle}
+                >
+                  Shuffle
+                </Button>
+              )}
+
               <AnimatePresence>
                 {showSearch && (
                   <motion.div

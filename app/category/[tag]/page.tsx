@@ -29,6 +29,7 @@ export default function CategoryPage() {
   const [filteredVideos, setFilteredVideos] = useState<any[]>([])
   const [showSearch, setShowSearch] = useState(false)
   const { isProUser } = useUserPlan()
+  const [randomSeed, setRandomSeed] = useState(Date.now()) // Random seed for consistent shuffling within a session
 
   // Special case for "browse all"
   useEffect(() => {
@@ -89,7 +90,8 @@ export default function CategoryPage() {
     if (videos && videos.length > 0) {
       if (isProUser) {
         // Pro users get completely random videos - no organization at all
-        const shuffled = shuffleArray([...videos])
+        // Use a different random seed each time to ensure maximum randomness
+        const shuffled = shuffleArray([...videos], Math.random())
         setProcessedVideos(shuffled)
       } else {
         // Free users get consistently sorted videos (by name)
@@ -106,6 +108,20 @@ export default function CategoryPage() {
     }
   }, [videos, isProUser])
 
+  // Reshuffle videos periodically for pro users to ensure maximum randomness
+  useEffect(() => {
+    if (!isProUser || !videos || videos.length === 0) return
+
+    // Reshuffle every 60 seconds for pro users
+    const reshuffleInterval = setInterval(() => {
+      setRandomSeed(Date.now())
+      const reshuffled = shuffleArray([...videos], Math.random())
+      setProcessedVideos(reshuffled)
+    }, 60000)
+
+    return () => clearInterval(reshuffleInterval)
+  }, [videos, isProUser])
+
   // Filter videos based on search query
   useEffect(() => {
     if (searchQuery.trim() === "") {
@@ -119,14 +135,14 @@ export default function CategoryPage() {
           video.tags?.some((tag: any) => tag.name.toLowerCase().includes(query)),
       )
 
-      // For pro users, keep search results randomly ordered
+      // For pro users, keep search results randomly ordered with a new shuffle
       if (isProUser) {
-        setFilteredVideos(shuffleArray(filtered))
+        setFilteredVideos(shuffleArray(filtered, Math.random()))
       } else {
         setFilteredVideos(filtered)
       }
     }
-  }, [searchQuery, processedVideos, isProUser])
+  }, [searchQuery, processedVideos, isProUser, randomSeed])
 
   // Reference for infinite scrolling
   const lastVideoElementRef = useCallback(
@@ -195,6 +211,15 @@ export default function CategoryPage() {
   // Determine if we need to show the upgrade banner
   const showUpgradeBanner = !isProUser && totalVideosCount > 5
 
+  // Function to reshuffle videos for pro users
+  const handleReshuffle = () => {
+    if (isProUser) {
+      setRandomSeed(Date.now())
+      const reshuffled = shuffleArray([...processedVideos], Math.random())
+      setProcessedVideos(reshuffled)
+    }
+  }
+
   return (
     <div className="relative min-h-screen bg-black text-white">
       {/* Premium Gradient Background */}
@@ -224,6 +249,17 @@ export default function CategoryPage() {
             </div>
 
             <div className="flex items-center gap-2">
+              {isProUser && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="border-gray-800 bg-gray-900/80 hover:bg-gray-800 text-gray-300"
+                  onClick={handleReshuffle}
+                >
+                  Shuffle
+                </Button>
+              )}
+
               <AnimatePresence>
                 {showSearch && (
                   <motion.div

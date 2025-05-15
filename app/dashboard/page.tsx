@@ -3,7 +3,7 @@
 import { useRef, useEffect, useState } from "react"
 import { useSearchParams } from "next/navigation"
 import { motion } from "framer-motion"
-import { Search, Clock, Brain, Rocket, ChevronRight, TrendingUp, Lock, Film } from "lucide-react"
+import { Search, Clock, Brain, Rocket, ChevronRight, TrendingUp, Lock, Film, Shuffle } from "lucide-react"
 import DashboardHeader from "@/components/dashboard-header"
 import VideoRow from "@/components/video-row"
 import { useVimeoShowcases } from "@/hooks/use-vimeo-showcases"
@@ -26,6 +26,7 @@ export default function Dashboard() {
   const [featuredVideos, setFeaturedVideos] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [activeCategory, setActiveCategory] = useState<string | null>(null)
+  const [randomSeed, setRandomSeed] = useState(Date.now()) // Random seed for consistent shuffling within a session
 
   // Get user plan
   const { isProUser } = useUserPlan()
@@ -53,7 +54,17 @@ export default function Dashboard() {
     if (searchQuery && !loadingShowcases && !loadingVideos) {
       // Filter showcase videos
       const filteredShowcases = filterCategoriesBySearch(showcaseVideos, searchQuery)
-      setFilteredShowcaseVideos(filteredShowcases)
+
+      // For pro users, shuffle each category's videos
+      if (isProUser) {
+        const shuffledShowcases: Record<string, any[]> = {}
+        Object.entries(filteredShowcases).forEach(([key, videos]) => {
+          shuffledShowcases[key] = shuffleArray([...videos], Math.random())
+        })
+        setFilteredShowcaseVideos(shuffledShowcases)
+      } else {
+        setFilteredShowcaseVideos(filteredShowcases)
+      }
 
       // Check if we have any search results
       const hasResults = Object.keys(filteredShowcases).length > 0
@@ -67,10 +78,20 @@ export default function Dashboard() {
       }
     } else {
       // If no search query, show all showcase videos
-      setFilteredShowcaseVideos(showcaseVideos)
+      if (isProUser) {
+        // For pro users, shuffle each category's videos
+        const shuffledShowcases: Record<string, any[]> = {}
+        Object.entries(showcaseVideos).forEach(([key, videos]) => {
+          shuffledShowcases[key] = shuffleArray([...videos], Math.random())
+        })
+        setFilteredShowcaseVideos(shuffledShowcases)
+      } else {
+        setFilteredShowcaseVideos(showcaseVideos)
+      }
+
       setHasSearchResults(Object.keys(showcaseVideos).length > 0)
     }
-  }, [searchQuery, showcaseVideos, loadingShowcases, loadingVideos, videosByTag, videos])
+  }, [searchQuery, showcaseVideos, loadingShowcases, loadingVideos, videosByTag, videos, isProUser, randomSeed])
 
   // Get showcase names based on whether we're searching or not
   const showcaseNames = Object.keys(searchQuery ? filteredShowcaseVideos : showcaseVideos)
@@ -82,13 +103,26 @@ export default function Dashboard() {
       const allShowcaseVideos = Object.values(showcaseVideos).flat()
 
       // Both free and pro users get shuffled videos in the featured section
+      // But use a different random seed each time for maximum randomness
       if (allShowcaseVideos.length > 0) {
-        setFeaturedVideos(shuffleArray(allShowcaseVideos).slice(0, 6))
+        setFeaturedVideos(shuffleArray(allShowcaseVideos, Math.random()).slice(0, 6))
       }
 
       setIsLoading(false)
     }
-  }, [showcaseVideos, loadingShowcases, loadingVideos])
+  }, [showcaseVideos, loadingShowcases, loadingVideos, randomSeed])
+
+  // Reshuffle videos periodically for pro users to ensure maximum randomness
+  useEffect(() => {
+    if (!isProUser) return
+
+    // Reshuffle every 60 seconds for pro users
+    const reshuffleInterval = setInterval(() => {
+      setRandomSeed(Date.now())
+    }, 60000)
+
+    return () => clearInterval(reshuffleInterval)
+  }, [isProUser])
 
   // Check if we're still loading initial data
   const isLoadingData = (loadingShowcases || loadingVideos) && showcaseNames.length === 0
@@ -167,6 +201,13 @@ export default function Dashboard() {
     },
   ]
 
+  // Function to reshuffle all videos
+  const handleReshuffle = () => {
+    if (isProUser) {
+      setRandomSeed(Date.now())
+    }
+  }
+
   return (
     <div className="relative min-h-screen bg-black text-white">
       {/* Premium Gradient Background */}
@@ -210,21 +251,34 @@ export default function Dashboard() {
               <h1 className="text-3xl font-extralight tracking-tight text-white">
                 <span className="text-gradient-accent">Featured</span> Clips
               </h1>
-              <Button
-                onClick={() => router.push(isProUser ? "/category/browse-all" : "/pricing")}
-                variant="ghost"
-                className="text-zinc-400 hover:text-white hover:bg-zinc-900/50 rounded-full px-4 py-2 transition-all duration-300"
-              >
-                {isProUser ? (
-                  <>
-                    View All <ChevronRight className="h-4 w-4 ml-1" />
-                  </>
-                ) : (
-                  <>
-                    Upgrade <ChevronRight className="h-4 w-4 ml-1" />
-                  </>
+              <div className="flex items-center gap-2">
+                {isProUser && (
+                  <Button
+                    onClick={handleReshuffle}
+                    variant="ghost"
+                    size="sm"
+                    className="text-zinc-400 hover:text-white hover:bg-zinc-900/50 rounded-full px-3 py-1 transition-all duration-300"
+                  >
+                    <Shuffle className="h-3.5 w-3.5 mr-1" />
+                    Shuffle
+                  </Button>
                 )}
-              </Button>
+                <Button
+                  onClick={() => router.push(isProUser ? "/category/browse-all" : "/pricing")}
+                  variant="ghost"
+                  className="text-zinc-400 hover:text-white hover:bg-zinc-900/50 rounded-full px-4 py-2 transition-all duration-300"
+                >
+                  {isProUser ? (
+                    <>
+                      View All <ChevronRight className="h-4 w-4 ml-1" />
+                    </>
+                  ) : (
+                    <>
+                      Upgrade <ChevronRight className="h-4 w-4 ml-1" />
+                    </>
+                  )}
+                </Button>
+              </div>
             </motion.div>
 
             {/* Featured Videos Grid */}
