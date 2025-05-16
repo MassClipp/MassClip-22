@@ -370,4 +370,15 @@ export default function Dashboard() {
         {!isLoadingData && showcaseNames.length === 0 && (
           <div className="px-6 py-10 text-center">
             {searchQuery ? (
-              <p className="text-zinc-400">No videos found matching "{searchQuery}". Try a different search\
+              <p className="text-zinc-400">No videos found matching "{searchQuery}". Try a different search term.</p>
+            ) : (
+              <p className="text-zinc-400">
+                No videos found. Make sure your Vimeo account has videos and your API credentials are correct.
+              </p>
+            )}
+          </div>
+        )}
+      </main>
+    </div>
+  )
+}
