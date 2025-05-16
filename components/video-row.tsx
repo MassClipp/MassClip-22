@@ -29,7 +29,6 @@ export default function VideoRow({ title, videos, limit = 10, isShowcase = false
   const rowRef = useRef<HTMLDivElement>(null)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const { isProUser } = useUserPlan()
-  const [randomSeed, setRandomSeed] = useState(Math.random()) // Random seed for consistent shuffling within a session
 
   // Create a URL-friendly name
   const slug = encodeURIComponent(title.toLowerCase().replace(/\s+/g, "-"))
@@ -84,21 +83,7 @@ export default function VideoRow({ title, videos, limit = 10, isShowcase = false
         setVisibleVideos(sortedVideos)
       }
     }
-  }, [isIntersecting, videos, limit, isProUser, randomSeed])
-
-  // Reshuffle videos periodically for pro users to ensure maximum randomness
-  useEffect(() => {
-    if (!isProUser || !isIntersecting || !videos || videos.length === 0) return
-
-    // Reshuffle every 60 seconds for pro users
-    const reshuffleInterval = setInterval(() => {
-      setRandomSeed(Math.random())
-      const reshuffled = shuffleArray([...videos], Math.random()).slice(0, limit)
-      setVisibleVideos(reshuffled)
-    }, 60000)
-
-    return () => clearInterval(reshuffleInterval)
-  }, [videos, isProUser, isIntersecting, limit])
+  }, [isIntersecting, videos, limit, isProUser])
 
   // Calculate max scroll position
   useEffect(() => {
@@ -145,15 +130,6 @@ export default function VideoRow({ title, videos, limit = 10, isShowcase = false
     }
   }
 
-  // Function to reshuffle videos for pro users
-  const handleReshuffle = () => {
-    if (isProUser && videos) {
-      setRandomSeed(Math.random())
-      const reshuffled = shuffleArray([...videos], Math.random()).slice(0, limit)
-      setVisibleVideos(reshuffled)
-    }
-  }
-
   if (!videos || videos.length === 0) {
     return null
   }
@@ -171,25 +147,15 @@ export default function VideoRow({ title, videos, limit = 10, isShowcase = false
         <h2 className="text-2xl font-extralight tracking-wider text-white category-title group-hover:text-crimson transition-colors duration-300">
           {title}
         </h2>
-        <div className="flex items-center gap-2">
-          {isProUser && isIntersecting && (
-            <button
-              onClick={handleReshuffle}
-              className="text-zinc-400 hover:text-white text-xs bg-zinc-900/30 hover:bg-zinc-900/50 px-2 py-1 rounded-full transition-all duration-300"
-            >
-              Shuffle
-            </button>
-          )}
-          {hasMore && (
-            <Link
-              href={linkPath}
-              className="text-zinc-400 hover:text-white flex items-center group bg-zinc-900/30 hover:bg-zinc-900/50 px-3 py-1 rounded-full transition-all duration-300"
-            >
-              <span className="mr-1 text-sm">{buttonText}</span>
-              <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
-            </Link>
-          )}
-        </div>
+        {hasMore && (
+          <Link
+            href={linkPath}
+            className="text-zinc-400 hover:text-white flex items-center group bg-zinc-900/30 hover:bg-zinc-900/50 px-3 py-1 rounded-full transition-all duration-300"
+          >
+            <span className="mr-1 text-sm">{buttonText}</span>
+            <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
+          </Link>
+        )}
       </div>
       <div className="relative">
         {/* Left scroll button */}

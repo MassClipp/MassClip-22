@@ -3,7 +3,7 @@
 import { useRef, useEffect, useState } from "react"
 import { useSearchParams } from "next/navigation"
 import { motion } from "framer-motion"
-import { Search, Clock, Brain, Rocket, ChevronRight, TrendingUp, Lock, Film, Shuffle } from "lucide-react"
+import { Search, Clock, Brain, Rocket, ChevronRight, TrendingUp, Lock, Film } from "lucide-react"
 import DashboardHeader from "@/components/dashboard-header"
 import VideoRow from "@/components/video-row"
 import { useVimeoShowcases } from "@/hooks/use-vimeo-showcases"
@@ -26,7 +26,6 @@ export default function Dashboard() {
   const [featuredVideos, setFeaturedVideos] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [activeCategory, setActiveCategory] = useState<string | null>(null)
-  const [randomSeed, setRandomSeed] = useState(Date.now()) // Random seed for consistent shuffling within a session
 
   // Get user plan
   const { isProUser } = useUserPlan()
@@ -91,7 +90,7 @@ export default function Dashboard() {
 
       setHasSearchResults(Object.keys(showcaseVideos).length > 0)
     }
-  }, [searchQuery, showcaseVideos, loadingShowcases, loadingVideos, videosByTag, videos, isProUser, randomSeed])
+  }, [searchQuery, showcaseVideos, loadingShowcases, loadingVideos, videosByTag, videos, isProUser])
 
   // Get showcase names based on whether we're searching or not
   const showcaseNames = Object.keys(searchQuery ? filteredShowcaseVideos : showcaseVideos)
@@ -110,19 +109,7 @@ export default function Dashboard() {
 
       setIsLoading(false)
     }
-  }, [showcaseVideos, loadingShowcases, loadingVideos, randomSeed])
-
-  // Reshuffle videos periodically for pro users to ensure maximum randomness
-  useEffect(() => {
-    if (!isProUser) return
-
-    // Reshuffle every 60 seconds for pro users
-    const reshuffleInterval = setInterval(() => {
-      setRandomSeed(Date.now())
-    }, 60000)
-
-    return () => clearInterval(reshuffleInterval)
-  }, [isProUser])
+  }, [showcaseVideos, loadingShowcases, loadingVideos])
 
   // Check if we're still loading initial data
   const isLoadingData = (loadingShowcases || loadingVideos) && showcaseNames.length === 0
@@ -201,13 +188,6 @@ export default function Dashboard() {
     },
   ]
 
-  // Function to reshuffle all videos
-  const handleReshuffle = () => {
-    if (isProUser) {
-      setRandomSeed(Date.now())
-    }
-  }
-
   return (
     <div className="relative min-h-screen bg-black text-white">
       {/* Premium Gradient Background */}
@@ -251,34 +231,21 @@ export default function Dashboard() {
               <h1 className="text-3xl font-extralight tracking-tight text-white">
                 <span className="text-gradient-accent">Featured</span> Clips
               </h1>
-              <div className="flex items-center gap-2">
-                {isProUser && (
-                  <Button
-                    onClick={handleReshuffle}
-                    variant="ghost"
-                    size="sm"
-                    className="text-zinc-400 hover:text-white hover:bg-zinc-900/50 rounded-full px-3 py-1 transition-all duration-300"
-                  >
-                    <Shuffle className="h-3.5 w-3.5 mr-1" />
-                    Shuffle
-                  </Button>
+              <Button
+                onClick={() => router.push(isProUser ? "/category/browse-all" : "/pricing")}
+                variant="ghost"
+                className="text-zinc-400 hover:text-white hover:bg-zinc-900/50 rounded-full px-4 py-2 transition-all duration-300"
+              >
+                {isProUser ? (
+                  <>
+                    View All <ChevronRight className="h-4 w-4 ml-1" />
+                  </>
+                ) : (
+                  <>
+                    Upgrade <ChevronRight className="h-4 w-4 ml-1" />
+                  </>
                 )}
-                <Button
-                  onClick={() => router.push(isProUser ? "/category/browse-all" : "/pricing")}
-                  variant="ghost"
-                  className="text-zinc-400 hover:text-white hover:bg-zinc-900/50 rounded-full px-4 py-2 transition-all duration-300"
-                >
-                  {isProUser ? (
-                    <>
-                      View All <ChevronRight className="h-4 w-4 ml-1" />
-                    </>
-                  ) : (
-                    <>
-                      Upgrade <ChevronRight className="h-4 w-4 ml-1" />
-                    </>
-                  )}
-                </Button>
-              </div>
+              </Button>
             </motion.div>
 
             {/* Featured Videos Grid */}
@@ -403,15 +370,4 @@ export default function Dashboard() {
         {!isLoadingData && showcaseNames.length === 0 && (
           <div className="px-6 py-10 text-center">
             {searchQuery ? (
-              <p className="text-zinc-400">No videos found matching "{searchQuery}". Try a different search term.</p>
-            ) : (
-              <p className="text-zinc-400">
-                No videos found. Make sure your Vimeo account has videos and your API credentials are correct.
-              </p>
-            )}
-          </div>
-        )}
-      </main>
-    </div>
-  )
-}
+              <p className="text-zinc-400">No videos found matching "{searchQuery}". Try a different search\
