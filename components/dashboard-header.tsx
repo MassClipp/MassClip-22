@@ -19,6 +19,7 @@ import {
   ChevronRight,
   DollarSign,
   Infinity,
+  Video,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useAuth } from "@/contexts/auth-context"
@@ -120,6 +121,7 @@ export default function DashboardHeader({ initialSearchQuery = "" }) {
     { name: "Categories", href: "/dashboard/categories", icon: <Grid className="h-4 w-4" /> },
     { name: "Favorites", href: "/dashboard/favorites", icon: <Heart className="h-4 w-4" /> },
     { name: "History", href: "/dashboard/history", icon: <Clock className="h-4 w-4" /> },
+    { name: "Creator Hub", href: "/dashboard/creator-hub", icon: <Video className="h-4 w-4" /> },
     { name: "Pricing", href: "/membership-plans", icon: <DollarSign className="h-4 w-4" /> },
   ]
 
@@ -147,6 +149,12 @@ export default function DashboardHeader({ initialSearchQuery = "" }) {
                   {item.name}
                 </Link>
               ))}
+              <Link
+                href="/dashboard/creator-hub"
+                className="text-zinc-400 hover:text-white transition-colors text-sm font-light tracking-wide"
+              >
+                Creator Hub
+              </Link>
             </nav>
           </div>
 
@@ -215,6 +223,13 @@ export default function DashboardHeader({ initialSearchQuery = "" }) {
                     onClick={() => router.push("/dashboard/profile")}
                   >
                     Profile
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    className="hover:bg-zinc-800 focus:bg-zinc-800"
+                    onClick={() => router.push("/dashboard/creator-hub")}
+                  >
+                    <Video className="h-4 w-4 mr-2" />
+                    Creator Hub
                   </DropdownMenuItem>
                   <DropdownMenuSeparator className="bg-zinc-800" />
                   <DropdownMenuItem
@@ -371,6 +386,17 @@ export default function DashboardHeader({ initialSearchQuery = "" }) {
                 <div className="flex items-center">
                   <User className="h-4 w-4 mr-3" />
                   <span className="text-sm font-light">Profile</span>
+                </div>
+                <ChevronRight className="h-4 w-4 text-zinc-500 group-hover:text-white/70 transition-colors" />
+              </Link>
+              <Link
+                href="/dashboard/creator-hub"
+                className="flex items-center justify-between py-3 px-4 text-white/90 hover:text-white hover:bg-white/5 rounded-lg transition-colors group"
+                onClick={() => setIsMobileMenuOpen(false)}
+              >
+                <div className="flex items-center">
+                  <Video className="h-4 w-4 mr-3" />
+                  <span className="text-sm font-light">Creator Hub</span>
                 </div>
                 <ChevronRight className="h-4 w-4 text-zinc-500 group-hover:text-white/70 transition-colors" />
               </Link>
