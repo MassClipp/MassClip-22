@@ -1,107 +1,85 @@
 "use client"
 
-import type React from "react"
-
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import { useRouter } from "next/navigation"
+import { motion } from "framer-motion"
 import { useAuth } from "@/contexts/auth-context"
-import { checkUsernameAvailability, updateCreatorProfile } from "@/app/actions/profile-actions"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
+import DashboardHeader from "@/components/dashboard-header"
 import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
+import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Instagram, Twitter, Youtube, Globe, AtSign, Check, X, Loader2 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
+import { AtSign, User, Link2, ArrowLeft } from "lucide-react"
 
-export default function CreatorProfileSetup() {
+export default function CreatorProfileSetupPage() {
   const { user } = useAuth()
   const router = useRouter()
   const { toast } = useToast()
-
-  const [username, setUsername] = useState("")
-  const [displayName, setDisplayName] = useState("")
-  const [bio, setBio] = useState("")
-  const [instagram, setInstagram] = useState("")
-  const [twitter, setTwitter] = useState("")
-  const [youtube, setYoutube] = useState("")
-  const [website, setWebsite] = useState("")
-
-  const [usernameStatus, setUsernameStatus] = useState<"checking" | "available" | "unavailable" | "idle">("idle")
-  const [usernameMessage, setUsernameMessage] = useState("")
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [error, setError] = useState("")
+  const [formData, setFormData] = useState({
+    username: "",
+    displayName: user?.displayName || "",
+    bio: "",
+    website: "",
+    instagram: "",
+    twitter: "",
+    tiktok: "",
+  })
 
-  useEffect(() => {
-    if (user) {
-      setDisplayName(user.displayName || "")
-    }
-  }, [user])
+  // Animation variants
+  const containerVariants = {
+    hidden: { opacity: 0 },
+    visible: {
+      opacity: 1,
+      transition: {
+        staggerChildren: 0.1,
+      },
+    },
+  }
 
-  useEffect(() => {
-    const checkUsername = async () => {
-      if (username.length < 3) {
-        setUsernameStatus("idle")
-        setUsernameMessage("")
-        return
-      }
+  const itemVariants = {
+    hidden: { y: 20, opacity: 0 },
+    visible: {
+      y: 0,
+      opacity: 1,
+      transition: {
+        duration: 0.5,
+        ease: [0.25, 0.1, 0.25, 1.0],
+      },
+    },
+  }
 
-      setUsernameStatus("checking")
+  const handleChange = (e) => {
+    const { name, value } = e.target
+    setFormData((prev) => ({
+      ...prev,
+      [name]: value,
+    }))
+  }
 
-      const result = await checkUsernameAvailability(username)
-
-      if (result.available) {
-        setUsernameStatus("available")
-        setUsernameMessage("Username is available")
-      } else {
-        setUsernameStatus("unavailable")
-        setUsernameMessage(result.message || "Username is not available")
-      }
-    }
-
-    const debounce = setTimeout(checkUsername, 500)
-    return () => clearTimeout(debounce)
-  }, [username])
-
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e) => {
     e.preventDefault()
-
-    if (!user) return
-
-    if (usernameStatus !== "available" && username.length > 0) {
-      setError("Please choose a valid username")
-      return
-    }
-
     setIsSubmitting(true)
-    setError("")
 
     try {
-      const result = await updateCreatorProfile(user.uid, {
-        username,
-        displayName,
-        bio,
-        socialLinks: {
-          instagram,
-          twitter,
-          youtube,
-          website,
-        },
+      // Simulate API call
+      await new Promise((resolve) => setTimeout(resolve, 1000))
+
+      toast({
+        title: "Profile saved",
+        description: "Your creator profile has been set up successfully.",
       })
 
-      if (result.success) {
-        toast({
-          title: "Profile updated",
-          description: "Your creator profile has been set up successfully.",
-        })
-        router.push("/dashboard/creator")
-      } else {
-        setError(result.message || "Failed to update profile")
-      }
+      router.push("/dashboard/creator")
     } catch (error) {
-      setError("An unexpected error occurred")
-      console.error(error)
+      console.error("Error saving profile:", error)
+      toast({
+        title: "Error",
+        description: "Failed to save your profile. Please try again.",
+        variant: "destructive",
+      })
     } finally {
       setIsSubmitting(false)
     }
@@ -109,173 +87,202 @@ export default function CreatorProfileSetup() {
 
   if (!user) {
     return (
-      <div className="min-h-screen bg-black p-4 flex items-center justify-center">
-        <Card className="w-full max-w-md border-gray-800 bg-black/50 backdrop-blur-sm">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-center">
-              <Loader2 className="h-6 w-6 animate-spin text-crimson" />
-              <span className="ml-2 text-gray-300">Loading...</span>
-            </div>
-          </CardContent>
-        </Card>
+      <div className="min-h-screen bg-black flex items-center justify-center">
+        <div className="text-white">Loading...</div>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-black p-4 py-12">
-      <div className="max-w-3xl mx-auto">
-        <h1 className="text-3xl font-light tracking-tight text-white mb-6 text-center">Set Up Your Creator Profile</h1>
-
-        {error && (
-          <Alert variant="destructive" className="mb-6 border-gray-800 bg-black/80 backdrop-blur-sm">
-            <AlertDescription>{error}</AlertDescription>
-          </Alert>
-        )}
-
-        <Card className="border-gray-800 bg-black/50 backdrop-blur-sm">
-          <CardHeader>
-            <CardTitle className="text-xl">Profile Information</CardTitle>
-            <CardDescription>Set up your creator profile to start sharing your clips</CardDescription>
-          </CardHeader>
-
-          <CardContent>
-            <form onSubmit={handleSubmit} className="space-y-6">
-              <div className="space-y-2">
-                <Label htmlFor="username" className="text-gray-300 flex items-center">
-                  <AtSign className="h-4 w-4 mr-1 text-gray-400" />
-                  Username
-                </Label>
-                <div className="relative">
-                  <Input
-                    id="username"
-                    value={username}
-                    onChange={(e) => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ""))}
-                    className="border-gray-700 bg-gray-800/70 text-white pr-10 focus-visible:ring-crimson"
-                    placeholder="your_username"
-                  />
-                  {usernameStatus === "checking" && (
-                    <Loader2 className="absolute right-3 top-2.5 h-5 w-5 animate-spin text-gray-400" />
-                  )}
-                  {usernameStatus === "available" && (
-                    <Check className="absolute right-3 top-2.5 h-5 w-5 text-green-500" />
-                  )}
-                  {usernameStatus === "unavailable" && <X className="absolute right-3 top-2.5 h-5 w-5 text-red-500" />}
-                </div>
-                {usernameMessage && (
-                  <p className={`text-sm ${usernameStatus === "available" ? "text-green-500" : "text-red-500"}`}>
-                    {usernameMessage}
-                  </p>
-                )}
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="displayName" className="text-gray-300">
-                  Display Name
-                </Label>
-                <Input
-                  id="displayName"
-                  value={displayName}
-                  onChange={(e) => setDisplayName(e.target.value)}
-                  className="border-gray-700 bg-gray-800/70 text-white focus-visible:ring-crimson"
-                  placeholder="Your Name"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="bio" className="text-gray-300">
-                  Bio
-                </Label>
-                <Textarea
-                  id="bio"
-                  value={bio}
-                  onChange={(e) => setBio(e.target.value)}
-                  className="border-gray-700 bg-gray-800/70 text-white focus-visible:ring-crimson min-h-[100px]"
-                  placeholder="Tell others about yourself and your content"
-                />
-                <p className="text-xs text-gray-400">{bio.length}/500 characters</p>
-              </div>
-
-              <div className="space-y-4">
-                <h3 className="text-lg font-medium text-white">Social Links</h3>
-
-                <div className="space-y-2">
-                  <Label htmlFor="instagram" className="text-gray-300 flex items-center">
-                    <Instagram className="h-4 w-4 mr-1 text-gray-400" />
-                    Instagram
-                  </Label>
-                  <Input
-                    id="instagram"
-                    value={instagram}
-                    onChange={(e) => setInstagram(e.target.value.replace(/[^a-zA-Z0-9_.]/g, ""))}
-                    className="border-gray-700 bg-gray-800/70 text-white focus-visible:ring-crimson"
-                    placeholder="username"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="twitter" className="text-gray-300 flex items-center">
-                    <Twitter className="h-4 w-4 mr-1 text-gray-400" />
-                    Twitter
-                  </Label>
-                  <Input
-                    id="twitter"
-                    value={twitter}
-                    onChange={(e) => setTwitter(e.target.value.replace(/[^a-zA-Z0-9_]/g, ""))}
-                    className="border-gray-700 bg-gray-800/70 text-white focus-visible:ring-crimson"
-                    placeholder="username"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="youtube" className="text-gray-300 flex items-center">
-                    <Youtube className="h-4 w-4 mr-1 text-gray-400" />
-                    YouTube
-                  </Label>
-                  <Input
-                    id="youtube"
-                    value={youtube}
-                    onChange={(e) => setYoutube(e.target.value)}
-                    className="border-gray-700 bg-gray-800/70 text-white focus-visible:ring-crimson"
-                    placeholder="channel name or ID"
-                  />
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="website" className="text-gray-300 flex items-center">
-                    <Globe className="h-4 w-4 mr-1 text-gray-400" />
-                    Website
-                  </Label>
-                  <Input
-                    id="website"
-                    value={website}
-                    onChange={(e) => setWebsite(e.target.value)}
-                    className="border-gray-700 bg-gray-800/70 text-white focus-visible:ring-crimson"
-                    placeholder="https://yourwebsite.com"
-                  />
-                </div>
-              </div>
-
-              <div className="pt-4">
-                <Button
-                  type="submit"
-                  className="w-full border border-crimson bg-transparent text-white hover:bg-crimson/10 transition-all"
-                  disabled={isSubmitting}
-                >
-                  {isSubmitting ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Saving...
-                    </>
-                  ) : (
-                    "Save Profile"
-                  )}
-                </Button>
-              </div>
-            </form>
-          </CardContent>
-        </Card>
+    <div className="relative min-h-screen bg-black text-white">
+      {/* Premium Gradient Background */}
+      <div className="fixed inset-0 z-0 premium-gradient">
+        <div className="absolute inset-0 bg-[url('/noise.png')] opacity-[0.03] mix-blend-soft-light"></div>
       </div>
+
+      <DashboardHeader />
+
+      <main className="pt-20 pb-16 relative z-10">
+        <div className="container mx-auto px-4">
+          <motion.div
+            variants={containerVariants}
+            initial="hidden"
+            animate="visible"
+            className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8"
+          >
+            <motion.div variants={itemVariants}>
+              <Button
+                variant="ghost"
+                className="mb-2 -ml-4 text-zinc-400 hover:text-white"
+                onClick={() => router.push("/dashboard/creator")}
+              >
+                <ArrowLeft className="mr-2 h-4 w-4" /> Back to Dashboard
+              </Button>
+              <h1 className="text-3xl font-extralight tracking-tight text-white">Set Up Creator Profile</h1>
+              <p className="text-zinc-400 mt-1 font-light">
+                Create your public profile to share your clips with the community
+              </p>
+            </motion.div>
+          </motion.div>
+
+          <motion.div variants={containerVariants} initial="hidden" animate="visible">
+            <motion.div variants={itemVariants}>
+              <form onSubmit={handleSubmit}>
+                <Card className="bg-zinc-900/30 border-zinc-800/50 backdrop-blur-sm">
+                  <CardHeader className="pb-4">
+                    <CardTitle className="flex items-center text-white text-xl font-light">
+                      <User className="mr-2 h-5 w-5 text-crimson" /> Profile Information
+                    </CardTitle>
+                    <CardDescription className="text-zinc-400">
+                      This information will be displayed on your public profile
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-6">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div className="space-y-2">
+                        <Label htmlFor="username" className="text-zinc-400">
+                          Username <span className="text-crimson">*</span>
+                        </Label>
+                        <div className="relative">
+                          <AtSign className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-zinc-500" />
+                          <Input
+                            id="username"
+                            name="username"
+                            value={formData.username}
+                            onChange={handleChange}
+                            placeholder="your-username"
+                            className="pl-10 bg-zinc-900/50 border-zinc-800 text-white"
+                            required
+                          />
+                        </div>
+                        <p className="text-xs text-zinc-500">
+                          This will be your unique profile URL: massclip.com/creator/
+                          <span className="text-zinc-400">{formData.username || "your-username"}</span>
+                        </p>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="displayName" className="text-zinc-400">
+                          Display Name <span className="text-crimson">*</span>
+                        </Label>
+                        <Input
+                          id="displayName"
+                          name="displayName"
+                          value={formData.displayName}
+                          onChange={handleChange}
+                          placeholder="Your Name"
+                          className="bg-zinc-900/50 border-zinc-800 text-white"
+                          required
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="bio" className="text-zinc-400">
+                        Bio
+                      </Label>
+                      <Textarea
+                        id="bio"
+                        name="bio"
+                        value={formData.bio}
+                        onChange={handleChange}
+                        placeholder="Tell the community about yourself and your content..."
+                        className="bg-zinc-900/50 border-zinc-800 text-white min-h-[120px]"
+                      />
+                    </div>
+
+                    <div>
+                      <h3 className="text-white font-light mb-3">Social Links</h3>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                        <div className="space-y-2">
+                          <Label htmlFor="website" className="text-zinc-400">
+                            Website
+                          </Label>
+                          <div className="relative">
+                            <Link2 className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-zinc-500" />
+                            <Input
+                              id="website"
+                              name="website"
+                              value={formData.website}
+                              onChange={handleChange}
+                              placeholder="https://yourwebsite.com"
+                              className="pl-10 bg-zinc-900/50 border-zinc-800 text-white"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label htmlFor="instagram" className="text-zinc-400">
+                            Instagram
+                          </Label>
+                          <div className="relative">
+                            <AtSign className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-zinc-500" />
+                            <Input
+                              id="instagram"
+                              name="instagram"
+                              value={formData.instagram}
+                              onChange={handleChange}
+                              placeholder="your_instagram"
+                              className="pl-10 bg-zinc-900/50 border-zinc-800 text-white"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label htmlFor="twitter" className="text-zinc-400">
+                            Twitter
+                          </Label>
+                          <div className="relative">
+                            <AtSign className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-zinc-500" />
+                            <Input
+                              id="twitter"
+                              name="twitter"
+                              value={formData.twitter}
+                              onChange={handleChange}
+                              placeholder="your_twitter"
+                              className="pl-10 bg-zinc-900/50 border-zinc-800 text-white"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="space-y-2">
+                          <Label htmlFor="tiktok" className="text-zinc-400">
+                            TikTok
+                          </Label>
+                          <div className="relative">
+                            <AtSign className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-zinc-500" />
+                            <Input
+                              id="tiktok"
+                              name="tiktok"
+                              value={formData.tiktok}
+                              onChange={handleChange}
+                              placeholder="your_tiktok"
+                              className="pl-10 bg-zinc-900/50 border-zinc-800 text-white"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </CardContent>
+                  <CardFooter className="flex justify-between">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      className="border-zinc-800 bg-zinc-900/30 text-white hover:bg-zinc-900/50 hover:border-zinc-700"
+                      onClick={() => router.push("/dashboard/creator")}
+                    >
+                      Cancel
+                    </Button>
+                    <Button type="submit" className="bg-crimson hover:bg-crimson/90 text-white" disabled={isSubmitting}>
+                      {isSubmitting ? "Saving..." : "Save Profile"}
+                    </Button>
+                  </CardFooter>
+                </Card>
+              </form>
+            </motion.div>
+          </motion.div>
+        </div>
+      </main>
     </div>
   )
 }

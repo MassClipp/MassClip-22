@@ -146,7 +146,7 @@ export default function UserDashboardPage() {
                         <div>
                           <h3 className="text-sm font-medium text-zinc-400 mb-1">Account Created</h3>
                           <p className="text-white font-light">
-                            {user.metadata.creationTime
+                            {user.metadata?.creationTime
                               ? new Date(user.metadata.creationTime).toLocaleDateString()
                               : "Unknown"}
                           </p>
@@ -154,7 +154,7 @@ export default function UserDashboardPage() {
                         <div>
                           <h3 className="text-sm font-medium text-zinc-400 mb-1">Last Sign In</h3>
                           <p className="text-white font-light">
-                            {user.metadata.lastSignInTime
+                            {user.metadata?.lastSignInTime
                               ? new Date(user.metadata.lastSignInTime).toLocaleDateString()
                               : "Unknown"}
                           </p>
