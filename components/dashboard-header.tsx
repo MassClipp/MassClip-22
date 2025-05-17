@@ -14,11 +14,11 @@ import {
   Home,
   Grid,
   Heart,
-  Clock,
   Menu,
   ChevronRight,
   DollarSign,
   Infinity,
+  Video,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useAuth } from "@/contexts/auth-context"
@@ -50,6 +50,7 @@ export default function DashboardHeader({ initialSearchQuery = "" }) {
   const searchInputRef = useRef<HTMLInputElement>(null)
   const mobileMenuRef = useRef<HTMLDivElement>(null)
   const isMobile = useMobile()
+  const [creatorUsername, setCreatorUsername] = useState<string | undefined>(undefined)
 
   // Lock scroll when mobile menu is open
   useScrollLock(isMobileMenuOpen)
@@ -90,6 +91,26 @@ export default function DashboardHeader({ initialSearchQuery = "" }) {
     }
   }, [isMobileMenuOpen])
 
+  useEffect(() => {
+    const fetchCreatorProfile = async () => {
+      if (!user) return
+
+      try {
+        const response = await fetch(`/api/creator-profile?userId=${user.uid}`)
+        if (response.ok) {
+          const data = await response.json()
+          if (data.profile && data.profile.username) {
+            setCreatorUsername(data.profile.username)
+          }
+        }
+      } catch (error) {
+        console.error("Error fetching creator profile:", error)
+      }
+    }
+
+    fetchCreatorProfile()
+  }, [user])
+
   const handleLogout = async () => {
     try {
       setIsLoggingOut(true)
@@ -119,7 +140,7 @@ export default function DashboardHeader({ initialSearchQuery = "" }) {
     { name: "Home", href: "/dashboard", icon: <Home className="h-4 w-4" /> },
     { name: "Categories", href: "/dashboard/categories", icon: <Grid className="h-4 w-4" /> },
     { name: "Favorites", href: "/dashboard/favorites", icon: <Heart className="h-4 w-4" /> },
-    { name: "History", href: "/dashboard/history", icon: <Clock className="h-4 w-4" /> },
+    { name: "Creator", href: "/dashboard/creator", icon: <Video className="h-4 w-4" /> },
     { name: "Pricing", href: "/membership-plans", icon: <DollarSign className="h-4 w-4" /> },
   ]
 
@@ -203,6 +224,21 @@ export default function DashboardHeader({ initialSearchQuery = "" }) {
                     {user.displayName ? user.displayName : "My Account"}
                   </DropdownMenuLabel>
                   <UserDownloadInfo />
+                  {creatorUsername && (
+                    <>
+                      <div className="px-2 py-2">
+                        <p className="text-xs text-zinc-500 mb-1">Creator Profile</p>
+                        <p className="text-sm text-white">@{creatorUsername}</p>
+                      </div>
+                      <DropdownMenuItem
+                        className="hover:bg-zinc-800 focus:bg-zinc-800"
+                        onClick={() => router.push("/dashboard/creator")}
+                      >
+                        <Video className="h-4 w-4 mr-2" />
+                        Creator Dashboard
+                      </DropdownMenuItem>
+                    </>
+                  )}
                   <DropdownMenuSeparator className="bg-zinc-800" />
                   <DropdownMenuItem
                     className="hover:bg-zinc-800 focus:bg-zinc-800"
@@ -374,6 +410,19 @@ export default function DashboardHeader({ initialSearchQuery = "" }) {
                 </div>
                 <ChevronRight className="h-4 w-4 text-zinc-500 group-hover:text-white/70 transition-colors" />
               </Link>
+              {creatorUsername && (
+                <Link
+                  href="/dashboard/creator"
+                  className="flex items-center justify-between py-3 px-4 text-white/90 hover:text-white hover:bg-white/5 rounded-lg transition-colors group"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                >
+                  <div className="flex items-center">
+                    <Video className="h-4 w-4 mr-3" />
+                    <span className="text-sm font-light">Creator Dashboard</span>
+                  </div>
+                  <ChevronRight className="h-4 w-4 text-zinc-500 group-hover:text-white/70 transition-colors" />
+                </Link>
+              )}
             </div>
           </nav>
 
