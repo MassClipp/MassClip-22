@@ -265,15 +265,25 @@ export default function DashboardHeader({ initialSearchQuery = "" }) {
                     Dashboard
                   </DropdownMenuItem>
 
-                  {username && (
-                    <DropdownMenuItem
-                      className="hover:bg-zinc-800 focus:bg-zinc-800"
-                      onClick={() => router.push(`/creator/${username}`)}
-                    >
-                      <UserCircle className="h-4 w-4 mr-2" />
-                      Profile
-                    </DropdownMenuItem>
-                  )}
+                  {/* Always show Profile option, handle navigation based on username availability */}
+                  <DropdownMenuItem
+                    className="hover:bg-zinc-800 focus:bg-zinc-800"
+                    onClick={() => {
+                      if (username) {
+                        router.push(`/creator/${username}`)
+                      } else {
+                        toast({
+                          title: "Profile not set up",
+                          description: "Please set up your creator profile first.",
+                          variant: "destructive",
+                        })
+                        router.push("/dashboard/creator/setup")
+                      }
+                    }}
+                  >
+                    <UserCircle className="h-4 w-4 mr-2" />
+                    Profile
+                  </DropdownMenuItem>
 
                   <DropdownMenuItem
                     className="hover:bg-zinc-800 focus:bg-zinc-800"
@@ -446,19 +456,29 @@ export default function DashboardHeader({ initialSearchQuery = "" }) {
                 <ChevronRight className="h-4 w-4 text-zinc-500 group-hover:text-white/70 transition-colors" />
               </Link>
 
-              {username && (
-                <Link
-                  href={`/creator/${username}`}
-                  className="flex items-center justify-between py-3 px-4 text-white/90 hover:text-white hover:bg-white/5 rounded-lg transition-colors group"
-                  onClick={() => setIsMobileMenuOpen(false)}
-                >
-                  <div className="flex items-center">
-                    <UserCircle className="h-4 w-4 mr-3" />
-                    <span className="text-sm font-light">Profile</span>
-                  </div>
-                  <ChevronRight className="h-4 w-4 text-zinc-500 group-hover:text-white/70 transition-colors" />
-                </Link>
-              )}
+              {/* Always show Profile option in mobile menu too */}
+              <button
+                onClick={() => {
+                  if (username) {
+                    router.push(`/creator/${username}`)
+                  } else {
+                    toast({
+                      title: "Profile not set up",
+                      description: "Please set up your creator profile first.",
+                      variant: "destructive",
+                    })
+                    router.push("/dashboard/creator/setup")
+                  }
+                  setIsMobileMenuOpen(false)
+                }}
+                className="w-full flex items-center justify-between py-3 px-4 text-white/90 hover:text-white hover:bg-white/5 rounded-lg transition-colors group text-left"
+              >
+                <div className="flex items-center">
+                  <UserCircle className="h-4 w-4 mr-3" />
+                  <span className="text-sm font-light">Profile</span>
+                </div>
+                <ChevronRight className="h-4 w-4 text-zinc-500 group-hover:text-white/70 transition-colors" />
+              </button>
 
               <Link
                 href="/dashboard/profile"
