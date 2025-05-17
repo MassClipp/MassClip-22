@@ -1,15 +1,18 @@
 import Link from "next/link"
+import { Button } from "@/components/ui/button"
 
 export default function CreatorNotFound() {
   return (
-    <div className="min-h-screen bg-black text-white flex flex-col items-center justify-center p-4">
-      <h1 className="text-4xl font-bold mb-4">Creator Not Found</h1>
-      <p className="text-gray-400 text-center mb-8">
-        The creator profile you're looking for doesn't exist or may have been removed.
-      </p>
-      <Link href="/" className="px-6 py-3 bg-red-600 hover:bg-red-700 rounded-full transition-colors">
-        Back to Home
-      </Link>
+    <div className="min-h-screen bg-black flex items-center justify-center">
+      <div className="text-center max-w-md px-4">
+        <h1 className="text-3xl font-bold text-white mb-4">Creator Not Found</h1>
+        <p className="text-gray-400 mb-8">
+          The creator profile you're looking for doesn't exist or may have been removed.
+        </p>
+        <Button asChild>
+          <Link href="/">Return Home</Link>
+        </Button>
+      </div>
     </div>
   )
 }
