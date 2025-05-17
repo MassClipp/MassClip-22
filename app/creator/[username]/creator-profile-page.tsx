@@ -8,7 +8,7 @@ import { getClipsByCreator } from "@/app/actions/clip-actions"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Instagram, Twitter, Youtube, TwitterIcon as TikTok, Globe, Lock, Download, Play } from "lucide-react"
+import { Instagram, Twitter, Youtube, TwitterIcon as TikTok, Globe, Lock, Download, Play, Share2 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import type { CreatorProfile, UserClip } from "@/lib/types"
 
@@ -25,6 +25,7 @@ export default function CreatorProfilePage({ profile }: CreatorProfilePageProps)
   const [paidClips, setPaidClips] = useState<UserClip[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [purchasedClipIds, setPurchasedClipIds] = useState<string[]>([])
+  const [copied, setCopied] = useState(false)
 
   useEffect(() => {
     const fetchClips = async () => {
@@ -106,6 +107,42 @@ export default function CreatorProfilePage({ profile }: CreatorProfilePageProps)
     return purchasedClipIds.includes(clipId)
   }
 
+  const handleShareProfile = async () => {
+    const profileUrl = `${window.location.origin}/creator/${profile.username}`
+
+    // Try to use the Web Share API if available
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: `${profile.displayName} on MassClip`,
+          text: `Check out ${profile.displayName}'s clips on MassClip!`,
+          url: profileUrl,
+        })
+        return
+      } catch (error) {
+        console.error("Error sharing:", error)
+      }
+    }
+
+    // Fallback to clipboard
+    try {
+      await navigator.clipboard.writeText(profileUrl)
+      setCopied(true)
+      toast({
+        title: "Link copied!",
+        description: "Profile link copied to clipboard.",
+      })
+      setTimeout(() => setCopied(false), 2000)
+    } catch (error) {
+      console.error("Failed to copy:", error)
+      toast({
+        title: "Error",
+        description: "Failed to copy link. Please try again.",
+        variant: "destructive",
+      })
+    }
+  }
+
   return (
     <div className="min-h-screen bg-black">
       {/* Hero section with cover image */}
@@ -148,19 +185,58 @@ export default function CreatorProfilePage({ profile }: CreatorProfilePageProps)
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
               <div>
                 <h1 className="text-2xl md:text-3xl font-bold text-white">{profile.displayName}</h1>
-                <p className="text-gray-400">@{profile.username}</p>
+                <div className="flex items-center gap-2">
+                  <p className="text-gray-400">@{profile.username}</p>
+
+                  {/* URL indicator */}
+                  <div className="hidden md:flex items-center text-xs text-gray-500 bg-gray-800/50 px-2 py-0.5 rounded">
+                    <span>
+                      {window.location.origin}/creator/{profile.username}
+                    </span>
+                  </div>
+                </div>
               </div>
 
-              {/* Social links */}
-              <div className="flex gap-3">
+              {/* Share button */}
+              <Button
+                variant="outline"
+                size="sm"
+                className="border-gray-700 bg-transparent text-white hover:bg-gray-800"
+                onClick={handleShareProfile}
+              >
+                {copied ? (
+                  <>
+                    <span className="text-green-500 mr-2">✓</span>
+                    Copied!
+                  </>
+                ) : (
+                  <>
+                    <Share2 className="h-4 w-4 mr-2" />
+                    Share Profile
+                  </>
+                )}
+              </Button>
+            </div>
+
+            {/* Bio */}
+            {profile.bio && <p className="mt-4 text-gray-300">{profile.bio}</p>}
+
+            {/* Social links */}
+            {(profile.socialLinks?.instagram ||
+              profile.socialLinks?.twitter ||
+              profile.socialLinks?.youtube ||
+              profile.socialLinks?.tiktok ||
+              profile.socialLinks?.website) && (
+              <div className="mt-4 flex flex-wrap gap-3">
                 {profile.socialLinks?.instagram && (
                   <a
                     href={`https://instagram.com/${profile.socialLinks.instagram}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-gray-400 hover:text-crimson transition-colors"
+                    className="flex items-center gap-1 text-sm text-gray-400 hover:text-crimson transition-colors"
                   >
-                    <Instagram size={20} />
+                    <Instagram size={16} />
+                    <span>{profile.socialLinks.instagram}</span>
                   </a>
                 )}
                 {profile.socialLinks?.twitter && (
@@ -168,9 +244,10 @@ export default function CreatorProfilePage({ profile }: CreatorProfilePageProps)
                     href={`https://twitter.com/${profile.socialLinks.twitter}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-gray-400 hover:text-crimson transition-colors"
+                    className="flex items-center gap-1 text-sm text-gray-400 hover:text-crimson transition-colors"
                   >
-                    <Twitter size={20} />
+                    <Twitter size={16} />
+                    <span>{profile.socialLinks.twitter}</span>
                   </a>
                 )}
                 {profile.socialLinks?.youtube && (
@@ -178,9 +255,10 @@ export default function CreatorProfilePage({ profile }: CreatorProfilePageProps)
                     href={`https://youtube.com/${profile.socialLinks.youtube}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-gray-400 hover:text-crimson transition-colors"
+                    className="flex items-center gap-1 text-sm text-gray-400 hover:text-crimson transition-colors"
                   >
-                    <Youtube size={20} />
+                    <Youtube size={16} />
+                    <span>YouTube</span>
                   </a>
                 )}
                 {profile.socialLinks?.tiktok && (
@@ -188,9 +266,10 @@ export default function CreatorProfilePage({ profile }: CreatorProfilePageProps)
                     href={`https://tiktok.com/@${profile.socialLinks.tiktok}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-gray-400 hover:text-crimson transition-colors"
+                    className="flex items-center gap-1 text-sm text-gray-400 hover:text-crimson transition-colors"
                   >
-                    <TikTok size={20} />
+                    <TikTok size={16} />
+                    <span>{profile.socialLinks.tiktok}</span>
                   </a>
                 )}
                 {profile.socialLinks?.website && (
@@ -198,16 +277,14 @@ export default function CreatorProfilePage({ profile }: CreatorProfilePageProps)
                     href={profile.socialLinks.website}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="text-gray-400 hover:text-crimson transition-colors"
+                    className="flex items-center gap-1 text-sm text-gray-400 hover:text-crimson transition-colors"
                   >
-                    <Globe size={20} />
+                    <Globe size={16} />
+                    <span>Website</span>
                   </a>
                 )}
               </div>
-            </div>
-
-            {/* Bio */}
-            {profile.bio && <p className="mt-4 text-gray-300">{profile.bio}</p>}
+            )}
 
             {/* Stats */}
             <div className="mt-6 flex gap-6">

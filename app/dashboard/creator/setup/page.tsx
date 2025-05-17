@@ -6,13 +6,13 @@ import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/contexts/auth-context"
 import { checkUsernameAvailability, updateCreatorProfile } from "@/app/actions/profile-actions"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Instagram, Twitter, Youtube, Globe, AtSign, Check, X, Loader2 } from "lucide-react"
+import { Instagram, Twitter, Youtube, Globe, AtSign, Check, X, Loader2, Info } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 
 export default function CreatorProfileSetup() {
@@ -132,6 +132,25 @@ export default function CreatorProfileSetup() {
             <AlertDescription>{error}</AlertDescription>
           </Alert>
         )}
+
+        <Card className="border-gray-800 bg-black/50 backdrop-blur-sm mb-6">
+          <CardHeader>
+            <CardTitle className="text-xl">Your Shareable Profile URL</CardTitle>
+            <CardDescription>Choose a unique username to create your public profile link</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center gap-2 p-3 bg-gray-900/50 rounded-md">
+              <Info className="h-5 w-5 text-crimson" />
+              <p className="text-sm text-gray-300">
+                Your profile will be publicly accessible at:{" "}
+                <span className="font-mono text-white">
+                  {window.location.origin}/creator/
+                  <span className="text-crimson">{username || "your-username"}</span>
+                </span>
+              </p>
+            </div>
+          </CardContent>
+        </Card>
 
         <Card className="border-gray-800 bg-black/50 backdrop-blur-sm">
           <CardHeader>
@@ -274,6 +293,14 @@ export default function CreatorProfileSetup() {
               </div>
             </form>
           </CardContent>
+          <CardFooter className="bg-gray-900/30 border-t border-gray-800 px-6 py-4">
+            <div className="text-sm text-gray-400">
+              <p>
+                <strong className="text-white">Note:</strong> Your username cannot be changed once your profile gains
+                followers or sales. Choose wisely!
+              </p>
+            </div>
+          </CardFooter>
         </Card>
       </div>
     </div>
