@@ -14,8 +14,6 @@ import { filterCategoriesBySearch } from "@/lib/search-utils"
 import VimeoCard from "@/components/vimeo-card"
 import { shuffleArray } from "@/lib/utils"
 import { useUserPlan } from "@/hooks/use-user-plan"
-import { useUser } from "@clerk/nextjs"
-import { CreatorProfileCard } from "@/components/creator-profile-card"
 
 export default function Dashboard() {
   // Get search query from URL
@@ -28,7 +26,6 @@ export default function Dashboard() {
   const [featuredVideos, setFeaturedVideos] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [activeCategory, setActiveCategory] = useState<string | null>(null)
-  const [creatorUsername, setCreatorUsername] = useState<string | undefined>(undefined)
 
   // Get user plan
   const { isProUser } = useUserPlan()
@@ -40,7 +37,6 @@ export default function Dashboard() {
   const { videos, videosByTag, loading: loadingVideos } = useVimeoVideos()
 
   const router = useRouter()
-  const { user } = useUser()
 
   // Cleanup observer on unmount
   const observer = useRef<IntersectionObserver | null>(null)
@@ -51,26 +47,6 @@ export default function Dashboard() {
       }
     }
   }, [])
-
-  useEffect(() => {
-    const fetchCreatorProfile = async () => {
-      if (!user) return
-
-      try {
-        const response = await fetch(`/api/creator-profile?userId=${user.id}`)
-        if (response.ok) {
-          const data = await response.json()
-          if (data.profile && data.profile.username) {
-            setCreatorUsername(data.profile.username)
-          }
-        }
-      } catch (error) {
-        console.error("Error fetching creator profile:", error)
-      }
-    }
-
-    fetchCreatorProfile()
-  }, [user])
 
   // Filter videos based on search query
   useEffect(() => {
@@ -288,15 +264,6 @@ export default function Dashboard() {
                       <VimeoCard video={video} />
                     </div>
                   ))}
-            </motion.div>
-          </motion.div>
-        )}
-
-        {/* Creator Profile Card - Only visible for logged in users */}
-        {user && !searchQuery && !isLoadingData && (
-          <motion.div variants={containerVariants} initial="hidden" animate="visible" className="px-6 mb-12">
-            <motion.div variants={itemVariants}>
-              <CreatorProfileCard username={creatorUsername} />
             </motion.div>
           </motion.div>
         )}

@@ -19,7 +19,6 @@ import {
   ChevronRight,
   DollarSign,
   Infinity,
-  Video,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useAuth } from "@/contexts/auth-context"
@@ -121,7 +120,6 @@ export default function DashboardHeader({ initialSearchQuery = "" }) {
     { name: "Categories", href: "/dashboard/categories", icon: <Grid className="h-4 w-4" /> },
     { name: "Favorites", href: "/dashboard/favorites", icon: <Heart className="h-4 w-4" /> },
     { name: "History", href: "/dashboard/history", icon: <Clock className="h-4 w-4" /> },
-    { name: "Creator", href: "/dashboard/creator", icon: <Video className="h-4 w-4" /> },
     { name: "Pricing", href: "/membership-plans", icon: <DollarSign className="h-4 w-4" /> },
   ]
 
@@ -138,19 +136,17 @@ export default function DashboardHeader({ initialSearchQuery = "" }) {
 
             {/* Desktop Navigation */}
             <nav className="hidden md:flex items-center gap-6">
-              {[navigationItems[0], navigationItems[1], navigationItems[2], navigationItems[4], navigationItems[5]].map(
-                (item) => (
-                  <Link
-                    key={item.name}
-                    href={item.href}
-                    className={`${
-                      item.current ? "text-white" : "text-zinc-400"
-                    } hover:text-white transition-colors text-sm font-light tracking-wide`}
-                  >
-                    {item.name}
-                  </Link>
-                ),
-              )}
+              {[navigationItems[0], navigationItems[1], navigationItems[2], navigationItems[4]].map((item) => (
+                <Link
+                  key={item.name}
+                  href={item.href}
+                  className={`${
+                    item.current ? "text-white" : "text-zinc-400"
+                  } hover:text-white transition-colors text-sm font-light tracking-wide`}
+                >
+                  {item.name}
+                </Link>
+              ))}
             </nav>
           </div>
 
@@ -219,13 +215,6 @@ export default function DashboardHeader({ initialSearchQuery = "" }) {
                     onClick={() => router.push("/dashboard/profile")}
                   >
                     Profile
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    className="hover:bg-zinc-800 focus:bg-zinc-800"
-                    onClick={() => router.push("/dashboard/creator")}
-                  >
-                    <Video className="h-4 w-4 mr-2" />
-                    Creator Dashboard
                   </DropdownMenuItem>
                   <DropdownMenuSeparator className="bg-zinc-800" />
                   <DropdownMenuItem

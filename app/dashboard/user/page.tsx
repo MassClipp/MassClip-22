@@ -7,7 +7,7 @@ import DashboardHeader from "@/components/dashboard-header"
 import { Button } from "@/components/ui/button"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
-import { Edit, Crown, LogOut, Check, User2, Clock, Heart, Download, Shield, Video } from "lucide-react"
+import { Edit, Crown, LogOut, Check, User2, Clock, Heart, Download, Shield } from "lucide-react"
 import UpgradeButton from "@/components/upgrade-button"
 import DownloadStats from "@/components/download-stats"
 import { useUserPlan } from "@/hooks/use-user-plan"
@@ -146,7 +146,7 @@ export default function UserDashboardPage() {
                         <div>
                           <h3 className="text-sm font-medium text-zinc-400 mb-1">Account Created</h3>
                           <p className="text-white font-light">
-                            {user.metadata?.creationTime
+                            {user.metadata.creationTime
                               ? new Date(user.metadata.creationTime).toLocaleDateString()
                               : "Unknown"}
                           </p>
@@ -154,7 +154,7 @@ export default function UserDashboardPage() {
                         <div>
                           <h3 className="text-sm font-medium text-zinc-400 mb-1">Last Sign In</h3>
                           <p className="text-white font-light">
-                            {user.metadata?.lastSignInTime
+                            {user.metadata.lastSignInTime
                               ? new Date(user.metadata.lastSignInTime).toLocaleDateString()
                               : "Unknown"}
                           </p>
@@ -226,68 +226,6 @@ export default function UserDashboardPage() {
                         </Button>
                       </div>
                     </CardContent>
-                  </Card>
-                </motion.div>
-
-                {/* Creator Hub Card */}
-                <motion.div variants={itemVariants} className="md:col-span-3">
-                  <Card className="bg-zinc-900/30 border-zinc-800/50 backdrop-blur-sm">
-                    <CardHeader className="pb-4">
-                      <CardTitle className="flex items-center text-white text-xl font-light">
-                        <Video className="mr-2 h-5 w-5 text-crimson" /> Creator Hub
-                      </CardTitle>
-                      <CardDescription className="text-zinc-400">
-                        Share your own video clips with the community
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        <div>
-                          <h3 className="text-lg font-light text-white mb-3">Your Creator Profile</h3>
-                          <p className="text-zinc-300 mb-4 font-light">
-                            Upload and share your own video clips. Create free and premium clip packs that others can
-                            discover and purchase.
-                          </p>
-                          <Button
-                            onClick={() => router.push("/dashboard/creator")}
-                            className="bg-crimson hover:bg-crimson/90 text-white"
-                          >
-                            Go to Creator Dashboard
-                          </Button>
-                        </div>
-
-                        <div className="bg-zinc-900/50 p-6 rounded-lg border border-zinc-800/50 backdrop-blur-sm">
-                          <h3 className="text-lg font-light text-white mb-3">Creator Benefits</h3>
-                          <ul className="space-y-2 text-sm">
-                            <li className="flex items-center text-zinc-300">
-                              <Check className="h-4 w-4 mr-2 text-crimson" />{" "}
-                              <span className="font-light">Custom profile page</span>
-                            </li>
-                            <li className="flex items-center text-zinc-300">
-                              <Check className="h-4 w-4 mr-2 text-crimson" />{" "}
-                              <span className="font-light">Organize clips into packs</span>
-                            </li>
-                            <li className="flex items-center text-zinc-300">
-                              <Check className="h-4 w-4 mr-2 text-crimson" />{" "}
-                              <span className="font-light">Sell premium clip packs</span>
-                            </li>
-                            <li className="flex items-center text-zinc-300">
-                              <Check className="h-4 w-4 mr-2 text-crimson" />{" "}
-                              <span className="font-light">Build your audience</span>
-                            </li>
-                          </ul>
-                        </div>
-                      </div>
-                    </CardContent>
-                    <CardFooter>
-                      <Button
-                        variant="link"
-                        className="text-crimson hover:text-crimson/80 p-0"
-                        onClick={() => router.push("/dashboard/creator/setup")}
-                      >
-                        Set up your creator profile
-                      </Button>
-                    </CardFooter>
                   </Card>
                 </motion.div>
 
