@@ -20,6 +20,8 @@ import {
   DollarSign,
   Infinity,
   Video,
+  Settings,
+  UserCircle,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useAuth } from "@/contexts/auth-context"
@@ -37,6 +39,7 @@ import { useUserPlan } from "@/hooks/use-user-plan"
 import { useDownloadLimit } from "@/contexts/download-limit-context"
 import { useMobile } from "@/hooks/use-mobile"
 import { useScrollLock } from "@/hooks/use-scroll-lock"
+import { getFirestore, doc, getDoc } from "firebase/firestore"
 
 export default function DashboardHeader({ initialSearchQuery = "" }) {
   const [isScrolled, setIsScrolled] = useState(false)
@@ -44,6 +47,7 @@ export default function DashboardHeader({ initialSearchQuery = "" }) {
   const [isSearchOpen, setIsSearchOpen] = useState(false)
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
   const [isLoggingOut, setIsLoggingOut] = useState(false)
+  const [username, setUsername] = useState("")
   const { user, signOut } = useAuth()
   const { isProUser, loading } = useUserPlan()
   const { remainingDownloads, hasReachedLimit } = useDownloadLimit()
@@ -67,6 +71,26 @@ export default function DashboardHeader({ initialSearchQuery = "" }) {
     window.addEventListener("scroll", handleScroll)
     return () => window.removeEventListener("scroll", handleScroll)
   }, [])
+
+  // Fetch user's username for profile link
+  useEffect(() => {
+    const fetchUsername = async () => {
+      if (!user) return
+
+      try {
+        const db = getFirestore()
+        const userDoc = await getDoc(doc(db, "users", user.uid))
+
+        if (userDoc.exists() && userDoc.data().username) {
+          setUsername(userDoc.data().username)
+        }
+      } catch (error) {
+        console.error("Error fetching username:", error)
+      }
+    }
+
+    fetchUsername()
+  }, [user])
 
   // Focus search input when search is opened
   useEffect(() => {
@@ -213,12 +237,25 @@ export default function DashboardHeader({ initialSearchQuery = "" }) {
                   >
                     Dashboard
                   </DropdownMenuItem>
+
+                  {username && (
+                    <DropdownMenuItem
+                      className="hover:bg-zinc-800 focus:bg-zinc-800"
+                      onClick={() => router.push(`/creator/${username}`)}
+                    >
+                      <UserCircle className="h-4 w-4 mr-2" />
+                      Public Profile
+                    </DropdownMenuItem>
+                  )}
+
                   <DropdownMenuItem
                     className="hover:bg-zinc-800 focus:bg-zinc-800"
                     onClick={() => router.push("/dashboard/profile")}
                   >
-                    Profile
+                    <Settings className="h-4 w-4 mr-2" />
+                    Settings
                   </DropdownMenuItem>
+
                   <DropdownMenuItem
                     className="hover:bg-zinc-800 focus:bg-zinc-800"
                     onClick={() => router.push("/dashboard/creator-hub")}
@@ -373,17 +410,33 @@ export default function DashboardHeader({ initialSearchQuery = "" }) {
                 </div>
                 <ChevronRight className="h-4 w-4 text-zinc-500 group-hover:text-white/70 transition-colors" />
               </Link>
+
+              {username && (
+                <Link
+                  href={`/creator/${username}`}
+                  className="flex items-center justify-between py-3 px-4 text-white/90 hover:text-white hover:bg-white/5 rounded-lg transition-colors group"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                >
+                  <div className="flex items-center">
+                    <UserCircle className="h-4 w-4 mr-3" />
+                    <span className="text-sm font-light">Public Profile</span>
+                  </div>
+                  <ChevronRight className="h-4 w-4 text-zinc-500 group-hover:text-white/70 transition-colors" />
+                </Link>
+              )}
+
               <Link
                 href="/dashboard/profile"
                 className="flex items-center justify-between py-3 px-4 text-white/90 hover:text-white hover:bg-white/5 rounded-lg transition-colors group"
                 onClick={() => setIsMobileMenuOpen(false)}
               >
                 <div className="flex items-center">
-                  <User className="h-4 w-4 mr-3" />
-                  <span className="text-sm font-light">Profile</span>
+                  <Settings className="h-4 w-4 mr-3" />
+                  <span className="text-sm font-light">Settings</span>
                 </div>
                 <ChevronRight className="h-4 w-4 text-zinc-500 group-hover:text-white/70 transition-colors" />
               </Link>
+
               <Link
                 href="/dashboard/creator-hub"
                 className="flex items-center justify-between py-3 px-4 text-white/90 hover:text-white hover:bg-white/5 rounded-lg transition-colors group"
