@@ -1,41 +1,70 @@
-import type { Metadata } from "next"
 import { notFound } from "next/navigation"
-import { getCreatorProfile } from "@/app/actions/profile-actions"
+import { db } from "@/lib/firebase-admin"
 import CreatorProfilePage from "./creator-profile-page"
 
-interface CreatorPageProps {
-  params: {
-    username: string
-  }
-}
+// This ensures the page is server-rendered and SEO-friendly
+export const dynamic = "force-dynamic"
 
-export async function generateMetadata({ params }: CreatorPageProps): Promise<Metadata> {
+export async function generateMetadata({ params }: { params: { username: string } }) {
   const { username } = params
-  const { profile } = await getCreatorProfile(username)
 
-  if (!profile) {
+  try {
+    // Find profile by username (case insensitive)
+    const snapshot = await db
+      .collection("creatorProfiles")
+      .where("username", "==", username.toLowerCase())
+      .limit(1)
+      .get()
+
+    if (snapshot.empty) {
+      return {
+        title: "Creator Not Found | MassClip",
+        description: "The creator profile you are looking for does not exist.",
+      }
+    }
+
+    const profileData = snapshot.docs[0].data()
+
     return {
-      title: "Creator Not Found | MassClip",
-      description: "The creator profile you are looking for does not exist.",
+      title: `${profileData.displayName} (@${profileData.username}) | MassClip`,
+      description: profileData.bio || `Check out ${profileData.displayName}'s clips on MassClip`,
+    }
+  } catch (error) {
+    console.error("Error generating metadata:", error)
+    return {
+      title: "Creator Profile | MassClip",
+      description: "View creator clips on MassClip",
     }
   }
-
-  return {
-    title: `${profile.displayName} (@${profile.username}) | MassClip`,
-    description: profile.bio || `Check out ${profile.displayName}'s clips on MassClip`,
-    openGraph: {
-      images: profile.profileImage ? [profile.profileImage] : [],
-    },
-  }
 }
 
-export default async function CreatorPage({ params }: CreatorPageProps) {
+export default async function CreatorPage({ params }: { params: { username: string } }) {
   const { username } = params
-  const { profile, error } = await getCreatorProfile(username)
 
-  if (!profile) {
+  try {
+    // Find profile by username (case insensitive)
+    const snapshot = await db
+      .collection("creatorProfiles")
+      .where("username", "==", username.toLowerCase())
+      .limit(1)
+      .get()
+
+    if (snapshot.empty) {
+      notFound()
+    }
+
+    const profileDoc = snapshot.docs[0]
+    const profile = {
+      uid: profileDoc.id,
+      ...profileDoc.data(),
+      // Ensure dates are serializable
+      createdAt: profileDoc.data().createdAt?.toDate?.() || new Date(),
+      updatedAt: profileDoc.data().updatedAt?.toDate?.() || new Date(),
+    }
+
+    return <CreatorProfilePage profile={profile} />
+  } catch (error) {
+    console.error("Error fetching creator profile:", error)
     notFound()
   }
-
-  return <CreatorProfilePage profile={profile} />
 }

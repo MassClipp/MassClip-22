@@ -2,19 +2,19 @@
 
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { useAuth } from "@/contexts/auth-context"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { getCreatorProfile } from "@/app/actions/profile-actions"
-import { Loader2, Copy, Check, ExternalLink, Settings, Upload } from "lucide-react"
-import { useToast } from "@/hooks/use-toast"
 import Link from "next/link"
+import { useAuth } from "@/contexts/auth-context"
+import { db } from "@/lib/firebase"
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
+import { Loader2, Copy, Check, ExternalLink } from "lucide-react"
+import { useToast } from "@/hooks/use-toast"
 
 export default function CreatorDashboard() {
   const { user } = useAuth()
   const router = useRouter()
   const { toast } = useToast()
+
   const [profile, setProfile] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [copied, setCopied] = useState(false)
@@ -24,8 +24,11 @@ export default function CreatorDashboard() {
       if (!user) return
 
       try {
-        const { profile } = await getCreatorProfile(user.uid)
-        setProfile(profile)
+        const profileDoc = await db.collection("creatorProfiles").doc(user.uid).get()
+
+        if (profileDoc.exists) {
+          setProfile(profileDoc.data())
+        }
       } catch (error) {
         console.error("Error fetching profile:", error)
       } finally {
@@ -44,15 +47,11 @@ export default function CreatorDashboard() {
     setCopied(true)
 
     toast({
-      title: "Profile link copied!",
+      title: "Link copied!",
       description: "Your profile link has been copied to clipboard.",
     })
 
     setTimeout(() => setCopied(false), 2000)
-  }
-
-  const handleSetupProfile = () => {
-    router.push("/dashboard/creator/setup")
   }
 
   if (loading) {
@@ -66,16 +65,16 @@ export default function CreatorDashboard() {
   if (!profile) {
     return (
       <div className="max-w-4xl mx-auto p-4 py-8">
-        <Card className="border-gray-800 bg-black/50 backdrop-blur-sm">
+        <Card>
           <CardHeader>
             <CardTitle>Creator Profile</CardTitle>
             <CardDescription>You haven't set up your creator profile yet.</CardDescription>
           </CardHeader>
           <CardContent>
-            <p className="text-gray-400 mb-6">
+            <p className="text-gray-500 mb-6">
               Set up your creator profile to start sharing your clips and building your audience.
             </p>
-            <Button onClick={handleSetupProfile}>Set Up Profile</Button>
+            <Button onClick={() => router.push("/dashboard/creator/setup")}>Set Up Profile</Button>
           </CardContent>
         </Card>
       </div>
@@ -139,103 +138,61 @@ export default function CreatorDashboard() {
               className="border-gray-700 bg-transparent text-white hover:bg-gray-800"
               asChild
             >
-              <Link href="/dashboard/creator/setup">
-                <Settings className="h-4 w-4 mr-2" />
-                Edit Profile
-              </Link>
+              <Link href="/dashboard/creator/setup">Edit Profile</Link>
             </Button>
           </div>
         </CardContent>
       </Card>
 
-      <Tabs defaultValue="overview" className="w-full">
-        <TabsList className="grid grid-cols-3 max-w-md bg-gray-900/50">
-          <TabsTrigger value="overview">Overview</TabsTrigger>
-          <TabsTrigger value="clips">Clips</TabsTrigger>
-          <TabsTrigger value="analytics">Analytics</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="overview" className="mt-6">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <Card className="border-gray-800 bg-black/50 backdrop-blur-sm">
-              <CardContent className="p-6">
-                <h3 className="text-sm font-medium text-gray-400 mb-2">Total Clips</h3>
-                <p className="text-3xl font-bold text-white">0</p>
-              </CardContent>
-            </Card>
-
-            <Card className="border-gray-800 bg-black/50 backdrop-blur-sm">
-              <CardContent className="p-6">
-                <h3 className="text-sm font-medium text-gray-400 mb-2">Total Views</h3>
-                <p className="text-3xl font-bold text-white">0</p>
-              </CardContent>
-            </Card>
-
-            <Card className="border-gray-800 bg-black/50 backdrop-blur-sm">
-              <CardContent className="p-6">
-                <h3 className="text-sm font-medium text-gray-400 mb-2">Total Sales</h3>
-                <p className="text-3xl font-bold text-white">$0.00</p>
-              </CardContent>
-            </Card>
-          </div>
-
-          <div className="mt-8">
-            <div className="flex items-center justify-between mb-4">
-              <h2 className="text-xl font-bold text-white">Recent Clips</h2>
-              <Button asChild>
-                <Link href="/dashboard/creator/upload">
-                  <Upload className="h-4 w-4 mr-2" />
-                  Upload Clip
-                </Link>
-              </Button>
+      {/* Content placeholder */}
+      <Card className="border-gray-800 bg-black/50 backdrop-blur-sm">
+        <CardHeader>
+          <CardTitle>Getting Started</CardTitle>
+          <CardDescription>Follow these steps to set up your creator profile</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            <div className="flex items-start gap-3">
+              <div className="bg-crimson/20 text-crimson rounded-full w-6 h-6 flex items-center justify-center flex-shrink-0">
+                1
+              </div>
+              <div>
+                <h3 className="font-medium text-white">Share your profile</h3>
+                <p className="text-gray-400 text-sm">
+                  Your public profile is now live at{" "}
+                  <code className="bg-gray-800 px-1 py-0.5 rounded text-xs text-crimson">
+                    {window.location.origin}/creator/{profile.username}
+                  </code>
+                </p>
+              </div>
             </div>
 
-            <Card className="border-gray-800 bg-black/50 backdrop-blur-sm">
-              <CardContent className="p-6 text-center py-12">
-                <p className="text-gray-400">You haven't uploaded any clips yet.</p>
-                <Button className="mt-4" asChild>
-                  <Link href="/dashboard/creator/upload">
-                    <Upload className="h-4 w-4 mr-2" />
-                    Upload Your First Clip
-                  </Link>
-                </Button>
-              </CardContent>
-            </Card>
+            <div className="flex items-start gap-3">
+              <div className="bg-gray-800 text-gray-400 rounded-full w-6 h-6 flex items-center justify-center flex-shrink-0">
+                2
+              </div>
+              <div>
+                <h3 className="font-medium text-white">Upload your first clip</h3>
+                <p className="text-gray-400 text-sm">
+                  Start building your library by uploading clips that viewers can access
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-start gap-3">
+              <div className="bg-gray-800 text-gray-400 rounded-full w-6 h-6 flex items-center justify-center flex-shrink-0">
+                3
+              </div>
+              <div>
+                <h3 className="font-medium text-white">Customize your profile</h3>
+                <p className="text-gray-400 text-sm">
+                  Add a profile picture, cover image, and complete your bio to attract more viewers
+                </p>
+              </div>
+            </div>
           </div>
-        </TabsContent>
-
-        <TabsContent value="clips" className="mt-6">
-          <div className="flex items-center justify-between mb-6">
-            <h2 className="text-xl font-bold text-white">Your Clips</h2>
-            <Button asChild>
-              <Link href="/dashboard/creator/upload">
-                <Upload className="h-4 w-4 mr-2" />
-                Upload Clip
-              </Link>
-            </Button>
-          </div>
-
-          <Card className="border-gray-800 bg-black/50 backdrop-blur-sm">
-            <CardContent className="p-6 text-center py-12">
-              <p className="text-gray-400">You haven't uploaded any clips yet.</p>
-              <Button className="mt-4" asChild>
-                <Link href="/dashboard/creator/upload">
-                  <Upload className="h-4 w-4 mr-2" />
-                  Upload Your First Clip
-                </Link>
-              </Button>
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="analytics" className="mt-6">
-          <Card className="border-gray-800 bg-black/50 backdrop-blur-sm">
-            <CardContent className="p-6 text-center py-12">
-              <p className="text-gray-400">Analytics will be available once you start getting views and sales.</p>
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
+        </CardContent>
+      </Card>
     </div>
   )
 }
