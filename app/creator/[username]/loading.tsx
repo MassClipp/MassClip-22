@@ -1,35 +1,72 @@
+import { Skeleton } from "@/components/ui/skeleton"
+
 export default function CreatorProfileLoading() {
   return (
-    <div className="min-h-screen bg-black">
-      {/* Hero section */}
-      <div className="relative h-48 md:h-64 w-full bg-gradient-to-r from-gray-900 to-black"></div>
+    <div className="min-h-screen bg-black text-white">
+      {/* Hero Section Skeleton */}
+      <div className="relative h-64 md:h-80 w-full bg-gray-900"></div>
 
-      {/* Profile content */}
-      <div className="max-w-6xl mx-auto px-4 -mt-16 relative z-10">
-        <div className="flex flex-col md:flex-row gap-6 items-start">
-          {/* Profile image skeleton */}
-          <div className="w-32 h-32 rounded-full bg-gray-800 animate-pulse"></div>
+      {/* Profile Header Skeleton */}
+      <div className="container mx-auto px-4 -mt-24 relative z-10">
+        <div className="flex flex-col items-center">
+          {/* Profile Image Skeleton */}
+          <Skeleton className="w-36 h-36 md:w-40 md:h-40 rounded-full" />
 
-          {/* Profile details skeleton */}
-          <div className="flex-1 mt-4 md:mt-0">
-            <div className="h-8 bg-gray-800 rounded w-64 animate-pulse"></div>
-            <div className="h-4 bg-gray-800 rounded w-32 mt-2 animate-pulse"></div>
-            <div className="h-4 bg-gray-800 rounded w-48 mt-4 animate-pulse"></div>
-            <div className="h-4 bg-gray-800 rounded w-full mt-4 animate-pulse"></div>
-            <div className="h-4 bg-gray-800 rounded w-3/4 mt-2 animate-pulse"></div>
+          {/* Profile Info Skeleton */}
+          <div className="mt-4 text-center">
+            <Skeleton className="h-10 w-48 mx-auto mb-2" />
+            <Skeleton className="h-6 w-32 mx-auto mb-4" />
+
+            {/* Stats Skeleton */}
+            <div className="flex justify-center gap-6 mt-4">
+              <div className="flex flex-col items-center">
+                <Skeleton className="h-6 w-16 mb-1" />
+                <Skeleton className="h-4 w-12" />
+              </div>
+              <div className="flex flex-col items-center">
+                <Skeleton className="h-6 w-16 mb-1" />
+                <Skeleton className="h-4 w-12" />
+              </div>
+              <div className="flex flex-col items-center">
+                <Skeleton className="h-6 w-16 mb-1" />
+                <Skeleton className="h-4 w-12" />
+              </div>
+            </div>
+
+            {/* Bio Skeleton */}
+            <Skeleton className="h-16 max-w-2xl mx-auto mt-4" />
+
+            {/* Action Buttons Skeleton */}
+            <div className="flex justify-center gap-3 mt-6">
+              <Skeleton className="h-9 w-24" />
+              <Skeleton className="h-9 w-24" />
+              <Skeleton className="h-9 w-24" />
+            </div>
+
+            {/* Social Links Skeleton */}
+            <div className="flex justify-center gap-4 mt-6">
+              <Skeleton className="h-5 w-5 rounded-full" />
+              <Skeleton className="h-5 w-5 rounded-full" />
+              <Skeleton className="h-5 w-5 rounded-full" />
+              <Skeleton className="h-5 w-5 rounded-full" />
+            </div>
           </div>
         </div>
 
-        {/* Content tabs skeleton */}
-        <div className="mt-12">
-          <div className="h-10 bg-gray-800 rounded max-w-md mx-auto animate-pulse"></div>
+        {/* Content Tabs Skeleton */}
+        <div className="mt-12 pb-20">
+          <div className="max-w-md mx-auto">
+            <Skeleton className="h-10 w-full mb-8" />
+          </div>
 
-          <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
             {[...Array(8)].map((_, i) => (
-              <div key={i} className="animate-pulse">
-                <div className="aspect-[9/16] bg-gray-800 rounded-lg"></div>
-                <div className="h-4 bg-gray-800 rounded mt-2 w-3/4"></div>
-                <div className="h-3 bg-gray-800 rounded mt-2 w-1/2"></div>
+              <div key={i} className="bg-gray-900 border border-gray-800 rounded-md overflow-hidden">
+                <Skeleton className="aspect-video w-full" />
+                <div className="p-4">
+                  <Skeleton className="h-5 w-full mb-2" />
+                  <Skeleton className="h-4 w-2/3" />
+                </div>
               </div>
             ))}
           </div>

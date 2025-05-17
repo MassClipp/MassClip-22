@@ -20,6 +20,9 @@ import {
   DollarSign,
   Infinity,
   Video,
+  Settings,
+  UserCircle,
+  Copy,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useAuth } from "@/contexts/auth-context"
@@ -37,6 +40,9 @@ import { useUserPlan } from "@/hooks/use-user-plan"
 import { useDownloadLimit } from "@/contexts/download-limit-context"
 import { useMobile } from "@/hooks/use-mobile"
 import { useScrollLock } from "@/hooks/use-scroll-lock"
+import { doc, getDoc } from "firebase/firestore"
+import { db } from "@/lib/firebase"
+import { useToast } from "@/hooks/use-toast"
 
 export default function DashboardHeader({ initialSearchQuery = "" }) {
   const [isScrolled, setIsScrolled] = useState(false)
@@ -44,6 +50,7 @@ export default function DashboardHeader({ initialSearchQuery = "" }) {
   const [isSearchOpen, setIsSearchOpen] = useState(false)
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
   const [isLoggingOut, setIsLoggingOut] = useState(false)
+  const [username, setUsername] = useState<string | null>(null)
   const { user, signOut } = useAuth()
   const { isProUser, loading } = useUserPlan()
   const { remainingDownloads, hasReachedLimit } = useDownloadLimit()
@@ -51,6 +58,7 @@ export default function DashboardHeader({ initialSearchQuery = "" }) {
   const searchInputRef = useRef<HTMLInputElement>(null)
   const mobileMenuRef = useRef<HTMLDivElement>(null)
   const isMobile = useMobile()
+  const { toast } = useToast()
 
   // Lock scroll when mobile menu is open
   useScrollLock(isMobileMenuOpen)
@@ -67,6 +75,36 @@ export default function DashboardHeader({ initialSearchQuery = "" }) {
     window.addEventListener("scroll", handleScroll)
     return () => window.removeEventListener("scroll", handleScroll)
   }, [])
+
+  // Fetch username for profile link
+  useEffect(() => {
+    const fetchUsername = async () => {
+      if (!user) return
+
+      try {
+        // First check if user has a creator profile
+        const creatorProfileRef = doc(db, "creatorProfiles", user.uid)
+        const creatorProfileSnap = await getDoc(creatorProfileRef)
+
+        if (creatorProfileSnap.exists() && creatorProfileSnap.data().username) {
+          setUsername(creatorProfileSnap.data().username)
+          return
+        }
+
+        // If not, check regular user profile
+        const userDocRef = doc(db, "users", user.uid)
+        const userDocSnap = await getDoc(userDocRef)
+
+        if (userDocSnap.exists() && userDocSnap.data().username) {
+          setUsername(userDocSnap.data().username)
+        }
+      } catch (error) {
+        console.error("Error fetching username:", error)
+      }
+    }
+
+    fetchUsername()
+  }, [user])
 
   // Focus search input when search is opened
   useEffect(() => {
@@ -113,6 +151,18 @@ export default function DashboardHeader({ initialSearchQuery = "" }) {
       router.push(`/dashboard?search=${encodeURIComponent(searchQuery)}`)
       setIsSearchOpen(false)
     }
+  }
+
+  const handleCopyProfileLink = () => {
+    if (!username) return
+
+    const profileUrl = `${window.location.origin}/creator/${username}`
+    navigator.clipboard.writeText(profileUrl)
+
+    toast({
+      title: "Profile link copied!",
+      description: "Your profile link has been copied to clipboard.",
+    })
   }
 
   // Navigation items for both desktop and mobile
@@ -211,14 +261,28 @@ export default function DashboardHeader({ initialSearchQuery = "" }) {
                     className="hover:bg-zinc-800 focus:bg-zinc-800"
                     onClick={() => router.push("/dashboard/user")}
                   >
+                    <Home className="h-4 w-4 mr-2" />
                     Dashboard
                   </DropdownMenuItem>
+
+                  {username && (
+                    <DropdownMenuItem
+                      className="hover:bg-zinc-800 focus:bg-zinc-800"
+                      onClick={() => router.push(`/creator/${username}`)}
+                    >
+                      <UserCircle className="h-4 w-4 mr-2" />
+                      Profile
+                    </DropdownMenuItem>
+                  )}
+
                   <DropdownMenuItem
                     className="hover:bg-zinc-800 focus:bg-zinc-800"
                     onClick={() => router.push("/dashboard/profile")}
                   >
-                    Profile
+                    <Settings className="h-4 w-4 mr-2" />
+                    Account Settings
                   </DropdownMenuItem>
+
                   <DropdownMenuItem
                     className="hover:bg-zinc-800 focus:bg-zinc-800"
                     onClick={() => router.push("/dashboard/creator-hub")}
@@ -226,6 +290,14 @@ export default function DashboardHeader({ initialSearchQuery = "" }) {
                     <Video className="h-4 w-4 mr-2" />
                     Creator Hub
                   </DropdownMenuItem>
+
+                  {username && (
+                    <DropdownMenuItem className="hover:bg-zinc-800 focus:bg-zinc-800" onClick={handleCopyProfileLink}>
+                      <Copy className="h-4 w-4 mr-2" />
+                      Copy Profile Link
+                    </DropdownMenuItem>
+                  )}
+
                   <DropdownMenuSeparator className="bg-zinc-800" />
                   <DropdownMenuItem
                     className="hover:bg-zinc-800 focus:bg-zinc-800"
@@ -368,22 +440,38 @@ export default function DashboardHeader({ initialSearchQuery = "" }) {
                 onClick={() => setIsMobileMenuOpen(false)}
               >
                 <div className="flex items-center">
-                  <User className="h-4 w-4 mr-3" />
+                  <Home className="h-4 w-4 mr-3" />
                   <span className="text-sm font-light">Dashboard</span>
                 </div>
                 <ChevronRight className="h-4 w-4 text-zinc-500 group-hover:text-white/70 transition-colors" />
               </Link>
+
+              {username && (
+                <Link
+                  href={`/creator/${username}`}
+                  className="flex items-center justify-between py-3 px-4 text-white/90 hover:text-white hover:bg-white/5 rounded-lg transition-colors group"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                >
+                  <div className="flex items-center">
+                    <UserCircle className="h-4 w-4 mr-3" />
+                    <span className="text-sm font-light">Profile</span>
+                  </div>
+                  <ChevronRight className="h-4 w-4 text-zinc-500 group-hover:text-white/70 transition-colors" />
+                </Link>
+              )}
+
               <Link
                 href="/dashboard/profile"
                 className="flex items-center justify-between py-3 px-4 text-white/90 hover:text-white hover:bg-white/5 rounded-lg transition-colors group"
                 onClick={() => setIsMobileMenuOpen(false)}
               >
                 <div className="flex items-center">
-                  <User className="h-4 w-4 mr-3" />
-                  <span className="text-sm font-light">Profile</span>
+                  <Settings className="h-4 w-4 mr-3" />
+                  <span className="text-sm font-light">Account Settings</span>
                 </div>
                 <ChevronRight className="h-4 w-4 text-zinc-500 group-hover:text-white/70 transition-colors" />
               </Link>
+
               <Link
                 href="/dashboard/creator-hub"
                 className="flex items-center justify-between py-3 px-4 text-white/90 hover:text-white hover:bg-white/5 rounded-lg transition-colors group"
@@ -395,6 +483,22 @@ export default function DashboardHeader({ initialSearchQuery = "" }) {
                 </div>
                 <ChevronRight className="h-4 w-4 text-zinc-500 group-hover:text-white/70 transition-colors" />
               </Link>
+
+              {username && (
+                <button
+                  onClick={() => {
+                    handleCopyProfileLink()
+                    setIsMobileMenuOpen(false)
+                  }}
+                  className="w-full flex items-center justify-between py-3 px-4 text-white/90 hover:text-white hover:bg-white/5 rounded-lg transition-colors group text-left"
+                >
+                  <div className="flex items-center">
+                    <Copy className="h-4 w-4 mr-3" />
+                    <span className="text-sm font-light">Copy Profile Link</span>
+                  </div>
+                  <ChevronRight className="h-4 w-4 text-zinc-500 group-hover:text-white/70 transition-colors" />
+                </button>
+              )}
             </div>
           </nav>
 

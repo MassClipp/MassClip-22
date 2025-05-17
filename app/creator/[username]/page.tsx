@@ -28,6 +28,17 @@ export async function generateMetadata({ params }: { params: { username: string 
     return {
       title: `${profileData.displayName} (@${profileData.username}) | MassClip`,
       description: profileData.bio || `Check out ${profileData.displayName}'s clips on MassClip`,
+      openGraph: {
+        images: profileData.profileImage ? [profileData.profileImage] : [],
+        title: `${profileData.displayName} (@${profileData.username}) | MassClip`,
+        description: profileData.bio || `Check out ${profileData.displayName}'s clips on MassClip`,
+      },
+      twitter: {
+        card: "summary_large_image",
+        title: `${profileData.displayName} (@${profileData.username}) | MassClip`,
+        description: profileData.bio || `Check out ${profileData.displayName}'s clips on MassClip`,
+        images: profileData.profileImage ? [profileData.profileImage] : [],
+      },
     }
   } catch (error) {
     console.error("Error generating metadata:", error)
