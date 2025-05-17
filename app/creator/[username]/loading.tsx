@@ -1,63 +1,67 @@
-export default function CreatorLoading() {
+export default function CreatorProfileLoading() {
   return (
-    <div className="min-h-screen bg-black">
-      {/* Cover image skeleton */}
-      <div className="relative h-48 md:h-64 lg:h-80 w-full bg-gray-900"></div>
+    <div className="min-h-screen bg-black text-white">
+      {/* Cover Image and Profile Section */}
+      <div className="relative">
+        <div className="h-48 md:h-64 w-full bg-gray-900 animate-pulse"></div>
 
-      {/* Profile header skeleton */}
-      <div className="max-w-6xl mx-auto px-4 -mt-24 md:-mt-32 relative z-10">
-        <div className="flex flex-col items-center text-center">
-          {/* Profile image skeleton */}
-          <div className="w-32 h-32 md:w-40 md:h-40 rounded-full bg-gray-800 animate-pulse"></div>
+        <div className="container mx-auto px-4">
+          <div className="relative flex flex-col md:flex-row items-start md:items-end -mt-16 md:-mt-20 mb-6">
+            {/* Profile Image */}
+            <div className="w-24 h-24 md:w-32 md:h-32 rounded-full border-4 border-black bg-gray-800 animate-pulse"></div>
 
-          {/* Name skeleton */}
-          <div className="mt-4 h-8 bg-gray-800 rounded w-48 animate-pulse"></div>
-
-          {/* Username skeleton */}
-          <div className="mt-2 h-4 bg-gray-800 rounded w-32 animate-pulse"></div>
-
-          {/* Bio skeleton */}
-          <div className="mt-4 h-4 bg-gray-800 rounded w-64 animate-pulse"></div>
-          <div className="mt-2 h-4 bg-gray-800 rounded w-80 animate-pulse"></div>
-
-          {/* Stats skeleton */}
-          <div className="mt-6 flex justify-center gap-8">
-            <div className="text-center">
-              <div className="h-6 bg-gray-800 rounded w-12 animate-pulse"></div>
-              <div className="mt-1 h-4 bg-gray-800 rounded w-10 animate-pulse"></div>
+            {/* Creator Info */}
+            <div className="mt-4 md:mt-0 md:ml-4 md:mb-2 flex-grow">
+              <div className="h-8 bg-gray-800 rounded w-48 animate-pulse"></div>
+              <div className="h-4 bg-gray-800 rounded w-32 mt-2 animate-pulse"></div>
             </div>
-            <div className="text-center">
-              <div className="h-6 bg-gray-800 rounded w-12 animate-pulse"></div>
-              <div className="mt-1 h-4 bg-gray-800 rounded w-10 animate-pulse"></div>
-            </div>
-            <div className="text-center">
-              <div className="h-6 bg-gray-800 rounded w-12 animate-pulse"></div>
-              <div className="mt-1 h-4 bg-gray-800 rounded w-10 animate-pulse"></div>
-            </div>
+
+            {/* Share Button */}
+            <div className="mt-4 md:mt-0 h-10 w-32 bg-gray-800 rounded-full animate-pulse"></div>
           </div>
 
-          {/* Action buttons skeleton */}
-          <div className="mt-6 flex flex-wrap justify-center gap-3">
-            <div className="h-10 bg-gray-800 rounded w-32 animate-pulse"></div>
-            <div className="h-10 bg-gray-800 rounded w-32 animate-pulse"></div>
+          {/* Bio */}
+          <div className="mb-6">
+            <div className="h-4 bg-gray-800 rounded w-full animate-pulse"></div>
+            <div className="h-4 bg-gray-800 rounded w-3/4 mt-2 animate-pulse"></div>
           </div>
         </div>
+      </div>
 
-        {/* Tabs skeleton */}
-        <div className="mt-12">
-          <div className="max-w-md mx-auto h-10 bg-gray-800 rounded animate-pulse"></div>
+      <div className="container mx-auto px-4 py-8">
+        {/* Free Clips Section */}
+        <section className="mb-12">
+          <div className="h-8 bg-gray-800 rounded w-48 mb-6 animate-pulse"></div>
 
-          {/* Content skeleton */}
-          <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-            {[...Array(8)].map((_, i) => (
-              <div key={i} className="animate-pulse">
-                <div className="aspect-[9/16] bg-gray-800 rounded-lg"></div>
-                <div className="h-4 bg-gray-800 rounded mt-2 w-3/4"></div>
-                <div className="h-3 bg-gray-800 rounded mt-2 w-1/2"></div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+            {[...Array(4)].map((_, i) => (
+              <div key={i} className="bg-gray-800 rounded-lg overflow-hidden animate-pulse">
+                <div className="aspect-video bg-gray-700"></div>
+                <div className="p-4">
+                  <div className="h-4 bg-gray-700 rounded mb-2"></div>
+                  <div className="h-3 bg-gray-700 rounded w-3/4"></div>
+                </div>
               </div>
             ))}
           </div>
-        </div>
+        </section>
+
+        {/* Paid Clips Section */}
+        <section>
+          <div className="h-8 bg-gray-800 rounded w-48 mb-6 animate-pulse"></div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+            {[...Array(4)].map((_, i) => (
+              <div key={i} className="bg-gray-800 rounded-lg overflow-hidden animate-pulse">
+                <div className="aspect-video bg-gray-700"></div>
+                <div className="p-4">
+                  <div className="h-4 bg-gray-700 rounded mb-2"></div>
+                  <div className="h-3 bg-gray-700 rounded w-3/4"></div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
       </div>
     </div>
   )

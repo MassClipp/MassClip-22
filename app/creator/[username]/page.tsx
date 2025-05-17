@@ -1,52 +1,42 @@
-import type { Metadata } from "next"
 import { notFound } from "next/navigation"
-import { getFirestore, collection, query, where, getDocs, limit } from "firebase/firestore"
-import { initializeFirebaseApp } from "@/lib/firebase"
-import CreatorPublicProfile from "@/components/creator-public-profile"
+import { db } from "@/lib/firebase-admin"
+import CreatorProfilePage from "./creator-profile-page"
 
-// Force dynamic rendering for this page
+// This ensures the page is server-rendered and SEO-friendly
 export const dynamic = "force-dynamic"
 
-interface CreatorPageProps {
-  params: {
-    username: string
-  }
-}
-
-export async function generateMetadata({ params }: CreatorPageProps): Promise<Metadata> {
+export async function generateMetadata({ params }: { params: { username: string } }) {
   const { username } = params
 
   try {
-    // Initialize Firebase
-    initializeFirebaseApp()
-    const db = getFirestore()
+    // Find profile by username (case insensitive)
+    const snapshot = await db
+      .collection("creatorProfiles")
+      .where("username", "==", username.toLowerCase())
+      .limit(1)
+      .get()
 
-    // Query for the creator profile
-    const profilesRef = collection(db, "users")
-    const q = query(profilesRef, where("username", "==", username.toLowerCase()), limit(1))
-    const querySnapshot = await getDocs(q)
-
-    if (querySnapshot.empty) {
+    if (snapshot.empty) {
       return {
         title: "Creator Not Found | MassClip",
         description: "The creator profile you are looking for does not exist.",
       }
     }
 
-    const profileData = querySnapshot.docs[0].data()
+    const profileData = snapshot.docs[0].data()
 
     return {
-      title: `${profileData.displayName || username} (@${username}) | MassClip`,
-      description: profileData.bio || `Check out ${profileData.displayName || username}'s clips on MassClip`,
+      title: `${profileData.displayName} (@${profileData.username}) | MassClip`,
+      description: profileData.bio || `Check out ${profileData.displayName}'s clips on MassClip`,
       openGraph: {
         images: profileData.profileImage ? [profileData.profileImage] : [],
-        title: `${profileData.displayName || username} (@${username}) | MassClip`,
-        description: profileData.bio || `Check out ${profileData.displayName || username}'s clips on MassClip`,
+        title: `${profileData.displayName} (@${profileData.username}) | MassClip`,
+        description: profileData.bio || `Check out ${profileData.displayName}'s clips on MassClip`,
       },
       twitter: {
         card: "summary_large_image",
-        title: `${profileData.displayName || username} (@${username}) | MassClip`,
-        description: profileData.bio || `Check out ${profileData.displayName || username}'s clips on MassClip`,
+        title: `${profileData.displayName} (@${profileData.username}) | MassClip`,
+        description: profileData.bio || `Check out ${profileData.displayName}'s clips on MassClip`,
         images: profileData.profileImage ? [profileData.profileImage] : [],
       },
     }
@@ -59,40 +49,31 @@ export async function generateMetadata({ params }: CreatorPageProps): Promise<Me
   }
 }
 
-export default async function CreatorPage({ params }: CreatorPageProps) {
+export default async function CreatorPage({ params }: { params: { username: string } }) {
   const { username } = params
 
   try {
-    // Initialize Firebase
-    initializeFirebaseApp()
-    const db = getFirestore()
+    // Find profile by username (case insensitive)
+    const snapshot = await db
+      .collection("creatorProfiles")
+      .where("username", "==", username.toLowerCase())
+      .limit(1)
+      .get()
 
-    // Query for the creator profile
-    const profilesRef = collection(db, "users")
-    const q = query(profilesRef, where("username", "==", username.toLowerCase()), limit(1))
-    const querySnapshot = await getDocs(q)
-
-    if (querySnapshot.empty) {
+    if (snapshot.empty) {
       notFound()
     }
 
-    const profileDoc = querySnapshot.docs[0]
-    const profileData = profileDoc.data()
-
-    // Prepare the profile data
+    const profileDoc = snapshot.docs[0]
     const profile = {
-      id: profileDoc.id,
-      username: username,
-      displayName: profileData.displayName || username,
-      bio: profileData.bio || "",
-      profileImage: profileData.profileImage || null,
-      coverImage: profileData.coverImage || null,
-      socialLinks: profileData.socialLinks || {},
-      isVerified: profileData.isVerified || false,
-      createdAt: profileData.createdAt?.toDate?.() || new Date(),
+      uid: profileDoc.id,
+      ...profileDoc.data(),
+      // Ensure dates are serializable
+      createdAt: profileDoc.data().createdAt?.toDate?.() || new Date(),
+      updatedAt: profileDoc.data().updatedAt?.toDate?.() || new Date(),
     }
 
-    return <CreatorPublicProfile profile={profile} />
+    return <CreatorProfilePage profile={profile} />
   } catch (error) {
     console.error("Error fetching creator profile:", error)
     notFound()
