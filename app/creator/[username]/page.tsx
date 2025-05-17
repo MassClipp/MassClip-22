@@ -1,15 +1,15 @@
 import type { Metadata } from "next"
 import { notFound } from "next/navigation"
 import { getCreatorProfile } from "@/app/actions/profile-actions"
-import CreatorProfileClient from "./creator-profile-client"
+import CreatorProfilePage from "./creator-profile-page"
 
-interface CreatorProfilePageProps {
+interface CreatorPageProps {
   params: {
     username: string
   }
 }
 
-export async function generateMetadata({ params }: CreatorProfilePageProps): Promise<Metadata> {
+export async function generateMetadata({ params }: CreatorPageProps): Promise<Metadata> {
   const { username } = params
   const { profile } = await getCreatorProfile(username)
 
@@ -29,13 +29,13 @@ export async function generateMetadata({ params }: CreatorProfilePageProps): Pro
   }
 }
 
-export default async function CreatorProfilePage({ params }: CreatorProfilePageProps) {
+export default async function CreatorPage({ params }: CreatorPageProps) {
   const { username } = params
-  const { profile } = await getCreatorProfile(username)
+  const { profile, error } = await getCreatorProfile(username)
 
   if (!profile) {
     notFound()
   }
 
-  return <CreatorProfileClient profile={profile} />
+  return <CreatorProfilePage profile={profile} />
 }

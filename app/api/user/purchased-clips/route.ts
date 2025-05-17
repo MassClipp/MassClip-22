@@ -3,65 +3,71 @@ import { auth, db } from "@/lib/firebase-admin"
 
 export async function GET(request: NextRequest) {
   try {
-    // Get the session cookie
-    const sessionCookie = request.cookies.get("__session")?.value
+    // Get the authorization token from the request headers
+    const authHeader = request.headers.get("Authorization")
+    let userId = ""
 
-    if (!sessionCookie) {
-      return NextResponse.json({ error: "Authentication required" }, { status: 401 })
-    }
+    if (authHeader && authHeader.startsWith("Bearer ")) {
+      const token = authHeader.split("Bearer ")[1]
+      try {
+        const decodedToken = await auth.verifyIdToken(token)
+        userId = decodedToken.uid
+      } catch (error) {
+        return NextResponse.json({ error: "Invalid token" }, { status: 401 })
+      }
+    } else {
+      // Try to get the session cookie
+      const sessionCookie = request.cookies.get("__session")?.value
 
-    // Verify the session
-    let userId
-    try {
-      const decodedCookie = await auth.verifySessionCookie(sessionCookie)
-      userId = decodedCookie.uid
-    } catch (error) {
-      return NextResponse.json({ error: "Invalid session" }, { status: 401 })
+      if (sessionCookie) {
+        try {
+          const decodedCookie = await auth.verifySessionCookie(sessionCookie)
+          userId = decodedCookie.uid
+        } catch (error) {
+          return NextResponse.json({ error: "Invalid session" }, { status: 401 })
+        }
+      } else {
+        return NextResponse.json({ error: "Authentication required" }, { status: 401 })
+      }
     }
 
     // Get the user's purchased clips
-    const purchasedClipsSnapshot = await db.collection("users").doc(userId).collection("purchasedClips").get()
+    const purchasedSnapshot = await db.collection("users").doc(userId).collection("purchasedClips").get()
 
-    if (purchasedClipsSnapshot.empty) {
+    const purchasedClipIds = purchasedSnapshot.docs.map((doc) => doc.id)
+
+    // If no purchased clips, return empty array
+    if (purchasedClipIds.length === 0) {
       return NextResponse.json({ clips: [] })
     }
 
-    // Get clip IDs
-    const clipIds = purchasedClipsSnapshot.docs.map((doc) => doc.data().clipId)
+    // Fetch the actual clip data
+    // Note: Firestore "in" queries are limited to 10 items, so we may need to batch
+    const batchSize = 10
+    const batches = []
 
-    // Get clip details
-    const clipsPromises = clipIds.map(async (clipId) => {
-      const clipDoc = await db.collection("clips").doc(clipId).get()
+    for (let i = 0; i < purchasedClipIds.length; i += batchSize) {
+      const batch = purchasedClipIds.slice(i, i + batchSize)
+      batches.push(batch)
+    }
 
-      if (!clipDoc.exists) {
-        return null
-      }
+    // Execute each batch query
+    const clipPromises = batches.map((batch) => db.collection("clips").where("id", "in", batch).get())
 
-      const clipData = clipDoc.data()
+    const snapshots = await Promise.all(clipPromises)
 
-      // Get creator info
-      const creatorDoc = await db.collection("users").doc(clipData.creatorId).get()
-      const creatorName = creatorDoc.exists ? creatorDoc.data()?.displayName : "Unknown Creator"
-
-      // Get purchase info
-      const purchaseData = purchasedClipsSnapshot.docs.find((doc) => doc.data().clipId === clipId)?.data()
-
-      return {
-        id: clipId,
-        ...clipData,
-        creatorName,
-        purchasedAt: purchaseData?.purchasedAt?.toDate(),
-      }
-    })
-
-    const clips = (await Promise.all(clipsPromises)).filter(Boolean)
+    // Combine results
+    const clips = snapshots.flatMap((snapshot) =>
+      snapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+        isPurchased: true,
+      })),
+    )
 
     return NextResponse.json({ clips })
   } catch (error) {
     console.error("Error fetching purchased clips:", error)
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Failed to fetch purchased clips" },
-      { status: 500 },
-    )
+    return NextResponse.json({ error: "Failed to fetch purchased clips" }, { status: 500 })
   }
 }
