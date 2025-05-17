@@ -440,6 +440,7 @@ export interface ClipPack {
   featuredOrder?: number
 }
 
+// Update the UserClip interface to include paid clip fields
 export interface UserClip {
   id: string
   title: string
@@ -453,6 +454,12 @@ export interface UserClip {
   createdAt: Date
   isProcessed: boolean
   processingStatus: "pending" | "processing" | "completed" | "failed"
+  isPaid?: boolean
+  price?: number
+  isFeatured?: boolean
+  creatorId?: string
+  creatorName?: string
+  purchasedAt?: Date
 }
 
 export interface Purchase {

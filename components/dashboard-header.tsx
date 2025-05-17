@@ -122,6 +122,7 @@ export default function DashboardHeader({ initialSearchQuery = "" }) {
     { name: "Favorites", href: "/dashboard/favorites", icon: <Heart className="h-4 w-4" /> },
     { name: "History", href: "/dashboard/history", icon: <Clock className="h-4 w-4" /> },
     { name: "Creator Hub", href: "/dashboard/creator-hub", icon: <Video className="h-4 w-4" /> },
+    { name: "Purchased", href: "/dashboard/purchased-clips", icon: <DollarSign className="h-4 w-4" /> },
     { name: "Pricing", href: "/membership-plans", icon: <DollarSign className="h-4 w-4" /> },
   ]
 
@@ -149,12 +150,6 @@ export default function DashboardHeader({ initialSearchQuery = "" }) {
                   {item.name}
                 </Link>
               ))}
-              <Link
-                href="/dashboard/creator-hub"
-                className="text-zinc-400 hover:text-white transition-colors text-sm font-light tracking-wide"
-              >
-                Creator Hub
-              </Link>
             </nav>
           </div>
 
