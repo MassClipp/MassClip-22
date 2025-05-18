@@ -1,40 +1,30 @@
-import { cert, initializeApp, getApps } from "firebase-admin/app"
+import { initializeApp, cert, getApps } from "firebase-admin/app"
 import { getFirestore } from "firebase-admin/firestore"
+import { getAuth } from "firebase-admin/auth"
 
-/**
- * Initializes Firebase Admin SDK if it hasn't been initialized already
- * This prevents multiple initializations in serverless environments
- */
+// Your service account credentials
+const serviceAccount = {
+  projectId: process.env.FIREBASE_PROJECT_ID,
+  clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+  privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n"),
+}
+
+// Initialize Firebase Admin
 export function initializeFirebaseAdmin() {
-  if (getApps().length === 0) {
-    // Check for required environment variables
-    const projectId = process.env.FIREBASE_PROJECT_ID
-    const clientEmail = process.env.FIREBASE_CLIENT_EMAIL
-    const privateKey = process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n")
-
-    if (!projectId || !clientEmail || !privateKey) {
-      console.error("Missing Firebase Admin SDK credentials in environment variables")
-      throw new Error("Firebase Admin SDK credentials are required")
-    }
-
+  if (!getApps().length) {
     try {
       initializeApp({
-        credential: cert({
-          projectId,
-          clientEmail,
-          privateKey,
-        }),
+        credential: cert(serviceAccount),
       })
-      console.log("Firebase Admin SDK initialized successfully")
     } catch (error) {
-      console.error("Error initializing Firebase Admin SDK:", error)
-      throw error
+      console.error("Firebase admin initialization error:", error)
     }
   }
 }
 
-// Initialize Firebase Admin if not already initialized
+// Initialize Firebase Admin
 initializeFirebaseAdmin()
 
-// Export the Firestore database
+// Export Firestore and Auth
 export const db = getFirestore()
+export const auth = getAuth()

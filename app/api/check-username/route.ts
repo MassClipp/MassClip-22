@@ -1,9 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { getFirestore, doc, getDoc } from "firebase/firestore"
-import { initializeFirebaseApp } from "@/lib/firebase"
-
-// Initialize Firebase
-initializeFirebaseApp()
+import { db } from "@/lib/firebase-admin"
 
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams
@@ -14,17 +10,18 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const db = getFirestore()
-
     // Check in usernames collection
-    const usernameDoc = await getDoc(doc(db, "usernames", username))
+    const usernameSnapshot = await db.collection("usernames").doc(username).get()
 
     // Check in creators collection as a backup
-    const creatorDoc = await getDoc(doc(db, "creators", username))
+    const creatorSnapshot = await db.collection("creators").where("username", "==", username).limit(1).get()
 
-    const isAvailable = !usernameDoc.exists() && !creatorDoc.exists()
+    const isAvailable = !usernameSnapshot.exists && creatorSnapshot.empty
 
-    return NextResponse.json({ available: isAvailable })
+    return NextResponse.json({
+      available: isAvailable,
+      message: isAvailable ? "Username is available" : "Username is already taken",
+    })
   } catch (error) {
     console.error("Error checking username:", error)
     return NextResponse.json({ error: "Failed to check username availability" }, { status: 500 })
