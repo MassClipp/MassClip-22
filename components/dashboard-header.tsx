@@ -23,6 +23,7 @@ import {
   Settings,
   UserCircle,
   Copy,
+  Database,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useAuth } from "@/contexts/auth-context"
@@ -306,6 +307,17 @@ export default function DashboardHeader({ initialSearchQuery = "" }) {
                       <Copy className="h-4 w-4 mr-2" />
                       Copy Profile Link
                     </DropdownMenuItem>
+                  )}
+
+                  {user?.email === "admin@example.com" && (
+                    <>
+                      <DropdownMenuItem asChild>
+                        <Link href="/debug/firestore">
+                          <Database className="mr-2 h-4 w-4" />
+                          Firestore Debug
+                        </Link>
+                      </DropdownMenuItem>
+                    </>
                   )}
 
                   <DropdownMenuSeparator className="bg-zinc-800" />

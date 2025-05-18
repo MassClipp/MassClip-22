@@ -12,10 +12,8 @@ import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { AtSign, Check, X, Loader2 } from "lucide-react"
+import { AtSign, Check, X, Loader2, AlertCircle } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
-import { generateUsername, validateUsername } from "@/lib/username-utils"
-import { checkUsernameAvailability } from "@/app/actions/username-actions"
 
 export default function CreatorProfileSetup() {
   const { user } = useAuth()
@@ -30,52 +28,120 @@ export default function CreatorProfileSetup() {
   const [youtube, setYoutube] = useState("")
   const [website, setWebsite] = useState("")
 
-  const [usernameStatus, setUsernameStatus] = useState<"checking" | "available" | "unavailable" | "idle">("idle")
+  const [usernameStatus, setUsernameStatus] = useState<"checking" | "available" | "unavailable" | "idle" | "error">(
+    "idle",
+  )
   const [usernameMessage, setUsernameMessage] = useState("")
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState("")
-
-  useEffect(() => {
-    if (user) {
-      setDisplayName(user.displayName || "")
-    }
-  }, [user])
+  const [bypassUsernameCheck, setBypassUsernameCheck] = useState(false)
 
   // Generate a suggested username when component mounts
   useEffect(() => {
-    if (user && !username) {
-      const suggestedUsername = generateUsername(user.displayName, user.email, user.uid)
-      setUsername(suggestedUsername)
-    }
-  }, [user])
+    if (user) {
+      setDisplayName(user.displayName || "")
 
-  // Check username availability using server action
+      // Generate a simple username suggestion based on display name or email
+      if (!username && (user.displayName || user.email)) {
+        let suggestion = ""
+
+        if (user.displayName) {
+          suggestion = user.displayName
+            .toLowerCase()
+            .replace(/\s+/g, "_")
+            .replace(/[^a-z0-9_]/g, "")
+        } else if (user.email) {
+          suggestion = user.email
+            .split("@")[0]
+            .toLowerCase()
+            .replace(/[^a-z0-9_]/g, "")
+        }
+
+        // Add random numbers to make it more unique
+        suggestion = `${suggestion}${Math.floor(Math.random() * 1000)}`
+
+        // Ensure it's at least 3 characters
+        if (suggestion.length < 3) {
+          suggestion = `user_${Math.floor(Math.random() * 10000)}`
+        }
+
+        setUsername(suggestion.substring(0, 30)) // Limit to 30 chars
+      }
+    }
+  }, [user, username])
+
+  // Basic client-side username validation
+  const validateUsername = (username: string) => {
+    if (username.length < 3) {
+      return { isValid: false, message: "Username must be at least 3 characters" }
+    }
+
+    if (username.length > 30) {
+      return { isValid: false, message: "Username must be less than 30 characters" }
+    }
+
+    if (!/^[a-z0-9_]+$/.test(username)) {
+      return { isValid: false, message: "Username can only contain lowercase letters, numbers, and underscores" }
+    }
+
+    return { isValid: true }
+  }
+
+  // Check username availability with direct Firestore query and extensive error handling
   useEffect(() => {
     const checkUsername = async () => {
-      if (username.length < 3) {
-        setUsernameStatus("idle")
-        setUsernameMessage("")
+      // Skip if bypass is enabled
+      if (bypassUsernameCheck) {
+        setUsernameStatus("available")
+        setUsernameMessage("Username check bypassed")
+        return
+      }
+
+      // Basic validation first
+      const validation = validateUsername(username)
+      if (!validation.isValid) {
+        setUsernameStatus("unavailable")
+        setUsernameMessage(validation.message || "Invalid username")
         return
       }
 
       setUsernameStatus("checking")
+      setUsernameMessage("Checking availability...")
 
       try {
-        // Use the server action to check username availability
-        const result = await checkUsernameAvailability(username)
+        console.log("Checking username availability for:", username)
 
-        if (result.available) {
+        // Direct Firestore query with timeout
+        const timeoutPromise = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error("Username check timed out")), 5000),
+        )
+
+        const queryPromise = db.collection("creatorProfiles").where("username", "==", username.toLowerCase()).get()
+
+        // Race between query and timeout
+        const snapshot = (await Promise.race([queryPromise, timeoutPromise])) as any
+
+        console.log("Username check result:", snapshot.empty ? "Available" : "Taken")
+
+        if (snapshot.empty) {
           setUsernameStatus("available")
-          setUsernameMessage(result.message || "Username is available")
+          setUsernameMessage("Username is available")
         } else {
           setUsernameStatus("unavailable")
-          setUsernameMessage(result.message || "Username is not available")
+          setUsernameMessage("Username is already taken")
         }
       } catch (error) {
         console.error("Error checking username:", error)
-        // Provide a fallback
-        setUsernameStatus("idle")
-        setUsernameMessage("Could not verify username. You can still proceed.")
+        setUsernameStatus("error")
+        setUsernameMessage("Error checking username. You can still proceed.")
+
+        // Show toast with option to bypass
+        toast({
+          title: "Username check failed",
+          description:
+            "We couldn't verify if this username is available. You can proceed anyway, but the username might need to be changed later if it's already taken.",
+          variant: "destructive",
+        })
       }
     }
 
@@ -83,22 +149,27 @@ export default function CreatorProfileSetup() {
     if (username.length >= 3) {
       const debounce = setTimeout(checkUsername, 500)
       return () => clearTimeout(debounce)
+    } else {
+      setUsernameStatus("idle")
+      setUsernameMessage("")
     }
-  }, [username])
+  }, [username, bypassUsernameCheck, toast])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
     if (!user) return
 
-    if (username.length < 3) {
-      setError("Username must be at least 3 characters")
+    // Basic validation
+    const validation = validateUsername(username)
+    if (!validation.isValid) {
+      setError(validation.message || "Invalid username")
       return
     }
 
-    // Allow proceeding even if username status is idle (couldn't verify)
-    if (usernameStatus === "unavailable") {
-      setError("Please choose an available username")
+    // Allow proceeding if bypass is enabled or status is available
+    if (!bypassUsernameCheck && usernameStatus !== "available" && usernameStatus !== "error") {
+      setError("Please choose an available username or enable bypass")
       return
     }
 
@@ -106,23 +177,7 @@ export default function CreatorProfileSetup() {
     setError("")
 
     try {
-      // First check if username exists (double-check)
-      let isUsernameTaken = false
-
-      try {
-        const snapshot = await db.collection("creatorProfiles").where("username", "==", username.toLowerCase()).get()
-        isUsernameTaken = !snapshot.empty
-      } catch (err) {
-        console.error("Error in final username check:", err)
-        // Continue anyway - we'll handle conflicts server-side
-      }
-
-      if (isUsernameTaken) {
-        setError("This username was just taken. Please choose another.")
-        setIsSubmitting(false)
-        setUsernameStatus("unavailable")
-        return
-      }
+      console.log("Creating profile with username:", username)
 
       // Create or update creator profile in Firebase
       const profileRef = db.collection("creatorProfiles").doc(user.uid)
@@ -146,6 +201,8 @@ export default function CreatorProfileSetup() {
         },
         { merge: true },
       )
+
+      console.log("Profile created successfully")
 
       toast({
         title: "Profile created!",
@@ -221,15 +278,11 @@ export default function CreatorProfileSetup() {
                     onChange={(e) => {
                       const newUsername = e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, "")
                       setUsername(newUsername)
-
-                      // Immediate validation feedback
-                      const validation = validateUsername(newUsername)
-                      if (!validation.isValid) {
-                        setUsernameStatus("unavailable")
-                        setUsernameMessage(validation.message || "Invalid username")
-                      }
+                      setBypassUsernameCheck(false) // Reset bypass when username changes
                     }}
-                    className={`pr-10 ${usernameStatus === "unavailable" ? "border-red-500" : ""}`}
+                    className={`pr-10 ${
+                      usernameStatus === "unavailable" || usernameStatus === "error" ? "border-red-500" : ""
+                    }`}
                     placeholder="your_username"
                     required
                     minLength={3}
@@ -242,15 +295,44 @@ export default function CreatorProfileSetup() {
                     <Check className="absolute right-3 top-2.5 h-5 w-5 text-green-500" />
                   )}
                   {usernameStatus === "unavailable" && <X className="absolute right-3 top-2.5 h-5 w-5 text-red-500" />}
+                  {usernameStatus === "error" && (
+                    <AlertCircle className="absolute right-3 top-2.5 h-5 w-5 text-yellow-500" />
+                  )}
                 </div>
                 {usernameMessage && (
-                  <p className={`text-sm ${usernameStatus === "available" ? "text-green-500" : "text-red-500"}`}>
+                  <p
+                    className={`text-sm ${
+                      usernameStatus === "available"
+                        ? "text-green-500"
+                        : usernameStatus === "error"
+                          ? "text-yellow-500"
+                          : "text-red-500"
+                    }`}
+                  >
                     {usernameMessage}
                   </p>
                 )}
                 <p className="text-xs text-gray-400">
                   Only lowercase letters, numbers, and underscores. 3-30 characters.
                 </p>
+
+                {/* Bypass option for when username check fails */}
+                {usernameStatus === "error" && (
+                  <div className="mt-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setBypassUsernameCheck(true)}
+                      className="text-xs"
+                    >
+                      Bypass username check
+                    </Button>
+                    <p className="text-xs text-yellow-500 mt-1">
+                      Note: If this username is already taken, you may need to change it later.
+                    </p>
+                  </div>
+                )}
               </div>
 
               <div className="space-y-2">
@@ -322,7 +404,14 @@ export default function CreatorProfileSetup() {
               </div>
 
               <div className="pt-4">
-                <Button type="submit" className="w-full" disabled={isSubmitting || usernameStatus !== "available"}>
+                <Button
+                  type="submit"
+                  className="w-full"
+                  disabled={
+                    isSubmitting ||
+                    (usernameStatus !== "available" && usernameStatus !== "error" && !bypassUsernameCheck)
+                  }
+                >
                   {isSubmitting ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" />
