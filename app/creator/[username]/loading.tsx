@@ -2,40 +2,32 @@ import { Skeleton } from "@/components/ui/skeleton"
 
 export default function CreatorProfileLoading() {
   return (
-    <div className="min-h-screen bg-black text-white">
-      {/* Header */}
-      <div className="bg-gradient-to-b from-gray-900 to-black pt-8 pb-6 px-4">
-        <div className="max-w-4xl mx-auto">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4">
-              <Skeleton className="w-16 h-16 rounded-full" />
-              <div>
-                <Skeleton className="h-7 w-40 mb-2" />
-                <Skeleton className="h-5 w-24" />
-              </div>
-            </div>
-            <Skeleton className="h-9 w-24" />
+    <div className="min-h-screen bg-black">
+      <div className="max-w-6xl mx-auto px-4 py-8">
+        {/* Creator Header Loading State */}
+        <div className="flex flex-col md:flex-row items-center md:items-start gap-6 mb-8">
+          <Skeleton className="w-24 h-24 md:w-32 md:h-32 rounded-full bg-gray-800" />
+
+          <div className="flex-1 text-center md:text-left space-y-4 w-full">
+            <Skeleton className="h-8 w-48 bg-gray-800" />
+            <Skeleton className="h-4 w-32 bg-gray-800" />
+            <Skeleton className="h-16 w-full bg-gray-800" />
           </div>
-          <Skeleton className="h-5 w-full max-w-md mt-4" />
+
+          <Skeleton className="h-10 w-24 bg-gray-800" />
         </div>
-      </div>
 
-      {/* Content */}
-      <div className="max-w-4xl mx-auto px-4 py-8">
-        <Skeleton className="h-10 w-full mb-8" />
+        {/* Tabs Loading State */}
+        <div className="w-full">
+          <Skeleton className="h-10 w-full bg-gray-800 mb-6" />
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {Array(6)
-            .fill(0)
-            .map((_, i) => (
-              <div key={i} className="bg-gray-900 border border-gray-800 rounded-lg overflow-hidden">
-                <Skeleton className="w-full aspect-video" />
-                <div className="p-4">
-                  <Skeleton className="h-6 w-full mb-2" />
-                  <Skeleton className="h-4 w-3/4" />
-                </div>
-              </div>
-            ))}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {Array(6)
+              .fill(0)
+              .map((_, i) => (
+                <Skeleton key={i} className="h-48 w-full bg-gray-800" />
+              ))}
+          </div>
         </div>
       </div>
     </div>

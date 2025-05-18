@@ -2,25 +2,22 @@
 
 import { useState } from "react"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Share2, Lock, Play } from "lucide-react"
+import { Share2, Lock } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 
-interface CreatorProfileProps {
-  creator: {
-    username: string
-    displayName: string
-    bio: string
-    profilePic: string
-    freeClips: any[]
-    paidClips: any[]
-    createdAt: string
-    uid: string
-  }
+interface Creator {
+  uid: string
+  username: string
+  displayName: string
+  bio: string
+  profilePic: string
+  freeClips: any[]
+  paidClips: any[]
+  createdAt: string
 }
 
-export default function CreatorProfile({ creator }: CreatorProfileProps) {
+export default function CreatorProfile({ creator }: { creator: Creator }) {
   const { toast } = useToast()
   const [activeTab, setActiveTab] = useState("free")
 
@@ -29,122 +26,76 @@ export default function CreatorProfile({ creator }: CreatorProfileProps) {
     navigator.clipboard.writeText(url)
     toast({
       title: "Link copied!",
-      description: "Share this profile with your audience",
+      description: "Share this link with your audience",
     })
   }
 
   return (
-    <div className="min-h-screen bg-black text-white">
-      {/* Header */}
-      <div className="bg-gradient-to-b from-gray-900 to-black pt-8 pb-6 px-4">
-        <div className="max-w-4xl mx-auto">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center space-x-4">
-              {creator.profilePic ? (
-                <img
-                  src={creator.profilePic || "/placeholder.svg"}
-                  alt={creator.displayName}
-                  className="w-16 h-16 rounded-full object-cover border-2 border-red-500"
-                />
-              ) : (
-                <div className="w-16 h-16 rounded-full bg-gray-800 flex items-center justify-center border-2 border-red-500">
-                  <span className="text-2xl font-bold">{creator.displayName.charAt(0)}</span>
-                </div>
-              )}
-              <div>
-                <h1 className="text-2xl font-bold">{creator.displayName}</h1>
-                <p className="text-gray-400">@{creator.username}</p>
+    <div className="min-h-screen bg-black">
+      <div className="max-w-6xl mx-auto px-4 py-8">
+        {/* Creator Header */}
+        <div className="flex flex-col md:flex-row items-center md:items-start gap-6 mb-8">
+          <div className="w-24 h-24 md:w-32 md:h-32 rounded-full overflow-hidden bg-gray-800 flex-shrink-0">
+            {creator.profilePic ? (
+              <img
+                src={creator.profilePic || "/placeholder.svg"}
+                alt={creator.displayName}
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center text-4xl text-gray-400">
+                {creator.displayName.charAt(0).toUpperCase()}
               </div>
-            </div>
-            <Button variant="outline" size="sm" onClick={handleShare} className="flex items-center gap-2">
-              <Share2 className="h-4 w-4" />
-              Share
-            </Button>
+            )}
           </div>
-          {creator.bio && <p className="mt-4 text-gray-300">{creator.bio}</p>}
-        </div>
-      </div>
 
-      {/* Content */}
-      <div className="max-w-4xl mx-auto px-4 py-8">
-        <Tabs defaultValue="free" value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="grid w-full grid-cols-2 mb-8">
-            <TabsTrigger value="free">Free Clips</TabsTrigger>
-            <TabsTrigger value="premium">Premium Clips</TabsTrigger>
+          <div className="flex-1 text-center md:text-left">
+            <h1 className="text-3xl font-bold text-white">{creator.displayName}</h1>
+            <p className="text-gray-400 mt-1">@{creator.username}</p>
+            {creator.bio && <p className="text-gray-300 mt-4">{creator.bio}</p>}
+          </div>
+
+          <Button onClick={handleShare} variant="outline" className="border-gray-700 text-white hover:bg-gray-800">
+            <Share2 className="mr-2 h-4 w-4" />
+            Share
+          </Button>
+        </div>
+
+        {/* Content Tabs */}
+        <Tabs defaultValue="free" className="w-full" onValueChange={setActiveTab}>
+          <TabsList className="grid w-full grid-cols-2 bg-gray-900">
+            <TabsTrigger value="free" className="data-[state=active]:bg-red-600">
+              Free Clips
+            </TabsTrigger>
+            <TabsTrigger value="premium" className="data-[state=active]:bg-red-600">
+              Premium Clips
+            </TabsTrigger>
           </TabsList>
-          <TabsContent value="free">
+
+          <TabsContent value="free" className="mt-6">
             {creator.freeClips && creator.freeClips.length > 0 ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {creator.freeClips.map((clip, index) => (
-                  <Card key={index} className="bg-gray-900 border-gray-800">
-                    <CardHeader className="p-0">
-                      <div className="relative aspect-video bg-gray-800">
-                        {clip.thumbnail ? (
-                          <img
-                            src={clip.thumbnail || "/placeholder.svg"}
-                            alt={clip.title}
-                            className="w-full h-full object-cover"
-                          />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center">
-                            <Play className="h-12 w-12 text-gray-600" />
-                          </div>
-                        )}
-                      </div>
-                    </CardHeader>
-                    <CardContent className="p-4">
-                      <CardTitle className="text-lg">{clip.title || "Untitled Clip"}</CardTitle>
-                      {clip.description && (
-                        <CardDescription className="text-gray-400 mt-1">{clip.description}</CardDescription>
-                      )}
-                    </CardContent>
-                  </Card>
-                ))}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {/* Free clips would go here */}
+                <p className="text-gray-400 col-span-full">Free clips will appear here</p>
               </div>
             ) : (
               <div className="text-center py-12">
-                <p className="text-gray-400">No free clips available yet.</p>
+                <p className="text-gray-400">No free clips available yet</p>
               </div>
             )}
           </TabsContent>
-          <TabsContent value="premium">
+
+          <TabsContent value="premium" className="mt-6">
             {creator.paidClips && creator.paidClips.length > 0 ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {creator.paidClips.map((clip, index) => (
-                  <Card key={index} className="bg-gray-900 border-gray-800">
-                    <CardHeader className="p-0">
-                      <div className="relative aspect-video bg-gray-800">
-                        {clip.thumbnail ? (
-                          <img
-                            src={clip.thumbnail || "/placeholder.svg"}
-                            alt={clip.title}
-                            className="w-full h-full object-cover"
-                          />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center">
-                            <Play className="h-12 w-12 text-gray-600" />
-                          </div>
-                        )}
-                        <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
-                          <Lock className="h-8 w-8 text-white" />
-                        </div>
-                      </div>
-                    </CardHeader>
-                    <CardContent className="p-4">
-                      <CardTitle className="text-lg">{clip.title || "Untitled Clip"}</CardTitle>
-                      {clip.description && (
-                        <CardDescription className="text-gray-400 mt-1">{clip.description}</CardDescription>
-                      )}
-                      <div className="mt-3">
-                        <Button className="w-full bg-red-600 hover:bg-red-700">Buy for ${clip.price || "9.99"}</Button>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {/* Premium clips would go here */}
+                <p className="text-gray-400 col-span-full">Premium clips will appear here</p>
               </div>
             ) : (
-              <div className="text-center py-12">
-                <p className="text-gray-400">No premium clips available yet.</p>
+              <div className="text-center py-12 flex flex-col items-center">
+                <Lock className="h-12 w-12 text-gray-600 mb-4" />
+                <p className="text-gray-400">Premium clips are locked</p>
+                <Button className="mt-4 bg-red-600 hover:bg-red-700">Unlock Premium Content</Button>
               </div>
             )}
           </TabsContent>
