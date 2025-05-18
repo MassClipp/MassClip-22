@@ -17,20 +17,25 @@ export default function ProfileBypass() {
   const [error, setError] = useState<string | null>(null)
 
   const createSampleProfile = async () => {
-    if (!user) return
+    if (!user) {
+      setError("You must be logged in to create a profile")
+      return
+    }
 
     setLoading(true)
     setError(null)
 
     try {
-      // Get the user's ID token
-      const idToken = await user.getIdToken()
-
-      // Call the API to create a sample profile
-      const response = await fetch("/api/debug/create-sample-profile", {
+      // Create a sample profile without requiring the token
+      const response = await fetch("/api/debug/create-sample-profile-alt", {
+        method: "POST",
         headers: {
-          Authorization: `Bearer ${idToken}`,
+          "Content-Type": "application/json",
         },
+        body: JSON.stringify({
+          uid: user.uid,
+          email: user.email,
+        }),
       })
 
       const data = await response.json()
@@ -62,21 +67,6 @@ export default function ProfileBypass() {
     } finally {
       setLoading(false)
     }
-  }
-
-  if (!user) {
-    return (
-      <div className="min-h-screen bg-black p-4 flex items-center justify-center">
-        <Card className="w-full max-w-md border-gray-800 bg-black/50 backdrop-blur-sm">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-center">
-              <Loader2 className="h-6 w-6 animate-spin text-crimson" />
-              <span className="ml-2 text-gray-300">Loading...</span>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    )
   }
 
   return (
