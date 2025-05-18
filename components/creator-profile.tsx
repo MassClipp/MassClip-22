@@ -3,10 +3,12 @@
 import { useState, useEffect } from "react"
 import { useSearchParams } from "next/navigation"
 import Image from "next/image"
-import { Share2, Edit, Plus, Instagram, Twitter, Globe } from "lucide-react"
+import { Share2, Edit, Instagram, Twitter, Globe, Lock } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useAuth } from "@/contexts/auth-context"
-import { cn } from "@/lib/utils"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { collection, query, orderBy, limit, getDocs } from "firebase/firestore"
+import { db } from "@/lib/firebase"
 
 interface Creator {
   uid: string
@@ -25,20 +27,66 @@ interface Creator {
 }
 
 export default function CreatorProfile({ creator }: { creator: Creator }) {
-  const { user } = useAuth()
+  const { user: userData } = useAuth()
   const searchParams = useSearchParams()
-  const [activeTab, setActiveTab] = useState<"free" | "premium">("free")
-  const isOwner = user && user.uid === creator.uid
+  const defaultTab = searchParams.get("tab") || "free"
+  const [activeTab, setActiveTab] = useState(defaultTab)
+  const isOwner = userData && userData.uid === creator.uid
+  const [freeVideos, setFreeVideos] = useState([])
+  const [premiumVideos, setPremiumVideos] = useState([])
+  const [isLoading, setIsLoading] = useState(true)
 
   // Set active tab based on URL query parameter
+  // useEffect(() => {
+  //   const tab = searchParams.get("tab")
+  //   if (tab === "premium") {
+  //     setActiveTab("premium")
+  //   } else {
+  //     setActiveTab("free")
+  //   }
+  // }, [searchParams])
+
   useEffect(() => {
-    const tab = searchParams.get("tab")
-    if (tab === "premium") {
-      setActiveTab("premium")
-    } else {
-      setActiveTab("free")
+    const fetchVideos = async () => {
+      if (!userData?.uid) return
+
+      setIsLoading(true)
+      try {
+        // Fetch free videos
+        const freeQuery = query(
+          collection(db, `users/${userData.uid}/freeClips`),
+          orderBy("createdAt", "desc"),
+          limit(12),
+        )
+        const freeSnapshot = await getDocs(freeQuery)
+        const freeData = freeSnapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        }))
+
+        // Fetch premium videos
+        const premiumQuery = query(
+          collection(db, `users/${userData.uid}/premiumClips`),
+          orderBy("createdAt", "desc"),
+          limit(12),
+        )
+        const premiumSnapshot = await getDocs(premiumQuery)
+        const premiumData = premiumSnapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        }))
+
+        setFreeVideos(freeData)
+        setPremiumVideos(premiumData)
+      } catch (error) {
+        console.error("Error fetching videos:", error)
+      } finally {
+        setIsLoading(false)
+      }
     }
-  }, [searchParams])
+
+    fetchVideos()
+  }, [userData?.uid])
 
   const handleShare = async () => {
     if (navigator.share) {
@@ -194,7 +242,7 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
       </div>
 
       {/* Content Tabs */}
-      <div className="container mx-auto px-4 pb-20">
+      {/* <div className="container mx-auto px-4 pb-20">
         <div className="border-b border-zinc-800 mb-8">
           <div className="flex">
             <button
@@ -219,16 +267,16 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
               {activeTab === "premium" && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-crimson"></div>}
             </button>
           </div>
-        </div>
+        </div> */}
 
-        {/* Content Area */}
-        <div>
+      {/* Content Area */}
+      {/* <div>
           {activeTab === "free" && (
             <div>
               {creator.freeClips && creator.freeClips.length > 0 ? (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                   {/* Free clips would be rendered here */}
-                  <div className="text-zinc-400">Free clips would be displayed here</div>
+      {/* <div className="text-zinc-400">Free clips would be displayed here</div>
                 </div>
               ) : (
                 <div className="bg-zinc-900/50 border border-zinc-800/50 rounded-lg p-8 text-center">
@@ -260,7 +308,7 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
               {creator.paidClips && creator.paidClips.length > 0 ? (
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                   {/* Premium clips would be rendered here */}
-                  <div className="text-zinc-400">Premium clips would be displayed here</div>
+      {/* <div className="text-zinc-400">Premium clips would be displayed here</div>
                 </div>
               ) : (
                 <div className="bg-zinc-900/50 border border-zinc-800/50 rounded-lg p-8 text-center">
@@ -286,6 +334,104 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
               )}
             </div>
           )}
+        </div>
+      </div> */}
+      <div className="container mx-auto px-4 pb-20">
+        <div className="mt-8">
+          <Tabs defaultValue={activeTab} onValueChange={setActiveTab} className="w-full">
+            <TabsList className="bg-zinc-800 border-b border-zinc-700 w-full justify-start rounded-none p-0">
+              <TabsTrigger
+                value="free"
+                className="data-[state=active]:bg-zinc-900 data-[state=active]:border-b-2 data-[state=active]:border-red-500 data-[state=active]:shadow-none rounded-none px-6 py-3"
+              >
+                Free Videos
+              </TabsTrigger>
+              <TabsTrigger
+                value="premium"
+                className="data-[state=active]:bg-zinc-900 data-[state=active]:border-b-2 data-[state=active]:border-red-500 data-[state=active]:shadow-none rounded-none px-6 py-3"
+              >
+                Premium Videos
+              </TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="free" className="mt-6">
+              {isLoading ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {[1, 2, 3].map((i) => (
+                    <div key={i} className="aspect-video bg-zinc-800 animate-pulse rounded-lg" />
+                  ))}
+                </div>
+              ) : freeVideos.length > 0 ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {freeVideos.map((video) => (
+                    <div key={video.id} className="overflow-hidden bg-zinc-900 border-zinc-800 rounded-lg">
+                      <div className="aspect-video relative overflow-hidden">
+                        {video.thumbnailUrl ? (
+                          <img
+                            src={video.thumbnailUrl || "/placeholder.svg"}
+                            alt={video.title}
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <div className="w-full h-full bg-zinc-800 flex items-center justify-center">
+                            <span className="text-zinc-500">No thumbnail</span>
+                          </div>
+                        )}
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent flex items-end p-4">
+                          <h3 className="font-medium text-white line-clamp-2">{video.title}</h3>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-12">
+                  <p className="text-zinc-400">No free videos available yet.</p>
+                </div>
+              )}
+            </TabsContent>
+
+            <TabsContent value="premium" className="mt-6">
+              {isLoading ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {[1, 2, 3].map((i) => (
+                    <div key={i} className="aspect-video bg-zinc-800 animate-pulse rounded-lg" />
+                  ))}
+                </div>
+              ) : premiumVideos.length > 0 ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {premiumVideos.map((video) => (
+                    <div key={video.id} className="overflow-hidden bg-zinc-900 border-zinc-800 rounded-lg">
+                      <div className="aspect-video relative overflow-hidden">
+                        {video.thumbnailUrl ? (
+                          <img
+                            src={video.thumbnailUrl || "/placeholder.svg"}
+                            alt={video.title}
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <div className="w-full h-full bg-zinc-800 flex items-center justify-center">
+                            <span className="text-zinc-500">No thumbnail</span>
+                          </div>
+                        )}
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent flex flex-col justify-between p-4">
+                          <div className="self-end bg-red-500 text-white text-xs px-2 py-1 rounded-full flex items-center">
+                            <Lock className="w-3 h-3 mr-1" />
+                            Premium
+                          </div>
+                          <h3 className="font-medium text-white line-clamp-2">{video.title}</h3>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-12">
+                  <p className="text-zinc-400">No premium videos available yet.</p>
+                </div>
+              )}
+            </TabsContent>
+          </Tabs>
         </div>
       </div>
     </div>
