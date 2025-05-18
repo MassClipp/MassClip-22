@@ -4,13 +4,10 @@ import { useState, useEffect } from "react"
 import { useSearchParams } from "next/navigation"
 import Image from "next/image"
 import { Share2, Edit, Instagram, Twitter, Globe, Lock, Upload, Plus } from "lucide-react"
-import { Button } from "@/components/ui/button"
 import { useAuth } from "@/contexts/auth-context"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { collection, query, orderBy, limit, getDocs } from "firebase/firestore"
 import { db } from "@/lib/firebase"
-import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog"
-import VideoUploadForm from "@/components/video-upload-form"
+import UploadModal from "./upload-modal"
 
 interface Creator {
   uid: string
@@ -37,7 +34,7 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
   const [freeVideos, setFreeVideos] = useState([])
   const [premiumVideos, setPremiumVideos] = useState([])
   const [isLoading, setIsLoading] = useState(true)
-  const [isUploadDialogOpen, setIsUploadDialogOpen] = useState(false)
+  const [isUploadModalOpen, setIsUploadModalOpen] = useState(false)
 
   useEffect(() => {
     const fetchVideos = async () => {
@@ -79,7 +76,7 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
     }
 
     fetchVideos()
-  }, [userData?.uid, isUploadDialogOpen]) // Re-fetch when upload dialog closes
+  }, [userData?.uid, isUploadModalOpen]) // Re-fetch when upload modal closes
 
   const handleShare = async () => {
     if (navigator.share) {
@@ -106,6 +103,9 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-black to-zinc-900">
+      {/* Upload Modal */}
+      <UploadModal isOpen={isUploadModalOpen} onClose={() => setIsUploadModalOpen(false)} />
+
       {/* Hero Section */}
       <div className="relative">
         {/* Background gradient with subtle animated lines */}
@@ -208,43 +208,32 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
 
             {/* Action Buttons */}
             <div className="flex gap-3 mt-4 md:mt-0">
-              <Button
-                variant="outline"
-                size="sm"
-                className="bg-zinc-800/50 border-zinc-700 hover:bg-zinc-800 text-white"
+              <button
+                className="px-3 py-1.5 bg-zinc-800/50 border border-zinc-700 hover:bg-zinc-800 text-white rounded-md text-sm"
                 onClick={handleShare}
               >
-                <Share2 className="h-4 w-4 mr-2" />
+                <Share2 className="h-4 w-4 inline mr-2" />
                 Share
-              </Button>
+              </button>
 
               {isOwner && (
                 <>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="bg-zinc-800/50 border-zinc-700 hover:bg-zinc-800 text-white"
+                  <button
+                    className="px-3 py-1.5 bg-zinc-800/50 border border-zinc-700 hover:bg-zinc-800 text-white rounded-md text-sm"
                     onClick={() => (window.location.href = "/dashboard/profile/edit")}
                   >
-                    <Edit className="h-4 w-4 mr-2" />
+                    <Edit className="h-4 w-4 inline mr-2" />
                     Edit Profile
-                  </Button>
+                  </button>
 
                   {/* Upload Button */}
-                  <Dialog open={isUploadDialogOpen} onOpenChange={setIsUploadDialogOpen}>
-                    <DialogTrigger asChild>
-                      <Button size="sm" className="bg-red-500 hover:bg-red-600 text-white">
-                        <Upload className="h-4 w-4 mr-2" />
-                        Upload
-                      </Button>
-                    </DialogTrigger>
-                    <DialogContent className="sm:max-w-[800px] bg-zinc-900 border-zinc-800">
-                      <VideoUploadForm
-                        onComplete={() => setIsUploadDialogOpen(false)}
-                        defaultIsPremium={activeTab === "premium"}
-                      />
-                    </DialogContent>
-                  </Dialog>
+                  <button
+                    className="px-3 py-1.5 bg-red-500 hover:bg-red-600 text-white rounded-md text-sm"
+                    onClick={() => setIsUploadModalOpen(true)}
+                  >
+                    <Upload className="h-4 w-4 inline mr-2" />
+                    Upload
+                  </button>
                 </>
               )}
             </div>
@@ -255,37 +244,44 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
       {/* Content Tabs */}
       <div className="container mx-auto px-4 pb-20">
         <div className="mt-8">
-          <Tabs defaultValue={activeTab} onValueChange={setActiveTab} className="w-full">
-            <TabsList className="bg-zinc-800 border-b border-zinc-700 w-full justify-start rounded-none p-0">
-              <TabsTrigger
-                value="free"
-                className="data-[state=active]:bg-zinc-900 data-[state=active]:border-b-2 data-[state=active]:border-red-500 data-[state=active]:shadow-none rounded-none px-6 py-3"
+          {/* Tab Navigation */}
+          <div className="border-b border-zinc-800 mb-8">
+            <div className="flex">
+              <button
+                className={`px-6 py-3 text-sm font-medium relative ${
+                  activeTab === "free" ? "text-white" : "text-zinc-400 hover:text-white"
+                }`}
+                onClick={() => setActiveTab("free")}
               >
                 Free Videos
-              </TabsTrigger>
-              <TabsTrigger
-                value="premium"
-                className="data-[state=active]:bg-zinc-900 data-[state=active]:border-b-2 data-[state=active]:border-red-500 data-[state=active]:shadow-none rounded-none px-6 py-3"
+                {activeTab === "free" && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-red-500"></div>}
+              </button>
+
+              <button
+                className={`px-6 py-3 text-sm font-medium relative ${
+                  activeTab === "premium" ? "text-white" : "text-zinc-400 hover:text-white"
+                }`}
+                onClick={() => setActiveTab("premium")}
               >
                 Premium Videos
-              </TabsTrigger>
-            </TabsList>
+                {activeTab === "premium" && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-red-500"></div>}
+              </button>
+            </div>
+          </div>
 
-            <TabsContent value="free" className="mt-6">
+          {/* Free Videos Tab */}
+          {activeTab === "free" && (
+            <div>
               {/* Add Video Button (Only visible to profile owner) */}
               {isOwner && (
                 <div className="mb-6">
-                  <Dialog open={isUploadDialogOpen} onOpenChange={setIsUploadDialogOpen}>
-                    <DialogTrigger asChild>
-                      <Button className="bg-zinc-800 hover:bg-zinc-700 text-white border border-zinc-700">
-                        <Plus className="h-4 w-4 mr-2" />
-                        Add Free Video
-                      </Button>
-                    </DialogTrigger>
-                    <DialogContent className="sm:max-w-[800px] bg-zinc-900 border-zinc-800">
-                      <VideoUploadForm onComplete={() => setIsUploadDialogOpen(false)} defaultIsPremium={false} />
-                    </DialogContent>
-                  </Dialog>
+                  <button
+                    className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-white border border-zinc-700 rounded-md"
+                    onClick={() => setIsUploadModalOpen(true)}
+                  >
+                    <Plus className="h-4 w-4 inline mr-2" />
+                    Add Free Video
+                  </button>
                 </div>
               )}
 
@@ -329,38 +325,33 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
                     </p>
 
                     {isOwner && (
-                      <Dialog open={isUploadDialogOpen} onOpenChange={setIsUploadDialogOpen}>
-                        <DialogTrigger asChild>
-                          <Button className="bg-red-500 hover:bg-red-600 text-white">
-                            <Plus className="h-4 w-4 mr-2" />
-                            Add Free Video
-                          </Button>
-                        </DialogTrigger>
-                        <DialogContent className="sm:max-w-[800px] bg-zinc-900 border-zinc-800">
-                          <VideoUploadForm onComplete={() => setIsUploadDialogOpen(false)} defaultIsPremium={false} />
-                        </DialogContent>
-                      </Dialog>
+                      <button
+                        className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-md"
+                        onClick={() => setIsUploadModalOpen(true)}
+                      >
+                        <Plus className="h-4 w-4 inline mr-2" />
+                        Add Free Video
+                      </button>
                     )}
                   </div>
                 </div>
               )}
-            </TabsContent>
+            </div>
+          )}
 
-            <TabsContent value="premium" className="mt-6">
+          {/* Premium Videos Tab */}
+          {activeTab === "premium" && (
+            <div>
               {/* Add Video Button (Only visible to profile owner) */}
               {isOwner && (
                 <div className="mb-6">
-                  <Dialog open={isUploadDialogOpen} onOpenChange={setIsUploadDialogOpen}>
-                    <DialogTrigger asChild>
-                      <Button className="bg-zinc-800 hover:bg-zinc-700 text-white border border-zinc-700">
-                        <Plus className="h-4 w-4 mr-2" />
-                        Add Premium Video
-                      </Button>
-                    </DialogTrigger>
-                    <DialogContent className="sm:max-w-[800px] bg-zinc-900 border-zinc-800">
-                      <VideoUploadForm onComplete={() => setIsUploadDialogOpen(false)} defaultIsPremium={true} />
-                    </DialogContent>
-                  </Dialog>
+                  <button
+                    className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-white border border-zinc-700 rounded-md"
+                    onClick={() => setIsUploadModalOpen(true)}
+                  >
+                    <Plus className="h-4 w-4 inline mr-2" />
+                    Add Premium Video
+                  </button>
                 </div>
               )}
 
@@ -408,23 +399,19 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
                     </p>
 
                     {isOwner && (
-                      <Dialog open={isUploadDialogOpen} onOpenChange={setIsUploadDialogOpen}>
-                        <DialogTrigger asChild>
-                          <Button className="bg-red-500 hover:bg-red-600 text-white">
-                            <Plus className="h-4 w-4 mr-2" />
-                            Add Premium Video
-                          </Button>
-                        </DialogTrigger>
-                        <DialogContent className="sm:max-w-[800px] bg-zinc-900 border-zinc-800">
-                          <VideoUploadForm onComplete={() => setIsUploadDialogOpen(false)} defaultIsPremium={true} />
-                        </DialogContent>
-                      </Dialog>
+                      <button
+                        className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-md"
+                        onClick={() => setIsUploadModalOpen(true)}
+                      >
+                        <Plus className="h-4 w-4 inline mr-2" />
+                        Add Premium Video
+                      </button>
                     )}
                   </div>
                 </div>
               )}
-            </TabsContent>
-          </Tabs>
+            </div>
+          )}
         </div>
       </div>
     </div>
