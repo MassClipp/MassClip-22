@@ -2,7 +2,7 @@ import { notFound } from "next/navigation"
 import type { Metadata } from "next"
 import { getFirestore } from "firebase-admin/firestore"
 import { getApp, getApps, initializeApp, cert } from "firebase-admin/app"
-import CreatorProfileWithSidebar from "@/components/creator-profile-with-sidebar"
+import CreatorProfile from "@/components/creator-profile"
 
 // Initialize Firebase Admin
 function getFirebaseAdmin() {
@@ -124,7 +124,7 @@ export default async function CreatorProfilePage({ params }: { params: { usernam
     const creatorData = serializeData(creatorDoc.data())
     console.log(`Creator profile found for username: ${username}`)
 
-    return <CreatorProfileWithSidebar creator={creatorData} />
+    return <CreatorProfile creator={creatorData} />
   } catch (error) {
     console.error(`Error fetching creator profile for ${username}:`, error)
     notFound()
