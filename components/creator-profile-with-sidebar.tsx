@@ -19,7 +19,6 @@ import {
   ChevronLeft,
   Compass,
   Sparkles,
-  BarChart3,
 } from "lucide-react"
 import { useMediaQuery } from "@/hooks/use-media-query"
 import { cn } from "@/lib/utils"
@@ -127,7 +126,7 @@ export default function CreatorProfileWithSidebar({ creator }: { creator: Creato
       {
         name: "Dashboard",
         href: "/dashboard",
-        icon: BarChart3,
+        icon: ChevronRight,
       },
       {
         name: "Edit Profile",
@@ -141,6 +140,18 @@ export default function CreatorProfileWithSidebar({ creator }: { creator: Creato
     navigationItems.push(creatorTools)
   }
 
+  // Motivational quotes that appear at the bottom of the sidebar
+  const motivationalQuotes = [
+    "Create without limits.",
+    "Share your vision.",
+    "Inspire others daily.",
+    "Elevate your content.",
+    "Build your legacy.",
+  ]
+
+  // Select a random quote
+  const randomQuote = motivationalQuotes[Math.floor(Math.random() * motivationalQuotes.length)]
+
   return (
     <div className="min-h-screen bg-black text-white flex">
       {/* Mobile menu button - only visible on mobile */}
@@ -150,49 +161,40 @@ export default function CreatorProfileWithSidebar({ creator }: { creator: Creato
             variant="outline"
             size="icon"
             onClick={toggleSidebar}
-            className="bg-zinc-900/80 backdrop-blur-sm border-zinc-800 hover:bg-zinc-800 shadow-lg shadow-black/20"
+            className="bg-zinc-900/80 backdrop-blur-sm border-zinc-800 hover:bg-zinc-800"
           >
             {sidebarOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
           </Button>
         </div>
       )}
 
-      {/* Premium Sidebar */}
+      {/* Sleek, Professional Sidebar */}
       <div
         className={cn(
           "fixed inset-y-0 left-0 z-40 transition-all duration-300 ease-in-out",
-          "bg-gradient-to-b from-zinc-900/95 via-zinc-900/95 to-zinc-900/90",
-          "backdrop-blur-md border-r border-zinc-800/30",
-          "shadow-xl shadow-black/20",
+          "bg-black border-r border-zinc-800/30",
           {
             "translate-x-0": sidebarOpen,
             "-translate-x-full": !sidebarOpen,
-            "w-72": !sidebarCollapsed,
-            "w-20": sidebarCollapsed && isDesktop,
+            "w-64": !sidebarCollapsed,
+            "w-16": sidebarCollapsed && isDesktop,
           },
         )}
       >
-        {/* Subtle animated gradient overlay */}
-        <div className="absolute inset-0 bg-gradient-to-br from-red-500/5 via-transparent to-purple-500/5 pointer-events-none" />
-
-        {/* Subtle animated dot pattern */}
-        <div className="absolute inset-0 opacity-5 pointer-events-none bg-[radial-gradient(circle,_#fff_1px,_transparent_1px)] bg-[length:24px_24px]" />
-
         {/* Collapse toggle button - only visible on desktop */}
         {isDesktop && sidebarOpen && (
           <button
             onClick={toggleCollapse}
             className={cn(
-              "absolute -right-3 top-20 z-50",
-              "bg-gradient-to-br from-zinc-800 to-zinc-900",
-              "text-white rounded-full p-1.5",
-              "shadow-lg shadow-black/30 border border-zinc-700/50",
-              "transition-all duration-300 hover:scale-105",
-              "focus:outline-none focus:ring-2 focus:ring-red-500/50 focus:ring-offset-2 focus:ring-offset-zinc-900",
+              "absolute -right-2.5 top-20 z-50",
+              "bg-black text-white rounded-full p-1",
+              "shadow-md border border-zinc-800",
+              "transition-all duration-200 hover:border-red-500/50",
+              "focus:outline-none focus:ring-1 focus:ring-red-500",
             )}
             aria-label={sidebarCollapsed ? "Expand sidebar" : "Collapse sidebar"}
           >
-            {sidebarCollapsed ? <ChevronRight className="h-3.5 w-3.5" /> : <ChevronLeft className="h-3.5 w-3.5" />}
+            {sidebarCollapsed ? <ChevronRight className="h-3 w-3" /> : <ChevronLeft className="h-3 w-3" />}
           </button>
         )}
 
@@ -200,21 +202,19 @@ export default function CreatorProfileWithSidebar({ creator }: { creator: Creato
           {/* Logo area */}
           <div
             className={cn(
-              "flex items-center justify-center py-8 border-b border-zinc-800/30",
-              "bg-gradient-to-r from-zinc-900/0 via-zinc-800/20 to-zinc-900/0",
+              "flex items-center justify-center py-6 border-b border-zinc-800/30",
               sidebarCollapsed && isDesktop ? "px-0" : "px-6",
             )}
           >
             <Link
               href="/"
               className={cn(
-                "font-bold transition-all duration-300 relative group",
-                "text-transparent bg-clip-text bg-gradient-to-r from-red-500 to-red-600",
+                "font-bold transition-all duration-200",
+                "text-red-500",
                 sidebarCollapsed && isDesktop ? "text-xl" : "text-2xl",
               )}
             >
               {sidebarCollapsed && isDesktop ? "MC" : "MassClip"}
-              <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-gradient-to-r from-red-500 to-red-600 transition-all duration-300 group-hover:w-full"></span>
             </Link>
           </div>
 
@@ -224,16 +224,16 @@ export default function CreatorProfileWithSidebar({ creator }: { creator: Creato
               <div key={group.group} className="mb-6">
                 {/* Group label */}
                 {(!sidebarCollapsed || !isDesktop) && (
-                  <div className="px-4 py-2 text-xs font-medium text-zinc-400 uppercase tracking-wider">
+                  <div className="px-3 py-2 text-xs font-medium text-zinc-500 uppercase tracking-wider">
                     {group.group}
                   </div>
                 )}
                 {sidebarCollapsed && isDesktop && groupIndex > 0 && (
-                  <div className="h-px mx-2 my-4 bg-gradient-to-r from-zinc-800/0 via-zinc-800/50 to-zinc-800/0"></div>
+                  <div className="h-px mx-2 my-4 bg-zinc-800/50"></div>
                 )}
 
                 {/* Group items */}
-                <div className="space-y-1 mt-2">
+                <div className="space-y-1 mt-1">
                   {group.items.map((item) => {
                     const isActive = activeItem === item.href
                     return (
@@ -245,45 +245,29 @@ export default function CreatorProfileWithSidebar({ creator }: { creator: Creato
                           if (!isDesktop) setSidebarOpen(false)
                         }}
                         className={cn(
-                          "flex items-center rounded-lg transition-all duration-200",
-                          "relative overflow-hidden group",
-                          sidebarCollapsed && isDesktop ? "justify-center py-3 px-2" : "py-2.5 px-4",
+                          "flex items-center rounded-md transition-all duration-200",
+                          "relative group",
+                          sidebarCollapsed && isDesktop ? "justify-center py-3 px-2" : "py-2 px-3",
                           isActive
-                            ? "text-white bg-gradient-to-r from-red-500/10 to-red-600/5 font-medium"
+                            ? "text-white bg-zinc-800/50 font-medium"
                             : "text-zinc-400 hover:text-white hover:bg-zinc-800/30",
                         )}
                         title={item.name}
                       >
                         {/* Active indicator */}
                         {isActive && (
-                          <span className="absolute left-0 top-0 bottom-0 w-0.5 bg-gradient-to-b from-red-500 to-red-600 rounded-r"></span>
+                          <span className="absolute left-0 top-0 bottom-0 w-0.5 bg-red-500 rounded-r"></span>
                         )}
 
-                        {/* Icon with subtle glow for active state */}
+                        {/* Icon */}
                         <div className={cn("relative", isActive && "text-red-500")}>
                           <item.icon
-                            className={cn(
-                              "h-5 w-5 transition-all",
-                              sidebarCollapsed && isDesktop ? "" : "mr-3",
-                              isActive && "drop-shadow-[0_0_3px_rgba(239,68,68,0.3)]",
-                            )}
+                            className={cn("h-5 w-5 transition-all", sidebarCollapsed && isDesktop ? "" : "mr-3")}
                           />
                         </div>
 
-                        {/* Text with gradient hover effect */}
-                        {(!sidebarCollapsed || !isDesktop) && (
-                          <span
-                            className={cn(
-                              "relative",
-                              "after:absolute after:bottom-0 after:left-0 after:h-[1px] after:bg-red-500/70",
-                              "after:w-0 after:transition-all after:duration-300",
-                              "group-hover:after:w-full",
-                              isActive && "after:w-full",
-                            )}
-                          >
-                            {item.name}
-                          </span>
-                        )}
+                        {/* Text */}
+                        {(!sidebarCollapsed || !isDesktop) && <span>{item.name}</span>}
                       </Link>
                     )
                   })}
@@ -292,19 +276,25 @@ export default function CreatorProfileWithSidebar({ creator }: { creator: Creato
             ))}
           </nav>
 
+          {/* Motivational quote - only visible when expanded */}
+          {!sidebarCollapsed && isDesktop && (
+            <div className="px-4 py-3 mx-3 mb-4 bg-zinc-900/50 rounded-md border border-zinc-800/50">
+              <p className="text-xs text-zinc-400 italic">"{randomQuote}"</p>
+            </div>
+          )}
+
           {/* User section */}
           {isOwner && (
             <div
               className={cn(
                 "border-t border-zinc-800/30 py-4 mt-auto",
-                "bg-gradient-to-t from-zinc-900/50 to-transparent",
                 sidebarCollapsed && isDesktop ? "px-2" : "px-4",
               )}
             >
               {/* User info - only show when expanded */}
               {!sidebarCollapsed && isDesktop && (
                 <div className="flex items-center mb-4 px-2">
-                  <div className="relative w-10 h-10 rounded-full overflow-hidden border border-zinc-700/50 shadow-md">
+                  <div className="relative w-8 h-8 rounded-full overflow-hidden border border-zinc-800">
                     {creator.profilePic ? (
                       <Image
                         src={creator.profilePic || "/placeholder.svg"}
@@ -313,11 +303,10 @@ export default function CreatorProfileWithSidebar({ creator }: { creator: Creato
                         className="object-cover"
                       />
                     ) : (
-                      <div className="w-full h-full bg-gradient-to-br from-red-500/20 to-red-600/20 flex items-center justify-center">
-                        <span className="text-lg font-medium text-white">{creator.displayName.charAt(0)}</span>
+                      <div className="w-full h-full bg-zinc-800 flex items-center justify-center">
+                        <span className="text-sm font-medium text-white">{creator.displayName.charAt(0)}</span>
                       </div>
                     )}
-                    <div className="absolute bottom-0 right-0 w-3 h-3 bg-green-500 rounded-full border-2 border-zinc-900"></div>
                   </div>
                   <div className="ml-3 overflow-hidden">
                     <p className="text-sm font-medium text-white truncate">{creator.displayName}</p>
@@ -331,10 +320,8 @@ export default function CreatorProfileWithSidebar({ creator }: { creator: Creato
                 variant="ghost"
                 className={cn(
                   "w-full transition-all duration-200",
-                  "bg-gradient-to-r hover:from-red-950/30 hover:to-red-900/20",
-                  "text-zinc-400 hover:text-white border border-transparent",
-                  "hover:border-red-900/30 hover:shadow-inner",
-                  sidebarCollapsed && isDesktop ? "justify-center p-2" : "justify-start px-4 py-2",
+                  "text-zinc-400 hover:text-white hover:bg-zinc-800/50",
+                  sidebarCollapsed && isDesktop ? "justify-center p-2" : "justify-start px-3 py-2",
                 )}
                 onClick={handleLogout}
                 title="Log out"
@@ -351,12 +338,11 @@ export default function CreatorProfileWithSidebar({ creator }: { creator: Creato
               <div
                 className={cn(
                   "text-xs font-medium",
-                  "bg-gradient-to-r from-amber-200 to-yellow-400 bg-clip-text text-transparent",
-                  "flex items-center gap-1.5",
+                  "flex items-center gap-1.5 text-red-500",
                   sidebarCollapsed && isDesktop ? "justify-center" : "",
                 )}
               >
-                <Sparkles className="h-3.5 w-3.5 text-amber-300" />
+                <Sparkles className="h-3.5 w-3.5" />
                 {(!sidebarCollapsed || !isDesktop) && "Creator Pro"}
               </div>
             </div>
@@ -373,7 +359,7 @@ export default function CreatorProfileWithSidebar({ creator }: { creator: Creato
       <div
         className={cn(
           "flex-1 transition-all duration-300",
-          sidebarOpen ? (sidebarCollapsed ? "ml-20" : "ml-72") : "ml-0",
+          sidebarOpen ? (sidebarCollapsed ? "ml-16" : "ml-64") : "ml-0",
         )}
       >
         <CreatorProfile creator={creator} />
