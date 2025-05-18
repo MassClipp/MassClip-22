@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button"
 import { Home, User, Video, ShoppingBag, Settings, Menu, X, LogOut, ChevronRight, ChevronLeft } from "lucide-react"
 import { useMediaQuery } from "@/hooks/use-media-query"
 import { cn } from "@/lib/utils"
+import { useRouter } from "next/navigation"
 
 interface Creator {
   uid: string
@@ -26,11 +27,12 @@ interface Creator {
 }
 
 export default function CreatorProfileWithSidebar({ creator }: { creator: Creator }) {
-  const { user, logOut } = useAuth()
+  const { user, signOut } = useAuth()
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const isDesktop = useMediaQuery("(min-width: 1024px)")
   const isOwner = user && user.uid === creator.uid
+  const router = useRouter()
 
   // Initialize sidebar state based on screen size
   useEffect(() => {
@@ -53,8 +55,18 @@ export default function CreatorProfileWithSidebar({ creator }: { creator: Creato
     setSidebarCollapsed(!sidebarCollapsed)
   }
 
+  // Handle logout with proper error handling
+  const handleLogout = async () => {
+    try {
+      await signOut()
+      router.push("/login")
+    } catch (error) {
+      console.error("Error signing out:", error)
+    }
+  }
+
   return (
-    <div className="min-h-screen bg-black text-white flex flex-col lg:flex-row">
+    <div className="min-h-screen bg-black text-white flex">
       {/* Mobile menu button - only visible on mobile */}
       {!isDesktop && (
         <div className="fixed top-4 left-4 z-50">
@@ -72,7 +84,7 @@ export default function CreatorProfileWithSidebar({ creator }: { creator: Creato
       {/* Sidebar */}
       <div
         className={cn(
-          "fixed inset-y-0 left-0 z-40 bg-zinc-900/95 backdrop-blur-md border-r border-zinc-800/50 transition-all duration-300 ease-in-out lg:relative",
+          "fixed inset-y-0 left-0 z-40 bg-zinc-900/95 backdrop-blur-md border-r border-zinc-800/50 transition-all duration-300 ease-in-out",
           {
             "translate-x-0": sidebarOpen,
             "-translate-x-full": !sidebarOpen,
@@ -212,7 +224,7 @@ export default function CreatorProfileWithSidebar({ creator }: { creator: Creato
                   "text-zinc-400 hover:text-white hover:bg-zinc-800/50",
                   sidebarCollapsed && isDesktop ? "w-full justify-center p-2" : "w-full justify-start",
                 )}
-                onClick={() => logOut()}
+                onClick={handleLogout}
                 title="Log out"
               >
                 <LogOut className={cn("h-5 w-5", sidebarCollapsed && isDesktop ? "" : "mr-3")} />
@@ -228,17 +240,8 @@ export default function CreatorProfileWithSidebar({ creator }: { creator: Creato
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-30" onClick={() => setSidebarOpen(false)} />
       )}
 
-      {/* Main content */}
-      <div
-        className={cn(
-          "flex-1 transition-all duration-300",
-          isDesktop && sidebarOpen && sidebarCollapsed
-            ? "lg:ml-16"
-            : isDesktop && sidebarOpen && !sidebarCollapsed
-              ? "lg:ml-64"
-              : "",
-        )}
-      >
+      {/* Main content - fixed the black gap by removing lg:ml-X classes and using flex-1 */}
+      <div className={cn("flex-1", sidebarOpen ? (sidebarCollapsed ? "ml-16" : "ml-64") : "ml-0")}>
         <CreatorProfile creator={creator} />
       </div>
     </div>
