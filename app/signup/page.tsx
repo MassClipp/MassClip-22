@@ -33,7 +33,11 @@ export default function SignupPage() {
   const router = useRouter()
 
   useEffect(() => {
-    initializeFirebaseApp()
+    try {
+      initializeFirebaseApp()
+    } catch (error) {
+      console.error("Error initializing Firebase:", error)
+    }
   }, [])
 
   // Username validation
@@ -133,17 +137,19 @@ export default function SignupPage() {
     setIsLoading(true)
 
     try {
+      console.log("Signing up with:", { email, username, displayName })
       const result = await signUp(email, password, username, displayName)
 
       if (result.success) {
+        console.log("Signup successful, redirecting to:", `/creator/${username}`)
         // Redirect to their public profile
         router.push(`/creator/${username}`)
       } else {
         setErrorMessage(result.error || "Failed to create account")
       }
     } catch (error) {
+      console.error("Signup error:", error)
       setErrorMessage("An unexpected error occurred")
-      console.error(error)
     } finally {
       setIsLoading(false)
     }
@@ -175,16 +181,18 @@ export default function SignupPage() {
     setIsGoogleLoading(true)
 
     try {
+      console.log("Signing up with Google:", { username, displayName })
       const result = await signInWithGoogle(username, displayName)
 
       if (result.success) {
+        console.log("Google signup successful, redirecting to:", `/creator/${username}`)
         router.push(`/creator/${username}`)
       } else {
         setErrorMessage(result.error || "Failed to sign up with Google")
       }
     } catch (error) {
+      console.error("Google signup error:", error)
       setErrorMessage("An unexpected error occurred")
-      console.error(error)
     } finally {
       setIsGoogleLoading(false)
     }

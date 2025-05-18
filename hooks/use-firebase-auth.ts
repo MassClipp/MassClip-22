@@ -93,10 +93,14 @@ export function useFirebaseAuth() {
       const result = await signInWithPopup(auth, provider)
       const user = result.user
 
+      console.log("Google sign in successful, user:", user.uid)
+
       // Check if username is already taken
       if (username) {
+        console.log("Checking if username exists:", username)
         const usernameDoc = await getDoc(doc(db, "usernames", username))
         if (usernameDoc.exists()) {
+          console.log("Username already exists")
           return { success: false, error: "Username is already taken" }
         }
       }
@@ -106,6 +110,7 @@ export function useFirebaseAuth() {
 
       // If user doesn't exist in Firestore, create a new document
       if (!userDoc.exists()) {
+        console.log("Creating new user document for:", user.uid)
         await setDoc(doc(db, "users", user.uid), {
           email: user.email,
           displayName: displayName || user.displayName,
@@ -118,12 +123,48 @@ export function useFirebaseAuth() {
 
         // Create username document
         if (username) {
+          console.log("Creating username document:", username)
           await setDoc(doc(db, "usernames", username), {
             uid: user.uid,
             createdAt: serverTimestamp(),
           })
 
           // Create creator profile
+          console.log("Creating creator profile for:", username)
+          await setDoc(doc(db, "creators", username), {
+            uid: user.uid,
+            username,
+            displayName: displayName || user.displayName || username,
+            createdAt: serverTimestamp(),
+            bio: "",
+            profilePic: user.photoURL || "",
+            freeClips: [],
+            paidClips: [],
+          })
+        }
+      } else {
+        // If user exists but doesn't have a username yet
+        const userData = userDoc.data()
+        if (!userData.username && username) {
+          console.log("Updating existing user with username:", username)
+          await setDoc(
+            doc(db, "users", user.uid),
+            {
+              username: username,
+              displayName: displayName || user.displayName,
+            },
+            { merge: true },
+          )
+
+          // Create username document
+          console.log("Creating username document for existing user:", username)
+          await setDoc(doc(db, "usernames", username), {
+            uid: user.uid,
+            createdAt: serverTimestamp(),
+          })
+
+          // Create creator profile
+          console.log("Creating creator profile for existing user:", username)
           await setDoc(doc(db, "creators", username), {
             uid: user.uid,
             username,
@@ -165,17 +206,24 @@ export function useFirebaseAuth() {
     try {
       setLoading(true)
 
+      console.log("Starting signup process with:", { email, username, displayName })
+
       // Check if username is already taken
       if (username) {
+        console.log("Checking if username exists:", username)
         const usernameDoc = await getDoc(doc(db, "usernames", username))
         if (usernameDoc.exists()) {
+          console.log("Username already exists")
           return { success: false, error: "Username is already taken" }
         }
       }
 
+      console.log("Creating user with email and password")
       const { user } = await createUserWithEmailAndPassword(auth, email, password)
+      console.log("User created:", user.uid)
 
       // Create user document in Firestore
+      console.log("Creating user document")
       await setDoc(doc(db, "users", user.uid), {
         email,
         displayName: displayName || null,
@@ -187,12 +235,14 @@ export function useFirebaseAuth() {
 
       // Create username document
       if (username) {
+        console.log("Creating username document:", username)
         await setDoc(doc(db, "usernames", username), {
           uid: user.uid,
           createdAt: serverTimestamp(),
         })
 
         // Create creator profile
+        console.log("Creating creator profile:", username)
         await setDoc(doc(db, "creators", username), {
           uid: user.uid,
           username,
@@ -205,6 +255,7 @@ export function useFirebaseAuth() {
         })
       }
 
+      console.log("Signup process completed successfully")
       return { success: true }
     } catch (err) {
       console.error("Error signing up:", err)

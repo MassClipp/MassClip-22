@@ -66,6 +66,7 @@ export async function generateMetadata({ params }: { params: { username: string 
     const creatorDoc = await db.collection("creators").doc(username).get()
 
     if (!creatorDoc.exists) {
+      console.log(`Creator not found for username: ${username}`)
       return {
         title: "Creator Not Found | MassClip",
         description: "The creator profile you're looking for doesn't exist.",
@@ -107,20 +108,66 @@ export default async function CreatorProfilePage({ params }: { params: { usernam
   const { username } = params
 
   try {
+    console.log(`Fetching creator profile for username: ${username}`)
     getFirebaseAdmin()
     const db = getFirestore()
-    const creatorDoc = await db.collection("creators").doc(username).get()
 
+    // Check if username exists in usernames collection
+    const usernameDoc = await db.collection("usernames").doc(username).get()
+    if (!usernameDoc.exists) {
+      console.log(`Username not found in usernames collection: ${username}`)
+      notFound()
+    }
+
+    // Get creator profile
+    const creatorDoc = await db.collection("creators").doc(username).get()
     if (!creatorDoc.exists) {
+      console.log(`Creator profile not found for username: ${username}`)
+
+      // If username exists but creator profile doesn't, try to create it
+      const usernameData = usernameDoc.data()
+      if (usernameData && usernameData.uid) {
+        console.log(`Attempting to create missing creator profile for username: ${username}`)
+
+        // Get user data
+        const userDoc = await db.collection("users").doc(usernameData.uid).get()
+        if (userDoc.exists) {
+          const userData = userDoc.data()
+
+          // Create creator profile
+          await db
+            .collection("creators")
+            .doc(username)
+            .set({
+              uid: usernameData.uid,
+              username,
+              displayName: userData.displayName || username,
+              createdAt: new Date(),
+              bio: "",
+              profilePic: userData.photoURL || "",
+              freeClips: [],
+              paidClips: [],
+            })
+
+          console.log(`Created missing creator profile for username: ${username}`)
+
+          // Fetch the newly created profile
+          const newCreatorDoc = await db.collection("creators").doc(username).get()
+          const creatorData = serializeData(newCreatorDoc.data())
+          return <CreatorProfile creator={creatorData} />
+        }
+      }
+
       notFound()
     }
 
     // Serialize the Firestore data to plain objects
     const creatorData = serializeData(creatorDoc.data())
+    console.log(`Creator profile found for username: ${username}`)
 
     return <CreatorProfile creator={creatorData} />
   } catch (error) {
-    console.error("Error fetching creator profile:", error)
+    console.error(`Error fetching creator profile for ${username}:`, error)
     notFound()
   }
 }
