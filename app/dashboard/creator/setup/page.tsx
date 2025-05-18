@@ -35,6 +35,8 @@ export default function CreatorProfileSetup() {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [error, setError] = useState("")
   const [bypassUsernameCheck, setBypassUsernameCheck] = useState(false)
+  const [debugInfo, setDebugInfo] = useState<string | null>(null)
+  const [useServerFallback, setUseServerFallback] = useState(false)
 
   // Generate a suggested username when component mounts
   useEffect(() => {
@@ -155,6 +157,40 @@ export default function CreatorProfileSetup() {
     }
   }, [username, bypassUsernameCheck, toast])
 
+  // Function to create profile using the API endpoint
+  const createProfileViaAPI = async (profileData: any) => {
+    if (!user) return { success: false, error: "No user authenticated" }
+
+    try {
+      // Get the current user's ID token
+      const idToken = await user.getIdToken()
+
+      // Call the API endpoint
+      const response = await fetch("/api/create-profile", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${idToken}`,
+        },
+        body: JSON.stringify(profileData),
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to create profile via API")
+      }
+
+      return { success: true }
+    } catch (error) {
+      console.error("API profile creation error:", error)
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : "Unknown error",
+      }
+    }
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
@@ -175,34 +211,79 @@ export default function CreatorProfileSetup() {
 
     setIsSubmitting(true)
     setError("")
+    setDebugInfo(null)
 
     try {
       console.log("Creating profile with username:", username)
 
-      // Create or update creator profile in Firebase
-      const profileRef = db.collection("creatorProfiles").doc(user.uid)
-
-      await profileRef.set(
-        {
-          username: username.toLowerCase(),
-          displayName: displayName || user.displayName || "Creator",
-          bio: bio || "",
-          socialLinks: {
-            instagram: instagram || "",
-            twitter: twitter || "",
-            youtube: youtube || "",
-            website: website || "",
-          },
-          profileImage: "",
-          coverImage: "",
-          createdAt: new Date(),
-          updatedAt: new Date(),
-          isVerified: false,
+      // Prepare profile data
+      const profileData = {
+        username: username.toLowerCase(),
+        displayName: displayName || user.displayName || "Creator",
+        bio: bio || "",
+        socialLinks: {
+          instagram: instagram || "",
+          twitter: twitter || "",
+          youtube: youtube || "",
+          website: website || "",
         },
-        { merge: true },
-      )
+        profileImage: "",
+        coverImage: "",
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        isVerified: false,
+        userId: user.uid, // Add user ID for reference
+        email: user.email, // Add email for reference
+      }
 
-      console.log("Profile created successfully")
+      // Log the data we're trying to save
+      console.log("Profile data to save:", JSON.stringify(profileData))
+
+      let success = false
+
+      // Try client-side first if not using server fallback
+      if (!useServerFallback) {
+        try {
+          // Create or update creator profile in Firebase with retry logic
+          const profileRef = db.collection("creatorProfiles").doc(user.uid)
+
+          // Try up to 3 times
+          for (let attempt = 1; attempt <= 3; attempt++) {
+            try {
+              console.log(`Attempt ${attempt} to save profile...`)
+              await profileRef.set(profileData, { merge: true })
+              console.log("Profile created successfully on attempt", attempt)
+              success = true
+              break
+            } catch (err) {
+              console.error(`Error on attempt ${attempt}:`, err)
+              // Wait a bit before retrying
+              if (attempt < 3) {
+                await new Promise((resolve) => setTimeout(resolve, 1000))
+              }
+            }
+          }
+        } catch (err) {
+          console.error("All client-side attempts failed:", err)
+        }
+      }
+
+      // If client-side failed or we're using server fallback, try the API
+      if (!success) {
+        console.log("Trying server-side API fallback...")
+        const apiResult = await createProfileViaAPI(profileData)
+
+        if (apiResult.success) {
+          console.log("Profile created successfully via API")
+          success = true
+        } else {
+          throw new Error(`API fallback failed: ${apiResult.error}`)
+        }
+      }
+
+      if (!success) {
+        throw new Error("Failed to create profile after all attempts")
+      }
 
       toast({
         title: "Profile created!",
@@ -213,7 +294,24 @@ export default function CreatorProfileSetup() {
       router.push("/dashboard/creator")
     } catch (error) {
       console.error("Error creating profile:", error)
-      setError("Failed to create profile. Please try again.")
+
+      // Detailed error information for debugging
+      const errorMessage = error instanceof Error ? error.message : String(error)
+      const errorStack = error instanceof Error ? error.stack : "No stack trace"
+
+      setDebugInfo(`Error: ${errorMessage}\n\nStack: ${errorStack}`)
+
+      setError("Failed to create profile. Please try again or contact support.")
+
+      // Show more detailed toast with option to try server fallback
+      toast({
+        title: "Profile creation failed",
+        description: "There was an error creating your profile. Try using the server fallback option.",
+        variant: "destructive",
+      })
+
+      // Offer server fallback option
+      setUseServerFallback(true)
     } finally {
       setIsSubmitting(false)
     }
@@ -403,7 +501,16 @@ export default function CreatorProfileSetup() {
                 </div>
               </div>
 
-              <div className="pt-4">
+              <div className="pt-4 space-y-4">
+                {useServerFallback && (
+                  <Alert className="bg-amber-900/20 border-amber-800">
+                    <AlertCircle className="h-4 w-4 text-amber-500" />
+                    <AlertDescription>
+                      Using server fallback method. This may help resolve permission issues.
+                    </AlertDescription>
+                  </Alert>
+                )}
+
                 <Button
                   type="submit"
                   className="w-full"
@@ -421,7 +528,21 @@ export default function CreatorProfileSetup() {
                     "Create Profile"
                   )}
                 </Button>
+
+                {error && !useServerFallback && (
+                  <Button type="button" variant="outline" className="w-full" onClick={() => setUseServerFallback(true)}>
+                    Try Server Fallback Method
+                  </Button>
+                )}
               </div>
+
+              {/* Debug information section */}
+              {debugInfo && (
+                <div className="mt-6 p-4 bg-gray-900 rounded-md">
+                  <h4 className="text-sm font-medium text-gray-300 mb-2">Debug Information</h4>
+                  <pre className="text-xs text-gray-400 whitespace-pre-wrap break-all">{debugInfo}</pre>
+                </div>
+              )}
             </form>
           </CardContent>
         </Card>
