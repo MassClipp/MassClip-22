@@ -124,6 +124,11 @@ export default async function CreatorProfilePage({ params }: { params: { usernam
     const creatorData = serializeData(creatorDoc.data())
     console.log(`Creator profile found for username: ${username}`)
 
+    // Add mock social links for demo if they don't exist
+    if (!creatorData.socialLinks) {
+      creatorData.socialLinks = {}
+    }
+
     return <CreatorProfileWithSidebar creator={creatorData} />
   } catch (error) {
     console.error(`Error fetching creator profile for ${username}:`, error)

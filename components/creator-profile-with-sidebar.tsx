@@ -18,6 +18,11 @@ interface Creator {
   freeClips: any[]
   paidClips: any[]
   createdAt: string
+  socialLinks?: {
+    instagram?: string
+    twitter?: string
+    website?: string
+  }
 }
 
 export default function CreatorProfileWithSidebar({ creator }: { creator: Creator }) {
@@ -39,7 +44,7 @@ export default function CreatorProfileWithSidebar({ creator }: { creator: Creato
             variant="outline"
             size="icon"
             onClick={toggleSidebar}
-            className="bg-gray-900 border-gray-700 hover:bg-gray-800"
+            className="bg-zinc-900/80 backdrop-blur-sm border-zinc-800 hover:bg-zinc-800"
           >
             {sidebarOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
           </Button>
@@ -49,7 +54,7 @@ export default function CreatorProfileWithSidebar({ creator }: { creator: Creato
       {/* Sidebar */}
       <div
         className={cn(
-          "fixed inset-y-0 left-0 z-40 w-64 bg-gray-900 border-r border-gray-800 transition-transform duration-300 ease-in-out lg:relative lg:translate-x-0",
+          "fixed inset-y-0 left-0 z-40 w-64 bg-zinc-900/95 backdrop-blur-md border-r border-zinc-800/50 transition-transform duration-300 ease-in-out lg:relative lg:translate-x-0",
           {
             "translate-x-0": sidebarOpen || isDesktop,
             "-translate-x-full": !sidebarOpen && !isDesktop,
@@ -57,8 +62,8 @@ export default function CreatorProfileWithSidebar({ creator }: { creator: Creato
         )}
       >
         <div className="flex flex-col h-full p-4">
-          <div className="flex items-center justify-center py-6 border-b border-gray-800 mb-6">
-            <Link href="/" className="text-xl font-bold text-red-500">
+          <div className="flex items-center justify-center py-6 border-b border-zinc-800/50 mb-6">
+            <Link href="/" className="text-xl font-bold text-crimson">
               MassClip
             </Link>
           </div>
@@ -66,7 +71,7 @@ export default function CreatorProfileWithSidebar({ creator }: { creator: Creato
           <nav className="flex-1 space-y-1">
             <Link
               href="/"
-              className="flex items-center px-4 py-3 text-gray-300 hover:bg-gray-800 rounded-md transition-colors"
+              className="flex items-center px-4 py-3 text-zinc-400 hover:text-white hover:bg-zinc-800/50 rounded-md transition-colors"
             >
               <Home className="mr-3 h-5 w-5" />
               <span>Home</span>
@@ -74,17 +79,17 @@ export default function CreatorProfileWithSidebar({ creator }: { creator: Creato
 
             <Link
               href={`/creator/${creator.username}`}
-              className="flex items-center px-4 py-3 bg-gray-800 text-white rounded-md transition-colors"
+              className="flex items-center px-4 py-3 bg-zinc-800/50 text-white rounded-md transition-colors"
             >
               <User className="mr-3 h-5 w-5" />
               <span>Profile</span>
             </Link>
 
-            <div className="px-4 py-2 text-xs text-gray-500 uppercase mt-6">Content</div>
+            <div className="px-4 py-2 text-xs text-zinc-500 uppercase mt-6">Content</div>
 
             <Link
               href={`/creator/${creator.username}?tab=free`}
-              className="flex items-center px-4 py-3 text-gray-300 hover:bg-gray-800 rounded-md transition-colors"
+              className="flex items-center px-4 py-3 text-zinc-400 hover:text-white hover:bg-zinc-800/50 rounded-md transition-colors"
             >
               <Video className="mr-3 h-5 w-5" />
               <span>Free Clips</span>
@@ -92,7 +97,7 @@ export default function CreatorProfileWithSidebar({ creator }: { creator: Creato
 
             <Link
               href={`/creator/${creator.username}?tab=premium`}
-              className="flex items-center px-4 py-3 text-gray-300 hover:bg-gray-800 rounded-md transition-colors"
+              className="flex items-center px-4 py-3 text-zinc-400 hover:text-white hover:bg-zinc-800/50 rounded-md transition-colors"
             >
               <ShoppingBag className="mr-3 h-5 w-5" />
               <span>Premium Clips</span>
@@ -100,11 +105,11 @@ export default function CreatorProfileWithSidebar({ creator }: { creator: Creato
 
             {isOwner && (
               <>
-                <div className="px-4 py-2 text-xs text-gray-500 uppercase mt-6">Creator Tools</div>
+                <div className="px-4 py-2 text-xs text-zinc-500 uppercase mt-6">Creator Tools</div>
 
                 <Link
                   href="/dashboard"
-                  className="flex items-center px-4 py-3 text-gray-300 hover:bg-gray-800 rounded-md transition-colors"
+                  className="flex items-center px-4 py-3 text-zinc-400 hover:text-white hover:bg-zinc-800/50 rounded-md transition-colors"
                 >
                   <ChevronRight className="mr-3 h-5 w-5" />
                   <span>Dashboard</span>
@@ -112,7 +117,7 @@ export default function CreatorProfileWithSidebar({ creator }: { creator: Creato
 
                 <Link
                   href="/dashboard/profile/edit"
-                  className="flex items-center px-4 py-3 text-gray-300 hover:bg-gray-800 rounded-md transition-colors"
+                  className="flex items-center px-4 py-3 text-zinc-400 hover:text-white hover:bg-zinc-800/50 rounded-md transition-colors"
                 >
                   <Settings className="mr-3 h-5 w-5" />
                   <span>Edit Profile</span>
@@ -122,10 +127,10 @@ export default function CreatorProfileWithSidebar({ creator }: { creator: Creato
           </nav>
 
           {isOwner && (
-            <div className="border-t border-gray-800 pt-4 mt-6">
+            <div className="border-t border-zinc-800/50 pt-4 mt-6">
               <Button
                 variant="ghost"
-                className="w-full justify-start text-gray-400 hover:text-white hover:bg-gray-800"
+                className="w-full justify-start text-zinc-400 hover:text-white hover:bg-zinc-800/50"
                 onClick={() => logOut()}
               >
                 <LogOut className="mr-3 h-5 w-5" />
@@ -138,7 +143,7 @@ export default function CreatorProfileWithSidebar({ creator }: { creator: Creato
 
       {/* Overlay for mobile */}
       {!isDesktop && sidebarOpen && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 z-30" onClick={() => setSidebarOpen(false)} />
+        <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-30" onClick={() => setSidebarOpen(false)} />
       )}
 
       {/* Main content */}
