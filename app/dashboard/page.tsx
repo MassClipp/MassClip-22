@@ -1,11 +1,10 @@
 "use client"
 
-import type React from "react"
-
 import { useRef, useEffect, useState } from "react"
 import { useSearchParams } from "next/navigation"
 import { motion } from "framer-motion"
 import { Search, Clock, Brain, Rocket, ChevronRight, TrendingUp, Lock, Film } from "lucide-react"
+import DashboardHeader from "@/components/dashboard-header"
 import VideoRow from "@/components/video-row"
 import { useVimeoShowcases } from "@/hooks/use-vimeo-showcases"
 import { useVimeoVideos } from "@/hooks/use-vimeo-videos"
@@ -27,7 +26,6 @@ export default function Dashboard() {
   const [featuredVideos, setFeaturedVideos] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [activeCategory, setActiveCategory] = useState<string | null>(null)
-  const [searchInputValue, setSearchInputValue] = useState(searchQuery)
 
   // Get user plan
   const { isProUser } = useUserPlan()
@@ -190,15 +188,6 @@ export default function Dashboard() {
     },
   ]
 
-  const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault()
-    if (searchInputValue.trim()) {
-      // Save the search query to localStorage for potential use in other components
-      localStorage.setItem("lastSearchQuery", searchInputValue)
-      router.push(`/dashboard?search=${encodeURIComponent(searchInputValue)}`)
-    }
-  }
-
   return (
     <div className="relative min-h-screen bg-black text-white">
       {/* Premium Gradient Background */}
@@ -210,34 +199,16 @@ export default function Dashboard() {
         <div className="absolute bottom-0 left-0 right-0 h-[30vh] bg-gradient-to-t from-zinc-900/20 to-transparent"></div>
       </div>
 
-      <div className="relative z-10">
-        {/* Search Bar */}
-        <div className="mb-8">
-          <form onSubmit={handleSearch} className="relative max-w-md">
-            <input
-              type="text"
-              value={searchInputValue}
-              onChange={(e) => setSearchInputValue(e.target.value)}
-              placeholder="Search for clips..."
-              className="w-full bg-zinc-900/50 border border-zinc-800 text-white px-4 py-2 pl-10 rounded-md focus:outline-none focus:ring-1 focus:ring-crimson"
-            />
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-zinc-500" />
-            <button
-              type="submit"
-              className="absolute right-3 top-1/2 transform -translate-y-1/2 text-zinc-500 hover:text-white"
-            >
-              <Search className="h-4 w-4" />
-            </button>
-          </form>
-        </div>
+      <DashboardHeader initialSearchQuery={searchQuery} />
 
+      <main className="pt-20 pb-16 relative z-10">
         {/* Search Results Header (if searching) */}
         {searchQuery && (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5 }}
-            className="mb-8"
+            className="px-6 mb-8"
           >
             <div className="bg-zinc-900/30 backdrop-blur-sm border border-zinc-800/50 rounded-xl p-6 shadow-xl">
               <h2 className="text-2xl font-light tracking-wider text-white mb-2 flex items-center">
@@ -255,7 +226,7 @@ export default function Dashboard() {
 
         {/* Featured Section (if not searching) */}
         {!searchQuery && !isLoadingData && (
-          <motion.div variants={containerVariants} initial="hidden" animate="visible" className="mb-12">
+          <motion.div variants={containerVariants} initial="hidden" animate="visible" className="px-6 mb-12">
             <motion.div variants={itemVariants} className="flex items-center justify-between mb-6">
               <h1 className="text-3xl font-extralight tracking-tight text-white">
                 <span className="text-gradient-accent">Featured</span> Clips
@@ -299,7 +270,7 @@ export default function Dashboard() {
 
         {/* Category Quick Links (if not searching) */}
         {!searchQuery && !isLoadingData && (
-          <motion.div variants={containerVariants} initial="hidden" animate="visible" className="mb-12">
+          <motion.div variants={containerVariants} initial="hidden" animate="visible" className="px-6 mb-12">
             <motion.h3
               variants={itemVariants}
               className="text-xl font-light tracking-tight text-white mb-4 flex items-center"
@@ -344,9 +315,7 @@ export default function Dashboard() {
                     }`}
                   >
                     <div
-                      className={`p-2 rounded-full bg-black/30 mr-3 ${
-                        activeCategory === category.name ? "text-crimson" : "text-crimson"
-                      }`}
+                      className={`p-2 rounded-full bg-black/30 mr-3 ${activeCategory === category.name ? "text-crimson" : "text-crimson"}`}
                     >
                       {category.icon}
                     </div>
@@ -360,14 +329,14 @@ export default function Dashboard() {
 
         {/* Error state */}
         {error && (
-          <div className="py-10 text-center">
+          <div className="px-6 py-10 text-center">
             <p className="text-red-500">Error loading videos: {error}</p>
           </div>
         )}
 
         {/* Loading state (initial) */}
         {isLoadingData && (
-          <div className="py-10">
+          <div className="px-6 py-10">
             <div className="h-8 w-48 bg-zinc-900/50 rounded-md animate-pulse mb-8"></div>
             <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
               {Array.from({ length: 6 }).map((_, index) => (
@@ -399,7 +368,7 @@ export default function Dashboard() {
 
         {/* No videos state */}
         {!isLoadingData && showcaseNames.length === 0 && (
-          <div className="py-10 text-center">
+          <div className="px-6 py-10 text-center">
             {searchQuery ? (
               <p className="text-zinc-400">No videos found matching "{searchQuery}". Try a different search term.</p>
             ) : (
@@ -409,7 +378,7 @@ export default function Dashboard() {
             )}
           </div>
         )}
-      </div>
+      </main>
     </div>
   )
 }

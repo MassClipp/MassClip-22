@@ -19,23 +19,18 @@ import {
   ChevronRight,
   DollarSign,
   Infinity,
+  Globe,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useAuth } from "@/contexts/auth-context"
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu"
 import Logo from "@/components/logo"
 import UserDownloadInfo from "@/components/user-download-info"
 import { useUserPlan } from "@/hooks/use-user-plan"
 import { useDownloadLimit } from "@/contexts/download-limit-context"
 import { useMobile } from "@/hooks/use-mobile"
 import { useScrollLock } from "@/hooks/use-scroll-lock"
+import { doc, getDoc } from "firebase/firestore"
+import { db } from "@/lib/firebase"
 
 export default function DashboardHeader({ initialSearchQuery = "" }) {
   const [isScrolled, setIsScrolled] = useState(false)
@@ -43,6 +38,7 @@ export default function DashboardHeader({ initialSearchQuery = "" }) {
   const [isSearchOpen, setIsSearchOpen] = useState(false)
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
   const [isLoggingOut, setIsLoggingOut] = useState(false)
+  const [username, setUsername] = useState<string | null>(null)
   const { user, signOut } = useAuth()
   const { isProUser, loading } = useUserPlan()
   const { remainingDownloads, hasReachedLimit } = useDownloadLimit()
@@ -53,6 +49,25 @@ export default function DashboardHeader({ initialSearchQuery = "" }) {
 
   // Lock scroll when mobile menu is open
   useScrollLock(isMobileMenuOpen)
+
+  // Fetch username for profile redirect
+  useEffect(() => {
+    const fetchUsername = async () => {
+      if (user) {
+        try {
+          const userDoc = await getDoc(doc(db, "users", user.uid))
+          if (userDoc.exists()) {
+            const userData = userDoc.data()
+            setUsername(userData.username || null)
+          }
+        } catch (error) {
+          console.error("Error fetching username:", error)
+        }
+      }
+    }
+
+    fetchUsername()
+  }, [user])
 
   useEffect(() => {
     const handleScroll = () => {
@@ -111,6 +126,12 @@ export default function DashboardHeader({ initialSearchQuery = "" }) {
       localStorage.setItem("lastSearchQuery", searchQuery)
       router.push(`/dashboard?search=${encodeURIComponent(searchQuery)}`)
       setIsSearchOpen(false)
+    }
+  }
+
+  const handleProfileClick = () => {
+    if (username) {
+      router.push(`/creator/${username}`)
     }
   }
 
@@ -186,47 +207,76 @@ export default function DashboardHeader({ initialSearchQuery = "" }) {
               </>
             )}
 
-            {/* User Menu */}
+            {/* User Menu - Desktop: Hover for dropdown, click for profile */}
             {user && (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-full"
-                  >
-                    <User className="h-5 w-5" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent className="w-56 bg-zinc-900/95 backdrop-blur-sm border-zinc-800 text-white">
-                  <DropdownMenuLabel className="font-light">
-                    {user.displayName ? user.displayName : "My Account"}
-                  </DropdownMenuLabel>
-                  <UserDownloadInfo />
-                  <DropdownMenuSeparator className="bg-zinc-800" />
-                  <DropdownMenuItem
-                    className="hover:bg-zinc-800 focus:bg-zinc-800"
-                    onClick={() => router.push("/dashboard/user")}
-                  >
-                    Dashboard
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    className="hover:bg-zinc-800 focus:bg-zinc-800"
-                    onClick={() => router.push("/dashboard/profile")}
-                  >
-                    Profile
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator className="bg-zinc-800" />
-                  <DropdownMenuItem
-                    className="hover:bg-zinc-800 focus:bg-zinc-800"
-                    onClick={handleLogout}
-                    disabled={isLoggingOut}
-                  >
-                    <LogOut className="h-4 w-4 mr-2" />
-                    {isLoggingOut ? "Logging out..." : "Log out"}
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
+              <div className="relative group">
+                {/* Profile Icon Button - Clickable */}
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-full"
+                  onClick={handleProfileClick}
+                  aria-label="Go to profile"
+                >
+                  <User className="h-5 w-5" />
+                </Button>
+
+                {/* Dropdown Menu - Appears on Hover */}
+                <div className="hidden group-hover:block absolute right-0 mt-2 w-56 z-50">
+                  <div className="bg-zinc-900/95 backdrop-blur-sm border border-zinc-800 rounded-md shadow-lg overflow-hidden">
+                    <div className="px-4 py-3">
+                      <p className="text-sm font-light text-white">
+                        {user.displayName ? user.displayName : "My Account"}
+                      </p>
+                    </div>
+
+                    <UserDownloadInfo />
+
+                    <div className="border-t border-zinc-800"></div>
+
+                    <div className="py-1">
+                      {username && (
+                        <Link
+                          href={`/creator/${username}`}
+                          className="flex items-center px-4 py-2 text-sm text-white hover:bg-zinc-800"
+                        >
+                          <Globe className="h-4 w-4 mr-2" />
+                          Public Profile
+                        </Link>
+                      )}
+
+                      <Link
+                        href="/dashboard/user"
+                        className="flex items-center px-4 py-2 text-sm text-white hover:bg-zinc-800"
+                      >
+                        <User className="h-4 w-4 mr-2" />
+                        Dashboard
+                      </Link>
+
+                      <Link
+                        href="/dashboard/profile"
+                        className="flex items-center px-4 py-2 text-sm text-white hover:bg-zinc-800"
+                      >
+                        <User className="h-4 w-4 mr-2" />
+                        Profile
+                      </Link>
+                    </div>
+
+                    <div className="border-t border-zinc-800"></div>
+
+                    <div className="py-1">
+                      <button
+                        onClick={handleLogout}
+                        disabled={isLoggingOut}
+                        className="flex w-full items-center px-4 py-2 text-sm text-red-500 hover:bg-zinc-800 disabled:opacity-50"
+                      >
+                        <LogOut className="h-4 w-4 mr-2" />
+                        {isLoggingOut ? "Logging out..." : "Log out"}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
             )}
           </div>
 
@@ -352,6 +402,21 @@ export default function DashboardHeader({ initialSearchQuery = "" }) {
             {/* User Section */}
             <div className="mt-8 pt-6 border-t border-zinc-800/50 bg-black">
               <p className="text-xs text-zinc-500 font-light px-4 mb-4">Account</p>
+
+              {username && (
+                <Link
+                  href={`/creator/${username}`}
+                  className="flex items-center justify-between py-3 px-4 text-white/90 hover:text-white hover:bg-white/5 rounded-lg transition-colors group"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                >
+                  <div className="flex items-center">
+                    <Globe className="h-4 w-4 mr-3" />
+                    <span className="text-sm font-light">Public Profile</span>
+                  </div>
+                  <ChevronRight className="h-4 w-4 text-zinc-500 group-hover:text-white/70 transition-colors" />
+                </Link>
+              )}
+
               <Link
                 href="/dashboard/user"
                 className="flex items-center justify-between py-3 px-4 text-white/90 hover:text-white hover:bg-white/5 rounded-lg transition-colors group"
@@ -363,6 +428,7 @@ export default function DashboardHeader({ initialSearchQuery = "" }) {
                 </div>
                 <ChevronRight className="h-4 w-4 text-zinc-500 group-hover:text-white/70 transition-colors" />
               </Link>
+
               <Link
                 href="/dashboard/profile"
                 className="flex items-center justify-between py-3 px-4 text-white/90 hover:text-white hover:bg-white/5 rounded-lg transition-colors group"
