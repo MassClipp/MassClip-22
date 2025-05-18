@@ -12,17 +12,17 @@ import {
   GoogleAuthProvider,
   signInWithPopup,
 } from "firebase/auth"
-import { doc, getDoc, setDoc, getFirestore } from "firebase/firestore"
+import { doc, getDoc, setDoc, getFirestore, serverTimestamp } from "firebase/firestore"
 import { useRouter, usePathname } from "next/navigation"
 import { initializeFirebaseApp } from "@/lib/firebase"
 
-// Define the user type
-export interface User extends FirebaseUser {
-  plan?: string
-  permissions?: {
-    download?: boolean
-    premium?: boolean
-  }
+// Update the User interface to include username
+interface User {
+  uid: string
+  email: string | null
+  displayName: string | null
+  photoURL: string | null
+  username?: string
 }
 
 // Define the auth context type
@@ -61,46 +61,51 @@ export function AuthProvider({ children }: AuthProviderProps) {
       // Subscribe to auth state changes
       const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
         if (firebaseUser) {
-          // Get additional user data from Firestore
-          try {
-            const userDoc = await getDoc(doc(db, "users", firebaseUser.uid))
+          const fetchUserData = async (user: FirebaseUser) => {
+            try {
+              const userDocRef = doc(db, "users", user.uid)
+              const userDoc = await getDoc(userDocRef)
 
-            if (userDoc.exists()) {
-              // Combine Firebase user with Firestore data
-              const userData = userDoc.data()
-              const enhancedUser = {
-                ...firebaseUser,
-                plan: userData.plan || "free",
-                permissions: userData.permissions || { download: false, premium: false },
-              } as User
+              if (userDoc.exists()) {
+                const userData = userDoc.data()
 
-              setUser(enhancedUser)
-            } else {
-              // Create a new user document if it doesn't exist
-              const newUserData = {
-                email: firebaseUser.email,
-                displayName: firebaseUser.displayName,
-                photoURL: firebaseUser.photoURL,
-                createdAt: new Date(),
-                plan: "free",
-                permissions: { download: false, premium: false },
+                // Update the user state with the username
+                setUser({
+                  uid: user.uid,
+                  email: user.email,
+                  displayName: user.displayName,
+                  photoURL: user.photoURL,
+                  username: userData.username || null,
+                })
+
+                // Check if user has set up profile
+                if (!userData.hasSetupProfile && window.location.pathname !== "/setup-profile") {
+                  router.push("/setup-profile")
+                }
+              } else {
+                // Create user document if it doesn't exist
+                await setDoc(userDocRef, {
+                  email: user.email,
+                  displayName: user.displayName,
+                  photoURL: user.photoURL,
+                  createdAt: serverTimestamp(),
+                  plan: "free",
+                  downloads: 0,
+                  lastReset: serverTimestamp(),
+                  hasSetupProfile: false,
+                })
+
+                // Redirect to setup profile
+                router.push("/setup-profile")
               }
-
-              await setDoc(doc(db, "users", firebaseUser.uid), newUserData)
-
-              const enhancedUser = {
-                ...firebaseUser,
-                plan: "free",
-                permissions: { download: false, premium: false },
-              } as User
-
-              setUser(enhancedUser)
+            } catch (error) {
+              console.error("Error fetching user data:", error)
+            } finally {
+              setLoading(false)
             }
-          } catch (error) {
-            console.error("Error fetching user data:", error)
-            // Still set the basic user even if Firestore fails
-            setUser(firebaseUser as User)
           }
+
+          fetchUserData(firebaseUser)
         } else {
           setUser(null)
 
