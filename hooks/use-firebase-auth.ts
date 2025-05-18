@@ -11,8 +11,15 @@ import {
   GoogleAuthProvider,
   signInWithPopup,
 } from "firebase/auth"
-import { doc, getDoc, setDoc } from "firebase/firestore"
+import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore"
 import { auth, isFirebaseConfigured, db } from "@/lib/firebase"
+
+// Update the return type to include success and error
+interface AuthResult {
+  success: boolean
+  error?: string
+  demo?: boolean
+}
 
 export function useFirebaseAuth() {
   const [user, setUser] = useState<User | null>(null)
@@ -49,7 +56,7 @@ export function useFirebaseAuth() {
   }, [])
 
   // Sign in with email and password
-  const signIn = async (email: string, password: string) => {
+  const signIn = async (email: string, password: string): Promise<AuthResult> => {
     if (!isFirebaseConfigured) {
       console.warn("Firebase is not properly configured. Using demo mode.")
       // Simulate successful login for demo/preview purposes
@@ -72,7 +79,7 @@ export function useFirebaseAuth() {
   }
 
   // Sign in with Google
-  const signInWithGoogle = async () => {
+  const signInWithGoogle = async (username?: string, displayName?: string): Promise<AuthResult> => {
     if (!isFirebaseConfigured) {
       console.warn("Firebase is not properly configured. Using demo mode.")
       setLoading(false)
@@ -86,6 +93,14 @@ export function useFirebaseAuth() {
       const result = await signInWithPopup(auth, provider)
       const user = result.user
 
+      // Check if username is already taken
+      if (username) {
+        const usernameDoc = await getDoc(doc(db, "usernames", username))
+        if (usernameDoc.exists()) {
+          return { success: false, error: "Username is already taken" }
+        }
+      }
+
       // Check if user document exists in Firestore
       const userDoc = await getDoc(doc(db, "users", user.uid))
 
@@ -93,12 +108,33 @@ export function useFirebaseAuth() {
       if (!userDoc.exists()) {
         await setDoc(doc(db, "users", user.uid), {
           email: user.email,
-          displayName: user.displayName,
+          displayName: displayName || user.displayName,
+          username: username,
           photoURL: user.photoURL,
-          createdAt: new Date(),
+          createdAt: serverTimestamp(),
           plan: "free",
           permissions: { download: false, premium: false },
         })
+
+        // Create username document
+        if (username) {
+          await setDoc(doc(db, "usernames", username), {
+            uid: user.uid,
+            createdAt: serverTimestamp(),
+          })
+
+          // Create creator profile
+          await setDoc(doc(db, "creators", username), {
+            uid: user.uid,
+            username,
+            displayName: displayName || user.displayName || username,
+            createdAt: serverTimestamp(),
+            bio: "",
+            profilePic: user.photoURL || "",
+            freeClips: [],
+            paidClips: [],
+          })
+        }
       }
 
       return { success: true }
@@ -112,7 +148,12 @@ export function useFirebaseAuth() {
   }
 
   // Sign up with email and password
-  const signUp = async (email: string, password: string) => {
+  const signUp = async (
+    email: string,
+    password: string,
+    username?: string,
+    displayName?: string,
+  ): Promise<AuthResult> => {
     if (!isFirebaseConfigured) {
       console.warn("Firebase is not properly configured. Using demo mode.")
       // Simulate successful signup for demo/preview purposes
@@ -123,7 +164,47 @@ export function useFirebaseAuth() {
     setError(null)
     try {
       setLoading(true)
-      await createUserWithEmailAndPassword(auth, email, password)
+
+      // Check if username is already taken
+      if (username) {
+        const usernameDoc = await getDoc(doc(db, "usernames", username))
+        if (usernameDoc.exists()) {
+          return { success: false, error: "Username is already taken" }
+        }
+      }
+
+      const { user } = await createUserWithEmailAndPassword(auth, email, password)
+
+      // Create user document in Firestore
+      await setDoc(doc(db, "users", user.uid), {
+        email,
+        displayName: displayName || null,
+        username: username || null,
+        createdAt: serverTimestamp(),
+        plan: "free",
+        permissions: { download: false, premium: false },
+      })
+
+      // Create username document
+      if (username) {
+        await setDoc(doc(db, "usernames", username), {
+          uid: user.uid,
+          createdAt: serverTimestamp(),
+        })
+
+        // Create creator profile
+        await setDoc(doc(db, "creators", username), {
+          uid: user.uid,
+          username,
+          displayName: displayName || username,
+          createdAt: serverTimestamp(),
+          bio: "",
+          profilePic: "",
+          freeClips: [],
+          paidClips: [],
+        })
+      }
+
       return { success: true }
     } catch (err) {
       console.error("Error signing up:", err)
