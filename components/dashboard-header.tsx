@@ -20,7 +20,6 @@ import {
   DollarSign,
   Infinity,
   Video,
-  Settings,
   UserCircle,
   Copy,
   Database,
@@ -288,14 +287,6 @@ export default function DashboardHeader({ initialSearchQuery = "" }) {
 
                   <DropdownMenuItem
                     className="hover:bg-zinc-800 focus:bg-zinc-800"
-                    onClick={() => router.push("/dashboard/profile")}
-                  >
-                    <Settings className="h-4 w-4 mr-2" />
-                    Account Settings
-                  </DropdownMenuItem>
-
-                  <DropdownMenuItem
-                    className="hover:bg-zinc-800 focus:bg-zinc-800"
                     onClick={() => router.push("/dashboard/creator-hub")}
                   >
                     <Video className="h-4 w-4 mr-2" />
@@ -491,18 +482,6 @@ export default function DashboardHeader({ initialSearchQuery = "" }) {
                 </div>
                 <ChevronRight className="h-4 w-4 text-zinc-500 group-hover:text-white/70 transition-colors" />
               </button>
-
-              <Link
-                href="/dashboard/profile"
-                className="flex items-center justify-between py-3 px-4 text-white/90 hover:text-white hover:bg-white/5 rounded-lg transition-colors group"
-                onClick={() => setIsMobileMenuOpen(false)}
-              >
-                <div className="flex items-center">
-                  <Settings className="h-4 w-4 mr-3" />
-                  <span className="text-sm font-light">Account Settings</span>
-                </div>
-                <ChevronRight className="h-4 w-4 text-zinc-500 group-hover:text-white/70 transition-colors" />
-              </Link>
 
               <Link
                 href="/dashboard/creator-hub"
