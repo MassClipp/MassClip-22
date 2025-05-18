@@ -23,22 +23,15 @@ export interface User extends FirebaseUser {
     download?: boolean
     premium?: boolean
   }
-  username?: string
-  displayName?: string
 }
 
 // Define the auth context type
 interface AuthContextType {
   user: User | null
   loading: boolean
-  signIn: (email: string, password: string) => Promise<{ success: boolean; error?: string }>
-  signInWithGoogle: (username?: string, displayName?: string) => Promise<{ success: boolean; error?: string }>
-  signUp: (
-    email: string,
-    password: string,
-    username?: string,
-    displayName?: string,
-  ) => Promise<{ success: boolean; error?: string }>
+  signIn: (email: string, password: string) => Promise<void>
+  signInWithGoogle: () => Promise<void>
+  signUp: (email: string, password: string) => Promise<void>
   signOut: () => Promise<void>
   resetPassword: (email: string) => Promise<void>
 }
@@ -133,20 +126,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
   }, [pathname, router])
 
   // Sign in with Google
-  const signInWithGoogle = async (username?: string, displayName?: string) => {
+  const signInWithGoogle = async () => {
     try {
       setLoading(true)
       const auth = getAuth()
       const provider = new GoogleAuthProvider()
       const db = getFirestore()
-
-      // Check if username is already taken
-      if (username) {
-        const usernameDoc = await getDoc(doc(db, "usernames", username))
-        if (usernameDoc.exists()) {
-          return { success: false, error: "Username is already taken" }
-        }
-      }
 
       const result = await signInWithPopup(auth, provider)
       const user = result.user
@@ -154,48 +139,33 @@ export function AuthProvider({ children }: AuthProviderProps) {
       // Check if user document exists in Firestore
       const userDoc = await getDoc(doc(db, "users", user.uid))
 
+      // If user doesn't exist in Firestore, create a new document
       if (!userDoc.exists()) {
-        // Create new user document
-        const userData = {
+        await setDoc(doc(db, "users", user.uid), {
           email: user.email,
-          displayName: displayName || user.displayName,
-          username: username || null,
+          displayName: user.displayName,
           photoURL: user.photoURL,
           createdAt: new Date(),
           plan: "free",
           permissions: { download: false, premium: false },
-        }
+        })
+      }
 
-        await setDoc(doc(db, "users", user.uid), userData)
+      // Get redirect URL from query params if we're in the browser
+      let redirectTo = "/dashboard"
 
-        // If username is provided, also create a document in the usernames collection
-        if (username) {
-          await setDoc(doc(db, "usernames", username), {
-            uid: user.uid,
-            createdAt: new Date(),
-          })
-
-          // Create a document in the creators collection
-          await setDoc(doc(db, "creators", username), {
-            uid: user.uid,
-            username,
-            displayName: displayName || user.displayName || username,
-            createdAt: new Date(),
-            bio: "",
-            profilePic: user.photoURL || "",
-            freeClips: [],
-            paidClips: [],
-          })
+      if (typeof window !== "undefined") {
+        const params = new URLSearchParams(window.location.search)
+        const redirect = params.get("redirect")
+        if (redirect) {
+          redirectTo = redirect
         }
       }
 
-      return { success: true }
-    } catch (error: any) {
+      router.push(redirectTo)
+    } catch (error) {
       console.error("Error signing in with Google:", error)
-      return {
-        success: false,
-        error: error.message || "Failed to sign in with Google",
-      }
+      throw error
     } finally {
       setLoading(false)
     }
@@ -229,61 +199,25 @@ export function AuthProvider({ children }: AuthProviderProps) {
   }
 
   // Sign up function
-  const signUp = async (email: string, password: string, username?: string, displayName?: string) => {
+  const signUp = async (email: string, password: string) => {
     try {
       setLoading(true)
       const auth = getAuth()
-      const db = getFirestore()
-
-      // Check if username is already taken
-      if (username) {
-        const usernameDoc = await getDoc(doc(db, "usernames", username))
-        if (usernameDoc.exists()) {
-          return { success: false, error: "Username is already taken" }
-        }
-      }
-
       const { user: newUser } = await createUserWithEmailAndPassword(auth, email, password)
 
       // Create user document in Firestore
-      const userData = {
+      const db = getFirestore()
+      await setDoc(doc(db, "users", newUser.uid), {
         email,
-        displayName: displayName || null,
-        username: username || null,
         createdAt: new Date(),
         plan: "free",
         permissions: { download: false, premium: false },
-      }
+      })
 
-      await setDoc(doc(db, "users", newUser.uid), userData)
-
-      // If username is provided, also create a document in the usernames collection
-      if (username) {
-        await setDoc(doc(db, "usernames", username), {
-          uid: newUser.uid,
-          createdAt: new Date(),
-        })
-
-        // Create a document in the creators collection
-        await setDoc(doc(db, "creators", username), {
-          uid: newUser.uid,
-          username,
-          displayName: displayName || username,
-          createdAt: new Date(),
-          bio: "",
-          profilePic: "",
-          freeClips: [],
-          paidClips: [],
-        })
-      }
-
-      return { success: true }
-    } catch (error: any) {
+      router.push("/dashboard")
+    } catch (error) {
       console.error("Error signing up:", error)
-      return {
-        success: false,
-        error: error.message || "Failed to create account",
-      }
+      throw error
     } finally {
       setLoading(false)
     }

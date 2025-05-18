@@ -1,21 +1,22 @@
 "use client"
 
+import { Button } from "@/components/ui/button"
 import { Loader2 } from "lucide-react"
 
 interface GoogleAuthButtonProps {
   onClick: () => Promise<void>
   isLoading: boolean
   text: string
-  disabled?: boolean
 }
 
-export default function GoogleAuthButton({ onClick, isLoading, text, disabled = false }: GoogleAuthButtonProps) {
+export function GoogleAuthButton({ onClick, isLoading, text }: GoogleAuthButtonProps) {
   return (
-    <button
+    <Button
       type="button"
+      variant="outline"
       onClick={onClick}
-      disabled={isLoading || disabled}
-      className="w-full bg-white hover:bg-gray-100 text-gray-800 border border-gray-300 transition-all duration-300 flex items-center justify-center gap-2 group py-2 px-4 rounded-md disabled:opacity-50 disabled:cursor-not-allowed"
+      disabled={isLoading}
+      className="w-full bg-white hover:bg-gray-100 text-gray-800 border border-gray-300 transition-all duration-300 flex items-center justify-center gap-2 group"
     >
       {isLoading ? (
         <>
@@ -45,6 +46,6 @@ export default function GoogleAuthButton({ onClick, isLoading, text, disabled = 
           <span>{text}</span>
         </>
       )}
-    </button>
+    </Button>
   )
 }
