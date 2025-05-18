@@ -1,29 +1,30 @@
-import { type NextRequest, NextResponse } from "next/server"
-import { db } from "@/lib/firebase-admin"
-import { initializeFirebaseAdmin } from "@/lib/firebase-admin"
+import { NextResponse } from "next/server"
+import { initializeFirebaseAdmin, db } from "@/lib/firebase-admin"
+import { validateUsername } from "@/lib/username-validation"
 
-export async function GET(request: NextRequest) {
+export async function POST(request: Request) {
   try {
+    const { username } = await request.json()
+
+    // Validate username format
+    const validation = validateUsername(username)
+    if (!validation.isValid) {
+      return NextResponse.json({ available: false, message: validation.message }, { status: 400 })
+    }
+
     // Initialize Firebase Admin
     initializeFirebaseAdmin()
 
-    // Get username from query params
-    const { searchParams } = new URL(request.url)
-    const username = searchParams.get("username")
+    // Check if username exists in creators collection
+    const creatorSnapshot = await db.collection("creators").where("username", "==", username).limit(1).get()
 
-    if (!username) {
-      return NextResponse.json({ error: "Username is required" }, { status: 400 })
+    if (!creatorSnapshot.empty) {
+      return NextResponse.json({ available: false, message: "Username is already taken" }, { status: 200 })
     }
 
-    // Query Firestore to check if username exists
-    const creatorsRef = db.collection("creators")
-    const snapshot = await creatorsRef.where("username", "==", username.toLowerCase()).limit(1).get()
-
-    const isUnique = snapshot.empty
-
-    return NextResponse.json({ isUnique })
+    return NextResponse.json({ available: true, message: "Username is available" }, { status: 200 })
   } catch (error) {
     console.error("Error checking username:", error)
-    return NextResponse.json({ error: "Failed to check username" }, { status: 500 })
+    return NextResponse.json({ available: false, message: "Error checking username" }, { status: 500 })
   }
 }

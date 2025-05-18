@@ -1,78 +1,79 @@
+import type { Metadata } from "next"
 import { notFound } from "next/navigation"
-import { initializeFirebaseAdmin } from "@/lib/firebase-admin"
-import { db } from "@/lib/firebase-admin"
 import { CreatorProfile } from "@/components/creator-profile"
-import type { VimeoVideo } from "@/lib/types"
+import { initializeFirebaseAdmin, db } from "@/lib/firebase-admin"
 
-interface CreatorPageProps {
+interface PageProps {
   params: {
     username: string
   }
 }
 
-export default async function CreatorPage({ params }: CreatorPageProps) {
+export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { username } = params
 
   try {
     // Initialize Firebase Admin
     initializeFirebaseAdmin()
 
-    // Query for creator by username
-    const creatorsRef = db.collection("creators")
-    const snapshot = await creatorsRef.where("username", "==", username.toLowerCase()).limit(1).get()
+    // Query for creator
+    const creatorSnapshot = await db.collection("creators").where("username", "==", username).limit(1).get()
 
-    if (snapshot.empty) {
+    if (creatorSnapshot.empty) {
+      return {
+        title: "Creator Not Found | MassClip",
+        description: "The creator profile you're looking for doesn't exist.",
+      }
+    }
+
+    const creatorData = creatorSnapshot.docs[0].data()
+
+    return {
+      title: `${creatorData.displayName} | MassClip Creator`,
+      description: creatorData.bio || `Check out ${creatorData.displayName}'s content on MassClip`,
+      openGraph: {
+        title: `${creatorData.displayName} | MassClip Creator`,
+        description: creatorData.bio || `Check out ${creatorData.displayName}'s content on MassClip`,
+        url: `${process.env.NEXT_PUBLIC_SITE_URL}/creator/${username}`,
+        siteName: "MassClip",
+        images: [
+          {
+            url: creatorData.profilePic || `${process.env.NEXT_PUBLIC_SITE_URL}/images/default-profile.png`,
+            width: 1200,
+            height: 630,
+            alt: creatorData.displayName,
+          },
+        ],
+        locale: "en_US",
+        type: "website",
+      },
+    }
+  } catch (error) {
+    console.error("Error generating metadata:", error)
+    return {
+      title: "Creator Profile | MassClip",
+      description: "View creator content on MassClip",
+    }
+  }
+}
+
+export default async function CreatorProfilePage({ params }: PageProps) {
+  const { username } = params
+
+  try {
+    // Initialize Firebase Admin
+    initializeFirebaseAdmin()
+
+    // Check if creator exists
+    const creatorSnapshot = await db.collection("creators").where("username", "==", username).limit(1).get()
+
+    if (creatorSnapshot.empty) {
       return notFound()
     }
 
-    // Get creator data
-    const creatorDoc = snapshot.docs[0]
-    const creatorData = creatorDoc.data()
-
-    // Fetch free clips data
-    let freeClips: VimeoVideo[] = []
-    if (creatorData.freeClips && creatorData.freeClips.length > 0) {
-      // If freeClips contains full video objects, use them directly
-      if (typeof creatorData.freeClips[0] === "object" && creatorData.freeClips[0].uri) {
-        freeClips = creatorData.freeClips
-      } else {
-        // Otherwise, fetch the videos from their IDs
-        // This would need implementation based on how you store clip references
-        // For now, we'll leave it as an empty array
-      }
-    }
-
-    // Fetch paid clips data
-    let paidClips: VimeoVideo[] = []
-    if (creatorData.paidClips && creatorData.paidClips.length > 0) {
-      // If paidClips contains full video objects, use them directly
-      if (typeof creatorData.paidClips[0] === "object" && creatorData.paidClips[0].uri) {
-        paidClips = creatorData.paidClips
-      } else {
-        // Otherwise, fetch the videos from their IDs
-        // This would need implementation based on how you store clip references
-        // For now, we'll leave it as an empty array
-      }
-    }
-
-    // Prepare creator data for client component
-    const creator = {
-      uid: creatorData.uid,
-      username: creatorData.username,
-      displayName: creatorData.displayName || creatorData.username,
-      bio: creatorData.bio || "",
-      profilePic: creatorData.profilePic || "",
-      freeClips,
-      paidClips,
-    }
-
-    return (
-      <main className="min-h-screen bg-zinc-950">
-        <CreatorProfile creator={creator} />
-      </main>
-    )
+    return <CreatorProfile username={username} />
   } catch (error) {
-    console.error("Error fetching creator profile:", error)
+    console.error("Error loading creator profile:", error)
     return notFound()
   }
 }

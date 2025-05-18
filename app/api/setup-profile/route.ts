@@ -1,67 +1,67 @@
-import { type NextRequest, NextResponse } from "next/server"
-import { cookies } from "next/headers"
-import { initializeFirebaseAdmin } from "@/lib/firebase-admin"
-import { db } from "@/lib/firebase-admin"
+import { NextResponse } from "next/server"
+import { initializeFirebaseAdmin, db } from "@/lib/firebase-admin"
 import { validateUsername } from "@/lib/username-validation"
 
-export async function POST(request: NextRequest) {
+export async function POST(request: Request) {
   try {
+    const { username, displayName, bio } = await request.json()
+
+    // Get the session cookie
+    const cookies = request.headers.get("cookie") || ""
+    const sessionCookie = cookies
+      .split("; ")
+      .find((c) => c.startsWith("session="))
+      ?.split("=")[1]
+
+    if (!sessionCookie) {
+      return NextResponse.json({ success: false, message: "Not authenticated" }, { status: 401 })
+    }
+
     // Initialize Firebase Admin
     initializeFirebaseAdmin()
 
-    // Get the session cookie
-    const sessionCookie = cookies().get("session")?.value
-
-    if (!sessionCookie) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
-
     // Verify the session cookie
-    const decodedClaims = await (await import("firebase-admin/auth")).getAuth().verifySessionCookie(sessionCookie)
+    const admin = await import("firebase-admin/auth")
+    const decodedClaims = await admin.getAuth().verifySessionCookie(sessionCookie)
     const uid = decodedClaims.uid
 
-    // Get request body
-    const body = await request.json()
-    const { username, displayName, bio } = body
-
-    // Validate username
+    // Validate username format
     const validation = validateUsername(username)
     if (!validation.isValid) {
-      return NextResponse.json({ error: validation.message }, { status: 400 })
+      return NextResponse.json({ success: false, message: validation.message }, { status: 400 })
     }
 
-    // Check if username is unique
-    const creatorsRef = db.collection("creators")
-    const snapshot = await creatorsRef.where("username", "==", username.toLowerCase()).limit(1).get()
+    // Check if username exists
+    const creatorSnapshot = await db.collection("creators").where("username", "==", username).limit(1).get()
 
-    if (!snapshot.empty) {
-      return NextResponse.json({ error: "Username is already taken" }, { status: 400 })
+    if (!creatorSnapshot.empty) {
+      return NextResponse.json({ success: false, message: "Username is already taken" }, { status: 400 })
     }
 
-    // Create creator document
-    await creatorsRef.doc(uid).set({
+    // Create creator profile
+    const creatorData = {
       uid,
-      username: username.toLowerCase(),
+      username,
       displayName: displayName || username,
       bio: bio || "",
-      profilePic: decodedClaims.picture || "",
+      profilePic: "",
       freeClips: [],
       paidClips: [],
       createdAt: new Date(),
-    })
+    }
+
+    // Add to creators collection
+    await db.collection("creators").doc(uid).set(creatorData)
 
     // Update user document to mark profile as set up
-    await db.collection("users").doc(uid).set(
-      {
-        hasSetupProfile: true,
-        username: username.toLowerCase(),
-      },
-      { merge: true },
-    )
+    await db.collection("users").doc(uid).update({
+      hasSetupProfile: true,
+      username,
+    })
 
-    return NextResponse.json({ success: true })
+    return NextResponse.json({ success: true, message: "Profile created successfully" }, { status: 200 })
   } catch (error) {
     console.error("Error setting up profile:", error)
-    return NextResponse.json({ error: "Failed to set up profile" }, { status: 500 })
+    return NextResponse.json({ success: false, message: "Error setting up profile" }, { status: 500 })
   }
 }

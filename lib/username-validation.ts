@@ -1,12 +1,11 @@
 /**
  * Validates a username according to the specified rules
- * - Must be unique (checked separately via Firebase)
  * - Must be lowercase
  * - Must contain only letters, numbers, underscores
  * - Must be between 3-20 characters
  */
-export function validateUsername(username: string): { isValid: boolean; message: string } {
-  // Check if username is provided
+export function validateUsername(username: string): { isValid: boolean; message?: string } {
+  // Check if username is empty
   if (!username) {
     return { isValid: false, message: "Username is required" }
   }
@@ -27,19 +26,5 @@ export function validateUsername(username: string): { isValid: boolean; message:
     return { isValid: false, message: "Username must be between 3-20 characters" }
   }
 
-  return { isValid: true, message: "Username is valid" }
-}
-
-/**
- * Checks if a username is unique in the creators collection
- */
-export async function isUsernameUnique(username: string): Promise<boolean> {
-  try {
-    const response = await fetch(`/api/check-username?username=${encodeURIComponent(username)}`)
-    const data = await response.json()
-    return data.isUnique
-  } catch (error) {
-    console.error("Error checking username uniqueness:", error)
-    throw error
-  }
+  return { isValid: true }
 }

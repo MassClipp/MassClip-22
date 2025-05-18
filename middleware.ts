@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server"
 import type { NextRequest } from "next/server"
-import { initializeFirebaseAdmin } from "@/lib/firebase-admin"
-import { db } from "@/lib/firebase-admin"
+import { initializeFirebaseAdmin, db } from "@/lib/firebase-admin"
 
 // Paths that require authentication
 const authRequiredPaths = ["/dashboard", "/setup-profile"]
@@ -33,8 +32,9 @@ export async function middleware(request: NextRequest) {
       // Initialize Firebase Admin
       initializeFirebaseAdmin()
 
-      // Verify the session cookie
-      const decodedClaims = await (await import("firebase-admin/auth")).getAuth().verifySessionCookie(sessionCookie)
+      // Verify the session cookie - dynamically import to avoid node: scheme issues
+      const admin = await import("firebase-admin/auth")
+      const decodedClaims = await admin.getAuth().verifySessionCookie(sessionCookie)
       const uid = decodedClaims.uid
 
       // Check if user has set up profile
