@@ -23,6 +23,7 @@ import {
   UserCircle,
   Copy,
   Database,
+  AlertCircle,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useAuth } from "@/contexts/auth-context"
@@ -314,6 +315,16 @@ export default function DashboardHeader({ initialSearchQuery = "" }) {
                   <DropdownMenuSeparator className="bg-zinc-800" />
                   <DropdownMenuItem
                     className="hover:bg-zinc-800 focus:bg-zinc-800"
+                    onClick={() => router.push("/debug/profile-bypass")}
+                  >
+                    <AlertCircle className="h-4 w-4 mr-2" />
+                    Debug: Profile Bypass
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator className="bg-zinc-800" />
+
+                  <DropdownMenuSeparator className="bg-zinc-800" />
+                  <DropdownMenuItem
+                    className="hover:bg-zinc-800 focus:bg-zinc-800"
                     onClick={handleLogout}
                     disabled={isLoggingOut}
                   >
@@ -515,6 +526,16 @@ export default function DashboardHeader({ initialSearchQuery = "" }) {
 
           {/* Action Buttons */}
           <div className="p-5 border-t border-zinc-800/50 space-y-3 bg-black">
+            <button
+              onClick={() => {
+                router.push("/debug/profile-bypass")
+                setIsMobileMenuOpen(false)
+              }}
+              className="flex items-center justify-center w-full py-2.5 text-sm text-amber-400 hover:text-amber-300 bg-zinc-800/50 hover:bg-zinc-800 rounded-lg transition-colors mb-2"
+            >
+              <AlertCircle className="h-4 w-4 mr-2" />
+              Debug: Profile Bypass
+            </button>
             <button
               onClick={handleLogout}
               disabled={isLoggingOut}
