@@ -34,21 +34,6 @@ service cloud.firestore {
       }
     }
     
-    // Creator profiles
-    match /creators/{creatorId} {
-      // Allow public read access to creator profiles
-      allow read: if true;
-      
-      // Only allow the creator to update their own profile
-      allow update: if request.auth != null && request.auth.uid == creatorId;
-      
-      // Only allow creation if the user is authenticated and the document ID matches their UID
-      allow create: if request.auth != null && 
-                     request.auth.uid == creatorId &&
-                     // Ensure username is unique (no existing document with this username)
-                     !exists(/databases/$(database)/documents/creators/$(request.resource.data.username));
-    }
-    
     // Function to check if a user has reached their download limit
     function hasReachedDownloadLimit(userId) {
       let user = get(/databases/$(database)/documents/users/$(userId)).data;
