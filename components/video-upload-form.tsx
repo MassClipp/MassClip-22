@@ -2,8 +2,7 @@
 
 import type React from "react"
 
-import { useState, useRef } from "react"
-import { useVideoUpload } from "@/hooks/use-video-upload"
+import { useState, useRef, type FormEvent, type ChangeEvent } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
@@ -13,6 +12,7 @@ import { Progress } from "@/components/ui/progress"
 import { Upload, X, Video, AlertCircle } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/contexts/auth-context"
+import { useToast } from "@/hooks/use-toast"
 
 export default function VideoUploadForm() {
   const [title, setTitle] = useState("")
@@ -21,10 +21,12 @@ export default function VideoUploadForm() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [dragActive, setDragActive] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [isUploading, setIsUploading] = useState(false)
+  const [progress, setProgress] = useState(0)
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const { uploadVideo, isUploading, progress } = useVideoUpload()
   const router = useRouter()
-  const { user } = useAuth()
+  const { user, getIdToken } = useAuth()
+  const { toast } = useToast()
 
   const handleDrag = (e: React.DragEvent) => {
     e.preventDefault()
@@ -63,14 +65,19 @@ export default function VideoUploadForm() {
     setError(null)
   }
 
-  const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileInputChange = (e: ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       handleFileSelect(e.target.files[0])
     }
   }
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
+
+    if (!user) {
+      setError("You must be logged in to upload videos")
+      return
+    }
 
     if (!title.trim()) {
       setError("Please enter a title for your video")
@@ -83,31 +90,102 @@ export default function VideoUploadForm() {
     }
 
     try {
-      await uploadVideo({
-        title,
-        description,
-        isPremium,
-        file: selectedFile,
-        onProgress: (progress) => {
-          console.log(`Upload progress: ${progress}%`)
+      setIsUploading(true)
+      setProgress(0)
+      setError(null)
+
+      // Step 1: Get a pre-signed URL
+      const token = await getIdToken()
+
+      console.log("Getting presigned URL...")
+      const presignedResponse = await fetch("/api/upload/presigned-url", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
         },
-        onComplete: (data) => {
-          console.log("Upload complete:", data)
-          // Redirect to the creator's profile or video management page
-          if (user?.username) {
-            router.push(`/creator/${user.username}?tab=${isPremium ? "premium" : "free"}`)
-          } else {
-            router.push("/dashboard")
-          }
-        },
-        onError: (error) => {
-          console.error("Upload error in component:", error)
-          setError(error.message || "Upload failed. Please try again.")
-        },
+        body: JSON.stringify({
+          filename: selectedFile.name,
+          contentType: selectedFile.type,
+          isPremium,
+        }),
       })
-    } catch (err) {
-      console.error("Unhandled upload error:", err)
-      setError(err instanceof Error ? err.message : "An unknown error occurred")
+
+      if (!presignedResponse.ok) {
+        const errorData = await presignedResponse.json()
+        throw new Error(errorData.error || "Failed to get upload URL")
+      }
+
+      const { presignedUrl, key, fileId, contentType } = await presignedResponse.json()
+      console.log("Got presigned URL:", { key, fileId, contentType })
+
+      // Step 2: Upload the file directly to R2 using fetch instead of XMLHttpRequest
+      console.log("Starting upload to R2...")
+      const uploadResponse = await fetch(presignedUrl, {
+        method: "PUT",
+        headers: {
+          "Content-Type": selectedFile.type,
+        },
+        body: selectedFile,
+      })
+
+      if (!uploadResponse.ok) {
+        throw new Error(`Upload failed with status ${uploadResponse.status}`)
+      }
+
+      console.log("Upload to R2 complete")
+      setProgress(75)
+
+      // Step 3: Save metadata to Firestore
+      console.log("Saving metadata...")
+      const metadataResponse = await fetch("/api/upload/save-metadata", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          title,
+          description,
+          key,
+          fileId,
+          contentType,
+          duration: 0, // Placeholder
+          thumbnailUrl: "", // Placeholder
+        }),
+      })
+
+      if (!metadataResponse.ok) {
+        const errorData = await metadataResponse.json()
+        throw new Error(errorData.error || "Failed to save video metadata")
+      }
+
+      const result = await metadataResponse.json()
+      console.log("Metadata saved:", result)
+
+      // Complete!
+      setProgress(100)
+      toast({
+        title: "Upload Complete",
+        description: `Your ${isPremium ? "premium" : "free"} video has been uploaded successfully.`,
+      })
+
+      // Redirect to the creator's profile or video management page
+      if (user?.username) {
+        router.push(`/creator/${user.username}?tab=${isPremium ? "premium" : "free"}`)
+      } else {
+        router.push("/dashboard")
+      }
+    } catch (error) {
+      console.error("Upload error:", error)
+      setError(error instanceof Error ? error.message : "An unknown error occurred")
+      toast({
+        title: "Upload Failed",
+        description: error instanceof Error ? error.message : "An unknown error occurred",
+        variant: "destructive",
+      })
+    } finally {
+      setIsUploading(false)
     }
   }
 
