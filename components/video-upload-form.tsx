@@ -14,10 +14,15 @@ import { useRouter } from "next/navigation"
 import { useAuth } from "@/contexts/auth-context"
 import { useToast } from "@/hooks/use-toast"
 
-export default function VideoUploadForm() {
+interface VideoUploadFormProps {
+  onComplete?: () => void
+  defaultIsPremium?: boolean
+}
+
+export default function VideoUploadForm({ onComplete, defaultIsPremium = false }: VideoUploadFormProps) {
   const [title, setTitle] = useState("")
   const [description, setDescription] = useState("")
-  const [isPremium, setIsPremium] = useState(false)
+  const [isPremium, setIsPremium] = useState(defaultIsPremium)
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [dragActive, setDragActive] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -169,11 +174,16 @@ export default function VideoUploadForm() {
         description: `Your ${isPremium ? "premium" : "free"} video has been uploaded successfully.`,
       })
 
-      // Redirect to the creator's profile or dashboard
-      if (user?.username) {
-        router.push(`/creator/${user.username}?tab=${isPremium ? "premium" : "free"}`)
+      // Call the onComplete callback if provided
+      if (onComplete) {
+        onComplete()
       } else {
-        router.push("/dashboard")
+        // Otherwise redirect to the creator's profile or dashboard
+        if (user?.username) {
+          router.push(`/creator/${user.username}?tab=${isPremium ? "premium" : "free"}`)
+        } else {
+          router.push("/dashboard")
+        }
       }
     } catch (error) {
       console.error("Upload error:", error)
@@ -321,7 +331,7 @@ export default function VideoUploadForm() {
           <Button
             type="button"
             variant="outline"
-            onClick={() => router.back()}
+            onClick={() => (onComplete ? onComplete() : router.back())}
             className="border-zinc-700 text-white"
             disabled={isUploading}
           >

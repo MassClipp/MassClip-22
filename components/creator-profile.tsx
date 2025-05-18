@@ -3,12 +3,14 @@
 import { useState, useEffect } from "react"
 import { useSearchParams } from "next/navigation"
 import Image from "next/image"
-import { Share2, Edit, Instagram, Twitter, Globe, Lock } from "lucide-react"
+import { Share2, Edit, Instagram, Twitter, Globe, Lock, Upload, Plus } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useAuth } from "@/contexts/auth-context"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { collection, query, orderBy, limit, getDocs } from "firebase/firestore"
 import { db } from "@/lib/firebase"
+import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog"
+import VideoUploadForm from "@/components/video-upload-form"
 
 interface Creator {
   uid: string
@@ -35,16 +37,7 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
   const [freeVideos, setFreeVideos] = useState([])
   const [premiumVideos, setPremiumVideos] = useState([])
   const [isLoading, setIsLoading] = useState(true)
-
-  // Set active tab based on URL query parameter
-  // useEffect(() => {
-  //   const tab = searchParams.get("tab")
-  //   if (tab === "premium") {
-  //     setActiveTab("premium")
-  //   } else {
-  //     setActiveTab("free")
-  //   }
-  // }, [searchParams])
+  const [isUploadDialogOpen, setIsUploadDialogOpen] = useState(false)
 
   useEffect(() => {
     const fetchVideos = async () => {
@@ -86,7 +79,7 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
     }
 
     fetchVideos()
-  }, [userData?.uid])
+  }, [userData?.uid, isUploadDialogOpen]) // Re-fetch when upload dialog closes
 
   const handleShare = async () => {
     if (navigator.share) {
@@ -226,15 +219,33 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
               </Button>
 
               {isOwner && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="bg-zinc-800/50 border-zinc-700 hover:bg-zinc-800 text-white"
-                  onClick={() => (window.location.href = "/dashboard/profile/edit")}
-                >
-                  <Edit className="h-4 w-4 mr-2" />
-                  Edit Profile
-                </Button>
+                <>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="bg-zinc-800/50 border-zinc-700 hover:bg-zinc-800 text-white"
+                    onClick={() => (window.location.href = "/dashboard/profile/edit")}
+                  >
+                    <Edit className="h-4 w-4 mr-2" />
+                    Edit Profile
+                  </Button>
+
+                  {/* Upload Button */}
+                  <Dialog open={isUploadDialogOpen} onOpenChange={setIsUploadDialogOpen}>
+                    <DialogTrigger asChild>
+                      <Button size="sm" className="bg-red-500 hover:bg-red-600 text-white">
+                        <Upload className="h-4 w-4 mr-2" />
+                        Upload
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent className="sm:max-w-[800px] bg-zinc-900 border-zinc-800">
+                      <VideoUploadForm
+                        onComplete={() => setIsUploadDialogOpen(false)}
+                        defaultIsPremium={activeTab === "premium"}
+                      />
+                    </DialogContent>
+                  </Dialog>
+                </>
               )}
             </div>
           </div>
@@ -242,100 +253,6 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
       </div>
 
       {/* Content Tabs */}
-      {/* <div className="container mx-auto px-4 pb-20">
-        <div className="border-b border-zinc-800 mb-8">
-          <div className="flex">
-            <button
-              className={cn(
-                "px-6 py-3 text-sm font-medium relative",
-                activeTab === "free" ? "text-white" : "text-zinc-400 hover:text-white",
-              )}
-              onClick={() => setActiveTab("free")}
-            >
-              Free Clips
-              {activeTab === "free" && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-crimson"></div>}
-            </button>
-
-            <button
-              className={cn(
-                "px-6 py-3 text-sm font-medium relative",
-                activeTab === "premium" ? "text-white" : "text-zinc-400 hover:text-white",
-              )}
-              onClick={() => setActiveTab("premium")}
-            >
-              Premium Clips
-              {activeTab === "premium" && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-crimson"></div>}
-            </button>
-          </div>
-        </div> */}
-
-      {/* Content Area */}
-      {/* <div>
-          {activeTab === "free" && (
-            <div>
-              {creator.freeClips && creator.freeClips.length > 0 ? (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                  {/* Free clips would be rendered here */}
-      {/* <div className="text-zinc-400">Free clips would be displayed here</div>
-                </div>
-              ) : (
-                <div className="bg-zinc-900/50 border border-zinc-800/50 rounded-lg p-8 text-center">
-                  <div className="max-w-md mx-auto">
-                    <h3 className="text-xl font-light text-white mb-2">No Free Clips Yet</h3>
-                    <p className="text-zinc-400 mb-6">
-                      {isOwner
-                        ? "Share your first free clip to attract viewers and showcase your content."
-                        : `${creator.displayName} hasn't shared any free clips yet.`}
-                    </p>
-
-                    {isOwner && (
-                      <Button
-                        className="bg-crimson hover:bg-crimson/90 text-white"
-                        onClick={() => (window.location.href = "/dashboard/clips/add")}
-                      >
-                        <Plus className="h-4 w-4 mr-2" />
-                        Add Clip
-                      </Button>
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-
-          {activeTab === "premium" && (
-            <div>
-              {creator.paidClips && creator.paidClips.length > 0 ? (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                  {/* Premium clips would be rendered here */}
-      {/* <div className="text-zinc-400">Premium clips would be displayed here</div>
-                </div>
-              ) : (
-                <div className="bg-zinc-900/50 border border-zinc-800/50 rounded-lg p-8 text-center">
-                  <div className="max-w-md mx-auto">
-                    <h3 className="text-xl font-light text-white mb-2">No Premium Clips Yet</h3>
-                    <p className="text-zinc-400 mb-6">
-                      {isOwner
-                        ? "Add premium clips to monetize your content and provide exclusive value to your subscribers."
-                        : `${creator.displayName} hasn't shared any premium clips yet.`}
-                    </p>
-
-                    {isOwner && (
-                      <Button
-                        className="bg-crimson hover:bg-crimson/90 text-white"
-                        onClick={() => (window.location.href = "/dashboard/clips/add")}
-                      >
-                        <Plus className="h-4 w-4 mr-2" />
-                        Add Premium Clip
-                      </Button>
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      </div> */}
       <div className="container mx-auto px-4 pb-20">
         <div className="mt-8">
           <Tabs defaultValue={activeTab} onValueChange={setActiveTab} className="w-full">
@@ -355,6 +272,23 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
             </TabsList>
 
             <TabsContent value="free" className="mt-6">
+              {/* Add Video Button (Only visible to profile owner) */}
+              {isOwner && (
+                <div className="mb-6">
+                  <Dialog open={isUploadDialogOpen} onOpenChange={setIsUploadDialogOpen}>
+                    <DialogTrigger asChild>
+                      <Button className="bg-zinc-800 hover:bg-zinc-700 text-white border border-zinc-700">
+                        <Plus className="h-4 w-4 mr-2" />
+                        Add Free Video
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent className="sm:max-w-[800px] bg-zinc-900 border-zinc-800">
+                      <VideoUploadForm onComplete={() => setIsUploadDialogOpen(false)} defaultIsPremium={false} />
+                    </DialogContent>
+                  </Dialog>
+                </div>
+              )}
+
               {isLoading ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                   {[1, 2, 3].map((i) => (
@@ -385,13 +319,51 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
                   ))}
                 </div>
               ) : (
-                <div className="text-center py-12">
-                  <p className="text-zinc-400">No free videos available yet.</p>
+                <div className="text-center py-12 bg-zinc-900/50 border border-zinc-800/50 rounded-lg">
+                  <div className="max-w-md mx-auto">
+                    <h3 className="text-xl font-light text-white mb-2">No Free Videos Yet</h3>
+                    <p className="text-zinc-400 mb-6">
+                      {isOwner
+                        ? "Share your first free video to attract viewers and showcase your content."
+                        : `${creator.displayName} hasn't shared any free videos yet.`}
+                    </p>
+
+                    {isOwner && (
+                      <Dialog open={isUploadDialogOpen} onOpenChange={setIsUploadDialogOpen}>
+                        <DialogTrigger asChild>
+                          <Button className="bg-red-500 hover:bg-red-600 text-white">
+                            <Plus className="h-4 w-4 mr-2" />
+                            Add Free Video
+                          </Button>
+                        </DialogTrigger>
+                        <DialogContent className="sm:max-w-[800px] bg-zinc-900 border-zinc-800">
+                          <VideoUploadForm onComplete={() => setIsUploadDialogOpen(false)} defaultIsPremium={false} />
+                        </DialogContent>
+                      </Dialog>
+                    )}
+                  </div>
                 </div>
               )}
             </TabsContent>
 
             <TabsContent value="premium" className="mt-6">
+              {/* Add Video Button (Only visible to profile owner) */}
+              {isOwner && (
+                <div className="mb-6">
+                  <Dialog open={isUploadDialogOpen} onOpenChange={setIsUploadDialogOpen}>
+                    <DialogTrigger asChild>
+                      <Button className="bg-zinc-800 hover:bg-zinc-700 text-white border border-zinc-700">
+                        <Plus className="h-4 w-4 mr-2" />
+                        Add Premium Video
+                      </Button>
+                    </DialogTrigger>
+                    <DialogContent className="sm:max-w-[800px] bg-zinc-900 border-zinc-800">
+                      <VideoUploadForm onComplete={() => setIsUploadDialogOpen(false)} defaultIsPremium={true} />
+                    </DialogContent>
+                  </Dialog>
+                </div>
+              )}
+
               {isLoading ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                   {[1, 2, 3].map((i) => (
@@ -426,8 +398,29 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
                   ))}
                 </div>
               ) : (
-                <div className="text-center py-12">
-                  <p className="text-zinc-400">No premium videos available yet.</p>
+                <div className="text-center py-12 bg-zinc-900/50 border border-zinc-800/50 rounded-lg">
+                  <div className="max-w-md mx-auto">
+                    <h3 className="text-xl font-light text-white mb-2">No Premium Videos Yet</h3>
+                    <p className="text-zinc-400 mb-6">
+                      {isOwner
+                        ? "Add premium videos to monetize your content and provide exclusive value to your subscribers."
+                        : `${creator.displayName} hasn't shared any premium videos yet.`}
+                    </p>
+
+                    {isOwner && (
+                      <Dialog open={isUploadDialogOpen} onOpenChange={setIsUploadDialogOpen}>
+                        <DialogTrigger asChild>
+                          <Button className="bg-red-500 hover:bg-red-600 text-white">
+                            <Plus className="h-4 w-4 mr-2" />
+                            Add Premium Video
+                          </Button>
+                        </DialogTrigger>
+                        <DialogContent className="sm:max-w-[800px] bg-zinc-900 border-zinc-800">
+                          <VideoUploadForm onComplete={() => setIsUploadDialogOpen(false)} defaultIsPremium={true} />
+                        </DialogContent>
+                      </Dialog>
+                    )}
+                  </div>
                 </div>
               )}
             </TabsContent>
