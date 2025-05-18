@@ -20,6 +20,42 @@ function getFirebaseAdmin() {
   return getApp()
 }
 
+// Helper function to convert Firestore data to plain objects
+function serializeData(data: any) {
+  if (!data) return null
+
+  // Convert to plain object
+  const plainData = { ...data }
+
+  // Handle Firestore Timestamp objects
+  if (plainData.createdAt && typeof plainData.createdAt.toDate === "function") {
+    plainData.createdAt = plainData.createdAt.toDate().toISOString()
+  }
+
+  // Handle arrays with potential Timestamp objects
+  if (Array.isArray(plainData.freeClips)) {
+    plainData.freeClips = plainData.freeClips.map((clip: any) => {
+      const serializedClip = { ...clip }
+      if (serializedClip.createdAt && typeof serializedClip.createdAt.toDate === "function") {
+        serializedClip.createdAt = serializedClip.createdAt.toDate().toISOString()
+      }
+      return serializedClip
+    })
+  }
+
+  if (Array.isArray(plainData.paidClips)) {
+    plainData.paidClips = plainData.paidClips.map((clip: any) => {
+      const serializedClip = { ...clip }
+      if (serializedClip.createdAt && typeof serializedClip.createdAt.toDate === "function") {
+        serializedClip.createdAt = serializedClip.createdAt.toDate().toISOString()
+      }
+      return serializedClip
+    })
+  }
+
+  return plainData
+}
+
 // Generate metadata for the page
 export async function generateMetadata({ params }: { params: { username: string } }): Promise<Metadata> {
   const { username } = params
@@ -79,7 +115,8 @@ export default async function CreatorProfilePage({ params }: { params: { usernam
       notFound()
     }
 
-    const creatorData = creatorDoc.data()
+    // Serialize the Firestore data to plain objects
+    const creatorData = serializeData(creatorDoc.data())
 
     return <CreatorProfile creator={creatorData} />
   } catch (error) {

@@ -19,6 +19,7 @@ interface CreatorProfileProps {
     profilePic?: string
     freeClips: any[]
     paidClips: any[]
+    createdAt?: string // Now a string ISO date
   }
 }
 
