@@ -14,6 +14,8 @@ import { Textarea } from "@/components/ui/textarea"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { AtSign, Check, X, Loader2 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
+import { generateUsername, validateUsername } from "@/lib/username-utils"
+import { checkUsernameAvailability } from "@/app/actions/username-actions"
 
 export default function CreatorProfileSetup() {
   const { user } = useAuth()
@@ -39,7 +41,15 @@ export default function CreatorProfileSetup() {
     }
   }, [user])
 
-  // Check username availability
+  // Generate a suggested username when component mounts
+  useEffect(() => {
+    if (user && !username) {
+      const suggestedUsername = generateUsername(user.displayName, user.email, user.uid)
+      setUsername(suggestedUsername)
+    }
+  }, [user])
+
+  // Check username availability using server action
   useEffect(() => {
     const checkUsername = async () => {
       if (username.length < 3) {
@@ -51,25 +61,29 @@ export default function CreatorProfileSetup() {
       setUsernameStatus("checking")
 
       try {
-        // Check if username exists in Firebase
-        const snapshot = await db.collection("creatorProfiles").where("username", "==", username.toLowerCase()).get()
+        // Use the server action to check username availability
+        const result = await checkUsernameAvailability(username)
 
-        if (snapshot.empty) {
+        if (result.available) {
           setUsernameStatus("available")
-          setUsernameMessage("Username is available")
+          setUsernameMessage(result.message || "Username is available")
         } else {
           setUsernameStatus("unavailable")
-          setUsernameMessage("Username is already taken")
+          setUsernameMessage(result.message || "Username is not available")
         }
       } catch (error) {
         console.error("Error checking username:", error)
-        setUsernameStatus("unavailable")
-        setUsernameMessage("Error checking username")
+        // Provide a fallback
+        setUsernameStatus("idle")
+        setUsernameMessage("Could not verify username. You can still proceed.")
       }
     }
 
-    const debounce = setTimeout(checkUsername, 500)
-    return () => clearTimeout(debounce)
+    // Only check if username has at least 3 characters
+    if (username.length >= 3) {
+      const debounce = setTimeout(checkUsername, 500)
+      return () => clearTimeout(debounce)
+    }
   }, [username])
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -82,7 +96,8 @@ export default function CreatorProfileSetup() {
       return
     }
 
-    if (usernameStatus !== "available") {
+    // Allow proceeding even if username status is idle (couldn't verify)
+    if (usernameStatus === "unavailable") {
       setError("Please choose an available username")
       return
     }
@@ -91,6 +106,24 @@ export default function CreatorProfileSetup() {
     setError("")
 
     try {
+      // First check if username exists (double-check)
+      let isUsernameTaken = false
+
+      try {
+        const snapshot = await db.collection("creatorProfiles").where("username", "==", username.toLowerCase()).get()
+        isUsernameTaken = !snapshot.empty
+      } catch (err) {
+        console.error("Error in final username check:", err)
+        // Continue anyway - we'll handle conflicts server-side
+      }
+
+      if (isUsernameTaken) {
+        setError("This username was just taken. Please choose another.")
+        setIsSubmitting(false)
+        setUsernameStatus("unavailable")
+        return
+      }
+
       // Create or update creator profile in Firebase
       const profileRef = db.collection("creatorProfiles").doc(user.uid)
 
@@ -185,8 +218,18 @@ export default function CreatorProfileSetup() {
                   <Input
                     id="username"
                     value={username}
-                    onChange={(e) => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ""))}
-                    className="pr-10"
+                    onChange={(e) => {
+                      const newUsername = e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, "")
+                      setUsername(newUsername)
+
+                      // Immediate validation feedback
+                      const validation = validateUsername(newUsername)
+                      if (!validation.isValid) {
+                        setUsernameStatus("unavailable")
+                        setUsernameMessage(validation.message || "Invalid username")
+                      }
+                    }}
+                    className={`pr-10 ${usernameStatus === "unavailable" ? "border-red-500" : ""}`}
                     placeholder="your_username"
                     required
                     minLength={3}
