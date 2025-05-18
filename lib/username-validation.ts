@@ -20,3 +20,9 @@ export function validateUsername(username: string): { isValid: boolean; message:
 
   return { isValid: true, message: "Username is valid" }
 }
+
+export function isValidUsername(username: string): boolean {
+  // Username must be 3-20 characters and contain only lowercase letters, numbers, and underscores
+  const usernameRegex = /^[a-z0-9_]{3,20}$/
+  return usernameRegex.test(username)
+}

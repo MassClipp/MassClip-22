@@ -1,27 +1,27 @@
 import type { Metadata } from "next"
 import { notFound } from "next/navigation"
-import { getFirestore, doc, getDoc } from "firebase/firestore"
-import { initializeFirebaseApp } from "@/lib/firebase"
+import { initializeFirebaseAdmin, db } from "@/lib/firebase-admin"
 import CreatorProfile from "@/components/creator-profile"
-
-// Initialize Firebase
-initializeFirebaseApp()
 
 // Generate metadata for the page
 export async function generateMetadata({ params }: { params: { username: string } }): Promise<Metadata> {
   const { username } = params
 
   try {
-    const db = getFirestore()
-    const creatorDoc = await getDoc(doc(db, "creators", username))
+    // Initialize Firebase Admin
+    initializeFirebaseAdmin()
 
-    if (!creatorDoc.exists()) {
+    // Query for creator by username
+    const creatorsRef = db.collection("creators")
+    const snapshot = await creatorsRef.where("username", "==", username).limit(1).get()
+
+    if (snapshot.empty) {
       return {
         title: "Creator Not Found | MassClip",
       }
     }
 
-    const creatorData = creatorDoc.data()
+    const creatorData = snapshot.docs[0].data()
 
     return {
       title: `${creatorData.displayName || username} | MassClip`,
@@ -39,18 +39,23 @@ export default async function CreatorProfilePage({ params }: { params: { usernam
   const { username } = params
 
   try {
-    const db = getFirestore()
-    const creatorDoc = await getDoc(doc(db, "creators", username))
+    // Initialize Firebase Admin
+    initializeFirebaseAdmin()
 
-    if (!creatorDoc.exists()) {
-      notFound()
+    // Query for creator by username
+    const creatorsRef = db.collection("creators")
+    const snapshot = await creatorsRef.where("username", "==", username).limit(1).get()
+
+    if (snapshot.empty) {
+      return notFound()
     }
 
-    const creatorData = creatorDoc.data()
+    const creatorData = snapshot.docs[0].data()
 
+    // Pass the creator data to the client component
     return <CreatorProfile creator={creatorData} />
   } catch (error) {
     console.error("Error fetching creator data:", error)
-    notFound()
+    return notFound()
   }
 }

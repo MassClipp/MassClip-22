@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Share2, Lock, Download, Play } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
+import { useAuth } from "@/contexts/auth-context"
 
 interface Creator {
   uid: string
@@ -25,6 +26,9 @@ interface CreatorProfileProps {
 export default function CreatorProfile({ creator }: CreatorProfileProps) {
   const [activeTab, setActiveTab] = useState("free")
   const { toast } = useToast()
+  const { user } = useAuth()
+
+  const isOwner = user?.uid === creator.uid
 
   const handleShare = () => {
     if (navigator.share) {
@@ -67,10 +71,18 @@ export default function CreatorProfile({ creator }: CreatorProfileProps) {
 
           {creator.bio && <p className="text-gray-400 text-center max-w-2xl mb-4">{creator.bio}</p>}
 
-          <Button variant="outline" size="sm" className="border-gray-700 hover:bg-gray-800" onClick={handleShare}>
-            <Share2 className="h-4 w-4 mr-2" />
-            Share Profile
-          </Button>
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" className="border-gray-700 hover:bg-gray-800" onClick={handleShare}>
+              <Share2 className="h-4 w-4 mr-2" />
+              Share Profile
+            </Button>
+
+            {isOwner && (
+              <Button variant="outline" size="sm" className="border-gray-700 hover:bg-gray-800" asChild>
+                <a href="/dashboard/profile">Edit Profile</a>
+              </Button>
+            )}
+          </div>
         </div>
 
         {/* Content Tabs */}

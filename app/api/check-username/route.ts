@@ -1,29 +1,35 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { db } from "@/lib/firebase-admin"
+import { initializeFirebaseAdmin, db } from "@/lib/firebase-admin"
+import { isValidUsername } from "@/lib/username-validation"
 
 export async function GET(request: NextRequest) {
-  const searchParams = request.nextUrl.searchParams
-  const username = searchParams.get("username")
+  const username = request.nextUrl.searchParams.get("username")
 
   if (!username) {
-    return NextResponse.json({ error: "Username is required" }, { status: 400 })
+    return NextResponse.json({ available: false, error: "Username is required" }, { status: 400 })
+  }
+
+  // Validate username format
+  if (!isValidUsername(username)) {
+    return NextResponse.json(
+      {
+        available: false,
+        error: "Username must be 3-20 characters and contain only lowercase letters, numbers, and underscores",
+      },
+      { status: 400 },
+    )
   }
 
   try {
-    // Check in usernames collection
-    const usernameSnapshot = await db.collection("usernames").doc(username).get()
+    // Initialize Firebase Admin
+    initializeFirebaseAdmin()
 
-    // Check in creators collection as a backup
-    const creatorSnapshot = await db.collection("creators").where("username", "==", username).limit(1).get()
+    // Check if username exists
+    const snapshot = await db.collection("creators").where("username", "==", username).limit(1).get()
 
-    const isAvailable = !usernameSnapshot.exists && creatorSnapshot.empty
-
-    return NextResponse.json({
-      available: isAvailable,
-      message: isAvailable ? "Username is available" : "Username is already taken",
-    })
+    return NextResponse.json({ available: snapshot.empty })
   } catch (error) {
-    console.error("Error checking username:", error)
-    return NextResponse.json({ error: "Failed to check username availability" }, { status: 500 })
+    console.error("Error checking username availability:", error)
+    return NextResponse.json({ available: false, error: "Failed to check username availability" }, { status: 500 })
   }
 }
