@@ -1,36 +1,56 @@
+import type { Metadata } from "next"
 import { notFound } from "next/navigation"
-import { initializeFirebaseAdmin, db } from "@/lib/firebase-admin"
-import { CreatorProfile } from "@/components/creator-profile"
+import { getFirestore, doc, getDoc } from "firebase/firestore"
+import { initializeFirebaseApp } from "@/lib/firebase"
+import CreatorProfile from "@/components/creator-profile"
 
-interface CreatorPageProps {
-  params: {
-    username: string
-  }
-}
+// Initialize Firebase
+initializeFirebaseApp()
 
-export default async function CreatorPage({ params }: CreatorPageProps) {
+// Generate metadata for the page
+export async function generateMetadata({ params }: { params: { username: string } }): Promise<Metadata> {
   const { username } = params
 
   try {
-    // Initialize Firebase Admin
-    initializeFirebaseAdmin()
+    const db = getFirestore()
+    const creatorDoc = await getDoc(doc(db, "creators", username))
 
-    // Fetch creator data
-    const snapshot = await db.collection("creators").where("username", "==", username).limit(1).get()
-
-    if (snapshot.empty) {
-      return notFound()
+    if (!creatorDoc.exists()) {
+      return {
+        title: "Creator Not Found | MassClip",
+      }
     }
 
-    const creatorData = snapshot.docs[0].data()
+    const creatorData = creatorDoc.data()
 
-    return (
-      <main>
-        <CreatorProfile creator={creatorData} />
-      </main>
-    )
+    return {
+      title: `${creatorData.displayName || username} | MassClip`,
+      description: creatorData.bio || `Check out ${creatorData.displayName || username}'s content on MassClip`,
+    }
   } catch (error) {
-    console.error("Error fetching creator:", error)
-    return notFound()
+    console.error("Error fetching creator data for metadata:", error)
+    return {
+      title: "Creator Profile | MassClip",
+    }
+  }
+}
+
+export default async function CreatorProfilePage({ params }: { params: { username: string } }) {
+  const { username } = params
+
+  try {
+    const db = getFirestore()
+    const creatorDoc = await getDoc(doc(db, "creators", username))
+
+    if (!creatorDoc.exists()) {
+      notFound()
+    }
+
+    const creatorData = creatorDoc.data()
+
+    return <CreatorProfile creator={creatorData} />
+  } catch (error) {
+    console.error("Error fetching creator data:", error)
+    notFound()
   }
 }

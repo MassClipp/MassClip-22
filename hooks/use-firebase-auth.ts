@@ -10,10 +10,18 @@ import {
   sendPasswordResetEmail,
   GoogleAuthProvider,
   signInWithPopup,
+  getAuth,
 } from "firebase/auth"
-import { doc, getDoc, setDoc } from "firebase/firestore"
-import { auth, isFirebaseConfigured, db } from "@/lib/firebase"
+import { doc, getDoc, setDoc, getFirestore, serverTimestamp } from "firebase/firestore"
+import { auth, isFirebaseConfigured } from "@/lib/firebase"
 
+// Update the return type to include success and error
+interface AuthResult {
+  success: boolean
+  error?: string
+}
+
+// Update the hook to include the new parameters
 export function useFirebaseAuth() {
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
@@ -72,47 +80,82 @@ export function useFirebaseAuth() {
   }
 
   // Sign in with Google
-  const signInWithGoogle = async () => {
-    if (!isFirebaseConfigured) {
-      console.warn("Firebase is not properly configured. Using demo mode.")
-      setLoading(false)
-      return { success: true, demo: true }
-    }
-
-    setError(null)
+  const signInWithGoogle = async (username?: string, displayName?: string): Promise<AuthResult> => {
     try {
-      setLoading(true)
+      const auth = getAuth()
       const provider = new GoogleAuthProvider()
+      const db = getFirestore()
+
+      // Check if username is already taken
+      if (username) {
+        const usernameDoc = await getDoc(doc(db, "usernames", username))
+        if (usernameDoc.exists()) {
+          return { success: false, error: "Username is already taken" }
+        }
+      }
+
       const result = await signInWithPopup(auth, provider)
       const user = result.user
 
       // Check if user document exists in Firestore
       const userDoc = await getDoc(doc(db, "users", user.uid))
 
-      // If user doesn't exist in Firestore, create a new document
       if (!userDoc.exists()) {
-        await setDoc(doc(db, "users", user.uid), {
+        // Create new user document
+        const userData = {
           email: user.email,
-          displayName: user.displayName,
+          displayName: displayName || user.displayName,
+          username: username || null,
           photoURL: user.photoURL,
-          createdAt: new Date(),
+          createdAt: serverTimestamp(),
           plan: "free",
           permissions: { download: false, premium: false },
-        })
+          bio: "",
+          profilePic: user.photoURL || "",
+          freeClips: [],
+          paidClips: [],
+        }
+
+        await setDoc(doc(db, "users", user.uid), userData)
+
+        // If username is provided, also create a document in the usernames collection
+        if (username) {
+          await setDoc(doc(db, "usernames", username), {
+            uid: user.uid,
+            createdAt: serverTimestamp(),
+          })
+
+          // Create a document in the creators collection
+          await setDoc(doc(db, "creators", username), {
+            uid: user.uid,
+            username,
+            displayName: displayName || user.displayName || username,
+            createdAt: serverTimestamp(),
+            bio: "",
+            profilePic: user.photoURL || "",
+            freeClips: [],
+            paidClips: [],
+          })
+        }
       }
 
       return { success: true }
-    } catch (err) {
-      console.error("Error signing in with Google:", err)
-      setError(err instanceof Error ? err.message : "Failed to sign in with Google")
-      return { success: false, error: err instanceof Error ? err.message : "Failed to sign in with Google" }
-    } finally {
-      setLoading(false)
+    } catch (error: any) {
+      console.error("Error signing in with Google:", error)
+      return {
+        success: false,
+        error: error.message || "Failed to sign in with Google",
+      }
     }
   }
 
   // Sign up with email and password
-  const signUp = async (email: string, password: string) => {
+  const signUp = async (
+    email: string,
+    password: string,
+    username?: string,
+    displayName?: string,
+  ): Promise<AuthResult> => {
     if (!isFirebaseConfigured) {
       console.warn("Firebase is not properly configured. Using demo mode.")
       // Simulate successful signup for demo/preview purposes
@@ -122,13 +165,63 @@ export function useFirebaseAuth() {
 
     setError(null)
     try {
-      setLoading(true)
-      await createUserWithEmailAndPassword(auth, email, password)
+      const auth = getAuth()
+      const db = getFirestore()
+
+      // Check if username is already taken
+      if (username) {
+        const usernameDoc = await getDoc(doc(db, "usernames", username))
+        if (usernameDoc.exists()) {
+          return { success: false, error: "Username is already taken" }
+        }
+      }
+
+      // Create the user in Firebase Auth
+      const { user } = await createUserWithEmailAndPassword(auth, email, password)
+
+      // Create user document in Firestore
+      const userData = {
+        email,
+        displayName: displayName || null,
+        username: username || null,
+        createdAt: serverTimestamp(),
+        plan: "free",
+        permissions: { download: false, premium: false },
+        bio: "",
+        profilePic: "",
+        freeClips: [],
+        paidClips: [],
+      }
+
+      await setDoc(doc(db, "users", user.uid), userData)
+
+      // If username is provided, also create a document in the usernames collection
+      if (username) {
+        await setDoc(doc(db, "usernames", username), {
+          uid: user.uid,
+          createdAt: serverTimestamp(),
+        })
+
+        // Create a document in the creators collection
+        await setDoc(doc(db, "creators", username), {
+          uid: user.uid,
+          username,
+          displayName: displayName || username,
+          createdAt: serverTimestamp(),
+          bio: "",
+          profilePic: "",
+          freeClips: [],
+          paidClips: [],
+        })
+      }
+
       return { success: true }
-    } catch (err) {
-      console.error("Error signing up:", err)
-      setError(err instanceof Error ? err.message : "Failed to sign up")
-      return { success: false, error: err instanceof Error ? err.message : "Failed to sign up" }
+    } catch (error: any) {
+      console.error("Error signing up:", error)
+      return {
+        success: false,
+        error: error.message || "Failed to create account",
+      }
     } finally {
       setLoading(false)
     }

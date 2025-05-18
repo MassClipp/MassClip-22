@@ -34,6 +34,25 @@ service cloud.firestore {
       }
     }
     
+    // Username collection rules
+    match /usernames/{username} {
+      allow read: true;
+      allow create: if request.auth != null && 
+                     !exists(/databases/$(database)/documents/usernames/$(username));
+      allow update, delete: if request.auth != null && 
+                             request.auth.uid == resource.data.uid;
+    }
+    
+    // Creators collection rules
+    match /creators/{username} {
+      allow read: true;
+      allow create: if request.auth != null && 
+                     !exists(/databases/$(database)/documents/creators/$(username)) &&
+                     request.resource.data.uid == request.auth.uid;
+      allow update, delete: if request.auth != null && 
+                             request.auth.uid == resource.data.uid;
+    }
+    
     // Function to check if a user has reached their download limit
     function hasReachedDownloadLimit(userId) {
       let user = get(/databases/$(database)/documents/users/$(userId)).data;

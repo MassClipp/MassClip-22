@@ -2,201 +2,161 @@
 
 import { useState } from "react"
 import Image from "next/image"
-import Link from "next/link"
-import { useAuth } from "@/contexts/auth-context"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent } from "@/components/ui/card"
+import { Share2, Lock, Download, Play } from "lucide-react"
+import { useToast } from "@/hooks/use-toast"
 
-interface CreatorProfileProps {
-  creator: {
-    uid: string
-    username: string
-    displayName: string
-    bio: string
-    profilePic: string
-    freeClips: any[]
-    paidClips: any[]
-  }
+interface Creator {
+  uid: string
+  username: string
+  displayName: string
+  bio?: string
+  profilePic?: string
+  freeClips: any[]
+  paidClips: any[]
 }
 
-export function CreatorProfile({ creator }: CreatorProfileProps) {
-  const [activeTab, setActiveTab] = useState<"free" | "premium">("free")
-  const { user } = useAuth()
-  const isOwner = user?.uid === creator.uid
+interface CreatorProfileProps {
+  creator: Creator
+}
+
+export default function CreatorProfile({ creator }: CreatorProfileProps) {
+  const [activeTab, setActiveTab] = useState("free")
+  const { toast } = useToast()
+
+  const handleShare = () => {
+    if (navigator.share) {
+      navigator
+        .share({
+          title: `${creator.displayName} on MassClip`,
+          text: `Check out ${creator.displayName}'s content on MassClip`,
+          url: window.location.href,
+        })
+        .catch((error) => console.log("Error sharing", error))
+    } else {
+      navigator.clipboard.writeText(window.location.href)
+      toast({
+        title: "Link copied!",
+        description: "Profile link copied to clipboard",
+      })
+    }
+  }
 
   return (
-    <div className="max-w-6xl mx-auto px-4 py-8">
-      {/* Profile Header */}
-      <div className="flex flex-col md:flex-row items-center md:items-start gap-6 mb-8">
-        <div className="w-24 h-24 md:w-32 md:h-32 relative rounded-full overflow-hidden bg-gray-200">
+    <div className="min-h-screen bg-black text-white">
+      <div className="container mx-auto px-4 py-8 max-w-6xl">
+        {/* Profile Header */}
+        <div className="flex flex-col items-center mb-8">
           {creator.profilePic ? (
             <Image
               src={creator.profilePic || "/placeholder.svg"}
-              alt={creator.displayName || creator.username}
-              fill
-              className="object-cover"
+              alt={creator.displayName}
+              width={96}
+              height={96}
+              className="rounded-full border-2 border-red-500 mb-4"
             />
           ) : (
-            <div className="w-full h-full flex items-center justify-center text-gray-400">
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                className="h-16 w-16"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={2}
-                  d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"
-                />
-              </svg>
+            <div className="w-24 h-24 rounded-full bg-gradient-to-br from-red-500 to-red-700 flex items-center justify-center text-2xl font-bold mb-4">
+              {creator.displayName.charAt(0).toUpperCase()}
             </div>
           )}
+
+          <h1 className="text-3xl font-bold mb-2">{creator.displayName}</h1>
+
+          {creator.bio && <p className="text-gray-400 text-center max-w-2xl mb-4">{creator.bio}</p>}
+
+          <Button variant="outline" size="sm" className="border-gray-700 hover:bg-gray-800" onClick={handleShare}>
+            <Share2 className="h-4 w-4 mr-2" />
+            Share Profile
+          </Button>
         </div>
 
-        <div className="flex-1 text-center md:text-left">
-          <h1 className="text-2xl md:text-3xl font-bold">{creator.displayName || creator.username}</h1>
-          <p className="text-gray-500 mb-2">@{creator.username}</p>
-
-          {creator.bio && <p className="text-gray-700 mb-4 max-w-2xl">{creator.bio}</p>}
-
-          <div className="flex flex-wrap gap-2 justify-center md:justify-start">
-            {isOwner && (
-              <Link
-                href="/dashboard/profile"
-                className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
-              >
-                Edit Profile
-              </Link>
-            )}
-
-            <button
-              className="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md text-sm font-medium text-gray-700 bg-white hover:bg-gray-50"
-              onClick={() => {
-                navigator.clipboard.writeText(`${window.location.origin}/creator/${creator.username}`)
-                alert("Profile link copied to clipboard!")
-              }}
-            >
-              Share Profile
-            </button>
+        {/* Content Tabs */}
+        <Tabs defaultValue="free" className="w-full" onValueChange={setActiveTab}>
+          <div className="flex justify-center mb-6">
+            <TabsList className="bg-gray-900">
+              <TabsTrigger value="free" className="data-[state=active]:bg-red-600">
+                Free Clips
+              </TabsTrigger>
+              <TabsTrigger value="premium" className="data-[state=active]:bg-red-600">
+                Premium Clips
+              </TabsTrigger>
+            </TabsList>
           </div>
-        </div>
-      </div>
 
-      {/* Content Tabs */}
-      <div className="mb-6 border-b border-gray-200">
-        <div className="flex space-x-8">
-          <button
-            className={`py-4 px-1 border-b-2 font-medium text-sm ${
-              activeTab === "free"
-                ? "border-blue-500 text-blue-600"
-                : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
-            }`}
-            onClick={() => setActiveTab("free")}
-          >
-            Free Clips
-          </button>
-          <button
-            className={`py-4 px-1 border-b-2 font-medium text-sm ${
-              activeTab === "premium"
-                ? "border-blue-500 text-blue-600"
-                : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"
-            }`}
-            onClick={() => setActiveTab("premium")}
-          >
-            Premium Clips
-          </button>
-        </div>
-      </div>
-
-      {/* Content */}
-      <div>
-        {activeTab === "free" && (
-          <div>
+          <TabsContent value="free" className="mt-0">
             {creator.freeClips && creator.freeClips.length > 0 ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {creator.freeClips.map((clip, index) => (
-                  <div key={index} className="bg-white rounded-lg shadow overflow-hidden">
-                    <div className="aspect-video relative bg-gray-200">
-                      {/* Clip thumbnail or video player would go here */}
-                      <div className="absolute inset-0 flex items-center justify-center">
-                        <span className="text-gray-500">Clip Preview</span>
+                  <Card key={index} className="bg-gray-900 border-gray-800 overflow-hidden">
+                    <div className="relative aspect-video">
+                      <Image
+                        src={clip.thumbnail || "/placeholder.svg?height=200&width=350&query=video thumbnail"}
+                        alt={clip.title || `Free clip ${index + 1}`}
+                        fill
+                        className="object-cover"
+                      />
+                      <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 hover:opacity-100 transition-opacity">
+                        <Button size="sm" variant="secondary" className="mr-2">
+                          <Play className="h-4 w-4 mr-1" /> Play
+                        </Button>
+                        <Button size="sm" variant="outline">
+                          <Download className="h-4 w-4 mr-1" /> Download
+                        </Button>
                       </div>
                     </div>
-                    <div className="p-4">
-                      <h3 className="font-semibold mb-2">{clip.title || `Free Clip ${index + 1}`}</h3>
-                      <button className="w-full py-2 px-4 bg-blue-600 text-white font-medium rounded-md hover:bg-blue-700">
-                        Download
-                      </button>
-                    </div>
-                  </div>
+                    <CardContent className="p-4">
+                      <h3 className="font-medium">{clip.title || `Free clip ${index + 1}`}</h3>
+                      {clip.description && <p className="text-sm text-gray-400 mt-1">{clip.description}</p>}
+                    </CardContent>
+                  </Card>
                 ))}
               </div>
             ) : (
               <div className="text-center py-12">
-                <p className="text-gray-500">No free clips available yet.</p>
-                {isOwner && (
-                  <Link
-                    href="/dashboard/clips"
-                    className="mt-4 inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700"
-                  >
-                    Add Clips
-                  </Link>
-                )}
+                <h3 className="text-xl font-medium mb-2">No free clips available yet</h3>
+                <p className="text-gray-400">Check back soon for new content</p>
               </div>
             )}
-          </div>
-        )}
+          </TabsContent>
 
-        {activeTab === "premium" && (
-          <div>
+          <TabsContent value="premium" className="mt-0">
             {creator.paidClips && creator.paidClips.length > 0 ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {creator.paidClips.map((clip, index) => (
-                  <div key={index} className="bg-white rounded-lg shadow overflow-hidden">
-                    <div className="aspect-video relative bg-gray-200">
-                      {/* Clip thumbnail with blur/lock overlay */}
-                      <div className="absolute inset-0 flex items-center justify-center bg-black/50">
-                        <svg
-                          xmlns="http://www.w3.org/2000/svg"
-                          className="h-12 w-12 text-white"
-                          fill="none"
-                          viewBox="0 0 24 24"
-                          stroke="currentColor"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            strokeWidth={2}
-                            d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"
-                          />
-                        </svg>
+                  <Card key={index} className="bg-gray-900 border-gray-800 overflow-hidden">
+                    <div className="relative aspect-video">
+                      <div className="absolute inset-0 backdrop-blur-md z-10"></div>
+                      <Image
+                        src={clip.thumbnail || "/placeholder.svg?height=200&width=350&query=premium video thumbnail"}
+                        alt={clip.title || `Premium clip ${index + 1}`}
+                        fill
+                        className="object-cover"
+                      />
+                      <div className="absolute inset-0 bg-black/60 flex flex-col items-center justify-center z-20">
+                        <Lock className="h-8 w-8 text-red-500 mb-2" />
+                        <Button size="sm" className="bg-red-600 hover:bg-red-700">
+                          Unlock Premium
+                        </Button>
                       </div>
                     </div>
-                    <div className="p-4">
-                      <h3 className="font-semibold mb-2">{clip.title || `Premium Clip ${index + 1}`}</h3>
-                      <button className="w-full py-2 px-4 bg-green-600 text-white font-medium rounded-md hover:bg-green-700">
-                        Unlock for ${clip.price || "4.99"}
-                      </button>
-                    </div>
-                  </div>
+                    <CardContent className="p-4">
+                      <h3 className="font-medium">{clip.title || `Premium clip ${index + 1}`}</h3>
+                      {clip.description && <p className="text-sm text-gray-400 mt-1">{clip.description}</p>}
+                    </CardContent>
+                  </Card>
                 ))}
               </div>
             ) : (
               <div className="text-center py-12">
-                <p className="text-gray-500">No premium clips available yet.</p>
-                {isOwner && (
-                  <Link
-                    href="/dashboard/clips"
-                    className="mt-4 inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700"
-                  >
-                    Add Premium Clips
-                  </Link>
-                )}
+                <h3 className="text-xl font-medium mb-2">No premium clips available yet</h3>
+                <p className="text-gray-400">Check back soon for exclusive content</p>
               </div>
             )}
-          </div>
-        )}
+          </TabsContent>
+        </Tabs>
       </div>
     </div>
   )

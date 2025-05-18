@@ -12,26 +12,33 @@ import {
   GoogleAuthProvider,
   signInWithPopup,
 } from "firebase/auth"
-import { doc, getDoc, setDoc, getFirestore, serverTimestamp } from "firebase/firestore"
+import { doc, getDoc, setDoc, getFirestore } from "firebase/firestore"
 import { useRouter, usePathname } from "next/navigation"
 import { initializeFirebaseApp } from "@/lib/firebase"
 
-// Update the User interface to include username
-interface User {
-  uid: string
-  email: string | null
-  displayName: string | null
-  photoURL: string | null
+// Define the user type
+export interface User extends FirebaseUser {
+  plan?: string
+  permissions?: {
+    download?: boolean
+    premium?: boolean
+  }
   username?: string
+  displayName?: string
 }
 
 // Define the auth context type
 interface AuthContextType {
   user: User | null
   loading: boolean
-  signIn: (email: string, password: string) => Promise<void>
-  signInWithGoogle: () => Promise<void>
-  signUp: (email: string, password: string) => Promise<void>
+  signIn: (email: string, password: string) => Promise<{ success: boolean; error?: string }>
+  signInWithGoogle: (username?: string, displayName?: string) => Promise<{ success: boolean; error?: string }>
+  signUp: (
+    email: string,
+    password: string,
+    username?: string,
+    displayName?: string,
+  ) => Promise<{ success: boolean; error?: string }>
   signOut: () => Promise<void>
   resetPassword: (email: string) => Promise<void>
 }
@@ -61,51 +68,46 @@ export function AuthProvider({ children }: AuthProviderProps) {
       // Subscribe to auth state changes
       const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
         if (firebaseUser) {
-          const fetchUserData = async (user: FirebaseUser) => {
-            try {
-              const userDocRef = doc(db, "users", user.uid)
-              const userDoc = await getDoc(userDocRef)
+          // Get additional user data from Firestore
+          try {
+            const userDoc = await getDoc(doc(db, "users", firebaseUser.uid))
 
-              if (userDoc.exists()) {
-                const userData = userDoc.data()
+            if (userDoc.exists()) {
+              // Combine Firebase user with Firestore data
+              const userData = userDoc.data()
+              const enhancedUser = {
+                ...firebaseUser,
+                plan: userData.plan || "free",
+                permissions: userData.permissions || { download: false, premium: false },
+              } as User
 
-                // Update the user state with the username
-                setUser({
-                  uid: user.uid,
-                  email: user.email,
-                  displayName: user.displayName,
-                  photoURL: user.photoURL,
-                  username: userData.username || null,
-                })
-
-                // Check if user has set up profile
-                if (!userData.hasSetupProfile && window.location.pathname !== "/setup-profile") {
-                  router.push("/setup-profile")
-                }
-              } else {
-                // Create user document if it doesn't exist
-                await setDoc(userDocRef, {
-                  email: user.email,
-                  displayName: user.displayName,
-                  photoURL: user.photoURL,
-                  createdAt: serverTimestamp(),
-                  plan: "free",
-                  downloads: 0,
-                  lastReset: serverTimestamp(),
-                  hasSetupProfile: false,
-                })
-
-                // Redirect to setup profile
-                router.push("/setup-profile")
+              setUser(enhancedUser)
+            } else {
+              // Create a new user document if it doesn't exist
+              const newUserData = {
+                email: firebaseUser.email,
+                displayName: firebaseUser.displayName,
+                photoURL: firebaseUser.photoURL,
+                createdAt: new Date(),
+                plan: "free",
+                permissions: { download: false, premium: false },
               }
-            } catch (error) {
-              console.error("Error fetching user data:", error)
-            } finally {
-              setLoading(false)
-            }
-          }
 
-          fetchUserData(firebaseUser)
+              await setDoc(doc(db, "users", firebaseUser.uid), newUserData)
+
+              const enhancedUser = {
+                ...firebaseUser,
+                plan: "free",
+                permissions: { download: false, premium: false },
+              } as User
+
+              setUser(enhancedUser)
+            }
+          } catch (error) {
+            console.error("Error fetching user data:", error)
+            // Still set the basic user even if Firestore fails
+            setUser(firebaseUser as User)
+          }
         } else {
           setUser(null)
 
@@ -131,12 +133,20 @@ export function AuthProvider({ children }: AuthProviderProps) {
   }, [pathname, router])
 
   // Sign in with Google
-  const signInWithGoogle = async () => {
+  const signInWithGoogle = async (username?: string, displayName?: string) => {
     try {
       setLoading(true)
       const auth = getAuth()
       const provider = new GoogleAuthProvider()
       const db = getFirestore()
+
+      // Check if username is already taken
+      if (username) {
+        const usernameDoc = await getDoc(doc(db, "usernames", username))
+        if (usernameDoc.exists()) {
+          return { success: false, error: "Username is already taken" }
+        }
+      }
 
       const result = await signInWithPopup(auth, provider)
       const user = result.user
@@ -144,33 +154,48 @@ export function AuthProvider({ children }: AuthProviderProps) {
       // Check if user document exists in Firestore
       const userDoc = await getDoc(doc(db, "users", user.uid))
 
-      // If user doesn't exist in Firestore, create a new document
       if (!userDoc.exists()) {
-        await setDoc(doc(db, "users", user.uid), {
+        // Create new user document
+        const userData = {
           email: user.email,
-          displayName: user.displayName,
+          displayName: displayName || user.displayName,
+          username: username || null,
           photoURL: user.photoURL,
           createdAt: new Date(),
           plan: "free",
           permissions: { download: false, premium: false },
-        })
-      }
+        }
 
-      // Get redirect URL from query params if we're in the browser
-      let redirectTo = "/dashboard"
+        await setDoc(doc(db, "users", user.uid), userData)
 
-      if (typeof window !== "undefined") {
-        const params = new URLSearchParams(window.location.search)
-        const redirect = params.get("redirect")
-        if (redirect) {
-          redirectTo = redirect
+        // If username is provided, also create a document in the usernames collection
+        if (username) {
+          await setDoc(doc(db, "usernames", username), {
+            uid: user.uid,
+            createdAt: new Date(),
+          })
+
+          // Create a document in the creators collection
+          await setDoc(doc(db, "creators", username), {
+            uid: user.uid,
+            username,
+            displayName: displayName || user.displayName || username,
+            createdAt: new Date(),
+            bio: "",
+            profilePic: user.photoURL || "",
+            freeClips: [],
+            paidClips: [],
+          })
         }
       }
 
-      router.push(redirectTo)
-    } catch (error) {
+      return { success: true }
+    } catch (error: any) {
       console.error("Error signing in with Google:", error)
-      throw error
+      return {
+        success: false,
+        error: error.message || "Failed to sign in with Google",
+      }
     } finally {
       setLoading(false)
     }
@@ -204,25 +229,61 @@ export function AuthProvider({ children }: AuthProviderProps) {
   }
 
   // Sign up function
-  const signUp = async (email: string, password: string) => {
+  const signUp = async (email: string, password: string, username?: string, displayName?: string) => {
     try {
       setLoading(true)
       const auth = getAuth()
+      const db = getFirestore()
+
+      // Check if username is already taken
+      if (username) {
+        const usernameDoc = await getDoc(doc(db, "usernames", username))
+        if (usernameDoc.exists()) {
+          return { success: false, error: "Username is already taken" }
+        }
+      }
+
       const { user: newUser } = await createUserWithEmailAndPassword(auth, email, password)
 
       // Create user document in Firestore
-      const db = getFirestore()
-      await setDoc(doc(db, "users", newUser.uid), {
+      const userData = {
         email,
+        displayName: displayName || null,
+        username: username || null,
         createdAt: new Date(),
         plan: "free",
         permissions: { download: false, premium: false },
-      })
+      }
 
-      router.push("/dashboard")
-    } catch (error) {
+      await setDoc(doc(db, "users", newUser.uid), userData)
+
+      // If username is provided, also create a document in the usernames collection
+      if (username) {
+        await setDoc(doc(db, "usernames", username), {
+          uid: newUser.uid,
+          createdAt: new Date(),
+        })
+
+        // Create a document in the creators collection
+        await setDoc(doc(db, "creators", username), {
+          uid: newUser.uid,
+          username,
+          displayName: displayName || username,
+          createdAt: new Date(),
+          bio: "",
+          profilePic: "",
+          freeClips: [],
+          paidClips: [],
+        })
+      }
+
+      return { success: true }
+    } catch (error: any) {
       console.error("Error signing up:", error)
-      throw error
+      return {
+        success: false,
+        error: error.message || "Failed to create account",
+      }
     } finally {
       setLoading(false)
     }
