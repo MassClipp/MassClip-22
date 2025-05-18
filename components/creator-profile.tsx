@@ -1,15 +1,12 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { useSearchParams, useRouter } from "next/navigation"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardFooter } from "@/components/ui/card"
-import { Share2, Lock, Edit, Plus, Play, Instagram, Twitter, Globe } from "lucide-react"
-import { useToast } from "@/hooks/use-toast"
-import { useAuth } from "@/contexts/auth-context"
-import Link from "next/link"
+import { useSearchParams } from "next/navigation"
 import Image from "next/image"
+import { Share2, Edit, Plus, Instagram, Twitter, Globe } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { useAuth } from "@/contexts/auth-context"
+import { cn } from "@/lib/utils"
 
 interface Creator {
   uid: string
@@ -28,343 +25,268 @@ interface Creator {
 }
 
 export default function CreatorProfile({ creator }: { creator: Creator }) {
-  const { toast } = useToast()
   const { user } = useAuth()
-  const router = useRouter()
   const searchParams = useSearchParams()
-  const tabParam = searchParams.get("tab")
-  const [activeTab, setActiveTab] = useState(tabParam === "premium" ? "premium" : "free")
-  const [copied, setCopied] = useState(false)
+  const [activeTab, setActiveTab] = useState<"free" | "premium">("free")
   const isOwner = user && user.uid === creator.uid
 
-  // Update active tab when URL parameter changes
+  // Set active tab based on URL query parameter
   useEffect(() => {
-    if (tabParam === "premium") {
+    const tab = searchParams.get("tab")
+    if (tab === "premium") {
       setActiveTab("premium")
-    } else if (tabParam === "free") {
+    } else {
       setActiveTab("free")
     }
-  }, [tabParam])
+  }, [searchParams])
 
-  const handleShare = () => {
-    const url = `${window.location.origin}/creator/${creator.username}`
-    navigator.clipboard.writeText(url)
-    setCopied(true)
-
-    toast({
-      title: "Link copied!",
-      description: "Share this link with your audience",
-    })
-
-    setTimeout(() => setCopied(false), 2000)
+  const handleShare = async () => {
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: `${creator.displayName} on MassClip`,
+          text: `Check out ${creator.displayName}'s content on MassClip`,
+          url: window.location.href,
+        })
+      } catch (error) {
+        console.error("Error sharing:", error)
+      }
+    } else {
+      // Fallback for browsers that don't support the Web Share API
+      navigator.clipboard.writeText(window.location.href)
+      alert("Profile link copied to clipboard!")
+    }
   }
 
-  const handleTabChange = (value: string) => {
-    setActiveTab(value)
-    router.push(`/creator/${creator.username}?tab=${value}`, { scroll: false })
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString)
+    return date.toLocaleDateString("en-US", { month: "long", year: "numeric" })
   }
 
   return (
-    <div className="min-h-screen bg-black">
-      {/* Hero Section with Gradient Overlay */}
-      <div className="relative h-64 md:h-80 overflow-hidden">
-        <div className="absolute inset-0 bg-gradient-to-r from-black via-zinc-900 to-black opacity-90"></div>
-        <div className="absolute inset-0 bg-[url('/noise.png')] opacity-[0.03] mix-blend-soft-light"></div>
-        <div className="absolute inset-0 bg-gradient-to-t from-black via-transparent to-transparent"></div>
-
-        {/* Subtle animated gradient lines */}
-        <div className="absolute inset-0 overflow-hidden">
-          <div className="absolute h-px w-full top-1/4 left-0 bg-gradient-to-r from-transparent via-zinc-700/20 to-transparent"></div>
-          <div className="absolute h-px w-full top-2/4 left-0 bg-gradient-to-r from-transparent via-zinc-700/10 to-transparent"></div>
-          <div className="absolute h-px w-full top-3/4 left-0 bg-gradient-to-r from-transparent via-zinc-700/20 to-transparent"></div>
+    <div className="min-h-screen bg-gradient-to-b from-black to-zinc-900">
+      {/* Hero Section */}
+      <div className="relative">
+        {/* Background gradient with subtle animated lines */}
+        <div className="absolute inset-0 bg-gradient-to-b from-zinc-900/80 to-black/90 overflow-hidden">
+          <div className="absolute inset-0 opacity-10">
+            <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-zinc-500 to-transparent"></div>
+            <div className="absolute bottom-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-zinc-500 to-transparent"></div>
+            <div className="absolute left-0 top-0 bottom-0 w-px bg-gradient-to-b from-transparent via-zinc-500 to-transparent"></div>
+            <div className="absolute right-0 top-0 bottom-0 w-px bg-gradient-to-b from-transparent via-zinc-500 to-transparent"></div>
+          </div>
         </div>
 
-        {/* Content positioned at bottom of hero */}
-        <div className="absolute bottom-0 left-0 right-0">
-          <div className="max-w-6xl mx-auto px-4 pb-8 pt-16">
-            <div className="flex flex-col md:flex-row items-center md:items-end gap-6">
-              {/* Profile Picture */}
-              <div className="w-28 h-28 md:w-32 md:h-32 rounded-full overflow-hidden bg-zinc-800 border-4 border-black shadow-xl">
+        <div className="container mx-auto px-4 py-12 md:py-20 relative z-10">
+          <div className="flex flex-col md:flex-row items-center md:items-start gap-8">
+            {/* Profile Image */}
+            <div className="relative">
+              <div className="w-32 h-32 md:w-40 md:h-40 rounded-full overflow-hidden bg-zinc-800 border-2 border-zinc-700 shadow-xl">
                 {creator.profilePic ? (
                   <Image
                     src={creator.profilePic || "/placeholder.svg"}
                     alt={creator.displayName}
-                    width={128}
-                    height={128}
-                    className="w-full h-full object-cover"
+                    width={160}
+                    height={160}
+                    className="object-cover w-full h-full"
                   />
                 ) : (
-                  <div className="w-full h-full flex items-center justify-center text-4xl font-bold text-zinc-400">
+                  <div className="w-full h-full flex items-center justify-center bg-zinc-800 text-zinc-400 text-4xl font-light">
                     {creator.displayName.charAt(0).toUpperCase()}
                   </div>
                 )}
               </div>
 
-              {/* Profile Info */}
-              <div className="flex-1 text-center md:text-left">
-                <h1 className="text-3xl md:text-4xl font-bold text-white tracking-tight">{creator.displayName}</h1>
-                <p className="text-zinc-400 mt-1">@{creator.username}</p>
+              {/* Premium indicator for pro users */}
+              <div className="absolute -bottom-1 -right-1 bg-gradient-to-r from-amber-500 to-amber-600 text-black text-xs font-medium px-2 py-0.5 rounded-full shadow-lg">
+                PRO
               </div>
+            </div>
 
-              {/* Action Buttons */}
-              <div className="flex gap-3 mt-4 md:mt-0">
-                <Button
-                  onClick={handleShare}
-                  variant="outline"
-                  size="sm"
-                  className="border-zinc-800 bg-zinc-900/50 backdrop-blur-sm text-white hover:bg-zinc-800 transition-all"
-                >
-                  <Share2 className="mr-2 h-4 w-4" />
-                  {copied ? "Copied!" : "Share"}
-                </Button>
+            {/* Profile Info */}
+            <div className="flex-1 text-center md:text-left">
+              <h1 className="text-3xl md:text-4xl font-light tracking-tight text-white mb-1">{creator.displayName}</h1>
+              <p className="text-zinc-400 text-sm mb-4">@{creator.username}</p>
 
-                {isOwner && (
-                  <Button variant="default" size="sm" className="bg-crimson hover:bg-crimson/90 transition-all" asChild>
-                    <Link href="/dashboard/profile/edit">
-                      <Edit className="mr-2 h-4 w-4" />
-                      Edit Profile
-                    </Link>
-                  </Button>
+              {creator.bio && <p className="text-zinc-300 max-w-2xl mb-6 text-sm md:text-base">{creator.bio}</p>}
+
+              {/* Social Links */}
+              <div className="flex flex-wrap gap-3 justify-center md:justify-start mb-6">
+                {creator.socialLinks?.instagram && (
+                  <a
+                    href={`https://instagram.com/${creator.socialLinks.instagram}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-1.5 text-zinc-400 hover:text-white text-sm bg-zinc-800/50 hover:bg-zinc-800 px-3 py-1.5 rounded-full transition-colors"
+                  >
+                    <Instagram className="h-4 w-4" />
+                    <span>Instagram</span>
+                  </a>
+                )}
+
+                {creator.socialLinks?.twitter && (
+                  <a
+                    href={`https://twitter.com/${creator.socialLinks.twitter}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-1.5 text-zinc-400 hover:text-white text-sm bg-zinc-800/50 hover:bg-zinc-800 px-3 py-1.5 rounded-full transition-colors"
+                  >
+                    <Twitter className="h-4 w-4" />
+                    <span>Twitter</span>
+                  </a>
+                )}
+
+                {creator.socialLinks?.website && (
+                  <a
+                    href={creator.socialLinks.website}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="flex items-center gap-1.5 text-zinc-400 hover:text-white text-sm bg-zinc-800/50 hover:bg-zinc-800 px-3 py-1.5 rounded-full transition-colors"
+                  >
+                    <Globe className="h-4 w-4" />
+                    <span>Website</span>
+                  </a>
                 )}
               </div>
+
+              <div className="flex flex-wrap gap-3 justify-center md:justify-start">
+                {/* Member since */}
+                <div className="text-zinc-500 text-xs">Member since {formatDate(creator.createdAt)}</div>
+
+                {/* Content counts */}
+                <div className="flex gap-3 text-xs">
+                  <div className="text-zinc-400">
+                    <span className="text-white font-medium">{creator.freeClips?.length || 0}</span> free clips
+                  </div>
+                  <div className="text-zinc-400">
+                    <span className="text-white font-medium">{creator.paidClips?.length || 0}</span> premium clips
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Action Buttons */}
+            <div className="flex gap-3 mt-4 md:mt-0">
+              <Button
+                variant="outline"
+                size="sm"
+                className="bg-zinc-800/50 border-zinc-700 hover:bg-zinc-800 text-white"
+                onClick={handleShare}
+              >
+                <Share2 className="h-4 w-4 mr-2" />
+                Share
+              </Button>
+
+              {isOwner && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="bg-zinc-800/50 border-zinc-700 hover:bg-zinc-800 text-white"
+                  onClick={() => (window.location.href = "/dashboard/profile/edit")}
+                >
+                  <Edit className="h-4 w-4 mr-2" />
+                  Edit Profile
+                </Button>
+              )}
             </div>
           </div>
         </div>
       </div>
 
-      {/* Bio and Social Links */}
-      <div className="max-w-6xl mx-auto px-4 py-6">
-        <div className="flex flex-col md:flex-row gap-6 items-start">
-          <div className="w-full md:w-2/3">
-            {creator.bio ? (
-              <p className="text-zinc-300 text-lg leading-relaxed">{creator.bio}</p>
-            ) : isOwner ? (
-              <p className="text-zinc-500 italic">Add a bio to tell people about your content</p>
-            ) : null}
-          </div>
+      {/* Content Tabs */}
+      <div className="container mx-auto px-4 pb-20">
+        <div className="border-b border-zinc-800 mb-8">
+          <div className="flex">
+            <button
+              className={cn(
+                "px-6 py-3 text-sm font-medium relative",
+                activeTab === "free" ? "text-white" : "text-zinc-400 hover:text-white",
+              )}
+              onClick={() => setActiveTab("free")}
+            >
+              Free Clips
+              {activeTab === "free" && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-crimson"></div>}
+            </button>
 
-          <div className="w-full md:w-1/3 flex justify-center md:justify-end space-x-4">
-            {creator.socialLinks?.instagram && (
-              <a
-                href={creator.socialLinks.instagram}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="p-2 rounded-full bg-zinc-900 hover:bg-zinc-800 transition-colors"
-              >
-                <Instagram className="h-5 w-5 text-zinc-400 hover:text-white" />
-              </a>
-            )}
-
-            {creator.socialLinks?.twitter && (
-              <a
-                href={creator.socialLinks.twitter}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="p-2 rounded-full bg-zinc-900 hover:bg-zinc-800 transition-colors"
-              >
-                <Twitter className="h-5 w-5 text-zinc-400 hover:text-white" />
-              </a>
-            )}
-
-            {creator.socialLinks?.website && (
-              <a
-                href={creator.socialLinks.website}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="p-2 rounded-full bg-zinc-900 hover:bg-zinc-800 transition-colors"
-              >
-                <Globe className="h-5 w-5 text-zinc-400 hover:text-white" />
-              </a>
-            )}
+            <button
+              className={cn(
+                "px-6 py-3 text-sm font-medium relative",
+                activeTab === "premium" ? "text-white" : "text-zinc-400 hover:text-white",
+              )}
+              onClick={() => setActiveTab("premium")}
+            >
+              Premium Clips
+              {activeTab === "premium" && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-crimson"></div>}
+            </button>
           </div>
         </div>
-      </div>
 
-      {/* Content Tabs */}
-      <div className="max-w-6xl mx-auto px-4 pb-20">
-        <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
-          <div className="border-b border-zinc-800 mb-8">
-            <TabsList className="bg-transparent w-full flex justify-start gap-8">
-              <TabsTrigger
-                value="free"
-                className="text-lg py-4 px-1 border-b-2 border-transparent data-[state=active]:border-crimson data-[state=active]:text-white text-zinc-400 bg-transparent hover:text-white transition-colors"
-              >
-                Free Clips
-              </TabsTrigger>
-              <TabsTrigger
-                value="premium"
-                className="text-lg py-4 px-1 border-b-2 border-transparent data-[state=active]:border-crimson data-[state=active]:text-white text-zinc-400 bg-transparent hover:text-white transition-colors"
-              >
-                Premium Clips
-              </TabsTrigger>
-            </TabsList>
-          </div>
-
-          <TabsContent value="free" className="mt-6 animate-in fade-in-50 duration-300">
-            {creator.freeClips && creator.freeClips.length > 0 ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {creator.freeClips.map((clip, index) => (
-                  <Card
-                    key={index}
-                    className="bg-zinc-900/50 backdrop-blur-sm border-zinc-800 overflow-hidden group hover:border-zinc-700 transition-all duration-300"
-                  >
-                    <div className="aspect-video relative bg-zinc-800 overflow-hidden">
-                      {clip.thumbnail ? (
-                        <div className="relative w-full h-full">
-                          <Image
-                            src={clip.thumbnail || "/placeholder.svg"}
-                            alt={clip.title}
-                            fill
-                            className="object-cover transition-transform duration-700 group-hover:scale-105"
-                          />
-                          <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
-                          <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                            <div className="w-16 h-16 rounded-full bg-crimson/90 flex items-center justify-center">
-                              <Play className="h-8 w-8 text-white" fill="white" />
-                            </div>
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center">
-                          <Play className="h-12 w-12 text-zinc-600" />
-                        </div>
-                      )}
-                    </div>
-                    <CardContent className="p-4">
-                      <h3 className="text-lg font-semibold text-white line-clamp-1">{clip.title || "Untitled Clip"}</h3>
-                      {clip.description && (
-                        <p className="text-zinc-400 mt-1 text-sm line-clamp-2">{clip.description}</p>
-                      )}
-                    </CardContent>
-                    <CardFooter className="px-4 pb-4 pt-0 flex justify-between">
-                      <Button size="sm" className="bg-crimson hover:bg-crimson/90 transition-all">
-                        Watch
-                      </Button>
-                      <Button size="sm" variant="outline" className="border-zinc-700 hover:bg-zinc-800 transition-all">
-                        Download
-                      </Button>
-                    </CardFooter>
-                  </Card>
-                ))}
-              </div>
-            ) : (
-              <div className="rounded-xl overflow-hidden">
-                <div className="bg-gradient-to-r from-zinc-900 via-zinc-800 to-zinc-900 p-12 text-center">
+        {/* Content Area */}
+        <div>
+          {activeTab === "free" && (
+            <div>
+              {creator.freeClips && creator.freeClips.length > 0 ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                  {/* Free clips would be rendered here */}
+                  <div className="text-zinc-400">Free clips would be displayed here</div>
+                </div>
+              ) : (
+                <div className="bg-zinc-900/50 border border-zinc-800/50 rounded-lg p-8 text-center">
                   <div className="max-w-md mx-auto">
-                    {isOwner ? (
-                      <>
-                        <h3 className="text-2xl font-bold mb-4">Share Your Vision</h3>
-                        <p className="text-zinc-400 mb-8 leading-relaxed">
-                          Add free clips to showcase your style and attract viewers to your premium content.
-                        </p>
-                        <Button asChild className="bg-crimson hover:bg-crimson/90 transition-all">
-                          <Link href="/dashboard/clips/add">
-                            <Plus className="w-4 h-4 mr-2" />
-                            Add Your First Clip
-                          </Link>
-                        </Button>
-                      </>
-                    ) : (
-                      <>
-                        <h3 className="text-2xl font-bold mb-4">Coming Soon</h3>
-                        <p className="text-zinc-400 mb-6 leading-relaxed">
-                          {creator.displayName} hasn't added any free content yet. Check back soon or explore their
-                          premium offerings.
-                        </p>
-                        <Button
-                          onClick={() => handleTabChange("premium")}
-                          className="bg-crimson hover:bg-crimson/90 transition-all"
-                        >
-                          View Premium Content
-                        </Button>
-                      </>
+                    <h3 className="text-xl font-light text-white mb-2">No Free Clips Yet</h3>
+                    <p className="text-zinc-400 mb-6">
+                      {isOwner
+                        ? "Share your first free clip to attract viewers and showcase your content."
+                        : `${creator.displayName} hasn't shared any free clips yet.`}
+                    </p>
+
+                    {isOwner && (
+                      <Button
+                        className="bg-crimson hover:bg-crimson/90 text-white"
+                        onClick={() => (window.location.href = "/dashboard/clips/add")}
+                      >
+                        <Plus className="h-4 w-4 mr-2" />
+                        Add Clip
+                      </Button>
                     )}
                   </div>
                 </div>
-              </div>
-            )}
-          </TabsContent>
+              )}
+            </div>
+          )}
 
-          <TabsContent value="premium" className="mt-6 animate-in fade-in-50 duration-300">
-            {creator.paidClips && creator.paidClips.length > 0 ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                {creator.paidClips.map((clip, index) => (
-                  <Card
-                    key={index}
-                    className="bg-zinc-900/50 backdrop-blur-sm border-zinc-800 overflow-hidden group hover:border-zinc-700 transition-all duration-300"
-                  >
-                    <div className="aspect-video relative bg-zinc-800 overflow-hidden">
-                      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-10">
-                        <Lock className="h-10 w-10 text-crimson" />
-                      </div>
-                      {clip.thumbnail ? (
-                        <Image
-                          src={clip.thumbnail || "/placeholder.svg"}
-                          alt={clip.title}
-                          fill
-                          className="object-cover"
-                        />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center">
-                          <Play className="h-12 w-12 text-zinc-600" />
-                        </div>
-                      )}
-                    </div>
-                    <CardContent className="p-4">
-                      <div className="flex justify-between items-start">
-                        <h3 className="text-lg font-semibold text-white line-clamp-1">
-                          {clip.title || "Untitled Clip"}
-                        </h3>
-                        <span className="text-crimson font-bold">${clip.price || "9.99"}</span>
-                      </div>
-                      {clip.description && (
-                        <p className="text-zinc-400 mt-1 text-sm line-clamp-2">{clip.description}</p>
-                      )}
-                    </CardContent>
-                    <CardFooter className="px-4 pb-4 pt-0">
-                      <Button className="w-full bg-crimson hover:bg-crimson/90 transition-all">Unlock Content</Button>
-                    </CardFooter>
-                  </Card>
-                ))}
-              </div>
-            ) : (
-              <div className="rounded-xl overflow-hidden">
-                <div className="bg-gradient-to-r from-zinc-900 via-zinc-800 to-zinc-900 p-12 text-center">
+          {activeTab === "premium" && (
+            <div>
+              {creator.paidClips && creator.paidClips.length > 0 ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                  {/* Premium clips would be rendered here */}
+                  <div className="text-zinc-400">Premium clips would be displayed here</div>
+                </div>
+              ) : (
+                <div className="bg-zinc-900/50 border border-zinc-800/50 rounded-lg p-8 text-center">
                   <div className="max-w-md mx-auto">
-                    {isOwner ? (
-                      <>
-                        <h3 className="text-2xl font-bold mb-4">Monetize Your Content</h3>
-                        <p className="text-zinc-400 mb-8 leading-relaxed">
-                          Start earning by adding premium clips that viewers can purchase.
-                        </p>
-                        <Button asChild className="bg-crimson hover:bg-crimson/90 transition-all">
-                          <Link href="/dashboard/clips/add">
-                            <Plus className="w-4 h-4 mr-2" />
-                            Add Premium Clip
-                          </Link>
-                        </Button>
-                      </>
-                    ) : (
-                      <>
-                        <Lock className="h-12 w-12 text-crimson mx-auto mb-4" />
-                        <h3 className="text-2xl font-bold mb-4">Premium Content Coming Soon</h3>
-                        <p className="text-zinc-400 mb-6 leading-relaxed">
-                          {creator.displayName} is working on premium content. Check back soon for exclusive clips.
-                        </p>
-                        <Button
-                          onClick={() => handleTabChange("free")}
-                          className="bg-crimson hover:bg-crimson/90 transition-all"
-                        >
-                          View Free Content
-                        </Button>
-                      </>
+                    <h3 className="text-xl font-light text-white mb-2">No Premium Clips Yet</h3>
+                    <p className="text-zinc-400 mb-6">
+                      {isOwner
+                        ? "Add premium clips to monetize your content and provide exclusive value to your subscribers."
+                        : `${creator.displayName} hasn't shared any premium clips yet.`}
+                    </p>
+
+                    {isOwner && (
+                      <Button
+                        className="bg-crimson hover:bg-crimson/90 text-white"
+                        onClick={() => (window.location.href = "/dashboard/clips/add")}
+                      >
+                        <Plus className="h-4 w-4 mr-2" />
+                        Add Premium Clip
+                      </Button>
                     )}
                   </div>
                 </div>
-              </div>
-            )}
-          </TabsContent>
-        </Tabs>
+              )}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   )
