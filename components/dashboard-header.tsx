@@ -221,9 +221,12 @@ export default function DashboardHeader({ initialSearchQuery = "" }) {
                   <User className="h-5 w-5" />
                 </Button>
 
-                {/* Dropdown Menu - Appears on Hover */}
-                <div className="hidden group-hover:block absolute right-0 mt-2 w-56 z-50">
-                  <div className="bg-zinc-900/95 backdrop-blur-sm border border-zinc-800 rounded-md shadow-lg overflow-hidden">
+                {/* Dropdown Menu - Appears on Hover with buffer zone */}
+                <div className="absolute right-0 pt-2 opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all duration-150 z-50">
+                  {/* This invisible element creates a "buffer zone" between the icon and dropdown */}
+                  <div className="absolute -top-2 left-0 right-0 h-2 bg-transparent"></div>
+
+                  <div className="bg-zinc-900/95 backdrop-blur-sm border border-zinc-800 rounded-md shadow-lg overflow-hidden w-56">
                     <div className="px-4 py-3">
                       <p className="text-sm font-light text-white">
                         {user.displayName ? user.displayName : "My Account"}
