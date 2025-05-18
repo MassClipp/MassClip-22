@@ -19,11 +19,6 @@ import {
   ChevronRight,
   DollarSign,
   Infinity,
-  Video,
-  UserCircle,
-  Copy,
-  Database,
-  AlertCircle,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useAuth } from "@/contexts/auth-context"
@@ -41,9 +36,6 @@ import { useUserPlan } from "@/hooks/use-user-plan"
 import { useDownloadLimit } from "@/contexts/download-limit-context"
 import { useMobile } from "@/hooks/use-mobile"
 import { useScrollLock } from "@/hooks/use-scroll-lock"
-import { doc, getDoc } from "firebase/firestore"
-import { db } from "@/lib/firebase"
-import { useToast } from "@/hooks/use-toast"
 
 export default function DashboardHeader({ initialSearchQuery = "" }) {
   const [isScrolled, setIsScrolled] = useState(false)
@@ -51,7 +43,6 @@ export default function DashboardHeader({ initialSearchQuery = "" }) {
   const [isSearchOpen, setIsSearchOpen] = useState(false)
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
   const [isLoggingOut, setIsLoggingOut] = useState(false)
-  const [username, setUsername] = useState<string | null>(null)
   const { user, signOut } = useAuth()
   const { isProUser, loading } = useUserPlan()
   const { remainingDownloads, hasReachedLimit } = useDownloadLimit()
@@ -59,7 +50,6 @@ export default function DashboardHeader({ initialSearchQuery = "" }) {
   const searchInputRef = useRef<HTMLInputElement>(null)
   const mobileMenuRef = useRef<HTMLDivElement>(null)
   const isMobile = useMobile()
-  const { toast } = useToast()
 
   // Lock scroll when mobile menu is open
   useScrollLock(isMobileMenuOpen)
@@ -76,36 +66,6 @@ export default function DashboardHeader({ initialSearchQuery = "" }) {
     window.addEventListener("scroll", handleScroll)
     return () => window.removeEventListener("scroll", handleScroll)
   }, [])
-
-  // Fetch username for profile link
-  useEffect(() => {
-    const fetchUsername = async () => {
-      if (!user) return
-
-      try {
-        // First check if user has a creator profile
-        const creatorProfileRef = doc(db, "creatorProfiles", user.uid)
-        const creatorProfileSnap = await getDoc(creatorProfileRef)
-
-        if (creatorProfileSnap.exists() && creatorProfileSnap.data().username) {
-          setUsername(creatorProfileSnap.data().username)
-          return
-        }
-
-        // If not, check regular user profile
-        const userDocRef = doc(db, "users", user.uid)
-        const userDocSnap = await getDoc(userDocRef)
-
-        if (userDocSnap.exists() && userDocSnap.data().username) {
-          setUsername(userDocSnap.data().username)
-        }
-      } catch (error) {
-        console.error("Error fetching username:", error)
-      }
-    }
-
-    fetchUsername()
-  }, [user])
 
   // Focus search input when search is opened
   useEffect(() => {
@@ -154,26 +114,12 @@ export default function DashboardHeader({ initialSearchQuery = "" }) {
     }
   }
 
-  const handleCopyProfileLink = () => {
-    if (!username) return
-
-    const profileUrl = `${window.location.origin}/creator/${username}`
-    navigator.clipboard.writeText(profileUrl)
-
-    toast({
-      title: "Profile link copied!",
-      description: "Your profile link has been copied to clipboard.",
-    })
-  }
-
   // Navigation items for both desktop and mobile
   const navigationItems = [
     { name: "Home", href: "/dashboard", icon: <Home className="h-4 w-4" /> },
     { name: "Categories", href: "/dashboard/categories", icon: <Grid className="h-4 w-4" /> },
     { name: "Favorites", href: "/dashboard/favorites", icon: <Heart className="h-4 w-4" /> },
     { name: "History", href: "/dashboard/history", icon: <Clock className="h-4 w-4" /> },
-    { name: "Creator Hub", href: "/dashboard/creator-hub", icon: <Video className="h-4 w-4" /> },
-    { name: "Purchased", href: "/dashboard/purchased-clips", icon: <DollarSign className="h-4 w-4" /> },
     { name: "Pricing", href: "/membership-plans", icon: <DollarSign className="h-4 w-4" /> },
   ]
 
@@ -262,66 +208,14 @@ export default function DashboardHeader({ initialSearchQuery = "" }) {
                     className="hover:bg-zinc-800 focus:bg-zinc-800"
                     onClick={() => router.push("/dashboard/user")}
                   >
-                    <Home className="h-4 w-4 mr-2" />
                     Dashboard
                   </DropdownMenuItem>
-
-                  {/* Always show Profile option, handle navigation based on username availability */}
                   <DropdownMenuItem
                     className="hover:bg-zinc-800 focus:bg-zinc-800"
-                    onClick={() => {
-                      if (username) {
-                        router.push(`/creator/${username}`)
-                      } else {
-                        toast({
-                          title: "Profile not set up",
-                          description: "Please set up your creator profile first.",
-                          variant: "destructive",
-                        })
-                        router.push("/dashboard/creator/setup")
-                      }
-                    }}
+                    onClick={() => router.push("/dashboard/profile")}
                   >
-                    <UserCircle className="h-4 w-4 mr-2" />
                     Profile
                   </DropdownMenuItem>
-
-                  <DropdownMenuItem
-                    className="hover:bg-zinc-800 focus:bg-zinc-800"
-                    onClick={() => router.push("/dashboard/creator-hub")}
-                  >
-                    <Video className="h-4 w-4 mr-2" />
-                    Creator Hub
-                  </DropdownMenuItem>
-
-                  {username && (
-                    <DropdownMenuItem className="hover:bg-zinc-800 focus:bg-zinc-800" onClick={handleCopyProfileLink}>
-                      <Copy className="h-4 w-4 mr-2" />
-                      Copy Profile Link
-                    </DropdownMenuItem>
-                  )}
-
-                  {user?.email === "admin@example.com" && (
-                    <>
-                      <DropdownMenuItem asChild>
-                        <Link href="/debug/firestore">
-                          <Database className="mr-2 h-4 w-4" />
-                          Firestore Debug
-                        </Link>
-                      </DropdownMenuItem>
-                    </>
-                  )}
-
-                  <DropdownMenuSeparator className="bg-zinc-800" />
-                  <DropdownMenuItem
-                    className="hover:bg-zinc-800 focus:bg-zinc-800"
-                    onClick={() => router.push("/debug/profile-bypass")}
-                  >
-                    <AlertCircle className="h-4 w-4 mr-2" />
-                    Debug: Profile Bypass
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator className="bg-zinc-800" />
-
                   <DropdownMenuSeparator className="bg-zinc-800" />
                   <DropdownMenuItem
                     className="hover:bg-zinc-800 focus:bg-zinc-800"
@@ -464,78 +358,27 @@ export default function DashboardHeader({ initialSearchQuery = "" }) {
                 onClick={() => setIsMobileMenuOpen(false)}
               >
                 <div className="flex items-center">
-                  <Home className="h-4 w-4 mr-3" />
+                  <User className="h-4 w-4 mr-3" />
                   <span className="text-sm font-light">Dashboard</span>
                 </div>
                 <ChevronRight className="h-4 w-4 text-zinc-500 group-hover:text-white/70 transition-colors" />
               </Link>
-
-              {/* Always show Profile option in mobile menu too */}
-              <button
-                onClick={() => {
-                  if (username) {
-                    router.push(`/creator/${username}`)
-                  } else {
-                    toast({
-                      title: "Profile not set up",
-                      description: "Please set up your creator profile first.",
-                      variant: "destructive",
-                    })
-                    router.push("/dashboard/creator/setup")
-                  }
-                  setIsMobileMenuOpen(false)
-                }}
-                className="w-full flex items-center justify-between py-3 px-4 text-white/90 hover:text-white hover:bg-white/5 rounded-lg transition-colors group text-left"
-              >
-                <div className="flex items-center">
-                  <UserCircle className="h-4 w-4 mr-3" />
-                  <span className="text-sm font-light">Profile</span>
-                </div>
-                <ChevronRight className="h-4 w-4 text-zinc-500 group-hover:text-white/70 transition-colors" />
-              </button>
-
               <Link
-                href="/dashboard/creator-hub"
+                href="/dashboard/profile"
                 className="flex items-center justify-between py-3 px-4 text-white/90 hover:text-white hover:bg-white/5 rounded-lg transition-colors group"
                 onClick={() => setIsMobileMenuOpen(false)}
               >
                 <div className="flex items-center">
-                  <Video className="h-4 w-4 mr-3" />
-                  <span className="text-sm font-light">Creator Hub</span>
+                  <User className="h-4 w-4 mr-3" />
+                  <span className="text-sm font-light">Profile</span>
                 </div>
                 <ChevronRight className="h-4 w-4 text-zinc-500 group-hover:text-white/70 transition-colors" />
               </Link>
-
-              {username && (
-                <button
-                  onClick={() => {
-                    handleCopyProfileLink()
-                    setIsMobileMenuOpen(false)
-                  }}
-                  className="w-full flex items-center justify-between py-3 px-4 text-white/90 hover:text-white hover:bg-white/5 rounded-lg transition-colors group text-left"
-                >
-                  <div className="flex items-center">
-                    <Copy className="h-4 w-4 mr-3" />
-                    <span className="text-sm font-light">Copy Profile Link</span>
-                  </div>
-                  <ChevronRight className="h-4 w-4 text-zinc-500 group-hover:text-white/70 transition-colors" />
-                </button>
-              )}
             </div>
           </nav>
 
           {/* Action Buttons */}
           <div className="p-5 border-t border-zinc-800/50 space-y-3 bg-black">
-            <button
-              onClick={() => {
-                router.push("/debug/profile-bypass")
-                setIsMobileMenuOpen(false)
-              }}
-              className="flex items-center justify-center w-full py-2.5 text-sm text-amber-400 hover:text-amber-300 bg-zinc-800/50 hover:bg-zinc-800 rounded-lg transition-colors mb-2"
-            >
-              <AlertCircle className="h-4 w-4 mr-2" />
-              Debug: Profile Bypass
-            </button>
             <button
               onClick={handleLogout}
               disabled={isLoggingOut}

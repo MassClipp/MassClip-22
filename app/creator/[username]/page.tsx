@@ -1,50 +1,61 @@
+import type { Metadata } from "next"
 import { notFound } from "next/navigation"
-import { db } from "@/lib/firebase-admin"
-import CreatorProfileClient from "./creator-profile-client"
+import { getCreatorByUsername } from "@/lib/creator-utils"
+import { CreatorProfile } from "@/components/creator-profile"
 
-interface CreatorProfilePageProps {
+interface CreatorPageProps {
   params: {
     username: string
   }
 }
 
-export default async function CreatorProfilePage({ params }: CreatorProfilePageProps) {
+// Generate metadata for the page
+export async function generateMetadata({ params }: CreatorPageProps): Promise<Metadata> {
   const { username } = params
 
   try {
-    // Find the profile by username
-    const usernameDoc = await db.collection("usernames").doc(username).get()
+    const creator = await getCreatorByUsername(username)
 
-    if (!usernameDoc.exists) {
-      return notFound()
+    if (!creator) {
+      return {
+        title: "Creator Not Found | MassClip",
+      }
     }
 
-    const uid = usernameDoc.data()?.uid
-
-    if (!uid) {
-      return notFound()
+    return {
+      title: `${creator.displayName} | MassClip`,
+      description: creator.bio || `Check out ${creator.displayName}'s content on MassClip`,
     }
-
-    // Get the creator profile
-    const profileDoc = await db.collection("creatorProfiles").doc(uid).get()
-
-    if (!profileDoc.exists) {
-      return notFound()
-    }
-
-    const profile = {
-      id: profileDoc.id,
-      ...profileDoc.data(),
-    }
-
-    // For now, we'll use empty arrays for clips
-    // In a real implementation, you would fetch the clips from your database
-    const freeClips = []
-    const paidClips = []
-
-    return <CreatorProfileClient profile={profile} freeClips={freeClips} paidClips={paidClips} />
   } catch (error) {
-    console.error("Error fetching creator profile:", error)
-    return notFound()
+    console.error("Error generating metadata:", error)
+    return {
+      title: "Creator | MassClip",
+    }
+  }
+}
+
+export default async function CreatorPage({ params }: CreatorPageProps) {
+  const { username } = params
+
+  try {
+    const creator = await getCreatorByUsername(username)
+
+    if (!creator) {
+      notFound()
+    }
+
+    return (
+      <main className="min-h-screen bg-black">
+        <CreatorProfile creator={creator} />
+      </main>
+    )
+  } catch (error) {
+    console.error("Error fetching creator:", error)
+    return (
+      <div className="min-h-screen bg-black flex flex-col items-center justify-center">
+        <h1 className="text-2xl text-white mb-4">Something went wrong</h1>
+        <p className="text-gray-400">We couldn't load this creator's profile</p>
+      </div>
+    )
   }
 }

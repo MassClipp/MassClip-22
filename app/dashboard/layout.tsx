@@ -1,29 +1,60 @@
+"use client"
+
 import type React from "react"
-import { DownloadLimitProvider } from "@/components/providers/download-limit-provider"
-import { RedirectHelper } from "@/components/redirect-helper"
-import Logo from "@/components/logo"
+
+import { useEffect, useState } from "react"
+import { useRouter } from "next/navigation"
+import { useAuth } from "@/contexts/auth-context"
+import { getCreatorByUid } from "@/lib/creator-utils"
 
 export default function DashboardLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
-  return (
-    <DownloadLimitProvider>
-      <RedirectHelper />
-      <div>{children}</div>
-      <footer className="mt-4 py-4 border-t border-zinc-800/30 text-center hidden md:block">
-        <div className="container mx-auto px-4 flex flex-col md:flex-row justify-between items-center">
-          <div className="mb-4 md:mb-0">
-            <Logo href="/" size="sm" />
-          </div>
-          <div>
-            <a href="mailto:john@massclip.pro" className="text-zinc-400 hover:text-white transition-colors">
-              john@massclip.pro
-            </a>
-          </div>
-        </div>
-      </footer>
-    </DownloadLimitProvider>
-  )
+  const { user, loading } = useAuth()
+  const router = useRouter()
+  const [hasProfile, setHasProfile] = useState<boolean | null>(null)
+  const [isCheckingProfile, setIsCheckingProfile] = useState(true)
+
+  useEffect(() => {
+    const checkCreatorProfile = async () => {
+      if (!user) return
+
+      try {
+        setIsCheckingProfile(true)
+        const creator = await getCreatorByUid(user.uid)
+        setHasProfile(!!creator)
+      } catch (error) {
+        console.error("Error checking creator profile:", error)
+      } finally {
+        setIsCheckingProfile(false)
+      }
+    }
+
+    if (!loading) {
+      if (!user) {
+        router.push("/login")
+      } else {
+        checkCreatorProfile()
+      }
+    }
+  }, [user, loading, router])
+
+  useEffect(() => {
+    // If we've checked and the user doesn't have a profile, redirect to setup
+    if (!isCheckingProfile && hasProfile === false) {
+      router.push("/setup-profile")
+    }
+  }, [hasProfile, isCheckingProfile, router])
+
+  if (loading || isCheckingProfile) {
+    return (
+      <div className="min-h-screen bg-black flex flex-col justify-center items-center">
+        <div className="w-16 h-16 border-t-2 border-red-600 border-solid rounded-full animate-spin"></div>
+      </div>
+    )
+  }
+
+  return children
 }
