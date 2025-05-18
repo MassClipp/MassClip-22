@@ -56,6 +56,37 @@ export function useFirebaseAuth() {
     return () => unsubscribe()
   }, [])
 
+  // Save creator profile to Firestore
+  const saveCreatorProfile = async (uid: string, username: string, displayName: string, photoURL?: string) => {
+    console.log(`Saving creator profile for ${username}...`)
+
+    try {
+      // Create creator profile
+      await setDoc(doc(db, "creators", username), {
+        uid: uid,
+        username: username,
+        displayName: displayName || username,
+        bio: "",
+        profilePic: photoURL || "",
+        freeClips: [],
+        paidClips: [],
+        createdAt: serverTimestamp(),
+      })
+
+      // Create username document for uniqueness check
+      await setDoc(doc(db, "usernames", username), {
+        uid: uid,
+        createdAt: serverTimestamp(),
+      })
+
+      console.log(`Creator profile saved successfully for ${username}`)
+      return true
+    } catch (error) {
+      console.error("Error saving creator profile:", error)
+      return false
+    }
+  }
+
   // Sign in with email and password
   const signIn = async (email: string, password: string): Promise<AuthResult> => {
     if (!isFirebaseConfigured) {
@@ -134,26 +165,8 @@ export function useFirebaseAuth() {
             { merge: true },
           )
 
-          // Create username document
-          console.log("Creating username document for existing user:", username)
-          await setDoc(doc(db, "usernames", username), {
-            uid: user.uid,
-            createdAt: serverTimestamp(),
-          })
-
           // Create creator profile
-          console.log("Creating creator profile for existing user:", username)
-          await setDoc(doc(db, "creators", username), {
-            uid: user.uid,
-            username,
-            displayName: displayName || user.displayName || username,
-            createdAt: serverTimestamp(),
-            bio: "",
-            profilePic: user.photoURL || "",
-            freeClips: [],
-            paidClips: [],
-          })
-
+          await saveCreatorProfile(user.uid, username, displayName || user.displayName || username, user.photoURL || "")
           existingUsername = username
         }
       } else {
@@ -169,27 +182,9 @@ export function useFirebaseAuth() {
           permissions: { download: false, premium: false },
         })
 
-        // Create username document
+        // Create creator profile
         if (username) {
-          console.log("Creating username document:", username)
-          await setDoc(doc(db, "usernames", username), {
-            uid: user.uid,
-            createdAt: serverTimestamp(),
-          })
-
-          // Create creator profile
-          console.log("Creating creator profile for:", username)
-          await setDoc(doc(db, "creators", username), {
-            uid: user.uid,
-            username,
-            displayName: displayName || user.displayName || username,
-            createdAt: serverTimestamp(),
-            bio: "",
-            profilePic: user.photoURL || "",
-            freeClips: [],
-            paidClips: [],
-          })
-
+          await saveCreatorProfile(user.uid, username, displayName || user.displayName || username, user.photoURL || "")
           existingUsername = username
         }
       }
@@ -249,26 +244,9 @@ export function useFirebaseAuth() {
         permissions: { download: false, premium: false },
       })
 
-      // Create username document
+      // Create creator profile
       if (username) {
-        console.log("Creating username document:", username)
-        await setDoc(doc(db, "usernames", username), {
-          uid: user.uid,
-          createdAt: serverTimestamp(),
-        })
-
-        // Create creator profile - USING OPTION B (username as document ID)
-        console.log("Creating creator profile:", username)
-        await setDoc(doc(db, "creators", username), {
-          uid: user.uid,
-          username,
-          displayName: displayName || username,
-          createdAt: serverTimestamp(),
-          bio: "",
-          profilePic: "",
-          freeClips: [],
-          paidClips: [],
-        })
+        await saveCreatorProfile(user.uid, username, displayName || username)
       }
 
       console.log("Signup process completed successfully")

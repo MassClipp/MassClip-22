@@ -2,7 +2,7 @@ import { notFound } from "next/navigation"
 import type { Metadata } from "next"
 import { getFirestore } from "firebase-admin/firestore"
 import { getApp, getApps, initializeApp, cert } from "firebase-admin/app"
-import CreatorProfile from "@/components/creator-profile"
+import CreatorProfileWithSidebar from "@/components/creator-profile-with-sidebar"
 
 // Initialize Firebase Admin
 function getFirebaseAdmin() {
@@ -112,52 +112,11 @@ export default async function CreatorProfilePage({ params }: { params: { usernam
     getFirebaseAdmin()
     const db = getFirestore()
 
-    // Check if username exists in usernames collection
-    const usernameDoc = await db.collection("usernames").doc(username).get()
-    if (!usernameDoc.exists) {
-      console.log(`Username not found in usernames collection: ${username}`)
-      notFound()
-    }
-
-    // Get creator profile
+    // Get creator profile directly using username as document ID
     const creatorDoc = await db.collection("creators").doc(username).get()
+
     if (!creatorDoc.exists) {
       console.log(`Creator profile not found for username: ${username}`)
-
-      // If username exists but creator profile doesn't, try to create it
-      const usernameData = usernameDoc.data()
-      if (usernameData && usernameData.uid) {
-        console.log(`Attempting to create missing creator profile for username: ${username}`)
-
-        // Get user data
-        const userDoc = await db.collection("users").doc(usernameData.uid).get()
-        if (userDoc.exists) {
-          const userData = userDoc.data()
-
-          // Create creator profile
-          await db
-            .collection("creators")
-            .doc(username)
-            .set({
-              uid: usernameData.uid,
-              username,
-              displayName: userData.displayName || username,
-              createdAt: new Date(),
-              bio: "",
-              profilePic: userData.photoURL || "",
-              freeClips: [],
-              paidClips: [],
-            })
-
-          console.log(`Created missing creator profile for username: ${username}`)
-
-          // Fetch the newly created profile
-          const newCreatorDoc = await db.collection("creators").doc(username).get()
-          const creatorData = serializeData(newCreatorDoc.data())
-          return <CreatorProfile creator={creatorData} />
-        }
-      }
-
       notFound()
     }
 
@@ -165,7 +124,7 @@ export default async function CreatorProfilePage({ params }: { params: { usernam
     const creatorData = serializeData(creatorDoc.data())
     console.log(`Creator profile found for username: ${username}`)
 
-    return <CreatorProfile creator={creatorData} />
+    return <CreatorProfileWithSidebar creator={creatorData} />
   } catch (error) {
     console.error(`Error fetching creator profile for ${username}:`, error)
     notFound()
