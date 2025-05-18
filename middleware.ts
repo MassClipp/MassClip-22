@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server"
 import type { NextRequest } from "next/server"
-import { initializeFirebaseAdmin, db } from "@/lib/firebase-admin"
 
 // Paths that require authentication
 const authRequiredPaths = ["/dashboard", "/setup-profile"]
@@ -29,25 +28,26 @@ export async function middleware(request: NextRequest) {
   // If session exists and path requires profile setup, check if profile is set up
   if (sessionCookie && profileSetupRequiredPaths.some((p) => path.startsWith(p))) {
     try {
-      // Initialize Firebase Admin
-      initializeFirebaseAdmin()
+      // Instead of using Firebase Admin directly, make a request to our API
+      const response = await fetch(new URL("/api/check-profile-setup", request.url), {
+        headers: {
+          Cookie: `session=${sessionCookie}`,
+        },
+      })
 
-      // Verify the session cookie - dynamically import to avoid node: scheme issues
-      const admin = await import("firebase-admin/auth")
-      const decodedClaims = await admin.getAuth().verifySessionCookie(sessionCookie)
-      const uid = decodedClaims.uid
+      if (!response.ok) {
+        throw new Error("Failed to verify profile setup")
+      }
 
-      // Check if user has set up profile
-      const userDoc = await db.collection("users").doc(uid).get()
-      const userData = userDoc.data()
+      const data = await response.json()
 
-      if (!userData?.hasSetupProfile) {
+      if (!data.hasSetupProfile) {
         // User hasn't set up profile, redirect to setup page
         return NextResponse.redirect(new URL("/setup-profile", request.url))
       }
     } catch (error) {
       console.error("Error in middleware:", error)
-      // Session invalid, redirect to login
+      // Session invalid or error occurred, redirect to login
       const url = new URL("/login", request.url)
       url.searchParams.set("redirect", path)
       return NextResponse.redirect(url)

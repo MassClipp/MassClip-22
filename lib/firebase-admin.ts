@@ -38,9 +38,3 @@ initializeFirebaseAdmin()
 
 // Export the Firestore database
 export const db = getFirestore()
-
-// Export a function to get Auth - this avoids direct imports that cause node: scheme issues
-export async function getAuth() {
-  const { getAuth: firebaseGetAuth } = await import("firebase-admin/auth")
-  return firebaseGetAuth()
-}
