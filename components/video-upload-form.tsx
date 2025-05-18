@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState, useRef, type FormEvent, type ChangeEvent } from "react"
+import { useState, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
@@ -65,13 +65,13 @@ export default function VideoUploadForm() {
     setError(null)
   }
 
-  const handleFileInputChange = (e: ChangeEvent<HTMLInputElement>) => {
+  const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
       handleFileSelect(e.target.files[0])
     }
   }
 
-  const handleSubmit = async (e: FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
 
     if (!user) {
@@ -94,83 +94,82 @@ export default function VideoUploadForm() {
       setProgress(0)
       setError(null)
 
-      // Step 1: Get a pre-signed URL
+      // Step 1: Prepare form data for the initial request
+      const formData = new FormData()
+      formData.append("title", title)
+      formData.append("description", description || "")
+      formData.append("isPremium", String(isPremium))
+
+      // Get token for authentication
       const token = await getIdToken()
 
-      console.log("Getting presigned URL...")
-      const presignedResponse = await fetch("/api/upload/presigned-url", {
+      // Step 2: Get upload URL and file details
+      console.log("Getting upload URL...")
+      const uploadResponse = await fetch("/api/upload", {
         method: "POST",
         headers: {
-          "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({
-          filename: selectedFile.name,
-          contentType: selectedFile.type,
-          isPremium,
-        }),
-      })
-
-      if (!presignedResponse.ok) {
-        const errorData = await presignedResponse.json()
-        throw new Error(errorData.error || "Failed to get upload URL")
-      }
-
-      const { presignedUrl, key, fileId, contentType } = await presignedResponse.json()
-      console.log("Got presigned URL:", { key, fileId, contentType })
-
-      // Step 2: Upload the file directly to R2 using fetch instead of XMLHttpRequest
-      console.log("Starting upload to R2...")
-      const uploadResponse = await fetch(presignedUrl, {
-        method: "PUT",
-        headers: {
-          "Content-Type": selectedFile.type,
-        },
-        body: selectedFile,
+        body: formData,
       })
 
       if (!uploadResponse.ok) {
-        throw new Error(`Upload failed with status ${uploadResponse.status}`)
+        const errorData = await uploadResponse.json()
+        throw new Error(errorData.error || "Failed to initialize upload")
       }
 
-      console.log("Upload to R2 complete")
-      setProgress(75)
+      const { presignedUrl, fileId, key, publicUrl } = await uploadResponse.json()
+      console.log("Got upload URL:", { fileId, key })
 
-      // Step 3: Save metadata to Firestore
-      console.log("Saving metadata...")
-      const metadataResponse = await fetch("/api/upload/save-metadata", {
+      // Step 3: Upload the file directly to R2
+      console.log("Uploading file to R2...")
+      setProgress(10)
+
+      // Simple upload with fetch
+      const uploadResult = await fetch(presignedUrl, {
+        method: "PUT",
+        body: selectedFile,
+        headers: {
+          "Content-Type": selectedFile.type,
+        },
+      })
+
+      if (!uploadResult.ok) {
+        throw new Error(`Upload failed with status ${uploadResult.status}`)
+      }
+
+      console.log("File uploaded successfully")
+      setProgress(90)
+
+      // Step 4: Mark the upload as complete
+      console.log("Marking upload as complete...")
+      const completeResponse = await fetch("/api/upload/complete", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
-          title,
-          description,
-          key,
           fileId,
-          contentType,
-          duration: 0, // Placeholder
-          thumbnailUrl: "", // Placeholder
+          contentType: isPremium ? "premium" : "free",
         }),
       })
 
-      if (!metadataResponse.ok) {
-        const errorData = await metadataResponse.json()
-        throw new Error(errorData.error || "Failed to save video metadata")
+      if (!completeResponse.ok) {
+        const errorData = await completeResponse.json()
+        throw new Error(errorData.error || "Failed to complete upload")
       }
 
-      const result = await metadataResponse.json()
-      console.log("Metadata saved:", result)
-
-      // Complete!
+      console.log("Upload process completed successfully")
       setProgress(100)
+
+      // Show success message
       toast({
         title: "Upload Complete",
         description: `Your ${isPremium ? "premium" : "free"} video has been uploaded successfully.`,
       })
 
-      // Redirect to the creator's profile or video management page
+      // Redirect to the creator's profile or dashboard
       if (user?.username) {
         router.push(`/creator/${user.username}?tab=${isPremium ? "premium" : "free"}`)
       } else {
@@ -313,7 +312,7 @@ export default function VideoUploadForm() {
               <span className="text-zinc-400">Uploading...</span>
               <span className="text-white">{progress}%</span>
             </div>
-            <Progress value={progress} className="h-2 bg-zinc-800" indicatorClassName="bg-red-500" />
+            <Progress value={progress} className="h-2 bg-zinc-800" />
           </div>
         )}
 
