@@ -88,7 +88,11 @@ export default function VideoUploadForm() {
         description,
         isPremium,
         file: selectedFile,
+        onProgress: (progress) => {
+          console.log(`Upload progress: ${progress}%`)
+        },
         onComplete: (data) => {
+          console.log("Upload complete:", data)
           // Redirect to the creator's profile or video management page
           if (user?.username) {
             router.push(`/creator/${user.username}?tab=${isPremium ? "premium" : "free"}`)
@@ -96,9 +100,14 @@ export default function VideoUploadForm() {
             router.push("/dashboard")
           }
         },
+        onError: (error) => {
+          console.error("Upload error in component:", error)
+          setError(error.message || "Upload failed. Please try again.")
+        },
       })
     } catch (err) {
-      console.error("Upload error:", err)
+      console.error("Unhandled upload error:", err)
+      setError(err instanceof Error ? err.message : "An unknown error occurred")
     }
   }
 

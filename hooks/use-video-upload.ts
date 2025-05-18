@@ -81,51 +81,23 @@ export function useVideoUpload() {
 
       // Create a promise to handle the XHR upload
       const uploadPromise = new Promise<void>((resolve, reject) => {
-        xhr.onload = async () => {
+        xhr.onload = () => {
           if (xhr.status >= 200 && xhr.status < 300) {
             resolve()
           } else {
             reject(new Error(`Upload failed with status ${xhr.status}`))
           }
         }
-        xhr.onerror = () => reject(new Error("Network error during upload"))
+        xhr.onerror = () => {
+          reject(new Error("Network error during upload"))
+        }
       })
 
       // Start the upload
       xhr.send(file)
       await uploadPromise
 
-      // Step 3: Generate a thumbnail
-      let thumbnailUrl = ""
-      try {
-        const thumbnailResponse = await fetch("/api/upload/generate-thumbnail", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            videoUrl: `${process.env.CLOUDFLARE_R2_PUBLIC_URL}/${key}`,
-            fileId,
-            contentType,
-            userId: user.uid,
-          }),
-        })
-
-        if (thumbnailResponse.ok) {
-          const thumbnailData = await thumbnailResponse.json()
-          thumbnailUrl = thumbnailData.thumbnailUrl
-        }
-      } catch (thumbnailError) {
-        console.error("Thumbnail generation error:", thumbnailError)
-        // Continue with upload even if thumbnail generation fails
-      }
-
-      // Step 4: Extract video duration and thumbnail (simplified for now)
-      // In a real implementation, you might want to use a service like FFmpeg or a client-side solution
-      const duration = 0 // Placeholder
-
-      // Step 5: Save metadata to Firestore
+      // Step 3: Save metadata to Firestore
       const metadataResponse = await fetch("/api/upload/save-metadata", {
         method: "POST",
         headers: {
@@ -138,8 +110,8 @@ export function useVideoUpload() {
           key,
           fileId,
           contentType,
-          duration,
-          thumbnailUrl,
+          duration: 0, // Placeholder
+          thumbnailUrl: "", // Placeholder
         }),
       })
 
