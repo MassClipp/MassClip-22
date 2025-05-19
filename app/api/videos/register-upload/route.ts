@@ -58,18 +58,16 @@ export async function POST(request: NextRequest) {
     const collectionPath = `users/${userId}/${contentType}Clips`
 
     // Create the video metadata
-    const timestamp = FieldValue.serverTimestamp()
-
-    // Generate a default thumbnail if none provided
-    const finalThumbnailUrl = thumbnailUrl || `${publicUrl}?poster=true`
+    const timestamp = new Date().toISOString()
 
     const videoData = {
       id: fileId,
       title,
       description: description || "",
       storagePath,
+      contentType,
       url: publicUrl,
-      thumbnailUrl: finalThumbnailUrl,
+      thumbnailUrl: thumbnailUrl || "",
       duration: duration || 0,
       createdAt: timestamp,
       updatedAt: timestamp,
@@ -103,13 +101,9 @@ export async function POST(request: NextRequest) {
       username,
       fileId,
       contentType,
-      timestamp: new Date().toISOString(),
+      timestamp,
       success: true,
-      data: {
-        ...videoData,
-        createdAt: new Date().toISOString(), // Convert timestamp for logging
-        updatedAt: new Date().toISOString(),
-      },
+      data: videoData,
     })
 
     console.log("Upload registration completed successfully")
@@ -119,11 +113,7 @@ export async function POST(request: NextRequest) {
       message: "Upload registration completed successfully",
       videoId: fileId,
       publicUrl,
-      videoData: {
-        ...videoData,
-        createdAt: new Date().toISOString(), // Convert timestamp for response
-        updatedAt: new Date().toISOString(),
-      },
+      videoData,
     })
   } catch (error) {
     console.error("Error registering upload:", error)

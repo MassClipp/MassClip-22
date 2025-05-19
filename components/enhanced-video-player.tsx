@@ -1,13 +1,15 @@
 "use client"
 
+import type React from "react"
+
 import { useState, useEffect, useRef } from "react"
 import { useAuth } from "@/contexts/auth-context"
-import { Lock, Play } from "lucide-react"
+import { Lock, Play, Volume2, VolumeX } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useRouter } from "next/navigation"
 import { useToast } from "@/hooks/use-toast"
 
-interface VideoPlayerProps {
+interface EnhancedVideoPlayerProps {
   videoUrl: string
   thumbnailUrl?: string
   title: string
@@ -17,7 +19,7 @@ interface VideoPlayerProps {
   onPlay?: () => void
 }
 
-export default function VideoPlayer({
+export default function EnhancedVideoPlayer({
   videoUrl,
   thumbnailUrl,
   title,
@@ -25,12 +27,14 @@ export default function VideoPlayer({
   videoId,
   creatorId,
   onPlay,
-}: VideoPlayerProps) {
+}: EnhancedVideoPlayerProps) {
   const [hasAccess, setHasAccess] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [isPlaying, setIsPlaying] = useState(false)
+  const [isMuted, setIsMuted] = useState(false)
   const [isVideoError, setIsVideoError] = useState(false)
   const videoRef = useRef<HTMLVideoElement>(null)
+  const containerRef = useRef<HTMLDivElement>(null)
   const { user } = useAuth()
   const router = useRouter()
   const { toast } = useToast()
@@ -85,6 +89,34 @@ export default function VideoPlayer({
     checkAccess()
   }, [isPremium, user, videoId, creatorId])
 
+  // Test video URL on mount
+  useEffect(() => {
+    const testVideoUrl = async () => {
+      if (!videoUrl) return
+
+      try {
+        console.log("Testing video URL:", videoUrl)
+        const response = await fetch(videoUrl, { method: "HEAD" })
+        console.log(`Video URL test result: ${response.status} ${response.statusText}`)
+
+        // Log headers for debugging
+        const headers: Record<string, string> = {}
+        response.headers.forEach((value, key) => {
+          headers[key] = value
+        })
+        console.log("Response headers:", headers)
+
+        if (!response.ok) {
+          console.error(`Video URL returned error status: ${response.status}`)
+        }
+      } catch (error) {
+        console.error("Error testing video URL:", error)
+      }
+    }
+
+    testVideoUrl()
+  }, [videoUrl])
+
   const handlePlay = () => {
     if (!hasAccess && isPremium) {
       // Redirect to purchase page or show upgrade modal
@@ -120,18 +152,32 @@ export default function VideoPlayer({
     }
   }
 
-  // Log video URL for debugging
-  useEffect(() => {
-    console.log("Standard player - Video URL:", videoUrl)
-
-    // Check if URL is from Cloudflare R2
-    if (videoUrl && videoUrl.includes("r2.dev")) {
-      console.log("Cloudflare R2 URL detected in standard player")
+  const toggleMute = () => {
+    if (videoRef.current) {
+      videoRef.current.muted = !videoRef.current.muted
+      setIsMuted(videoRef.current.muted)
     }
-  }, [videoUrl])
+  }
+
+  const handleVideoError = (e: React.SyntheticEvent<HTMLVideoElement, Event>) => {
+    const videoElement = e.currentTarget
+    console.error("Video error occurred with URL:", videoUrl)
+    console.error("Video error code:", videoElement.error?.code)
+    console.error("Video error message:", videoElement.error?.message)
+
+    setIsVideoError(true)
+    setIsPlaying(false)
+
+    toast({
+      title: "Video Playback Error",
+      description: `Error: ${videoElement.error?.message || "Unknown error"}`,
+      variant: "destructive",
+    })
+  }
 
   return (
     <div
+      ref={containerRef}
       className="relative mx-auto overflow-hidden bg-black rounded-lg"
       style={{
         aspectRatio: "9/16",
@@ -201,10 +247,7 @@ export default function VideoPlayer({
               onPlay={() => setIsPlaying(true)}
               onPause={() => setIsPlaying(false)}
               onEnded={() => setIsPlaying(false)}
-              onError={() => {
-                console.error("Video error occurred with URL:", videoUrl)
-                setIsVideoError(true)
-              }}
+              onError={handleVideoError}
               poster={thumbnailUrl}
               playsInline
               preload="metadata"
@@ -212,6 +255,17 @@ export default function VideoPlayer({
               <source src={videoUrl} type="video/mp4" />
               Your browser does not support the video tag.
             </video>
+          )}
+
+          {/* Mute/Unmute button (only visible when playing) */}
+          {isPlaying && (
+            <button
+              onClick={toggleMute}
+              className="absolute bottom-4 right-4 bg-black/50 p-2 rounded-full z-10"
+              style={{ display: isPlaying ? "block" : "none" }}
+            >
+              {isMuted ? <VolumeX className="h-5 w-5 text-white" /> : <Volume2 className="h-5 w-5 text-white" />}
+            </button>
           )}
         </>
       )}

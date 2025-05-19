@@ -1,15 +1,16 @@
 "use client"
 
 import { useState, useEffect, useCallback } from "react"
-import { useSearchParams } from "next/navigation"
+import { useSearchParams, useRouter } from "next/navigation"
 import Image from "next/image"
-import { Share2, Edit, Instagram, Twitter, Globe, Lock, Upload, Plus, RefreshCw } from "lucide-react"
+import { Share2, Edit, Instagram, Twitter, Globe, Upload, Plus, RefreshCw } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useAuth } from "@/contexts/auth-context"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { collection, query, orderBy, limit, getDocs } from "firebase/firestore"
 import { db } from "@/lib/firebase"
 import { useToast } from "@/hooks/use-toast"
+import DirectVideoPlayer from "@/components/direct-video-player"
 
 interface Creator {
   uid: string
@@ -43,6 +44,7 @@ interface VideoItem {
 export default function CreatorProfile({ creator }: { creator: Creator }) {
   const { user: userData } = useAuth()
   const searchParams = useSearchParams()
+  const router = useRouter()
   const defaultTab = searchParams.get("tab") || "free"
   const [activeTab, setActiveTab] = useState(defaultTab)
   const isOwner = userData && userData.uid === creator.uid
@@ -122,6 +124,7 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
             id: doc.id,
             ...data,
             createdAt,
+            isPremium: true, // Ensure premium flag is set
           }
         }) as VideoItem[]
 
@@ -194,50 +197,34 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
     return date.toLocaleDateString("en-US", { month: "long", year: "numeric" })
   }
 
+  // Handle video deletion
+  const handleVideoDeleted = (videoId: string, isPremium: boolean) => {
+    if (isPremium) {
+      setPremiumVideos(premiumVideos.filter((v) => v.id !== videoId))
+    } else {
+      setFreeVideos(freeVideos.filter((v) => v.id !== videoId))
+    }
+
+    toast({
+      title: "Video Deleted",
+      description: "The video has been removed from your profile",
+    })
+  }
+
   // Function to render video card
   const renderVideoCard = (video: VideoItem) => {
     return (
-      <div key={video.id} className="overflow-hidden bg-zinc-900 border border-zinc-800 rounded-lg">
-        <div className="aspect-video relative overflow-hidden">
-          {video.thumbnailUrl ? (
-            <img
-              src={video.thumbnailUrl || "/placeholder.svg"}
-              alt={video.title}
-              className="w-full h-full object-cover"
-              onError={(e) => {
-                // Fallback if thumbnail fails to load
-                const target = e.target as HTMLImageElement
-                target.onerror = null
-                target.src = "/video-production-setup.png"
-              }}
-            />
-          ) : video.url ? (
-            <div className="w-full h-full bg-zinc-800 flex items-center justify-center relative">
-              <video
-                src={video.url}
-                className="w-full h-full object-cover"
-                preload="metadata"
-                poster="/video-production-setup.png"
-              />
-              <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent"></div>
-            </div>
-          ) : (
-            <div className="w-full h-full bg-zinc-800 flex items-center justify-center">
-              <span className="text-zinc-500">No preview available</span>
-            </div>
-          )}
-          <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent flex items-end p-4">
-            <h3 className="font-medium text-white line-clamp-2">{video.title}</h3>
-          </div>
-
-          {/* Premium badge if applicable */}
-          {video.isPremium && (
-            <div className="absolute top-2 right-2 bg-red-500 text-white text-xs px-2 py-1 rounded-full flex items-center">
-              <Lock className="w-3 h-3 mr-1" />
-              Premium
-            </div>
-          )}
-        </div>
+      <div key={video.id} className="flex-shrink-0 w-[160px]">
+        <DirectVideoPlayer
+          videoUrl={video.url}
+          thumbnailUrl={video.thumbnailUrl}
+          title={video.title || video.name || "Untitled"}
+          inlinePlayback={true}
+          videoId={video.id}
+          creatorId={creator.uid}
+          isPremium={video.isPremium}
+          onDelete={() => handleVideoDeleted(video.id, video.isPremium)}
+        />
       </div>
     )
   }
@@ -431,9 +418,9 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
               )}
 
               {isLoading ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {[1, 2, 3].map((i) => (
-                    <div key={i} className="aspect-video bg-zinc-800 animate-pulse rounded-lg" />
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
+                  {[1, 2, 3, 4].map((i) => (
+                    <div key={i} className="bg-zinc-800 animate-pulse rounded-lg" style={{ aspectRatio: "9/16" }} />
                   ))}
                 </div>
               ) : error ? (
@@ -444,7 +431,7 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
                   </div>
                 </div>
               ) : freeVideos.length > 0 ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
                   {freeVideos.map((video) => renderVideoCard(video))}
                 </div>
               ) : (
@@ -486,9 +473,9 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
               )}
 
               {isLoading ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {[1, 2, 3].map((i) => (
-                    <div key={i} className="aspect-video bg-zinc-800 animate-pulse rounded-lg" />
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
+                  {[1, 2, 3, 4].map((i) => (
+                    <div key={i} className="bg-zinc-800 animate-pulse rounded-lg" style={{ aspectRatio: "9/16" }} />
                   ))}
                 </div>
               ) : error ? (
@@ -499,7 +486,7 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
                   </div>
                 </div>
               ) : premiumVideos.length > 0 ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
                   {premiumVideos.map((video) => renderVideoCard(video))}
                 </div>
               ) : (
