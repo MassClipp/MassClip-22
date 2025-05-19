@@ -29,7 +29,6 @@ export default function VideoPlayer({
   const [hasAccess, setHasAccess] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [isPlaying, setIsPlaying] = useState(false)
-  const [isVideoError, setIsVideoError] = useState(false)
   const videoRef = useRef<HTMLVideoElement>(null)
   const { user } = useAuth()
   const router = useRouter()
@@ -62,6 +61,7 @@ export default function VideoPlayer({
         }
 
         // For premium content, check if the user has purchased it
+        // This is a placeholder - you'll need to implement the actual purchase check
         const response = await fetch(`/api/check-purchase-access?videoId=${videoId}`, {
           headers: {
             Authorization: `Bearer ${await user.getIdToken()}`,
@@ -97,48 +97,14 @@ export default function VideoPlayer({
     }
 
     if (videoRef.current) {
-      try {
-        videoRef.current
-          .play()
-          .then(() => {
-            setIsPlaying(true)
-            if (onPlay) onPlay()
-          })
-          .catch((err) => {
-            console.error("Error playing video:", err)
-            setIsVideoError(true)
-            toast({
-              title: "Playback Error",
-              description: "There was a problem playing this video. Please try again.",
-              variant: "destructive",
-            })
-          })
-      } catch (error) {
-        console.error("Error playing video:", error)
-        setIsVideoError(true)
-      }
+      videoRef.current.play()
+      setIsPlaying(true)
+      if (onPlay) onPlay()
     }
   }
 
-  // Log video URL for debugging
-  useEffect(() => {
-    console.log("Standard player - Video URL:", videoUrl)
-
-    // Check if URL is from Cloudflare R2
-    if (videoUrl && videoUrl.includes("r2.dev")) {
-      console.log("Cloudflare R2 URL detected in standard player")
-    }
-  }, [videoUrl])
-
   return (
-    <div
-      className="relative mx-auto overflow-hidden bg-black rounded-lg"
-      style={{
-        aspectRatio: "9/16",
-        maxWidth: "calc(100vh * 9/16)", // Ensure it doesn't get too wide on desktop
-        width: "100%",
-      }}
-    >
+    <div className="relative aspect-video bg-black rounded-lg overflow-hidden">
       {!isPlaying && (
         <div className="absolute inset-0 flex items-center justify-center">
           {thumbnailUrl && (
@@ -146,12 +112,6 @@ export default function VideoPlayer({
               src={thumbnailUrl || "/placeholder.svg"}
               alt={title}
               className="absolute inset-0 w-full h-full object-cover"
-              onError={(e) => {
-                // Fallback if thumbnail fails to load
-                const target = e.target as HTMLImageElement
-                target.onerror = null
-                target.src = "/placeholder.svg?key=video-thumbnail"
-              }}
             />
           )}
 
@@ -180,41 +140,17 @@ export default function VideoPlayer({
         </div>
       )}
 
-      {isVideoError ? (
-        <div className="absolute inset-0 flex flex-col items-center justify-center bg-zinc-900">
-          <p className="text-white mb-4">Unable to play this video.</p>
-          <Button
-            onClick={() => window.location.reload()}
-            variant="outline"
-            className="bg-zinc-800 text-white hover:bg-zinc-700"
-          >
-            Reload Page
-          </Button>
-        </div>
-      ) : (
-        <>
-          {videoUrl && hasAccess && (
-            <video
-              ref={videoRef}
-              className="w-full h-full object-contain bg-black"
-              controls={isPlaying}
-              onPlay={() => setIsPlaying(true)}
-              onPause={() => setIsPlaying(false)}
-              onEnded={() => setIsPlaying(false)}
-              onError={() => {
-                console.error("Video error occurred with URL:", videoUrl)
-                setIsVideoError(true)
-              }}
-              poster={thumbnailUrl}
-              playsInline
-              preload="metadata"
-            >
-              <source src={videoUrl} type="video/mp4" />
-              Your browser does not support the video tag.
-            </video>
-          )}
-        </>
-      )}
+      <video
+        ref={videoRef}
+        src={hasAccess ? videoUrl : undefined}
+        className="w-full h-full"
+        controls={isPlaying}
+        onPlay={() => setIsPlaying(true)}
+        onPause={() => setIsPlaying(false)}
+        onEnded={() => setIsPlaying(false)}
+        poster={thumbnailUrl}
+        playsInline
+      />
     </div>
   )
 }

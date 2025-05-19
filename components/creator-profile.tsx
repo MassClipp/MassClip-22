@@ -1,15 +1,13 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
-import { useSearchParams, useRouter } from "next/navigation"
+import { useState, useEffect } from "react"
+import { useSearchParams } from "next/navigation"
 import Image from "next/image"
-import { Share2, Edit, Instagram, Twitter, Globe, Lock, Upload, Plus, RefreshCw, Play } from "lucide-react"
-import { Button } from "@/components/ui/button"
+import { Share2, Edit, Instagram, Twitter, Globe, Lock, Upload, Plus } from "lucide-react"
 import { useAuth } from "@/contexts/auth-context"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { collection, query, orderBy, limit, getDocs } from "firebase/firestore"
 import { db } from "@/lib/firebase"
-import { useToast } from "@/hooks/use-toast"
+import UploadModal from "./upload-modal"
 
 interface Creator {
   uid: string
@@ -27,147 +25,58 @@ interface Creator {
   }
 }
 
-interface VideoItem {
-  id: string
-  title: string
-  description: string
-  url: string
-  thumbnailUrl: string
-  createdAt: any // Can be timestamp or string
-  views: number
-  likes: number
-  isPremium: boolean
-  [key: string]: any
-}
-
 export default function CreatorProfile({ creator }: { creator: Creator }) {
   const { user: userData } = useAuth()
   const searchParams = useSearchParams()
-  const router = useRouter()
   const defaultTab = searchParams.get("tab") || "free"
   const [activeTab, setActiveTab] = useState(defaultTab)
   const isOwner = userData && userData.uid === creator.uid
-  const [freeVideos, setFreeVideos] = useState<VideoItem[]>([])
-  const [premiumVideos, setPremiumVideos] = useState<VideoItem[]>([])
+  const [freeVideos, setFreeVideos] = useState([])
+  const [premiumVideos, setPremiumVideos] = useState([])
   const [isLoading, setIsLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [isRefreshing, setIsRefreshing] = useState(false)
-  const { toast } = useToast()
+  const [isUploadModalOpen, setIsUploadModalOpen] = useState(false)
 
-  // Function to fetch videos
-  const fetchVideos = useCallback(
-    async (showToast = false) => {
-      if (!creator.uid) {
-        setError("Creator ID is missing")
-        setIsLoading(false)
-        return
-      }
+  useEffect(() => {
+    const fetchVideos = async () => {
+      if (!userData?.uid) return
 
-      if (showToast) {
-        setIsRefreshing(true)
-      } else {
-        setIsLoading(true)
-      }
-
-      setError(null)
-
+      setIsLoading(true)
       try {
-        console.log(`Fetching videos for creator: ${creator.uid}`)
-
         // Fetch free videos
         const freeQuery = query(
-          collection(db, `users/${creator.uid}/freeClips`),
+          collection(db, `users/${userData.uid}/freeClips`),
           orderBy("createdAt", "desc"),
           limit(12),
         )
-
-        console.log("Executing free videos query")
         const freeSnapshot = await getDocs(freeQuery)
-        console.log(`Free videos query returned ${freeSnapshot.docs.length} results`)
-
-        const freeData = freeSnapshot.docs.map((doc) => {
-          const data = doc.data()
-          // Convert Firestore timestamp to string if needed
-          const createdAt =
-            data.createdAt && typeof data.createdAt.toDate === "function"
-              ? data.createdAt.toDate().toISOString()
-              : data.createdAt
-
-          return {
-            id: doc.id,
-            ...data,
-            createdAt,
-          }
-        }) as VideoItem[]
+        const freeData = freeSnapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        }))
 
         // Fetch premium videos
         const premiumQuery = query(
-          collection(db, `users/${creator.uid}/premiumClips`),
+          collection(db, `users/${userData.uid}/premiumClips`),
           orderBy("createdAt", "desc"),
           limit(12),
         )
-
-        console.log("Executing premium videos query")
         const premiumSnapshot = await getDocs(premiumQuery)
-        console.log(`Premium videos query returned ${premiumSnapshot.docs.length} results`)
-
-        const premiumData = premiumSnapshot.docs.map((doc) => {
-          const data = doc.data()
-          // Convert Firestore timestamp to string if needed
-          const createdAt =
-            data.createdAt && typeof data.createdAt.toDate === "function"
-              ? data.createdAt.toDate().toISOString()
-              : data.createdAt
-
-          return {
-            id: doc.id,
-            ...data,
-            createdAt,
-          }
-        }) as VideoItem[]
-
-        console.log("Free videos:", freeData)
-        console.log("Premium videos:", premiumData)
+        const premiumData = premiumSnapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        }))
 
         setFreeVideos(freeData)
         setPremiumVideos(premiumData)
-
-        if (freeData.length === 0 && premiumData.length === 0) {
-          console.log("No videos found for this creator")
-        }
-
-        if (showToast) {
-          toast({
-            title: "Content refreshed",
-            description: "Your videos have been refreshed",
-          })
-        }
       } catch (error) {
         console.error("Error fetching videos:", error)
-        setError("Failed to load videos. Please try again later.")
-
-        toast({
-          title: "Error loading videos",
-          description: "There was a problem loading the videos. Please try again.",
-          variant: "destructive",
-        })
       } finally {
         setIsLoading(false)
-        setIsRefreshing(false)
       }
-    },
-    [creator.uid, toast],
-  )
+    }
 
-  // Initial fetch
-  useEffect(() => {
     fetchVideos()
-  }, [fetchVideos])
-
-  // Refresh videos
-  const refreshVideos = () => {
-    fetchVideos(true)
-  }
+  }, [userData?.uid, isUploadModalOpen]) // Re-fetch when upload modal closes
 
   const handleShare = async () => {
     if (navigator.share) {
@@ -183,10 +92,7 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
     } else {
       // Fallback for browsers that don't support the Web Share API
       navigator.clipboard.writeText(window.location.href)
-      toast({
-        title: "Link copied",
-        description: "Profile link copied to clipboard!",
-      })
+      alert("Profile link copied to clipboard!")
     }
   }
 
@@ -195,75 +101,11 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
     return date.toLocaleDateString("en-US", { month: "long", year: "numeric" })
   }
 
-  const handleVideoClick = (video: VideoItem) => {
-    // Navigate to a dedicated video page
-    router.push(`/video/${video.id}?creatorId=${creator.uid}&isPremium=${video.isPremium}`)
-  }
-
-  // Function to render video card
-  const renderVideoCard = (video: VideoItem) => {
-    return (
-      <div
-        key={video.id}
-        className="overflow-hidden bg-zinc-900 border border-zinc-800 rounded-lg cursor-pointer transition-transform hover:scale-[1.02]"
-        onClick={() => handleVideoClick(video)}
-      >
-        <div className="relative overflow-hidden group" style={{ aspectRatio: "9/16" }}>
-          {video.url ? (
-            <div className="w-full h-full bg-zinc-800 flex items-center justify-center relative">
-              <video
-                className="w-full h-full object-cover"
-                preload="metadata"
-                poster={video.thumbnailUrl || "/placeholder.svg?key=video-poster"}
-              >
-                <source src={video.url} type="video/mp4" />
-                Your browser does not support the video tag.
-              </video>
-              <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent"></div>
-            </div>
-          ) : video.thumbnailUrl ? (
-            <img
-              src={video.thumbnailUrl || "/placeholder.svg"}
-              alt={video.title}
-              className="w-full h-full object-cover"
-              onError={(e) => {
-                // Fallback if thumbnail fails to load
-                const target = e.target as HTMLImageElement
-                target.onerror = null
-                target.src = "/placeholder.svg?key=video-thumbnail"
-              }}
-            />
-          ) : (
-            <div className="w-full h-full bg-zinc-800 flex items-center justify-center">
-              <span className="text-zinc-500">No preview available</span>
-            </div>
-          )}
-
-          {/* Play button overlay */}
-          <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-            <div className="rounded-full bg-red-500/80 p-3">
-              <Play className="h-8 w-8 text-white" />
-            </div>
-          </div>
-
-          <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent flex items-end p-4">
-            <h3 className="font-medium text-white line-clamp-2">{video.title}</h3>
-          </div>
-
-          {/* Premium badge if applicable */}
-          {video.isPremium && (
-            <div className="absolute top-2 right-2 bg-red-500 text-white text-xs px-2 py-1 rounded-full flex items-center">
-              <Lock className="w-3 h-3 mr-1" />
-              Premium
-            </div>
-          )}
-        </div>
-      </div>
-    )
-  }
-
   return (
     <div className="min-h-screen bg-gradient-to-b from-black to-zinc-900">
+      {/* Upload Modal */}
+      <UploadModal isOpen={isUploadModalOpen} onClose={() => setIsUploadModalOpen(false)} />
+
       {/* Hero Section */}
       <div className="relative">
         {/* Background gradient with subtle animated lines */}
@@ -355,10 +197,10 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
                 {/* Content counts */}
                 <div className="flex gap-3 text-xs">
                   <div className="text-zinc-400">
-                    <span className="text-white font-medium">{freeVideos.length}</span> free clips
+                    <span className="text-white font-medium">{creator.freeClips?.length || 0}</span> free clips
                   </div>
                   <div className="text-zinc-400">
-                    <span className="text-white font-medium">{premiumVideos.length}</span> premium clips
+                    <span className="text-white font-medium">{creator.paidClips?.length || 0}</span> premium clips
                   </div>
                 </div>
               </div>
@@ -366,50 +208,32 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
 
             {/* Action Buttons */}
             <div className="flex gap-3 mt-4 md:mt-0">
-              {isOwner && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="bg-zinc-800/50 border-zinc-700 hover:bg-zinc-800 text-white"
-                  onClick={refreshVideos}
-                  disabled={isRefreshing}
-                >
-                  <RefreshCw className={`h-4 w-4 mr-2 ${isRefreshing ? "animate-spin" : ""}`} />
-                  {isRefreshing ? "Refreshing..." : "Refresh"}
-                </Button>
-              )}
-
-              <Button
-                variant="outline"
-                size="sm"
-                className="bg-zinc-800/50 border-zinc-700 hover:bg-zinc-800 text-white"
+              <button
+                className="px-3 py-1.5 bg-zinc-800/50 border border-zinc-700 hover:bg-zinc-800 text-white rounded-md text-sm"
                 onClick={handleShare}
               >
-                <Share2 className="h-4 w-4 mr-2" />
+                <Share2 className="h-4 w-4 inline mr-2" />
                 Share
-              </Button>
+              </button>
 
               {isOwner && (
                 <>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="bg-zinc-800/50 border-zinc-700 hover:bg-zinc-800 text-white"
+                  <button
+                    className="px-3 py-1.5 bg-zinc-800/50 border border-zinc-700 hover:bg-zinc-800 text-white rounded-md text-sm"
                     onClick={() => (window.location.href = "/dashboard/profile/edit")}
                   >
-                    <Edit className="h-4 w-4 mr-2" />
+                    <Edit className="h-4 w-4 inline mr-2" />
                     Edit Profile
-                  </Button>
+                  </button>
 
                   {/* Upload Button */}
-                  <Button
-                    size="sm"
-                    className="bg-red-500 hover:bg-red-600 text-white"
-                    onClick={() => (window.location.href = "/dashboard/upload")}
+                  <button
+                    className="px-3 py-1.5 bg-red-500 hover:bg-red-600 text-white rounded-md text-sm"
+                    onClick={() => setIsUploadModalOpen(true)}
                   >
-                    <Upload className="h-4 w-4 mr-2" />
+                    <Upload className="h-4 w-4 inline mr-2" />
                     Upload
-                  </Button>
+                  </button>
                 </>
               )}
             </div>
@@ -420,52 +244,75 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
       {/* Content Tabs */}
       <div className="container mx-auto px-4 pb-20">
         <div className="mt-8">
-          <Tabs defaultValue={activeTab} onValueChange={setActiveTab} className="w-full">
-            <TabsList className="bg-zinc-800 border-b border-zinc-700 w-full justify-start rounded-none p-0">
-              <TabsTrigger
-                value="free"
-                className="data-[state=active]:bg-zinc-900 data-[state=active]:border-b-2 data-[state=active]:border-red-500 data-[state=active]:shadow-none rounded-none px-6 py-3"
+          {/* Tab Navigation */}
+          <div className="border-b border-zinc-800 mb-8">
+            <div className="flex">
+              <button
+                className={`px-6 py-3 text-sm font-medium relative ${
+                  activeTab === "free" ? "text-white" : "text-zinc-400 hover:text-white"
+                }`}
+                onClick={() => setActiveTab("free")}
               >
                 Free Videos
-              </TabsTrigger>
-              <TabsTrigger
-                value="premium"
-                className="data-[state=active]:bg-zinc-900 data-[state=active]:border-b-2 data-[state=active]:border-red-500 data-[state=active]:shadow-none rounded-none px-6 py-3"
+                {activeTab === "free" && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-red-500"></div>}
+              </button>
+
+              <button
+                className={`px-6 py-3 text-sm font-medium relative ${
+                  activeTab === "premium" ? "text-white" : "text-zinc-400 hover:text-white"
+                }`}
+                onClick={() => setActiveTab("premium")}
               >
                 Premium Videos
-              </TabsTrigger>
-            </TabsList>
+                {activeTab === "premium" && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-red-500"></div>}
+              </button>
+            </div>
+          </div>
 
-            <TabsContent value="free" className="mt-6">
+          {/* Free Videos Tab */}
+          {activeTab === "free" && (
+            <div>
               {/* Add Video Button (Only visible to profile owner) */}
               {isOwner && (
                 <div className="mb-6">
-                  <Button
-                    className="bg-zinc-800 hover:bg-zinc-700 text-white border border-zinc-700"
-                    onClick={() => (window.location.href = "/dashboard/upload")}
+                  <button
+                    className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-white border border-zinc-700 rounded-md"
+                    onClick={() => setIsUploadModalOpen(true)}
                   >
-                    <Plus className="h-4 w-4 mr-2" />
+                    <Plus className="h-4 w-4 inline mr-2" />
                     Add Free Video
-                  </Button>
+                  </button>
                 </div>
               )}
 
               {isLoading ? (
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                  {[1, 2, 3, 4].map((i) => (
-                    <div key={i} className="bg-zinc-800 animate-pulse rounded-lg" style={{ aspectRatio: "9/16" }} />
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {[1, 2, 3].map((i) => (
+                    <div key={i} className="aspect-video bg-zinc-800 animate-pulse rounded-lg" />
                   ))}
                 </div>
-              ) : error ? (
-                <div className="text-center py-12 bg-zinc-900/50 border border-zinc-800/50 rounded-lg">
-                  <div className="max-w-md mx-auto">
-                    <h3 className="text-xl font-light text-white mb-2">Error Loading Videos</h3>
-                    <p className="text-zinc-400 mb-6">{error}</p>
-                  </div>
-                </div>
               ) : freeVideos.length > 0 ? (
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                  {freeVideos.map((video) => renderVideoCard(video))}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {freeVideos.map((video) => (
+                    <div key={video.id} className="overflow-hidden bg-zinc-900 border-zinc-800 rounded-lg">
+                      <div className="aspect-video relative overflow-hidden">
+                        {video.thumbnailUrl ? (
+                          <img
+                            src={video.thumbnailUrl || "/placeholder.svg"}
+                            alt={video.title}
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <div className="w-full h-full bg-zinc-800 flex items-center justify-center">
+                            <span className="text-zinc-500">No thumbnail</span>
+                          </div>
+                        )}
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent flex items-end p-4">
+                          <h3 className="font-medium text-white line-clamp-2">{video.title}</h3>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               ) : (
                 <div className="text-center py-12 bg-zinc-900/50 border border-zinc-800/50 rounded-lg">
@@ -478,49 +325,68 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
                     </p>
 
                     {isOwner && (
-                      <Button
-                        className="bg-red-500 hover:bg-red-600 text-white"
-                        onClick={() => (window.location.href = "/dashboard/upload")}
+                      <button
+                        className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-md"
+                        onClick={() => setIsUploadModalOpen(true)}
                       >
-                        <Plus className="h-4 w-4 mr-2" />
+                        <Plus className="h-4 w-4 inline mr-2" />
                         Add Free Video
-                      </Button>
+                      </button>
                     )}
                   </div>
                 </div>
               )}
-            </TabsContent>
+            </div>
+          )}
 
-            <TabsContent value="premium" className="mt-6">
+          {/* Premium Videos Tab */}
+          {activeTab === "premium" && (
+            <div>
               {/* Add Video Button (Only visible to profile owner) */}
               {isOwner && (
                 <div className="mb-6">
-                  <Button
-                    className="bg-zinc-800 hover:bg-zinc-700 text-white border border-zinc-700"
-                    onClick={() => (window.location.href = "/dashboard/upload?premium=true")}
+                  <button
+                    className="px-4 py-2 bg-zinc-800 hover:bg-zinc-700 text-white border border-zinc-700 rounded-md"
+                    onClick={() => setIsUploadModalOpen(true)}
                   >
-                    <Plus className="h-4 w-4 mr-2" />
+                    <Plus className="h-4 w-4 inline mr-2" />
                     Add Premium Video
-                  </Button>
+                  </button>
                 </div>
               )}
 
               {isLoading ? (
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                  {[1, 2, 3, 4].map((i) => (
-                    <div key={i} className="bg-zinc-800 animate-pulse rounded-lg" style={{ aspectRatio: "9/16" }} />
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {[1, 2, 3].map((i) => (
+                    <div key={i} className="aspect-video bg-zinc-800 animate-pulse rounded-lg" />
                   ))}
                 </div>
-              ) : error ? (
-                <div className="text-center py-12 bg-zinc-900/50 border border-zinc-800/50 rounded-lg">
-                  <div className="max-w-md mx-auto">
-                    <h3 className="text-xl font-light text-white mb-2">Error Loading Videos</h3>
-                    <p className="text-zinc-400 mb-6">{error}</p>
-                  </div>
-                </div>
               ) : premiumVideos.length > 0 ? (
-                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                  {premiumVideos.map((video) => renderVideoCard(video))}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {premiumVideos.map((video) => (
+                    <div key={video.id} className="overflow-hidden bg-zinc-900 border-zinc-800 rounded-lg">
+                      <div className="aspect-video relative overflow-hidden">
+                        {video.thumbnailUrl ? (
+                          <img
+                            src={video.thumbnailUrl || "/placeholder.svg"}
+                            alt={video.title}
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <div className="w-full h-full bg-zinc-800 flex items-center justify-center">
+                            <span className="text-zinc-500">No thumbnail</span>
+                          </div>
+                        )}
+                        <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent flex flex-col justify-between p-4">
+                          <div className="self-end bg-red-500 text-white text-xs px-2 py-1 rounded-full flex items-center">
+                            <Lock className="w-3 h-3 mr-1" />
+                            Premium
+                          </div>
+                          <h3 className="font-medium text-white line-clamp-2">{video.title}</h3>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               ) : (
                 <div className="text-center py-12 bg-zinc-900/50 border border-zinc-800/50 rounded-lg">
@@ -533,19 +399,19 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
                     </p>
 
                     {isOwner && (
-                      <Button
-                        className="bg-red-500 hover:bg-red-600 text-white"
-                        onClick={() => (window.location.href = "/dashboard/upload?premium=true")}
+                      <button
+                        className="px-4 py-2 bg-red-500 hover:bg-red-600 text-white rounded-md"
+                        onClick={() => setIsUploadModalOpen(true)}
                       >
-                        <Plus className="h-4 w-4 mr-2" />
+                        <Plus className="h-4 w-4 inline mr-2" />
                         Add Premium Video
-                      </Button>
+                      </button>
                     )}
                   </div>
                 </div>
               )}
-            </TabsContent>
-          </Tabs>
+            </div>
+          )}
         </div>
       </div>
     </div>
