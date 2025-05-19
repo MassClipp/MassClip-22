@@ -1,81 +1,74 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { initializeFirebaseAdmin, db } from "@/lib/firebase-admin"
-import { getAuth } from "firebase-admin/auth"
-import { FieldValue } from "firebase-admin/firestore"
+import { auth } from "@/lib/firebase-admin"
+import { getFirestore } from "firebase-admin/firestore"
 
 export async function POST(request: NextRequest) {
-  console.log("Save metadata API route called")
+  console.log("Save metadata request received")
 
   try {
-    // Initialize Firebase Admin
-    initializeFirebaseAdmin()
+    // Verify authentication
+    const sessionCookie = request.cookies.get("session")?.value
 
-    // Parse the request body
-    const body = await request.json()
-    const { title, description, isPremium, fileId, key, publicUrl, fileType } = body
+    if (!sessionCookie) {
+      console.log("No session cookie found")
+      return NextResponse.json({ error: "Authentication required" }, { status: 401 })
+    }
 
-    console.log("Request body:", {
-      title,
-      hasDescription: !!description,
-      isPremium,
+    let decodedToken
+    try {
+      decodedToken = await auth.verifySessionCookie(sessionCookie)
+    } catch (error) {
+      console.error("Session verification failed:", error)
+      return NextResponse.json({ error: "Invalid session" }, { status: 401 })
+    }
+
+    const uid = decodedToken.uid
+
+    console.log(`Authenticated user: ${uid}`)
+
+    // Parse request body
+    const { title, description, isPremium = false, fileId, key, publicUrl, fileType } = await request.json()
+
+    if (!fileId || !key || !publicUrl) {
+      return NextResponse.json({ error: "Missing required fields" }, { status: 400 })
+    }
+
+    // Save metadata to Firestore
+    const db = getFirestore()
+    const collectionName = isPremium ? "premiumClips" : "freeClips"
+
+    const metadata = {
+      title: title || "Untitled",
+      description: description || "",
       fileId,
       key,
       publicUrl,
       fileType,
-    })
-
-    // Validate required fields
-    if (!title || !fileId || !key || !publicUrl) {
-      return NextResponse.json({ error: "Missing required fields" }, { status: 400 })
-    }
-
-    // Get the session cookie for authentication
-    const cookies = request.cookies
-    const sessionCookie = cookies.get("session")?.value
-
-    if (!sessionCookie) {
-      return NextResponse.json({ error: "Authentication required" }, { status: 401 })
-    }
-
-    // Verify the session cookie
-    const decodedClaims = await getAuth().verifySessionCookie(sessionCookie)
-    const uid = decodedClaims.uid
-
-    // Create the video metadata record in Firestore
-    const contentType = isPremium ? "premium" : "free"
-    const videoData = {
-      title,
-      description: description || "",
-      key,
-      fileId,
-      contentType: fileType || "video/mp4",
-      duration: 0, // Placeholder
-      thumbnailUrl: "", // Placeholder
-      createdAt: FieldValue.serverTimestamp(),
-      updatedAt: FieldValue.serverTimestamp(),
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
       userId: uid,
-      status: "active",
       views: 0,
-      likes: 0,
-      publicUrl,
+      isPremium,
     }
 
-    // Save to the appropriate collection based on content type
-    const collectionPath = `users/${uid}/${contentType}Clips`
-    await db.collection(collectionPath).doc(fileId).set(videoData)
+    console.log(`Saving metadata to ${collectionName}/${fileId}:`, metadata)
+
+    await db.collection("users").doc(uid).collection(collectionName).doc(fileId).set(metadata)
+
+    console.log("Metadata saved successfully")
 
     return NextResponse.json({
       success: true,
+      message: "Metadata saved successfully",
       fileId,
     })
   } catch (error) {
     console.error("Error saving metadata:", error)
     return NextResponse.json(
-      {
-        error: "Failed to save metadata",
-        details: error instanceof Error ? error.message : String(error),
-      },
+      { error: `Failed to save metadata: ${error instanceof Error ? error.message : String(error)}` },
       { status: 500 },
     )
   }
 }
+
+export const maxDuration = 60 // Set max duration to 60 seconds
