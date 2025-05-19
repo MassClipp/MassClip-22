@@ -21,6 +21,7 @@ export default function VideoUploadForm({ onComplete, defaultIsPremium = false }
   const [error, setError] = useState(null)
   const [isUploading, setIsUploading] = useState(false)
   const [progress, setProgress] = useState(0)
+  const [testMode, setTestMode] = useState(process.env.NEXT_PUBLIC_VERCEL_ENV !== "production")
   const fileInputRef = useRef(null)
   const router = useRouter()
   const { user } = useAuth()
@@ -101,7 +102,7 @@ export default function VideoUploadForm({ onComplete, defaultIsPremium = false }
   const handleSubmit = async (e) => {
     e.preventDefault()
 
-    if (!user) {
+    if (!user && !testMode) {
       setError("You must be logged in to upload videos")
       return
     }
@@ -128,6 +129,7 @@ export default function VideoUploadForm({ onComplete, defaultIsPremium = false }
       formData.append("isPremium", String(isPremium))
       formData.append("filename", selectedFile.name)
       formData.append("contentType", selectedFile.type)
+      formData.append("testMode", String(testMode))
 
       const urlResponse = await fetch("/api/videos/get-upload-url", {
         method: "POST",
@@ -158,6 +160,7 @@ export default function VideoUploadForm({ onComplete, defaultIsPremium = false }
           title,
           description: description || "",
           isPremium,
+          testMode,
         }),
       })
 
@@ -303,6 +306,19 @@ export default function VideoUploadForm({ onComplete, defaultIsPremium = false }
           </div>
           <Switch checked={isPremium} onCheckedChange={setIsPremium} className="data-[state=checked]:bg-red-500" />
         </div>
+
+        {/* Test Mode Toggle (only in non-production) */}
+        {process.env.NEXT_PUBLIC_VERCEL_ENV !== "production" && (
+          <div className="flex items-center justify-between p-4 bg-amber-900/20 rounded-lg border border-amber-900/30">
+            <div>
+              <h3 className="text-white font-medium">Test Mode</h3>
+              <p className="text-zinc-400 text-sm">
+                {testMode ? "Authentication will be bypassed for testing" : "Authentication will be required"}
+              </p>
+            </div>
+            <Switch checked={testMode} onCheckedChange={setTestMode} className="data-[state=checked]:bg-amber-500" />
+          </div>
+        )}
 
         {/* Error Message */}
         {error && (

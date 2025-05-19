@@ -1,24 +1,27 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { cookies } from "next/headers"
-import { initializeFirebaseAdmin, db } from "@/lib/firebase-admin"
+import { initializeFirebaseAdmin } from "@/lib/firebase-admin"
+import { getFirestore } from "firebase-admin/firestore"
 import { getAuth } from "firebase-admin/auth"
-import { FieldValue } from "firebase-admin/firestore"
+import { cookies } from "next/headers"
 
 export async function POST(request: NextRequest) {
   try {
     console.log("Complete upload request received")
 
     // Get request body
-    const { fileId, key, title, description, isPremium } = await request.json()
+    const body = await request.json()
+    const { fileId, key, title, description, isPremium } = body
+    const testMode = body.testMode === true
 
     // Validate required fields
-    if (!fileId || !key || !title) {
+    if (!fileId || !key) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 })
     }
 
     // Get user info
-    let userId = "anonymous"
-    let username = "anonymous"
+    let userId = "test-user"
+    let username = "test-user"
+    let isAuthenticated = false
 
     try {
       // Initialize Firebase Admin
@@ -31,60 +34,64 @@ export async function POST(request: NextRequest) {
         // Verify session
         const decodedClaims = await getAuth().verifySessionCookie(sessionCookie)
         userId = decodedClaims.uid
+        isAuthenticated = true
 
         // Get user data from auth
         const userRecord = await getAuth().getUser(userId)
         username = userRecord.displayName || userId
+
+        console.log("User authenticated:", { userId, username })
+      } else {
+        console.log("No session cookie found")
       }
     } catch (authError) {
       console.error("Auth error:", authError)
-      // Continue with anonymous upload for testing
+      // Continue with test user for testing
     }
 
-    // Determine the collection based on premium status
-    const contentType = isPremium ? "premium" : "free"
-    const collectionPath = `users/${userId}/${contentType}Clips`
+    // If not authenticated and not in test mode, return error
+    if (!isAuthenticated && !testMode && process.env.NEXT_PUBLIC_VERCEL_ENV === "production") {
+      console.log("Authentication required and not in test mode")
+      return NextResponse.json({ error: "Authentication required" }, { status: 401 })
+    }
 
-    // Create the video metadata
+    // Prepare video data
+    const contentCategory = isPremium ? "premium" : "free"
+    const publicUrl = `${process.env.CLOUDFLARE_R2_PUBLIC_URL}/${key}`
+    const timestamp = new Date().toISOString()
+
     const videoData = {
-      title,
-      description: description || "",
-      key,
       fileId,
-      contentType,
-      duration: 0, // Placeholder
-      thumbnailUrl: "", // Placeholder
-      createdAt: FieldValue.serverTimestamp(),
-      updatedAt: FieldValue.serverTimestamp(),
-      userId,
-      username,
-      status: "active",
+      key,
+      title: title || "Untitled Video",
+      description: description || "",
+      contentType: contentCategory,
+      url: publicUrl,
+      createdAt: timestamp,
+      updatedAt: timestamp,
       views: 0,
       likes: 0,
-      publicUrl: `${process.env.CLOUDFLARE_R2_PUBLIC_URL}/${key}`,
+      isPremium: Boolean(isPremium),
     }
 
-    // Save to Firestore
-    console.log(`Saving to collection: ${collectionPath}`)
-    await db.collection(collectionPath).doc(fileId).set(videoData)
+    // Save to Firestore if authenticated
+    if (isAuthenticated) {
+      const db = getFirestore()
+      const collectionName = isPremium ? "premiumClips" : "freeClips"
 
-    // Update user's clip counts
-    const countField = contentType === "premium" ? "premiumClipCount" : "freeClipCount"
-    await db
-      .collection("users")
-      .doc(userId)
-      .update({
-        [countField]: FieldValue.increment(1),
-        updatedAt: FieldValue.serverTimestamp(),
-      })
+      await db.collection("users").doc(userId).collection(collectionName).doc(fileId).set(videoData)
 
-    console.log("Upload completed successfully")
+      console.log(`Saved video metadata to ${collectionName}:`, { fileId })
+    } else {
+      console.log("Test mode: Skipping Firestore save")
+    }
 
     return NextResponse.json({
       success: true,
-      message: "Upload completed successfully",
-      videoId: fileId,
-      publicUrl: videoData.publicUrl,
+      fileId,
+      url: publicUrl,
+      isAuthenticated,
+      testMode,
     })
   } catch (error) {
     console.error("Error completing upload:", error)
