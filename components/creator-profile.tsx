@@ -52,7 +52,6 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [isRefreshing, setIsRefreshing] = useState(false)
-  const [selectedVideo, setSelectedVideo] = useState<VideoItem | null>(null)
   const { toast } = useToast()
 
   // Function to fetch videos
@@ -209,7 +208,7 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
         className="overflow-hidden bg-zinc-900 border border-zinc-800 rounded-lg cursor-pointer transition-transform hover:scale-[1.02]"
         onClick={() => handleVideoClick(video)}
       >
-        <div className="aspect-video relative overflow-hidden group">
+        <div className="relative overflow-hidden group" style={{ aspectRatio: "9/16" }}>
           {video.thumbnailUrl ? (
             <img
               src={video.thumbnailUrl || "/placeholder.svg"}
@@ -452,9 +451,9 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
               )}
 
               {isLoading ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {[1, 2, 3].map((i) => (
-                    <div key={i} className="aspect-video bg-zinc-800 animate-pulse rounded-lg" />
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                  {[1, 2, 3, 4].map((i) => (
+                    <div key={i} className="bg-zinc-800 animate-pulse rounded-lg" style={{ aspectRatio: "9/16" }} />
                   ))}
                 </div>
               ) : error ? (
@@ -465,7 +464,7 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
                   </div>
                 </div>
               ) : freeVideos.length > 0 ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                   {freeVideos.map((video) => renderVideoCard(video))}
                 </div>
               ) : (
@@ -507,9 +506,9 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
               )}
 
               {isLoading ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {[1, 2, 3].map((i) => (
-                    <div key={i} className="aspect-video bg-zinc-800 animate-pulse rounded-lg" />
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                  {[1, 2, 3, 4].map((i) => (
+                    <div key={i} className="bg-zinc-800 animate-pulse rounded-lg" style={{ aspectRatio: "9/16" }} />
                   ))}
                 </div>
               ) : error ? (
@@ -520,7 +519,7 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
                   </div>
                 </div>
               ) : premiumVideos.length > 0 ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                   {premiumVideos.map((video) => renderVideoCard(video))}
                 </div>
               ) : (

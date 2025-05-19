@@ -32,6 +32,7 @@ export default function EnhancedVideoPlayer({
   const [isMuted, setIsMuted] = useState(false)
   const [isVideoError, setIsVideoError] = useState(false)
   const videoRef = useRef<HTMLVideoElement>(null)
+  const containerRef = useRef<HTMLDivElement>(null)
   const { user } = useAuth()
   const router = useRouter()
   const { toast } = useToast()
@@ -141,7 +142,15 @@ export default function EnhancedVideoPlayer({
   }, [videoUrl])
 
   return (
-    <div className="relative aspect-video bg-black rounded-lg overflow-hidden">
+    <div
+      ref={containerRef}
+      className="relative mx-auto overflow-hidden bg-black rounded-lg"
+      style={{
+        aspectRatio: "9/16",
+        maxWidth: "calc(100vh * 9/16)", // Ensure it doesn't get too wide on desktop
+        width: "100%",
+      }}
+    >
       {!isPlaying && (
         <div className="absolute inset-0 flex items-center justify-center">
           {thumbnailUrl && (
@@ -199,7 +208,7 @@ export default function EnhancedVideoPlayer({
           {videoUrl && hasAccess && (
             <video
               ref={videoRef}
-              className="w-full h-full"
+              className="w-full h-full object-contain bg-black"
               controls={isPlaying}
               onPlay={() => setIsPlaying(true)}
               onPause={() => setIsPlaying(false)}

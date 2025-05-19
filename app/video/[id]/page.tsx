@@ -9,7 +9,6 @@ import { db } from "@/lib/firebase"
 import { useAuth } from "@/contexts/auth-context"
 import { useToast } from "@/hooks/use-toast"
 import EnhancedVideoPlayer from "@/components/enhanced-video-player"
-import VideoDebug from "@/components/video-debug"
 
 export default function VideoPage() {
   const { id } = useParams()
@@ -127,7 +126,7 @@ export default function VideoPage() {
         </div>
 
         {/* Video player */}
-        <div className="max-w-4xl mx-auto">
+        <div className="flex flex-col items-center justify-center">
           <EnhancedVideoPlayer
             videoUrl={video.url}
             thumbnailUrl={video.thumbnailUrl}
@@ -138,7 +137,7 @@ export default function VideoPage() {
           />
 
           {/* Video info */}
-          <div className="mt-6">
+          <div className="mt-6 w-full max-w-md">
             <div className="flex justify-between items-start">
               <div>
                 <h1 className="text-2xl font-bold text-white">{video.title}</h1>
@@ -162,9 +161,6 @@ export default function VideoPage() {
                 <p className="text-zinc-300 whitespace-pre-wrap">{video.description}</p>
               </div>
             )}
-
-            {/* Debug tools for owners or when debug param is present */}
-            {(isOwner || debug) && <VideoDebug videoUrl={video.url} />}
           </div>
         </div>
       </div>
