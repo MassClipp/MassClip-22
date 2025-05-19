@@ -43,6 +43,7 @@ export default function VimeoCard({ video }: VimeoCardProps) {
   const [isFavorite, setIsFavorite] = useState(false)
   const [isCheckingFavorite, setIsCheckingFavorite] = useState(true)
   const [isTikTokBrowser, setIsTikTokBrowser] = useState(false)
+  const [isR2Video, setIsR2Video] = useState(false)
 
   const { user } = useAuth()
   const { toast } = useToast()
@@ -475,6 +476,17 @@ export default function VimeoCard({ video }: VimeoCardProps) {
     return baseUrl
   }
 
+  // Add this useEffect to detect R2 videos
+  useEffect(() => {
+    // Check if this is a Cloudflare R2 video
+    if (video?.url && typeof video.url === "string" && video.url.includes("r2.dev")) {
+      console.log("Cloudflare R2 video detected:", video.url)
+      setIsR2Video(true)
+    } else {
+      setIsR2Video(false)
+    }
+  }, [video])
+
   return (
     <div className="flex-shrink-0 w-[160px]">
       <div
@@ -596,31 +608,53 @@ export default function VimeoCard({ video }: VimeoCardProps) {
               </div>
             )}
 
-            {/* Video iframe with fade-in effect */}
-            {isActive && (
-              <iframe
-                ref={videoRef}
-                src={getVideoSrc()}
+            {/* Check if this is a Cloudflare R2 video */}
+            {isActive && isR2Video && video.url ? (
+              <video
+                className="absolute inset-0 w-full h-full object-cover"
+                controls
+                playsInline
+                preload="metadata"
+                poster={thumbnailUrl || undefined}
                 style={{
-                  position: "absolute",
-                  top: 0,
-                  left: 0,
-                  width: "100%",
-                  height: "100%",
-                  border: "none",
                   opacity: isIframeLoaded ? 1 : 0,
                   transition: "opacity 300ms ease-in-out",
                 }}
-                allow={
-                  isTikTokBrowser
-                    ? "autoplay; picture-in-picture; clipboard-write; encrypted-media"
-                    : "autoplay; fullscreen; picture-in-picture; clipboard-write; encrypted-media"
-                }
-                title={video.name || "Video"}
-                loading="lazy"
-                onLoad={handleIframeLoad}
-                className={isTikTokBrowser ? "tiktok-restricted-iframe" : ""}
-              ></iframe>
+                onLoadedData={() => setIsIframeLoaded(true)}
+                onError={(e) => {
+                  console.error("Error loading R2 video:", e)
+                  setIsIframeLoaded(false)
+                }}
+              >
+                <source src={video.url} type="video/mp4" />
+                Your browser does not support the video tag.
+              </video>
+            ) : (
+              isActive && (
+                <iframe
+                  ref={videoRef}
+                  src={getVideoSrc()}
+                  style={{
+                    position: "absolute",
+                    top: 0,
+                    left: 0,
+                    width: "100%",
+                    height: "100%",
+                    border: "none",
+                    opacity: isIframeLoaded ? 1 : 0,
+                    transition: "opacity 300ms ease-in-out",
+                  }}
+                  allow={
+                    isTikTokBrowser
+                      ? "autoplay; picture-in-picture; clipboard-write; encrypted-media"
+                      : "autoplay; fullscreen; picture-in-picture; clipboard-write; encrypted-media"
+                  }
+                  title={video.name || "Video"}
+                  loading="lazy"
+                  onLoad={handleIframeLoad}
+                  className={isTikTokBrowser ? "tiktok-restricted-iframe" : ""}
+                ></iframe>
+              )
             )}
           </div>
         ) : (

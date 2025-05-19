@@ -209,7 +209,19 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
         onClick={() => handleVideoClick(video)}
       >
         <div className="relative overflow-hidden group" style={{ aspectRatio: "9/16" }}>
-          {video.thumbnailUrl ? (
+          {video.url ? (
+            <div className="w-full h-full bg-zinc-800 flex items-center justify-center relative">
+              <video
+                className="w-full h-full object-cover"
+                preload="metadata"
+                poster={video.thumbnailUrl || "/placeholder.svg?key=video-poster"}
+              >
+                <source src={video.url} type="video/mp4" />
+                Your browser does not support the video tag.
+              </video>
+              <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent"></div>
+            </div>
+          ) : video.thumbnailUrl ? (
             <img
               src={video.thumbnailUrl || "/placeholder.svg"}
               alt={video.title}
@@ -221,18 +233,6 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
                 target.src = "/placeholder.svg?key=video-thumbnail"
               }}
             />
-          ) : video.url ? (
-            <div className="w-full h-full bg-zinc-800 flex items-center justify-center relative">
-              <video
-                className="w-full h-full object-cover"
-                preload="metadata"
-                poster="/placeholder.svg?key=video-poster"
-              >
-                <source src={`${video.url}#t=0.1`} type="video/mp4" />
-                Your browser does not support the video tag.
-              </video>
-              <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent"></div>
-            </div>
           ) : (
             <div className="w-full h-full bg-zinc-800 flex items-center justify-center">
               <span className="text-zinc-500">No preview available</span>

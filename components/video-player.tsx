@@ -120,6 +120,16 @@ export default function VideoPlayer({
     }
   }
 
+  // Log video URL for debugging
+  useEffect(() => {
+    console.log("Standard player - Video URL:", videoUrl)
+
+    // Check if URL is from Cloudflare R2
+    if (videoUrl && videoUrl.includes("r2.dev")) {
+      console.log("Cloudflare R2 URL detected in standard player")
+    }
+  }, [videoUrl])
+
   return (
     <div
       className="relative mx-auto overflow-hidden bg-black rounded-lg"
@@ -191,7 +201,10 @@ export default function VideoPlayer({
               onPlay={() => setIsPlaying(true)}
               onPause={() => setIsPlaying(false)}
               onEnded={() => setIsPlaying(false)}
-              onError={() => setIsVideoError(true)}
+              onError={() => {
+                console.error("Video error occurred with URL:", videoUrl)
+                setIsVideoError(true)
+              }}
               poster={thumbnailUrl}
               playsInline
               preload="metadata"

@@ -130,15 +130,34 @@ export default function EnhancedVideoPlayer({
   }
 
   const handleVideoError = () => {
-    console.error("Video error occurred")
+    console.error("Video error occurred with URL:", videoUrl)
+
+    // Try to get more specific error information
+    if (videoRef.current) {
+      const videoElement = videoRef.current
+      console.error("Video error code:", videoElement.error?.code)
+      console.error("Video error message:", videoElement.error?.message)
+    }
+
     setIsVideoError(true)
     setIsPlaying(false)
+
+    toast({
+      title: "Video Playback Error",
+      description: "There was a problem playing this video. The file may be incompatible or unavailable.",
+      variant: "destructive",
+    })
   }
 
   // Log video URL for debugging
   useEffect(() => {
     console.log("Video URL:", videoUrl)
     console.log("Video element:", videoRef.current)
+
+    // Check if URL is from Cloudflare R2
+    if (videoUrl && videoUrl.includes("r2.dev")) {
+      console.log("Cloudflare R2 URL detected")
+    }
   }, [videoUrl])
 
   return (

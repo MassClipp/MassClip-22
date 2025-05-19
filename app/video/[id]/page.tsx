@@ -26,6 +26,21 @@ export default function VideoPage() {
   const [error, setError] = useState<string | null>(null)
   const [creator, setCreator] = useState<any>(null)
 
+  // Add this function near the top of the component
+  const testVideoUrl = async (url: string) => {
+    if (!url) return
+
+    try {
+      const response = await fetch(url, { method: "HEAD" })
+      console.log(`Video URL test (${url}):`, response.status, response.statusText)
+      console.log("Headers:", response.headers)
+      return response.ok
+    } catch (error) {
+      console.error("Error testing video URL:", error)
+      return false
+    }
+  }
+
   useEffect(() => {
     const fetchVideoData = async () => {
       if (!creatorId || !id) {
@@ -65,6 +80,12 @@ export default function VideoPage() {
 
     fetchVideoData()
   }, [id, creatorId, isPremium])
+
+  useEffect(() => {
+    if (video?.url) {
+      testVideoUrl(video.url)
+    }
+  }, [video])
 
   const handleBack = () => {
     router.back()
@@ -163,6 +184,46 @@ export default function VideoPage() {
             )}
           </div>
         </div>
+
+        {/* Debug info for video URL (only visible to owner) */}
+        {isOwner && (
+          <div className="mt-6 p-4 bg-zinc-900/50 rounded-lg border border-zinc-800/50">
+            <h3 className="text-lg font-medium text-white mb-2">Debug Information</h3>
+            <div className="space-y-2 text-sm">
+              <p className="text-zinc-400">
+                <span className="text-zinc-300">Video URL:</span> {video.url || "No URL available"}
+              </p>
+              <p className="text-zinc-400">
+                <span className="text-zinc-300">Thumbnail URL:</span> {video.thumbnailUrl || "No thumbnail available"}
+              </p>
+              <p className="text-zinc-400">
+                <span className="text-zinc-300">Video ID:</span> {id}
+              </p>
+              <p className="text-zinc-400">
+                <span className="text-zinc-300">Creator ID:</span> {creatorId}
+              </p>
+              <p className="text-zinc-400">
+                <span className="text-zinc-300">Is Premium:</span> {isPremium ? "Yes" : "No"}
+              </p>
+
+              {/* Direct video test */}
+              <div className="mt-4">
+                <h4 className="text-zinc-300 mb-2">Direct Video Test</h4>
+                <video
+                  controls
+                  width="100%"
+                  height="auto"
+                  preload="metadata"
+                  style={{ borderRadius: "8px", maxHeight: "200px" }}
+                  className="bg-black"
+                >
+                  <source src={video.url} type="video/mp4" />
+                  Your browser does not support the video tag.
+                </video>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   )

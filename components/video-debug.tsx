@@ -1,116 +1,115 @@
 "use client"
 
-import { useState, useRef } from "react"
+import { useState } from "react"
 import { Button } from "@/components/ui/button"
+import DirectVideoPlayer from "./direct-video-player"
 
 interface VideoDebugProps {
   videoUrl: string
 }
 
 export default function VideoDebug({ videoUrl }: VideoDebugProps) {
-  const [isExpanded, setIsExpanded] = useState(false)
-  const [networkStatus, setNetworkStatus] = useState<string>("Not tested")
-  const [directPlayStatus, setDirectPlayStatus] = useState<string>("Not tested")
-  const videoRef = useRef<HTMLVideoElement>(null)
+  const [networkTestResult, setNetworkTestResult] = useState<string | null>(null)
+  const [isTestingNetwork, setIsTestingNetwork] = useState(false)
+  const [showDirectPlayer, setShowDirectPlayer] = useState(false)
 
-  const testNetworkRequest = async () => {
-    setNetworkStatus("Testing...")
+  // Test if the video URL is accessible
+  const testVideoUrl = async () => {
+    if (!videoUrl) {
+      setNetworkTestResult("No video URL provided")
+      return
+    }
+
+    setIsTestingNetwork(true)
+    setNetworkTestResult(null)
+
     try {
       const response = await fetch(videoUrl, { method: "HEAD" })
+      console.log(`Video URL test (${videoUrl}):`, response.status, response.statusText)
+
       if (response.ok) {
-        setNetworkStatus(`Success (${response.status}): Content-Type: ${response.headers.get("content-type")}`)
+        setNetworkTestResult(`✅ Success: Status ${response.status}`)
       } else {
-        setNetworkStatus(`Failed (${response.status}): ${response.statusText}`)
+        setNetworkTestResult(`❌ Failed: Status ${response.status} - ${response.statusText}`)
       }
     } catch (error) {
-      setNetworkStatus(`Error: ${error instanceof Error ? error.message : String(error)}`)
-    }
-  }
-
-  const testDirectPlay = () => {
-    setDirectPlayStatus("Testing...")
-    if (videoRef.current) {
-      try {
-        videoRef.current.onloadeddata = () => {
-          setDirectPlayStatus("Video loaded successfully")
-        }
-        videoRef.current.onerror = (e) => {
-          setDirectPlayStatus(`Error: ${(e.target as HTMLVideoElement).error?.message || "Unknown error"}`)
-        }
-        // Force reload the video
-        videoRef.current.load()
-      } catch (error) {
-        setDirectPlayStatus(`Error: ${error instanceof Error ? error.message : String(error)}`)
-      }
-    } else {
-      setDirectPlayStatus("Video element not found")
+      console.error("Error testing video URL:", error)
+      setNetworkTestResult(`❌ Error: ${error instanceof Error ? error.message : String(error)}`)
+    } finally {
+      setIsTestingNetwork(false)
     }
   }
 
   return (
-    <div className="mt-8 p-4 bg-zinc-900 border border-zinc-800 rounded-lg">
-      <div className="flex justify-between items-center mb-4">
-        <h3 className="text-lg font-medium text-white">Video Debug Tools</h3>
-        <Button variant="outline" size="sm" onClick={() => setIsExpanded(!isExpanded)}>
-          {isExpanded ? "Hide" : "Show"}
-        </Button>
-      </div>
+    <div className="mt-8 p-4 bg-zinc-900/50 rounded-lg border border-zinc-800/50">
+      <h3 className="text-lg font-medium text-white mb-4">Video Debug Tools</h3>
 
-      {isExpanded && (
-        <div className="space-y-4">
-          <div>
-            <p className="text-zinc-400 mb-2">Video URL:</p>
-            <div className="bg-zinc-800 p-2 rounded overflow-x-auto">
-              <code className="text-xs text-zinc-300 whitespace-pre-wrap break-all">{videoUrl}</code>
-            </div>
-          </div>
+      <div className="space-y-6">
+        {/* Network Test */}
+        <div>
+          <h4 className="text-zinc-300 mb-2 text-sm font-medium">Network Test</h4>
+          <div className="flex items-center gap-4">
+            <Button onClick={testVideoUrl} variant="outline" size="sm" disabled={isTestingNetwork}>
+              {isTestingNetwork ? "Testing..." : "Test Network Access"}
+            </Button>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <p className="text-zinc-400 mb-2">Network Request Test:</p>
-              <div className="flex items-center gap-2">
-                <Button variant="outline" size="sm" onClick={testNetworkRequest}>
-                  Test Network
-                </Button>
-                <span className="text-sm text-zinc-300">{networkStatus}</span>
-              </div>
-            </div>
-
-            <div>
-              <p className="text-zinc-400 mb-2">Direct Play Test:</p>
-              <div className="flex items-center gap-2">
-                <Button variant="outline" size="sm" onClick={testDirectPlay}>
-                  Test Direct Play
-                </Button>
-                <span className="text-sm text-zinc-300">{directPlayStatus}</span>
-              </div>
-            </div>
-          </div>
-
-          <div>
-            <p className="text-zinc-400 mb-2">Hardcoded Player Test:</p>
-            <div
-              className="mx-auto overflow-hidden bg-black rounded-lg"
-              style={{
-                aspectRatio: "9/16",
-                maxWidth: "calc(100vh * 9/16 * 0.5)", // Half the size of the main player
-                width: "100%",
-              }}
-            >
-              <video
-                ref={videoRef}
-                className="w-full h-full object-contain bg-black"
-                controls
-                playsInline
-                preload="metadata"
-              >
-                <source src={videoUrl} type="video/mp4" />
-                Your browser does not support the video tag.
-              </video>
-            </div>
+            {networkTestResult && (
+              <p className={`text-sm ${networkTestResult.includes("✅") ? "text-green-400" : "text-red-400"}`}>
+                {networkTestResult}
+              </p>
+            )}
           </div>
         </div>
-      )}
+
+        {/* Direct Player */}
+        <div>
+          <div className="flex items-center justify-between mb-2">
+            <h4 className="text-zinc-300 text-sm font-medium">Direct Video Player</h4>
+            <Button onClick={() => setShowDirectPlayer(!showDirectPlayer)} variant="ghost" size="sm">
+              {showDirectPlayer ? "Hide" : "Show"}
+            </Button>
+          </div>
+
+          {showDirectPlayer && <DirectVideoPlayer videoUrl={videoUrl} title="Raw Video Test" />}
+        </div>
+
+        {/* Hardcoded Player */}
+        <div>
+          <h4 className="text-zinc-300 mb-2 text-sm font-medium">Hardcoded Player</h4>
+          <div
+            className="relative bg-black rounded-lg overflow-hidden"
+            style={{ aspectRatio: "9/16", maxWidth: "200px" }}
+          >
+            <video className="w-full h-full object-contain" controls preload="metadata" playsInline>
+              <source src={videoUrl} type="video/mp4" />
+              Your browser does not support the video tag.
+            </video>
+          </div>
+        </div>
+
+        {/* Video URL */}
+        <div>
+          <h4 className="text-zinc-300 mb-2 text-sm font-medium">Video URL</h4>
+          <div className="p-2 bg-zinc-800 rounded-md overflow-x-auto">
+            <code className="text-xs text-zinc-300 break-all">{videoUrl || "No URL available"}</code>
+          </div>
+
+          <div className="mt-2">
+            <Button
+              onClick={() => {
+                if (videoUrl) {
+                  window.open(videoUrl, "_blank")
+                }
+              }}
+              variant="outline"
+              size="sm"
+              disabled={!videoUrl}
+            >
+              Open URL in New Tab
+            </Button>
+          </div>
+        </div>
+      </div>
     </div>
   )
 }
