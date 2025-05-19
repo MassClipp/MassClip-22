@@ -8,6 +8,7 @@ export default function UploadTest() {
   const [file, setFile] = useState<File | null>(null)
   const [status, setStatus] = useState<string>("")
   const [logs, setLogs] = useState<string[]>([])
+  const [testMode, setTestMode] = useState(true)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   const addLog = (message: string) => {
@@ -45,15 +46,20 @@ export default function UploadTest() {
           fileName: file.name,
           fileType: file.type,
           fileSize: file.size,
+          // Include test mode data if enabled
+          testMode: testMode,
+          testUserId: "test-user-123",
+          testUsername: "test-creator",
         }),
       })
 
       if (!presignedResponse.ok) {
-        const errorText = await presignedResponse.text()
+        const errorData = await presignedResponse.json().catch(() => ({}))
+        const errorText = JSON.stringify(errorData)
         throw new Error(`Failed to get presigned URL: ${presignedResponse.status} ${errorText}`)
       }
 
-      const { presignedUrl, fileId, key } = await presignedResponse.json()
+      const { presignedUrl, fileId, key, publicUrl } = await presignedResponse.json()
       addLog(`Got presigned URL for key: ${key}`)
 
       // Step 2: Upload directly to R2
@@ -91,12 +97,16 @@ export default function UploadTest() {
           fileId,
           key,
           fileType: file.type,
-          publicUrl: `${process.env.NEXT_PUBLIC_CLOUDFLARE_R2_PUBLIC_URL || ""}/${key}`,
+          publicUrl: publicUrl || `${process.env.NEXT_PUBLIC_CLOUDFLARE_R2_PUBLIC_URL || ""}/${key}`,
+          // Include test mode data if enabled
+          testMode: testMode,
+          testUserId: "test-user-123",
         }),
       })
 
       if (!metadataResponse.ok) {
-        const errorText = await metadataResponse.text()
+        const errorData = await metadataResponse.json().catch(() => ({}))
+        const errorText = JSON.stringify(errorData)
         throw new Error(`Failed to save metadata: ${metadataResponse.status} ${errorText}`)
       }
 
@@ -114,6 +124,18 @@ export default function UploadTest() {
       <h1 className="text-2xl font-bold mb-6">Upload Test Page</h1>
 
       <div className="mb-6">
+        <div className="mb-4">
+          <label className="flex items-center">
+            <input
+              type="checkbox"
+              checked={testMode}
+              onChange={(e) => setTestMode(e.target.checked)}
+              className="mr-2"
+            />
+            <span>Test Mode (bypass authentication for testing)</span>
+          </label>
+        </div>
+
         <input type="file" ref={fileInputRef} onChange={handleFileChange} className="mb-4" />
 
         <button

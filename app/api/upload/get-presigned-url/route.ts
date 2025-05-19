@@ -1,7 +1,8 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3"
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner"
-import { auth } from "@/lib/firebase-admin"
+import { initializeFirebaseAdmin, db } from "@/lib/firebase-admin"
+import { getAuth } from "firebase-admin/auth"
 import { v4 as uuidv4 } from "uuid"
 
 // Configure S3 client for Cloudflare R2
@@ -18,74 +19,135 @@ export async function POST(request: NextRequest) {
   console.log("Presigned URL request received")
 
   try {
-    // Verify authentication
+    // Initialize Firebase Admin
+    initializeFirebaseAdmin()
+    const auth = getAuth()
+
+    // Get the session cookie
     const sessionCookie = request.cookies.get("session")?.value
+    console.log("Session cookie present:", !!sessionCookie)
 
     if (!sessionCookie) {
-      console.log("No session cookie found")
+      // For testing purposes, let's try to get the user from the request body
+      const body = await request.json()
+      console.log("Request body:", body)
+
+      // Check if we're in test mode and have a test user
+      if (process.env.PREVIEW_MODE_TRUE === "true" && body.testMode) {
+        console.log("Using test mode with user:", body.testUserId)
+        const testUserId = body.testUserId || "test-user"
+        const testUsername = body.testUsername || "test-user"
+
+        // Generate a unique file ID
+        const fileId = uuidv4()
+        const isPremium = body.isPremium || false
+        const contentType = isPremium ? "premium" : "free"
+        const fileName = body.fileName || "test-file.mp4"
+
+        // Create the key (path) for the file in R2
+        const key = `creators/${testUsername}/${contentType}/${fileId}-${fileName}`
+
+        // Create a presigned URL for uploading
+        const command = new PutObjectCommand({
+          Bucket: process.env.CLOUDFLARE_R2_BUCKET_NAME,
+          Key: key,
+          ContentType: body.fileType || "video/mp4",
+        })
+
+        const presignedUrl = await getSignedUrl(s3Client, command, { expiresIn: 3600 })
+
+        return NextResponse.json({
+          success: true,
+          presignedUrl,
+          fileId,
+          key,
+          publicUrl: `${process.env.CLOUDFLARE_R2_PUBLIC_URL}/${key}`,
+          testMode: true,
+        })
+      }
+
       return NextResponse.json({ error: "Authentication required" }, { status: 401 })
     }
 
-    let decodedToken
+    // Verify the session cookie
     try {
-      decodedToken = await auth.verifySessionCookie(sessionCookie)
+      console.log("Verifying session cookie...")
+      const decodedClaims = await auth.verifySessionCookie(sessionCookie)
+      const uid = decodedClaims.uid
+      console.log("Session verified for user:", uid)
+
+      // Get user data from Firestore
+      const userDoc = await db.collection("users").doc(uid).get()
+
+      if (!userDoc.exists) {
+        console.log("User not found in Firestore")
+        return NextResponse.json({ error: "User not found" }, { status: 404 })
+      }
+
+      const userData = userDoc.data()
+      const username = userData?.username || uid
+
+      console.log("Username:", username)
+
+      // Parse the request body
+      const body = await request.json()
+      const { fileName, fileType, isPremium = false } = body
+
+      if (!fileName) {
+        return NextResponse.json({ error: "File name is required" }, { status: 400 })
+      }
+
+      // Generate a unique file ID
+      const fileId = uuidv4()
+      const contentType = isPremium ? "premium" : "free"
+
+      // Create the key (path) for the file in R2
+      const key = `creators/${username}/${contentType}/${fileId}-${fileName}`
+
+      console.log("File will be stored at:", key)
+
+      // Create a presigned URL for uploading
+      const command = new PutObjectCommand({
+        Bucket: process.env.CLOUDFLARE_R2_BUCKET_NAME,
+        Key: key,
+        ContentType: fileType,
+      })
+
+      const presignedUrl = await getSignedUrl(s3Client, command, { expiresIn: 3600 })
+
+      return NextResponse.json({
+        success: true,
+        presignedUrl,
+        fileId,
+        key,
+        publicUrl: `${process.env.CLOUDFLARE_R2_PUBLIC_URL}/${key}`,
+      })
     } catch (error) {
       console.error("Session verification failed:", error)
-      return NextResponse.json({ error: "Invalid session" }, { status: 401 })
+      return NextResponse.json(
+        {
+          error: "Invalid session",
+          details: error instanceof Error ? error.message : String(error),
+        },
+        { status: 401 },
+      )
     }
-
-    const uid = decodedToken.uid
-    const userData = await auth.getUser(uid)
-    const username = userData.displayName || uid
-
-    console.log(`Authenticated user: ${username} (${uid})`)
-
-    // Parse request body
-    const { fileName, fileType, isPremium = false } = await request.json()
-
-    if (!fileName) {
-      return NextResponse.json({ error: "File name is required" }, { status: 400 })
-    }
-
-    // Generate a unique file ID
-    const fileId = uuidv4()
-
-    // Determine the storage path based on premium status
-    const folderPath = isPremium ? "premium" : "free"
-    const key = `creators/${username}/${folderPath}/${fileId}-${fileName}`
-
-    console.log(`Generating presigned URL for: ${key}`)
-
-    // Check if all required environment variables are set
-    if (!process.env.CLOUDFLARE_R2_BUCKET_NAME) {
-      console.error("Missing R2 bucket name environment variable")
-      return NextResponse.json({ error: "Server configuration error" }, { status: 500 })
-    }
-
-    // Create the command to put an object in the bucket
-    const command = new PutObjectCommand({
-      Bucket: process.env.CLOUDFLARE_R2_BUCKET_NAME,
-      Key: key,
-      ContentType: fileType,
-    })
-
-    // Generate a presigned URL
-    const presignedUrl = await getSignedUrl(s3Client, command, { expiresIn: 3600 })
-
-    console.log("Presigned URL generated successfully")
-
-    return NextResponse.json({
-      presignedUrl,
-      fileId,
-      key,
-    })
   } catch (error) {
     console.error("Error generating presigned URL:", error)
     return NextResponse.json(
-      { error: `Failed to generate presigned URL: ${error instanceof Error ? error.message : String(error)}` },
+      {
+        error: "Failed to generate presigned URL",
+        details: error instanceof Error ? error.message : String(error),
+      },
       { status: 500 },
     )
   }
 }
 
-export const maxDuration = 60 // Set max duration to 60 seconds
+export const config = {
+  api: {
+    bodyParser: {
+      sizeLimit: "1mb",
+    },
+  },
+}
