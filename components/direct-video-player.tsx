@@ -1,20 +1,19 @@
 "use client"
 
 import type React from "react"
-import { useState, useRef, useEffect } from "react"
-import { Play, Pause, Volume2, VolumeX, Download, Heart, Trash2 } from "lucide-react"
-import { useAuth } from "@/contexts/auth-context"
+
+import { useState, useEffect, useRef } from "react"
+import { Play, Heart, Download, Trash2, Volume2, VolumeX } from "lucide-react"
+import { doc, deleteDoc, setDoc, getDoc } from "firebase/firestore"
 import { db } from "@/lib/firebase"
-import { collection, addDoc, serverTimestamp, query, where, getDocs, deleteDoc, doc } from "firebase/firestore"
+import { useAuth } from "@/contexts/auth-context"
 import { useToast } from "@/hooks/use-toast"
-import { useDownloadLimit } from "@/contexts/download-limit-context"
-import { useUserPlan } from "@/hooks/use-user-plan"
+import { useRouter } from "next/navigation"
 
 interface DirectVideoPlayerProps {
   videoUrl: string
   thumbnailUrl?: string
-  title?: string
-  className?: string
+  title: string
   inlinePlayback?: boolean
   videoId?: string
   creatorId?: string
@@ -26,7 +25,6 @@ export default function DirectVideoPlayer({
   videoUrl,
   thumbnailUrl,
   title,
-  className = "",
   inlinePlayback = false,
   videoId,
   creatorId,
@@ -34,412 +32,286 @@ export default function DirectVideoPlayer({
   onDelete,
 }: DirectVideoPlayerProps) {
   const [isPlaying, setIsPlaying] = useState(false)
-  const [isHovered, setIsHovered] = useState(false)
-  const [isError, setIsError] = useState(false)
   const [isMuted, setIsMuted] = useState(false)
-  const [localThumbnail, setLocalThumbnail] = useState<string | null>(null)
+  const [isHovering, setIsHovering] = useState(false)
+  const [showControls, setShowControls] = useState(false)
+  const [generatedThumbnail, setGeneratedThumbnail] = useState<string | null>(null)
   const [isFavorite, setIsFavorite] = useState(false)
-  const [isCheckingFavorite, setIsCheckingFavorite] = useState(true)
-  const [isDownloading, setIsDownloading] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
-
   const videoRef = useRef<HTMLVideoElement>(null)
-  const canvasRef = useRef<HTMLCanvasElement>(null)
-  const downloadLinkRef = useRef<HTMLAnchorElement | null>(null)
-
+  const containerRef = useRef<HTMLDivElement>(null)
   const { user } = useAuth()
   const { toast } = useToast()
-  const { hasReachedLimit, isProUser, forceRefresh } = useDownloadLimit()
-  const { planData } = useUserPlan()
+  const router = useRouter()
 
-  // Create a hidden download link element
+  // Check if the video is in favorites
   useEffect(() => {
-    // Create a hidden anchor element for downloads
-    const downloadLink = document.createElement("a")
-    downloadLink.style.display = "none"
-    document.body.appendChild(downloadLink)
-    downloadLinkRef.current = downloadLink
-
-    return () => {
-      if (downloadLink.parentNode) {
-        downloadLink.parentNode.removeChild(downloadLink)
-      }
-    }
-  }, [])
-
-  // Check if video is in favorites
-  useEffect(() => {
-    const checkIfFavorite = async () => {
-      if (!user || !videoId) {
-        setIsCheckingFavorite(false)
-        return
-      }
+    const checkFavoriteStatus = async () => {
+      if (!user || !videoId) return
 
       try {
-        // Query for this video in user's favorites
-        const favoritesRef = collection(db, `users/${user.uid}/favorites`)
-        const q = query(favoritesRef, where("videoId", "==", videoId))
-        const querySnapshot = await getDocs(q)
-
-        setIsFavorite(!querySnapshot.empty)
-      } catch (err) {
-        console.error("Error checking favorite status:", err)
-      } finally {
-        setIsCheckingFavorite(false)
+        const favoriteRef = doc(db, `users/${user.uid}/favorites/${videoId}`)
+        const favoriteDoc = await getDoc(favoriteRef)
+        setIsFavorite(favoriteDoc.exists())
+      } catch (error) {
+        console.error("Error checking favorite status:", error)
       }
     }
 
-    checkIfFavorite()
+    checkFavoriteStatus()
   }, [user, videoId])
 
-  // Log props for debugging
+  // Generate thumbnail if none provided
   useEffect(() => {
-    console.log("DirectVideoPlayer props:", { videoUrl, thumbnailUrl, title, videoId, creatorId })
+    if (!thumbnailUrl && videoUrl && !generatedThumbnail) {
+      const video = document.createElement("video")
+      video.crossOrigin = "anonymous"
+      video.src = videoUrl
+      video.muted = true
+      video.preload = "metadata"
 
-    // If no thumbnail is provided, try to generate one from the video
-    if (!thumbnailUrl && videoUrl && !localThumbnail) {
-      generateThumbnailFromVideo()
-    }
-  }, [videoUrl, thumbnailUrl, title, localThumbnail, videoId, creatorId])
-
-  // Function to generate a thumbnail from the video
-  const generateThumbnailFromVideo = () => {
-    const video = document.createElement("video")
-    video.crossOrigin = "anonymous"
-    video.src = videoUrl
-    video.muted = true
-    video.preload = "metadata"
-
-    video.onloadeddata = () => {
-      // Try to seek to 25% of the video
-      try {
-        video.currentTime = Math.min(video.duration * 0.25, 3)
-      } catch (e) {
-        console.error("Error seeking video:", e)
+      video.onloadeddata = () => {
+        // Seek to 25% of the video duration for a good thumbnail
+        video.currentTime = video.duration * 0.25
       }
-    }
 
-    video.onseeked = () => {
-      try {
-        // Create a canvas and draw the video frame
+      video.onseeked = () => {
         const canvas = document.createElement("canvas")
-        canvas.width = video.videoWidth || 640
-        canvas.height = video.videoHeight || 360
-
+        canvas.width = video.videoWidth
+        canvas.height = video.videoHeight
         const ctx = canvas.getContext("2d")
-        if (ctx) {
-          ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
-          const thumbnailDataUrl = canvas.toDataURL("image/jpeg")
-          setLocalThumbnail(thumbnailDataUrl)
-        }
-      } catch (e) {
-        console.error("Error generating thumbnail:", e)
+        ctx?.drawImage(video, 0, 0, canvas.width, canvas.height)
+        const dataUrl = canvas.toDataURL("image/jpeg")
+        setGeneratedThumbnail(dataUrl)
+        video.remove()
+      }
+
+      video.onerror = () => {
+        console.error("Error generating thumbnail")
+        video.remove()
+      }
+
+      video.load()
+    }
+  }, [thumbnailUrl, videoUrl, generatedThumbnail])
+
+  // Handle play/pause
+  const togglePlay = (e?: React.MouseEvent) => {
+    e?.stopPropagation()
+
+    if (videoRef.current) {
+      if (isPlaying) {
+        videoRef.current.pause()
+      } else {
+        // Pause all other videos before playing this one
+        document.querySelectorAll("video").forEach((video) => {
+          if (video !== videoRef.current) {
+            video.pause()
+          }
+        })
+
+        videoRef.current.play().catch((error) => {
+          console.error("Error playing video:", error)
+          toast({
+            title: "Playback Error",
+            description: "There was a problem playing this video. Please try again.",
+            variant: "destructive",
+          })
+        })
       }
     }
+  }
 
-    video.onerror = () => {
-      console.error("Error loading video for thumbnail generation")
+  // Handle video events
+  const handlePlay = () => {
+    setIsPlaying(true)
+    setShowControls(true)
+  }
+
+  const handlePause = () => {
+    setIsPlaying(false)
+  }
+
+  const handleEnded = () => {
+    setIsPlaying(false)
+    if (videoRef.current) {
+      videoRef.current.currentTime = 0
     }
   }
 
-  const togglePlay = (e: React.MouseEvent) => {
-    e.preventDefault()
-    e.stopPropagation()
-
-    if (!videoRef.current) return
-
-    if (isPlaying) {
-      videoRef.current.pause()
-    } else {
-      videoRef.current.play().catch((err) => {
-        console.error("Error playing video:", err)
-        setIsError(true)
-      })
-    }
-  }
-
+  // Toggle mute
   const toggleMute = (e: React.MouseEvent) => {
-    e.preventDefault()
     e.stopPropagation()
-
-    if (!videoRef.current) return
-
-    videoRef.current.muted = !videoRef.current.muted
-    setIsMuted(videoRef.current.muted)
+    if (videoRef.current) {
+      videoRef.current.muted = !isMuted
+      setIsMuted(!isMuted)
+    }
   }
 
+  // Handle mouse events
   const handleMouseEnter = () => {
-    setIsHovered(true)
+    setIsHovering(true)
+    setShowControls(true)
   }
 
   const handleMouseLeave = () => {
-    setIsHovered(false)
-    // Only auto-pause if we're in inline playback mode
-    if (inlinePlayback && videoRef.current && isPlaying) {
-      videoRef.current.pause()
+    setIsHovering(false)
+    if (!isPlaying) {
+      setShowControls(false)
     }
   }
 
-  const handlePlay = () => setIsPlaying(true)
-  const handlePause = () => setIsPlaying(false)
-  const handleEnded = () => setIsPlaying(false)
-
-  const handleError = (e: React.SyntheticEvent<HTMLVideoElement>) => {
-    console.error("Video error:", e)
-    console.error("Video error details:", videoRef.current?.error)
-    setIsError(true)
-  }
-
-  // Toggle favorite status
+  // Handle favorite toggle
   const toggleFavorite = async (e: React.MouseEvent) => {
-    e.preventDefault()
     e.stopPropagation()
 
-    if (!user || !videoId) {
+    if (!user) {
       toast({
-        title: "Authentication Required",
-        description: "Please log in to save favorites",
+        title: "Sign in required",
+        description: "Please sign in to favorite videos",
+      })
+      return
+    }
+
+    if (!videoId || !creatorId) {
+      toast({
+        title: "Error",
+        description: "Could not favorite this video",
         variant: "destructive",
       })
       return
     }
 
     try {
+      const favoriteRef = doc(db, `users/${user.uid}/favorites/${videoId}`)
+
       if (isFavorite) {
-        // Find and remove from favorites
-        const favoritesRef = collection(db, `users/${user.uid}/favorites`)
-        const q = query(favoritesRef, where("videoId", "==", videoId))
-        const querySnapshot = await getDocs(q)
-
-        querySnapshot.forEach(async (document) => {
-          await deleteDoc(doc(db, `users/${user.uid}/favorites`, document.id))
-        })
-
+        // Remove from favorites
+        await deleteDoc(favoriteRef)
+        setIsFavorite(false)
         toast({
           title: "Removed from favorites",
           description: "Video removed from your favorites",
         })
       } else {
         // Add to favorites
-        const videoData = {
+        await setDoc(favoriteRef, {
           videoId,
-          title: title || "Untitled",
-          thumbnailUrl: thumbnailUrl || localThumbnail,
-          url: videoUrl,
-          isPremium,
           creatorId,
-        }
-
-        await addDoc(collection(db, `users/${user.uid}/favorites`), {
-          videoId: videoId,
-          video: videoData,
-          createdAt: serverTimestamp(),
+          title,
+          thumbnailUrl: thumbnailUrl || generatedThumbnail,
+          videoUrl,
+          isPremium,
+          addedAt: new Date(),
         })
-
+        setIsFavorite(true)
         toast({
           title: "Added to favorites",
-          description: "Video saved to your favorites",
+          description: "Video added to your favorites",
         })
       }
-
-      // Toggle state
-      setIsFavorite(!isFavorite)
-    } catch (err) {
-      console.error("Error toggling favorite:", err)
+    } catch (error) {
+      console.error("Error toggling favorite:", error)
       toast({
         title: "Error",
-        description: "Failed to update favorites",
+        description: "There was a problem updating your favorites",
         variant: "destructive",
       })
     }
   }
 
-  // Direct download function
-  const startDirectDownload = async (url: string, filename: string) => {
-    try {
-      // Fetch the file
-      const response = await fetch(url)
-      if (!response.ok) throw new Error("Network response was not ok")
-
-      // Get the blob
-      const blob = await response.blob()
-
-      // Create object URL
-      const objectUrl = URL.createObjectURL(blob)
-
-      // Use the hidden anchor to download
-      if (downloadLinkRef.current) {
-        downloadLinkRef.current.href = objectUrl
-        downloadLinkRef.current.download = filename
-        downloadLinkRef.current.click()
-
-        // Clean up
-        setTimeout(() => {
-          URL.revokeObjectURL(objectUrl)
-        }, 100)
-      }
-
-      return true
-    } catch (error) {
-      console.error("Direct download failed:", error)
-      return false
-    }
-  }
-
-  // Record a download directly in Firestore
-  const recordDownload = async () => {
-    if (!user) return { success: false, message: "User not authenticated" }
-
-    // Creator Pro users don't need to track downloads
-    if (isProUser) return { success: true }
-
-    try {
-      const userDocRef = doc(db, "users", user.uid)
-
-      // Increment download count in user-plan-badge.tsx
-      forceRefresh()
-
-      return { success: true }
-    } catch (err) {
-      console.error("Error recording download:", err)
-      return {
-        success: false,
-        message: "Failed to record download. Please try again.",
-      }
-    }
-  }
-
-  // Handle download button click
+  // Handle download
   const handleDownload = async (e: React.MouseEvent) => {
-    e.preventDefault()
     e.stopPropagation()
 
-    // Prevent multiple clicks
-    if (isDownloading) return
-
-    setIsDownloading(true)
+    if (!user) {
+      toast({
+        title: "Sign in required",
+        description: "Please sign in to download videos",
+      })
+      return
+    }
 
     try {
-      // 1. Basic authentication check
-      if (!user) {
+      // Check if user has download permissions
+      const response = await fetch("/api/check-purchase-access", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ uid: user.uid }),
+      })
+
+      const data = await response.json()
+
+      if (!data.canDownload) {
         toast({
-          title: "Authentication Required",
-          description: "Please log in to download videos",
+          title: "Download limit reached",
+          description: "Upgrade to Pro for unlimited downloads",
           variant: "destructive",
         })
         return
       }
 
-      // 2. Check if download link exists
-      if (!videoUrl) {
-        toast({
-          title: "Download Error",
-          description: "No download links available for this video.",
-          variant: "destructive",
-        })
-        return
-      }
+      // Create an anchor element and trigger download
+      const a = document.createElement("a")
+      a.href = videoUrl
+      a.download = `${title.replace(/[^a-z0-9]/gi, "_").toLowerCase()}.mp4`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
 
-      // 3. Creator Pro users bypass limit checks
-      if (!isProUser) {
-        // 4. Strict limit check - this is the core permission enforcement
-        if (hasReachedLimit) {
-          toast({
-            title: "Download Limit Reached",
-            description: "You've reached your monthly download limit. Upgrade to Creator Pro for unlimited downloads.",
-            variant: "destructive",
-          })
-          return
-        }
-
-        // 5. CRITICAL: Record the download FIRST for free users
-        const result = await recordDownload()
-
-        // If recording failed, abort the download
-        if (!result.success) {
-          toast({
-            title: "Download Error",
-            description: result.message || "Failed to record download.",
-            variant: "destructive",
-          })
-          return
-        }
-      }
-
-      // 6. Only now, trigger the actual download
-      const filename = `${title?.replace(/[^\w\s]/gi, "") || "video"}.mp4`
-      const success = await startDirectDownload(videoUrl, filename)
-
-      if (!success) {
-        // Fallback to traditional method if direct download fails
-        if (downloadLinkRef.current) {
-          downloadLinkRef.current.href = videoUrl
-          downloadLinkRef.current.download = filename
-          downloadLinkRef.current.click()
-        }
-      }
-
-      // Show success toast
       toast({
-        title: "Download Started",
+        title: "Download started",
         description: "Your video is downloading",
       })
     } catch (error) {
-      console.error("Download failed:", error)
-
+      console.error("Error downloading video:", error)
       toast({
-        title: "Download Error",
-        description: "There was an issue starting your download. Please try again.",
+        title: "Download failed",
+        description: "There was a problem downloading this video",
         variant: "destructive",
       })
-    } finally {
-      setIsDownloading(false)
     }
   }
 
-  // Handle delete button click
+  // Handle delete
   const handleDelete = async (e: React.MouseEvent) => {
-    e.preventDefault()
     e.stopPropagation()
 
-    // Show confirmation first
-    setShowDeleteConfirm(true)
-  }
-
-  // Confirm delete
-  const confirmDelete = async (e: React.MouseEvent) => {
-    e.preventDefault()
-    e.stopPropagation()
+    if (!showDeleteConfirm) {
+      setShowDeleteConfirm(true)
+      return
+    }
 
     if (!user || !videoId || !creatorId) {
       toast({
         title: "Error",
-        description: "Missing required information to delete video",
-        variant: "destructive",
-      })
-      return
-    }
-
-    // Check if user is the creator
-    if (user.uid !== creatorId) {
-      toast({
-        title: "Permission Denied",
-        description: "You can only delete your own videos",
+        description: "Could not delete this video",
         variant: "destructive",
       })
       return
     }
 
     try {
-      // Determine collection based on premium status
+      // Check if user is the creator
+      if (user.uid !== creatorId) {
+        toast({
+          title: "Permission denied",
+          description: "You can only delete your own videos",
+          variant: "destructive",
+        })
+        return
+      }
+
+      // Delete from the appropriate collection
       const collectionPath = isPremium ? `users/${creatorId}/premiumClips` : `users/${creatorId}/freeClips`
 
-      // Delete from Firestore
       await deleteDoc(doc(db, collectionPath, videoId))
 
       toast({
-        title: "Video Deleted",
-        description: "Your video has been successfully deleted",
+        title: "Video deleted",
+        description: "Your video has been removed",
       })
 
       // Call the onDelete callback if provided
@@ -449,8 +321,8 @@ export default function DirectVideoPlayer({
     } catch (error) {
       console.error("Error deleting video:", error)
       toast({
-        title: "Delete Error",
-        description: "There was an issue deleting your video. Please try again.",
+        title: "Delete failed",
+        description: "There was a problem deleting this video",
         variant: "destructive",
       })
     } finally {
@@ -458,184 +330,148 @@ export default function DirectVideoPlayer({
     }
   }
 
-  // Cancel delete
+  // Cancel delete confirmation
   const cancelDelete = (e: React.MouseEvent) => {
-    e.preventDefault()
     e.stopPropagation()
     setShowDeleteConfirm(false)
   }
 
-  // Determine which thumbnail to use
-  const effectiveThumbnail = thumbnailUrl || localThumbnail
-
-  // Check if user is the creator
-  const isCreator = user && creatorId && user.uid === creatorId
-
   return (
     <div
-      className={`relative overflow-hidden bg-zinc-900 rounded-lg ${className}`}
-      style={{ aspectRatio: "9/16" }}
+      ref={containerRef}
+      className="relative group"
+      style={{
+        position: "relative",
+        paddingBottom: "177.78%", // 9:16 aspect ratio
+        height: 0,
+        borderRadius: "8px",
+        overflow: "hidden",
+      }}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
+      onClick={togglePlay}
     >
-      {/* Thumbnail display */}
-      {!isPlaying && (
-        <div className="absolute inset-0">
-          {effectiveThumbnail ? (
-            <img
-              src={effectiveThumbnail || "/placeholder.svg"}
-              alt={title || "Video thumbnail"}
-              className="w-full h-full object-cover"
-              onError={() => console.error("Thumbnail failed to load:", effectiveThumbnail)}
-            />
-          ) : (
-            <div className="absolute inset-0 flex flex-col items-center justify-center bg-zinc-800 text-zinc-500">
-              <Play className="h-12 w-12 mb-2 text-red-500/70" />
-              <span className="text-sm">Play video</span>
-            </div>
-          )}
-
-          {/* Dark overlay for better contrast */}
-          <div
-            className={`absolute inset-0 transition-opacity duration-300 ${isHovered ? "opacity-30" : "opacity-50"}`}
-            style={{
-              background: "linear-gradient(to bottom, rgba(0,0,0,0.2), rgba(0,0,0,0.7))",
-            }}
-          ></div>
-        </div>
-      )}
+      {/* Border overlay that appears on hover */}
+      <div
+        className="absolute inset-0 z-10 pointer-events-none transition-opacity duration-300 group-hover:opacity-100 opacity-0"
+        style={{
+          border: "1px solid rgba(220, 20, 60, 0.5)",
+          borderRadius: "8px",
+          boxShadow: "0 0 20px rgba(220, 20, 60, 0.2)",
+        }}
+      ></div>
 
       {/* Video element */}
       <video
         ref={videoRef}
-        className="absolute inset-0 w-full h-full object-cover"
-        poster={effectiveThumbnail || undefined}
+        src={videoUrl}
+        className={`absolute inset-0 w-full h-full object-cover ${isPlaying ? "z-20" : "z-0"}`}
         playsInline
-        preload="metadata"
-        style={{ display: isPlaying ? "block" : "none" }}
+        loop={false}
+        muted={isMuted}
         onPlay={handlePlay}
         onPause={handlePause}
         onEnded={handleEnded}
-        onError={handleError}
-        muted={isMuted}
-      >
-        <source src={videoUrl} type="video/mp4" />
-        Your browser does not support the video tag.
-      </video>
+        style={{ borderRadius: "8px" }}
+      />
 
-      {/* Action buttons container - only show when hovered */}
-      {isHovered && (
-        <div className="absolute bottom-2 left-2 right-2 z-20 flex items-center justify-between transition-opacity duration-300">
-          {/* Download button */}
-          <button
-            className={`${
-              hasReachedLimit && !isProUser ? "bg-zinc-800/90 cursor-not-allowed" : "bg-black/70 hover:bg-black/90"
-            } p-1.5 rounded-full transition-all duration-300`}
-            onClick={handleDownload}
-            aria-label={hasReachedLimit && !isProUser ? "Download limit reached" : "Download video"}
-            disabled={isDownloading || (hasReachedLimit && !isProUser)}
-            title={hasReachedLimit && !isProUser ? "Upgrade to Creator Pro for unlimited downloads" : "Download video"}
-          >
-            <Download className="h-3.5 w-3.5 text-white" />
-          </button>
-
-          {/* Favorite button */}
-          <button
-            className={`bg-black/70 hover:bg-black/90 p-1.5 rounded-full transition-all duration-300 ${
-              isFavorite ? "text-red-500" : "text-white"
-            }`}
-            onClick={toggleFavorite}
-            aria-label={isFavorite ? "Remove from favorites" : "Add to favorites"}
-            disabled={isCheckingFavorite}
-            title={isFavorite ? "Remove from favorites" : "Add to favorites"}
-          >
-            <Heart className="h-3.5 w-3.5" fill={isFavorite ? "currentColor" : "none"} />
-          </button>
-
-          {/* Delete button - only show for creator */}
-          {isCreator && (
-            <button
-              className="bg-black/70 hover:bg-black/90 p-1.5 rounded-full transition-all duration-300 text-white hover:text-red-500"
-              onClick={handleDelete}
-              aria-label="Delete video"
-              title="Delete video"
-            >
-              <Trash2 className="h-3.5 w-3.5" />
-            </button>
+      {/* Thumbnail or placeholder */}
+      {!isPlaying && (
+        <div className="absolute inset-0 z-10 bg-zinc-900">
+          {thumbnailUrl || generatedThumbnail ? (
+            <img
+              src={thumbnailUrl || generatedThumbnail || ""}
+              alt={title}
+              className="w-full h-full object-cover"
+              style={{ borderRadius: "8px" }}
+            />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center bg-zinc-800">
+              <span className="text-zinc-500 text-sm">No preview</span>
+            </div>
           )}
         </div>
       )}
 
-      {/* Play/Pause overlay */}
-      <div className="absolute inset-0 flex items-center justify-center cursor-pointer" onClick={togglePlay}>
-        {!isPlaying && (
-          <button className="bg-red-500/80 hover:bg-red-500 text-white rounded-full p-3 transition-all">
-            <Play className="h-5 w-5 ml-0.5" />
-          </button>
-        )}
-        {isPlaying && isHovered && (
-          <button className="bg-black/50 hover:bg-black/70 text-white rounded-full p-3 transition-all">
-            <Pause className="h-5 w-5" />
-          </button>
-        )}
-      </div>
-
-      {/* Mute/Unmute button - only show when playing */}
-      {isPlaying && (
-        <div className="absolute bottom-2 right-2 z-10" onClick={toggleMute}>
-          <button className="bg-black/50 hover:bg-black/70 text-white rounded-full p-1.5 transition-all">
-            {isMuted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
-          </button>
-        </div>
-      )}
-
-      {/* Delete confirmation dialog */}
-      {showDeleteConfirm && (
-        <div className="absolute inset-0 flex items-center justify-center bg-black/80 z-30">
-          <div className="bg-zinc-900 p-4 rounded-lg max-w-[90%] text-center">
-            <h3 className="text-white text-sm font-medium mb-2">Delete Video?</h3>
-            <p className="text-zinc-400 text-xs mb-4">This action cannot be undone.</p>
-            <div className="flex justify-center gap-2">
-              <button
-                className="bg-red-500 hover:bg-red-600 text-white text-xs px-3 py-1 rounded"
-                onClick={confirmDelete}
-              >
-                Delete
-              </button>
-              <button
-                className="bg-zinc-700 hover:bg-zinc-600 text-white text-xs px-3 py-1 rounded"
-                onClick={cancelDelete}
-              >
-                Cancel
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Error message */}
-      {isError && (
-        <div className="absolute inset-0 flex items-center justify-center bg-black/70 text-white p-4 text-center">
-          <p>Unable to play video</p>
-        </div>
-      )}
-
-      {/* Title overlay */}
-      {title && !isPlaying && (
-        <div className="absolute bottom-0 left-0 right-0 p-2 bg-gradient-to-t from-black/80 to-transparent">
-          <p className="text-white text-sm truncate">{title}</p>
-        </div>
-      )}
-
-      {/* Premium badge if applicable */}
+      {/* Premium badge */}
       {isPremium && (
-        <div className="absolute top-2 right-2 bg-red-500 text-white text-xs px-1.5 py-0.5 rounded-full flex items-center">
+        <div className="absolute top-2 right-2 z-30 bg-red-500 text-white text-xs px-1.5 py-0.5 rounded-full flex items-center">
           <span className="text-[10px]">Premium</span>
         </div>
       )}
 
-      {/* Hidden canvas for thumbnail generation */}
-      <canvas ref={canvasRef} className="hidden" width="640" height="360" />
+      {/* Play button overlay */}
+      {!isPlaying && (
+        <div
+          className="absolute inset-0 z-20 flex items-center justify-center bg-black/30 transition-opacity duration-300 hover:opacity-70"
+          style={{ borderRadius: "8px" }}
+        >
+          <div className="rounded-full bg-red-500/80 p-2 transform transition-transform duration-300 hover:scale-110">
+            <Play className="h-6 w-6 text-white" fill="white" />
+          </div>
+        </div>
+      )}
+
+      {/* Video controls */}
+      {(showControls || isHovering) && (
+        <div className="absolute bottom-0 left-0 right-0 z-30 p-2 bg-gradient-to-t from-black/80 to-transparent">
+          <div className="flex items-center justify-between">
+            {/* Left controls */}
+            <div className="flex items-center space-x-2">
+              {/* Mute/unmute button */}
+              <button onClick={toggleMute} className="text-white hover:text-red-500 transition-colors">
+                {isMuted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
+              </button>
+            </div>
+
+            {/* Right controls */}
+            <div className="flex items-center space-x-2">
+              {/* Favorite button */}
+              <button
+                onClick={toggleFavorite}
+                className={`hover:scale-110 transition-transform ${isFavorite ? "text-red-500" : "text-white"}`}
+              >
+                <Heart className="h-4 w-4" fill={isFavorite ? "currentColor" : "none"} />
+              </button>
+
+              {/* Download button */}
+              <button
+                onClick={handleDownload}
+                className="text-white hover:text-red-500 transition-colors hover:scale-110"
+              >
+                <Download className="h-4 w-4" />
+              </button>
+
+              {/* Delete button (only for owner) */}
+              {user && creatorId && user.uid === creatorId && (
+                <button
+                  onClick={handleDelete}
+                  className={`text-white hover:text-red-500 transition-colors hover:scale-110 ${
+                    showDeleteConfirm ? "text-red-500" : ""
+                  }`}
+                >
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Delete confirmation */}
+          {showDeleteConfirm && (
+            <div className="absolute bottom-10 right-0 bg-zinc-900 p-2 rounded-md shadow-lg z-40 text-xs">
+              <p className="text-white mb-2">Delete this video?</p>
+              <div className="flex space-x-2">
+                <button onClick={handleDelete} className="bg-red-500 text-white px-2 py-1 rounded hover:bg-red-600">
+                  Yes
+                </button>
+                <button onClick={cancelDelete} className="bg-zinc-700 text-white px-2 py-1 rounded hover:bg-zinc-600">
+                  No
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }
