@@ -2,12 +2,12 @@
 
 import { useState, useEffect, useRef } from "react"
 import { useAuth } from "@/contexts/auth-context"
-import { Lock, Play } from "lucide-react"
+import { Lock, Play, Volume2, VolumeX } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useRouter } from "next/navigation"
 import { useToast } from "@/hooks/use-toast"
 
-interface VideoPlayerProps {
+interface EnhancedVideoPlayerProps {
   videoUrl: string
   thumbnailUrl?: string
   title: string
@@ -17,7 +17,7 @@ interface VideoPlayerProps {
   onPlay?: () => void
 }
 
-export default function VideoPlayer({
+export default function EnhancedVideoPlayer({
   videoUrl,
   thumbnailUrl,
   title,
@@ -25,10 +25,11 @@ export default function VideoPlayer({
   videoId,
   creatorId,
   onPlay,
-}: VideoPlayerProps) {
+}: EnhancedVideoPlayerProps) {
   const [hasAccess, setHasAccess] = useState(false)
   const [isLoading, setIsLoading] = useState(true)
   const [isPlaying, setIsPlaying] = useState(false)
+  const [isMuted, setIsMuted] = useState(false)
   const [isVideoError, setIsVideoError] = useState(false)
   const videoRef = useRef<HTMLVideoElement>(null)
   const { user } = useAuth()
@@ -120,6 +121,25 @@ export default function VideoPlayer({
     }
   }
 
+  const toggleMute = () => {
+    if (videoRef.current) {
+      videoRef.current.muted = !videoRef.current.muted
+      setIsMuted(videoRef.current.muted)
+    }
+  }
+
+  const handleVideoError = () => {
+    console.error("Video error occurred")
+    setIsVideoError(true)
+    setIsPlaying(false)
+  }
+
+  // Log video URL for debugging
+  useEffect(() => {
+    console.log("Video URL:", videoUrl)
+    console.log("Video element:", videoRef.current)
+  }, [videoUrl])
+
   return (
     <div className="relative aspect-video bg-black rounded-lg overflow-hidden">
       {!isPlaying && (
@@ -184,7 +204,7 @@ export default function VideoPlayer({
               onPlay={() => setIsPlaying(true)}
               onPause={() => setIsPlaying(false)}
               onEnded={() => setIsPlaying(false)}
-              onError={() => setIsVideoError(true)}
+              onError={handleVideoError}
               poster={thumbnailUrl}
               playsInline
               preload="metadata"
@@ -192,6 +212,17 @@ export default function VideoPlayer({
               <source src={videoUrl} type="video/mp4" />
               Your browser does not support the video tag.
             </video>
+          )}
+
+          {/* Mute/Unmute button (only visible when playing) */}
+          {isPlaying && (
+            <button
+              onClick={toggleMute}
+              className="absolute bottom-4 right-4 bg-black/50 p-2 rounded-full z-10"
+              style={{ display: isPlaying ? "block" : "none" }}
+            >
+              {isMuted ? <VolumeX className="h-5 w-5 text-white" /> : <Volume2 className="h-5 w-5 text-white" />}
+            </button>
           )}
         </>
       )}
