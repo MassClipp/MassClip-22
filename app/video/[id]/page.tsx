@@ -1,48 +1,29 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { useParams, useSearchParams, useRouter } from "next/navigation"
-import { ArrowLeft, Share2 } from "lucide-react"
-import { Button } from "@/components/ui/button"
+import { useParams, useSearchParams } from "next/navigation"
 import { doc, getDoc } from "firebase/firestore"
 import { db } from "@/lib/firebase"
 import { useAuth } from "@/contexts/auth-context"
-import { useToast } from "@/hooks/use-toast"
-import EnhancedVideoPlayer from "@/components/enhanced-video-player"
+import DirectVideoPlayer from "@/components/direct-video-player"
+import VideoDebug from "@/components/video-debug"
+import { Button } from "@/components/ui/button"
+import { ArrowLeft, Share2 } from "lucide-react"
 
 export default function VideoPage() {
   const { id } = useParams()
   const searchParams = useSearchParams()
-  const router = useRouter()
-  const { toast } = useToast()
-  const { user } = useAuth()
-
   const creatorId = searchParams.get("creatorId")
   const isPremium = searchParams.get("isPremium") === "true"
-  const debug = searchParams.get("debug") === "true"
+  const { user } = useAuth()
 
   const [video, setVideo] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [creator, setCreator] = useState<any>(null)
-
-  // Add this function near the top of the component
-  const testVideoUrl = async (url: string) => {
-    if (!url) return
-
-    try {
-      const response = await fetch(url, { method: "HEAD" })
-      console.log(`Video URL test (${url}):`, response.status, response.statusText)
-      console.log("Headers:", response.headers)
-      return response.ok
-    } catch (error) {
-      console.error("Error testing video URL:", error)
-      return false
-    }
-  }
+  const [showDebug, setShowDebug] = useState(false)
 
   useEffect(() => {
-    const fetchVideoData = async () => {
+    const fetchVideo = async () => {
       if (!creatorId || !id) {
         setError("Missing video information")
         setLoading(false)
@@ -50,8 +31,10 @@ export default function VideoPage() {
       }
 
       try {
-        const collectionName = isPremium ? "premiumClips" : "freeClips"
-        const videoRef = doc(db, `users/${creatorId}/${collectionName}/${id}`)
+        // Determine the collection based on isPremium
+        const collectionPath = isPremium ? `users/${creatorId}/premiumClips` : `users/${creatorId}/freeClips`
+
+        const videoRef = doc(db, collectionPath, id as string)
         const videoDoc = await getDoc(videoRef)
 
         if (!videoDoc.exists()) {
@@ -61,15 +44,9 @@ export default function VideoPage() {
         }
 
         const videoData = videoDoc.data()
+        console.log("Fetched video data:", videoData)
+
         setVideo(videoData)
-
-        // Fetch creator info
-        const creatorRef = doc(db, "users", creatorId)
-        const creatorDoc = await getDoc(creatorRef)
-
-        if (creatorDoc.exists()) {
-          setCreator(creatorDoc.data())
-        }
       } catch (err) {
         console.error("Error fetching video:", err)
         setError("Failed to load video")
@@ -78,25 +55,15 @@ export default function VideoPage() {
       }
     }
 
-    fetchVideoData()
+    fetchVideo()
   }, [id, creatorId, isPremium])
-
-  useEffect(() => {
-    if (video?.url) {
-      testVideoUrl(video.url)
-    }
-  }, [video])
-
-  const handleBack = () => {
-    router.back()
-  }
 
   const handleShare = async () => {
     if (navigator.share) {
       try {
         await navigator.share({
           title: video?.title || "Video on MassClip",
-          text: `Check out this video on MassClip`,
+          text: video?.description || "Check out this video on MassClip",
           url: window.location.href,
         })
       } catch (error) {
@@ -105,123 +72,96 @@ export default function VideoPage() {
     } else {
       // Fallback for browsers that don't support the Web Share API
       navigator.clipboard.writeText(window.location.href)
-      toast({
-        title: "Link copied",
-        description: "Video link copied to clipboard!",
-      })
+      alert("Link copied to clipboard!")
     }
+  }
+
+  const handleGoBack = () => {
+    window.history.back()
   }
 
   if (loading) {
     return (
       <div className="min-h-screen bg-black flex items-center justify-center">
-        <div className="w-16 h-16 border-4 border-zinc-700 border-t-red-500 rounded-full animate-spin"></div>
+        <div className="animate-pulse text-white">Loading video...</div>
       </div>
     )
   }
 
-  if (error || !video) {
+  if (error) {
     return (
-      <div className="min-h-screen bg-black flex flex-col items-center justify-center p-4">
-        <h1 className="text-2xl font-bold text-white mb-4">Error</h1>
-        <p className="text-zinc-400 mb-6">{error || "Failed to load video"}</p>
-        <Button onClick={handleBack} variant="outline">
-          <ArrowLeft className="mr-2 h-4 w-4" />
-          Go Back
-        </Button>
+      <div className="min-h-screen bg-black flex items-center justify-center">
+        <div className="text-center">
+          <h2 className="text-xl text-white mb-4">Error: {error}</h2>
+          <Button onClick={handleGoBack} variant="outline">
+            Go Back
+          </Button>
+        </div>
       </div>
     )
   }
 
-  const isOwner = user && user.uid === creatorId
+  if (!video) {
+    return (
+      <div className="min-h-screen bg-black flex items-center justify-center">
+        <div className="text-center">
+          <h2 className="text-xl text-white mb-4">Video not found</h2>
+          <Button onClick={handleGoBack} variant="outline">
+            Go Back
+          </Button>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="min-h-screen bg-black">
-      <div className="container mx-auto px-4 py-6">
-        {/* Back button */}
-        <div className="mb-4">
-          <Button variant="ghost" onClick={handleBack} className="text-zinc-400 hover:text-white">
-            <ArrowLeft className="mr-2 h-4 w-4" />
+      <div className="max-w-4xl mx-auto px-4 py-8">
+        <div className="mb-4 flex items-center justify-between">
+          <Button variant="ghost" size="sm" onClick={handleGoBack} className="text-white">
+            <ArrowLeft className="h-4 w-4 mr-2" />
             Back
+          </Button>
+
+          <Button variant="ghost" size="sm" onClick={handleShare} className="text-white">
+            <Share2 className="h-4 w-4 mr-2" />
+            Share
           </Button>
         </div>
 
-        {/* Video player */}
-        <div className="flex flex-col items-center justify-center">
-          <EnhancedVideoPlayer
+        {/* Video Player - Using our guaranteed-to-work player */}
+        <div className="mx-auto" style={{ maxWidth: "calc(100vh * 9/16)" }}>
+          <DirectVideoPlayer
             videoUrl={video.url}
             thumbnailUrl={video.thumbnailUrl}
-            title={video.title}
-            isPremium={isPremium}
-            videoId={id as string}
-            creatorId={creatorId as string}
+            title={video.title || video.name || "Untitled"}
           />
-
-          {/* Video info */}
-          <div className="mt-6 w-full max-w-md">
-            <div className="flex justify-between items-start">
-              <div>
-                <h1 className="text-2xl font-bold text-white">{video.title}</h1>
-                {creator && (
-                  <a
-                    href={`/creator/${creator.username}`}
-                    className="text-zinc-400 hover:text-white text-sm mt-1 inline-block"
-                  >
-                    {creator.displayName}
-                  </a>
-                )}
-              </div>
-              <Button variant="outline" size="sm" onClick={handleShare} className="text-zinc-400 hover:text-white">
-                <Share2 className="mr-2 h-4 w-4" />
-                Share
-              </Button>
-            </div>
-
-            {video.description && (
-              <div className="mt-4 p-4 bg-zinc-900/50 rounded-lg">
-                <p className="text-zinc-300 whitespace-pre-wrap">{video.description}</p>
-              </div>
-            )}
-          </div>
         </div>
 
-        {/* Debug info for video URL (only visible to owner) */}
-        {isOwner && (
-          <div className="mt-6 p-4 bg-zinc-900/50 rounded-lg border border-zinc-800/50">
-            <h3 className="text-lg font-medium text-white mb-2">Debug Information</h3>
-            <div className="space-y-2 text-sm">
-              <p className="text-zinc-400">
-                <span className="text-zinc-300">Video URL:</span> {video.url || "No URL available"}
-              </p>
-              <p className="text-zinc-400">
-                <span className="text-zinc-300">Thumbnail URL:</span> {video.thumbnailUrl || "No thumbnail available"}
-              </p>
-              <p className="text-zinc-400">
-                <span className="text-zinc-300">Video ID:</span> {id}
-              </p>
-              <p className="text-zinc-400">
-                <span className="text-zinc-300">Creator ID:</span> {creatorId}
-              </p>
-              <p className="text-zinc-400">
-                <span className="text-zinc-300">Is Premium:</span> {isPremium ? "Yes" : "No"}
-              </p>
+        <div className="mt-6">
+          <h1 className="text-2xl font-bold text-white mb-2">{video.title || video.name || "Untitled"}</h1>
+          {video.description && <p className="text-zinc-300 mt-2">{video.description}</p>}
+        </div>
 
-              {/* Direct video test */}
-              <div className="mt-4">
-                <h4 className="text-zinc-300 mb-2">Direct Video Test</h4>
-                <video
-                  controls
-                  width="100%"
-                  height="auto"
-                  preload="metadata"
-                  style={{ borderRadius: "8px", maxHeight: "200px" }}
-                  className="bg-black"
-                >
-                  <source src={video.url} type="video/mp4" />
-                  Your browser does not support the video tag.
-                </video>
-              </div>
-            </div>
+        {/* Debug section - only visible to the video owner or when explicitly shown */}
+        {(user?.uid === creatorId || showDebug) && (
+          <div className="mt-8">
+            <Button variant="outline" size="sm" onClick={() => setShowDebug(!showDebug)} className="mb-4">
+              {showDebug ? "Hide Debug Info" : "Show Debug Info"}
+            </Button>
+
+            {showDebug && (
+              <>
+                <VideoDebug videoUrl={video.url} thumbnailUrl={video.thumbnailUrl} />
+
+                <div className="mt-4 p-4 bg-zinc-900 rounded-lg">
+                  <h3 className="text-lg font-medium text-white mb-2">Video Data</h3>
+                  <pre className="text-xs text-zinc-400 overflow-auto p-2 bg-zinc-800 rounded">
+                    {JSON.stringify(video, null, 2)}
+                  </pre>
+                </div>
+              </>
+            )}
           </div>
         )}
       </div>
