@@ -197,75 +197,58 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
   }
 
   const handleVideoClick = (video: VideoItem) => {
-    // Instead of navigating, we'll just mark the video as active for inline playback
-    console.log("Video clicked:", video)
-    // We don't navigate anymore - video will play inline
+    // Navigate to a dedicated video page
+    router.push(`/video/${video.id}?creatorId=${creator.uid}&isPremium=${video.isPremium}`)
   }
 
   // Function to render video card
   const renderVideoCard = (video: VideoItem) => {
+    // Log the video object for debugging
+    console.log("Rendering video:", video)
+
     return (
-      <div key={video.id} className="flex-shrink-0 w-[160px]" onClick={() => handleVideoClick(video)}>
-        <div
-          className="group relative premium-hover-effect"
-          style={{
-            position: "relative",
-            paddingBottom: "177.78%", // 9:16 aspect ratio
-            height: 0,
-            borderRadius: "8px",
-            overflow: "hidden",
-          }}
-        >
-          {/* Border overlay that appears on hover */}
-          <div
-            className="absolute inset-0 z-10 pointer-events-none transition-opacity duration-300 group-hover:opacity-100 opacity-0"
-            style={{
-              border: "1px solid rgba(220, 20, 60, 0.5)",
-              borderRadius: "8px",
-              boxShadow: "0 0 20px rgba(220, 20, 60, 0.2)",
-            }}
-          ></div>
-
-          {/* Video container */}
-          <div className="absolute inset-0">
-            {/* Direct video player - matches the dashboard style */}
-            {video.url ? (
-              <DirectVideoPlayer
-                videoUrl={video.url}
-                thumbnailUrl={video.thumbnailUrl}
-                title={video.title || video.name || "Untitled"}
-                inlinePlayback={true}
-              />
-            ) : video.thumbnailUrl ? (
-              <div className="w-full h-full">
-                <img
-                  src={video.thumbnailUrl || "/placeholder.svg"}
-                  alt={video.title || "Video thumbnail"}
-                  className="w-full h-full object-cover"
-                />
-                <div className="absolute inset-0 bg-black/30 flex items-center justify-center">
-                  <div className="text-white text-sm">No video available</div>
-                </div>
-              </div>
-            ) : (
-              <div className="flex items-center justify-center bg-zinc-800 w-full h-full">
-                <span className="text-zinc-500">No preview</span>
-              </div>
-            )}
-          </div>
-
-          {/* Premium badge if applicable */}
-          {video.isPremium && (
-            <div className="absolute top-2 right-2 bg-red-500 text-white text-xs px-1.5 py-0.5 rounded-full flex items-center">
-              <Lock className="w-3 h-3 mr-0.5" />
-              <span className="text-[10px]">Premium</span>
+      <div
+        key={video.id}
+        className="overflow-hidden bg-zinc-900 border border-zinc-800 rounded-lg cursor-pointer transition-transform hover:scale-[1.02]"
+        onClick={() => handleVideoClick(video)}
+      >
+        {/* IMPORTANT: Use the direct video player that works in debug */}
+        {video.url ? (
+          <DirectVideoPlayer
+            videoUrl={video.url}
+            thumbnailUrl={video.thumbnailUrl}
+            title={video.title || video.name || "Untitled"}
+          />
+        ) : video.thumbnailUrl ? (
+          <div className="relative" style={{ aspectRatio: "9/16" }}>
+            <img
+              src={video.thumbnailUrl || "/placeholder.svg"}
+              alt={video.title || "Video thumbnail"}
+              className="w-full h-full object-cover"
+            />
+            <div className="absolute inset-0 bg-black/30 flex items-center justify-center">
+              <div className="text-white text-sm">No video available</div>
             </div>
-          )}
-        </div>
+          </div>
+        ) : (
+          <div className="flex items-center justify-center bg-zinc-800" style={{ aspectRatio: "9/16" }}>
+            <span className="text-zinc-500">No preview available</span>
+          </div>
+        )}
 
-        {/* Video title - smaller and truncated like dashboard */}
-        <div className="mt-2 text-xs text-zinc-300 min-h-[2.5rem] line-clamp-2 font-light">
-          {video.title || video.name || "Untitled video"}
+        {/* Premium badge if applicable */}
+        {video.isPremium && (
+          <div className="absolute top-2 right-2 bg-red-500 text-white text-xs px-2 py-1 rounded-full flex items-center">
+            <Lock className="w-3 h-3 mr-1" />
+            Premium
+          </div>
+        )}
+
+        {/* Video title */}
+        <div className="p-2">
+          <h3 className="font-medium text-white text-sm line-clamp-1">
+            {video.title || video.name || "Untitled video"}
+          </h3>
         </div>
       </div>
     )
@@ -473,7 +456,7 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
                   </div>
                 </div>
               ) : freeVideos.length > 0 ? (
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                   {freeVideos.map((video) => renderVideoCard(video))}
                 </div>
               ) : (
@@ -528,7 +511,7 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
                   </div>
                 </div>
               ) : premiumVideos.length > 0 ? (
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                   {premiumVideos.map((video) => renderVideoCard(video))}
                 </div>
               ) : (
