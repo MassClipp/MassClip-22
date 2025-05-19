@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
-import DirectVideoPlayer from "@/components/direct-video-player"
+import SimpleVideoPlayer from "@/components/simple-video-player"
 
 interface VideoDebugProps {
   videoUrl: string
@@ -20,7 +20,6 @@ export default function VideoDebug({ videoUrl, thumbnailUrl }: VideoDebugProps) 
     setIsLoading(true)
 
     try {
-      console.log("Testing URL:", videoUrl)
       const response = await fetch(videoUrl, { method: "HEAD" })
 
       const headers: Record<string, string> = {}
@@ -37,7 +36,6 @@ export default function VideoDebug({ videoUrl, thumbnailUrl }: VideoDebugProps) 
         testedAt: new Date().toISOString(),
       })
     } catch (error) {
-      console.error("Error testing URL:", error)
       setUrlTestResult({
         url: videoUrl,
         error: error instanceof Error ? error.message : String(error),
@@ -68,16 +66,16 @@ export default function VideoDebug({ videoUrl, thumbnailUrl }: VideoDebugProps) 
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {/* DirectVideoPlayer - Our guaranteed-to-work player */}
+          {/* Simple Video Player */}
           <div>
-            <p className="text-sm text-zinc-400 mb-2">Direct Player</p>
-            <DirectVideoPlayer videoUrl={videoUrl} thumbnailUrl={thumbnailUrl} title="Debug Video" />
+            <p className="text-sm text-zinc-400 mb-2">Simple Player</p>
+            <SimpleVideoPlayer videoUrl={videoUrl} thumbnailUrl={thumbnailUrl} aspectRatio="9/16" />
           </div>
 
           {/* Native Video Element */}
           <div>
             <p className="text-sm text-zinc-400 mb-2">Native HTML5 Video</p>
-            <div className="relative bg-black rounded-lg" style={{ aspectRatio: "9/16" }}>
+            <div className="relative bg-black rounded-lg" style={{ paddingBottom: "177.78%" }}>
               <video
                 className="absolute inset-0 w-full h-full object-contain"
                 controls

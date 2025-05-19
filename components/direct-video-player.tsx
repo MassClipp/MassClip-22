@@ -2,97 +2,114 @@
 
 import type React from "react"
 
-import { useState, useRef, useEffect } from "react"
-import { Play, Pause } from "lucide-react"
+import { useState, useEffect, useRef } from "react"
+import { Button } from "@/components/ui/button"
 
 interface DirectVideoPlayerProps {
   videoUrl: string
-  thumbnailUrl?: string
   title?: string
-  className?: string
 }
 
-export default function DirectVideoPlayer({ videoUrl, thumbnailUrl, title, className = "" }: DirectVideoPlayerProps) {
+export default function DirectVideoPlayer({ videoUrl, title }: DirectVideoPlayerProps) {
   const [isPlaying, setIsPlaying] = useState(false)
-  const [isError, setIsError] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
 
-  // Log props for debugging
+  // Test if the video URL is accessible
   useEffect(() => {
-    console.log("DirectVideoPlayer props:", { videoUrl, thumbnailUrl, title })
-  }, [videoUrl, thumbnailUrl, title])
+    const testVideoUrl = async () => {
+      if (!videoUrl) {
+        setError("No video URL provided")
+        setIsLoading(false)
+        return
+      }
 
-  const togglePlay = () => {
-    if (!videoRef.current) return
+      try {
+        const response = await fetch(videoUrl, { method: "HEAD" })
+        console.log(`Video URL test (${videoUrl}):`, response.status, response.statusText)
 
-    if (isPlaying) {
-      videoRef.current.pause()
-    } else {
-      videoRef.current.play().catch((err) => {
-        console.error("Error playing video:", err)
-        setIsError(true)
-      })
+        if (!response.ok) {
+          setError(`Video URL returned status: ${response.status}`)
+        }
+      } catch (error) {
+        console.error("Error testing video URL:", error)
+        setError("Failed to access video URL")
+      } finally {
+        setIsLoading(false)
+      }
     }
+
+    testVideoUrl()
+  }, [videoUrl])
+
+  const handleVideoError = (e: React.SyntheticEvent<HTMLVideoElement, Event>) => {
+    const videoElement = e.currentTarget
+    console.error("Video error occurred:", videoElement.error)
+    setError(`Video error: ${videoElement.error?.message || "Unknown error"}`)
   }
 
-  const handlePlay = () => setIsPlaying(true)
-  const handlePause = () => setIsPlaying(false)
-  const handleEnded = () => setIsPlaying(false)
-
-  const handleError = (e: React.SyntheticEvent<HTMLVideoElement>) => {
-    console.error("Video error:", e)
-    console.error("Video error details:", videoRef.current?.error)
-    setIsError(true)
+  const handleCanPlay = () => {
+    setIsLoading(false)
+    console.log("Video can play now")
   }
 
   return (
-    <div className={`relative overflow-hidden bg-black rounded-lg ${className}`} style={{ aspectRatio: "9/16" }}>
-      {/* Video element - using the exact same approach as the debug player */}
-      <video
-        ref={videoRef}
-        className="absolute inset-0 w-full h-full object-cover"
-        poster={thumbnailUrl}
-        playsInline
-        preload="metadata"
-        onPlay={handlePlay}
-        onPause={handlePause}
-        onEnded={handleEnded}
-        onError={handleError}
-      >
-        <source src={videoUrl} type="video/mp4" />
-        Your browser does not support the video tag.
-      </video>
+    <div className="space-y-4">
+      <h3 className="text-lg font-medium text-white">{title || "Direct Video Player"}</h3>
 
-      {/* Play/Pause overlay */}
-      <div
-        className="absolute inset-0 flex items-center justify-center cursor-pointer bg-black/20"
-        onClick={togglePlay}
-      >
-        {!isPlaying && !isError && (
-          <button className="bg-red-500/80 hover:bg-red-500 text-white rounded-full p-3 transition-all">
-            <Play className="h-5 w-5 ml-0.5" />
-          </button>
-        )}
-        {isPlaying && (
-          <button className="bg-black/50 hover:bg-black/70 text-white rounded-full p-3 transition-all opacity-0 hover:opacity-100">
-            <Pause className="h-5 w-5" />
-          </button>
-        )}
+      {isLoading && (
+        <div className="flex items-center justify-center h-20 bg-zinc-900 rounded-lg">
+          <div className="animate-spin h-6 w-6 border-2 border-zinc-500 border-t-white rounded-full"></div>
+        </div>
+      )}
+
+      {error && (
+        <div className="p-4 bg-red-900/30 border border-red-900 rounded-lg">
+          <p className="text-red-400 text-sm">{error}</p>
+        </div>
+      )}
+
+      <div className="relative bg-black rounded-lg overflow-hidden" style={{ aspectRatio: "9/16" }}>
+        <video
+          ref={videoRef}
+          className="w-full h-full object-contain"
+          controls
+          preload="metadata"
+          onError={handleVideoError}
+          onCanPlay={handleCanPlay}
+          onPlay={() => setIsPlaying(true)}
+          onPause={() => setIsPlaying(false)}
+          playsInline
+        >
+          <source src={videoUrl} type="video/mp4" />
+          Your browser does not support the video tag.
+        </video>
       </div>
 
-      {/* Error message */}
-      {isError && (
-        <div className="absolute inset-0 flex items-center justify-center bg-black/70 text-white p-4 text-center">
-          <p>Unable to play video</p>
-        </div>
-      )}
+      <div className="space-y-2 text-sm">
+        <p className="text-zinc-400 break-all">
+          <span className="text-zinc-300">Video URL:</span> {videoUrl}
+        </p>
+        <p className="text-zinc-400">
+          <span className="text-zinc-300">Status:</span>{" "}
+          {isLoading ? "Loading..." : error ? "Error" : isPlaying ? "Playing" : "Ready"}
+        </p>
 
-      {/* Title overlay */}
-      {title && (
-        <div className="absolute bottom-0 left-0 right-0 p-2 bg-gradient-to-t from-black/80 to-transparent">
-          <p className="text-white text-sm truncate">{title}</p>
-        </div>
-      )}
+        <Button
+          onClick={() => {
+            if (videoRef.current) {
+              videoRef.current.load()
+              console.log("Video reloaded")
+            }
+          }}
+          variant="outline"
+          size="sm"
+          className="mt-2"
+        >
+          Reload Video
+        </Button>
+      </div>
     </div>
   )
 }

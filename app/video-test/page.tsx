@@ -1,157 +1,98 @@
 "use client"
 
 import { useState } from "react"
-import DirectVideoPlayer from "@/components/direct-video-player"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import DirectVideoPlayer from "@/components/direct-video-player"
 
 export default function VideoTestPage() {
   const [videoUrl, setVideoUrl] = useState("")
-  const [thumbnailUrl, setThumbnailUrl] = useState("")
-  const [testResults, setTestResults] = useState<any>(null)
-  const [isLoading, setIsLoading] = useState(false)
+  const [testUrl, setTestUrl] = useState("")
 
-  const testVideoUrl = async (url: string) => {
-    if (!url) return
-
-    setIsLoading(true)
-    setTestResults(null)
-
-    try {
-      console.log("Testing URL:", url)
-      const response = await fetch(url, { method: "HEAD" })
-
-      const headers: Record<string, string> = {}
-      response.headers.forEach((value, key) => {
-        headers[key] = value
-      })
-
-      setTestResults({
-        url,
-        status: response.status,
-        statusText: response.statusText,
-        ok: response.ok,
-        headers,
-        testedAt: new Date().toISOString(),
-      })
-    } catch (error) {
-      console.error("Error testing URL:", error)
-      setTestResults({
-        url,
-        error: error instanceof Error ? error.message : String(error),
-        testedAt: new Date().toISOString(),
-      })
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
-  // Sample videos for testing
-  const sampleVideos = [
-    {
-      name: "Sample R2 Video",
-      url: "https://pub-e23c9e9b9b4f46a79dc429f4aa4c08b3.r2.dev/videos/sample-video.mp4",
-      thumbnail: "https://pub-e23c9e9b9b4f46a79dc429f4aa4c08b3.r2.dev/thumbnails/sample-thumbnail.jpg",
-    },
-    {
-      name: "Sample MP4 Video",
-      url: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
-      thumbnail: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/images/BigBuckBunny.jpg",
-    },
-  ]
+  // Sample Cloudflare R2 URL for testing
+  const sampleUrl = process.env.NEXT_PUBLIC_CLOUDFLARE_R2_PUBLIC_URL
+    ? `${process.env.NEXT_PUBLIC_CLOUDFLARE_R2_PUBLIC_URL}/sample-video.mp4`
+    : ""
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-white p-6">
-      <div className="max-w-4xl mx-auto">
-        <h1 className="text-3xl font-bold mb-6">Video Player Test</h1>
+    <div className="min-h-screen bg-black text-white p-6">
+      <div className="max-w-3xl mx-auto">
+        <h1 className="text-3xl font-bold mb-8">Video Player Test Page</h1>
 
-        <div className="mb-8">
-          <h2 className="text-xl font-semibold mb-4">Test Your Video URL</h2>
+        <div className="space-y-8">
+          {/* URL Input */}
+          <div className="space-y-4">
+            <h2 className="text-xl font-semibold">Test Your Video URL</h2>
+            <div className="flex gap-4">
+              <Input
+                type="text"
+                value={videoUrl}
+                onChange={(e) => setVideoUrl(e.target.value)}
+                placeholder="Enter video URL to test"
+                className="flex-1 bg-zinc-900 border-zinc-700"
+              />
+              <Button onClick={() => setTestUrl(videoUrl)} disabled={!videoUrl}>
+                Test
+              </Button>
+            </div>
 
-          <div className="flex gap-4 mb-4">
-            <Input
-              type="text"
-              placeholder="Enter video URL"
-              value={videoUrl}
-              onChange={(e) => setVideoUrl(e.target.value)}
-              className="flex-1 bg-zinc-900 border-zinc-700 text-white"
-            />
-            <Button onClick={() => testVideoUrl(videoUrl)} disabled={!videoUrl || isLoading}>
-              {isLoading ? "Testing..." : "Test URL"}
-            </Button>
+            {sampleUrl && (
+              <div>
+                <p className="text-sm text-zinc-400 mb-2">Or try our sample video:</p>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setVideoUrl(sampleUrl)
+                    setTestUrl(sampleUrl)
+                  }}
+                >
+                  Use Sample Video
+                </Button>
+              </div>
+            )}
           </div>
 
-          <div className="flex gap-4 mb-6">
-            <Input
-              type="text"
-              placeholder="Enter thumbnail URL (optional)"
-              value={thumbnailUrl}
-              onChange={(e) => setThumbnailUrl(e.target.value)}
-              className="flex-1 bg-zinc-900 border-zinc-700 text-white"
-            />
-          </div>
-
-          {videoUrl && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-              <div>
-                <h3 className="text-lg font-medium mb-2">DirectVideoPlayer</h3>
-                <DirectVideoPlayer videoUrl={videoUrl} thumbnailUrl={thumbnailUrl} title="Test Video" />
-              </div>
-
-              <div>
-                <h3 className="text-lg font-medium mb-2">Native Video Element</h3>
-                <div className="relative bg-black rounded-lg" style={{ aspectRatio: "9/16" }}>
-                  <video
-                    className="absolute inset-0 w-full h-full object-contain"
-                    controls
-                    preload="metadata"
-                    poster={thumbnailUrl || undefined}
-                  >
-                    <source src={videoUrl} type="video/mp4" />
-                    Your browser does not support the video tag.
-                  </video>
-                </div>
-              </div>
+          {/* Video Player */}
+          {testUrl && (
+            <div className="border border-zinc-800 rounded-lg p-6 bg-zinc-900/50">
+              <DirectVideoPlayer videoUrl={testUrl} title="Video Test" />
             </div>
           )}
 
-          {testResults && (
-            <div className="bg-zinc-900 p-4 rounded-lg mb-8">
-              <h3 className="text-lg font-medium mb-2">Test Results</h3>
-              <pre className="text-xs overflow-auto p-2 bg-zinc-800 rounded">
-                {JSON.stringify(testResults, null, 2)}
+          {/* HTML5 Video Reference */}
+          <div className="border border-zinc-800 rounded-lg p-6 bg-zinc-900/50">
+            <h2 className="text-xl font-semibold mb-4">HTML5 Video Reference</h2>
+            <div className="bg-zinc-800 p-4 rounded-md mb-4 overflow-x-auto">
+              <pre className="text-sm text-zinc-300">
+                {`<video 
+  controls 
+  width="100%" 
+  height="auto" 
+  preload="metadata"
+  style={{ borderRadius: "8px" }}
+>
+  <source src={videoUrl} type="video/mp4" />
+  Your browser does not support the video tag.
+</video>`}
               </pre>
             </div>
-          )}
-        </div>
 
-        <div className="mb-8">
-          <h2 className="text-xl font-semibold mb-4">Sample Videos</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {sampleVideos.map((video, index) => (
-              <div key={index} className="bg-zinc-900 rounded-lg overflow-hidden">
-                <DirectVideoPlayer videoUrl={video.url} thumbnailUrl={video.thumbnail} title={video.name} />
-                <div className="p-3">
-                  <h3 className="font-medium mb-1">{video.name}</h3>
-                  <p className="text-xs text-zinc-400 truncate">{video.url}</p>
-                  <div className="flex gap-2 mt-2">
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => {
-                        setVideoUrl(video.url)
-                        setThumbnailUrl(video.thumbnail)
-                      }}
-                    >
-                      Use This Video
-                    </Button>
-                    <Button size="sm" variant="outline" onClick={() => testVideoUrl(video.url)}>
-                      Test URL
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            ))}
+            <p className="text-sm text-zinc-400 mb-4">
+              This is the standard HTML5 video element that should be used to display videos from Cloudflare R2. Make
+              sure your video URLs are accessible and the CORS settings are properly configured.
+            </p>
+          </div>
+
+          {/* Troubleshooting */}
+          <div className="border border-zinc-800 rounded-lg p-6 bg-zinc-900/50">
+            <h2 className="text-xl font-semibold mb-4">Troubleshooting</h2>
+            <ul className="list-disc list-inside space-y-2 text-zinc-300">
+              <li>Ensure your Cloudflare R2 bucket has public access enabled</li>
+              <li>Check that CORS is properly configured to allow video streaming</li>
+              <li>Verify that the video format is compatible (MP4 is recommended)</li>
+              <li>Test the direct URL in a new browser tab to ensure it's accessible</li>
+              <li>Check browser console for any errors related to video loading</li>
+            </ul>
           </div>
         </div>
       </div>

@@ -3,14 +3,13 @@
 import { useState, useEffect, useCallback } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
 import Image from "next/image"
-import { Share2, Edit, Instagram, Twitter, Globe, Lock, Upload, Plus, RefreshCw } from "lucide-react"
+import { Share2, Edit, Instagram, Twitter, Globe, Lock, Upload, Plus, RefreshCw, Play } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useAuth } from "@/contexts/auth-context"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { collection, query, orderBy, limit, getDocs } from "firebase/firestore"
 import { db } from "@/lib/firebase"
 import { useToast } from "@/hooks/use-toast"
-import DirectVideoPlayer from "@/components/direct-video-player"
 
 interface Creator {
   uid: string
@@ -203,52 +202,61 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
 
   // Function to render video card
   const renderVideoCard = (video: VideoItem) => {
-    // Log the video object for debugging
-    console.log("Rendering video:", video)
-
     return (
       <div
         key={video.id}
         className="overflow-hidden bg-zinc-900 border border-zinc-800 rounded-lg cursor-pointer transition-transform hover:scale-[1.02]"
         onClick={() => handleVideoClick(video)}
       >
-        {/* IMPORTANT: Use the direct video player that works in debug */}
-        {video.url ? (
-          <DirectVideoPlayer
-            videoUrl={video.url}
-            thumbnailUrl={video.thumbnailUrl}
-            title={video.title || video.name || "Untitled"}
-          />
-        ) : video.thumbnailUrl ? (
-          <div className="relative" style={{ aspectRatio: "9/16" }}>
+        <div className="relative overflow-hidden group" style={{ aspectRatio: "9/16" }}>
+          {video.url ? (
+            <div className="w-full h-full bg-zinc-800 flex items-center justify-center relative">
+              <video
+                className="w-full h-full object-cover"
+                preload="metadata"
+                poster={video.thumbnailUrl || "/placeholder.svg?key=video-poster"}
+              >
+                <source src={video.url} type="video/mp4" />
+                Your browser does not support the video tag.
+              </video>
+              <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent"></div>
+            </div>
+          ) : video.thumbnailUrl ? (
             <img
               src={video.thumbnailUrl || "/placeholder.svg"}
-              alt={video.title || "Video thumbnail"}
+              alt={video.title}
               className="w-full h-full object-cover"
+              onError={(e) => {
+                // Fallback if thumbnail fails to load
+                const target = e.target as HTMLImageElement
+                target.onerror = null
+                target.src = "/placeholder.svg?key=video-thumbnail"
+              }}
             />
-            <div className="absolute inset-0 bg-black/30 flex items-center justify-center">
-              <div className="text-white text-sm">No video available</div>
+          ) : (
+            <div className="w-full h-full bg-zinc-800 flex items-center justify-center">
+              <span className="text-zinc-500">No preview available</span>
+            </div>
+          )}
+
+          {/* Play button overlay */}
+          <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+            <div className="rounded-full bg-red-500/80 p-3">
+              <Play className="h-8 w-8 text-white" />
             </div>
           </div>
-        ) : (
-          <div className="flex items-center justify-center bg-zinc-800" style={{ aspectRatio: "9/16" }}>
-            <span className="text-zinc-500">No preview available</span>
-          </div>
-        )}
 
-        {/* Premium badge if applicable */}
-        {video.isPremium && (
-          <div className="absolute top-2 right-2 bg-red-500 text-white text-xs px-2 py-1 rounded-full flex items-center">
-            <Lock className="w-3 h-3 mr-1" />
-            Premium
+          <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent flex items-end p-4">
+            <h3 className="font-medium text-white line-clamp-2">{video.title}</h3>
           </div>
-        )}
 
-        {/* Video title */}
-        <div className="p-2">
-          <h3 className="font-medium text-white text-sm line-clamp-1">
-            {video.title || video.name || "Untitled video"}
-          </h3>
+          {/* Premium badge if applicable */}
+          {video.isPremium && (
+            <div className="absolute top-2 right-2 bg-red-500 text-white text-xs px-2 py-1 rounded-full flex items-center">
+              <Lock className="w-3 h-3 mr-1" />
+              Premium
+            </div>
+          )}
         </div>
       </div>
     )
