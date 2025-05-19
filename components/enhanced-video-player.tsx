@@ -1,5 +1,7 @@
 "use client"
 
+import type React from "react"
+
 import { useState, useEffect, useRef } from "react"
 import { useAuth } from "@/contexts/auth-context"
 import { Lock, Play, Volume2, VolumeX } from "lucide-react"
@@ -87,6 +89,34 @@ export default function EnhancedVideoPlayer({
     checkAccess()
   }, [isPremium, user, videoId, creatorId])
 
+  // Test video URL on mount
+  useEffect(() => {
+    const testVideoUrl = async () => {
+      if (!videoUrl) return
+
+      try {
+        console.log("Testing video URL:", videoUrl)
+        const response = await fetch(videoUrl, { method: "HEAD" })
+        console.log(`Video URL test result: ${response.status} ${response.statusText}`)
+
+        // Log headers for debugging
+        const headers: Record<string, string> = {}
+        response.headers.forEach((value, key) => {
+          headers[key] = value
+        })
+        console.log("Response headers:", headers)
+
+        if (!response.ok) {
+          console.error(`Video URL returned error status: ${response.status}`)
+        }
+      } catch (error) {
+        console.error("Error testing video URL:", error)
+      }
+    }
+
+    testVideoUrl()
+  }, [videoUrl])
+
   const handlePlay = () => {
     if (!hasAccess && isPremium) {
       // Redirect to purchase page or show upgrade modal
@@ -129,36 +159,21 @@ export default function EnhancedVideoPlayer({
     }
   }
 
-  const handleVideoError = () => {
+  const handleVideoError = (e: React.SyntheticEvent<HTMLVideoElement, Event>) => {
+    const videoElement = e.currentTarget
     console.error("Video error occurred with URL:", videoUrl)
-
-    // Try to get more specific error information
-    if (videoRef.current) {
-      const videoElement = videoRef.current
-      console.error("Video error code:", videoElement.error?.code)
-      console.error("Video error message:", videoElement.error?.message)
-    }
+    console.error("Video error code:", videoElement.error?.code)
+    console.error("Video error message:", videoElement.error?.message)
 
     setIsVideoError(true)
     setIsPlaying(false)
 
     toast({
       title: "Video Playback Error",
-      description: "There was a problem playing this video. The file may be incompatible or unavailable.",
+      description: `Error: ${videoElement.error?.message || "Unknown error"}`,
       variant: "destructive",
     })
   }
-
-  // Log video URL for debugging
-  useEffect(() => {
-    console.log("Video URL:", videoUrl)
-    console.log("Video element:", videoRef.current)
-
-    // Check if URL is from Cloudflare R2
-    if (videoUrl && videoUrl.includes("r2.dev")) {
-      console.log("Cloudflare R2 URL detected")
-    }
-  }, [videoUrl])
 
   return (
     <div

@@ -2,7 +2,7 @@
 
 import type React from "react"
 import { useState, useRef, useEffect } from "react"
-import { Download, Lock, Heart, ExternalLink } from "lucide-react"
+import { Download, Lock, Heart, ExternalLink, Play, Pause } from "lucide-react"
 import type { VimeoVideo } from "@/lib/types"
 import { useAuth } from "@/contexts/auth-context"
 import { db } from "@/lib/firebase"
@@ -36,14 +36,15 @@ export default function VimeoCard({ video }: VimeoCardProps) {
   const [downloadError, setDownloadError] = useState(false)
   const [isTitleOverflowing, setIsTitleOverflowing] = useState(false)
   const [hasTrackedView, setHasTrackedView] = useState(false)
-  const [isIframeLoaded, setIsIframeLoaded] = useState(false)
+  const [isVideoLoaded, setIsVideoLoaded] = useState(false)
   const [thumbnailLoaded, setThumbnailLoaded] = useState(false)
   const [isDownloading, setIsDownloading] = useState(false)
   const [downloadLink, setDownloadLink] = useState<string | null>(null)
   const [isFavorite, setIsFavorite] = useState(false)
   const [isCheckingFavorite, setIsCheckingFavorite] = useState(true)
   const [isTikTokBrowser, setIsTikTokBrowser] = useState(false)
-  const [isR2Video, setIsR2Video] = useState(false)
+  const [isPlaying, setIsPlaying] = useState(false)
+  const [videoError, setVideoError] = useState(false)
 
   const { user } = useAuth()
   const { toast } = useToast()
@@ -51,7 +52,7 @@ export default function VimeoCard({ video }: VimeoCardProps) {
   const { hasReachedLimit, isProUser, forceRefresh } = useDownloadLimit()
   const isMobile = useMobile()
   const titleRef = useRef<HTMLDivElement>(null)
-  const videoRef = useRef<HTMLIFrameElement>(null)
+  const videoRef = useRef<HTMLVideoElement>(null)
   const viewTrackedRef = useRef(false)
   const downloadFrameRef = useRef<HTMLIFrameElement | null>(null)
   const downloadLinkRef = useRef<HTMLAnchorElement | null>(null)
@@ -81,6 +82,9 @@ export default function VimeoCard({ video }: VimeoCardProps) {
     if (video?.download && video.download.length > 0) {
       const sortedDownloads = [...video.download].sort((a, b) => b.size - a.size)
       setDownloadLink(sortedDownloads[0].link)
+    } else if (video?.url) {
+      // If there's a direct URL (like from R2), use that
+      setDownloadLink(video.url)
     } else {
       setDownloadLink(null)
     }
@@ -419,11 +423,6 @@ export default function VimeoCard({ video }: VimeoCardProps) {
     }
   }
 
-  // Handle iframe load event
-  const handleIframeLoad = () => {
-    setIsIframeLoaded(true)
-  }
-
   // Handle thumbnail load event
   const handleThumbnailLoad = () => {
     setThumbnailLoaded(true)
@@ -437,6 +436,23 @@ export default function VimeoCard({ video }: VimeoCardProps) {
     // Try to open the current URL in the device's default browser
     const currentUrl = window.location.href
     window.open(currentUrl, "_blank")
+  }
+
+  // Handle video play/pause
+  const togglePlayPause = (e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+
+    if (!videoRef.current) return
+
+    if (isPlaying) {
+      videoRef.current.pause()
+    } else {
+      videoRef.current.play().catch((err) => {
+        console.error("Error playing video:", err)
+        setVideoError(true)
+      })
+    }
   }
 
   // If video is null or undefined, render a placeholder
@@ -463,29 +479,7 @@ export default function VimeoCard({ video }: VimeoCardProps) {
   }
 
   const thumbnailUrl = getHighQualityThumbnail()
-
-  // Modify the iframe src for TikTok browsers to disable fullscreen
-  const getVideoSrc = () => {
-    const baseUrl = `https://player.vimeo.com/video/${videoId}?title=0&byline=0&portrait=0&badge=0&autopause=0&player_id=0&app_id=58479&quality=1080p`
-
-    // For TikTok browsers, add parameters to restrict behavior
-    if (isTikTokBrowser) {
-      return `${baseUrl}&playsinline=1&transparent=0`
-    }
-
-    return baseUrl
-  }
-
-  // Add this useEffect to detect R2 videos
-  useEffect(() => {
-    // Check if this is a Cloudflare R2 video
-    if (video?.url && typeof video.url === "string" && video.url.includes("r2.dev")) {
-      console.log("Cloudflare R2 video detected:", video.url)
-      setIsR2Video(true)
-    } else {
-      setIsR2Video(false)
-    }
-  }, [video])
+  const videoUrl = video.url || downloadLink
 
   return (
     <div className="flex-shrink-0 w-[160px]">
@@ -503,7 +497,9 @@ export default function VimeoCard({ video }: VimeoCardProps) {
           setIsHovered(true)
         }}
         onMouseLeave={() => {
-          setIsActive(false)
+          if (!isPlaying) {
+            setIsActive(false)
+          }
           setIsHovered(false)
         }}
         onClick={() => setIsActive(true)}
@@ -569,111 +565,93 @@ export default function VimeoCard({ video }: VimeoCardProps) {
           </div>
         )}
 
-        {videoId ? (
-          <div className="absolute inset-0 video-container" ref={videoContainerRef}>
-            {/* Watermark - Added here */}
-            <VideoWatermark position="bottom-right" className="video-watermark" />
+        <div className="absolute inset-0 video-container" ref={videoContainerRef}>
+          {/* Watermark - Added here */}
+          <VideoWatermark position="bottom-right" className="video-watermark" />
 
-            {/* High-quality thumbnail with dark overlay */}
-            {thumbnailUrl && (
+          {/* High-quality thumbnail with dark overlay */}
+          {!isPlaying && thumbnailUrl && (
+            <div
+              className="absolute inset-0 video-card-thumbnail"
+              style={{
+                backgroundImage: `url(${thumbnailUrl})`,
+                backgroundSize: "cover",
+                backgroundPosition: "center",
+                backgroundColor: "#111",
+              }}
+            >
+              {/* Dark overlay with gradient for premium look */}
               <div
-                className={`absolute inset-0 video-card-thumbnail transition-all duration-300 ${
-                  isActive && isIframeLoaded ? "opacity-0" : "opacity-100"
+                className={`absolute inset-0 transition-opacity duration-300 ${
+                  isHovered ? "opacity-30" : "opacity-50"
                 }`}
                 style={{
-                  backgroundImage: `url(${thumbnailUrl})`,
-                  backgroundSize: "cover",
-                  backgroundPosition: "center",
-                  backgroundColor: "#111",
+                  background: "linear-gradient(to bottom, rgba(0,0,0,0.2), rgba(0,0,0,0.7))",
                 }}
-              >
-                {/* Dark overlay with gradient for premium look */}
-                <div
-                  className={`absolute inset-0 transition-opacity duration-300 ${
-                    isHovered ? "opacity-30" : "opacity-50"
-                  }`}
-                  style={{
-                    background: "linear-gradient(to bottom, rgba(0,0,0,0.2), rgba(0,0,0,0.7))",
-                  }}
-                ></div>
+              ></div>
 
-                {/* Preload the image with crossOrigin for canvas compatibility */}
-                <img
-                  src={thumbnailUrl || "/placeholder.svg"}
-                  alt=""
-                  className="hidden"
-                  onLoad={handleThumbnailLoad}
-                  crossOrigin="anonymous"
-                />
-              </div>
-            )}
+              {/* Preload the image with crossOrigin for canvas compatibility */}
+              <img
+                src={thumbnailUrl || "/placeholder.svg"}
+                alt=""
+                className="hidden"
+                onLoad={handleThumbnailLoad}
+                crossOrigin="anonymous"
+              />
+            </div>
+          )}
 
-            {/* Check if this is a Cloudflare R2 video */}
-            {isActive && isR2Video && video.url ? (
-              <video
-                className="absolute inset-0 w-full h-full object-cover"
-                controls
-                playsInline
-                preload="metadata"
-                poster={thumbnailUrl || undefined}
-                style={{
-                  opacity: isIframeLoaded ? 1 : 0,
-                  transition: "opacity 300ms ease-in-out",
-                }}
-                onLoadedData={() => setIsIframeLoaded(true)}
-                onError={(e) => {
-                  console.error("Error loading R2 video:", e)
-                  setIsIframeLoaded(false)
-                }}
+          {/* Play/Pause button overlay */}
+          {isActive && (
+            <div
+              className="absolute inset-0 flex items-center justify-center z-20 bg-black/20"
+              onClick={togglePlayPause}
+            >
+              <button
+                className="bg-red-500/80 hover:bg-red-500 text-white rounded-full p-3 transition-all"
+                aria-label={isPlaying ? "Pause video" : "Play video"}
               >
-                <source src={video.url} type="video/mp4" />
-                Your browser does not support the video tag.
-              </video>
-            ) : (
-              isActive && (
-                <iframe
-                  ref={videoRef}
-                  src={getVideoSrc()}
-                  style={{
-                    position: "absolute",
-                    top: 0,
-                    left: 0,
-                    width: "100%",
-                    height: "100%",
-                    border: "none",
-                    opacity: isIframeLoaded ? 1 : 0,
-                    transition: "opacity 300ms ease-in-out",
-                  }}
-                  allow={
-                    isTikTokBrowser
-                      ? "autoplay; picture-in-picture; clipboard-write; encrypted-media"
-                      : "autoplay; fullscreen; picture-in-picture; clipboard-write; encrypted-media"
-                  }
-                  title={video.name || "Video"}
-                  loading="lazy"
-                  onLoad={handleIframeLoad}
-                  className={isTikTokBrowser ? "tiktok-restricted-iframe" : ""}
-                ></iframe>
-              )
-            )}
-          </div>
-        ) : (
-          <div
-            style={{
-              position: "absolute",
-              top: 0,
-              left: 0,
-              width: "100%",
-              height: "100%",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              backgroundColor: "#111",
-            }}
-          >
-            <span className="text-xs text-zinc-500">Video unavailable</span>
-          </div>
-        )}
+                {isPlaying ? <Pause className="h-5 w-5" /> : <Play className="h-5 w-5 ml-0.5" />}
+              </button>
+            </div>
+          )}
+
+          {/* Direct video player - always render but only show when active */}
+          {videoUrl && (
+            <video
+              ref={videoRef}
+              className="absolute inset-0 w-full h-full object-cover"
+              playsInline
+              preload="metadata"
+              poster={thumbnailUrl || undefined}
+              style={{
+                display: isActive ? "block" : "none",
+              }}
+              onLoadedData={() => setIsVideoLoaded(true)}
+              onPlay={() => setIsPlaying(true)}
+              onPause={() => setIsPlaying(false)}
+              onEnded={() => {
+                setIsPlaying(false)
+                setIsActive(false)
+              }}
+              onError={(e) => {
+                console.error("Error loading video:", e)
+                setVideoError(true)
+              }}
+              muted={true} // Start muted to allow autoplay
+            >
+              <source src={videoUrl} type="video/mp4" />
+              Your browser does not support the video tag.
+            </video>
+          )}
+
+          {/* Error message */}
+          {videoError && (
+            <div className="absolute inset-0 flex items-center justify-center bg-black/70 text-white text-xs p-2 text-center">
+              Unable to play video
+            </div>
+          )}
+        </div>
       </div>
       {/* Updated title div to allow wrapping */}
       <div

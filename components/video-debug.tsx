@@ -1,114 +1,144 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
-import DirectVideoPlayer from "./direct-video-player"
+import SimpleVideoPlayer from "@/components/simple-video-player"
 
 interface VideoDebugProps {
   videoUrl: string
+  thumbnailUrl?: string
 }
 
-export default function VideoDebug({ videoUrl }: VideoDebugProps) {
-  const [networkTestResult, setNetworkTestResult] = useState<string | null>(null)
-  const [isTestingNetwork, setIsTestingNetwork] = useState(false)
-  const [showDirectPlayer, setShowDirectPlayer] = useState(false)
+export default function VideoDebug({ videoUrl, thumbnailUrl }: VideoDebugProps) {
+  const [urlTestResult, setUrlTestResult] = useState<any>(null)
+  const [isLoading, setIsLoading] = useState(false)
+  const [showAdvanced, setShowAdvanced] = useState(false)
 
-  // Test if the video URL is accessible
   const testVideoUrl = async () => {
-    if (!videoUrl) {
-      setNetworkTestResult("No video URL provided")
-      return
-    }
+    if (!videoUrl) return
 
-    setIsTestingNetwork(true)
-    setNetworkTestResult(null)
+    setIsLoading(true)
 
     try {
       const response = await fetch(videoUrl, { method: "HEAD" })
-      console.log(`Video URL test (${videoUrl}):`, response.status, response.statusText)
 
-      if (response.ok) {
-        setNetworkTestResult(`✅ Success: Status ${response.status}`)
-      } else {
-        setNetworkTestResult(`❌ Failed: Status ${response.status} - ${response.statusText}`)
-      }
+      const headers: Record<string, string> = {}
+      response.headers.forEach((value, key) => {
+        headers[key] = value
+      })
+
+      setUrlTestResult({
+        url: videoUrl,
+        status: response.status,
+        statusText: response.statusText,
+        ok: response.ok,
+        headers,
+        testedAt: new Date().toISOString(),
+      })
     } catch (error) {
-      console.error("Error testing video URL:", error)
-      setNetworkTestResult(`❌ Error: ${error instanceof Error ? error.message : String(error)}`)
+      setUrlTestResult({
+        url: videoUrl,
+        error: error instanceof Error ? error.message : String(error),
+        testedAt: new Date().toISOString(),
+      })
     } finally {
-      setIsTestingNetwork(false)
+      setIsLoading(false)
     }
   }
 
+  // Test URL on mount
+  useEffect(() => {
+    if (videoUrl) {
+      testVideoUrl()
+    }
+  }, [videoUrl])
+
   return (
-    <div className="mt-8 p-4 bg-zinc-900/50 rounded-lg border border-zinc-800/50">
+    <div className="mt-8 p-4 bg-zinc-900 rounded-lg border border-zinc-800">
       <h3 className="text-lg font-medium text-white mb-4">Video Debug Tools</h3>
 
-      <div className="space-y-6">
-        {/* Network Test */}
-        <div>
-          <h4 className="text-zinc-300 mb-2 text-sm font-medium">Network Test</h4>
-          <div className="flex items-center gap-4">
-            <Button onClick={testVideoUrl} variant="outline" size="sm" disabled={isTestingNetwork}>
-              {isTestingNetwork ? "Testing..." : "Test Network Access"}
-            </Button>
+      <div className="space-y-4">
+        <div className="flex justify-between items-center">
+          <h4 className="text-zinc-300">Direct Video Test</h4>
+          <Button variant="outline" size="sm" onClick={() => setShowAdvanced(!showAdvanced)}>
+            {showAdvanced ? "Hide Advanced" : "Show Advanced"}
+          </Button>
+        </div>
 
-            {networkTestResult && (
-              <p className={`text-sm ${networkTestResult.includes("✅") ? "text-green-400" : "text-red-400"}`}>
-                {networkTestResult}
-              </p>
-            )}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Simple Video Player */}
+          <div>
+            <p className="text-sm text-zinc-400 mb-2">Simple Player</p>
+            <SimpleVideoPlayer videoUrl={videoUrl} thumbnailUrl={thumbnailUrl} aspectRatio="9/16" />
+          </div>
+
+          {/* Native Video Element */}
+          <div>
+            <p className="text-sm text-zinc-400 mb-2">Native HTML5 Video</p>
+            <div className="relative bg-black rounded-lg" style={{ paddingBottom: "177.78%" }}>
+              <video
+                className="absolute inset-0 w-full h-full object-contain"
+                controls
+                preload="metadata"
+                poster={thumbnailUrl || undefined}
+              >
+                <source src={videoUrl} type="video/mp4" />
+                Your browser does not support the video tag.
+              </video>
+            </div>
           </div>
         </div>
 
-        {/* Direct Player */}
-        <div>
-          <div className="flex items-center justify-between mb-2">
-            <h4 className="text-zinc-300 text-sm font-medium">Direct Video Player</h4>
-            <Button onClick={() => setShowDirectPlayer(!showDirectPlayer)} variant="ghost" size="sm">
-              {showDirectPlayer ? "Hide" : "Show"}
-            </Button>
-          </div>
+        {showAdvanced && (
+          <>
+            <div className="mt-4">
+              <h4 className="text-zinc-300 mb-2">Video URL</h4>
+              <div className="bg-zinc-950 p-2 rounded overflow-x-auto">
+                <code className="text-xs text-zinc-400 break-all">{videoUrl}</code>
+              </div>
+            </div>
 
-          {showDirectPlayer && <DirectVideoPlayer videoUrl={videoUrl} title="Raw Video Test" />}
-        </div>
+            <div className="mt-4">
+              <h4 className="text-zinc-300 mb-2">URL Test Results</h4>
+              {isLoading ? (
+                <div className="flex items-center space-x-2">
+                  <div className="animate-spin h-4 w-4 border-2 border-zinc-500 border-t-white rounded-full"></div>
+                  <span className="text-zinc-400 text-sm">Testing URL...</span>
+                </div>
+              ) : urlTestResult ? (
+                <div className="bg-zinc-950 p-2 rounded">
+                  <pre className="text-xs text-zinc-400 overflow-auto">{JSON.stringify(urlTestResult, null, 2)}</pre>
+                </div>
+              ) : (
+                <p className="text-zinc-500 text-sm">No test results available</p>
+              )}
+            </div>
 
-        {/* Hardcoded Player */}
-        <div>
-          <h4 className="text-zinc-300 mb-2 text-sm font-medium">Hardcoded Player</h4>
-          <div
-            className="relative bg-black rounded-lg overflow-hidden"
-            style={{ aspectRatio: "9/16", maxWidth: "200px" }}
-          >
-            <video className="w-full h-full object-contain" controls preload="metadata" playsInline>
-              <source src={videoUrl} type="video/mp4" />
-              Your browser does not support the video tag.
-            </video>
-          </div>
-        </div>
+            <div className="mt-4">
+              <h4 className="text-zinc-300 mb-2">HTML5 Video Element Code</h4>
+              <div className="bg-zinc-950 p-2 rounded overflow-x-auto">
+                <pre className="text-xs text-zinc-400">
+                  {`<video 
+  controls 
+  width="100%" 
+  height="auto" 
+  preload="metadata"
+  style={{ borderRadius: "8px" }}
+>
+  <source src="${videoUrl}" type="video/mp4" />
+  Your browser does not support the video tag.
+</video>`}
+                </pre>
+              </div>
+            </div>
 
-        {/* Video URL */}
-        <div>
-          <h4 className="text-zinc-300 mb-2 text-sm font-medium">Video URL</h4>
-          <div className="p-2 bg-zinc-800 rounded-md overflow-x-auto">
-            <code className="text-xs text-zinc-300 break-all">{videoUrl || "No URL available"}</code>
-          </div>
-
-          <div className="mt-2">
-            <Button
-              onClick={() => {
-                if (videoUrl) {
-                  window.open(videoUrl, "_blank")
-                }
-              }}
-              variant="outline"
-              size="sm"
-              disabled={!videoUrl}
-            >
-              Open URL in New Tab
-            </Button>
-          </div>
-        </div>
+            <div className="mt-4 flex justify-end">
+              <Button onClick={testVideoUrl} disabled={isLoading} size="sm">
+                {isLoading ? "Testing..." : "Retest URL"}
+              </Button>
+            </div>
+          </>
+        )}
       </div>
     </div>
   )
