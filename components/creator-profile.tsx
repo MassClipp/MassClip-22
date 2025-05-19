@@ -1,9 +1,9 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { useSearchParams } from "next/navigation"
 import Image from "next/image"
-import { Share2, Edit, Instagram, Twitter, Globe, Lock, Upload, Plus } from "lucide-react"
+import { Share2, Edit, Instagram, Twitter, Globe, Lock, Upload, Plus, RefreshCw } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useAuth } from "@/contexts/auth-context"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -33,7 +33,7 @@ interface VideoItem {
   description: string
   url: string
   thumbnailUrl: string
-  createdAt: string
+  createdAt: any // Can be timestamp or string
   views: number
   likes: number
   isPremium: boolean
@@ -50,17 +50,24 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
   const [premiumVideos, setPremiumVideos] = useState<VideoItem[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [isRefreshing, setIsRefreshing] = useState(false)
   const { toast } = useToast()
 
-  useEffect(() => {
-    const fetchVideos = async () => {
+  // Function to fetch videos
+  const fetchVideos = useCallback(
+    async (showToast = false) => {
       if (!creator.uid) {
         setError("Creator ID is missing")
         setIsLoading(false)
         return
       }
 
-      setIsLoading(true)
+      if (showToast) {
+        setIsRefreshing(true)
+      } else {
+        setIsLoading(true)
+      }
+
       setError(null)
 
       try {
@@ -77,10 +84,20 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
         const freeSnapshot = await getDocs(freeQuery)
         console.log(`Free videos query returned ${freeSnapshot.docs.length} results`)
 
-        const freeData = freeSnapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-        })) as VideoItem[]
+        const freeData = freeSnapshot.docs.map((doc) => {
+          const data = doc.data()
+          // Convert Firestore timestamp to string if needed
+          const createdAt =
+            data.createdAt && typeof data.createdAt.toDate === "function"
+              ? data.createdAt.toDate().toISOString()
+              : data.createdAt
+
+          return {
+            id: doc.id,
+            ...data,
+            createdAt,
+          }
+        }) as VideoItem[]
 
         // Fetch premium videos
         const premiumQuery = query(
@@ -93,10 +110,20 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
         const premiumSnapshot = await getDocs(premiumQuery)
         console.log(`Premium videos query returned ${premiumSnapshot.docs.length} results`)
 
-        const premiumData = premiumSnapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-        })) as VideoItem[]
+        const premiumData = premiumSnapshot.docs.map((doc) => {
+          const data = doc.data()
+          // Convert Firestore timestamp to string if needed
+          const createdAt =
+            data.createdAt && typeof data.createdAt.toDate === "function"
+              ? data.createdAt.toDate().toISOString()
+              : data.createdAt
+
+          return {
+            id: doc.id,
+            ...data,
+            createdAt,
+          }
+        }) as VideoItem[]
 
         console.log("Free videos:", freeData)
         console.log("Premium videos:", premiumData)
@@ -106,6 +133,13 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
 
         if (freeData.length === 0 && premiumData.length === 0) {
           console.log("No videos found for this creator")
+        }
+
+        if (showToast) {
+          toast({
+            title: "Content refreshed",
+            description: "Your videos have been refreshed",
+          })
         }
       } catch (error) {
         console.error("Error fetching videos:", error)
@@ -118,11 +152,21 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
         })
       } finally {
         setIsLoading(false)
+        setIsRefreshing(false)
       }
-    }
+    },
+    [creator.uid, toast],
+  )
 
+  // Initial fetch
+  useEffect(() => {
     fetchVideos()
-  }, [creator.uid, toast])
+  }, [fetchVideos])
+
+  // Refresh videos
+  const refreshVideos = () => {
+    fetchVideos(true)
+  }
 
   const handleShare = async () => {
     if (navigator.share) {
@@ -148,6 +192,54 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
   const formatDate = (dateString: string) => {
     const date = new Date(dateString)
     return date.toLocaleDateString("en-US", { month: "long", year: "numeric" })
+  }
+
+  // Function to render video card
+  const renderVideoCard = (video: VideoItem) => {
+    return (
+      <div key={video.id} className="overflow-hidden bg-zinc-900 border border-zinc-800 rounded-lg">
+        <div className="aspect-video relative overflow-hidden">
+          {video.thumbnailUrl ? (
+            <img
+              src={video.thumbnailUrl || "/placeholder.svg"}
+              alt={video.title}
+              className="w-full h-full object-cover"
+              onError={(e) => {
+                // Fallback if thumbnail fails to load
+                const target = e.target as HTMLImageElement
+                target.onerror = null
+                target.src = "/video-production-setup.png"
+              }}
+            />
+          ) : video.url ? (
+            <div className="w-full h-full bg-zinc-800 flex items-center justify-center relative">
+              <video
+                src={video.url}
+                className="w-full h-full object-cover"
+                preload="metadata"
+                poster="/video-production-setup.png"
+              />
+              <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent"></div>
+            </div>
+          ) : (
+            <div className="w-full h-full bg-zinc-800 flex items-center justify-center">
+              <span className="text-zinc-500">No preview available</span>
+            </div>
+          )}
+          <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent flex items-end p-4">
+            <h3 className="font-medium text-white line-clamp-2">{video.title}</h3>
+          </div>
+
+          {/* Premium badge if applicable */}
+          {video.isPremium && (
+            <div className="absolute top-2 right-2 bg-red-500 text-white text-xs px-2 py-1 rounded-full flex items-center">
+              <Lock className="w-3 h-3 mr-1" />
+              Premium
+            </div>
+          )}
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -254,6 +346,19 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
 
             {/* Action Buttons */}
             <div className="flex gap-3 mt-4 md:mt-0">
+              {isOwner && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="bg-zinc-800/50 border-zinc-700 hover:bg-zinc-800 text-white"
+                  onClick={refreshVideos}
+                  disabled={isRefreshing}
+                >
+                  <RefreshCw className={`h-4 w-4 mr-2 ${isRefreshing ? "animate-spin" : ""}`} />
+                  {isRefreshing ? "Refreshing..." : "Refresh"}
+                </Button>
+              )}
+
               <Button
                 variant="outline"
                 size="sm"
@@ -340,31 +445,7 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
                 </div>
               ) : freeVideos.length > 0 ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {freeVideos.map((video) => (
-                    <div key={video.id} className="overflow-hidden bg-zinc-900 border border-zinc-800 rounded-lg">
-                      <div className="aspect-video relative overflow-hidden">
-                        {video.thumbnailUrl ? (
-                          <img
-                            src={video.thumbnailUrl || "/placeholder.svg"}
-                            alt={video.title}
-                            className="w-full h-full object-cover"
-                          />
-                        ) : video.url ? (
-                          <div className="w-full h-full bg-zinc-800 flex items-center justify-center relative">
-                            <video src={video.url} className="w-full h-full object-cover" preload="metadata" />
-                            <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent"></div>
-                          </div>
-                        ) : (
-                          <div className="w-full h-full bg-zinc-800 flex items-center justify-center">
-                            <span className="text-zinc-500">No preview available</span>
-                          </div>
-                        )}
-                        <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent flex items-end p-4">
-                          <h3 className="font-medium text-white line-clamp-2">{video.title}</h3>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
+                  {freeVideos.map((video) => renderVideoCard(video))}
                 </div>
               ) : (
                 <div className="text-center py-12 bg-zinc-900/50 border border-zinc-800/50 rounded-lg">
@@ -419,35 +500,7 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
                 </div>
               ) : premiumVideos.length > 0 ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                  {premiumVideos.map((video) => (
-                    <div key={video.id} className="overflow-hidden bg-zinc-900 border border-zinc-800 rounded-lg">
-                      <div className="aspect-video relative overflow-hidden">
-                        {video.thumbnailUrl ? (
-                          <img
-                            src={video.thumbnailUrl || "/placeholder.svg"}
-                            alt={video.title}
-                            className="w-full h-full object-cover"
-                          />
-                        ) : video.url ? (
-                          <div className="w-full h-full bg-zinc-800 flex items-center justify-center relative">
-                            <video src={video.url} className="w-full h-full object-cover" preload="metadata" />
-                            <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent"></div>
-                          </div>
-                        ) : (
-                          <div className="w-full h-full bg-zinc-800 flex items-center justify-center">
-                            <span className="text-zinc-500">No preview available</span>
-                          </div>
-                        )}
-                        <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent flex flex-col justify-between p-4">
-                          <div className="self-end bg-red-500 text-white text-xs px-2 py-1 rounded-full flex items-center">
-                            <Lock className="w-3 h-3 mr-1" />
-                            Premium
-                          </div>
-                          <h3 className="font-medium text-white line-clamp-2">{video.title}</h3>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
+                  {premiumVideos.map((video) => renderVideoCard(video))}
                 </div>
               ) : (
                 <div className="text-center py-12 bg-zinc-900/50 border border-zinc-800/50 rounded-lg">
