@@ -6,13 +6,14 @@ import { getFirestore, FieldValue } from "firebase-admin/firestore"
 
 export async function POST(request: NextRequest) {
   try {
-    console.log("Complete upload request received")
+    console.log("Register upload request received")
 
     // Get request body
-    const { fileId, key, title, description, isPremium } = await request.json()
+    const body = await request.json()
+    const { fileId, storagePath, publicUrl, title, description, isPremium, duration, thumbnailUrl } = body
 
     // Validate required fields
-    if (!fileId || !key || !title) {
+    if (!fileId || !storagePath || !publicUrl || !title) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 })
     }
 
@@ -57,17 +58,19 @@ export async function POST(request: NextRequest) {
     const collectionPath = `users/${userId}/${contentType}Clips`
 
     // Create the video metadata
-    const timestamp = new Date().toISOString()
-    const publicUrl = `${process.env.CLOUDFLARE_R2_PUBLIC_URL}/${key}`
+    const timestamp = FieldValue.serverTimestamp()
+
+    // Generate a default thumbnail if none provided
+    const finalThumbnailUrl = thumbnailUrl || `${publicUrl}?poster=true`
 
     const videoData = {
       id: fileId,
       title,
       description: description || "",
-      key,
-      contentType,
+      storagePath,
       url: publicUrl,
-      thumbnailUrl: "", // Will be updated later if thumbnail generation is implemented
+      thumbnailUrl: finalThumbnailUrl,
+      duration: duration || 0,
       createdAt: timestamp,
       updatedAt: timestamp,
       userId,
@@ -93,35 +96,43 @@ export async function POST(request: NextRequest) {
       updatedAt: timestamp,
     })
 
-    // Add a debug log entry
+    // Add a log entry
     await db.collection("logs").add({
-      type: "upload",
+      type: "upload_registered",
       userId,
       username,
       fileId,
       contentType,
-      timestamp,
+      timestamp: new Date().toISOString(),
       success: true,
-      data: videoData,
+      data: {
+        ...videoData,
+        createdAt: new Date().toISOString(), // Convert timestamp for logging
+        updatedAt: new Date().toISOString(),
+      },
     })
 
-    console.log("Upload completed successfully")
+    console.log("Upload registration completed successfully")
 
     return NextResponse.json({
       success: true,
-      message: "Upload completed successfully",
+      message: "Upload registration completed successfully",
       videoId: fileId,
       publicUrl,
-      videoData,
+      videoData: {
+        ...videoData,
+        createdAt: new Date().toISOString(), // Convert timestamp for response
+        updatedAt: new Date().toISOString(),
+      },
     })
   } catch (error) {
-    console.error("Error completing upload:", error)
+    console.error("Error registering upload:", error)
 
     // Log the error to Firestore
     try {
       const db = getFirestore()
       await db.collection("logs").add({
-        type: "upload_error",
+        type: "upload_registration_error",
         timestamp: new Date().toISOString(),
         error: error instanceof Error ? error.message : String(error),
         stack: error instanceof Error ? error.stack : null,
@@ -131,7 +142,7 @@ export async function POST(request: NextRequest) {
     }
 
     return NextResponse.json(
-      { error: "Failed to complete upload", details: error instanceof Error ? error.message : String(error) },
+      { error: "Failed to register upload", details: error instanceof Error ? error.message : String(error) },
       { status: 500 },
     )
   }

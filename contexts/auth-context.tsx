@@ -51,6 +51,30 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const router = useRouter()
   const pathname = usePathname()
 
+  // Create session cookie
+  const createSession = async (user: FirebaseUser) => {
+    try {
+      const idToken = await user.getIdToken()
+      const response = await fetch("/api/sessionLogin", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ idToken }),
+      })
+
+      if (!response.ok) {
+        throw new Error("Failed to create session")
+      }
+
+      console.log("Session created successfully")
+      return true
+    } catch (error) {
+      console.error("Error creating session:", error)
+      return false
+    }
+  }
+
   // Initialize Firebase when the component mounts
   useEffect(() => {
     try {
@@ -61,6 +85,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
       // Subscribe to auth state changes
       const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
         if (firebaseUser) {
+          // Create session cookie if user is authenticated
+          await createSession(firebaseUser)
+
           // Get additional user data from Firestore
           try {
             const userDoc = await getDoc(doc(db, "users", firebaseUser.uid))
@@ -136,6 +163,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
       const result = await signInWithPopup(auth, provider)
       const user = result.user
 
+      // Create session cookie
+      await createSession(user)
+
       // Check if user document exists in Firestore
       const userDoc = await getDoc(doc(db, "users", user.uid))
 
@@ -176,7 +206,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
     try {
       setLoading(true)
       const auth = getAuth()
-      await signInWithEmailAndPassword(auth, email, password)
+      const userCredential = await signInWithEmailAndPassword(auth, email, password)
+
+      // Create session cookie
+      await createSession(userCredential.user)
 
       // Get redirect URL from query params if we're in the browser
       let redirectTo = "/dashboard"
@@ -205,6 +238,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
       const auth = getAuth()
       const { user: newUser } = await createUserWithEmailAndPassword(auth, email, password)
 
+      // Create session cookie
+      await createSession(newUser)
+
       // Create user document in Firestore
       const db = getFirestore()
       await setDoc(doc(db, "users", newUser.uid), {
@@ -227,6 +263,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
   const signOut = async () => {
     try {
       setLoading(true)
+
+      // Clear session cookie
+      await fetch("/api/logout", {
+        method: "POST",
+      })
+
       const auth = getAuth()
       await firebaseSignOut(auth)
 
