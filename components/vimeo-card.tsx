@@ -2,7 +2,7 @@
 
 import type React from "react"
 import { useState, useRef, useEffect } from "react"
-import { Download, Lock, Heart, ExternalLink, Play, Pause } from "lucide-react"
+import { Download, Lock, Heart, ExternalLink, Play, Pause, Volume2, VolumeX } from "lucide-react"
 import type { VimeoVideo } from "@/lib/types"
 import { useAuth } from "@/contexts/auth-context"
 import { db } from "@/lib/firebase"
@@ -26,6 +26,16 @@ import { useDownloadLimit } from "@/contexts/download-limit-context"
 import { isInTikTokBrowser } from "@/lib/browser-detection"
 import { VideoWatermark } from "@/components/video-watermark"
 
+// Global state to track which video is currently playing
+const globalState = {
+  currentlyPlayingId: null as string | null,
+  pauseAllExcept: (id: string | null) => {
+    globalState.currentlyPlayingId = id
+    // We'll dispatch an event that all cards will listen for
+    document.dispatchEvent(new CustomEvent("vimeo-pause-all-except", { detail: { id } }))
+  },
+}
+
 interface VimeoCardProps {
   video: VimeoVideo
 }
@@ -45,6 +55,7 @@ export default function VimeoCard({ video }: VimeoCardProps) {
   const [isTikTokBrowser, setIsTikTokBrowser] = useState(false)
   const [isPlaying, setIsPlaying] = useState(false)
   const [videoError, setVideoError] = useState(false)
+  const [isMuted, setIsMuted] = useState(false)
 
   const { user } = useAuth()
   const { toast } = useToast()
@@ -60,6 +71,26 @@ export default function VimeoCard({ video }: VimeoCardProps) {
 
   // Extract video ID from URI (format: "/videos/12345678") with null check
   const videoId = video?.uri ? video.uri.split("/").pop() : null
+  const uniqueVideoId = `vimeo-${videoId || Math.random().toString(36).substring(7)}`
+
+  // Listen for global pause events
+  useEffect(() => {
+    const handlePauseAllExcept = (e: CustomEvent) => {
+      const exceptId = e.detail?.id
+      if (exceptId !== uniqueVideoId && videoRef.current && isPlaying) {
+        videoRef.current.pause()
+        setIsPlaying(false)
+      }
+    }
+
+    // Add event listener
+    document.addEventListener("vimeo-pause-all-except", handlePauseAllExcept as EventListener)
+
+    // Clean up
+    return () => {
+      document.removeEventListener("vimeo-pause-all-except", handlePauseAllExcept as EventListener)
+    }
+  }, [uniqueVideoId, isPlaying])
 
   // Check if we're in TikTok browser on mount
   useEffect(() => {
@@ -438,6 +469,18 @@ export default function VimeoCard({ video }: VimeoCardProps) {
     window.open(currentUrl, "_blank")
   }
 
+  // Toggle mute/unmute
+  const toggleMute = (e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+
+    if (!videoRef.current) return
+
+    const newMutedState = !isMuted
+    videoRef.current.muted = newMutedState
+    setIsMuted(newMutedState)
+  }
+
   // Handle video play/pause
   const togglePlayPause = (e: React.MouseEvent) => {
     e.preventDefault()
@@ -448,6 +491,9 @@ export default function VimeoCard({ video }: VimeoCardProps) {
     if (isPlaying) {
       videoRef.current.pause()
     } else {
+      // Pause all other videos first
+      globalState.pauseAllExcept(uniqueVideoId)
+
       videoRef.current.play().catch((err) => {
         console.error("Error playing video:", err)
         setVideoError(true)
@@ -518,7 +564,7 @@ export default function VimeoCard({ video }: VimeoCardProps) {
         {/* Action buttons container */}
         <div
           className="absolute bottom-2 left-2 right-2 z-20 flex items-center justify-between transition-opacity duration-300"
-          style={{ opacity: isHovered ? 1 : 0 }}
+          style={{ opacity: isHovered || isPlaying ? 1 : 0 }}
         >
           {/* Download button - visually disabled when limit reached */}
           <button
@@ -550,6 +596,23 @@ export default function VimeoCard({ video }: VimeoCardProps) {
             <Heart className="h-3.5 w-3.5" fill={isFavorite ? "currentColor" : "none"} />
           </button>
         </div>
+
+        {/* Volume control - only show when playing */}
+        {isPlaying && (
+          <div className="absolute top-2 right-2 z-20">
+            <button
+              onClick={toggleMute}
+              className="bg-black/70 hover:bg-black/90 p-1.5 rounded-full transition-all duration-300"
+              aria-label={isMuted ? "Unmute" : "Mute"}
+            >
+              {isMuted ? (
+                <VolumeX className="h-3.5 w-3.5 text-white" />
+              ) : (
+                <Volume2 className="h-3.5 w-3.5 text-white" />
+              )}
+            </button>
+          </div>
+        )}
 
         {/* TikTok-specific "Open in browser" button */}
         {isTikTokBrowser && (
@@ -628,7 +691,11 @@ export default function VimeoCard({ video }: VimeoCardProps) {
                 display: isActive ? "block" : "none",
               }}
               onLoadedData={() => setIsVideoLoaded(true)}
-              onPlay={() => setIsPlaying(true)}
+              onPlay={() => {
+                setIsPlaying(true)
+                // Ensure this is the only playing video
+                globalState.pauseAllExcept(uniqueVideoId)
+              }}
               onPause={() => setIsPlaying(false)}
               onEnded={() => {
                 setIsPlaying(false)
@@ -638,7 +705,7 @@ export default function VimeoCard({ video }: VimeoCardProps) {
                 console.error("Error loading video:", e)
                 setVideoError(true)
               }}
-              muted={true} // Start muted to allow autoplay
+              muted={isMuted} // Use the muted state
             >
               <source src={videoUrl} type="video/mp4" />
               Your browser does not support the video tag.
