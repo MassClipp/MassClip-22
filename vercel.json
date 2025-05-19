@@ -1,0 +1,16 @@
+{
+  "functions": {
+    "app/api/simple-upload/route.ts": {
+      "memory": 1024,
+      "maxDuration": 60
+    },
+    "app/api/upload/get-presigned-url/route.ts": {
+      "memory": 1024,
+      "maxDuration": 60
+    },
+    "app/api/upload/save-metadata/route.ts": {
+      "memory": 1024,
+      "maxDuration": 60
+    }
+  }
+}
