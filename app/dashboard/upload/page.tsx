@@ -1,4 +1,4 @@
-import PresignedUploadForm from "@/components/presigned-upload-form"
+import VideoUploadForm from "@/components/video-upload-form"
 import type { Metadata } from "next"
 
 export const metadata: Metadata = {
@@ -7,5 +7,5 @@ export const metadata: Metadata = {
 }
 
 export default function UploadPage() {
-  return <PresignedUploadForm />
+  return <VideoUploadForm />
 }

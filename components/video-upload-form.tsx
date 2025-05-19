@@ -1,7 +1,5 @@
 "use client"
 
-import type React from "react"
-
 import { useState, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -14,26 +12,21 @@ import { useRouter } from "next/navigation"
 import { useAuth } from "@/contexts/auth-context"
 import { useToast } from "@/hooks/use-toast"
 
-interface VideoUploadFormProps {
-  onComplete?: () => void
-  defaultIsPremium?: boolean
-}
-
-export default function VideoUploadForm({ onComplete, defaultIsPremium = false }: VideoUploadFormProps) {
+export default function VideoUploadForm({ onComplete, defaultIsPremium = false }) {
   const [title, setTitle] = useState("")
   const [description, setDescription] = useState("")
   const [isPremium, setIsPremium] = useState(defaultIsPremium)
-  const [selectedFile, setSelectedFile] = useState<File | null>(null)
+  const [selectedFile, setSelectedFile] = useState(null)
   const [dragActive, setDragActive] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [error, setError] = useState(null)
   const [isUploading, setIsUploading] = useState(false)
   const [progress, setProgress] = useState(0)
-  const fileInputRef = useRef<HTMLInputElement>(null)
+  const fileInputRef = useRef(null)
   const router = useRouter()
-  const { user, getIdToken } = useAuth()
+  const { user } = useAuth()
   const { toast } = useToast()
 
-  const handleDrag = (e: React.DragEvent) => {
+  const handleDrag = (e) => {
     e.preventDefault()
     e.stopPropagation()
     if (e.type === "dragenter" || e.type === "dragover") {
@@ -43,7 +36,7 @@ export default function VideoUploadForm({ onComplete, defaultIsPremium = false }
     }
   }
 
-  const handleDrop = (e: React.DragEvent) => {
+  const handleDrop = (e) => {
     e.preventDefault()
     e.stopPropagation()
     setDragActive(false)
@@ -53,7 +46,7 @@ export default function VideoUploadForm({ onComplete, defaultIsPremium = false }
     }
   }
 
-  const handleFileSelect = (file: File) => {
+  const handleFileSelect = (file) => {
     // Validate file type
     if (!file.type.startsWith("video/")) {
       setError("Please select a valid video file")
@@ -70,13 +63,42 @@ export default function VideoUploadForm({ onComplete, defaultIsPremium = false }
     setError(null)
   }
 
-  const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileInputChange = (e) => {
     if (e.target.files && e.target.files[0]) {
       handleFileSelect(e.target.files[0])
     }
   }
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  const uploadFile = async (file, url) => {
+    return new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest()
+      xhr.open("PUT", url)
+      xhr.setRequestHeader("Content-Type", file.type)
+
+      xhr.upload.addEventListener("progress", (event) => {
+        if (event.lengthComputable) {
+          const percentComplete = Math.round((event.loaded / event.total) * 100)
+          setProgress(percentComplete)
+        }
+      })
+
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          resolve()
+        } else {
+          reject(new Error(`Upload failed with status ${xhr.status}`))
+        }
+      }
+
+      xhr.onerror = () => {
+        reject(new Error("Network error during upload"))
+      }
+
+      xhr.send(file)
+    })
+  }
+
+  const handleSubmit = async (e) => {
     e.preventDefault()
 
     if (!user) {
@@ -99,64 +121,43 @@ export default function VideoUploadForm({ onComplete, defaultIsPremium = false }
       setProgress(0)
       setError(null)
 
-      // Step 1: Prepare form data for the initial request
+      // Step 1: Get upload URL
       const formData = new FormData()
       formData.append("title", title)
       formData.append("description", description || "")
       formData.append("isPremium", String(isPremium))
+      formData.append("filename", selectedFile.name)
+      formData.append("contentType", selectedFile.type)
 
-      // Get token for authentication
-      const token = await getIdToken()
-
-      // Step 2: Get upload URL and file details
-      console.log("Getting upload URL...")
-      const uploadResponse = await fetch("/api/upload", {
+      const urlResponse = await fetch("/api/videos/get-upload-url", {
         method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
         body: formData,
       })
 
-      if (!uploadResponse.ok) {
-        const errorData = await uploadResponse.json()
-        throw new Error(errorData.error || "Failed to initialize upload")
+      if (!urlResponse.ok) {
+        const errorData = await urlResponse.json()
+        throw new Error(errorData.error || "Failed to get upload URL")
       }
 
-      const { presignedUrl, fileId, key, publicUrl } = await uploadResponse.json()
-      console.log("Got upload URL:", { fileId, key })
+      const { url, key, fileId } = await urlResponse.json()
 
-      // Step 3: Upload the file directly to R2
-      console.log("Uploading file to R2...")
+      // Step 2: Upload file directly to storage
       setProgress(10)
-
-      // Simple upload with fetch
-      const uploadResult = await fetch(presignedUrl, {
-        method: "PUT",
-        body: selectedFile,
-        headers: {
-          "Content-Type": selectedFile.type,
-        },
-      })
-
-      if (!uploadResult.ok) {
-        throw new Error(`Upload failed with status ${uploadResult.status}`)
-      }
-
-      console.log("File uploaded successfully")
+      await uploadFile(selectedFile, url)
       setProgress(90)
 
-      // Step 4: Mark the upload as complete
-      console.log("Marking upload as complete...")
-      const completeResponse = await fetch("/api/upload/complete", {
+      // Step 3: Complete the upload process
+      const completeResponse = await fetch("/api/videos/complete-upload", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
           fileId,
-          contentType: isPremium ? "premium" : "free",
+          key,
+          title,
+          description: description || "",
+          isPremium,
         }),
       })
 
@@ -165,20 +166,16 @@ export default function VideoUploadForm({ onComplete, defaultIsPremium = false }
         throw new Error(errorData.error || "Failed to complete upload")
       }
 
-      console.log("Upload process completed successfully")
       setProgress(100)
-
-      // Show success message
       toast({
         title: "Upload Complete",
         description: `Your ${isPremium ? "premium" : "free"} video has been uploaded successfully.`,
       })
 
-      // Call the onComplete callback if provided
+      // Handle completion
       if (onComplete) {
         onComplete()
       } else {
-        // Otherwise redirect to the creator's profile or dashboard
         if (user?.username) {
           router.push(`/creator/${user.username}?tab=${isPremium ? "premium" : "free"}`)
         } else {
@@ -187,10 +184,10 @@ export default function VideoUploadForm({ onComplete, defaultIsPremium = false }
       }
     } catch (error) {
       console.error("Upload error:", error)
-      setError(error instanceof Error ? error.message : "An unknown error occurred")
+      setError(error.message || "An unknown error occurred")
       toast({
         title: "Upload Failed",
-        description: error instanceof Error ? error.message : "An unknown error occurred",
+        description: error.message || "An unknown error occurred",
         variant: "destructive",
       })
     } finally {
