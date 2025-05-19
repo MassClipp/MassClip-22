@@ -56,6 +56,30 @@ export function useFirebaseAuth() {
     return () => unsubscribe()
   }, [])
 
+  // Create session cookie
+  const createSession = async (user: User) => {
+    try {
+      const idToken = await user.getIdToken()
+      const response = await fetch("/api/sessionLogin", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ idToken }),
+      })
+
+      if (!response.ok) {
+        throw new Error("Failed to create session")
+      }
+
+      console.log("Session created successfully")
+      return true
+    } catch (error) {
+      console.error("Error creating session:", error)
+      return false
+    }
+  }
+
   // Save creator profile to Firestore
   const saveCreatorProfile = async (uid: string, username: string, displayName: string, photoURL?: string) => {
     console.log(`Saving creator profile for ${username}...`)
@@ -101,6 +125,9 @@ export function useFirebaseAuth() {
       setLoading(true)
       const userCredential = await signInWithEmailAndPassword(auth, email, password)
 
+      // Create session cookie
+      await createSession(userCredential.user)
+
       // Get the user's username from Firestore
       const userDoc = await getDoc(doc(db, "users", userCredential.user.uid))
       const username = userDoc.exists() ? userDoc.data().username : null
@@ -129,6 +156,9 @@ export function useFirebaseAuth() {
       const provider = new GoogleAuthProvider()
       const result = await signInWithPopup(auth, provider)
       const user = result.user
+
+      // Create session cookie
+      await createSession(user)
 
       console.log("Google sign in successful, user:", user.uid)
 
@@ -233,6 +263,9 @@ export function useFirebaseAuth() {
       const { user } = await createUserWithEmailAndPassword(auth, email, password)
       console.log("User created:", user.uid)
 
+      // Create session cookie
+      await createSession(user)
+
       // Create user document in Firestore
       console.log("Creating user document")
       await setDoc(doc(db, "users", user.uid), {
@@ -276,6 +309,11 @@ export function useFirebaseAuth() {
 
     setError(null)
     try {
+      // Clear session cookie
+      await fetch("/api/logout", {
+        method: "POST",
+      })
+
       await signOut(auth)
 
       // Force redirect to login page

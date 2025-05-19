@@ -27,7 +27,6 @@ export async function POST(request: NextRequest) {
     const isPremium = isPremiumStr === "true"
     const filename = formData.get("filename") as string
     const contentType = formData.get("contentType") as string
-    const testMode = formData.get("testMode") === "true"
 
     // Validate required fields
     if (!title || !filename || !contentType) {
@@ -35,9 +34,8 @@ export async function POST(request: NextRequest) {
     }
 
     // Get user info
-    let userId = "test-user"
-    let username = "test-user"
-    let isAuthenticated = false
+    let userId = "anonymous"
+    let username = "anonymous"
 
     try {
       // Initialize Firebase Admin
@@ -46,29 +44,23 @@ export async function POST(request: NextRequest) {
       // Get session cookie
       const sessionCookie = cookies().get("session")?.value
 
-      if (sessionCookie) {
-        // Verify session
-        const decodedClaims = await getAuth().verifySessionCookie(sessionCookie)
-        userId = decodedClaims.uid
-        isAuthenticated = true
-
-        // Get user data from auth
-        const userRecord = await getAuth().getUser(userId)
-        username = userRecord.displayName || userId
-
-        console.log("User authenticated:", { userId, username })
-      } else {
+      if (!sessionCookie) {
         console.log("No session cookie found")
+        return NextResponse.json({ error: "Authentication required" }, { status: 401 })
       }
+
+      // Verify session
+      const decodedClaims = await getAuth().verifySessionCookie(sessionCookie)
+      userId = decodedClaims.uid
+
+      // Get user data from auth
+      const userRecord = await getAuth().getUser(userId)
+      username = userRecord.displayName || userId
+
+      console.log("User authenticated:", { userId, username })
     } catch (authError) {
       console.error("Auth error:", authError)
-      // Continue with test user for testing
-    }
-
-    // If not authenticated and not in test mode, return error
-    if (!isAuthenticated && !testMode && process.env.NEXT_PUBLIC_VERCEL_ENV === "production") {
-      console.log("Authentication required and not in test mode")
-      return NextResponse.json({ error: "Authentication required" }, { status: 401 })
+      return NextResponse.json({ error: "Authentication failed" }, { status: 401 })
     }
 
     // Generate a unique file ID
@@ -101,8 +93,6 @@ export async function POST(request: NextRequest) {
       key,
       fileId,
       publicUrl: `${process.env.CLOUDFLARE_R2_PUBLIC_URL}/${key}`,
-      isAuthenticated,
-      testMode,
     })
   } catch (error) {
     console.error("Error generating upload URL:", error)
