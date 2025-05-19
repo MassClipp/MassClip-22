@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
 import Image from "next/image"
-import { Share2, Edit, Instagram, Twitter, Globe, Upload, Plus, RefreshCw } from "lucide-react"
+import { Share2, Edit, Instagram, Twitter, Globe, Lock, Upload, Plus, RefreshCw } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useAuth } from "@/contexts/auth-context"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -124,7 +124,6 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
             id: doc.id,
             ...data,
             createdAt,
-            isPremium: true, // Ensure premium flag is set
           }
         }) as VideoItem[]
 
@@ -197,34 +196,77 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
     return date.toLocaleDateString("en-US", { month: "long", year: "numeric" })
   }
 
-  // Handle video deletion
-  const handleVideoDeleted = (videoId: string, isPremium: boolean) => {
-    if (isPremium) {
-      setPremiumVideos(premiumVideos.filter((v) => v.id !== videoId))
-    } else {
-      setFreeVideos(freeVideos.filter((v) => v.id !== videoId))
-    }
-
-    toast({
-      title: "Video Deleted",
-      description: "The video has been removed from your profile",
-    })
+  const handleVideoClick = (video: VideoItem) => {
+    // Instead of navigating, we'll just mark the video as active for inline playback
+    console.log("Video clicked:", video)
+    // We don't navigate anymore - video will play inline
   }
 
   // Function to render video card
   const renderVideoCard = (video: VideoItem) => {
     return (
-      <div key={video.id} className="flex-shrink-0 w-[160px]">
-        <DirectVideoPlayer
-          videoUrl={video.url}
-          thumbnailUrl={video.thumbnailUrl}
-          title={video.title || video.name || "Untitled"}
-          inlinePlayback={true}
-          videoId={video.id}
-          creatorId={creator.uid}
-          isPremium={video.isPremium}
-          onDelete={() => handleVideoDeleted(video.id, video.isPremium)}
-        />
+      <div key={video.id} className="flex-shrink-0 w-[160px]" onClick={() => handleVideoClick(video)}>
+        <div
+          className="group relative premium-hover-effect"
+          style={{
+            position: "relative",
+            paddingBottom: "177.78%", // 9:16 aspect ratio
+            height: 0,
+            borderRadius: "8px",
+            overflow: "hidden",
+          }}
+        >
+          {/* Border overlay that appears on hover */}
+          <div
+            className="absolute inset-0 z-10 pointer-events-none transition-opacity duration-300 group-hover:opacity-100 opacity-0"
+            style={{
+              border: "1px solid rgba(220, 20, 60, 0.5)",
+              borderRadius: "8px",
+              boxShadow: "0 0 20px rgba(220, 20, 60, 0.2)",
+            }}
+          ></div>
+
+          {/* Video container */}
+          <div className="absolute inset-0">
+            {/* Direct video player - matches the dashboard style */}
+            {video.url ? (
+              <DirectVideoPlayer
+                videoUrl={video.url}
+                thumbnailUrl={video.thumbnailUrl}
+                title={video.title || video.name || "Untitled"}
+                inlinePlayback={true}
+              />
+            ) : video.thumbnailUrl ? (
+              <div className="w-full h-full">
+                <img
+                  src={video.thumbnailUrl || "/placeholder.svg"}
+                  alt={video.title || "Video thumbnail"}
+                  className="w-full h-full object-cover"
+                />
+                <div className="absolute inset-0 bg-black/30 flex items-center justify-center">
+                  <div className="text-white text-sm">No video available</div>
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-center justify-center bg-zinc-800 w-full h-full">
+                <span className="text-zinc-500">No preview</span>
+              </div>
+            )}
+          </div>
+
+          {/* Premium badge if applicable */}
+          {video.isPremium && (
+            <div className="absolute top-2 right-2 bg-red-500 text-white text-xs px-1.5 py-0.5 rounded-full flex items-center">
+              <Lock className="w-3 h-3 mr-0.5" />
+              <span className="text-[10px]">Premium</span>
+            </div>
+          )}
+        </div>
+
+        {/* Video title - smaller and truncated like dashboard */}
+        <div className="mt-2 text-xs text-zinc-300 min-h-[2.5rem] line-clamp-2 font-light">
+          {video.title || video.name || "Untitled video"}
+        </div>
       </div>
     )
   }
@@ -418,7 +460,7 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
               )}
 
               {isLoading ? (
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                   {[1, 2, 3, 4].map((i) => (
                     <div key={i} className="bg-zinc-800 animate-pulse rounded-lg" style={{ aspectRatio: "9/16" }} />
                   ))}
@@ -473,7 +515,7 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
               )}
 
               {isLoading ? (
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
+                <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                   {[1, 2, 3, 4].map((i) => (
                     <div key={i} className="bg-zinc-800 animate-pulse rounded-lg" style={{ aspectRatio: "9/16" }} />
                   ))}
