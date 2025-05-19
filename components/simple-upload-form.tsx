@@ -2,10 +2,9 @@
 
 import type React from "react"
 
-import { useState, useRef } from "react"
+import { useState, useRef, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/contexts/auth-context"
-import { useToast } from "@/hooks/use-toast"
 import { AlertCircle, Upload, X, Video } from "lucide-react"
 
 export default function SimpleUploadForm() {
@@ -14,16 +13,23 @@ export default function SimpleUploadForm() {
   const [isPremium, setIsPremium] = useState(false)
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [isUploading, setIsUploading] = useState(false)
+  const [uploadProgress, setUploadProgress] = useState(0)
   const [error, setError] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const formRef = useRef<HTMLFormElement>(null)
   const router = useRouter()
   const { user } = useAuth()
-  const { toast } = useToast()
+
+  // Debug logging
+  useEffect(() => {
+    console.log("Auth state:", user ? "Logged in" : "Not logged in")
+  }, [user])
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files
     if (files && files.length > 0) {
+      console.log("File selected:", files[0].name, files[0].size, files[0].type)
+
       // Validate file type
       if (!files[0].type.startsWith("video/")) {
         setError("Please select a valid video file")
@@ -43,8 +49,10 @@ export default function SimpleUploadForm() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    console.log("Form submitted")
 
     if (!user) {
+      console.error("No user logged in")
       setError("You must be logged in to upload videos")
       return
     }
@@ -62,6 +70,7 @@ export default function SimpleUploadForm() {
     try {
       setIsUploading(true)
       setError(null)
+      console.log("Starting upload process")
 
       // Create a FormData object
       const formData = new FormData()
@@ -70,39 +79,85 @@ export default function SimpleUploadForm() {
       formData.append("isPremium", isPremium ? "true" : "false")
       formData.append("file", selectedFile)
 
-      // Use a simple fetch to upload
-      const response = await fetch("/api/simple-upload", {
-        method: "POST",
-        body: formData,
+      console.log("FormData created with:", {
+        title,
+        description: description ? "Yes" : "No",
+        isPremium,
+        fileName: selectedFile.name,
+        fileSize: selectedFile.size,
+        fileType: selectedFile.type,
       })
 
-      if (!response.ok) {
-        const data = await response.json()
-        throw new Error(data.error || "Upload failed")
+      // Use XMLHttpRequest for better progress tracking
+      const xhr = new XMLHttpRequest()
+
+      xhr.upload.onprogress = (event) => {
+        if (event.lengthComputable) {
+          const progress = Math.round((event.loaded / event.total) * 100)
+          console.log(`Upload progress: ${progress}%`)
+          setUploadProgress(progress)
+        }
       }
 
-      const result = await response.json()
+      xhr.onload = () => {
+        console.log("XHR onload triggered, status:", xhr.status)
+        if (xhr.status >= 200 && xhr.status < 300) {
+          try {
+            const response = JSON.parse(xhr.responseText)
+            console.log("Upload successful:", response)
 
-      toast({
-        title: "Upload Complete",
-        description: `Your ${isPremium ? "premium" : "free"} video has been uploaded successfully.`,
-      })
+            // Show success message
+            alert("Upload successful!")
 
-      // Redirect to the creator's profile
-      if (user?.username) {
-        router.push(`/creator/${user.username}?tab=${isPremium ? "premium" : "free"}`)
-      } else {
-        router.push("/dashboard")
+            // Redirect to the creator's profile
+            if (user?.username) {
+              window.location.href = `/creator/${user.username}?tab=${isPremium ? "premium" : "free"}`
+            } else {
+              window.location.href = "/dashboard"
+            }
+          } catch (parseError) {
+            console.error("Error parsing response:", parseError)
+            setError("Server returned an invalid response")
+          }
+        } else {
+          console.error("Upload failed with status:", xhr.status)
+          try {
+            const errorResponse = JSON.parse(xhr.responseText)
+            setError(errorResponse.error || "Upload failed")
+          } catch (parseError) {
+            setError(`Upload failed with status ${xhr.status}`)
+          }
+        }
+        setIsUploading(false)
       }
+
+      xhr.onerror = () => {
+        console.error("XHR error occurred")
+        setError("Network error occurred during upload")
+        setIsUploading(false)
+      }
+
+      xhr.onabort = () => {
+        console.log("Upload aborted")
+        setError("Upload was aborted")
+        setIsUploading(false)
+      }
+
+      xhr.ontimeout = () => {
+        console.error("XHR timeout")
+        setError("Upload timed out. Please try again with a smaller file or better connection.")
+        setIsUploading(false)
+      }
+
+      // Open and send the request
+      xhr.open("POST", "/api/simple-upload", true)
+      xhr.timeout = 300000 // 5 minutes timeout
+      xhr.send(formData)
+
+      console.log("XHR request sent")
     } catch (error) {
       console.error("Upload error:", error)
       setError(error instanceof Error ? error.message : "An unknown error occurred")
-      toast({
-        title: "Upload Failed",
-        description: error instanceof Error ? error.message : "An unknown error occurred",
-        variant: "destructive",
-      })
-    } finally {
       setIsUploading(false)
     }
   }
@@ -216,11 +271,23 @@ export default function SimpleUploadForm() {
           </div>
         )}
 
+        {/* Upload Progress */}
+        {isUploading && (
+          <div className="space-y-2">
+            <div className="w-full bg-zinc-700 rounded-full h-2.5">
+              <div className="bg-red-500 h-2.5 rounded-full" style={{ width: `${uploadProgress}%` }}></div>
+            </div>
+            <p className="text-zinc-400 text-sm text-center">
+              {uploadProgress < 100 ? `Uploading: ${uploadProgress}%` : "Processing..."}
+            </p>
+          </div>
+        )}
+
         {/* Submit Button */}
         <div className="flex justify-end gap-3">
           <button
             type="button"
-            onClick={() => router.back()}
+            onClick={() => window.history.back()}
             className="px-4 py-2 border border-zinc-700 rounded-md text-white hover:bg-zinc-800"
             disabled={isUploading}
           >
