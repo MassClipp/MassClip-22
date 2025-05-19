@@ -23,12 +23,59 @@ export default function DirectVideoPlayer({
   const [isHovered, setIsHovered] = useState(false)
   const [isError, setIsError] = useState(false)
   const [isMuted, setIsMuted] = useState(false)
+  const [localThumbnail, setLocalThumbnail] = useState<string | null>(null)
   const videoRef = useRef<HTMLVideoElement>(null)
+  const canvasRef = useRef<HTMLCanvasElement>(null)
 
   // Log props for debugging
   useEffect(() => {
     console.log("DirectVideoPlayer props:", { videoUrl, thumbnailUrl, title })
-  }, [videoUrl, thumbnailUrl, title])
+
+    // If no thumbnail is provided, try to generate one from the video
+    if (!thumbnailUrl && videoUrl && !localThumbnail) {
+      generateThumbnailFromVideo()
+    }
+  }, [videoUrl, thumbnailUrl, title, localThumbnail])
+
+  // Function to generate a thumbnail from the video
+  const generateThumbnailFromVideo = () => {
+    const video = document.createElement("video")
+    video.crossOrigin = "anonymous"
+    video.src = videoUrl
+    video.muted = true
+    video.preload = "metadata"
+
+    video.onloadeddata = () => {
+      // Try to seek to 25% of the video
+      try {
+        video.currentTime = Math.min(video.duration * 0.25, 3)
+      } catch (e) {
+        console.error("Error seeking video:", e)
+      }
+    }
+
+    video.onseeked = () => {
+      try {
+        // Create a canvas and draw the video frame
+        const canvas = document.createElement("canvas")
+        canvas.width = video.videoWidth || 640
+        canvas.height = video.videoHeight || 360
+
+        const ctx = canvas.getContext("2d")
+        if (ctx) {
+          ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
+          const thumbnailDataUrl = canvas.toDataURL("image/jpeg")
+          setLocalThumbnail(thumbnailDataUrl)
+        }
+      } catch (e) {
+        console.error("Error generating thumbnail:", e)
+      }
+    }
+
+    video.onerror = () => {
+      console.error("Error loading video for thumbnail generation")
+    }
+  }
 
   const togglePlay = (e: React.MouseEvent) => {
     e.preventDefault()
@@ -78,6 +125,9 @@ export default function DirectVideoPlayer({
     setIsError(true)
   }
 
+  // Determine which thumbnail to use
+  const effectiveThumbnail = thumbnailUrl || localThumbnail
+
   return (
     <div
       className={`relative overflow-hidden bg-zinc-900 rounded-lg ${className}`}
@@ -85,38 +135,38 @@ export default function DirectVideoPlayer({
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
     >
-      {/* Thumbnail as an actual image element */}
-      {!isPlaying && thumbnailUrl && (
-        <img
-          src={thumbnailUrl || "/placeholder.svg"}
-          alt={title || "Video thumbnail"}
-          className="absolute inset-0 w-full h-full object-cover"
-          onError={() => console.error("Thumbnail failed to load:", thumbnailUrl)}
-        />
-      )}
-
-      {/* Fallback for no thumbnail */}
-      {!isPlaying && !thumbnailUrl && (
-        <div className="absolute inset-0 flex items-center justify-center bg-zinc-800 text-zinc-500 text-sm">
-          No preview
-        </div>
-      )}
-
-      {/* Dark overlay */}
+      {/* Thumbnail display */}
       {!isPlaying && (
-        <div
-          className={`absolute inset-0 transition-opacity duration-300 ${isHovered ? "opacity-30" : "opacity-50"}`}
-          style={{
-            background: "linear-gradient(to bottom, rgba(0,0,0,0.2), rgba(0,0,0,0.7))",
-          }}
-        ></div>
+        <div className="absolute inset-0">
+          {effectiveThumbnail ? (
+            <img
+              src={effectiveThumbnail || "/placeholder.svg"}
+              alt={title || "Video thumbnail"}
+              className="w-full h-full object-cover"
+              onError={() => console.error("Thumbnail failed to load:", effectiveThumbnail)}
+            />
+          ) : (
+            <div className="absolute inset-0 flex flex-col items-center justify-center bg-zinc-800 text-zinc-500">
+              <Play className="h-12 w-12 mb-2 text-red-500/70" />
+              <span className="text-sm">Play video</span>
+            </div>
+          )}
+
+          {/* Dark overlay for better contrast */}
+          <div
+            className={`absolute inset-0 transition-opacity duration-300 ${isHovered ? "opacity-30" : "opacity-50"}`}
+            style={{
+              background: "linear-gradient(to bottom, rgba(0,0,0,0.2), rgba(0,0,0,0.7))",
+            }}
+          ></div>
+        </div>
       )}
 
       {/* Video element */}
       <video
         ref={videoRef}
         className="absolute inset-0 w-full h-full object-cover"
-        poster={thumbnailUrl}
+        poster={effectiveThumbnail || undefined}
         playsInline
         preload="metadata"
         style={{ display: isPlaying ? "block" : "none" }}
@@ -166,6 +216,9 @@ export default function DirectVideoPlayer({
           <p className="text-white text-sm truncate">{title}</p>
         </div>
       )}
+
+      {/* Hidden canvas for thumbnail generation */}
+      <canvas ref={canvasRef} className="hidden" width="640" height="360" />
     </div>
   )
 }
