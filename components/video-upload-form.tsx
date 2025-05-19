@@ -7,10 +7,16 @@ import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import { Progress } from "@/components/ui/progress"
-import { Upload, X, Video, AlertCircle } from "lucide-react"
+import { Upload, X, Video, AlertCircle, Info } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/contexts/auth-context"
 import { useToast } from "@/hooks/use-toast"
+
+// Maximum file size in bytes (50MB)
+const MAX_FILE_SIZE = 50 * 1024 * 1024
+
+// Allowed file types
+const ALLOWED_FILE_TYPES = ["video/mp4", "video/quicktime", "video/x-msvideo", "video/webm"]
 
 export default function VideoUploadForm({ onComplete, defaultIsPremium = false }) {
   const [title, setTitle] = useState("")
@@ -21,7 +27,7 @@ export default function VideoUploadForm({ onComplete, defaultIsPremium = false }
   const [error, setError] = useState(null)
   const [isUploading, setIsUploading] = useState(false)
   const [progress, setProgress] = useState(0)
-  const [testMode, setTestMode] = useState(process.env.NEXT_PUBLIC_VERCEL_ENV !== "production")
+  const [currentStep, setCurrentStep] = useState("idle") // idle, preparing, uploading, registering, complete
   const fileInputRef = useRef(null)
   const router = useRouter()
   const { user } = useAuth()
@@ -49,14 +55,14 @@ export default function VideoUploadForm({ onComplete, defaultIsPremium = false }
 
   const handleFileSelect = (file) => {
     // Validate file type
-    if (!file.type.startsWith("video/")) {
-      setError("Please select a valid video file")
+    if (!ALLOWED_FILE_TYPES.includes(file.type)) {
+      setError(`Invalid file type. Allowed types: ${ALLOWED_FILE_TYPES.join(", ")}`)
       return
     }
 
-    // Validate file size (100MB limit for example)
-    if (file.size > 100 * 1024 * 1024) {
-      setError("File size exceeds 100MB limit")
+    // Validate file size
+    if (file.size > MAX_FILE_SIZE) {
+      setError(`File size exceeds ${MAX_FILE_SIZE / (1024 * 1024)}MB limit`)
       return
     }
 
@@ -70,10 +76,10 @@ export default function VideoUploadForm({ onComplete, defaultIsPremium = false }
     }
   }
 
-  const uploadFile = async (file, url) => {
+  const uploadFileDirectly = async (file, uploadUrl) => {
     return new Promise((resolve, reject) => {
       const xhr = new XMLHttpRequest()
-      xhr.open("PUT", url)
+      xhr.open("PUT", uploadUrl)
       xhr.setRequestHeader("Content-Type", file.type)
 
       xhr.upload.addEventListener("progress", (event) => {
@@ -102,7 +108,7 @@ export default function VideoUploadForm({ onComplete, defaultIsPremium = false }
   const handleSubmit = async (e) => {
     e.preventDefault()
 
-    if (!user && !testMode) {
+    if (!user) {
       setError("You must be logged in to upload videos")
       return
     }
@@ -121,15 +127,13 @@ export default function VideoUploadForm({ onComplete, defaultIsPremium = false }
       setIsUploading(true)
       setProgress(0)
       setError(null)
+      setCurrentStep("preparing")
 
       // Step 1: Get upload URL
       const formData = new FormData()
-      formData.append("title", title)
-      formData.append("description", description || "")
-      formData.append("isPremium", String(isPremium))
       formData.append("filename", selectedFile.name)
       formData.append("contentType", selectedFile.type)
-      formData.append("testMode", String(testMode))
+      formData.append("isPremium", String(isPremium))
 
       const urlResponse = await fetch("/api/videos/get-upload-url", {
         method: "POST",
@@ -141,35 +145,40 @@ export default function VideoUploadForm({ onComplete, defaultIsPremium = false }
         throw new Error(errorData.error || "Failed to get upload URL")
       }
 
-      const { url, key, fileId } = await urlResponse.json()
+      const { uploadUrl, publicUrl, storagePath, fileId } = await urlResponse.json()
 
-      // Step 2: Upload file directly to storage
-      setProgress(10)
-      await uploadFile(selectedFile, url)
+      // Step 2: Upload file directly to Cloudflare R2
+      setCurrentStep("uploading")
+      setProgress(0)
+      await uploadFileDirectly(selectedFile, uploadUrl)
+
+      // Step 3: Register the upload in Firestore
+      setCurrentStep("registering")
       setProgress(90)
 
-      // Step 3: Complete the upload process
-      const completeResponse = await fetch("/api/videos/complete-upload", {
+      const registerResponse = await fetch("/api/videos/register-upload", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
           fileId,
-          key,
+          storagePath,
+          publicUrl,
           title,
           description: description || "",
           isPremium,
-          testMode,
         }),
       })
 
-      if (!completeResponse.ok) {
-        const errorData = await completeResponse.json()
-        throw new Error(errorData.error || "Failed to complete upload")
+      if (!registerResponse.ok) {
+        const errorData = await registerResponse.json()
+        throw new Error(errorData.error || "Failed to register upload")
       }
 
+      setCurrentStep("complete")
       setProgress(100)
+
       toast({
         title: "Upload Complete",
         description: `Your ${isPremium ? "premium" : "free"} video has been uploaded successfully.`,
@@ -188,6 +197,7 @@ export default function VideoUploadForm({ onComplete, defaultIsPremium = false }
     } catch (error) {
       console.error("Upload error:", error)
       setError(error.message || "An unknown error occurred")
+      setCurrentStep("idle")
       toast({
         title: "Upload Failed",
         description: error.message || "An unknown error occurred",
@@ -195,6 +205,21 @@ export default function VideoUploadForm({ onComplete, defaultIsPremium = false }
       })
     } finally {
       setIsUploading(false)
+    }
+  }
+
+  const getStepText = () => {
+    switch (currentStep) {
+      case "preparing":
+        return "Preparing upload..."
+      case "uploading":
+        return "Uploading to Cloudflare R2..."
+      case "registering":
+        return "Registering upload..."
+      case "complete":
+        return "Upload complete!"
+      default:
+        return "Uploading..."
     }
   }
 
@@ -231,6 +256,7 @@ export default function VideoUploadForm({ onComplete, defaultIsPremium = false }
                 size="sm"
                 onClick={() => setSelectedFile(null)}
                 className="text-zinc-400 border-zinc-700"
+                disabled={isUploading}
               >
                 <X className="h-4 w-4 mr-2" />
                 Remove
@@ -243,7 +269,9 @@ export default function VideoUploadForm({ onComplete, defaultIsPremium = false }
               </div>
               <div>
                 <p className="text-white font-medium">Drag and drop your video here</p>
-                <p className="text-zinc-400 text-sm">or click to browse (MP4, MOV, up to 100MB)</p>
+                <p className="text-zinc-400 text-sm">
+                  or click to browse (MP4, MOV, WebM, up to {MAX_FILE_SIZE / (1024 * 1024)}MB)
+                </p>
               </div>
               <Button
                 type="button"
@@ -256,7 +284,7 @@ export default function VideoUploadForm({ onComplete, defaultIsPremium = false }
               <input
                 ref={fileInputRef}
                 type="file"
-                accept="video/*"
+                accept={ALLOWED_FILE_TYPES.join(",")}
                 onChange={handleFileInputChange}
                 className="hidden"
               />
@@ -277,6 +305,7 @@ export default function VideoUploadForm({ onComplete, defaultIsPremium = false }
               placeholder="Enter a title for your video"
               className="bg-zinc-800/50 border-zinc-700 text-white"
               required
+              disabled={isUploading}
             />
           </div>
 
@@ -290,6 +319,7 @@ export default function VideoUploadForm({ onComplete, defaultIsPremium = false }
               onChange={(e) => setDescription(e.target.value)}
               placeholder="Add a description for your video"
               className="bg-zinc-800/50 border-zinc-700 text-white h-24"
+              disabled={isUploading}
             />
           </div>
         </div>
@@ -304,21 +334,25 @@ export default function VideoUploadForm({ onComplete, defaultIsPremium = false }
                 : "This video will be available to everyone for free"}
             </p>
           </div>
-          <Switch checked={isPremium} onCheckedChange={setIsPremium} className="data-[state=checked]:bg-red-500" />
+          <Switch
+            checked={isPremium}
+            onCheckedChange={setIsPremium}
+            className="data-[state=checked]:bg-red-500"
+            disabled={isUploading}
+          />
         </div>
 
-        {/* Test Mode Toggle (only in non-production) */}
-        {process.env.NEXT_PUBLIC_VERCEL_ENV !== "production" && (
-          <div className="flex items-center justify-between p-4 bg-amber-900/20 rounded-lg border border-amber-900/30">
-            <div>
-              <h3 className="text-white font-medium">Test Mode</h3>
-              <p className="text-zinc-400 text-sm">
-                {testMode ? "Authentication will be bypassed for testing" : "Authentication will be required"}
-              </p>
-            </div>
-            <Switch checked={testMode} onCheckedChange={setTestMode} className="data-[state=checked]:bg-amber-500" />
+        {/* Direct Upload Info */}
+        <div className="flex items-start gap-3 p-4 bg-blue-900/10 rounded-lg border border-blue-900/20">
+          <Info className="h-5 w-5 text-blue-400 mt-0.5 flex-shrink-0" />
+          <div>
+            <h3 className="text-white font-medium">Direct Upload</h3>
+            <p className="text-zinc-400 text-sm">
+              Your video will be uploaded directly to our secure storage. This bypasses Vercel's serverless function
+              limits and allows for larger file uploads.
+            </p>
           </div>
-        )}
+        </div>
 
         {/* Error Message */}
         {error && (
@@ -332,7 +366,7 @@ export default function VideoUploadForm({ onComplete, defaultIsPremium = false }
         {isUploading && (
           <div className="space-y-2">
             <div className="flex justify-between text-sm">
-              <span className="text-zinc-400">Uploading...</span>
+              <span className="text-zinc-400">{getStepText()}</span>
               <span className="text-white">{progress}%</span>
             </div>
             <Progress value={progress} className="h-2 bg-zinc-800" />

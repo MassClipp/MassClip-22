@@ -22,20 +22,19 @@ export async function POST(request: NextRequest) {
 
     // Get form data
     const formData = await request.formData()
-    const title = formData.get("title") as string
-    const isPremiumStr = formData.get("isPremium") as string
-    const isPremium = isPremiumStr === "true"
     const filename = formData.get("filename") as string
     const contentType = formData.get("contentType") as string
+    const isPremiumStr = formData.get("isPremium") as string
+    const isPremium = isPremiumStr === "true"
 
     // Validate required fields
-    if (!title || !filename || !contentType) {
+    if (!filename || !contentType) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 })
     }
 
-    // Get user info
-    let userId = "anonymous"
-    let username = "anonymous"
+    // Get user info from session cookie
+    let userId = null
+    let username = null
 
     try {
       // Initialize Firebase Admin
@@ -45,7 +44,6 @@ export async function POST(request: NextRequest) {
       const sessionCookie = cookies().get("session")?.value
 
       if (!sessionCookie) {
-        console.log("No session cookie found")
         return NextResponse.json({ error: "Authentication required" }, { status: 401 })
       }
 
@@ -67,32 +65,40 @@ export async function POST(request: NextRequest) {
     const fileId = nanoid(10)
     const contentCategory = isPremium ? "premium" : "free"
 
-    // Create the key (path) for the file
-    const key = `creators/${username}/${contentCategory}/${fileId}-${filename}`
+    // Sanitize filename to prevent path traversal
+    const sanitizedFilename = filename.replace(/[^a-zA-Z0-9.-]/g, "_")
+
+    // Create the storage path
+    const storagePath = `massclip/creators/${username}/${contentCategory}/${fileId}-${sanitizedFilename}`
 
     // Create the command to generate a presigned URL
     const command = new PutObjectCommand({
-      Bucket: process.env.CLOUDFLARE_R2_BUCKET_NAME,
-      Key: key,
+      Bucket: process.env.CLOUDFLARE_R2_BUCKET_NAME || "",
+      Key: storagePath,
       ContentType: contentType,
       Metadata: {
         userId,
         username,
-        title,
+        fileId,
         contentCategory,
       },
     })
 
-    // Generate the presigned URL
-    const url = await getSignedUrl(s3Client, command, { expiresIn: 3600 })
+    // Generate the presigned URL with a 10-minute expiration
+    const expiresIn = 60 * 10 // 10 minutes
+    const uploadUrl = await getSignedUrl(s3Client, command, { expiresIn })
 
-    console.log("Generated presigned URL for:", key)
+    // Generate the public URL
+    const publicUrl = `${process.env.CLOUDFLARE_R2_PUBLIC_URL}/${storagePath}`
+
+    console.log("Generated presigned URL for:", storagePath)
 
     return NextResponse.json({
-      url,
-      key,
+      uploadUrl,
+      publicUrl,
+      storagePath,
       fileId,
-      publicUrl: `${process.env.CLOUDFLARE_R2_PUBLIC_URL}/${key}`,
+      expiresIn,
     })
   } catch (error) {
     console.error("Error generating upload URL:", error)
