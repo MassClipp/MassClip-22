@@ -1,4 +1,4 @@
-import { initializeApp, getApps } from "firebase-admin/app"
+import { cert, initializeApp, getApps } from "firebase-admin/app"
 import { getFirestore } from "firebase-admin/firestore"
 import { getAuth } from "firebase-admin/auth"
 
@@ -20,11 +20,11 @@ export function initializeFirebaseAdmin() {
 
     try {
       initializeApp({
-        credential: {
+        credential: cert({
           projectId,
           clientEmail,
           privateKey,
-        },
+        }),
       })
       console.log("Firebase Admin SDK initialized successfully")
     } catch (error) {
