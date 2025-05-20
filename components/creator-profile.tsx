@@ -27,7 +27,6 @@ import { collection, query, orderBy, limit, getDocs } from "firebase/firestore"
 import { db } from "@/lib/firebase"
 import { useToast } from "@/hooks/use-toast"
 import { where, deleteDoc, doc, addDoc, serverTimestamp } from "firebase/firestore"
-// Import the downloadFile helper at the top of the file
 import { downloadFile } from "@/lib/download-helper"
 
 interface Creator {
@@ -316,7 +315,6 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
     setLoadedThumbnails((prev) => ({ ...prev, [videoId]: true }))
   }
 
-  // Replace the handleDownload function with this improved version:
   // Handle download
   const handleDownload = async (e: React.MouseEvent, video: VideoItem) => {
     e.preventDefault()
@@ -369,7 +367,7 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
     }
   }
 
-  // Toggle favorite
+  // Toggle favorite - Updated to ensure compatibility with VimeoCard
   const toggleFavorite = async (e: React.MouseEvent, video: VideoItem) => {
     e.preventDefault()
     e.stopPropagation()
@@ -409,10 +407,47 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
           description: "Video removed from your favorites",
         })
       } else {
-        // Add to favorites
+        // Format the video data to be compatible with VimeoCard
+        // This is the key change - we need to transform our VideoItem into a format
+        // that matches what VimeoCard expects
+        const vimeoCompatibleVideo = {
+          uri: `/videos/${videoId}`, // Create a URI format that VimeoCard expects
+          name: video.title,
+          description: video.description || "",
+          link: video.url,
+          pictures: {
+            sizes: [
+              {
+                width: 1920,
+                height: 1080,
+                link: video.thumbnailUrl || "",
+              },
+            ],
+          },
+          // Add other required fields that VimeoCard might use
+          duration: video.duration || 0,
+          width: 1920,
+          height: 1080,
+          created_time: video.createdAt || new Date().toISOString(),
+          modified_time: video.createdAt || new Date().toISOString(),
+          release_time: video.createdAt || new Date().toISOString(),
+          // Add download information
+          download: [
+            {
+              quality: "hd",
+              type: "video/mp4",
+              width: 1920,
+              height: 1080,
+              link: video.url,
+              size: 0,
+            },
+          ],
+        }
+
+        // Add to favorites with the properly formatted video object
         await addDoc(collection(db, `users/${userData.uid}/favorites`), {
           videoId: videoId,
-          video: video,
+          video: vimeoCompatibleVideo, // Store the compatible format
           createdAt: serverTimestamp(),
         })
 
