@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback, useRef } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { useSearchParams } from "next/navigation"
 import Image from "next/image"
 import { Share2, Edit, Instagram, Twitter, Globe, Lock, Upload, Plus, RefreshCw, Play, X } from "lucide-react"
@@ -52,7 +52,6 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
   const [error, setError] = useState<string | null>(null)
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [playingVideo, setPlayingVideo] = useState<string | null>(null)
-  const videoRefs = useRef<{ [key: string]: HTMLVideoElement | null }>({})
   const { toast } = useToast()
 
   // Function to fetch videos
@@ -199,36 +198,12 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
   const handleVideoClick = (video: VideoItem) => {
     // If this video is already playing, stop it
     if (playingVideo === video.id) {
-      const videoElement = videoRefs.current[video.id]
-      if (videoElement) {
-        videoElement.pause()
-      }
       setPlayingVideo(null)
       return
     }
 
-    // If another video is playing, stop it
-    if (playingVideo && videoRefs.current[playingVideo]) {
-      videoRefs.current[playingVideo]?.pause()
-    }
-
     // Start playing this video
     setPlayingVideo(video.id)
-
-    // Use setTimeout to ensure the video element is rendered before trying to play
-    setTimeout(() => {
-      const videoElement = videoRefs.current[video.id]
-      if (videoElement) {
-        videoElement.play().catch((err) => {
-          console.error("Error playing video:", err)
-          toast({
-            title: "Playback error",
-            description: "There was a problem playing this video. Please try again.",
-            variant: "destructive",
-          })
-        })
-      }
-    }, 100)
   }
 
   // Function to render video card
@@ -250,14 +225,7 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
           >
             {isPlaying ? (
               <div className="w-full h-full relative">
-                <video
-                  ref={(el) => (videoRefs.current[video.id] = el)}
-                  src={video.url}
-                  className="w-full h-full object-cover"
-                  controls
-                  playsInline
-                  autoPlay
-                >
+                <video src={video.url} className="w-full h-full object-cover" controls playsInline autoPlay>
                   Your browser does not support the video tag.
                 </video>
                 <button
@@ -284,17 +252,6 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
                       target.src = "/placeholder.svg?key=video-thumbnail"
                     }}
                   />
-                ) : video.url ? (
-                  <div className="w-full h-full bg-zinc-900 flex items-center justify-center relative">
-                    <video
-                      className="w-full h-full object-cover"
-                      preload="metadata"
-                      poster="/placeholder.svg?key=video-poster"
-                    >
-                      <source src={`${video.url}#t=0.1`} type="video/mp4" />
-                      Your browser does not support the video tag.
-                    </video>
-                  </div>
                 ) : (
                   <div className="w-full h-full bg-zinc-900 flex items-center justify-center">
                     <span className="text-zinc-500 text-xs">No preview</span>
