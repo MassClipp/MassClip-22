@@ -27,6 +27,8 @@ import { collection, query, orderBy, limit, getDocs } from "firebase/firestore"
 import { db } from "@/lib/firebase"
 import { useToast } from "@/hooks/use-toast"
 import { where, deleteDoc, doc, addDoc, serverTimestamp } from "firebase/firestore"
+// Import the downloadFile helper at the top of the file
+import { downloadFile } from "@/lib/download-helper"
 
 interface Creator {
   uid: string
@@ -314,6 +316,7 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
     setLoadedThumbnails((prev) => ({ ...prev, [videoId]: true }))
   }
 
+  // Replace the handleDownload function with this improved version:
   // Handle download
   const handleDownload = async (e: React.MouseEvent, video: VideoItem) => {
     e.preventDefault()
@@ -338,23 +341,29 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
     }
 
     try {
-      // Create a temporary anchor element
-      const link = document.createElement("a")
-      link.href = video.url
-      link.download = `${video.title || "video"}.mp4`
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
-
+      // Show loading toast
       toast({
-        title: "Download Started",
-        description: "Your video is downloading",
+        title: "Starting download...",
+        description: "Preparing your video for download",
       })
+
+      // Use the downloadFile helper function
+      const filename = `${video.title || "video"}.mp4`
+      const success = await downloadFile(video.url, filename)
+
+      if (success) {
+        toast({
+          title: "Download Started",
+          description: "Your video is downloading",
+        })
+      } else {
+        throw new Error("Download failed")
+      }
     } catch (error) {
       console.error("Download error:", error)
       toast({
         title: "Download Error",
-        description: "There was a problem downloading the video.",
+        description: "There was a problem downloading the video. Please try again.",
         variant: "destructive",
       })
     }
