@@ -407,41 +407,210 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
           description: "Video removed from your favorites",
         })
       } else {
-        // Format the video data to be compatible with VimeoCard
-        // This is the key change - we need to transform our VideoItem into a format
-        // that matches what VimeoCard expects
+        // Create a Vimeo-compatible video object
+        // This is crucial - we need to match the exact structure expected by VimeoCard
+
+        // First, create a proper thumbnail URL structure
+        const thumbnailSizes = []
+        if (video.thumbnailUrl) {
+          thumbnailSizes.push({
+            width: 1920,
+            height: 1080,
+            link: video.thumbnailUrl,
+            link_with_play_button: video.thumbnailUrl,
+          })
+          // Add a few more sizes for good measure
+          thumbnailSizes.push({
+            width: 960,
+            height: 540,
+            link: video.thumbnailUrl,
+            link_with_play_button: video.thumbnailUrl,
+          })
+          thumbnailSizes.push({
+            width: 640,
+            height: 360,
+            link: video.thumbnailUrl,
+            link_with_play_button: video.thumbnailUrl,
+          })
+        }
+
+        // Create a proper download array
+        const downloadArray = []
+        if (video.url) {
+          downloadArray.push({
+            quality: "hd",
+            type: "video/mp4",
+            width: 1920,
+            height: 1080,
+            link: video.url,
+            size: 0,
+            fps: 30,
+          })
+        }
+
+        // Create the Vimeo-compatible video object
         const vimeoCompatibleVideo = {
-          uri: `/videos/${videoId}`, // Create a URI format that VimeoCard expects
-          name: video.title,
+          uri: `/videos/${videoId}`,
+          name: video.title || "Untitled Video",
           description: video.description || "",
-          link: video.url,
-          pictures: {
-            sizes: [
-              {
-                width: 1920,
-                height: 1080,
-                link: video.thumbnailUrl || "",
-              },
-            ],
-          },
-          // Add other required fields that VimeoCard might use
+          link: video.url || "",
           duration: video.duration || 0,
           width: 1920,
           height: 1080,
           created_time: video.createdAt || new Date().toISOString(),
           modified_time: video.createdAt || new Date().toISOString(),
           release_time: video.createdAt || new Date().toISOString(),
-          // Add download information
-          download: [
-            {
-              quality: "hd",
-              type: "video/mp4",
-              width: 1920,
-              height: 1080,
-              link: video.url,
-              size: 0,
+
+          // Pictures structure is critical for VimeoCard
+          pictures: {
+            uri: "",
+            active: true,
+            type: "custom",
+            base_link: "",
+            sizes: thumbnailSizes,
+          },
+
+          // Download array is used for the download functionality
+          download: downloadArray,
+
+          // Add other fields that VimeoCard might check for
+          embed: {
+            html: `<iframe src="${video.url}" width="1920" height="1080" frameborder="0" allow="autoplay; fullscreen; picture-in-picture" allowfullscreen></iframe>`,
+            badges: {
+              hdr: false,
+              live: {
+                streaming: false,
+                archived: false,
+              },
+              staff_pick: {
+                normal: false,
+                best_of_the_month: false,
+                best_of_the_year: false,
+                premiere: false,
+              },
+              vod: false,
+              weekend_challenge: false,
             },
-          ],
+            buttons: {
+              like: true,
+              watchlater: true,
+              share: true,
+              embed: true,
+              hd: true,
+              fullscreen: true,
+              scaling: true,
+            },
+            logos: {
+              vimeo: false,
+              custom: {
+                active: false,
+                url: null,
+                link: null,
+                sticky: false,
+              },
+            },
+            title: {
+              name: video.title || "Untitled Video",
+              owner: creator.displayName || "Creator",
+              portrait: creator.profilePic || "",
+            },
+          },
+
+          // Stats
+          stats: {
+            plays: video.views || 0,
+          },
+
+          // User info
+          user: {
+            uri: `/users/${creator.uid}`,
+            name: creator.displayName || "Creator",
+            link: `/creator/${creator.username}`,
+            location: "",
+            bio: creator.bio || "",
+            created_time: creator.createdAt || new Date().toISOString(),
+            pictures: {
+              uri: "",
+              active: true,
+              type: "custom",
+              base_link: "",
+              sizes: [
+                {
+                  width: 100,
+                  height: 100,
+                  link: creator.profilePic || "",
+                },
+              ],
+            },
+            websites: [],
+            metadata: {
+              connections: {
+                albums: { uri: "", options: [], total: 0 },
+                appearances: { uri: "", options: [], total: 0 },
+                channels: { uri: "", options: [], total: 0 },
+                feed: { uri: "", options: [] },
+                followers: { uri: "", options: [], total: 0 },
+                following: { uri: "", options: [], total: 0 },
+                groups: { uri: "", options: [], total: 0 },
+                likes: { uri: "", options: [], total: 0 },
+                membership: { uri: "", options: [] },
+                moderated_channels: { uri: "", options: [], total: 0 },
+                portfolios: { uri: "", options: [], total: 0 },
+                videos: { uri: "", options: [], total: 0 },
+                watchlater: { uri: "", options: [], total: 0 },
+                shared: { uri: "", options: [], total: 0 },
+                pictures: { uri: "", options: [], total: 0 },
+                watched_videos: { uri: "", options: [], total: 0 },
+              },
+            },
+            location_details: {
+              formatted_address: "",
+              latitude: 0,
+              longitude: 0,
+              city: "",
+              state: "",
+              neighborhood: "",
+              sub_locality: "",
+              state_iso_code: "",
+              country: "",
+              country_iso_code: "",
+            },
+            skills: [],
+            available_for_hire: false,
+            can_work_remotely: false,
+            resource_key: "",
+            account: "",
+          },
+
+          // App info
+          app: {
+            name: "MassClip",
+            uri: "",
+          },
+
+          // Status
+          status: "available",
+          resource_key: "",
+
+          // Upload info
+          upload: {
+            status: "complete",
+            upload_link: null,
+            form: null,
+            complete_uri: null,
+            approach: null,
+            size: null,
+            redirect_url: null,
+          },
+
+          // Transcode info
+          transcode: {
+            status: "complete",
+          },
+
+          // Playability
+          is_playable: true,
+          has_audio: true,
         }
 
         // Add to favorites with the properly formatted video object
