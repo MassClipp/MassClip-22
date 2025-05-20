@@ -1,9 +1,9 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useRef } from "react"
 import { useSearchParams } from "next/navigation"
 import Image from "next/image"
-import { Share2, Edit, Instagram, Twitter, Globe, Lock, Upload, Plus, RefreshCw } from "lucide-react"
+import { Share2, Edit, Instagram, Twitter, Globe, Lock, Upload, Plus, RefreshCw, Play, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useAuth } from "@/contexts/auth-context"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -51,6 +51,9 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [isRefreshing, setIsRefreshing] = useState(false)
+  const [playingVideo, setPlayingVideo] = useState<string | null>(null)
+  const [fadingIn, setFadingIn] = useState<string | null>(null)
+  const videoRefs = useRef<{ [key: string]: HTMLVideoElement | null }>({})
   const { toast } = useToast()
 
   // Function to fetch videos
@@ -194,29 +197,165 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
     return date.toLocaleDateString("en-US", { month: "long", year: "numeric" })
   }
 
+  const handleVideoClick = (video: VideoItem) => {
+    // If this video is already playing, stop it
+    if (playingVideo === video.id) {
+      const videoElement = videoRefs.current[video.id]
+      if (videoElement) {
+        videoElement.pause()
+      }
+      setPlayingVideo(null)
+      return
+    }
+
+    // If another video is playing, stop it
+    if (playingVideo && videoRefs.current[playingVideo]) {
+      videoRefs.current[playingVideo]?.pause()
+    }
+
+    // Start the fade-in transition
+    setFadingIn(video.id)
+
+    // After a short delay, set the playing video
+    setTimeout(() => {
+      setPlayingVideo(video.id)
+      setFadingIn(null)
+
+      // Use setTimeout to ensure the video element is rendered before trying to play
+      setTimeout(() => {
+        const videoElement = videoRefs.current[video.id]
+        if (videoElement) {
+          videoElement.play().catch((err) => {
+            console.error("Error playing video:", err)
+            toast({
+              title: "Playback error",
+              description: "There was a problem playing this video. Please try again.",
+              variant: "destructive",
+            })
+          })
+        }
+      }, 100)
+    }, 300) // Match this with the CSS transition duration
+  }
+
   // Function to render video card
   const renderVideoCard = (video: VideoItem) => {
+    const isPlaying = playingVideo === video.id
+    const isFading = fadingIn === video.id
+
     return (
       <div key={video.id} className="flex flex-col" style={{ maxWidth: "220px" }}>
-        {/* Video Container - Always show the video element */}
-        <div className="relative overflow-hidden rounded-md" style={{ aspectRatio: "9/16" }}>
-          <video
-            src={video.url}
-            className="w-full h-full object-cover"
-            controls
-            preload="metadata"
-            poster={video.thumbnailUrl || "/video-thumbnail.png"}
+        {/* Video Container */}
+        <div
+          className={`relative overflow-hidden rounded-md transition-all duration-300 ${
+            isPlaying ? "ring-[0.5px] ring-red-600" : "hover:ring-[0.5px] hover:ring-red-600"
+          }`}
+          style={{ aspectRatio: "9/16" }}
+        >
+          <div
+            className="relative overflow-hidden group cursor-pointer w-full h-full"
+            onClick={() => handleVideoClick(video)}
           >
-            Your browser does not support the video tag.
-          </video>
+            {/* Thumbnail (visible when not playing) */}
+            <div
+              className={`absolute inset-0 transition-opacity duration-300 ${
+                isPlaying ? "opacity-0" : isFading ? "opacity-50" : "opacity-100"
+              }`}
+            >
+              {video.thumbnailUrl ? (
+                <img
+                  src={video.thumbnailUrl || "/placeholder.svg"}
+                  alt={video.title}
+                  className="w-full h-full object-cover"
+                  onError={(e) => {
+                    // Fallback if thumbnail fails to load
+                    const target = e.target as HTMLImageElement
+                    target.onerror = null
+                    target.src = "/placeholder.svg?key=video-thumbnail"
+                  }}
+                />
+              ) : video.url ? (
+                <div className="w-full h-full bg-zinc-900 flex items-center justify-center relative">
+                  <video
+                    className="w-full h-full object-cover"
+                    preload="metadata"
+                    poster="/placeholder.svg?key=video-poster"
+                  >
+                    <source src={`${video.url}#t=0.1`} type="video/mp4" />
+                    Your browser does not support the video tag.
+                  </video>
+                </div>
+              ) : (
+                <div className="w-full h-full bg-zinc-900 flex items-center justify-center">
+                  <span className="text-zinc-500 text-xs">No preview</span>
+                </div>
+              )}
 
-          {/* Premium badge if applicable */}
-          {video.isPremium && (
-            <div className="absolute top-2 right-2 bg-black/30 backdrop-blur-sm text-white text-[10px] px-1.5 py-0.5 rounded-sm flex items-center">
-              <Lock className="w-2 h-2 mr-0.5" />
-              <span className="font-medium tracking-wide">PREMIUM</span>
+              {/* Minimal Play Button */}
+              <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+                <div className="rounded-full bg-black/40 backdrop-blur-sm p-1.5 transform transition-transform duration-200 group-hover:scale-110">
+                  <Play className="h-4 w-4 text-white" fill="white" />
+                </div>
+              </div>
+
+              {/* Premium badge if applicable */}
+              {video.isPremium && (
+                <div className="absolute top-2 right-2 bg-black/30 backdrop-blur-sm text-white text-[10px] px-1.5 py-0.5 rounded-sm flex items-center">
+                  <Lock className="w-2 h-2 mr-0.5" />
+                  <span className="font-medium tracking-wide">PREMIUM</span>
+                </div>
+              )}
             </div>
-          )}
+
+            {/* Video Player (visible when playing) */}
+            <div
+              className={`w-full h-full transition-opacity duration-300 ${
+                isPlaying ? "opacity-100" : "opacity-0"
+              } ${!isPlaying && !isFading ? "hidden" : ""}`}
+            >
+              <video
+                ref={(el) => (videoRefs.current[video.id] = el)}
+                src={video.url}
+                className="w-full h-full object-cover"
+                playsInline
+                autoPlay
+                onClick={(e) => e.stopPropagation()}
+                onTouchStart={(e) => e.stopPropagation()}
+                controlsList="nodownload nofullscreen noremoteplayback noplaybackrate"
+                disablePictureInPicture
+                disableRemotePlayback
+              >
+                Your browser does not support the video tag.
+              </video>
+
+              {/* Custom play/pause overlay */}
+              <div
+                className="absolute inset-0 bg-transparent"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  const videoElement = videoRefs.current[video.id]
+                  if (videoElement) {
+                    if (videoElement.paused) {
+                      videoElement.play()
+                    } else {
+                      videoElement.pause()
+                    }
+                  }
+                }}
+              />
+
+              {/* Close button */}
+              <button
+                className="absolute top-2 right-2 bg-black/30 backdrop-blur-sm rounded-full p-1 z-10 opacity-0 group-hover:opacity-70 hover:opacity-100 transition-opacity duration-200"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setPlayingVideo(null)
+                }}
+              >
+                <X className="h-3 w-3 text-white" />
+              </button>
+            </div>
+          </div>
         </div>
 
         {/* Video Title - Below the video */}
