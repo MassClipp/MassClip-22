@@ -1,5 +1,7 @@
 "use client"
 
+import type React from "react"
+
 import { useState, useEffect, useCallback, useRef } from "react"
 import { useSearchParams } from "next/navigation"
 import Image from "next/image"
@@ -230,16 +232,28 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
     setTimeout(() => {
       setPlayingVideo(video.id)
       setFadingIn(null)
-
-      // Use setTimeout to ensure the video element is rendered before trying to play
-      setTimeout(() => {
-        const videoElement = videoRefs.current[video.id]
-        if (videoElement) {
-          // Don't autoplay - wait for explicit user interaction
-          // The play button will be shown and user needs to click it
-        }
-      }, 100)
     }, 300) // Match this with the CSS transition duration
+  }
+
+  const handlePlayButtonClick = (e: React.MouseEvent, video: VideoItem) => {
+    e.stopPropagation() // Prevent triggering the card click event
+
+    const videoElement = videoRefs.current[video.id]
+    if (videoElement) {
+      if (videoElement.paused) {
+        videoElement.play().catch((err) => {
+          console.error("Error playing video:", err)
+          toast({
+            title: "Playback error",
+            description: "There was a problem playing this video. Please try again.",
+            variant: "destructive",
+          })
+        })
+      } else {
+        videoElement.pause()
+        setPlayingVideo(null) // Stop the video completely
+      }
+    }
   }
 
   const handleThumbnailLoad = (videoId: string) => {
@@ -312,7 +326,10 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
 
               {/* Minimal Play Button */}
               <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-                <div className="rounded-full bg-black/40 backdrop-blur-sm p-1.5 transform transition-transform duration-200 group-hover:scale-110">
+                <div
+                  className="rounded-full bg-black/40 backdrop-blur-sm p-1.5 transform transition-transform duration-200 group-hover:scale-110"
+                  onClick={(e) => handlePlayButtonClick(e, video)}
+                >
                   <Play className="h-4 w-4 text-white" fill="white" />
                 </div>
               </div>
@@ -337,6 +354,8 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
                 src={video.url}
                 className="w-full h-full object-cover"
                 playsInline
+                onClick={(e) => e.stopPropagation()}
+                onTouchStart={(e) => e.stopPropagation()}
                 controlsList="nodownload nofullscreen noremoteplayback noplaybackrate"
                 disablePictureInPicture
                 disableRemotePlayback
@@ -346,21 +365,8 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
 
               {/* Play/Pause overlay */}
               <div
-                className="absolute inset-0 flex items-center justify-center bg-black/20 backdrop-blur-[1px]"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  const videoElement = videoRefs.current[video.id]
-                  if (videoElement) {
-                    if (videoElement.paused) {
-                      videoElement.play().catch((err) => {
-                        console.error("Error playing video:", err)
-                      })
-                    } else {
-                      videoElement.pause()
-                      setPlayingVideo(null) // Stop the video completely
-                    }
-                  }
-                }}
+                className="absolute inset-0 flex items-center justify-center"
+                onClick={(e) => handlePlayButtonClick(e, video)}
               >
                 <div className="rounded-full bg-black/40 backdrop-blur-sm p-1.5 transform transition-transform duration-200 hover:scale-110">
                   <Play className="h-4 w-4 text-white" fill="white" />
