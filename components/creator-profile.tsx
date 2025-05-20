@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from "react"
 import { useSearchParams } from "next/navigation"
 import Image from "next/image"
-import { Share2, Edit, Instagram, Twitter, Globe, Lock, Upload, Plus, RefreshCw, Play, X } from "lucide-react"
+import { Share2, Edit, Instagram, Twitter, Globe, Lock, Upload, Plus, RefreshCw, Play } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useAuth } from "@/contexts/auth-context"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -53,6 +53,7 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [playingVideo, setPlayingVideo] = useState<string | null>(null)
   const [fadingIn, setFadingIn] = useState<string | null>(null)
+  const [thumbnailsLoading, setThumbnailsLoading] = useState<{ [key: string]: boolean }>({})
   const videoRefs = useRef<{ [key: string]: HTMLVideoElement | null }>({})
   const { toast } = useToast()
 
@@ -131,6 +132,15 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
         console.log("Free videos:", freeData)
         console.log("Premium videos:", premiumData)
 
+        // Initialize thumbnails loading state
+        const newThumbnailsLoading: { [key: string]: boolean } = {}
+
+        // Mark all thumbnails as loading initially
+        ;[...freeData, ...premiumData].forEach((video) => {
+          newThumbnailsLoading[video.id] = true
+        })
+
+        setThumbnailsLoading(newThumbnailsLoading)
         setFreeVideos(freeData)
         setPremiumVideos(premiumData)
 
@@ -225,23 +235,25 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
       setTimeout(() => {
         const videoElement = videoRefs.current[video.id]
         if (videoElement) {
-          videoElement.play().catch((err) => {
-            console.error("Error playing video:", err)
-            toast({
-              title: "Playback error",
-              description: "There was a problem playing this video. Please try again.",
-              variant: "destructive",
-            })
-          })
+          // Don't autoplay - wait for explicit user interaction
+          // The play button will be shown and user needs to click it
         }
       }, 100)
     }, 300) // Match this with the CSS transition duration
+  }
+
+  const handleThumbnailLoad = (videoId: string) => {
+    setThumbnailsLoading((prev) => ({
+      ...prev,
+      [videoId]: false,
+    }))
   }
 
   // Function to render video card
   const renderVideoCard = (video: VideoItem) => {
     const isPlaying = playingVideo === video.id
     const isFading = fadingIn === video.id
+    const isThumbnailLoading = thumbnailsLoading[video.id]
 
     return (
       <div key={video.id} className="flex flex-col" style={{ maxWidth: "220px" }}>
@@ -253,9 +265,12 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
           style={{ aspectRatio: "9/16" }}
         >
           <div
-            className="relative overflow-hidden group cursor-pointer w-full h-full"
+            className="relative overflow-hidden group cursor-pointer w-full h-full bg-black"
             onClick={() => handleVideoClick(video)}
           >
+            {/* Skeleton loader for thumbnail */}
+            {isThumbnailLoading && <div className="absolute inset-0 bg-zinc-900 animate-pulse"></div>}
+
             {/* Thumbnail (visible when not playing) */}
             <div
               className={`absolute inset-0 transition-opacity duration-300 ${
@@ -266,12 +281,15 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
                 <img
                   src={video.thumbnailUrl || "/placeholder.svg"}
                   alt={video.title}
-                  className="w-full h-full object-cover"
+                  className="w-full h-full object-cover transition-opacity duration-300"
+                  style={{ opacity: isThumbnailLoading ? 0 : 1 }}
+                  onLoad={() => handleThumbnailLoad(video.id)}
                   onError={(e) => {
                     // Fallback if thumbnail fails to load
                     const target = e.target as HTMLImageElement
                     target.onerror = null
                     target.src = "/placeholder.svg?key=video-thumbnail"
+                    handleThumbnailLoad(video.id)
                   }}
                 />
               ) : video.url ? (
@@ -280,6 +298,7 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
                     className="w-full h-full object-cover"
                     preload="metadata"
                     poster="/placeholder.svg?key=video-poster"
+                    onLoadedData={() => handleThumbnailLoad(video.id)}
                   >
                     <source src={`${video.url}#t=0.1`} type="video/mp4" />
                     Your browser does not support the video tag.
@@ -318,9 +337,6 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
                 src={video.url}
                 className="w-full h-full object-cover"
                 playsInline
-                autoPlay
-                onClick={(e) => e.stopPropagation()}
-                onTouchStart={(e) => e.stopPropagation()}
                 controlsList="nodownload nofullscreen noremoteplayback noplaybackrate"
                 disablePictureInPicture
                 disableRemotePlayback
@@ -328,32 +344,28 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
                 Your browser does not support the video tag.
               </video>
 
-              {/* Custom play/pause overlay */}
+              {/* Play/Pause overlay */}
               <div
-                className="absolute inset-0 bg-transparent"
+                className="absolute inset-0 flex items-center justify-center bg-black/20 backdrop-blur-[1px]"
                 onClick={(e) => {
                   e.stopPropagation()
                   const videoElement = videoRefs.current[video.id]
                   if (videoElement) {
                     if (videoElement.paused) {
-                      videoElement.play()
+                      videoElement.play().catch((err) => {
+                        console.error("Error playing video:", err)
+                      })
                     } else {
                       videoElement.pause()
+                      setPlayingVideo(null) // Stop the video completely
                     }
                   }
                 }}
-              />
-
-              {/* Close button */}
-              <button
-                className="absolute top-2 right-2 bg-black/30 backdrop-blur-sm rounded-full p-1 z-10 opacity-0 group-hover:opacity-70 hover:opacity-100 transition-opacity duration-200"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  setPlayingVideo(null)
-                }}
               >
-                <X className="h-3 w-3 text-white" />
-              </button>
+                <div className="rounded-full bg-black/40 backdrop-blur-sm p-1.5 transform transition-transform duration-200 hover:scale-110">
+                  <Play className="h-4 w-4 text-white" fill="white" />
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -559,7 +571,7 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-5">
                   {[1, 2, 3, 4, 5].map((i) => (
                     <div key={i} className="flex flex-col" style={{ maxWidth: "220px" }}>
-                      <div className="bg-zinc-800 animate-pulse rounded-md" style={{ aspectRatio: "9/16" }} />
+                      <div className="bg-zinc-900 animate-pulse rounded-md" style={{ aspectRatio: "9/16" }} />
                       <div className="mt-2">
                         <div className="h-3 bg-zinc-800 animate-pulse rounded w-3/4"></div>
                         <div className="h-2 bg-zinc-800 animate-pulse rounded w-1/2 mt-1"></div>
@@ -620,7 +632,7 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-5">
                   {[1, 2, 3, 4, 5].map((i) => (
                     <div key={i} className="flex flex-col" style={{ maxWidth: "220px" }}>
-                      <div className="bg-zinc-800 animate-pulse rounded-md" style={{ aspectRatio: "9/16" }} />
+                      <div className="bg-zinc-900 animate-pulse rounded-md" style={{ aspectRatio: "9/16" }} />
                       <div className="mt-2">
                         <div className="h-3 bg-zinc-800 animate-pulse rounded w-3/4"></div>
                         <div className="h-2 bg-zinc-800 animate-pulse rounded w-1/2 mt-1"></div>
