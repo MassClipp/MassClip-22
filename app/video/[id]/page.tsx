@@ -8,7 +8,7 @@ import { doc, getDoc } from "firebase/firestore"
 import { db } from "@/lib/firebase"
 import { useAuth } from "@/contexts/auth-context"
 import { useToast } from "@/hooks/use-toast"
-import EnhancedVideoPlayer from "@/components/enhanced-video-player"
+import SimpleVideoPlayer from "@/components/simple-video-player"
 import VideoDebug from "@/components/video-debug"
 
 export default function VideoPage() {
@@ -127,45 +127,40 @@ export default function VideoPage() {
         </div>
 
         {/* Video player */}
-        <div className="max-w-4xl mx-auto">
-          <EnhancedVideoPlayer
-            videoUrl={video.url}
-            thumbnailUrl={video.thumbnailUrl}
-            title={video.title}
-            isPremium={isPremium}
-            videoId={id as string}
-            creatorId={creatorId as string}
-          />
+        <div className="max-w-sm mx-auto">
+          {" "}
+          {/* Changed from max-w-4xl to max-w-sm for better 9:16 display */}
+          <SimpleVideoPlayer videoUrl={video.url} thumbnailUrl={video.thumbnailUrl} title={video.title} />
+        </div>
 
-          {/* Video info */}
-          <div className="mt-6">
-            <div className="flex justify-between items-start">
-              <div>
-                <h1 className="text-2xl font-bold text-white">{video.title}</h1>
-                {creator && (
-                  <a
-                    href={`/creator/${creator.username}`}
-                    className="text-zinc-400 hover:text-white text-sm mt-1 inline-block"
-                  >
-                    {creator.displayName}
-                  </a>
-                )}
-              </div>
-              <Button variant="outline" size="sm" onClick={handleShare} className="text-zinc-400 hover:text-white">
-                <Share2 className="mr-2 h-4 w-4" />
-                Share
-              </Button>
+        {/* Video info */}
+        <div className="mt-6">
+          <div className="flex justify-between items-start">
+            <div>
+              <h1 className="text-2xl font-bold text-white">{video.title}</h1>
+              {creator && (
+                <a
+                  href={`/creator/${creator.username}`}
+                  className="text-zinc-400 hover:text-white text-sm mt-1 inline-block"
+                >
+                  {creator.displayName}
+                </a>
+              )}
             </div>
-
-            {video.description && (
-              <div className="mt-4 p-4 bg-zinc-900/50 rounded-lg">
-                <p className="text-zinc-300 whitespace-pre-wrap">{video.description}</p>
-              </div>
-            )}
-
-            {/* Debug tools for owners or when debug param is present */}
-            {(isOwner || debug) && <VideoDebug videoUrl={video.url} />}
+            <Button variant="outline" size="sm" onClick={handleShare} className="text-zinc-400 hover:text-white">
+              <Share2 className="mr-2 h-4 w-4" />
+              Share
+            </Button>
           </div>
+
+          {video.description && (
+            <div className="mt-4 p-4 bg-zinc-900/50 rounded-lg">
+              <p className="text-zinc-300 whitespace-pre-wrap">{video.description}</p>
+            </div>
+          )}
+
+          {/* Debug tools for owners or when debug param is present */}
+          {(isOwner || debug) && <VideoDebug videoUrl={video.url} />}
         </div>
       </div>
     </div>

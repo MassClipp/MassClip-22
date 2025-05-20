@@ -197,8 +197,11 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
   }
 
   const handleVideoClick = (video: VideoItem) => {
-    // Navigate to a dedicated video page
-    router.push(`/video/${video.id}?creatorId=${creator.uid}&isPremium=${video.isPremium}`)
+    // Instead of navigating, we can show the video directly in a modal or expand it in place
+    setSelectedVideo(video)
+
+    // Or still navigate but with a flag to use the simple player
+    router.push(`/video/${video.id}?creatorId=${creator.uid}&isPremium=${video.isPremium}&simple=true`)
   }
 
   // Function to render video card
