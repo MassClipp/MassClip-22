@@ -197,11 +197,8 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
   }
 
   const handleVideoClick = (video: VideoItem) => {
-    // Instead of navigating, we can show the video directly in a modal or expand it in place
-    setSelectedVideo(video)
-
-    // Or still navigate but with a flag to use the simple player
-    router.push(`/video/${video.id}?creatorId=${creator.uid}&isPremium=${video.isPremium}&simple=true`)
+    // Navigate to our direct video player
+    router.push(`/direct-video/${video.id}?creatorId=${creator.uid}&isPremium=${video.isPremium}`)
   }
 
   // Function to render video card
@@ -209,10 +206,10 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
     return (
       <div
         key={video.id}
-        className="overflow-hidden bg-zinc-900 border border-zinc-800 rounded-lg cursor-pointer transition-transform hover:scale-[1.02]"
+        className="overflow-hidden bg-zinc-900 border border-zinc-800 rounded-lg cursor-pointer transition-all hover:scale-[1.03] hover:border-red-600 hover:border-2"
         onClick={() => handleVideoClick(video)}
       >
-        <div className="aspect-video relative overflow-hidden group">
+        <div className="relative overflow-hidden group" style={{ aspectRatio: "9/16" }}>
           {video.thumbnailUrl ? (
             <img
               src={video.thumbnailUrl || "/placeholder.svg"}
