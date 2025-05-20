@@ -184,14 +184,13 @@ export default function VideoUploadForm({ onComplete, defaultIsPremium = false }
         description: `Your ${isPremium ? "premium" : "free"} video has been uploaded successfully.`,
       })
 
-      // Handle completion
-      if (onComplete) {
-        onComplete()
+      // Redirect to the user's public profile
+      if (user?.username) {
+        router.push(`/creator/${user.username}?tab=${isPremium ? "premium" : "free"}`)
       } else {
-        if (user?.username) {
-          router.push(`/creator/${user.username}?tab=${isPremium ? "premium" : "free"}`)
-        } else {
-          router.push("/dashboard")
+        // If no username, just stay on the current page
+        if (onComplete) {
+          onComplete()
         }
       }
     } catch (error) {
