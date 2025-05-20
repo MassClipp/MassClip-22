@@ -1,11 +1,9 @@
 "use client"
 
-import type React from "react"
-
 import { useState, useEffect, useCallback, useRef } from "react"
 import { useSearchParams } from "next/navigation"
 import Image from "next/image"
-import { Share2, Edit, Instagram, Twitter, Globe, Lock, Upload, Plus, RefreshCw, Play } from "lucide-react"
+import { Share2, Edit, Instagram, Twitter, Globe, Lock, Upload, Plus, RefreshCw, Play, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useAuth } from "@/contexts/auth-context"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -223,28 +221,21 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
       setPlayingVideo(video.id)
       setFadingIn(null)
 
-      // We're not auto-playing the video here anymore
-    }, 300) // Match this with the CSS transition duration
-  }
-
-  const handlePlayButtonClick = (e: React.MouseEvent, video: VideoItem) => {
-    e.stopPropagation() // Prevent triggering the card click event
-
-    const videoElement = videoRefs.current[video.id]
-    if (videoElement) {
-      if (videoElement.paused) {
-        videoElement.play().catch((err) => {
-          console.error("Error playing video:", err)
-          toast({
-            title: "Playback error",
-            description: "There was a problem playing this video. Please try again.",
-            variant: "destructive",
+      // Use setTimeout to ensure the video element is rendered before trying to play
+      setTimeout(() => {
+        const videoElement = videoRefs.current[video.id]
+        if (videoElement) {
+          videoElement.play().catch((err) => {
+            console.error("Error playing video:", err)
+            toast({
+              title: "Playback error",
+              description: "There was a problem playing this video. Please try again.",
+              variant: "destructive",
+            })
           })
-        })
-      } else {
-        videoElement.pause()
-      }
-    }
+        }
+      }, 100)
+    }, 300) // Match this with the CSS transition duration
   }
 
   // Function to render video card
@@ -302,10 +293,7 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
 
               {/* Minimal Play Button */}
               <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-                <div
-                  className="rounded-full bg-black/40 backdrop-blur-sm p-1.5 transform transition-transform duration-200 group-hover:scale-110"
-                  onClick={(e) => handlePlayButtonClick(e, video)}
-                >
+                <div className="rounded-full bg-black/40 backdrop-blur-sm p-1.5 transform transition-transform duration-200 group-hover:scale-110">
                   <Play className="h-4 w-4 text-white" fill="white" />
                 </div>
               </div>
@@ -330,6 +318,7 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
                 src={video.url}
                 className="w-full h-full object-cover"
                 playsInline
+                autoPlay
                 onClick={(e) => e.stopPropagation()}
                 onTouchStart={(e) => e.stopPropagation()}
                 controlsList="nodownload nofullscreen noremoteplayback noplaybackrate"
@@ -341,16 +330,30 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
 
               {/* Custom play/pause overlay */}
               <div
-                className="absolute inset-0 flex items-center justify-center bg-transparent"
+                className="absolute inset-0 bg-transparent"
                 onClick={(e) => {
                   e.stopPropagation()
-                  handlePlayButtonClick(e, video)
+                  const videoElement = videoRefs.current[video.id]
+                  if (videoElement) {
+                    if (videoElement.paused) {
+                      videoElement.play()
+                    } else {
+                      videoElement.pause()
+                    }
+                  }
+                }}
+              />
+
+              {/* Close button */}
+              <button
+                className="absolute top-2 right-2 bg-black/30 backdrop-blur-sm rounded-full p-1 z-10 opacity-0 group-hover:opacity-70 hover:opacity-100 transition-opacity duration-200"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setPlayingVideo(null)
                 }}
               >
-                <div className="rounded-full bg-black/40 backdrop-blur-sm p-1.5 transform transition-transform duration-200 hover:scale-110">
-                  <Play className="h-4 w-4 text-white" fill="white" />
-                </div>
-              </div>
+                <X className="h-3 w-3 text-white" />
+              </button>
             </div>
           </div>
         </div>
