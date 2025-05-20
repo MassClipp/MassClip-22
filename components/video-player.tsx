@@ -120,25 +120,8 @@ export default function VideoPlayer({
     }
   }
 
-  // Log video URL for debugging
-  useEffect(() => {
-    console.log("Standard player - Video URL:", videoUrl)
-
-    // Check if URL is from Cloudflare R2
-    if (videoUrl && videoUrl.includes("r2.dev")) {
-      console.log("Cloudflare R2 URL detected in standard player")
-    }
-  }, [videoUrl])
-
   return (
-    <div
-      className="relative mx-auto overflow-hidden bg-black rounded-lg"
-      style={{
-        aspectRatio: "9/16",
-        maxWidth: "calc(100vh * 9/16)", // Ensure it doesn't get too wide on desktop
-        width: "100%",
-      }}
-    >
+    <div className="relative aspect-video bg-black rounded-lg overflow-hidden">
       {!isPlaying && (
         <div className="absolute inset-0 flex items-center justify-center">
           {thumbnailUrl && (
@@ -196,15 +179,12 @@ export default function VideoPlayer({
           {videoUrl && hasAccess && (
             <video
               ref={videoRef}
-              className="w-full h-full object-contain bg-black"
+              className="w-full h-full"
               controls={isPlaying}
               onPlay={() => setIsPlaying(true)}
               onPause={() => setIsPlaying(false)}
               onEnded={() => setIsPlaying(false)}
-              onError={() => {
-                console.error("Video error occurred with URL:", videoUrl)
-                setIsVideoError(true)
-              }}
+              onError={() => setIsVideoError(true)}
               poster={thumbnailUrl}
               playsInline
               preload="metadata"

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useRef, useEffect } from "react"
+import { useState, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
@@ -23,16 +23,12 @@ export default function VideoUploadForm({ onComplete, defaultIsPremium = false }
   const [description, setDescription] = useState("")
   const [isPremium, setIsPremium] = useState(defaultIsPremium)
   const [selectedFile, setSelectedFile] = useState(null)
-  const [thumbnailBlob, setThumbnailBlob] = useState(null)
-  const [thumbnailUrl, setThumbnailUrl] = useState("")
   const [dragActive, setDragActive] = useState(false)
   const [error, setError] = useState(null)
   const [isUploading, setIsUploading] = useState(false)
   const [progress, setProgress] = useState(0)
   const [currentStep, setCurrentStep] = useState("idle") // idle, preparing, uploading, registering, complete
   const fileInputRef = useRef(null)
-  const videoPreviewRef = useRef(null)
-  const canvasRef = useRef(null)
   const router = useRouter()
   const { user } = useAuth()
   const { toast } = useToast()
@@ -57,57 +53,6 @@ export default function VideoUploadForm({ onComplete, defaultIsPremium = false }
     }
   }
 
-  const generateThumbnail = (file) => {
-    // Create a video element to load the file
-    const video = document.createElement("video")
-    video.preload = "metadata"
-    video.muted = true
-    video.playsInline = true
-
-    // Create a URL for the file
-    const fileUrl = URL.createObjectURL(file)
-    video.src = fileUrl
-
-    // When the video can play, seek to the middle and capture a frame
-    video.onloadedmetadata = () => {
-      // Seek to 25% of the video duration for a good thumbnail
-      video.currentTime = video.duration * 0.25
-    }
-
-    video.onseeked = () => {
-      // Create a canvas to draw the video frame
-      const canvas = document.createElement("canvas")
-      canvas.width = video.videoWidth
-      canvas.height = video.videoHeight
-
-      // Draw the video frame to the canvas
-      const ctx = canvas.getContext("2d")
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
-
-      // Convert the canvas to a blob
-      canvas.toBlob(
-        (blob) => {
-          if (blob) {
-            setThumbnailBlob(blob)
-            const thumbnailObjectUrl = URL.createObjectURL(blob)
-            setThumbnailUrl(thumbnailObjectUrl)
-
-            // Clean up
-            URL.revokeObjectURL(fileUrl)
-          }
-        },
-        "image/jpeg",
-        0.8,
-      )
-    }
-
-    // Handle errors
-    video.onerror = () => {
-      console.error("Error generating thumbnail")
-      URL.revokeObjectURL(fileUrl)
-    }
-  }
-
   const handleFileSelect = (file) => {
     // Validate file type
     if (!ALLOWED_FILE_TYPES.includes(file.type)) {
@@ -123,9 +68,6 @@ export default function VideoUploadForm({ onComplete, defaultIsPremium = false }
 
     setSelectedFile(file)
     setError(null)
-
-    // Generate thumbnail from the video
-    generateThumbnail(file)
   }
 
   const handleFileInputChange = (e) => {
@@ -161,49 +103,6 @@ export default function VideoUploadForm({ onComplete, defaultIsPremium = false }
 
       xhr.send(file)
     })
-  }
-
-  const uploadThumbnail = async (fileId, thumbnailBlob) => {
-    try {
-      // Get a presigned URL for the thumbnail
-      const response = await fetch("/api/upload/generate-thumbnail", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${await user.getIdToken()}`,
-        },
-        body: JSON.stringify({
-          videoUrl: "", // Not needed for this implementation
-          fileId,
-          contentType: isPremium ? "premium" : "free",
-          userId: user.uid,
-        }),
-      })
-
-      if (!response.ok) {
-        throw new Error("Failed to get thumbnail upload URL")
-      }
-
-      const { presignedUrl, thumbnailUrl } = await response.json()
-
-      // Upload the thumbnail blob to the presigned URL
-      const uploadResponse = await fetch(presignedUrl, {
-        method: "PUT",
-        headers: {
-          "Content-Type": "image/jpeg",
-        },
-        body: thumbnailBlob,
-      })
-
-      if (!uploadResponse.ok) {
-        throw new Error("Failed to upload thumbnail")
-      }
-
-      return thumbnailUrl
-    } catch (error) {
-      console.error("Error uploading thumbnail:", error)
-      return null
-    }
   }
 
   const handleSubmit = async (e) => {
@@ -253,23 +152,9 @@ export default function VideoUploadForm({ onComplete, defaultIsPremium = false }
       setProgress(0)
       await uploadFileDirectly(selectedFile, uploadUrl)
 
-      // Step 3: Upload thumbnail if available
-      let finalThumbnailUrl = null
-      if (thumbnailBlob) {
-        setCurrentStep("uploading thumbnail")
-        setProgress(80)
-        finalThumbnailUrl = await uploadThumbnail(fileId, thumbnailBlob)
-      }
-
-      // Step 4: Register the upload in Firestore
+      // Step 3: Register the upload in Firestore
       setCurrentStep("registering")
       setProgress(90)
-
-      // Get video duration if possible
-      let duration = 0
-      if (videoPreviewRef.current) {
-        duration = videoPreviewRef.current.duration || 0
-      }
 
       const registerResponse = await fetch("/api/videos/register-upload", {
         method: "POST",
@@ -283,8 +168,6 @@ export default function VideoUploadForm({ onComplete, defaultIsPremium = false }
           title,
           description: description || "",
           isPremium,
-          duration,
-          thumbnailUrl: finalThumbnailUrl,
         }),
       })
 
@@ -331,8 +214,6 @@ export default function VideoUploadForm({ onComplete, defaultIsPremium = false }
         return "Preparing upload..."
       case "uploading":
         return "Uploading to Cloudflare R2..."
-      case "uploading thumbnail":
-        return "Uploading thumbnail..."
       case "registering":
         return "Registering upload..."
       case "complete":
@@ -341,15 +222,6 @@ export default function VideoUploadForm({ onComplete, defaultIsPremium = false }
         return "Uploading..."
     }
   }
-
-  // Clean up object URLs when component unmounts
-  useEffect(() => {
-    return () => {
-      if (thumbnailUrl) {
-        URL.revokeObjectURL(thumbnailUrl)
-      }
-    }
-  }, [thumbnailUrl])
 
   return (
     <div className="max-w-2xl mx-auto p-6">
@@ -378,21 +250,6 @@ export default function VideoUploadForm({ onComplete, defaultIsPremium = false }
                 <p className="text-white font-medium">{selectedFile.name}</p>
                 <p className="text-zinc-400 text-sm">{(selectedFile.size / (1024 * 1024)).toFixed(2)} MB</p>
               </div>
-
-              {/* Thumbnail preview */}
-              {thumbnailUrl && (
-                <div className="mt-4">
-                  <p className="text-zinc-400 text-sm mb-2">Thumbnail Preview:</p>
-                  <div className="relative w-32 h-56 mx-auto overflow-hidden rounded-md">
-                    <img
-                      src={thumbnailUrl || "/placeholder.svg"}
-                      alt="Video thumbnail"
-                      className="w-full h-full object-cover"
-                    />
-                  </div>
-                </div>
-              )}
-
               <Button
                 type="button"
                 variant="outline"
@@ -404,15 +261,6 @@ export default function VideoUploadForm({ onComplete, defaultIsPremium = false }
                 <X className="h-4 w-4 mr-2" />
                 Remove
               </Button>
-
-              {/* Hidden video element for metadata */}
-              <video
-                ref={videoPreviewRef}
-                src={selectedFile ? URL.createObjectURL(selectedFile) : ""}
-                className="hidden"
-                preload="metadata"
-                muted
-              />
             </div>
           ) : (
             <div className="space-y-4">

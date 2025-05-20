@@ -1,7 +1,5 @@
 "use client"
 
-import type React from "react"
-
 import { useState, useEffect, useRef } from "react"
 import { useAuth } from "@/contexts/auth-context"
 import { Lock, Play, Volume2, VolumeX } from "lucide-react"
@@ -34,7 +32,6 @@ export default function EnhancedVideoPlayer({
   const [isMuted, setIsMuted] = useState(false)
   const [isVideoError, setIsVideoError] = useState(false)
   const videoRef = useRef<HTMLVideoElement>(null)
-  const containerRef = useRef<HTMLDivElement>(null)
   const { user } = useAuth()
   const router = useRouter()
   const { toast } = useToast()
@@ -89,34 +86,6 @@ export default function EnhancedVideoPlayer({
     checkAccess()
   }, [isPremium, user, videoId, creatorId])
 
-  // Test video URL on mount
-  useEffect(() => {
-    const testVideoUrl = async () => {
-      if (!videoUrl) return
-
-      try {
-        console.log("Testing video URL:", videoUrl)
-        const response = await fetch(videoUrl, { method: "HEAD" })
-        console.log(`Video URL test result: ${response.status} ${response.statusText}`)
-
-        // Log headers for debugging
-        const headers: Record<string, string> = {}
-        response.headers.forEach((value, key) => {
-          headers[key] = value
-        })
-        console.log("Response headers:", headers)
-
-        if (!response.ok) {
-          console.error(`Video URL returned error status: ${response.status}`)
-        }
-      } catch (error) {
-        console.error("Error testing video URL:", error)
-      }
-    }
-
-    testVideoUrl()
-  }, [videoUrl])
-
   const handlePlay = () => {
     if (!hasAccess && isPremium) {
       // Redirect to purchase page or show upgrade modal
@@ -159,32 +128,20 @@ export default function EnhancedVideoPlayer({
     }
   }
 
-  const handleVideoError = (e: React.SyntheticEvent<HTMLVideoElement, Event>) => {
-    const videoElement = e.currentTarget
-    console.error("Video error occurred with URL:", videoUrl)
-    console.error("Video error code:", videoElement.error?.code)
-    console.error("Video error message:", videoElement.error?.message)
-
+  const handleVideoError = () => {
+    console.error("Video error occurred")
     setIsVideoError(true)
     setIsPlaying(false)
-
-    toast({
-      title: "Video Playback Error",
-      description: `Error: ${videoElement.error?.message || "Unknown error"}`,
-      variant: "destructive",
-    })
   }
 
+  // Log video URL for debugging
+  useEffect(() => {
+    console.log("Video URL:", videoUrl)
+    console.log("Video element:", videoRef.current)
+  }, [videoUrl])
+
   return (
-    <div
-      ref={containerRef}
-      className="relative mx-auto overflow-hidden bg-black rounded-lg"
-      style={{
-        aspectRatio: "9/16",
-        maxWidth: "calc(100vh * 9/16)", // Ensure it doesn't get too wide on desktop
-        width: "100%",
-      }}
-    >
+    <div className="relative aspect-video bg-black rounded-lg overflow-hidden">
       {!isPlaying && (
         <div className="absolute inset-0 flex items-center justify-center">
           {thumbnailUrl && (
@@ -242,7 +199,7 @@ export default function EnhancedVideoPlayer({
           {videoUrl && hasAccess && (
             <video
               ref={videoRef}
-              className="w-full h-full object-contain bg-black"
+              className="w-full h-full"
               controls={isPlaying}
               onPlay={() => setIsPlaying(true)}
               onPause={() => setIsPlaying(false)}
