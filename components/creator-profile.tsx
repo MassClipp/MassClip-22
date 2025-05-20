@@ -236,92 +236,94 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
     const isPlaying = playingVideo === video.id
 
     return (
-      <div
-        key={video.id}
-        className={`overflow-hidden bg-zinc-900 border rounded-lg transition-all ${
-          isPlaying ? "border-red-600 border-2" : "border-zinc-800 hover:border-red-600 hover:border-2"
-        }`}
-        style={{ maxWidth: "240px" }}
-      >
+      <div key={video.id} className="flex flex-col" style={{ maxWidth: "220px" }}>
+        {/* Video Container */}
         <div
-          className="relative overflow-hidden group cursor-pointer"
+          className={`relative overflow-hidden rounded-md ${
+            isPlaying ? "ring-1 ring-red-600" : "hover:ring-1 hover:ring-red-600"
+          }`}
           style={{ aspectRatio: "9/16" }}
-          onClick={() => handleVideoClick(video)}
         >
-          {isPlaying ? (
-            <div className="w-full h-full relative">
-              <video
-                ref={(el) => (videoRefs.current[video.id] = el)}
-                src={video.url}
-                className="w-full h-full object-cover"
-                controls
-                playsInline
-                autoPlay
-              >
-                Your browser does not support the video tag.
-              </video>
-              <button
-                className="absolute top-2 right-2 bg-black/50 rounded-full p-1 z-10"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  handleVideoClick(video) // This will stop the video since it's already playing
-                }}
-              >
-                <X className="h-4 w-4 text-white" />
-              </button>
-            </div>
-          ) : (
-            <>
-              {video.thumbnailUrl ? (
-                <img
-                  src={video.thumbnailUrl || "/placeholder.svg"}
-                  alt={video.title}
+          <div
+            className="relative overflow-hidden group cursor-pointer w-full h-full"
+            onClick={() => handleVideoClick(video)}
+          >
+            {isPlaying ? (
+              <div className="w-full h-full relative">
+                <video
+                  ref={(el) => (videoRefs.current[video.id] = el)}
+                  src={video.url}
                   className="w-full h-full object-cover"
-                  onError={(e) => {
-                    // Fallback if thumbnail fails to load
-                    const target = e.target as HTMLImageElement
-                    target.onerror = null
-                    target.src = "/placeholder.svg?key=video-thumbnail"
+                  controls
+                  playsInline
+                  autoPlay
+                >
+                  Your browser does not support the video tag.
+                </video>
+                <button
+                  className="absolute top-2 right-2 bg-black/30 backdrop-blur-sm rounded-full p-1 z-10 opacity-70 hover:opacity-100 transition-opacity"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    handleVideoClick(video) // This will stop the video since it's already playing
                   }}
-                />
-              ) : video.url ? (
-                <div className="w-full h-full bg-zinc-800 flex items-center justify-center relative">
-                  <video
+                >
+                  <X className="h-3 w-3 text-white" />
+                </button>
+              </div>
+            ) : (
+              <>
+                {video.thumbnailUrl ? (
+                  <img
+                    src={video.thumbnailUrl || "/placeholder.svg"}
+                    alt={video.title}
                     className="w-full h-full object-cover"
-                    preload="metadata"
-                    poster="/placeholder.svg?key=video-poster"
-                  >
-                    <source src={`${video.url}#t=0.1`} type="video/mp4" />
-                    Your browser does not support the video tag.
-                  </video>
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent"></div>
-                </div>
-              ) : (
-                <div className="w-full h-full bg-zinc-800 flex items-center justify-center">
-                  <span className="text-zinc-500">No preview available</span>
-                </div>
-              )}
+                    onError={(e) => {
+                      // Fallback if thumbnail fails to load
+                      const target = e.target as HTMLImageElement
+                      target.onerror = null
+                      target.src = "/placeholder.svg?key=video-thumbnail"
+                    }}
+                  />
+                ) : video.url ? (
+                  <div className="w-full h-full bg-zinc-900 flex items-center justify-center relative">
+                    <video
+                      className="w-full h-full object-cover"
+                      preload="metadata"
+                      poster="/placeholder.svg?key=video-poster"
+                    >
+                      <source src={`${video.url}#t=0.1`} type="video/mp4" />
+                      Your browser does not support the video tag.
+                    </video>
+                  </div>
+                ) : (
+                  <div className="w-full h-full bg-zinc-900 flex items-center justify-center">
+                    <span className="text-zinc-500 text-xs">No preview</span>
+                  </div>
+                )}
 
-              {/* Play button overlay */}
-              <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                <div className="rounded-full bg-red-500/80 p-2">
-                  <Play className="h-6 w-6 text-white" />
+                {/* Minimal Play Button */}
+                <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                  <div className="rounded-full bg-black/40 backdrop-blur-sm p-1.5 transform transition-transform group-hover:scale-110">
+                    <Play className="h-4 w-4 text-white" fill="white" />
+                  </div>
                 </div>
-              </div>
 
-              <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent flex items-end p-2">
-                <h3 className="font-medium text-white text-sm line-clamp-2">{video.title}</h3>
-              </div>
+                {/* Premium badge if applicable */}
+                {video.isPremium && (
+                  <div className="absolute top-2 right-2 bg-black/30 backdrop-blur-sm text-white text-[10px] px-1.5 py-0.5 rounded-sm flex items-center">
+                    <Lock className="w-2 h-2 mr-0.5" />
+                    <span className="font-medium tracking-wide">PREMIUM</span>
+                  </div>
+                )}
+              </>
+            )}
+          </div>
+        </div>
 
-              {/* Premium badge if applicable */}
-              {video.isPremium && (
-                <div className="absolute top-2 right-2 bg-red-500 text-white text-xs px-1.5 py-0.5 rounded-full flex items-center">
-                  <Lock className="w-2.5 h-2.5 mr-0.5" />
-                  <span className="text-xs">Premium</span>
-                </div>
-              )}
-            </>
-          )}
+        {/* Video Title - Below the video */}
+        <div className="mt-2 px-0.5">
+          <h3 className="text-xs font-medium text-zinc-200 line-clamp-1 tracking-tight">{video.title}</h3>
+          <p className="text-[10px] text-zinc-400 mt-0.5">{formatDate(video.createdAt)}</p>
         </div>
       </div>
     )
@@ -516,13 +518,15 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
               )}
 
               {isLoading ? (
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-5">
                   {[1, 2, 3, 4, 5].map((i) => (
-                    <div
-                      key={i}
-                      className="bg-zinc-800 animate-pulse rounded-lg"
-                      style={{ aspectRatio: "9/16", maxWidth: "240px" }}
-                    />
+                    <div key={i} className="flex flex-col" style={{ maxWidth: "220px" }}>
+                      <div className="bg-zinc-800 animate-pulse rounded-md" style={{ aspectRatio: "9/16" }} />
+                      <div className="mt-2">
+                        <div className="h-3 bg-zinc-800 animate-pulse rounded w-3/4"></div>
+                        <div className="h-2 bg-zinc-800 animate-pulse rounded w-1/2 mt-1"></div>
+                      </div>
+                    </div>
                   ))}
                 </div>
               ) : error ? (
@@ -533,7 +537,7 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
                   </div>
                 </div>
               ) : freeVideos.length > 0 ? (
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-5">
                   {freeVideos.map((video) => renderVideoCard(video))}
                 </div>
               ) : (
@@ -575,13 +579,15 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
               )}
 
               {isLoading ? (
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-5">
                   {[1, 2, 3, 4, 5].map((i) => (
-                    <div
-                      key={i}
-                      className="bg-zinc-800 animate-pulse rounded-lg"
-                      style={{ aspectRatio: "9/16", maxWidth: "240px" }}
-                    />
+                    <div key={i} className="flex flex-col" style={{ maxWidth: "220px" }}>
+                      <div className="bg-zinc-800 animate-pulse rounded-md" style={{ aspectRatio: "9/16" }} />
+                      <div className="mt-2">
+                        <div className="h-3 bg-zinc-800 animate-pulse rounded w-3/4"></div>
+                        <div className="h-2 bg-zinc-800 animate-pulse rounded w-1/2 mt-1"></div>
+                      </div>
+                    </div>
                   ))}
                 </div>
               ) : error ? (
@@ -592,7 +598,7 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
                   </div>
                 </div>
               ) : premiumVideos.length > 0 ? (
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-5">
                   {premiumVideos.map((video) => renderVideoCard(video))}
                 </div>
               ) : (
