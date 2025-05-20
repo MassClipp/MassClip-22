@@ -7,7 +7,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
 import { Progress } from "@/components/ui/progress"
-import { Upload, X, Video, AlertCircle, Info } from "lucide-react"
+import { Upload, X, Video, AlertCircle } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/contexts/auth-context"
 import { useToast } from "@/hooks/use-toast"
@@ -27,7 +27,7 @@ export default function VideoUploadForm({ onComplete, defaultIsPremium = false }
   const [error, setError] = useState(null)
   const [isUploading, setIsUploading] = useState(false)
   const [progress, setProgress] = useState(0)
-  const [currentStep, setCurrentStep] = useState("idle") // idle, preparing, uploading, registering, complete
+  const [currentStep, setCurrentStep] = useState("idle") // idle, preparing, uploading, processing, complete
   const fileInputRef = useRef(null)
   const router = useRouter()
   const { user } = useAuth()
@@ -147,13 +147,13 @@ export default function VideoUploadForm({ onComplete, defaultIsPremium = false }
 
       const { uploadUrl, publicUrl, storagePath, fileId } = await urlResponse.json()
 
-      // Step 2: Upload file directly to Cloudflare R2
+      // Step 2: Upload file directly
       setCurrentStep("uploading")
       setProgress(0)
       await uploadFileDirectly(selectedFile, uploadUrl)
 
-      // Step 3: Register the upload in Firestore
-      setCurrentStep("registering")
+      // Step 3: Register the upload
+      setCurrentStep("processing")
       setProgress(90)
 
       const registerResponse = await fetch("/api/videos/register-upload", {
@@ -212,9 +212,9 @@ export default function VideoUploadForm({ onComplete, defaultIsPremium = false }
       case "preparing":
         return "Preparing upload..."
       case "uploading":
-        return "Uploading to Cloudflare R2..."
-      case "registering":
-        return "Registering upload..."
+        return "Uploading video..."
+      case "processing":
+        return "Processing video..."
       case "complete":
         return "Upload complete!"
       default:
@@ -339,18 +339,6 @@ export default function VideoUploadForm({ onComplete, defaultIsPremium = false }
             className="data-[state=checked]:bg-red-500"
             disabled={isUploading}
           />
-        </div>
-
-        {/* Direct Upload Info */}
-        <div className="flex items-start gap-3 p-4 bg-blue-900/10 rounded-lg border border-blue-900/20">
-          <Info className="h-5 w-5 text-blue-400 mt-0.5 flex-shrink-0" />
-          <div>
-            <h3 className="text-white font-medium">Direct Upload</h3>
-            <p className="text-zinc-400 text-sm">
-              Your video will be uploaded directly to our secure storage. This bypasses Vercel's serverless function
-              limits and allows for larger file uploads.
-            </p>
-          </div>
         </div>
 
         {/* Error Message */}
