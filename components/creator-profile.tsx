@@ -1,15 +1,32 @@
 "use client"
 
+import type React from "react"
+
 import { useState, useEffect, useCallback, useRef } from "react"
 import { useSearchParams } from "next/navigation"
 import Image from "next/image"
-import { Share2, Edit, Instagram, Twitter, Globe, Lock, Upload, Plus, RefreshCw, Play, X } from "lucide-react"
+import {
+  Share2,
+  Edit,
+  Instagram,
+  Twitter,
+  Globe,
+  Lock,
+  Upload,
+  Plus,
+  RefreshCw,
+  Play,
+  X,
+  Download,
+  Heart,
+} from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useAuth } from "@/contexts/auth-context"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { collection, query, orderBy, limit, getDocs } from "firebase/firestore"
 import { db } from "@/lib/firebase"
 import { useToast } from "@/hooks/use-toast"
+import { where, deleteDoc, doc, addDoc, serverTimestamp } from "firebase/firestore"
 
 interface Creator {
   uid: string
@@ -54,6 +71,8 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
   const [playingVideo, setPlayingVideo] = useState<string | null>(null)
   const [fadingIn, setFadingIn] = useState<string | null>(null)
   const [loadedThumbnails, setLoadedThumbnails] = useState<{ [key: string]: boolean }>({})
+  const [favorites, setFavorites] = useState<{ [key: string]: boolean }>({})
+  const [isCheckingFavorites, setIsCheckingFavorites] = useState(true)
   const videoRefs = useRef<{ [key: string]: HTMLVideoElement | null }>({})
   const { toast } = useToast()
 
@@ -162,6 +181,46 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
     [creator.uid, toast],
   )
 
+  // Check favorites status
+  useEffect(() => {
+    const checkFavorites = async () => {
+      if (!userData) {
+        setIsCheckingFavorites(false)
+        return
+      }
+
+      try {
+        // Get all videos
+        const allVideos = [...freeVideos, ...premiumVideos]
+        if (allVideos.length === 0) {
+          setIsCheckingFavorites(false)
+          return
+        }
+
+        // Query for favorites
+        const favoritesRef = collection(db, `users/${userData.uid}/favorites`)
+        const favoritesSnapshot = await getDocs(favoritesRef)
+
+        // Create a map of video IDs to favorite status
+        const favoritesMap: { [key: string]: boolean } = {}
+        favoritesSnapshot.forEach((doc) => {
+          const data = doc.data()
+          if (data.videoId) {
+            favoritesMap[data.videoId] = true
+          }
+        })
+
+        setFavorites(favoritesMap)
+      } catch (error) {
+        console.error("Error checking favorites:", error)
+      } finally {
+        setIsCheckingFavorites(false)
+      }
+    }
+
+    checkFavorites()
+  }, [userData, freeVideos, premiumVideos])
+
   // Initial fetch
   useEffect(() => {
     fetchVideos()
@@ -255,11 +314,126 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
     setLoadedThumbnails((prev) => ({ ...prev, [videoId]: true }))
   }
 
+  // Handle download
+  const handleDownload = async (e: React.MouseEvent, video: VideoItem) => {
+    e.preventDefault()
+    e.stopPropagation()
+
+    if (!userData) {
+      toast({
+        title: "Authentication Required",
+        description: "Please log in to download videos",
+        variant: "destructive",
+      })
+      return
+    }
+
+    if (!video.url) {
+      toast({
+        title: "Download Error",
+        description: "No download link available for this video.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    try {
+      // Create a temporary anchor element
+      const link = document.createElement("a")
+      link.href = video.url
+      link.download = `${video.title || "video"}.mp4`
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+
+      toast({
+        title: "Download Started",
+        description: "Your video is downloading",
+      })
+    } catch (error) {
+      console.error("Download error:", error)
+      toast({
+        title: "Download Error",
+        description: "There was a problem downloading the video.",
+        variant: "destructive",
+      })
+    }
+  }
+
+  // Toggle favorite
+  const toggleFavorite = async (e: React.MouseEvent, video: VideoItem) => {
+    e.preventDefault()
+    e.stopPropagation()
+
+    if (!userData) {
+      toast({
+        title: "Authentication Required",
+        description: "Please log in to save favorites",
+        variant: "destructive",
+      })
+      return
+    }
+
+    const videoId = video.id
+    const isFavorite = favorites[videoId]
+
+    try {
+      if (isFavorite) {
+        // Find and remove from favorites
+        const favoritesRef = collection(db, `users/${userData.uid}/favorites`)
+        const q = query(favoritesRef, where("videoId", "==", videoId))
+        const querySnapshot = await getDocs(q)
+
+        querySnapshot.forEach(async (document) => {
+          await deleteDoc(doc(db, `users/${userData.uid}/favorites`, document.id))
+        })
+
+        // Update local state
+        setFavorites((prev) => {
+          const updated = { ...prev }
+          delete updated[videoId]
+          return updated
+        })
+
+        toast({
+          title: "Removed from favorites",
+          description: "Video removed from your favorites",
+        })
+      } else {
+        // Add to favorites
+        await addDoc(collection(db, `users/${userData.uid}/favorites`), {
+          videoId: videoId,
+          video: video,
+          createdAt: serverTimestamp(),
+        })
+
+        // Update local state
+        setFavorites((prev) => ({
+          ...prev,
+          [videoId]: true,
+        }))
+
+        toast({
+          title: "Added to favorites",
+          description: "Video saved to your favorites",
+        })
+      }
+    } catch (error) {
+      console.error("Error toggling favorite:", error)
+      toast({
+        title: "Error",
+        description: "Failed to update favorites",
+        variant: "destructive",
+      })
+    }
+  }
+
   // Function to render video card
   const renderVideoCard = (video: VideoItem) => {
     const isPlaying = playingVideo === video.id
     const isFading = fadingIn === video.id
     const isThumbnailLoaded = loadedThumbnails[video.id]
+    const isFavorite = favorites[video.id]
 
     return (
       <div key={video.id} className="flex flex-col" style={{ maxWidth: "220px" }}>
@@ -329,6 +503,27 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
                   <span className="font-medium tracking-wide">PREMIUM</span>
                 </div>
               )}
+
+              {/* Download button - bottom left */}
+              <button
+                className="absolute bottom-2 left-2 bg-black/40 hover:bg-black/60 backdrop-blur-sm p-1.5 rounded-full transition-all duration-200 opacity-0 group-hover:opacity-100"
+                onClick={(e) => handleDownload(e, video)}
+                aria-label="Download video"
+              >
+                <Download className="h-3.5 w-3.5 text-white" />
+              </button>
+
+              {/* Favorite button - bottom right */}
+              <button
+                className={`absolute bottom-2 right-2 bg-black/40 hover:bg-black/60 backdrop-blur-sm p-1.5 rounded-full transition-all duration-200 opacity-0 group-hover:opacity-100 ${
+                  isFavorite ? "text-red-500" : "text-white"
+                }`}
+                onClick={(e) => toggleFavorite(e, video)}
+                aria-label={isFavorite ? "Remove from favorites" : "Add to favorites"}
+                disabled={isCheckingFavorites}
+              >
+                <Heart className="h-3.5 w-3.5" fill={isFavorite ? "currentColor" : "none"} />
+              </button>
             </div>
 
             {/* Video Player (visible when playing) */}
@@ -377,6 +572,33 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
                 }}
               >
                 <X className="h-3 w-3 text-white" />
+              </button>
+
+              {/* Download button - bottom left (also visible when playing) */}
+              <button
+                className="absolute bottom-2 left-2 bg-black/40 hover:bg-black/60 backdrop-blur-sm p-1.5 rounded-full transition-all duration-200 opacity-0 group-hover:opacity-100"
+                onClick={(e) => {
+                  e.stopPropagation()
+                  handleDownload(e, video)
+                }}
+                aria-label="Download video"
+              >
+                <Download className="h-3.5 w-3.5 text-white" />
+              </button>
+
+              {/* Favorite button - bottom right (also visible when playing) */}
+              <button
+                className={`absolute bottom-2 right-2 bg-black/40 hover:bg-black/60 backdrop-blur-sm p-1.5 rounded-full transition-all duration-200 opacity-0 group-hover:opacity-100 ${
+                  isFavorite ? "text-red-500" : "text-white"
+                }`}
+                onClick={(e) => {
+                  e.stopPropagation()
+                  toggleFavorite(e, video)
+                }}
+                aria-label={isFavorite ? "Remove from favorites" : "Add to favorites"}
+                disabled={isCheckingFavorites}
+              >
+                <Heart className="h-3.5 w-3.5" fill={isFavorite ? "currentColor" : "none"} />
               </button>
             </div>
           </div>
