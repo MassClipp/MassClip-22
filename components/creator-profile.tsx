@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react"
 import { useSearchParams } from "next/navigation"
 import Image from "next/image"
-import { Share2, Edit, Instagram, Twitter, Globe, Lock, Upload, Plus, RefreshCw, Play, X } from "lucide-react"
+import { Share2, Edit, Instagram, Twitter, Globe, Lock, Upload, Plus, RefreshCw } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useAuth } from "@/contexts/auth-context"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -51,7 +51,6 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [isRefreshing, setIsRefreshing] = useState(false)
-  const [playingVideo, setPlayingVideo] = useState<string | null>(null)
   const { toast } = useToast()
 
   // Function to fetch videos
@@ -195,86 +194,29 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
     return date.toLocaleDateString("en-US", { month: "long", year: "numeric" })
   }
 
-  const handleVideoClick = (video: VideoItem) => {
-    // If this video is already playing, stop it
-    if (playingVideo === video.id) {
-      setPlayingVideo(null)
-      return
-    }
-
-    // Start playing this video
-    setPlayingVideo(video.id)
-  }
-
   // Function to render video card
   const renderVideoCard = (video: VideoItem) => {
-    const isPlaying = playingVideo === video.id
-
     return (
       <div key={video.id} className="flex flex-col" style={{ maxWidth: "220px" }}>
-        {/* Video Container */}
-        <div
-          className={`relative overflow-hidden rounded-md ${
-            isPlaying ? "ring-1 ring-red-600" : "hover:ring-1 hover:ring-red-600"
-          }`}
-          style={{ aspectRatio: "9/16" }}
-        >
-          <div
-            className="relative overflow-hidden group cursor-pointer w-full h-full"
-            onClick={() => handleVideoClick(video)}
+        {/* Video Container - Always show the video element */}
+        <div className="relative overflow-hidden rounded-md" style={{ aspectRatio: "9/16" }}>
+          <video
+            src={video.url}
+            className="w-full h-full object-cover"
+            controls
+            preload="metadata"
+            poster={video.thumbnailUrl || "/video-thumbnail.png"}
           >
-            {isPlaying ? (
-              <div className="w-full h-full relative">
-                <video src={video.url} className="w-full h-full object-cover" controls playsInline autoPlay>
-                  Your browser does not support the video tag.
-                </video>
-                <button
-                  className="absolute top-2 right-2 bg-black/30 backdrop-blur-sm rounded-full p-1 z-10 opacity-70 hover:opacity-100 transition-opacity"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    handleVideoClick(video) // This will stop the video since it's already playing
-                  }}
-                >
-                  <X className="h-3 w-3 text-white" />
-                </button>
-              </div>
-            ) : (
-              <>
-                {video.thumbnailUrl ? (
-                  <img
-                    src={video.thumbnailUrl || "/placeholder.svg"}
-                    alt={video.title}
-                    className="w-full h-full object-cover"
-                    onError={(e) => {
-                      // Fallback if thumbnail fails to load
-                      const target = e.target as HTMLImageElement
-                      target.onerror = null
-                      target.src = "/placeholder.svg?key=video-thumbnail"
-                    }}
-                  />
-                ) : (
-                  <div className="w-full h-full bg-zinc-900 flex items-center justify-center">
-                    <span className="text-zinc-500 text-xs">No preview</span>
-                  </div>
-                )}
+            Your browser does not support the video tag.
+          </video>
 
-                {/* Minimal Play Button */}
-                <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                  <div className="rounded-full bg-black/40 backdrop-blur-sm p-1.5 transform transition-transform group-hover:scale-110">
-                    <Play className="h-4 w-4 text-white" fill="white" />
-                  </div>
-                </div>
-
-                {/* Premium badge if applicable */}
-                {video.isPremium && (
-                  <div className="absolute top-2 right-2 bg-black/30 backdrop-blur-sm text-white text-[10px] px-1.5 py-0.5 rounded-sm flex items-center">
-                    <Lock className="w-2 h-2 mr-0.5" />
-                    <span className="font-medium tracking-wide">PREMIUM</span>
-                  </div>
-                )}
-              </>
-            )}
-          </div>
+          {/* Premium badge if applicable */}
+          {video.isPremium && (
+            <div className="absolute top-2 right-2 bg-black/30 backdrop-blur-sm text-white text-[10px] px-1.5 py-0.5 rounded-sm flex items-center">
+              <Lock className="w-2 h-2 mr-0.5" />
+              <span className="font-medium tracking-wide">PREMIUM</span>
+            </div>
+          )}
         </div>
 
         {/* Video Title - Below the video */}
