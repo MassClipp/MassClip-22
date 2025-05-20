@@ -53,6 +53,7 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
   const [isRefreshing, setIsRefreshing] = useState(false)
   const [playingVideo, setPlayingVideo] = useState<string | null>(null)
   const [fadingIn, setFadingIn] = useState<string | null>(null)
+  const [loadedThumbnails, setLoadedThumbnails] = useState<{ [key: string]: boolean }>({})
   const videoRefs = useRef<{ [key: string]: HTMLVideoElement | null }>({})
   const { toast } = useToast()
 
@@ -249,10 +250,16 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
     setPlayingVideo(null)
   }
 
+  // Handle thumbnail load
+  const handleThumbnailLoad = (videoId: string) => {
+    setLoadedThumbnails((prev) => ({ ...prev, [videoId]: true }))
+  }
+
   // Function to render video card
   const renderVideoCard = (video: VideoItem) => {
     const isPlaying = playingVideo === video.id
     const isFading = fadingIn === video.id
+    const isThumbnailLoaded = loadedThumbnails[video.id]
 
     return (
       <div key={video.id} className="flex flex-col" style={{ maxWidth: "220px" }}>
@@ -264,7 +271,7 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
           style={{ aspectRatio: "9/16" }}
         >
           <div
-            className="relative overflow-hidden group cursor-pointer w-full h-full"
+            className="relative overflow-hidden group cursor-pointer w-full h-full bg-black"
             onClick={() => handleVideoClick(video)}
           >
             {/* Thumbnail (visible when not playing) */}
@@ -274,19 +281,25 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
               }`}
             >
               {video.thumbnailUrl ? (
-                <img
-                  src={video.thumbnailUrl || "/placeholder.svg"}
-                  alt={video.title}
-                  className="w-full h-full object-cover"
-                  onError={(e) => {
-                    // Fallback if thumbnail fails to load
-                    const target = e.target as HTMLImageElement
-                    target.onerror = null
-                    target.src = "/placeholder.svg?key=video-thumbnail"
-                  }}
-                />
+                <div className="w-full h-full bg-black">
+                  <img
+                    src={video.thumbnailUrl || "/placeholder.svg"}
+                    alt={video.title}
+                    className={`w-full h-full object-cover transition-opacity duration-300 ${
+                      isThumbnailLoaded ? "opacity-100" : "opacity-0"
+                    }`}
+                    onLoad={() => handleThumbnailLoad(video.id)}
+                    onError={(e) => {
+                      // Fallback if thumbnail fails to load
+                      const target = e.target as HTMLImageElement
+                      target.onerror = null
+                      target.src = "/placeholder.svg?key=video-thumbnail"
+                      handleThumbnailLoad(video.id) // Mark as loaded even if it's the fallback
+                    }}
+                  />
+                </div>
               ) : video.url ? (
-                <div className="w-full h-full bg-zinc-900 flex items-center justify-center relative">
+                <div className="w-full h-full bg-black flex items-center justify-center relative">
                   <video
                     className="w-full h-full object-cover"
                     preload="metadata"
@@ -297,7 +310,7 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
                   </video>
                 </div>
               ) : (
-                <div className="w-full h-full bg-zinc-900 flex items-center justify-center">
+                <div className="w-full h-full bg-black flex items-center justify-center">
                   <span className="text-zinc-500 text-xs">No preview</span>
                 </div>
               )}
@@ -327,7 +340,7 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
               <video
                 ref={(el) => (videoRefs.current[video.id] = el)}
                 src={video.url}
-                className="w-full h-full object-cover"
+                className="w-full h-full object-cover bg-black"
                 playsInline
                 // Remove autoPlay to ensure videos only play when clicked
                 onClick={(e) => e.stopPropagation()}
@@ -570,7 +583,7 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-5">
                   {[1, 2, 3, 4, 5].map((i) => (
                     <div key={i} className="flex flex-col" style={{ maxWidth: "220px" }}>
-                      <div className="bg-zinc-800 animate-pulse rounded-md" style={{ aspectRatio: "9/16" }} />
+                      <div className="bg-zinc-900 animate-pulse rounded-md" style={{ aspectRatio: "9/16" }} />
                       <div className="mt-2">
                         <div className="h-3 bg-zinc-800 animate-pulse rounded w-3/4"></div>
                         <div className="h-2 bg-zinc-800 animate-pulse rounded w-1/2 mt-1"></div>
@@ -631,7 +644,7 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-5">
                   {[1, 2, 3, 4, 5].map((i) => (
                     <div key={i} className="flex flex-col" style={{ maxWidth: "220px" }}>
-                      <div className="bg-zinc-800 animate-pulse rounded-md" style={{ aspectRatio: "9/16" }} />
+                      <div className="bg-zinc-900 animate-pulse rounded-md" style={{ aspectRatio: "9/16" }} />
                       <div className="mt-2">
                         <div className="h-3 bg-zinc-800 animate-pulse rounded w-3/4"></div>
                         <div className="h-2 bg-zinc-800 animate-pulse rounded w-1/2 mt-1"></div>
