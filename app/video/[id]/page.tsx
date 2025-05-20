@@ -8,8 +8,9 @@ import { doc, getDoc } from "firebase/firestore"
 import { db } from "@/lib/firebase"
 import { useAuth } from "@/contexts/auth-context"
 import { useToast } from "@/hooks/use-toast"
-import SimpleVideoPlayer from "@/components/simple-video-player"
-import VideoDebug from "@/components/video-debug"
+import RawVideoPlayer from "@/components/raw-video-player"
+// import SimpleVideoPlayer from "@/components/simple-video-player" // Removed
+// import VideoDebug from "@/components/video-debug" // Removed
 
 export default function VideoPage() {
   const { id } = useParams()
@@ -128,9 +129,7 @@ export default function VideoPage() {
 
         {/* Video player */}
         <div className="max-w-sm mx-auto">
-          {" "}
-          {/* Changed from max-w-4xl to max-w-sm for better 9:16 display */}
-          <SimpleVideoPlayer videoUrl={video.url} thumbnailUrl={video.thumbnailUrl} title={video.title} />
+          <RawVideoPlayer videoUrl={video.url} />
         </div>
 
         {/* Video info */}
@@ -160,7 +159,7 @@ export default function VideoPage() {
           )}
 
           {/* Debug tools for owners or when debug param is present */}
-          {(isOwner || debug) && <VideoDebug videoUrl={video.url} />}
+          {/* {(isOwner || debug) && <VideoDebug videoUrl={video.url} />} */}
         </div>
       </div>
     </div>
