@@ -238,6 +238,17 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
     }, 300) // Match this with the CSS transition duration
   }
 
+  // Function to stop video playback
+  const stopVideo = (videoId: string) => {
+    const videoElement = videoRefs.current[videoId]
+    if (videoElement) {
+      videoElement.pause()
+      // Reset the video to the beginning
+      videoElement.currentTime = 0
+    }
+    setPlayingVideo(null)
+  }
+
   // Function to render video card
   const renderVideoCard = (video: VideoItem) => {
     const isPlaying = playingVideo === video.id
@@ -318,7 +329,7 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
                 src={video.url}
                 className="w-full h-full object-cover"
                 playsInline
-                autoPlay
+                // Remove autoPlay to ensure videos only play when clicked
                 onClick={(e) => e.stopPropagation()}
                 onTouchStart={(e) => e.stopPropagation()}
                 controlsList="nodownload nofullscreen noremoteplayback noplaybackrate"
@@ -344,12 +355,12 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
                 }}
               />
 
-              {/* Close button */}
+              {/* Close button - clicking it will stop the video */}
               <button
                 className="absolute top-2 right-2 bg-black/30 backdrop-blur-sm rounded-full p-1 z-10 opacity-0 group-hover:opacity-70 hover:opacity-100 transition-opacity duration-200"
                 onClick={(e) => {
                   e.stopPropagation()
-                  setPlayingVideo(null)
+                  stopVideo(video.id)
                 }}
               >
                 <X className="h-3 w-3 text-white" />
