@@ -1,9 +1,9 @@
 "use client"
 
-import { useState, useEffect, useCallback, useRef } from "react"
-import { useSearchParams } from "next/navigation"
+import { useState, useEffect, useCallback } from "react"
+import { useSearchParams, useRouter } from "next/navigation"
 import Image from "next/image"
-import { Share2, Edit, Instagram, Twitter, Globe, Lock, Upload, Plus, RefreshCw, Play, X } from "lucide-react"
+import { Share2, Edit, Instagram, Twitter, Globe, Lock, Upload, Plus, RefreshCw, Play } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useAuth } from "@/contexts/auth-context"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
@@ -43,6 +43,7 @@ interface VideoItem {
 export default function CreatorProfile({ creator }: { creator: Creator }) {
   const { user: userData } = useAuth()
   const searchParams = useSearchParams()
+  const router = useRouter()
   const defaultTab = searchParams.get("tab") || "free"
   const [activeTab, setActiveTab] = useState(defaultTab)
   const isOwner = userData && userData.uid === creator.uid
@@ -51,8 +52,7 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [isRefreshing, setIsRefreshing] = useState(false)
-  const [playingVideo, setPlayingVideo] = useState<string | null>(null)
-  const videoRefs = useRef<{ [key: string]: HTMLVideoElement | null }>({})
+  const [selectedVideo, setSelectedVideo] = useState<VideoItem | null>(null)
   const { toast } = useToast()
 
   // Function to fetch videos
@@ -197,130 +197,69 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
   }
 
   const handleVideoClick = (video: VideoItem) => {
-    // If this video is already playing, stop it
-    if (playingVideo === video.id) {
-      const videoElement = videoRefs.current[video.id]
-      if (videoElement) {
-        videoElement.pause()
-      }
-      setPlayingVideo(null)
-      return
-    }
+    // Instead of navigating, we can show the video directly in a modal or expand it in place
+    setSelectedVideo(video)
 
-    // If another video is playing, stop it
-    if (playingVideo && videoRefs.current[playingVideo]) {
-      videoRefs.current[playingVideo]?.pause()
-    }
-
-    // Start playing this video
-    setPlayingVideo(video.id)
-
-    // Use setTimeout to ensure the video element is rendered before trying to play
-    setTimeout(() => {
-      const videoElement = videoRefs.current[video.id]
-      if (videoElement) {
-        videoElement.play().catch((err) => {
-          console.error("Error playing video:", err)
-          toast({
-            title: "Playback error",
-            description: "There was a problem playing this video. Please try again.",
-            variant: "destructive",
-          })
-        })
-      }
-    }, 100)
+    // Or still navigate but with a flag to use the simple player
+    router.push(`/video/${video.id}?creatorId=${creator.uid}&isPremium=${video.isPremium}&simple=true`)
   }
 
   // Function to render video card
   const renderVideoCard = (video: VideoItem) => {
-    const isPlaying = playingVideo === video.id
-
     return (
       <div
         key={video.id}
-        className={`overflow-hidden bg-zinc-900 border rounded-lg transition-all ${
-          isPlaying ? "border-red-600 border-2" : "border-zinc-800 hover:border-red-600 hover:border-2"
-        }`}
-        style={{ maxWidth: "240px" }}
+        className="overflow-hidden bg-zinc-900 border border-zinc-800 rounded-lg cursor-pointer transition-transform hover:scale-[1.02]"
+        onClick={() => handleVideoClick(video)}
       >
-        <div
-          className="relative overflow-hidden group cursor-pointer"
-          style={{ aspectRatio: "9/16" }}
-          onClick={() => handleVideoClick(video)}
-        >
-          {isPlaying ? (
-            <div className="w-full h-full relative">
+        <div className="aspect-video relative overflow-hidden group">
+          {video.thumbnailUrl ? (
+            <img
+              src={video.thumbnailUrl || "/placeholder.svg"}
+              alt={video.title}
+              className="w-full h-full object-cover"
+              onError={(e) => {
+                // Fallback if thumbnail fails to load
+                const target = e.target as HTMLImageElement
+                target.onerror = null
+                target.src = "/placeholder.svg?key=video-thumbnail"
+              }}
+            />
+          ) : video.url ? (
+            <div className="w-full h-full bg-zinc-800 flex items-center justify-center relative">
               <video
-                ref={(el) => (videoRefs.current[video.id] = el)}
-                src={video.url}
                 className="w-full h-full object-cover"
-                controls
-                playsInline
-                autoPlay
+                preload="metadata"
+                poster="/placeholder.svg?key=video-poster"
               >
+                <source src={`${video.url}#t=0.1`} type="video/mp4" />
                 Your browser does not support the video tag.
               </video>
-              <button
-                className="absolute top-2 right-2 bg-black/50 rounded-full p-1 z-10"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  handleVideoClick(video) // This will stop the video since it's already playing
-                }}
-              >
-                <X className="h-4 w-4 text-white" />
-              </button>
+              <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent"></div>
             </div>
           ) : (
-            <>
-              {video.thumbnailUrl ? (
-                <img
-                  src={video.thumbnailUrl || "/placeholder.svg"}
-                  alt={video.title}
-                  className="w-full h-full object-cover"
-                  onError={(e) => {
-                    // Fallback if thumbnail fails to load
-                    const target = e.target as HTMLImageElement
-                    target.onerror = null
-                    target.src = "/placeholder.svg?key=video-thumbnail"
-                  }}
-                />
-              ) : video.url ? (
-                <div className="w-full h-full bg-zinc-800 flex items-center justify-center relative">
-                  <video
-                    className="w-full h-full object-cover"
-                    preload="metadata"
-                    poster="/placeholder.svg?key=video-poster"
-                  >
-                    <source src={`${video.url}#t=0.1`} type="video/mp4" />
-                    Your browser does not support the video tag.
-                  </video>
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent"></div>
-                </div>
-              ) : (
-                <div className="w-full h-full bg-zinc-800 flex items-center justify-center">
-                  <span className="text-zinc-500">No preview available</span>
-                </div>
-              )}
+            <div className="w-full h-full bg-zinc-800 flex items-center justify-center">
+              <span className="text-zinc-500">No preview available</span>
+            </div>
+          )}
 
-              {/* Play button overlay */}
-              <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                <div className="rounded-full bg-red-500/80 p-2">
-                  <Play className="h-6 w-6 text-white" />
-                </div>
-              </div>
+          {/* Play button overlay */}
+          <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+            <div className="rounded-full bg-red-500/80 p-3">
+              <Play className="h-8 w-8 text-white" />
+            </div>
+          </div>
 
-              <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent flex items-end p-2">
-                <h3 className="font-medium text-white text-sm line-clamp-2">{video.title}</h3>
-              </div>
+          <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent flex items-end p-4">
+            <h3 className="font-medium text-white line-clamp-2">{video.title}</h3>
+          </div>
 
-              {/* Premium badge if applicable */}
-              {video.isPremium && (
-                <div className="absolute top-2 right-2 bg-red-500 text-white text-xs px-1.5 py-0.5 rounded-full flex items-center">
-                  <Lock className="w-2.5 h-2.5 mr-0.5" />
-                  <span className="text-xs">Premium</span>
-                </div>
-              )}
-            </>
+          {/* Premium badge if applicable */}
+          {video.isPremium && (
+            <div className="absolute top-2 right-2 bg-red-500 text-white text-xs px-2 py-1 rounded-full flex items-center">
+              <Lock className="w-3 h-3 mr-1" />
+              Premium
+            </div>
           )}
         </div>
       </div>
@@ -516,13 +455,9 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
               )}
 
               {isLoading ? (
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-                  {[1, 2, 3, 4, 5].map((i) => (
-                    <div
-                      key={i}
-                      className="bg-zinc-800 animate-pulse rounded-lg"
-                      style={{ aspectRatio: "9/16", maxWidth: "240px" }}
-                    />
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {[1, 2, 3].map((i) => (
+                    <div key={i} className="aspect-video bg-zinc-800 animate-pulse rounded-lg" />
                   ))}
                 </div>
               ) : error ? (
@@ -533,7 +468,7 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
                   </div>
                 </div>
               ) : freeVideos.length > 0 ? (
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                   {freeVideos.map((video) => renderVideoCard(video))}
                 </div>
               ) : (
@@ -575,13 +510,9 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
               )}
 
               {isLoading ? (
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
-                  {[1, 2, 3, 4, 5].map((i) => (
-                    <div
-                      key={i}
-                      className="bg-zinc-800 animate-pulse rounded-lg"
-                      style={{ aspectRatio: "9/16", maxWidth: "240px" }}
-                    />
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {[1, 2, 3].map((i) => (
+                    <div key={i} className="aspect-video bg-zinc-800 animate-pulse rounded-lg" />
                   ))}
                 </div>
               ) : error ? (
@@ -592,7 +523,7 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
                   </div>
                 </div>
               ) : premiumVideos.length > 0 ? (
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                   {premiumVideos.map((video) => renderVideoCard(video))}
                 </div>
               ) : (
