@@ -1,25 +1,30 @@
 "use client"
 
-import { useState, useRef, useCallback } from "react"
+import { useState, useRef, useCallback, useEffect } from "react"
 import { useAuth } from "@/contexts/auth-context"
 import { db } from "@/lib/firebase"
 import { doc, deleteDoc, type Timestamp } from "firebase/firestore"
 import DashboardHeader from "@/components/dashboard-header"
 import VimeoCard from "@/components/vimeo-card"
 import { Button } from "@/components/ui/button"
-import { Trash2, RefreshCw, Clock } from "lucide-react"
+import { Trash2, RefreshCw, Clock, AlertTriangle } from "lucide-react"
 import type { VimeoVideo } from "@/lib/types"
 import { trackFirestoreWrite } from "@/lib/firestore-optimizer"
 import VideoSkeletonCard from "@/components/video-skeleton-card"
 import { usePaginatedFirestore } from "@/hooks/use-paginated-firestore"
 import { motion } from "framer-motion"
 import { format } from "date-fns"
+import { initializeUserSubcollections } from "@/lib/subcollection-initializer"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { useRouter } from "next/navigation"
 
 export default function HistoryPage() {
   const { user } = useAuth()
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [initializingSubcollections, setInitializingSubcollections] = useState(false)
   const observerRef = useRef<IntersectionObserver | null>(null)
+  const router = useRouter()
   const PAGE_SIZE = 12
 
   // Use the paginated hook for history
@@ -39,6 +44,34 @@ export default function HistoryPage() {
     "HistoryPage",
     !!user,
   )
+
+  // Initialize subcollections if there's an error
+  useEffect(() => {
+    if (historyError && user) {
+      const errorMessage = historyError.message || ""
+      if (errorMessage.includes("permission") || errorMessage.includes("Permission")) {
+        console.log("[HistoryPage] Detected permission error, attempting to initialize subcollections")
+        handleInitializeSubcollections()
+      }
+    }
+  }, [historyError, user])
+
+  const handleInitializeSubcollections = async () => {
+    if (!user) return
+
+    setInitializingSubcollections(true)
+    try {
+      await initializeUserSubcollections(user.uid)
+      // Wait a moment before refreshing
+      setTimeout(() => {
+        refreshData()
+      }, 1000)
+    } catch (err) {
+      console.error("[HistoryPage] Error initializing subcollections:", err)
+    } finally {
+      setInitializingSubcollections(false)
+    }
+  }
 
   const removeHistoryItem = async (historyId: string) => {
     if (!user) return
@@ -84,7 +117,7 @@ export default function HistoryPage() {
 
   // Combine errors
   const combinedError = error || (historyError ? historyError.message : null)
-  const isLoading = loading || historyLoading
+  const isLoading = loading || historyLoading || initializingSubcollections
 
   // Animation variants
   const containerVariants = {
@@ -129,15 +162,28 @@ export default function HistoryPage() {
             <p className="text-gray-400 mt-2 text-lg">Videos you've recently viewed</p>
           </div>
 
-          <Button
-            variant="outline"
-            onClick={refreshData}
-            disabled={isLoading}
-            className="border-gray-800 bg-black/50 text-white hover:bg-gray-900 hover:text-red-500 transition-all duration-300"
-          >
-            <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? "animate-spin" : ""}`} />
-            Refresh
-          </Button>
+          <div className="flex space-x-2">
+            <Button
+              variant="outline"
+              onClick={refreshData}
+              disabled={isLoading}
+              className="border-gray-800 bg-black/50 text-white hover:bg-gray-900 hover:text-red-500 transition-all duration-300"
+            >
+              <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? "animate-spin" : ""}`} />
+              Refresh
+            </Button>
+
+            {historyError && historyError.message.includes("permission") && (
+              <Button
+                variant="destructive"
+                onClick={() => router.push("/dashboard/fix-subcollections")}
+                className="bg-red-900 hover:bg-red-800"
+              >
+                <AlertTriangle className="h-4 w-4 mr-2" />
+                Fix Permissions
+              </Button>
+            )}
+          </div>
         </motion.div>
 
         {/* Red accent line */}
@@ -147,13 +193,31 @@ export default function HistoryPage() {
 
         {/* Error state */}
         {combinedError && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="px-6 py-10 text-center">
-            <p className="text-red-500 bg-red-500/10 border border-red-500/20 rounded-lg p-4">{combinedError}</p>
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="px-6 py-4 mb-4">
+            <Alert variant="destructive">
+              <AlertTriangle className="h-4 w-4" />
+              <AlertTitle>Error</AlertTitle>
+              <AlertDescription>
+                {combinedError}
+                {combinedError.includes("permission") && (
+                  <div className="mt-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={handleInitializeSubcollections}
+                      disabled={initializingSubcollections}
+                    >
+                      {initializingSubcollections ? "Fixing..." : "Fix Permissions"}
+                    </Button>
+                  </div>
+                )}
+              </AlertDescription>
+            </Alert>
           </motion.div>
         )}
 
         {/* Empty state */}
-        {historyItems.length === 0 && (
+        {historyItems.length === 0 && !combinedError && (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}

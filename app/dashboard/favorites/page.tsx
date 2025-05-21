@@ -7,23 +7,13 @@ import { doc, deleteDoc } from "firebase/firestore"
 import DashboardHeader from "@/components/dashboard-header"
 import VimeoCard from "@/components/vimeo-card"
 import { Button } from "@/components/ui/button"
-import { Trash2, RefreshCw, ExternalLink } from "lucide-react"
+import { Trash2, RefreshCw, AlertTriangle } from "lucide-react"
+import type { VimeoVideo } from "@/lib/types"
 import { trackFirestoreWrite } from "@/lib/firestore-optimizer"
 import VideoSkeletonCard from "@/components/video-skeleton-card"
 import { usePaginatedFirestore } from "@/hooks/use-paginated-firestore"
 import { motion } from "framer-motion"
 import Link from "next/link"
-
-// Define a type for our favorite items that can contain either type of video
-interface FavoriteItem {
-  id: string
-  videoId: string
-  source?: string // 'vimeo' or 'cloudflare'
-  video: any // Can be VimeoVideo or VideoItem
-  creatorId?: string
-  creatorName?: string
-  creatorUsername?: string
-}
 
 export default function FavoritesPage() {
   const { user } = useAuth()
@@ -41,7 +31,7 @@ export default function FavoritesPage() {
     hasMore,
     loadMore,
     refreshData,
-  } = usePaginatedFirestore<FavoriteItem>(
+  } = usePaginatedFirestore<{ id: string; video: VimeoVideo }>(
     `users/${user?.uid || "no-user"}/favorites`,
     PAGE_SIZE,
     "createdAt",
@@ -95,6 +85,12 @@ export default function FavoritesPage() {
   // Combine errors
   const combinedError = error || (favoritesError ? favoritesError.message : null)
   const isLoading = loading || favoritesLoading
+  const hasPermissionError =
+    combinedError &&
+    (combinedError.includes("permission") ||
+      combinedError.includes("Permission") ||
+      combinedError.includes("insufficient") ||
+      combinedError.includes("Missing"))
 
   // Animation variants
   const containerVariants = {
@@ -115,61 +111,6 @@ export default function FavoritesPage() {
   // If we're in the initial loading state, show the loading component
   if (initialLoading) {
     return <FavoritesLoading />
-  }
-
-  // Render a CloudflareVideoCard for Cloudflare videos
-  const renderCloudflareVideoCard = (favorite: FavoriteItem) => {
-    const video = favorite.video
-
-    if (!video) {
-      return (
-        <div className="relative overflow-hidden rounded-lg bg-gray-900 aspect-[9/16] flex items-center justify-center">
-          <p className="text-gray-400 text-sm">Video not available</p>
-        </div>
-      )
-    }
-
-    return (
-      <div className="overflow-hidden rounded-lg transition-all duration-300 transform group-hover:scale-[1.02] group-hover:shadow-lg group-hover:shadow-red-900/20">
-        <div className="relative aspect-[9/16] bg-black overflow-hidden rounded-lg">
-          {/* Thumbnail */}
-          {video.thumbnailUrl ? (
-            <img
-              src={video.thumbnailUrl || "/placeholder.svg"}
-              alt={video.title || "Video thumbnail"}
-              className="w-full h-full object-cover"
-            />
-          ) : (
-            <div className="w-full h-full bg-gray-900 flex items-center justify-center">
-              <span className="text-gray-400 text-sm">No thumbnail</span>
-            </div>
-          )}
-
-          {/* Title overlay at bottom */}
-          <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-2">
-            <h3 className="text-white text-sm font-medium truncate">{video.title || "Untitled"}</h3>
-          </div>
-
-          {/* Creator link */}
-          {favorite.creatorUsername && (
-            <div className="absolute top-2 left-2 bg-black/50 backdrop-blur-sm rounded-full px-2 py-1">
-              <Link
-                href={`/creator/${favorite.creatorUsername}`}
-                className="text-xs text-white flex items-center gap-1 hover:text-red-400 transition-colors"
-              >
-                <ExternalLink size={10} />
-                <span>{favorite.creatorName || favorite.creatorUsername}</span>
-              </Link>
-            </div>
-          )}
-
-          {/* Premium badge if applicable */}
-          {video.isPremium && (
-            <div className="absolute top-2 right-2 bg-red-600/80 text-white text-xs px-1.5 py-0.5 rounded">PREMIUM</div>
-          )}
-        </div>
-      </div>
-    )
   }
 
   return (
@@ -194,15 +135,26 @@ export default function FavoritesPage() {
             <p className="text-gray-400 mt-2 text-lg">Videos you've saved for quick access</p>
           </div>
 
-          <Button
-            variant="outline"
-            onClick={refreshData}
-            disabled={isLoading}
-            className="border-gray-800 bg-black/50 text-white hover:bg-gray-900 hover:text-red-500 transition-all duration-300"
-          >
-            <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? "animate-spin" : ""}`} />
-            Refresh
-          </Button>
+          <div className="flex space-x-2">
+            <Button
+              variant="outline"
+              onClick={refreshData}
+              disabled={isLoading}
+              className="border-gray-800 bg-black/50 text-white hover:bg-gray-900 hover:text-red-500 transition-all duration-300"
+            >
+              <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? "animate-spin" : ""}`} />
+              Refresh
+            </Button>
+
+            {hasPermissionError && (
+              <Link href="/fix-permissions">
+                <Button variant="destructive" className="bg-red-600 hover:bg-red-700">
+                  <AlertTriangle className="h-4 w-4 mr-2" />
+                  Fix Permissions
+                </Button>
+              </Link>
+            )}
+          </div>
         </motion.div>
 
         {/* Red accent line */}
@@ -212,13 +164,29 @@ export default function FavoritesPage() {
 
         {/* Error state */}
         {combinedError && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="px-6 py-10 text-center">
-            <p className="text-red-500 bg-red-500/10 border border-red-500/20 rounded-lg p-4">{combinedError}</p>
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="px-6 py-4 mb-4">
+            <div className="bg-red-900/20 border border-red-900/30 rounded-lg p-4 text-red-400">
+              <div className="flex items-start">
+                <AlertTriangle className="h-5 w-5 mr-2 mt-0.5 flex-shrink-0" />
+                <div>
+                  <p className="font-medium">{combinedError}</p>
+                  {hasPermissionError && (
+                    <div className="mt-3">
+                      <Link href="/fix-permissions">
+                        <Button variant="destructive" size="sm" className="bg-red-600 hover:bg-red-700">
+                          Fix Permissions Now
+                        </Button>
+                      </Link>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
           </motion.div>
         )}
 
         {/* Empty state */}
-        {favorites.length === 0 && (
+        {favorites.length === 0 && !combinedError && (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -256,15 +224,9 @@ export default function FavoritesPage() {
                   className="relative group"
                   ref={index === favorites.length - 1 ? lastElementRef : undefined}
                 >
-                  {/* Render different card types based on source */}
-                  {favorite.source === "cloudflare" ? (
-                    renderCloudflareVideoCard(favorite)
-                  ) : (
-                    <div className="overflow-hidden rounded-lg transition-all duration-300 transform group-hover:scale-[1.02] group-hover:shadow-lg group-hover:shadow-red-900/20">
-                      <VimeoCard video={favorite.video} />
-                    </div>
-                  )}
-
+                  <div className="overflow-hidden rounded-lg transition-all duration-300 transform group-hover:scale-[1.02] group-hover:shadow-lg group-hover:shadow-red-900/20">
+                    <VimeoCard video={favorite.video} />
+                  </div>
                   <Button
                     variant="destructive"
                     size="icon"

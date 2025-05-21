@@ -12,7 +12,7 @@ import {
   GoogleAuthProvider,
   signInWithPopup,
 } from "firebase/auth"
-import { doc, getDoc, setDoc, getFirestore } from "firebase/firestore"
+import { doc, getDoc, setDoc, deleteDoc, getFirestore, serverTimestamp, writeBatch } from "firebase/firestore"
 import { useRouter, usePathname } from "next/navigation"
 import { initializeFirebaseApp } from "@/lib/firebase"
 
@@ -67,10 +67,49 @@ export function AuthProvider({ children }: AuthProviderProps) {
         throw new Error("Failed to create session")
       }
 
-      console.log("Session created successfully")
+      console.log("[AuthContext] Session created successfully")
       return true
     } catch (error) {
-      console.error("Error creating session:", error)
+      console.error("[AuthContext] Error creating session:", error)
+      return false
+    }
+  }
+
+  // Initialize user subcollections - critical to prevent permission errors
+  const initializeUserSubcollections = async (uid: string) => {
+    console.log(`[AuthContext] Initializing subcollections for user: ${uid}`)
+    try {
+      const db = getFirestore()
+
+      // Use a batch to ensure atomic operations
+      const batch = writeBatch(db)
+
+      // Initialize favorites subcollection
+      const favInitDoc = doc(db, `users/${uid}/favorites/__init__`)
+      batch.set(favInitDoc, {
+        createdAt: new Date(),
+        temporary: true,
+      })
+
+      // Initialize history subcollection
+      const histInitDoc = doc(db, `users/${uid}/history/__init__`)
+      batch.set(histInitDoc, {
+        createdAt: new Date(),
+        temporary: true,
+      })
+
+      // Commit the batch
+      await batch.commit()
+      console.log(`[AuthContext] Subcollections initialized with batch write`)
+
+      // Now delete the temporary documents
+      await deleteDoc(favInitDoc)
+      await deleteDoc(histInitDoc)
+      console.log(`[AuthContext] Temporary documents deleted`)
+
+      return true
+    } catch (error) {
+      console.error("[AuthContext] Error initializing subcollections:", error)
       return false
     }
   }
@@ -102,6 +141,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
               } as User
 
               setUser(enhancedUser)
+
+              // Ensure subcollections exist for existing users
+              await initializeUserSubcollections(firebaseUser.uid)
             } else {
               // Create a new user document if it doesn't exist
               const newUserData = {
@@ -111,9 +153,13 @@ export function AuthProvider({ children }: AuthProviderProps) {
                 createdAt: new Date(),
                 plan: "free",
                 permissions: { download: false, premium: false },
+                bio: "",
               }
 
               await setDoc(doc(db, "users", firebaseUser.uid), newUserData)
+
+              // Initialize subcollections
+              await initializeUserSubcollections(firebaseUser.uid)
 
               const enhancedUser = {
                 ...firebaseUser,
@@ -124,7 +170,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
               setUser(enhancedUser)
             }
           } catch (error) {
-            console.error("Error fetching user data:", error)
+            console.error("[AuthContext] Error fetching user data:", error)
             // Still set the basic user even if Firestore fails
             setUser(firebaseUser as User)
           }
@@ -147,7 +193,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       // Cleanup subscription on unmount
       return () => unsubscribe()
     } catch (error) {
-      console.error("Error initializing Firebase:", error)
+      console.error("[AuthContext] Error initializing Firebase:", error)
       setLoading(false)
     }
   }, [pathname, router])
@@ -178,7 +224,14 @@ export function AuthProvider({ children }: AuthProviderProps) {
           createdAt: new Date(),
           plan: "free",
           permissions: { download: false, premium: false },
+          bio: "",
         })
+
+        // Initialize subcollections
+        await initializeUserSubcollections(user.uid)
+      } else {
+        // Ensure subcollections exist for existing users
+        await initializeUserSubcollections(user.uid)
       }
 
       // Get redirect URL from query params if we're in the browser
@@ -194,7 +247,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
       router.push(redirectTo)
     } catch (error) {
-      console.error("Error signing in with Google:", error)
+      console.error("[AuthContext] Error signing in with Google:", error)
       throw error
     } finally {
       setLoading(false)
@@ -211,6 +264,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
       // Create session cookie
       await createSession(userCredential.user)
 
+      // Ensure subcollections exist
+      await initializeUserSubcollections(userCredential.user.uid)
+
       // Get redirect URL from query params if we're in the browser
       let redirectTo = "/dashboard"
 
@@ -224,7 +280,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
       router.push(redirectTo)
     } catch (error) {
-      console.error("Error signing in:", error)
+      console.error("[AuthContext] Error signing in:", error)
       throw error
     } finally {
       setLoading(false)
@@ -245,14 +301,19 @@ export function AuthProvider({ children }: AuthProviderProps) {
       const db = getFirestore()
       await setDoc(doc(db, "users", newUser.uid), {
         email,
-        createdAt: new Date(),
+        createdAt: serverTimestamp(),
         plan: "free",
         permissions: { download: false, premium: false },
+        bio: "",
+        photoURL: null,
       })
+
+      // Initialize subcollections - critical step to prevent permission errors
+      await initializeUserSubcollections(newUser.uid)
 
       router.push("/dashboard")
     } catch (error) {
-      console.error("Error signing up:", error)
+      console.error("[AuthContext] Error signing up:", error)
       throw error
     } finally {
       setLoading(false)
@@ -278,7 +339,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       // Return a resolved promise
       return Promise.resolve()
     } catch (error) {
-      console.error("Error signing out:", error)
+      console.error("[AuthContext] Error signing out:", error)
       return Promise.reject(error)
     } finally {
       setLoading(false)
@@ -291,7 +352,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       const auth = getAuth()
       await sendPasswordResetEmail(auth, email)
     } catch (error) {
-      console.error("Error resetting password:", error)
+      console.error("[AuthContext] Error resetting password:", error)
       throw error
     }
   }

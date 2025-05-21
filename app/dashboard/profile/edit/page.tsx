@@ -12,7 +12,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { updateProfile } from "firebase/auth"
-import { doc, getDoc, updateDoc } from "firebase/firestore"
+import { doc, getDoc, updateDoc, collection, query, where, getDocs } from "firebase/firestore"
 import { db } from "@/lib/firebase"
 import { Loader2, User, AtSign, FileText, ArrowLeft, Save } from "lucide-react"
 
@@ -71,9 +71,9 @@ export default function EditProfilePage() {
 
     try {
       // Query Firestore to check if username exists
-      const usersRef = db.collection("users")
-      const query = usersRef.where("username", "==", username.toLowerCase())
-      const snapshot = await query.get()
+      const usersRef = collection(db, "users")
+      const q = query(usersRef, where("username", "==", username.toLowerCase()))
+      const snapshot = await getDocs(q)
 
       return snapshot.empty
     } catch (error) {

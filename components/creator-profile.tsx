@@ -35,8 +35,6 @@ interface Creator {
   displayName: string
   bio: string
   profilePic: string
-  freeClips: any[]
-  paidClips: any[]
   createdAt: string
   socialLinks?: {
     instagram?: string
@@ -367,7 +365,7 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
     }
   }
 
-  // Toggle favorite - Updated to preserve original format
+  // Toggle favorite - Updated to ensure compatibility with VimeoCard
   const toggleFavorite = async (e: React.MouseEvent, video: VideoItem) => {
     e.preventDefault()
     e.stopPropagation()
@@ -407,14 +405,47 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
           description: "Video removed from your favorites",
         })
       } else {
-        // Add to favorites with the original video data and source information
+        // Format the video data to be compatible with VimeoCard
+        // This is the key change - we need to transform our VideoItem into a format
+        // that matches what VimeoCard expects
+        const vimeoCompatibleVideo = {
+          uri: `/videos/${videoId}`, // Create a URI format that VimeoCard expects
+          name: video.title,
+          description: video.description || "",
+          link: video.url,
+          pictures: {
+            sizes: [
+              {
+                width: 1920,
+                height: 1080,
+                link: video.thumbnailUrl || "",
+              },
+            ],
+          },
+          // Add other required fields that VimeoCard might use
+          duration: video.duration || 0,
+          width: 1920,
+          height: 1080,
+          created_time: video.createdAt || new Date().toISOString(),
+          modified_time: video.createdAt || new Date().toISOString(),
+          release_time: video.createdAt || new Date().toISOString(),
+          // Add download information
+          download: [
+            {
+              quality: "hd",
+              type: "video/mp4",
+              width: 1920,
+              height: 1080,
+              link: video.url,
+              size: 0,
+            },
+          ],
+        }
+
+        // Add to favorites with the properly formatted video object
         await addDoc(collection(db, `users/${userData.uid}/favorites`), {
           videoId: videoId,
-          video: video,
-          source: "cloudflare", // Identify this as a Cloudflare video
-          creatorId: creator.uid,
-          creatorName: creator.displayName,
-          creatorUsername: creator.username,
+          video: vimeoCompatibleVideo, // Store the compatible format
           createdAt: serverTimestamp(),
         })
 

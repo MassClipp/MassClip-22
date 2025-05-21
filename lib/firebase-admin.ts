@@ -32,9 +32,11 @@ export function initializeFirebaseAdmin() {
       throw error
     }
   }
+  return getApps()[0]
 }
 
 // Initialize Firebase Admin if not already initialized
+// This ensures that the Firebase Admin SDK is initialized when this module is imported
 initializeFirebaseAdmin()
 
 // Export the Firestore database

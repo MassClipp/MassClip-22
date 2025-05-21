@@ -12,7 +12,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { useFirebaseAuth } from "@/hooks/use-firebase-auth"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import Logo from "@/components/logo"
-import { Loader2, ArrowRight, Check, X, AlertTriangle } from "lucide-react"
+import { Loader2, ArrowRight, Check, X } from "lucide-react"
 import { GoogleAuthButton } from "@/components/google-auth-button"
 import { doc, getDoc, getFirestore } from "firebase/firestore"
 import { initializeFirebaseApp } from "@/lib/firebase"
@@ -29,18 +29,14 @@ export default function SignupPage() {
   const [isCheckingUsername, setIsCheckingUsername] = useState(false)
   const [usernameAvailable, setUsernameAvailable] = useState<boolean | null>(null)
   const [usernameError, setUsernameError] = useState<string | null>(null)
-  const [firebaseInitialized, setFirebaseInitialized] = useState(false)
   const { signUp, signInWithGoogle } = useFirebaseAuth()
   const router = useRouter()
 
   useEffect(() => {
     try {
       initializeFirebaseApp()
-      setFirebaseInitialized(true)
-      console.log("Firebase initialized in signup page")
     } catch (error) {
-      console.error("Error initializing Firebase in signup page:", error)
-      setErrorMessage("Error initializing Firebase. Please try again later or contact support.")
+      console.error("Error initializing Firebase:", error)
     }
   }, [])
 
@@ -62,7 +58,7 @@ export default function SignupPage() {
 
   // Check if username is available
   const checkUsernameAvailability = async (username: string) => {
-    if (!username || !firebaseInitialized) return
+    if (!username) return
 
     const validation = validateUsername(username)
     if (!validation.valid) {
@@ -76,13 +72,11 @@ export default function SignupPage() {
 
     try {
       const db = getFirestore()
-      console.log("Checking username availability:", username)
 
       // Check in usernames collection
       const usernameSnapshot = await getDoc(doc(db, "usernames", username))
 
       const isAvailable = !usernameSnapshot.exists()
-      console.log("Username available:", isAvailable)
 
       setUsernameAvailable(isAvailable)
       if (!isAvailable) {
@@ -99,7 +93,7 @@ export default function SignupPage() {
   // Check username availability when username changes
   useEffect(() => {
     const timer = setTimeout(() => {
-      if (username && firebaseInitialized) {
+      if (username) {
         checkUsernameAvailability(username)
       } else {
         setUsernameAvailable(null)
@@ -108,16 +102,11 @@ export default function SignupPage() {
     }, 500)
 
     return () => clearTimeout(timer)
-  }, [username, firebaseInitialized])
+  }, [username])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setErrorMessage(null)
-
-    if (!firebaseInitialized) {
-      setErrorMessage("Firebase is not initialized. Please refresh the page and try again.")
-      return
-    }
 
     if (!termsAccepted) {
       setErrorMessage("You must accept the terms and conditions")
@@ -156,29 +145,17 @@ export default function SignupPage() {
         // Redirect to their public profile
         router.push(`/creator/${username}`)
       } else {
-        // More detailed error message
-        console.error("Signup failed:", result.error)
-        setErrorMessage(result.error || "Failed to create account. Please try again or contact support.")
+        setErrorMessage(result.error || "Failed to create account")
       }
     } catch (error) {
       console.error("Signup error:", error)
-      // More detailed error message for unexpected errors
-      if (error instanceof Error) {
-        setErrorMessage(`Error: ${error.message}`)
-      } else {
-        setErrorMessage("An unexpected error occurred. Please try again or contact support.")
-      }
+      setErrorMessage("An unexpected error occurred")
     } finally {
       setIsLoading(false)
     }
   }
 
   const handleGoogleSignUp = async () => {
-    if (!firebaseInitialized) {
-      setErrorMessage("Firebase is not initialized. Please refresh the page and try again.")
-      return
-    }
-
     if (!termsAccepted) {
       setErrorMessage("You must accept the terms and conditions")
       return
@@ -215,11 +192,7 @@ export default function SignupPage() {
       }
     } catch (error) {
       console.error("Google signup error:", error)
-      if (error instanceof Error) {
-        setErrorMessage(`Error: ${error.message}`)
-      } else {
-        setErrorMessage("An unexpected error occurred. Please try again or contact support.")
-      }
+      setErrorMessage("An unexpected error occurred")
     } finally {
       setIsGoogleLoading(false)
     }
@@ -256,21 +229,6 @@ export default function SignupPage() {
             Join the #1 clip vault for faceless creators
           </motion.p>
         </div>
-
-        {!firebaseInitialized && (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: "auto" }}
-            transition={{ duration: 0.3 }}
-          >
-            <Alert variant="destructive" className="bg-yellow-900/20 border-yellow-900/30 text-yellow-400">
-              <AlertTriangle className="h-4 w-4 mr-2" />
-              <AlertDescription>
-                Initializing authentication... If this message persists, please refresh the page.
-              </AlertDescription>
-            </Alert>
-          </motion.div>
-        )}
 
         {errorMessage && (
           <motion.div
@@ -414,7 +372,7 @@ export default function SignupPage() {
             <Button
               type="submit"
               className="w-full bg-red-600 hover:bg-red-700 text-white transition-all duration-300 flex items-center justify-center gap-2 group"
-              disabled={isLoading || usernameAvailable === false || !firebaseInitialized}
+              disabled={isLoading || usernameAvailable === false}
             >
               {isLoading ? (
                 <>
@@ -452,7 +410,7 @@ export default function SignupPage() {
             onClick={handleGoogleSignUp}
             isLoading={isGoogleLoading}
             text="Sign up with Google"
-            disabled={usernameAvailable === false || !username || !firebaseInitialized}
+            disabled={usernameAvailable === false || !username}
           />
         </motion.div>
 
