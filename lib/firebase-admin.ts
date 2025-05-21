@@ -1,4 +1,4 @@
-import { cert, initializeApp, getApps, getApp } from "firebase-admin/app"
+import { cert, initializeApp, getApps } from "firebase-admin/app"
 import { getFirestore } from "firebase-admin/firestore"
 
 /**
@@ -35,9 +35,6 @@ export function initializeFirebaseAdmin() {
 
 // Initialize Firebase Admin if not already initialized
 initializeFirebaseAdmin()
-
-// Export the admin app instance
-export const adminApp = getApps().length > 0 ? getApp() : null
 
 // Export the Firestore database
 export const db = getFirestore()
