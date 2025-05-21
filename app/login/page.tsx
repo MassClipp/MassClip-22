@@ -1,7 +1,7 @@
 "use client"
 
 import type React from "react"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { motion } from "framer-motion"
@@ -11,8 +11,9 @@ import { Label } from "@/components/ui/label"
 import { useFirebaseAuth } from "@/hooks/use-firebase-auth"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import Logo from "@/components/logo"
-import { Loader2, ArrowRight } from "lucide-react"
+import { Loader2, ArrowRight, AlertTriangle } from "lucide-react"
 import { GoogleAuthButton } from "@/components/google-auth-button"
+import { initializeFirebaseApp } from "@/lib/firebase"
 
 export default function LoginPage() {
   const [email, setEmail] = useState("")
@@ -20,25 +21,50 @@ export default function LoginPage() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [isGoogleLoading, setIsGoogleLoading] = useState(false)
+  const [firebaseInitialized, setFirebaseInitialized] = useState(false)
   const { signIn, signInWithGoogle } = useFirebaseAuth()
   const router = useRouter()
+
+  useEffect(() => {
+    try {
+      initializeFirebaseApp()
+      setFirebaseInitialized(true)
+      console.log("Firebase initialized in login page")
+    } catch (error) {
+      console.error("Error initializing Firebase in login page:", error)
+      setErrorMessage("Error initializing Firebase. Please try again later or contact support.")
+    }
+  }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setErrorMessage(null)
+
+    if (!firebaseInitialized) {
+      setErrorMessage("Firebase is not initialized. Please refresh the page and try again.")
+      return
+    }
+
     setIsLoading(true)
 
     try {
+      console.log("Signing in with email:", email)
       const result = await signIn(email, password)
 
       if (result.success) {
+        console.log("Sign in successful, redirecting to dashboard")
         router.push("/dashboard")
       } else {
+        console.error("Sign in failed:", result.error)
         setErrorMessage(result.error || "Failed to sign in")
       }
     } catch (error) {
-      setErrorMessage("An unexpected error occurred")
-      console.error(error)
+      console.error("Sign in error:", error)
+      if (error instanceof Error) {
+        setErrorMessage(`Error: ${error.message}`)
+      } else {
+        setErrorMessage("An unexpected error occurred")
+      }
     } finally {
       setIsLoading(false)
     }
@@ -46,19 +72,32 @@ export default function LoginPage() {
 
   const handleGoogleSignIn = async () => {
     setErrorMessage(null)
+
+    if (!firebaseInitialized) {
+      setErrorMessage("Firebase is not initialized. Please refresh the page and try again.")
+      return
+    }
+
     setIsGoogleLoading(true)
 
     try {
+      console.log("Signing in with Google")
       const result = await signInWithGoogle()
 
       if (result.success) {
+        console.log("Google sign in successful, redirecting to dashboard")
         router.push("/dashboard")
       } else {
+        console.error("Google sign in failed:", result.error)
         setErrorMessage(result.error || "Failed to sign in with Google")
       }
     } catch (error) {
-      setErrorMessage("An unexpected error occurred")
-      console.error(error)
+      console.error("Google sign in error:", error)
+      if (error instanceof Error) {
+        setErrorMessage(`Error: ${error.message}`)
+      } else {
+        setErrorMessage("An unexpected error occurred")
+      }
     } finally {
       setIsGoogleLoading(false)
     }
@@ -96,6 +135,21 @@ export default function LoginPage() {
           </motion.p>
         </div>
 
+        {!firebaseInitialized && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            transition={{ duration: 0.3 }}
+          >
+            <Alert variant="destructive" className="bg-yellow-900/20 border-yellow-900/30 text-yellow-400">
+              <AlertTriangle className="h-4 w-4 mr-2" />
+              <AlertDescription>
+                Initializing authentication... If this message persists, please refresh the page.
+              </AlertDescription>
+            </Alert>
+          </motion.div>
+        )}
+
         {errorMessage && (
           <motion.div
             initial={{ opacity: 0, height: 0 }}
@@ -113,7 +167,12 @@ export default function LoginPage() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.4, duration: 0.5 }}
         >
-          <GoogleAuthButton onClick={handleGoogleSignIn} isLoading={isGoogleLoading} text="Continue with Google" />
+          <GoogleAuthButton
+            onClick={handleGoogleSignIn}
+            isLoading={isGoogleLoading}
+            text="Continue with Google"
+            disabled={!firebaseInitialized}
+          />
         </motion.div>
 
         <motion.div
@@ -182,7 +241,7 @@ export default function LoginPage() {
             <Button
               type="submit"
               className="w-full bg-red-600 hover:bg-red-700 text-white transition-all duration-300 flex items-center justify-center gap-2 group"
-              disabled={isLoading}
+              disabled={isLoading || !firebaseInitialized}
             >
               {isLoading ? (
                 <>

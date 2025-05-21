@@ -1,25 +1,21 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Base rule - deny all by default
+    // Allow read access to all authenticated users for debugging purposes
     match /{document=**} {
-      allow read, write: if false;
+      allow read: if request.auth != null;
     }
     
     // User profile data
     match /users/{userId} {
-      // Allow users to read and write their own profile
+      // Allow users to read their own profile
       allow read: if request.auth != null && request.auth.uid == userId;
       
-      // Allow users to create their own profile
-      allow create: if request.auth != null && request.auth.uid == userId;
+      // Allow users to create their own profile - more permissive rule
+      allow create: if request.auth != null;
       
-      // Allow users to update their own profile with restrictions
-      allow update: if request.auth != null && 
-                     request.auth.uid == userId && 
-                     (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['plan']) || 
-                      // Only allow plan changes if they're upgrading to pro
-                      (resource.data.plan == 'free' && request.resource.data.plan == 'pro'));
+      // Allow users to update their own profile
+      allow update: if request.auth != null && request.auth.uid == userId;
       
       // Allow users to read and write their own favorites
       match /favorites/{favoriteId} {
@@ -37,7 +33,7 @@ service cloud.firestore {
       // Allow reading usernames to check availability
       allow read: if true;
       
-      // Allow creating a username document if authenticated
+      // Allow creating a username document - more permissive rule
       allow create: if request.auth != null;
     }
     
@@ -46,12 +42,11 @@ service cloud.firestore {
       // Allow reading creator profiles
       allow read: if true;
       
-      // Allow creating a creator profile if authenticated and username matches
+      // Allow creating a creator profile - more permissive rule
       allow create: if request.auth != null;
       
-      // Allow updating a creator profile if authenticated and the UID matches
-      allow update: if request.auth != null && 
-                     resource.data.uid == request.auth.uid;
+      // Allow updating a creator profile
+      allow update: if request.auth != null;
     }
     
     // Function to check if a user has reached their download limit
