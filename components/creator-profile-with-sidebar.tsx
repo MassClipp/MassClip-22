@@ -97,7 +97,7 @@ export default function CreatorProfileWithSidebar({ creator }: { creator: Creato
         },
         {
           name: "Explore",
-          href: "/dashboard", // Map Explore to Dashboard
+          href: "/", // Map Explore to main dashboard with Vimeo videos
           icon: Compass,
         },
       ],
