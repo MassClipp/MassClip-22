@@ -23,15 +23,32 @@ service cloud.firestore {
                      request.auth.uid == userId && 
                      request.resource.data.plan == 'free';
       
-      // CRITICAL FIX: Allow users to read and write to ANY subcollection under their user document
-      match /{allSubcollections=**} {
+      // Allow users to read and write their own favorites
+      match /favorites/{favoriteId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+      
+      // Allow users to read and write their own history
+      match /history/{historyId} {
         allow read, write: if request.auth != null && request.auth.uid == userId;
       }
     }
     
-    // Allow reading usernames for username availability checks
-    match /usernames/{username} {
-      allow read: if true;
+    // Function to check if a user has reached their download limit
+    function hasReachedDownloadLimit(userId) {
+      let user = get(/databases/$(database)/documents/users/$(userId)).data;
+      return user.plan == 'free' && user.downloads >= 15;
+    }
+    
+    // Function to check if it's a new month since last reset
+    function isNewMonth(userId) {
+      let user = get(/databases/$(database)/documents/users/$(userId)).data;
+      let lastReset = user.lastReset.toMillis();
+      let lastResetDate = new DateTime(lastReset);
+      let now = request.time;
+      
+      return lastResetDate.getMonth() != now.getMonth() || 
+             lastResetDate.getYear() != now.getYear();
     }
   }
 }

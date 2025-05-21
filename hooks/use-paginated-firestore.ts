@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useRef, useCallback } from "react"
 import {
   collection,
   query,
@@ -9,150 +9,222 @@ import {
   startAfter,
   getDocs,
   type DocumentData,
-  type QueryDocumentSnapshot,
-  type OrderByDirection,
-  type FirestoreError,
+  type QueryConstraint,
 } from "firebase/firestore"
 import { db } from "@/lib/firebase"
 import { trackFirestoreRead } from "@/lib/firestore-optimizer"
-import { ensureSubcollectionExists } from "@/lib/subcollection-utils"
 
-export function usePaginatedFirestore<T = DocumentData>(
+// Cache duration in milliseconds (30 minutes)
+const CACHE_DURATION = 30 * 60 * 1000
+
+interface CacheItem<T> {
+  data: T[]
+  timestamp: number
+  hasMore: boolean
+  lastDoc?: DocumentData | null
+}
+
+export function usePaginatedFirestore<T>(
   collectionPath: string,
-  pageSize = 10,
+  pageSize = 12,
   orderByField = "createdAt",
-  orderDirection: OrderByDirection = "desc",
-  trackingId = "unknown",
+  orderDirection: "desc" | "asc" = "desc",
+  componentName: string,
   enabled = true,
 ) {
   const [data, setData] = useState<T[]>([])
-  const [lastDoc, setLastDoc] = useState<QueryDocumentSnapshot | null>(null)
   const [loading, setLoading] = useState(false)
   const [initialLoading, setInitialLoading] = useState(true)
-  const [error, setError] = useState<FirestoreError | null>(null)
+  const [error, setError] = useState<Error | null>(null)
   const [hasMore, setHasMore] = useState(true)
+  const lastDocRef = useRef<DocumentData | null>(null)
+  const isMounted = useRef(true)
+  const cacheKey = `firestore-cache-${collectionPath.replace(/\//g, "-")}`
 
-  // Check if this is a user subcollection path
-  const isUserSubcollection = collectionPath.startsWith("users/") && collectionPath.includes("/")
-
-  // Extract user ID and subcollection name if this is a user subcollection
-  const getUserInfoFromPath = useCallback(() => {
-    if (!isUserSubcollection) return null
-
-    const parts = collectionPath.split("/")
-    if (parts.length >= 3) {
-      return {
-        userId: parts[1],
-        subcollectionName: parts[3] || parts[2], // Handle both users/uid/subcollection and users/uid/subcollection/etc
-      }
+  // Load data from cache on initial render
+  useEffect(() => {
+    if (!enabled) {
+      setInitialLoading(false)
+      return
     }
-    return null
-  }, [collectionPath, isUserSubcollection])
 
-  // Function to fetch data
-  const fetchData = useCallback(
-    async (lastDocument?: QueryDocumentSnapshot) => {
-      if (!enabled) {
-        setInitialLoading(false)
-        return
-      }
-
+    const loadFromCache = () => {
       try {
-        setLoading(true)
-        setError(null)
+        const cachedData = localStorage.getItem(cacheKey)
+        if (cachedData) {
+          const { data, timestamp, hasMore, lastDoc } = JSON.parse(cachedData) as CacheItem<T>
 
-        // If this is a user subcollection, ensure it exists first
-        const userInfo = getUserInfoFromPath()
-        if (userInfo) {
-          await ensureSubcollectionExists(userInfo.userId, userInfo.subcollectionName)
-        }
+          // Check if cache is still valid (within CACHE_DURATION)
+          if (Date.now() - timestamp < CACHE_DURATION) {
+            console.log(`Loading ${data.length} items from cache for ${collectionPath}`)
+            setData(data)
+            setHasMore(hasMore)
+            lastDocRef.current = lastDoc
 
-        // Create query
-        let q = query(collection(db, collectionPath), orderBy(orderByField, orderDirection), limit(pageSize))
-
-        // If we have a last document, start after it
-        if (lastDocument) {
-          q = query(q, startAfter(lastDocument))
-        }
-
-        // Get documents
-        const querySnapshot = await getDocs(q)
-
-        // Track the read operation
-        trackFirestoreRead(trackingId, querySnapshot.size)
-
-        // Process documents
-        const newData = querySnapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-        })) as T[]
-
-        // Update state
-        if (lastDocument) {
-          setData((prevData) => [...prevData, ...newData])
-        } else {
-          setData(newData)
-        }
-
-        // Update last document
-        const lastVisible = querySnapshot.docs[querySnapshot.docs.length - 1]
-        setLastDoc(lastVisible || null)
-
-        // Check if we have more data
-        setHasMore(querySnapshot.docs.length === pageSize)
-      } catch (err) {
-        console.error(`Error fetching data from ${collectionPath}:`, err)
-        setError(err as FirestoreError)
-
-        // Special handling for permission errors
-        if ((err as FirestoreError).code === "permission-denied") {
-          console.log(
-            `[usePaginatedFirestore] Permission denied for ${collectionPath}. This might be because the subcollection doesn't exist yet.`,
-          )
-
-          // Try to fix the subcollection if this is a user subcollection
-          const userInfo = getUserInfoFromPath()
-          if (userInfo) {
-            try {
-              await ensureSubcollectionExists(userInfo.userId, userInfo.subcollectionName)
-              // If successful, try fetching again
-              console.log(`[usePaginatedFirestore] Successfully created subcollection, retrying fetch`)
-              await fetchData(lastDocument)
-            } catch (fixError) {
-              console.error(`[usePaginatedFirestore] Failed to fix subcollection:`, fixError)
-            }
+            // Still fetch fresh data, but don't show loading state
+            fetchInitialData(true)
+            return true
           }
         }
-      } finally {
+        return false
+      } catch (err) {
+        console.error("Error loading from cache:", err)
+        return false
+      }
+    }
+
+    const cacheLoaded = loadFromCache()
+    if (!cacheLoaded) {
+      fetchInitialData(false)
+    }
+
+    return () => {
+      isMounted.current = false
+    }
+  }, [collectionPath, enabled]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Function to fetch initial data
+  const fetchInitialData = async (skipLoadingState: boolean) => {
+    if (!enabled) return
+
+    if (!skipLoadingState) {
+      setLoading(true)
+      setInitialLoading(true)
+    }
+
+    try {
+      const queryConstraints: QueryConstraint[] = [orderBy(orderByField, orderDirection), limit(pageSize)]
+
+      const q = query(collection(db, collectionPath), ...queryConstraints)
+      const querySnapshot = await getDocs(q)
+
+      // Track the read operation
+      trackFirestoreRead(`${componentName}-initial`, querySnapshot.size)
+
+      const results = querySnapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      })) as T[]
+
+      if (isMounted.current) {
+        // Only update state if we got new data or we're not using cached data
+        if (results.length > 0 || !skipLoadingState) {
+          setData(results)
+        }
+
+        setHasMore(results.length >= pageSize)
+
+        // Store the last document for pagination
+        lastDocRef.current = querySnapshot.docs[querySnapshot.docs.length - 1] || null
+
+        // Cache the results
+        cacheData(results, querySnapshot.docs[querySnapshot.docs.length - 1] || null, results.length >= pageSize)
+      }
+    } catch (err) {
+      console.error(`Error fetching ${collectionPath}:`, err)
+      if (isMounted.current) {
+        setError(err instanceof Error ? err : new Error(String(err)))
+      }
+    } finally {
+      if (isMounted.current) {
         setLoading(false)
         setInitialLoading(false)
       }
-    },
-    [collectionPath, orderByField, orderDirection, pageSize, trackingId, enabled, getUserInfoFromPath],
-  )
-
-  // Initial fetch
-  useEffect(() => {
-    if (enabled) {
-      fetchData()
-    } else {
-      setInitialLoading(false)
     }
-  }, [fetchData, enabled])
+  }
 
   // Function to load more data
-  const loadMore = useCallback(() => {
-    if (lastDoc && hasMore && !loading) {
-      fetchData(lastDoc)
-    }
-  }, [fetchData, lastDoc, hasMore, loading])
+  const loadMore = useCallback(async () => {
+    if (loading || !hasMore || !lastDocRef.current) return
 
-  // Function to refresh data
+    setLoading(true)
+
+    try {
+      const queryConstraints: QueryConstraint[] = [
+        orderBy(orderByField, orderDirection),
+        startAfter(lastDocRef.current),
+        limit(pageSize),
+      ]
+
+      const q = query(collection(db, collectionPath), ...queryConstraints)
+      const querySnapshot = await getDocs(q)
+
+      // Track the read operation
+      trackFirestoreRead(`${componentName}-loadMore`, querySnapshot.size)
+
+      const newResults = querySnapshot.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+      })) as T[]
+
+      if (isMounted.current) {
+        // Update data with new results
+        const updatedData = [...data, ...newResults]
+        setData(updatedData)
+
+        // Update hasMore flag
+        setHasMore(newResults.length >= pageSize)
+
+        // Update last document reference
+        if (querySnapshot.docs.length > 0) {
+          lastDocRef.current = querySnapshot.docs[querySnapshot.docs.length - 1]
+        }
+
+        // Update cache with all data
+        cacheData(updatedData, lastDocRef.current, newResults.length >= pageSize)
+      }
+    } catch (err) {
+      console.error(`Error fetching more ${collectionPath}:`, err)
+      if (isMounted.current) {
+        setError(err instanceof Error ? err : new Error(String(err)))
+      }
+    } finally {
+      if (isMounted.current) {
+        setLoading(false)
+      }
+    }
+  }, [loading, hasMore, data, collectionPath, pageSize, orderByField, orderDirection, componentName])
+
+  // Function to cache data in localStorage
+  const cacheData = (data: T[], lastDoc: DocumentData | null, hasMore: boolean) => {
+    try {
+      const cacheItem: CacheItem<T> = {
+        data,
+        timestamp: Date.now(),
+        hasMore,
+        lastDoc: lastDoc
+          ? {
+              // Only store the necessary fields for the lastDoc
+              id: lastDoc.id,
+              data: lastDoc.data(),
+            }
+          : null,
+      }
+      localStorage.setItem(cacheKey, JSON.stringify(cacheItem))
+    } catch (err) {
+      console.error("Error caching data:", err)
+      // If caching fails (e.g., localStorage is full), try to remove the item
+      try {
+        localStorage.removeItem(cacheKey)
+      } catch (e) {
+        // Ignore errors when removing
+      }
+    }
+  }
+
+  // Function to refresh data (clear cache and fetch again)
   const refreshData = useCallback(() => {
-    setLastDoc(null)
+    try {
+      localStorage.removeItem(cacheKey)
+    } catch (e) {
+      // Ignore errors when removing
+    }
+
+    setData([])
     setHasMore(true)
-    fetchData()
-  }, [fetchData])
+    lastDocRef.current = null
+    fetchInitialData(false)
+  }, [cacheKey]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return {
     data,

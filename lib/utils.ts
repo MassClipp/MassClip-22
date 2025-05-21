@@ -1,17 +1,8 @@
-import { type ClassValue, clsx } from "clsx"
+import { clsx, type ClassValue } from "clsx"
 import { twMerge } from "tailwind-merge"
 
 /**
- * Combines class names using clsx and tailwind-merge
- */
-export function cn(...inputs: ClassValue[]) {
-  return twMerge(clsx(inputs))
-}
-
-/**
  * Shuffles an array using the Fisher-Yates algorithm
- * @param array The array to shuffle
- * @returns A new shuffled array
  */
 export function shuffleArray<T>(array: T[]): T[] {
   const newArray = [...array]
@@ -20,4 +11,8 @@ export function shuffleArray<T>(array: T[]): T[] {
     ;[newArray[i], newArray[j]] = [newArray[j], newArray[i]]
   }
   return newArray
+}
+
+export function cn(...inputs: ClassValue[]) {
+  return twMerge(clsx(inputs))
 }

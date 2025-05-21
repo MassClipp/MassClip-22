@@ -7,13 +7,12 @@ import { doc, deleteDoc } from "firebase/firestore"
 import DashboardHeader from "@/components/dashboard-header"
 import VimeoCard from "@/components/vimeo-card"
 import { Button } from "@/components/ui/button"
-import { Trash2, RefreshCw, AlertTriangle } from "lucide-react"
+import { Trash2, RefreshCw } from "lucide-react"
 import type { VimeoVideo } from "@/lib/types"
 import { trackFirestoreWrite } from "@/lib/firestore-optimizer"
 import VideoSkeletonCard from "@/components/video-skeleton-card"
 import { usePaginatedFirestore } from "@/hooks/use-paginated-firestore"
 import { motion } from "framer-motion"
-import Link from "next/link"
 
 export default function FavoritesPage() {
   const { user } = useAuth()
@@ -85,12 +84,6 @@ export default function FavoritesPage() {
   // Combine errors
   const combinedError = error || (favoritesError ? favoritesError.message : null)
   const isLoading = loading || favoritesLoading
-  const hasPermissionError =
-    combinedError &&
-    (combinedError.includes("permission") ||
-      combinedError.includes("Permission") ||
-      combinedError.includes("insufficient") ||
-      combinedError.includes("Missing"))
 
   // Animation variants
   const containerVariants = {
@@ -135,26 +128,15 @@ export default function FavoritesPage() {
             <p className="text-gray-400 mt-2 text-lg">Videos you've saved for quick access</p>
           </div>
 
-          <div className="flex space-x-2">
-            <Button
-              variant="outline"
-              onClick={refreshData}
-              disabled={isLoading}
-              className="border-gray-800 bg-black/50 text-white hover:bg-gray-900 hover:text-red-500 transition-all duration-300"
-            >
-              <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? "animate-spin" : ""}`} />
-              Refresh
-            </Button>
-
-            {hasPermissionError && (
-              <Link href="/fix-permissions">
-                <Button variant="destructive" className="bg-red-600 hover:bg-red-700">
-                  <AlertTriangle className="h-4 w-4 mr-2" />
-                  Fix Permissions
-                </Button>
-              </Link>
-            )}
-          </div>
+          <Button
+            variant="outline"
+            onClick={refreshData}
+            disabled={isLoading}
+            className="border-gray-800 bg-black/50 text-white hover:bg-gray-900 hover:text-red-500 transition-all duration-300"
+          >
+            <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? "animate-spin" : ""}`} />
+            Refresh
+          </Button>
         </motion.div>
 
         {/* Red accent line */}
@@ -164,29 +146,13 @@ export default function FavoritesPage() {
 
         {/* Error state */}
         {combinedError && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="px-6 py-4 mb-4">
-            <div className="bg-red-900/20 border border-red-900/30 rounded-lg p-4 text-red-400">
-              <div className="flex items-start">
-                <AlertTriangle className="h-5 w-5 mr-2 mt-0.5 flex-shrink-0" />
-                <div>
-                  <p className="font-medium">{combinedError}</p>
-                  {hasPermissionError && (
-                    <div className="mt-3">
-                      <Link href="/fix-permissions">
-                        <Button variant="destructive" size="sm" className="bg-red-600 hover:bg-red-700">
-                          Fix Permissions Now
-                        </Button>
-                      </Link>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="px-6 py-10 text-center">
+            <p className="text-red-500 bg-red-500/10 border border-red-500/20 rounded-lg p-4">{combinedError}</p>
           </motion.div>
         )}
 
         {/* Empty state */}
-        {favorites.length === 0 && !combinedError && (
+        {favorites.length === 0 && (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}

@@ -1,7 +1,24 @@
 import { notFound } from "next/navigation"
 import type { Metadata } from "next"
-import { initializeFirebaseAdmin, db } from "@/lib/firebase-admin"
+import { getFirestore } from "firebase-admin/firestore"
+import { getApp, getApps, initializeApp, cert } from "firebase-admin/app"
 import CreatorProfileWithSidebar from "@/components/creator-profile-with-sidebar"
+
+// Initialize Firebase Admin
+function getFirebaseAdmin() {
+  if (getApps().length === 0) {
+    const serviceAccount = {
+      projectId: process.env.FIREBASE_PROJECT_ID,
+      clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+      privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n"),
+    }
+
+    initializeApp({
+      credential: cert(serviceAccount),
+    })
+  }
+  return getApp()
+}
 
 // Helper function to convert Firestore data to plain objects
 function serializeData(data: any) {
@@ -15,6 +32,27 @@ function serializeData(data: any) {
     plainData.createdAt = plainData.createdAt.toDate().toISOString()
   }
 
+  // Handle arrays with potential Timestamp objects
+  if (Array.isArray(plainData.freeClips)) {
+    plainData.freeClips = plainData.freeClips.map((clip: any) => {
+      const serializedClip = { ...clip }
+      if (serializedClip.createdAt && typeof serializedClip.createdAt.toDate === "function") {
+        serializedClip.createdAt = serializedClip.createdAt.toDate().toISOString()
+      }
+      return serializedClip
+    })
+  }
+
+  if (Array.isArray(plainData.paidClips)) {
+    plainData.paidClips = plainData.paidClips.map((clip: any) => {
+      const serializedClip = { ...clip }
+      if (serializedClip.createdAt && typeof serializedClip.createdAt.toDate === "function") {
+        serializedClip.createdAt = serializedClip.createdAt.toDate().toISOString()
+      }
+      return serializedClip
+    })
+  }
+
   return plainData
 }
 
@@ -23,49 +61,34 @@ export async function generateMetadata({ params }: { params: { username: string 
   const { username } = params
 
   try {
-    // Initialize Firebase Admin
-    initializeFirebaseAdmin()
+    getFirebaseAdmin()
+    const db = getFirestore()
+    const creatorDoc = await db.collection("creators").doc(username).get()
 
-    console.log(`[Metadata] Looking for user with username: ${username}`)
-
-    // Query users collection to find the user with the given username (case insensitive)
-    const usersRef = db.collection("users")
-    const querySnapshot = await usersRef.where("username", "==", username.toLowerCase()).get()
-
-    console.log(`[Metadata] Query results: ${querySnapshot.size} documents found`)
-
-    if (querySnapshot.empty) {
-      console.log(`[Metadata] Creator not found for username: ${username}`)
+    if (!creatorDoc.exists) {
+      console.log(`Creator not found for username: ${username}`)
       return {
         title: "Creator Not Found | MassClip",
         description: "The creator profile you're looking for doesn't exist.",
       }
     }
 
-    const userData = querySnapshot.docs[0].data()
-    console.log(
-      `[Metadata] Found user data:`,
-      JSON.stringify({
-        displayName: userData.displayName,
-        username: userData.username,
-        hasPhotoURL: !!userData.photoURL,
-      }),
-    )
+    const creatorData = creatorDoc.data()
 
     return {
-      title: `${userData?.displayName || username} | MassClip`,
-      description: userData?.bio || `Check out ${userData?.displayName || username}'s content on MassClip`,
+      title: `${creatorData?.displayName || username} | MassClip`,
+      description: creatorData?.bio || `Check out ${creatorData?.displayName || username}'s content on MassClip`,
       openGraph: {
-        title: `${userData?.displayName || username} | MassClip`,
-        description: userData?.bio || `Check out ${userData?.displayName || username}'s content on MassClip`,
+        title: `${creatorData?.displayName || username} | MassClip`,
+        description: creatorData?.bio || `Check out ${creatorData?.displayName || username}'s content on MassClip`,
         url: `https://massclip.pro/creator/${username}`,
         siteName: "MassClip",
         images: [
           {
-            url: userData?.photoURL || "https://massclip.pro/og-image.jpg",
+            url: creatorData?.profilePic || "https://massclip.pro/og-image.jpg",
             width: 1200,
             height: 630,
-            alt: userData?.displayName || username,
+            alt: creatorData?.displayName || username,
           },
         ],
         locale: "en_US",
@@ -73,7 +96,7 @@ export async function generateMetadata({ params }: { params: { username: string 
       },
     }
   } catch (error) {
-    console.error("[Metadata] Error generating metadata:", error)
+    console.error("Error generating metadata:", error)
     return {
       title: "Creator Profile | MassClip",
       description: "View creator content on MassClip",
@@ -85,93 +108,30 @@ export default async function CreatorProfilePage({ params }: { params: { usernam
   const { username } = params
 
   try {
-    console.log(`[Page] Fetching creator profile for username: ${username}`)
+    console.log(`Fetching creator profile for username: ${username}`)
+    getFirebaseAdmin()
+    const db = getFirestore()
 
-    // Initialize Firebase Admin
-    initializeFirebaseAdmin()
+    // Get creator profile directly using username as document ID
+    const creatorDoc = await db.collection("creators").doc(username).get()
 
-    // Query users collection to find the user with the given username (case insensitive)
-    const usersRef = db.collection("users")
-
-    // First try exact match
-    let querySnapshot = await usersRef.where("username", "==", username.toLowerCase()).get()
-
-    // If no results, try case-insensitive match
-    if (querySnapshot.empty) {
-      console.log(`[Page] No exact match found, trying case-insensitive match`)
-      querySnapshot = await usersRef.get()
-
-      // Filter results manually for case-insensitive match
-      const docs = querySnapshot.docs.filter((doc) => {
-        const userData = doc.data()
-        return userData.username && userData.username.toLowerCase() === username.toLowerCase()
-      })
-
-      if (docs.length === 0) {
-        console.log(`[Page] Creator profile not found for username: ${username} (case-insensitive)`)
-
-        // Log all usernames for debugging
-        const allUsers = querySnapshot.docs.map((doc) => {
-          const data = doc.data()
-          return {
-            id: doc.id,
-            username: data.username,
-            displayName: data.displayName,
-          }
-        })
-        console.log(`[Page] Available users:`, JSON.stringify(allUsers))
-
-        notFound()
-      }
-
-      // Use the first matching document
-      querySnapshot = {
-        empty: false,
-        docs: docs,
-        size: docs.length,
-      } as any
-    }
-
-    console.log(`[Page] Query results: ${querySnapshot.size} documents found`)
-
-    if (querySnapshot.empty) {
-      console.log(`[Page] Creator profile not found for username: ${username}`)
+    if (!creatorDoc.exists) {
+      console.log(`Creator profile not found for username: ${username}`)
       notFound()
     }
 
-    // Get the user document
-    const userDoc = querySnapshot.docs[0]
-    const userData = userDoc.data()
-    const uid = userDoc.id
-
-    console.log(`[Page] Creator profile found for username: ${username} with UID: ${uid}`)
-    console.log(
-      `[Page] User data:`,
-      JSON.stringify({
-        displayName: userData.displayName,
-        username: userData.username,
-        hasPhotoURL: !!userData.photoURL,
-        hasBio: !!userData.bio,
-      }),
-    )
-
     // Serialize the Firestore data to plain objects
-    const serializedData = serializeData(userData)
+    const creatorData = serializeData(creatorDoc.data())
+    console.log(`Creator profile found for username: ${username}`)
 
-    // Format the creator data for the component
-    const creatorData = {
-      uid: uid,
-      username: serializedData.username || username,
-      displayName: serializedData.displayName || username,
-      bio: serializedData.bio || "",
-      profilePic: serializedData.photoURL || "",
-      createdAt: serializedData.createdAt || new Date().toISOString(),
-      socialLinks: serializedData.socialLinks || {},
+    // Add mock social links for demo if they don't exist
+    if (!creatorData.socialLinks) {
+      creatorData.socialLinks = {}
     }
 
     return <CreatorProfileWithSidebar creator={creatorData} />
   } catch (error) {
-    console.error(`[Page] Error fetching creator profile for ${username}:`, error)
+    console.error(`Error fetching creator profile for ${username}:`, error)
     notFound()
   }
 }

@@ -35,7 +35,6 @@ export async function downloadFile(url: string, filename: string): Promise<boole
       // Fallback to direct approach
       link.href = url
       link.download = filename
-      link.target = "_self" // Ensure it doesn't open in a new tab
       link.click()
 
       setTimeout(() => {

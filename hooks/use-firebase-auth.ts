@@ -11,9 +11,8 @@ import {
   GoogleAuthProvider,
   signInWithPopup,
 } from "firebase/auth"
-import { doc, getDoc, setDoc, serverTimestamp, collection, query, where, getDocs } from "firebase/firestore"
+import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore"
 import { auth, isFirebaseConfigured, db } from "@/lib/firebase"
-import { ensureAllUserSubcollectionsExist } from "@/lib/subcollection-utils"
 
 // Update the return type to include success and error
 interface AuthResult {
@@ -39,16 +38,9 @@ export function useFirebaseAuth() {
 
     const unsubscribe = onAuthStateChanged(
       auth,
-      async (authUser) => {
+      (authUser) => {
         if (authUser) {
           setUser(authUser)
-
-          // Ensure subcollections exist whenever user logs in
-          try {
-            await ensureAllUserSubcollectionsExist(authUser.uid)
-          } catch (err) {
-            console.error("Error ensuring subcollections on auth state change:", err)
-          }
         } else {
           setUser(null)
         }
@@ -64,43 +56,33 @@ export function useFirebaseAuth() {
     return () => unsubscribe()
   }, [])
 
-  // Create session cookie
-  const createSession = async (user: User) => {
+  // Save creator profile to Firestore
+  const saveCreatorProfile = async (uid: string, username: string, displayName: string, photoURL?: string) => {
+    console.log(`Saving creator profile for ${username}...`)
+
     try {
-      const idToken = await user.getIdToken()
-      const response = await fetch("/api/sessionLogin", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ idToken }),
+      // Create creator profile
+      await setDoc(doc(db, "creators", username), {
+        uid: uid,
+        username: username,
+        displayName: displayName || username,
+        bio: "",
+        profilePic: photoURL || "",
+        freeClips: [],
+        paidClips: [],
+        createdAt: serverTimestamp(),
       })
 
-      if (!response.ok) {
-        throw new Error("Failed to create session")
-      }
+      // Create username document for uniqueness check
+      await setDoc(doc(db, "usernames", username), {
+        uid: uid,
+        createdAt: serverTimestamp(),
+      })
 
-      console.log("Session created successfully")
+      console.log(`Creator profile saved successfully for ${username}`)
       return true
     } catch (error) {
-      console.error("Error creating session:", error)
-      return false
-    }
-  }
-
-  // Check if username is available
-  const isUsernameAvailable = async (username: string): Promise<boolean> => {
-    if (!username) return false
-
-    try {
-      // Query users collection to check if username exists
-      const usersRef = collection(db, "users")
-      const q = query(usersRef, where("username", "==", username.toLowerCase()))
-      const querySnapshot = await getDocs(q)
-
-      return querySnapshot.empty
-    } catch (error) {
-      console.error("[Auth] Error checking username availability:", error)
+      console.error("Error saving creator profile:", error)
       return false
     }
   }
@@ -119,19 +101,13 @@ export function useFirebaseAuth() {
       setLoading(true)
       const userCredential = await signInWithEmailAndPassword(auth, email, password)
 
-      // Create session cookie
-      await createSession(userCredential.user)
-
       // Get the user's username from Firestore
       const userDoc = await getDoc(doc(db, "users", userCredential.user.uid))
       const username = userDoc.exists() ? userDoc.data().username : null
 
-      // Ensure subcollections exist (in case they were not created during signup)
-      await ensureAllUserSubcollectionsExist(userCredential.user.uid)
-
       return { success: true, username }
     } catch (err) {
-      console.error("[Auth] Error signing in:", err)
+      console.error("Error signing in:", err)
       setError(err instanceof Error ? err.message : "Failed to sign in")
       return { success: false, error: err instanceof Error ? err.message : "Failed to sign in" }
     } finally {
@@ -154,17 +130,14 @@ export function useFirebaseAuth() {
       const result = await signInWithPopup(auth, provider)
       const user = result.user
 
-      // Create session cookie
-      await createSession(user)
+      console.log("Google sign in successful, user:", user.uid)
 
-      console.log("[Auth] Google sign in successful, user:", user.uid)
-
-      // Check if username is already taken (if provided)
+      // Check if username is already taken
       if (username) {
-        console.log("[Auth] Checking if username is available:", username)
-        const available = await isUsernameAvailable(username)
-        if (!available) {
-          console.log("[Auth] Username already exists")
+        console.log("Checking if username exists:", username)
+        const usernameDoc = await getDoc(doc(db, "usernames", username))
+        if (usernameDoc.exists()) {
+          console.log("Username already exists")
           return { success: false, error: "Username is already taken" }
         }
       }
@@ -180,53 +153,45 @@ export function useFirebaseAuth() {
 
         // If user exists but doesn't have a username yet
         if (!existingUsername && username) {
-          console.log("[Auth] Updating existing user with username:", username)
+          console.log("Updating existing user with username:", username)
 
           // Update user document with username
           await setDoc(
             doc(db, "users", user.uid),
             {
-              username: username.toLowerCase(),
+              username: username,
               displayName: displayName || user.displayName,
-              updatedAt: serverTimestamp(),
             },
             { merge: true },
           )
 
-          existingUsername = username.toLowerCase()
+          // Create creator profile
+          await saveCreatorProfile(user.uid, username, displayName || user.displayName || username, user.photoURL || "")
+          existingUsername = username
         }
-
-        // Ensure subcollections exist
-        await ensureAllUserSubcollectionsExist(user.uid)
       } else {
         // Create new user document
-        console.log("[Auth] Creating new user document for:", user.uid)
-
-        const lowerUsername = username ? username.toLowerCase() : null
-        console.log("[Auth] Using lowercase username:", lowerUsername)
-
-        const newUserData = {
+        console.log("Creating new user document for:", user.uid)
+        await setDoc(doc(db, "users", user.uid), {
           email: user.email,
           displayName: displayName || user.displayName,
-          username: lowerUsername,
+          username: username,
           photoURL: user.photoURL,
           createdAt: serverTimestamp(),
           plan: "free",
           permissions: { download: false, premium: false },
-          bio: "",
+        })
+
+        // Create creator profile
+        if (username) {
+          await saveCreatorProfile(user.uid, username, displayName || user.displayName || username, user.photoURL || "")
+          existingUsername = username
         }
-
-        await setDoc(doc(db, "users", user.uid), newUserData)
-
-        // Initialize subcollections
-        await ensureAllUserSubcollectionsExist(user.uid)
-
-        existingUsername = lowerUsername
       }
 
       return { success: true, username: existingUsername }
     } catch (err) {
-      console.error("[Auth] Error signing in with Google:", err)
+      console.error("Error signing in with Google:", err)
       setError(err instanceof Error ? err.message : "Failed to sign in with Google")
       return { success: false, error: err instanceof Error ? err.message : "Failed to sign in with Google" }
     } finally {
@@ -252,50 +217,42 @@ export function useFirebaseAuth() {
     try {
       setLoading(true)
 
-      console.log("[Auth] Starting signup process with:", { email, username, displayName })
+      console.log("Starting signup process with:", { email, username, displayName })
 
       // Check if username is already taken
       if (username) {
-        console.log("[Auth] Checking if username is available:", username)
-        const available = await isUsernameAvailable(username)
-        if (!available) {
-          console.log("[Auth] Username already exists")
+        console.log("Checking if username exists:", username)
+        const usernameDoc = await getDoc(doc(db, "usernames", username))
+        if (usernameDoc.exists()) {
+          console.log("Username already exists")
           return { success: false, error: "Username is already taken" }
         }
       }
 
-      console.log("[Auth] Creating user with email and password")
+      console.log("Creating user with email and password")
       const { user } = await createUserWithEmailAndPassword(auth, email, password)
-      console.log("[Auth] User created:", user.uid)
-
-      // Create session cookie
-      await createSession(user)
+      console.log("User created:", user.uid)
 
       // Create user document in Firestore
-      console.log("[Auth] Creating user document")
-
-      const lowerUsername = username ? username.toLowerCase() : null
-      console.log("[Auth] Using lowercase username:", lowerUsername)
-
+      console.log("Creating user document")
       await setDoc(doc(db, "users", user.uid), {
         email,
         displayName: displayName || null,
-        username: lowerUsername,
+        username: username || null,
         createdAt: serverTimestamp(),
         plan: "free",
         permissions: { download: false, premium: false },
-        bio: "",
-        photoURL: null,
       })
 
-      // Initialize subcollections - critical step to prevent permission errors
-      console.log("[Auth] Initializing subcollections")
-      await ensureAllUserSubcollectionsExist(user.uid)
+      // Create creator profile
+      if (username) {
+        await saveCreatorProfile(user.uid, username, displayName || username)
+      }
 
-      console.log("[Auth] Signup process completed successfully")
-      return { success: true, username: lowerUsername }
+      console.log("Signup process completed successfully")
+      return { success: true, username }
     } catch (err) {
-      console.error("[Auth] Error signing up:", err)
+      console.error("Error signing up:", err)
       setError(err instanceof Error ? err.message : "Failed to sign up")
       return { success: false, error: err instanceof Error ? err.message : "Failed to sign up" }
     } finally {
@@ -319,11 +276,6 @@ export function useFirebaseAuth() {
 
     setError(null)
     try {
-      // Clear session cookie
-      await fetch("/api/logout", {
-        method: "POST",
-      })
-
       await signOut(auth)
 
       // Force redirect to login page
@@ -333,7 +285,7 @@ export function useFirebaseAuth() {
 
       return { success: true }
     } catch (err) {
-      console.error("[Auth] Error signing out:", err)
+      console.error("Error signing out:", err)
       setError(err instanceof Error ? err.message : "Failed to sign out")
       return { success: false, error: err instanceof Error ? err.message : "Failed to sign out" }
     }
@@ -351,7 +303,7 @@ export function useFirebaseAuth() {
       await sendPasswordResetEmail(auth, email)
       return { success: true }
     } catch (err) {
-      console.error("[Auth] Error resetting password:", err)
+      console.error("Error resetting password:", err)
       setError(err instanceof Error ? err.message : "Failed to reset password")
       return { success: false, error: err instanceof Error ? err.message : "Failed to reset password" }
     }

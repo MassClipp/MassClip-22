@@ -20,7 +20,6 @@ import {
   DollarSign,
   Infinity,
   Globe,
-  Upload,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useAuth } from "@/contexts/auth-context"
@@ -401,17 +400,6 @@ export default function DashboardHeader({ initialSearchQuery = "" }) {
                   <ChevronRight className="h-4 w-4 text-zinc-500 group-hover:text-white/70 transition-colors" />
                 </Link>
               ))}
-              <Link
-                href="/dashboard/upload"
-                className="flex items-center justify-between py-3 px-4 text-white/90 hover:text-white hover:bg-white/5 rounded-lg transition-colors group"
-                onClick={() => setIsMobileMenuOpen(false)}
-              >
-                <div className="flex items-center">
-                  <Upload className="h-4 w-4 mr-3" />
-                  <span className="text-sm font-light tracking-wide">Upload Video</span>
-                </div>
-                <ChevronRight className="h-4 w-4 text-zinc-500 group-hover:text-white/70 transition-colors" />
-              </Link>
             </div>
 
             {/* User Section */}
