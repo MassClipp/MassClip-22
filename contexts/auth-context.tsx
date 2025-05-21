@@ -23,7 +23,6 @@ export interface User extends FirebaseUser {
     download?: boolean
     premium?: boolean
   }
-  username?: string
 }
 
 // Define the auth context type
@@ -35,7 +34,6 @@ interface AuthContextType {
   signUp: (email: string, password: string) => Promise<void>
   signOut: () => Promise<void>
   resetPassword: (email: string) => Promise<void>
-  getIdToken: () => Promise<string | null>
 }
 
 // Create the auth context
@@ -74,7 +72,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
                 ...firebaseUser,
                 plan: userData.plan || "free",
                 permissions: userData.permissions || { download: false, premium: false },
-                username: userData.username || null,
               } as User
 
               setUser(enhancedUser)
@@ -127,23 +124,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
       setLoading(false)
     }
   }, [pathname, router])
-
-  // Get ID token for authenticated requests
-  const getIdToken = async (): Promise<string | null> => {
-    try {
-      const auth = getAuth()
-      const currentUser = auth.currentUser
-
-      if (!currentUser) {
-        return null
-      }
-
-      return await currentUser.getIdToken(true)
-    } catch (error) {
-      console.error("Error getting ID token:", error)
-      return null
-    }
-  }
 
   // Sign in with Google
   const signInWithGoogle = async () => {
@@ -276,18 +256,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   // Provide the auth context to children
   return (
-    <AuthContext.Provider
-      value={{
-        user,
-        loading,
-        signIn,
-        signInWithGoogle,
-        signUp,
-        signOut,
-        resetPassword,
-        getIdToken,
-      }}
-    >
+    <AuthContext.Provider value={{ user, loading, signIn, signInWithGoogle, signUp, signOut, resetPassword }}>
       {children}
     </AuthContext.Provider>
   )
