@@ -286,8 +286,34 @@ export function useFirebaseAuth() {
       return { success: true, username }
     } catch (err) {
       console.error("Error signing up:", err)
-      setError(err instanceof Error ? err.message : "Failed to sign up")
-      return { success: false, error: err instanceof Error ? err.message : "Failed to sign up" }
+
+      // More detailed error logging
+      if (err instanceof Error) {
+        console.error("Error details:", {
+          message: err.message,
+          code: err.code,
+          stack: err.stack,
+        })
+
+        // Provide more specific error messages based on Firebase error codes
+        if (err.code === "permission-denied") {
+          return {
+            success: false,
+            error: "Permission denied. This is likely due to Firestore security rules. Please contact support.",
+          }
+        } else if (err.code === "resource-exhausted") {
+          return {
+            success: false,
+            error: "Resource quota exceeded. Please try again later.",
+          }
+        }
+
+        setError(err.message)
+        return { success: false, error: err.message }
+      }
+
+      setError("Failed to sign up")
+      return { success: false, error: "Failed to sign up" }
     } finally {
       setLoading(false)
     }

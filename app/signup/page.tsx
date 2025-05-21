@@ -145,11 +145,18 @@ export default function SignupPage() {
         // Redirect to their public profile
         router.push(`/creator/${username}`)
       } else {
-        setErrorMessage(result.error || "Failed to create account")
+        // More detailed error message
+        console.error("Signup failed:", result.error)
+        setErrorMessage(result.error || "Failed to create account. Please try again or contact support.")
       }
     } catch (error) {
       console.error("Signup error:", error)
-      setErrorMessage("An unexpected error occurred")
+      // More detailed error message for unexpected errors
+      if (error instanceof Error) {
+        setErrorMessage(`Error: ${error.message}`)
+      } else {
+        setErrorMessage("An unexpected error occurred. Please try again or contact support.")
+      }
     } finally {
       setIsLoading(false)
     }

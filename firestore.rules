@@ -11,17 +11,15 @@ service cloud.firestore {
       // Allow users to read and write their own profile
       allow read: if request.auth != null && request.auth.uid == userId;
       
+      // Allow users to create their own profile
+      allow create: if request.auth != null && request.auth.uid == userId;
+      
       // Allow users to update their own profile with restrictions
       allow update: if request.auth != null && 
                      request.auth.uid == userId && 
                      (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['plan']) || 
                       // Only allow plan changes if they're upgrading to pro
                       (resource.data.plan == 'free' && request.resource.data.plan == 'pro'));
-      
-      // Allow creation of user profile
-      allow create: if request.auth != null && 
-                     request.auth.uid == userId && 
-                     request.resource.data.plan == 'free';
       
       // Allow users to read and write their own favorites
       match /favorites/{favoriteId} {
@@ -32,6 +30,28 @@ service cloud.firestore {
       match /history/{historyId} {
         allow read, write: if request.auth != null && request.auth.uid == userId;
       }
+    }
+    
+    // Username collection for uniqueness checks
+    match /usernames/{username} {
+      // Allow reading usernames to check availability
+      allow read: if true;
+      
+      // Allow creating a username document if authenticated
+      allow create: if request.auth != null;
+    }
+    
+    // Creator profiles
+    match /creators/{username} {
+      // Allow reading creator profiles
+      allow read: if true;
+      
+      // Allow creating a creator profile if authenticated and username matches
+      allow create: if request.auth != null;
+      
+      // Allow updating a creator profile if authenticated and the UID matches
+      allow update: if request.auth != null && 
+                     resource.data.uid == request.auth.uid;
     }
     
     // Function to check if a user has reached their download limit
