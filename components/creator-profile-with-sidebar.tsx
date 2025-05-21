@@ -19,6 +19,7 @@ import {
   ChevronLeft,
   Compass,
   Sparkles,
+  Upload,
 } from "lucide-react"
 import { useMediaQuery } from "@/hooks/use-media-query"
 import { cn } from "@/lib/utils"
@@ -123,7 +124,11 @@ export default function CreatorProfileWithSidebar({ creator }: { creator: Creato
   const creatorTools = {
     group: "CREATOR TOOLS",
     items: [
-      // Dashboard button removed as requested
+      {
+        name: "Upload Content",
+        href: "/dashboard/upload",
+        icon: Upload,
+      },
       {
         name: "Edit Profile",
         href: "/dashboard/profile/edit",

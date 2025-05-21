@@ -265,7 +265,7 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
                     {isOwner && (
                       <Button
                         className="bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white border-0"
-                        onClick={handleAddClip}
+                        onClick={() => router.push("/dashboard/upload")}
                       >
                         <Plus className="h-4 w-4 mr-2" />
                         Add Clip
