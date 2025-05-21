@@ -821,12 +821,3 @@
   color: transparent;
   display: inline-block;
 }
-
-/* Add this at the end of the file */
-.group:hover .group-hover\:visible {
-  visibility: visible;
-}
-
-.group:hover .group-hover\:opacity-100 {
-  opacity: 1;
-}
