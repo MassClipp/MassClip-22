@@ -32,6 +32,28 @@ service cloud.firestore {
       match /history/{historyId} {
         allow read, write: if request.auth != null && request.auth.uid == userId;
       }
+      
+      // Allow users to read and write their own videos
+      match /videos/{videoId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+    }
+    
+    // Allow read access to all videos for discovery
+    match /videos/{videoId} {
+      allow read: if true;
+    }
+    
+    // Allow read access to free clips
+    match /freeClips/{clipId} {
+      allow read: if true;
+      allow create, update: if request.auth != null && request.resource.data.creatorId == request.auth.uid;
+    }
+    
+    // Allow read access to premium clips metadata, but not content URLs unless purchased
+    match /premiumClips/{clipId} {
+      allow read: if true;
+      allow create, update: if request.auth != null && request.resource.data.creatorId == request.auth.uid;
     }
     
     // Function to check if a user has reached their download limit

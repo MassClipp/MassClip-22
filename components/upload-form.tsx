@@ -3,9 +3,8 @@
 import { useState, useRef, type ChangeEvent, type FormEvent } from "react"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/contexts/auth-context"
-import { db, storage } from "@/lib/firebase"
-import { ref, uploadBytesResumable, getDownloadURL } from "firebase/storage"
-import { collection, addDoc, serverTimestamp } from "firebase/firestore"
+import { db } from "@/lib/firebase"
+import { collection, addDoc, serverTimestamp, doc, setDoc } from "firebase/firestore"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
@@ -33,7 +32,7 @@ interface UploadFormProps {
 }
 
 export default function UploadForm({ contentType }: UploadFormProps) {
-  const { user } = useAuth()
+  const { user, getIdToken } = useAuth()
   const router = useRouter()
   const fileInputRef = useRef<HTMLInputElement>(null)
   const thumbnailInputRef = useRef<HTMLInputElement>(null)
@@ -100,6 +99,71 @@ export default function UploadForm({ contentType }: UploadFormProps) {
     return `${mins}:${secs.toString().padStart(2, "0")}`
   }
 
+  // Get a signed upload URL from the server
+  const getSignedUploadUrl = async (file: File, fileType: string) => {
+    try {
+      const token = await getIdToken()
+
+      if (!token) {
+        throw new Error("Authentication token not available")
+      }
+
+      const response = await fetch("/api/get-upload-url", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          fileName: file.name,
+          fileType: file.type,
+          contentType: contentType,
+        }),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || "Failed to get upload URL")
+      }
+
+      return await response.json()
+    } catch (error) {
+      console.error("Error getting signed URL:", error)
+      throw error
+    }
+  }
+
+  // Upload file to R2 using the signed URL
+  const uploadFileToR2 = async (file: File, signedUrl: string, onProgress: (progress: number) => void) => {
+    return new Promise<void>((resolve, reject) => {
+      const xhr = new XMLHttpRequest()
+
+      xhr.open("PUT", signedUrl, true)
+      xhr.setRequestHeader("Content-Type", file.type)
+
+      xhr.upload.onprogress = (event) => {
+        if (event.lengthComputable) {
+          const percentComplete = (event.loaded / event.total) * 100
+          onProgress(percentComplete)
+        }
+      }
+
+      xhr.onload = () => {
+        if (xhr.status === 200) {
+          resolve()
+        } else {
+          reject(new Error(`Upload failed with status: ${xhr.status}`))
+        }
+      }
+
+      xhr.onerror = () => {
+        reject(new Error("Network error occurred during upload"))
+      }
+
+      xhr.send(file)
+    })
+  }
+
   // Handle form submission
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
@@ -117,73 +181,74 @@ export default function UploadForm({ contentType }: UploadFormProps) {
     try {
       setIsUploading(true)
       setUploadError(null)
+      setUploadProgress(0)
 
-      // Upload video file
-      const videoFileName = `${user.uid}/${Date.now()}-${selectedFile.name}`
-      const videoStorageRef = ref(storage, `videos/${videoFileName}`)
-      const videoUploadTask = uploadBytesResumable(videoStorageRef, selectedFile)
+      // Step 1: Get signed URL for video upload
+      const videoUploadData = await getSignedUploadUrl(selectedFile, "video")
 
-      videoUploadTask.on(
-        "state_changed",
-        (snapshot) => {
-          const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100
-          setUploadProgress(progress)
-        },
-        (error) => {
-          console.error("Upload error:", error)
-          setUploadError("Error uploading video. Please try again.")
-          setIsUploading(false)
-        },
-        async () => {
-          // Get video download URL
-          const videoUrl = await getDownloadURL(videoUploadTask.snapshot.ref)
+      // Step 2: Upload video to R2
+      await uploadFileToR2(selectedFile, videoUploadData.uploadUrl, (progress) => {
+        setUploadProgress(progress * 0.8) // Video is 80% of total progress
+      })
 
-          // Upload thumbnail if provided, otherwise use a default
-          let thumbnailUrl = ""
+      // Variables to store URLs
+      let thumbnailPublicUrl = ""
 
-          if (selectedThumbnail) {
-            const thumbnailFileName = `${user.uid}/${Date.now()}-${selectedThumbnail.name}`
-            const thumbnailStorageRef = ref(storage, `thumbnails/${thumbnailFileName}`)
-            await uploadBytesResumable(thumbnailStorageRef, selectedThumbnail)
-            thumbnailUrl = await getDownloadURL(thumbnailStorageRef)
-          }
+      // Step 3: Upload thumbnail if provided
+      if (selectedThumbnail) {
+        setUploadProgress(80) // Video upload complete
 
-          // Save clip data to Firestore
-          const clipData = {
-            title,
-            description,
-            tags: tags
-              .split(",")
-              .map((tag) => tag.trim())
-              .filter((tag) => tag),
-            videoUrl,
-            thumbnailUrl,
-            duration,
-            creatorId: user.uid,
-            createdAt: serverTimestamp(),
-            isPremium: contentType === "premium",
-            price: contentType === "premium" ? price : 0,
-            allowComments,
-            isExclusive: contentType === "premium" && isExclusive,
-            views: 0,
-            likes: 0,
-          }
+        const thumbnailUploadData = await getSignedUploadUrl(selectedThumbnail, "image")
+        await uploadFileToR2(selectedThumbnail, thumbnailUploadData.uploadUrl, (progress) => {
+          setUploadProgress(80 + progress * 0.2) // Thumbnail is 20% of total progress
+        })
 
-          // Add to appropriate collection based on type
-          const collectionName = contentType === "premium" ? "premiumClips" : "freeClips"
-          await addDoc(collection(db, collectionName), clipData)
+        thumbnailPublicUrl = thumbnailUploadData.publicUrl
+      }
 
-          // Update user's clips array
-          // This would typically be done in a Cloud Function to ensure consistency
+      setUploadProgress(100)
 
-          setUploadSuccess(true)
-          setShowSuccessDialog(true)
-          setIsUploading(false)
-        },
-      )
+      // Step 4: Save clip data to Firestore
+      const clipData = {
+        title,
+        description,
+        tags: tags
+          .split(",")
+          .map((tag) => tag.trim())
+          .filter((tag) => tag),
+        videoUrl: videoUploadData.publicUrl,
+        thumbnailUrl: thumbnailPublicUrl || "",
+        duration,
+        creatorId: user.uid,
+        createdAt: serverTimestamp(),
+        isPremium: contentType === "premium",
+        price: contentType === "premium" ? price : 0,
+        allowComments,
+        isExclusive: contentType === "premium" && isExclusive,
+        views: 0,
+        likes: 0,
+      }
+
+      // Add to appropriate collection based on type
+      const collectionName = contentType === "premium" ? "premiumClips" : "freeClips"
+      const clipRef = await addDoc(collection(db, collectionName), clipData)
+
+      // Also add to user's videos collection for easy access
+      await setDoc(doc(db, `users/${user.uid}/videos`, clipRef.id), {
+        clipId: clipRef.id,
+        collectionName,
+        title,
+        thumbnailUrl: thumbnailPublicUrl || "",
+        createdAt: serverTimestamp(),
+        isPremium: contentType === "premium",
+      })
+
+      setUploadSuccess(true)
+      setShowSuccessDialog(true)
+      setIsUploading(false)
     } catch (error) {
       console.error("Upload error:", error)
-      setUploadError("An unexpected error occurred. Please try again.")
+      setUploadError(error instanceof Error ? error.message : "An unexpected error occurred. Please try again.")
       setIsUploading(false)
     }
   }
