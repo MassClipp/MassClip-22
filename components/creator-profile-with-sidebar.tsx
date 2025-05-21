@@ -194,11 +194,12 @@ export default function CreatorProfileWithSidebar({ creator }: { creator: Creato
               href="/"
               className={cn(
                 "font-bold transition-all duration-200",
-                "text-red-500",
                 sidebarCollapsed && isDesktop ? "text-xl" : "text-2xl",
               )}
             >
-              {sidebarCollapsed && isDesktop ? "MC" : "MassClip"}
+              <span className="bg-gradient-to-r from-red-500 to-red-600 bg-clip-text text-transparent">
+                {sidebarCollapsed && isDesktop ? "MC" : "MassClip"}
+              </span>
             </Link>
           </div>
 
