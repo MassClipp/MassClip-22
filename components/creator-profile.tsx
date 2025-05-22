@@ -10,7 +10,6 @@ import { cn } from "@/lib/utils"
 import { collection, query, where, getDocs, limit } from "firebase/firestore"
 import { db } from "@/lib/firebase"
 import { trackFirestoreRead } from "@/lib/firestore-optimizer"
-import Link from "next/link"
 
 interface Creator {
   uid: string
@@ -38,7 +37,6 @@ interface VideoItem {
   username: string
   views: number
   likes: number
-  createdAt?: string | Date
 }
 
 export default function CreatorProfile({ creator }: { creator: Creator }) {
@@ -52,6 +50,7 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
   const [paidClips, setPaidClips] = useState<VideoItem[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [selectedVideo, setSelectedVideo] = useState<VideoItem | null>(null)
 
   // Set active tab based on URL query parameter
   useEffect(() => {
@@ -77,42 +76,20 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
         setLoading(true)
         console.log("Fetching videos for creator:", creator.uid)
 
-        // Query for free videos (type: "free")
-        const freeVideosQuery = query(
-          collection(db, "videos"),
-          where("uid", "==", creator.uid),
-          where("type", "==", "free"),
-          where("status", "==", "active"),
-          limit(20),
-        )
+        // Query for videos
+        const videosQuery = query(collection(db, "videos"), where("uid", "==", creator.uid), limit(50))
 
-        // Query for premium videos (type: "premium")
-        const premiumVideosQuery = query(
-          collection(db, "videos"),
-          where("uid", "==", creator.uid),
-          where("type", "==", "premium"),
-          where("status", "==", "active"),
-          limit(20),
-        )
-
-        // Execute both queries
-        const [freeSnapshot, premiumSnapshot] = await Promise.all([
-          getDocs(freeVideosQuery),
-          getDocs(premiumVideosQuery),
-        ])
-
-        console.log(`Query results:`, {
-          free: freeSnapshot.size,
-          premium: premiumSnapshot.size,
-        })
+        // Execute query
+        const snapshot = await getDocs(videosQuery)
+        console.log(`Query results: ${snapshot.size} videos found`)
 
         // Track Firestore reads
-        trackFirestoreRead("CreatorProfile", freeSnapshot.size + premiumSnapshot.size)
+        trackFirestoreRead("CreatorProfile", snapshot.size)
 
-        // Process free videos
-        const freeVideos = freeSnapshot.docs.map((doc) => {
+        // Process videos
+        const videos = snapshot.docs.map((doc) => {
           const data = doc.data()
-          console.log("Free video data:", data)
+          console.log("Video data:", data)
           return {
             id: doc.id,
             title: data.title || "Untitled",
@@ -125,33 +102,16 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
             username: data.username || "",
             views: data.views || 0,
             likes: data.likes || 0,
-            createdAt: data.createdAt || new Date(),
           }
         })
 
-        // Process premium videos
-        const premiumVideos = premiumSnapshot.docs.map((doc) => {
-          const data = doc.data()
-          console.log("Premium video data:", data)
-          return {
-            id: doc.id,
-            title: data.title || "Untitled",
-            thumbnailUrl: data.thumbnailUrl || "",
-            url: data.url || "",
-            type: data.type || "premium",
-            status: data.status || "active",
-            isPublic: data.isPublic !== false,
-            uid: data.uid || "",
-            username: data.username || "",
-            views: data.views || 0,
-            likes: data.likes || 0,
-            createdAt: data.createdAt || new Date(),
-          }
-        })
+        // Filter videos by type
+        const free = videos.filter((v) => v.type === "free" && v.status === "active")
+        const premium = videos.filter((v) => v.type === "premium" && v.status === "active")
 
-        setFreeClips(freeVideos)
-        setPaidClips(premiumVideos)
-        console.log(`Loaded ${freeVideos.length} free clips and ${premiumVideos.length} premium clips`)
+        setFreeClips(free)
+        setPaidClips(premium)
+        console.log(`Loaded ${free.length} free clips and ${premium.length} premium clips`)
       } catch (error) {
         console.error("Error fetching videos:", error)
         setError("Failed to load videos. Please try again later.")
@@ -194,24 +154,31 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
     }
   }
 
+  const handleVideoClick = (video: VideoItem) => {
+    setSelectedVideo(video)
+  }
+
+  const closeVideoModal = () => {
+    setSelectedVideo(null)
+  }
+
   // Video card component
   const VideoCard = ({ video }: { video: VideoItem }) => {
     return (
-      <div className="group relative overflow-hidden rounded-lg bg-zinc-900 border border-zinc-800/50 transition-all duration-300 hover:border-zinc-700/50">
+      <div
+        className="group relative overflow-hidden rounded-lg bg-zinc-900 border border-zinc-800/50 transition-all duration-300 hover:border-zinc-700/50 cursor-pointer"
+        onClick={() => handleVideoClick(video)}
+      >
         <div className="aspect-[9/16] relative overflow-hidden">
-          {video.thumbnailUrl ? (
-            <Image
-              src={video.thumbnailUrl || "/placeholder.svg"}
-              alt={video.title}
-              width={320}
-              height={568}
-              className="object-cover w-full h-full transition-transform duration-500 group-hover:scale-105"
-            />
-          ) : (
-            <div className="w-full h-full bg-zinc-800 flex items-center justify-center">
-              <Film className="h-10 w-10 text-zinc-600" />
-            </div>
-          )}
+          {/* Direct video element */}
+          <video
+            src={video.url}
+            className="w-full h-full object-cover"
+            poster={video.thumbnailUrl || undefined}
+            preload="none"
+            muted
+            playsInline
+          />
 
           {/* Premium badge */}
           {video.type === "premium" && (
@@ -221,44 +188,45 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
           )}
 
           {/* Play button overlay */}
-          <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300 bg-black/30">
-            <div className="w-12 h-12 rounded-full bg-red-600/90 flex items-center justify-center">
-              <Play className="h-6 w-6 text-white" fill="white" />
+          <div className="absolute inset-0 flex items-center justify-center bg-black/30">
+            <div className="w-10 h-10 rounded-full bg-red-600/90 flex items-center justify-center">
+              <Play className="h-5 w-5 text-white" fill="white" />
             </div>
           </div>
         </div>
 
-        <div className="p-3">
-          <h3 className="font-medium text-white line-clamp-1 mb-1">{video.title}</h3>
-          <div className="flex items-center justify-between text-xs text-zinc-400">
-            <div className="flex items-center">
-              <span>{video.views} views</span>
-            </div>
-            <div className="flex items-center">
-              <span>{video.likes} likes</span>
-            </div>
+        <div className="p-2">
+          <h3 className="font-medium text-sm text-white line-clamp-1">{video.title}</h3>
+          <div className="flex items-center justify-between text-xs text-zinc-400 mt-1">
+            <span>{video.views} views</span>
+            <span>{video.likes} likes</span>
           </div>
         </div>
-
-        <Link href={`/video/${video.id}`} className="absolute inset-0" aria-label={`Watch ${video.title}`}>
-          <span className="sr-only">Watch {video.title}</span>
-        </Link>
       </div>
     )
   }
 
-  // Video player component
-  const VideoPlayer = ({ video }: { video: VideoItem }) => {
+  // Video modal component
+  const VideoModal = ({ video }: { video: VideoItem }) => {
     return (
-      <div className="aspect-[9/16] relative overflow-hidden rounded-lg bg-black">
-        <video
-          src={video.url}
-          controls
-          className="w-full h-full object-contain"
-          poster={video.thumbnailUrl || undefined}
-        >
-          Your browser does not support the video tag.
-        </video>
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80" onClick={closeVideoModal}>
+        <div className="relative max-w-md w-full mx-4" onClick={(e) => e.stopPropagation()}>
+          <div className="aspect-[9/16] bg-black rounded-lg overflow-hidden">
+            <video src={video.url} controls autoPlay className="w-full h-full" poster={video.thumbnailUrl || undefined}>
+              Your browser does not support the video tag.
+            </video>
+          </div>
+          <button className="absolute -top-10 right-0 text-white hover:text-gray-300" onClick={closeVideoModal}>
+            Close
+          </button>
+          <div className="mt-3 text-white">
+            <h3 className="text-lg font-medium">{video.title}</h3>
+            <div className="flex justify-between text-sm text-zinc-400 mt-1">
+              <span>{video.views} views</span>
+              <span>{video.likes} likes</span>
+            </div>
+          </div>
+        </div>
       </div>
     )
   }
@@ -451,7 +419,7 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
                   <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-red-500"></div>
                 </div>
               ) : freeClips.length > 0 ? (
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
                   {freeClips.map((video) => (
                     <VideoCard key={video.id} video={video} />
                   ))}
@@ -491,7 +459,7 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
                   <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-red-500"></div>
                 </div>
               ) : paidClips.length > 0 ? (
-                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
                   {paidClips.map((video) => (
                     <VideoCard key={video.id} video={video} />
                   ))}
@@ -525,6 +493,9 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
           )}
         </div>
       </div>
+
+      {/* Video Modal */}
+      {selectedVideo && <VideoModal video={selectedVideo} />}
     </div>
   )
 }
