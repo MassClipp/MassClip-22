@@ -1,9 +1,25 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import type React from "react"
+
+import { useState, useEffect, useRef } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
 import Image from "next/image"
-import { Share2, Edit, Plus, Instagram, Twitter, Globe, Calendar, Film, Lock, Play } from "lucide-react"
+import {
+  Share2,
+  Edit,
+  Plus,
+  Instagram,
+  Twitter,
+  Globe,
+  Calendar,
+  Film,
+  Lock,
+  Play,
+  Pause,
+  Volume2,
+  VolumeX,
+} from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useAuth } from "@/contexts/auth-context"
 import { cn } from "@/lib/utils"
@@ -50,7 +66,6 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
   const [paidClips, setPaidClips] = useState<VideoItem[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [selectedVideo, setSelectedVideo] = useState<VideoItem | null>(null)
 
   // Set active tab based on URL query parameter
   useEffect(() => {
@@ -154,30 +169,60 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
     }
   }
 
-  const handleVideoClick = (video: VideoItem) => {
-    setSelectedVideo(video)
-  }
-
-  const closeVideoModal = () => {
-    setSelectedVideo(null)
-  }
-
-  // Video card component
+  // Video card component with inline playback
   const VideoCard = ({ video }: { video: VideoItem }) => {
+    const videoRef = useRef<HTMLVideoElement>(null)
+    const [isPlaying, setIsPlaying] = useState(false)
+    const [isMuted, setIsMuted] = useState(true)
+
+    const togglePlay = (e: React.MouseEvent) => {
+      e.stopPropagation()
+      if (!videoRef.current) return
+
+      if (isPlaying) {
+        videoRef.current.pause()
+      } else {
+        // Pause all other videos first
+        document.querySelectorAll("video").forEach((v) => {
+          if (v !== videoRef.current) v.pause()
+        })
+
+        videoRef.current.play()
+      }
+
+      setIsPlaying(!isPlaying)
+    }
+
+    const toggleMute = (e: React.MouseEvent) => {
+      e.stopPropagation()
+      if (!videoRef.current) return
+
+      videoRef.current.muted = !videoRef.current.muted
+      setIsMuted(!isMuted)
+    }
+
+    // Handle video end
+    const handleVideoEnd = () => {
+      setIsPlaying(false)
+      if (videoRef.current) {
+        videoRef.current.currentTime = 0
+      }
+    }
+
     return (
-      <div
-        className="group relative overflow-hidden rounded-lg bg-zinc-900 border border-zinc-800/50 transition-all duration-300 hover:border-zinc-700/50 cursor-pointer"
-        onClick={() => handleVideoClick(video)}
-      >
+      <div className="group relative overflow-hidden rounded-lg bg-zinc-900 border border-zinc-800/50 transition-all duration-300 hover:border-zinc-700/50">
         <div className="aspect-[9/16] relative overflow-hidden">
           {/* Direct video element */}
           <video
+            ref={videoRef}
             src={video.url}
             className="w-full h-full object-cover"
             poster={video.thumbnailUrl || undefined}
-            preload="none"
-            muted
+            preload="metadata"
+            muted={isMuted}
             playsInline
+            onEnded={handleVideoEnd}
+            onClick={(e) => e.stopPropagation()} // Prevent click from bubbling
           />
 
           {/* Premium badge */}
@@ -187,11 +232,25 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
             </div>
           )}
 
-          {/* Play button overlay */}
-          <div className="absolute inset-0 flex items-center justify-center bg-black/30">
-            <div className="w-10 h-10 rounded-full bg-red-600/90 flex items-center justify-center">
-              <Play className="h-5 w-5 text-white" fill="white" />
+          {/* Video controls overlay */}
+          <div className="absolute inset-0 flex flex-col justify-between p-2 bg-gradient-to-b from-black/40 via-transparent to-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+            <div className="flex justify-end">
+              <button
+                onClick={toggleMute}
+                className="w-8 h-8 rounded-full bg-black/50 flex items-center justify-center text-white"
+              >
+                {isMuted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
+              </button>
             </div>
+            <div className="flex justify-center">
+              <button
+                onClick={togglePlay}
+                className="w-12 h-12 rounded-full bg-red-600/90 flex items-center justify-center text-white"
+              >
+                {isPlaying ? <Pause className="h-6 w-6" /> : <Play className="h-6 w-6" fill="white" />}
+              </button>
+            </div>
+            <div></div> {/* Empty div for flex spacing */}
           </div>
         </div>
 
@@ -200,31 +259,6 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
           <div className="flex items-center justify-between text-xs text-zinc-400 mt-1">
             <span>{video.views} views</span>
             <span>{video.likes} likes</span>
-          </div>
-        </div>
-      </div>
-    )
-  }
-
-  // Video modal component
-  const VideoModal = ({ video }: { video: VideoItem }) => {
-    return (
-      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80" onClick={closeVideoModal}>
-        <div className="relative max-w-md w-full mx-4" onClick={(e) => e.stopPropagation()}>
-          <div className="aspect-[9/16] bg-black rounded-lg overflow-hidden">
-            <video src={video.url} controls autoPlay className="w-full h-full" poster={video.thumbnailUrl || undefined}>
-              Your browser does not support the video tag.
-            </video>
-          </div>
-          <button className="absolute -top-10 right-0 text-white hover:text-gray-300" onClick={closeVideoModal}>
-            Close
-          </button>
-          <div className="mt-3 text-white">
-            <h3 className="text-lg font-medium">{video.title}</h3>
-            <div className="flex justify-between text-sm text-zinc-400 mt-1">
-              <span>{video.views} views</span>
-              <span>{video.likes} likes</span>
-            </div>
           </div>
         </div>
       </div>
@@ -493,9 +527,6 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
           )}
         </div>
       </div>
-
-      {/* Video Modal */}
-      {selectedVideo && <VideoModal video={selectedVideo} />}
     </div>
   )
 }
