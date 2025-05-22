@@ -1,36 +1,21 @@
-import { cookies } from "next/headers"
 import { NextResponse } from "next/server"
-import { initializeFirebaseAdmin } from "@/lib/firebase-admin"
-import { getAuth } from "firebase-admin/auth"
+import { validateSessionCookie } from "@/lib/server-session"
 
 export async function GET() {
   try {
-    // Get session cookie
-    const sessionCookie = cookies().get("session")?.value
+    const decodedToken = await validateSessionCookie()
 
-    if (!sessionCookie) {
+    if (!decodedToken) {
       return NextResponse.json({ valid: false }, { status: 401 })
     }
 
-    // Initialize Firebase Admin
-    initializeFirebaseAdmin()
-    const auth = getAuth()
-
-    try {
-      // Verify the session cookie
-      const decodedClaims = await auth.verifySessionCookie(sessionCookie, true)
-
-      // Return success with user ID
-      return NextResponse.json({
-        valid: true,
-        uid: decodedClaims.uid,
-      })
-    } catch (error) {
-      console.error("Invalid session during validation:", error)
-      return NextResponse.json({ valid: false }, { status: 401 })
-    }
+    return NextResponse.json({
+      valid: true,
+      uid: decodedToken.uid,
+      expiresAt: decodedToken.exp * 1000, // Convert to milliseconds
+    })
   } catch (error) {
     console.error("Error validating session:", error)
-    return NextResponse.json({ valid: false }, { status: 500 })
+    return NextResponse.json({ valid: false, error: "Session validation failed" }, { status: 500 })
   }
 }
