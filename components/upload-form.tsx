@@ -4,7 +4,7 @@ import { useState, useRef, useEffect, type ChangeEvent, type FormEvent } from "r
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/contexts/auth-context"
 import { db } from "@/lib/firebase"
-import { collection, addDoc, serverTimestamp, doc, getDoc } from "firebase/firestore"
+import { collection, addDoc, serverTimestamp, doc, getDoc, query, where, getDocs } from "firebase/firestore"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
@@ -21,7 +21,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
-import { Upload, Video, CheckCircle2, AlertCircle, Loader2 } from "lucide-react"
+import { Upload, Video, CheckCircle2, AlertCircle, Loader2, User } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 export default function UploadForm() {
@@ -33,9 +33,10 @@ export default function UploadForm() {
   const [title, setTitle] = useState("")
   const [description, setDescription] = useState("")
 
-  // User state
-  const [username, setUsername] = useState<string>("")
-  const [isLoadingUsername, setIsLoadingUsername] = useState(true)
+  // Creator profile state
+  const [creatorUsername, setCreatorUsername] = useState<string>("")
+  const [creatorHandle, setCreatorHandle] = useState<string>("")
+  const [isLoadingProfile, setIsLoadingProfile] = useState(true)
 
   // File state
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
@@ -48,31 +49,80 @@ export default function UploadForm() {
   const [uploadError, setUploadError] = useState<string | null>(null)
   const [showSuccessDialog, setShowSuccessDialog] = useState(false)
 
-  // Fetch the user's username from Firestore
+  // Fetch the creator profile information
   useEffect(() => {
-    async function fetchUsername() {
+    async function fetchCreatorProfile() {
       if (!user) {
-        setIsLoadingUsername(false)
+        setIsLoadingProfile(false)
         return
       }
 
       try {
-        const userDoc = await getDoc(doc(db, "users", user.uid))
-        if (userDoc.exists() && userDoc.data().username) {
-          setUsername(userDoc.data().username)
+        console.log("Fetching creator profile for UID:", user.uid)
+
+        // First try to get the creator profile directly
+        const usersRef = collection(db, "users")
+        const q = query(usersRef, where("uid", "==", user.uid))
+        const querySnapshot = await getDocs(q)
+
+        if (!querySnapshot.empty) {
+          const userData = querySnapshot.docs[0].data()
+          console.log("Found creator profile:", userData)
+
+          if (userData.username) {
+            setCreatorUsername(userData.username)
+            setCreatorHandle(userData.handle || userData.username)
+            setIsLoadingProfile(false)
+            return
+          }
+        }
+
+        // If not found by UID, try to find by email
+        if (user.email) {
+          const emailQuery = query(usersRef, where("email", "==", user.email))
+          const emailSnapshot = await getDocs(emailQuery)
+
+          if (!emailSnapshot.empty) {
+            const userData = emailSnapshot.docs[0].data()
+            console.log("Found creator profile by email:", userData)
+
+            if (userData.username) {
+              setCreatorUsername(userData.username)
+              setCreatorHandle(userData.handle || userData.username)
+              setIsLoadingProfile(false)
+              return
+            }
+          }
+        }
+
+        // As a last resort, check if there's a document with the user's UID as the ID
+        const userDocRef = doc(db, "users", user.uid)
+        const userDoc = await getDoc(userDocRef)
+
+        if (userDoc.exists()) {
+          const userData = userDoc.data()
+          console.log("Found user document by ID:", userData)
+
+          if (userData.username) {
+            setCreatorUsername(userData.username)
+            setCreatorHandle(userData.handle || userData.username)
+          } else {
+            console.error("No username found in user document")
+            setUploadError("Your creator profile is missing a username. Please set up your profile first.")
+          }
         } else {
-          console.error("No username found for user")
-          setUploadError("Your profile is missing a username. Please set up your profile first.")
+          console.error("No creator profile found")
+          setUploadError("No creator profile found. Please set up your profile first.")
         }
       } catch (error) {
-        console.error("Error fetching username:", error)
-        setUploadError("Failed to load your profile information. Please try again.")
+        console.error("Error fetching creator profile:", error)
+        setUploadError("Failed to load your creator profile information. Please try again.")
       } finally {
-        setIsLoadingUsername(false)
+        setIsLoadingProfile(false)
       }
     }
 
-    fetchUsername()
+    fetchCreatorProfile()
   }, [user])
 
   // Handle video file selection
@@ -112,8 +162,8 @@ export default function UploadForm() {
       const sanitizedTitle = title.replace(/[^a-zA-Z0-9]/g, "-").toLowerCase()
       const timestamp = Date.now()
 
-      // Format: {username}/{title}-{timestamp}.mp4
-      const fileName = `${username}/${sanitizedTitle}-${timestamp}.${file.name.split(".").pop()}`
+      // Format: {creatorUsername}/{title}-{timestamp}.mp4
+      const fileName = `${creatorUsername}/${sanitizedTitle}-${timestamp}.${file.name.split(".").pop()}`
 
       const response = await fetch("/api/get-upload-url", {
         method: "POST",
@@ -187,8 +237,8 @@ export default function UploadForm() {
       return
     }
 
-    if (!username) {
-      setUploadError("Your profile is missing a username. Please set up your profile first.")
+    if (!creatorUsername) {
+      setUploadError("Your creator profile is missing a username. Please set up your profile first.")
       return
     }
 
@@ -220,7 +270,7 @@ export default function UploadForm() {
       // Step 3: Save video data to Firestore
       const videoData = {
         uid: user.uid,
-        username: username, // Use the username from the profile
+        username: creatorUsername, // Use the creator profile username
         title,
         description: description || "",
         url: uploadData.publicUrl,
@@ -257,11 +307,16 @@ export default function UploadForm() {
 
   // Navigate to profile after upload
   const goToProfile = () => {
-    if (username) {
-      router.push(`/creator/${username}`)
+    if (creatorUsername) {
+      router.push(`/creator/${creatorUsername}`)
     } else {
       router.push("/dashboard")
     }
+  }
+
+  // Navigate to profile setup
+  const goToProfileSetup = () => {
+    router.push("/dashboard/profile/edit")
   }
 
   return (
@@ -274,24 +329,28 @@ export default function UploadForm() {
               <span>Upload Content</span>
             </CardTitle>
             <CardDescription className="text-zinc-400">
-              {username ? `Uploading as @${username}` : "Share your content with the world"}
+              {creatorUsername ? (
+                <span className="flex items-center gap-1.5">
+                  <User className="h-3.5 w-3.5 text-zinc-500" />
+                  Uploading as <span className="text-red-400">@{creatorHandle || creatorUsername}</span>
+                </span>
+              ) : (
+                "Share your content with the world"
+              )}
             </CardDescription>
           </CardHeader>
 
           <CardContent className="pt-6 bg-black">
-            {isLoadingUsername ? (
+            {isLoadingProfile ? (
               <div className="flex items-center justify-center py-8">
                 <Loader2 className="h-8 w-8 text-red-500 animate-spin" />
-                <span className="ml-3 text-zinc-400">Loading your profile...</span>
+                <span className="ml-3 text-zinc-400">Loading your creator profile...</span>
               </div>
-            ) : !username ? (
+            ) : !creatorUsername ? (
               <div className="p-4 bg-amber-500/10 border border-amber-500/20 rounded-lg text-center">
-                <p className="text-amber-200 mb-2">Your profile is missing a username</p>
-                <Button
-                  onClick={() => router.push("/dashboard/profile/edit")}
-                  className="bg-amber-500 hover:bg-amber-600 text-black"
-                >
-                  Set Up Profile
+                <p className="text-amber-200 mb-2">Your creator profile is missing a username</p>
+                <Button onClick={goToProfileSetup} className="bg-amber-500 hover:bg-amber-600 text-black">
+                  Set Up Creator Profile
                 </Button>
               </div>
             ) : (
@@ -392,7 +451,7 @@ export default function UploadForm() {
                 <CardFooter className="px-0 pt-6 pb-0 mt-6">
                   <Button
                     type="submit"
-                    disabled={isUploading || !selectedFile || !title.trim() || !username}
+                    disabled={isUploading || !selectedFile || !title.trim() || !creatorUsername}
                     className="w-full py-6 text-base font-medium bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white"
                   >
                     {isUploading ? (
@@ -423,7 +482,7 @@ export default function UploadForm() {
               Upload Successful!
             </AlertDialogTitle>
             <AlertDialogDescription className="text-zinc-400">
-              Your video has been uploaded successfully and is now available on your profile.
+              Your video has been uploaded successfully and is now available on your creator profile.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter className="gap-2">
