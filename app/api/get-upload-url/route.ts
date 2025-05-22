@@ -1,7 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3"
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner"
-import { v4 as uuidv4 } from "uuid"
 
 // Initialize R2 client
 const s3Client = new S3Client({
@@ -16,15 +15,11 @@ const s3Client = new S3Client({
 export async function POST(request: NextRequest) {
   try {
     // Parse request body
-    const { fileName, fileType, contentType } = await request.json()
+    const { fileName, fileType } = await request.json()
 
     if (!fileName || !fileType) {
       return NextResponse.json({ error: "Missing required fields" }, { status: 400 })
     }
-
-    // Generate a unique file name to prevent overwrites
-    // Use a UUID instead of relying on user authentication
-    const uniqueFileName = `uploads/${uuidv4()}-${fileName}`
 
     // Set the bucket name from environment variable
     const bucketName = process.env.CLOUDFLARE_R2_BUCKET_NAME || process.env.R2_BUCKET_NAME
@@ -36,7 +31,7 @@ export async function POST(request: NextRequest) {
     // Create the command to put an object in the bucket
     const command = new PutObjectCommand({
       Bucket: bucketName,
-      Key: uniqueFileName,
+      Key: fileName,
       ContentType: fileType,
     })
 
@@ -44,13 +39,13 @@ export async function POST(request: NextRequest) {
     const signedUrl = await getSignedUrl(s3Client, command, { expiresIn: 3600 }) // URL expires in 1 hour
 
     // Generate the public URL that will be accessible after upload
-    const publicUrl = `${process.env.CLOUDFLARE_R2_PUBLIC_URL || process.env.R2_PUBLIC_URL}/${uniqueFileName}`
+    const publicUrl = `${process.env.CLOUDFLARE_R2_PUBLIC_URL || process.env.R2_PUBLIC_URL}/${fileName}`
 
     return NextResponse.json({
       success: true,
       uploadUrl: signedUrl,
       publicUrl: publicUrl,
-      key: uniqueFileName,
+      key: fileName,
     })
   } catch (error) {
     console.error("Error generating upload URL:", error)
