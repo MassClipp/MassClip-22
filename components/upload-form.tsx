@@ -103,6 +103,8 @@ export default function UploadForm({ contentType }: UploadFormProps) {
   // Get a signed upload URL from the server
   const getSignedUploadUrl = async (file: File, fileType: string) => {
     try {
+      console.log("Requesting signed upload URL for file:", file.name)
+
       const response = await fetch("/api/get-upload-url", {
         method: "POST",
         headers: {
@@ -118,6 +120,7 @@ export default function UploadForm({ contentType }: UploadFormProps) {
 
       if (!response.ok) {
         const errorData = await response.json()
+        console.error("Failed to get upload URL:", errorData.error)
 
         // Check if this is an authentication error
         if (response.status === 401) {
@@ -127,7 +130,9 @@ export default function UploadForm({ contentType }: UploadFormProps) {
         throw new Error(errorData.error || "Failed to get upload URL")
       }
 
-      return await response.json()
+      const data = await response.json()
+      console.log("Got signed upload URL successfully")
+      return data
     } catch (error) {
       console.error("Error getting signed URL:", error)
       throw error
@@ -137,6 +142,8 @@ export default function UploadForm({ contentType }: UploadFormProps) {
   // Upload file to R2 using the signed URL
   const uploadFileToR2 = async (file: File, signedUrl: string, onProgress: (progress: number) => void) => {
     return new Promise<void>((resolve, reject) => {
+      console.log("Starting upload to R2 with signed URL")
+
       const xhr = new XMLHttpRequest()
 
       xhr.open("PUT", signedUrl, true)
@@ -151,13 +158,16 @@ export default function UploadForm({ contentType }: UploadFormProps) {
 
       xhr.onload = () => {
         if (xhr.status === 200) {
+          console.log("File uploaded successfully to R2")
           resolve()
         } else {
+          console.error(`Upload failed with status: ${xhr.status}`)
           reject(new Error(`Upload failed with status: ${xhr.status}`))
         }
       }
 
       xhr.onerror = () => {
+        console.error("Network error during upload")
         reject(new Error("Network error occurred during upload"))
       }
 
@@ -239,6 +249,7 @@ export default function UploadForm({ contentType }: UploadFormProps) {
       // Add to appropriate collection based on type
       const collectionName = contentType === "premium" ? "premiumClips" : "freeClips"
       const clipRef = await addDoc(collection(db, collectionName), clipData)
+      console.log(`Clip saved to Firestore with ID: ${clipRef.id}`)
 
       // Also add to user's videos collection for easy access
       await setDoc(doc(db, `users/${user.uid}/videos`, clipRef.id), {
@@ -249,6 +260,7 @@ export default function UploadForm({ contentType }: UploadFormProps) {
         createdAt: serverTimestamp(),
         isPremium: contentType === "premium",
       })
+      console.log("Clip reference added to user's videos collection")
 
       setUploadSuccess(true)
       setShowSuccessDialog(true)
@@ -257,7 +269,12 @@ export default function UploadForm({ contentType }: UploadFormProps) {
       console.error("Upload error:", error)
 
       // Check if this is a session error
-      if (error instanceof Error && error.message.includes("Authentication")) {
+      if (
+        error instanceof Error &&
+        (error.message.includes("Authentication") ||
+          error.message.includes("session") ||
+          error.message.includes("log in"))
+      ) {
         setShowSessionError(true)
       }
 

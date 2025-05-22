@@ -126,9 +126,14 @@ export function AuthProvider({ children }: AuthProviderProps) {
   }, [pathname, router])
 
   // Create a session cookie after authentication
-  const createSession = async (idToken: string): Promise<boolean> => {
+  const createSession = async (user: FirebaseUser): Promise<boolean> => {
     try {
-      console.log("Creating session with token:", idToken.substring(0, 10) + "...")
+      // Force token refresh to ensure we get a fresh token
+      await user.getIdToken(true)
+
+      // Get the fresh ID token
+      const idToken = await user.getIdToken()
+      console.log("Got fresh ID token for session creation")
 
       const response = await fetch("/api/auth/session", {
         method: "POST",
@@ -145,6 +150,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         return false
       }
 
+      console.log("Session created successfully")
       return true
     } catch (error) {
       console.error("Error creating session:", error)
@@ -162,14 +168,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
       const result = await signInWithPopup(auth, provider)
       const user = result.user
-
-      // Get the ID token
-      const idToken = await user.getIdToken(true)
-      console.log("Got ID token after Google sign-in")
+      console.log("Google sign-in successful for user:", user.uid)
 
       // Create a session cookie
-      const sessionCreated = await createSession(idToken)
+      const sessionCreated = await createSession(user)
       if (!sessionCreated) {
+        console.error("Failed to create session after Google sign-in")
         return { success: false, error: "Failed to create session" }
       }
 
@@ -218,14 +222,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
       setLoading(true)
       const auth = getAuth()
       const userCredential = await signInWithEmailAndPassword(auth, email, password)
-
-      // Get the ID token
-      const idToken = await userCredential.user.getIdToken(true)
-      console.log("Got ID token after email sign-in")
+      console.log("Email sign-in successful for user:", userCredential.user.uid)
 
       // Create a session cookie
-      const sessionCreated = await createSession(idToken)
+      const sessionCreated = await createSession(userCredential.user)
       if (!sessionCreated) {
+        console.error("Failed to create session after email sign-in")
         return { success: false, error: "Failed to create session" }
       }
 
@@ -259,14 +261,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
       setLoading(true)
       const auth = getAuth()
       const { user: newUser } = await createUserWithEmailAndPassword(auth, email, password)
-
-      // Get the ID token
-      const idToken = await newUser.getIdToken(true)
-      console.log("Got ID token after sign-up")
+      console.log("Sign-up successful for user:", newUser.uid)
 
       // Create a session cookie
-      const sessionCreated = await createSession(idToken)
+      const sessionCreated = await createSession(newUser)
       if (!sessionCreated) {
+        console.error("Failed to create session after sign-up")
         return { success: false, error: "Failed to create session" }
       }
 
@@ -304,6 +304,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         method: "POST",
         credentials: "include", // Important: include cookies with the request
       })
+      console.log("Logged out and cleared session cookie")
 
       // Clear any cached user data
       setUser(null)
