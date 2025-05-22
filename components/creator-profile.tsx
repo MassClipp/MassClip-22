@@ -181,10 +181,15 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
 
       if (isPlaying) {
         videoRef.current.pause()
+        // Reset video to beginning when paused
+        videoRef.current.currentTime = 0
       } else {
-        // Pause all other videos first
+        // Pause all other videos first and reset them
         document.querySelectorAll("video").forEach((v) => {
-          if (v !== videoRef.current) v.pause()
+          if (v !== videoRef.current) {
+            v.pause()
+            v.currentTime = 0
+          }
         })
 
         videoRef.current.muted = false // Ensure sound is on
@@ -208,6 +213,14 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
       >
+        {/* Thin white border that fades in on hover */}
+        <div
+          className="absolute inset-0 rounded-lg transition-opacity duration-300 pointer-events-none opacity-0 group-hover:opacity-100"
+          style={{
+            boxShadow: "inset 0 0 0 1px rgba(255, 255, 255, 0.3)",
+          }}
+        ></div>
+
         {/* Premium Vimeo-style card design */}
         <div className="aspect-[9/16] relative overflow-hidden rounded-lg bg-zinc-900 shadow-md">
           {/* Video element */}
@@ -230,13 +243,9 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
             </div>
           )}
 
-          {/* Minimal modern play button - only visible when not playing */}
+          {/* Minimal modern play button - fades in/out on hover */}
           {!isPlaying && (
-            <div
-              className={`absolute inset-0 flex items-center justify-center transition-opacity duration-200 ${
-                isHovered ? "opacity-100" : "opacity-0"
-              }`}
-            >
+            <div className="absolute inset-0 flex items-center justify-center transition-opacity duration-300 opacity-0 group-hover:opacity-100">
               <button
                 onClick={togglePlay}
                 className="w-10 h-10 rounded-full bg-black/30 backdrop-blur-sm flex items-center justify-center text-white transition-all duration-200 hover:bg-black/50"
@@ -247,9 +256,9 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
             </div>
           )}
 
-          {/* Pause button - only visible when playing and hovered */}
-          {isPlaying && isHovered && (
-            <div className="absolute inset-0 flex items-center justify-center">
+          {/* Pause button - fades in/out on hover when playing */}
+          {isPlaying && (
+            <div className="absolute inset-0 flex items-center justify-center transition-opacity duration-300 opacity-0 group-hover:opacity-100">
               <button
                 onClick={togglePlay}
                 className="w-10 h-10 rounded-full bg-black/30 backdrop-blur-sm flex items-center justify-center text-white transition-all duration-200 hover:bg-black/50"
