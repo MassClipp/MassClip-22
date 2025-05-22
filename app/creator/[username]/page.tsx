@@ -158,32 +158,6 @@ export default async function CreatorProfilePage({ params }: { params: { usernam
     // Serialize the Firestore data to plain objects
     const serializedData = serializeData(userData)
 
-    // Fetch the user's clips
-    console.log(`[Page] Fetching clips for user: ${uid}`)
-    const clipsRef = db.collection("clips").where("userId", "==", uid)
-    const clipsSnapshot = await clipsRef.get()
-
-    // Separate free and paid clips
-    const freeClips = []
-    const paidClips = []
-
-    clipsSnapshot.forEach((doc) => {
-      const clipData = doc.data()
-      const clip = {
-        id: doc.id,
-        ...clipData,
-        createdAt: clipData.createdAt?.toDate?.() || new Date(),
-      }
-
-      if (clipData.isPremium) {
-        paidClips.push(clip)
-      } else {
-        freeClips.push(clip)
-      }
-    })
-
-    console.log(`[Page] Found ${freeClips.length} free clips and ${paidClips.length} premium clips`)
-
     // Format the creator data for the component
     const creatorData = {
       uid: uid,
@@ -193,8 +167,6 @@ export default async function CreatorProfilePage({ params }: { params: { usernam
       profilePic: serializedData.photoURL || "",
       createdAt: serializedData.createdAt || new Date().toISOString(),
       socialLinks: serializedData.socialLinks || {},
-      freeClips: freeClips,
-      paidClips: paidClips,
     }
 
     return <CreatorProfileWithSidebar creator={creatorData} />
