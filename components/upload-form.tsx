@@ -4,7 +4,7 @@ import { useState, useRef, useEffect, type ChangeEvent, type FormEvent } from "r
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/contexts/auth-context"
 import { db } from "@/lib/firebase"
-import { collection, addDoc, serverTimestamp, doc, getDoc, query, where, getDocs } from "firebase/firestore"
+import { collection, addDoc, serverTimestamp, doc, getDoc, query, where, getDocs, setDoc } from "firebase/firestore"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
@@ -49,6 +49,9 @@ export default function UploadForm() {
   const [uploadError, setUploadError] = useState<string | null>(null)
   const [showSuccessDialog, setShowSuccessDialog] = useState(false)
 
+  // Debug state
+  const [debugInfo, setDebugInfo] = useState<any>(null)
+
   // Fetch the creator profile information
   useEffect(() => {
     async function fetchCreatorProfile() {
@@ -60,18 +63,44 @@ export default function UploadForm() {
       try {
         console.log("Fetching creator profile for UID:", user.uid)
 
-        // First try to get the creator profile directly
+        // First check if there's a document with the user's UID as the ID
+        const userDocRef = doc(db, "users", user.uid)
+        const userDoc = await getDoc(userDocRef)
+
+        let userData: any = null
+
+        if (userDoc.exists()) {
+          userData = userDoc.data()
+          console.log("Found user document by ID:", userData)
+
+          if (userData.username) {
+            setCreatorUsername(userData.username)
+            setCreatorHandle(userData.handle || userData.username)
+            setDebugInfo({
+              source: "direct-id",
+              data: userData,
+            })
+            setIsLoadingProfile(false)
+            return
+          }
+        }
+
+        // If not found by direct ID, try querying
         const usersRef = collection(db, "users")
         const q = query(usersRef, where("uid", "==", user.uid))
         const querySnapshot = await getDocs(q)
 
         if (!querySnapshot.empty) {
-          const userData = querySnapshot.docs[0].data()
-          console.log("Found creator profile:", userData)
+          userData = querySnapshot.docs[0].data()
+          console.log("Found creator profile by UID query:", userData)
 
           if (userData.username) {
             setCreatorUsername(userData.username)
             setCreatorHandle(userData.handle || userData.username)
+            setDebugInfo({
+              source: "uid-query",
+              data: userData,
+            })
             setIsLoadingProfile(false)
             return
           }
@@ -83,40 +112,38 @@ export default function UploadForm() {
           const emailSnapshot = await getDocs(emailQuery)
 
           if (!emailSnapshot.empty) {
-            const userData = emailSnapshot.docs[0].data()
+            userData = emailSnapshot.docs[0].data()
             console.log("Found creator profile by email:", userData)
 
             if (userData.username) {
               setCreatorUsername(userData.username)
               setCreatorHandle(userData.handle || userData.username)
+              setDebugInfo({
+                source: "email-query",
+                data: userData,
+              })
               setIsLoadingProfile(false)
               return
             }
           }
         }
 
-        // As a last resort, check if there's a document with the user's UID as the ID
-        const userDocRef = doc(db, "users", user.uid)
-        const userDoc = await getDoc(userDocRef)
-
-        if (userDoc.exists()) {
-          const userData = userDoc.data()
-          console.log("Found user document by ID:", userData)
-
-          if (userData.username) {
-            setCreatorUsername(userData.username)
-            setCreatorHandle(userData.handle || userData.username)
-          } else {
-            console.error("No username found in user document")
-            setUploadError("Your creator profile is missing a username. Please set up your profile first.")
-          }
-        } else {
-          console.error("No creator profile found")
-          setUploadError("No creator profile found. Please set up your profile first.")
+        if (!userData || !userData.username) {
+          console.error("No username found in user document")
+          setUploadError("Your creator profile is missing a username. Please set up your profile first.")
+          setDebugInfo({
+            source: "not-found",
+            uid: user.uid,
+            email: user.email,
+          })
         }
       } catch (error) {
         console.error("Error fetching creator profile:", error)
         setUploadError("Failed to load your creator profile information. Please try again.")
+        setDebugInfo({
+          source: "error",
+          error: error instanceof Error ? error.message : String(error),
+        })
       } finally {
         setIsLoadingProfile(false)
       }
@@ -268,20 +295,46 @@ export default function UploadForm() {
       setUploadProgress(100)
 
       // Step 3: Save video data to Firestore
+      // This is the critical part - we need to match the exact structure expected by the profile page
       const videoData = {
         uid: user.uid,
-        username: creatorUsername, // Use the creator profile username
+        username: creatorUsername,
         title,
         description: description || "",
         url: uploadData.publicUrl,
+        thumbnailUrl: "", // Add a default thumbnail if needed
         status: "active",
         createdAt: serverTimestamp(),
         duration,
+        views: 0,
+        likes: 0,
+        isPremium: false,
+        isPublic: true,
+        tags: [],
+        type: "free", // Make sure this matches what the profile page expects
       }
 
       // Add to videos collection
       const videoRef = await addDoc(collection(db, "videos"), videoData)
       console.log(`Video saved to Firestore with ID: ${videoRef.id}`)
+
+      // Also add to freeClips collection for compatibility
+      const freeClipRef = await addDoc(collection(db, "freeClips"), {
+        ...videoData,
+        videoId: videoRef.id,
+      })
+      console.log(`Also saved to freeClips with ID: ${freeClipRef.id}`)
+
+      // Also add to user's videos collection for easy access
+      await setDoc(doc(db, `users/${user.uid}/videos`, videoRef.id), {
+        videoId: videoRef.id,
+        title,
+        thumbnailUrl: "",
+        createdAt: serverTimestamp(),
+        isPremium: false,
+        url: uploadData.publicUrl,
+      })
+      console.log("Video reference added to user's videos collection")
 
       setShowSuccessDialog(true)
       setIsUploading(false)
@@ -352,6 +405,13 @@ export default function UploadForm() {
                 <Button onClick={goToProfileSetup} className="bg-amber-500 hover:bg-amber-600 text-black">
                   Set Up Creator Profile
                 </Button>
+
+                {debugInfo && (
+                  <div className="mt-4 text-left text-xs text-amber-200/70 bg-black/30 p-2 rounded overflow-auto">
+                    <p>Debug info:</p>
+                    <pre>{JSON.stringify(debugInfo, null, 2)}</pre>
+                  </div>
+                )}
               </div>
             ) : (
               <form onSubmit={handleSubmit}>
