@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useRef, type ChangeEvent, type FormEvent } from "react"
+import { useState, useRef, useEffect, type ChangeEvent, type FormEvent } from "react"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/contexts/auth-context"
 import { db } from "@/lib/firebase"
@@ -32,7 +32,7 @@ interface UploadFormProps {
 }
 
 export default function UploadForm({ contentType }: UploadFormProps) {
-  const { user } = useAuth()
+  const { user, refreshSession } = useAuth()
   const router = useRouter()
   const fileInputRef = useRef<HTMLInputElement>(null)
   const thumbnailInputRef = useRef<HTMLInputElement>(null)
@@ -59,6 +59,23 @@ export default function UploadForm({ contentType }: UploadFormProps) {
   const [uploadSuccess, setUploadSuccess] = useState(false)
   const [showSuccessDialog, setShowSuccessDialog] = useState(false)
   const [showSessionError, setShowSessionError] = useState(false)
+  const [isRefreshingSession, setIsRefreshingSession] = useState(false)
+
+  // Refresh session when component mounts
+  useEffect(() => {
+    const validateCurrentSession = async () => {
+      try {
+        setIsRefreshingSession(true)
+        await refreshSession()
+      } catch (error) {
+        console.error("Failed to refresh session on component mount:", error)
+      } finally {
+        setIsRefreshingSession(false)
+      }
+    }
+
+    validateCurrentSession()
+  }, [refreshSession])
 
   // Handle video file selection
   const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
@@ -105,6 +122,9 @@ export default function UploadForm({ contentType }: UploadFormProps) {
     try {
       console.log("Requesting signed upload URL for file:", file.name)
 
+      // Try to refresh the session before making the request
+      await refreshSession()
+
       const response = await fetch("/api/get-upload-url", {
         method: "POST",
         headers: {
@@ -124,6 +144,29 @@ export default function UploadForm({ contentType }: UploadFormProps) {
 
         // Check if this is an authentication error
         if (response.status === 401) {
+          // Try to refresh the session one more time
+          const refreshed = await refreshSession()
+
+          if (refreshed) {
+            // Try the request again
+            const retryResponse = await fetch("/api/get-upload-url", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                fileName: file.name,
+                fileType: file.type,
+                contentType: contentType,
+              }),
+              credentials: "include",
+            })
+
+            if (retryResponse.ok) {
+              return await retryResponse.json()
+            }
+          }
+
           setShowSessionError(true)
         }
 
@@ -199,6 +242,9 @@ export default function UploadForm({ contentType }: UploadFormProps) {
       setIsUploading(true)
       setUploadError(null)
       setUploadProgress(0)
+
+      // Refresh session before starting upload
+      await refreshSession()
 
       // Step 1: Get signed URL for video upload
       const videoUploadData = await getSignedUploadUrl(selectedFile, "video")
@@ -342,6 +388,13 @@ export default function UploadForm({ contentType }: UploadFormProps) {
           </CardHeader>
 
           <CardContent className="pt-6">
+            {isRefreshingSession && (
+              <div className="mb-4 p-2 bg-blue-500/10 border border-blue-500/20 rounded-lg flex items-center justify-center">
+                <Loader2 className="h-4 w-4 text-blue-500 mr-2 animate-spin" />
+                <p className="text-sm text-blue-200">Preparing secure upload environment...</p>
+              </div>
+            )}
+
             <form onSubmit={handleSubmit}>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 {/* Left column - File uploads */}
@@ -551,7 +604,7 @@ export default function UploadForm({ contentType }: UploadFormProps) {
               <CardFooter className="px-0 pt-6 pb-0 mt-6">
                 <Button
                   type="submit"
-                  disabled={isUploading || !selectedFile}
+                  disabled={isUploading || !selectedFile || isRefreshingSession}
                   className={cn(
                     "w-full py-6 text-base font-medium",
                     contentType === "premium"
@@ -563,6 +616,11 @@ export default function UploadForm({ contentType }: UploadFormProps) {
                     <>
                       <Loader2 className="mr-2 h-5 w-5 animate-spin" />
                       Uploading...
+                    </>
+                  ) : isRefreshingSession ? (
+                    <>
+                      <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                      Preparing...
                     </>
                   ) : (
                     <>

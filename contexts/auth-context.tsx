@@ -15,6 +15,7 @@ import {
 import { doc, getDoc, setDoc, getFirestore } from "firebase/firestore"
 import { useRouter, usePathname } from "next/navigation"
 import { initializeFirebaseApp } from "@/lib/firebase"
+import { checkAndRefreshSession, validateSession } from "@/lib/session-manager"
 
 // Define the user type
 export interface User extends FirebaseUser {
@@ -34,6 +35,7 @@ interface AuthContextType {
   signUp: (email: string, password: string) => Promise<{ success: boolean; error?: string }>
   signOut: () => Promise<void>
   resetPassword: (email: string) => Promise<void>
+  refreshSession: () => Promise<boolean>
 }
 
 // Create the auth context
@@ -61,6 +63,28 @@ export function AuthProvider({ children }: AuthProviderProps) {
       // Subscribe to auth state changes
       const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
         if (firebaseUser) {
+          // Validate the session cookie
+          const isSessionValid = await validateSession()
+
+          if (!isSessionValid) {
+            console.log("Session invalid, attempting to refresh...")
+            const refreshed = await checkAndRefreshSession()
+
+            if (!refreshed) {
+              console.error("Failed to refresh session, logging out")
+              await firebaseSignOut(auth)
+              setUser(null)
+              setLoading(false)
+
+              // Redirect to login if on a protected route
+              const isProtectedRoute = pathname?.startsWith("/dashboard") || false
+              if (isProtectedRoute) {
+                router.push(`/login?redirect=${encodeURIComponent(pathname || "")}`)
+              }
+              return
+            }
+          }
+
           // Get additional user data from Firestore
           try {
             const userDoc = await getDoc(doc(db, "users", firebaseUser.uid))
@@ -117,8 +141,23 @@ export function AuthProvider({ children }: AuthProviderProps) {
         setLoading(false)
       })
 
-      // Cleanup subscription on unmount
-      return () => unsubscribe()
+      // Set up periodic session refresh (every 30 minutes)
+      const refreshInterval = setInterval(
+        () => {
+          if (auth.currentUser) {
+            checkAndRefreshSession().catch((error) => {
+              console.error("Background session refresh failed:", error)
+            })
+          }
+        },
+        30 * 60 * 1000,
+      ) // 30 minutes
+
+      // Cleanup subscription and interval on unmount
+      return () => {
+        unsubscribe()
+        clearInterval(refreshInterval)
+      }
     } catch (error) {
       console.error("Error initializing Firebase:", error)
       setLoading(false)
@@ -156,6 +195,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
       console.error("Error creating session:", error)
       return false
     }
+  }
+
+  // Manually refresh the session
+  const refreshSession = async (): Promise<boolean> => {
+    return await checkAndRefreshSession()
   }
 
   // Sign in with Google
@@ -341,6 +385,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
         signUp,
         signOut,
         resetPassword,
+        refreshSession,
       }}
     >
       {children}
