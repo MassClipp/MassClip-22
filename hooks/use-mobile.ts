@@ -2,20 +2,16 @@
 
 import { useState, useEffect } from "react"
 
-/**
- * Hook to detect if the current device is a mobile device
- * @returns boolean indicating if the current device is mobile
- */
-export function useMobile() {
+export function useMobile(): boolean {
   const [isMobile, setIsMobile] = useState(false)
 
   useEffect(() => {
-    // Function to check if the device is mobile based on screen width
+    // Function to check if the screen width is mobile
     const checkMobile = () => {
-      setIsMobile(window.innerWidth < 768)
+      setIsMobile(window.innerWidth < 768) // Consider < 768px as mobile
     }
 
-    // Initial check
+    // Check on initial load
     checkMobile()
 
     // Add event listener for window resize

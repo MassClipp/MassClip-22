@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
 import Image from "next/image"
-import { Share2, Edit, Plus, Instagram, Twitter, Globe, Calendar, Film, Lock, Eye, Crown } from "lucide-react"
+import { Share2, Edit, Plus, Instagram, Twitter, Globe, Calendar, Film, Lock } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useAuth } from "@/contexts/auth-context"
 import { cn } from "@/lib/utils"
@@ -246,47 +246,10 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
             <div>
               {creator.freeClips && creator.freeClips.length > 0 ? (
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-                  {creator.freeClips.map((video) => (
-                    <div
-                      key={video.id}
-                      className="bg-zinc-900/60 backdrop-blur-sm border border-zinc-800/50 rounded-lg overflow-hidden"
-                    >
-                      <div className="aspect-video relative">
-                        {video.thumbnailUrl ? (
-                          <Image
-                            src={video.thumbnailUrl || "/placeholder.svg"}
-                            alt={video.title}
-                            fill
-                            className="object-cover"
-                          />
-                        ) : (
-                          <div className="w-full h-full bg-zinc-800 flex items-center justify-center">
-                            <Film className="h-8 w-8 text-zinc-600" />
-                          </div>
-                        )}
-                        <div className="absolute bottom-2 right-2 bg-black/70 text-white text-xs px-1.5 py-0.5 rounded">
-                          {typeof video.duration === "number"
-                            ? `${Math.floor(video.duration / 60)}:${(video.duration % 60).toString().padStart(2, "0")}`
-                            : "0:00"}
-                        </div>
-                      </div>
-                      <div className="p-3">
-                        <h3 className="text-sm font-medium text-white line-clamp-1">{video.title}</h3>
-                        <p className="text-xs text-zinc-400 mt-1 line-clamp-2">{video.description}</p>
-                        <div className="mt-2 flex justify-between items-center">
-                          <span className="text-xs text-zinc-500">
-                            {new Date(video.createdAt).toLocaleDateString()}
-                          </span>
-                          <span className="text-xs text-zinc-500 flex items-center">
-                            <Eye className="h-3 w-3 mr-1" /> {video.views || 0}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
+                  {/* Free clips would be rendered here */}
+                  <div className="text-zinc-400">Free clips would be displayed here</div>
                 </div>
               ) : (
-                // Keep the existing "No Free Clips Yet" UI
                 <div className="py-16 text-center">
                   <div className="max-w-md mx-auto bg-zinc-900/40 backdrop-blur-sm border border-zinc-800/50 rounded-xl p-8">
                     <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gradient-to-br from-zinc-800 to-zinc-900 flex items-center justify-center">
@@ -318,50 +281,10 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
             <div>
               {creator.paidClips && creator.paidClips.length > 0 ? (
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-                  {creator.paidClips.map((video) => (
-                    <div
-                      key={video.id}
-                      className="bg-zinc-900/60 backdrop-blur-sm border border-zinc-800/50 rounded-lg overflow-hidden"
-                    >
-                      <div className="aspect-video relative">
-                        {video.thumbnailUrl ? (
-                          <Image
-                            src={video.thumbnailUrl || "/placeholder.svg"}
-                            alt={video.title}
-                            fill
-                            className="object-cover"
-                          />
-                        ) : (
-                          <div className="w-full h-full bg-zinc-800 flex items-center justify-center">
-                            <Film className="h-8 w-8 text-zinc-600" />
-                          </div>
-                        )}
-                        <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
-                          <Lock className="h-8 w-8 text-white/80" />
-                        </div>
-                        <div className="absolute bottom-2 right-2 bg-black/70 text-white text-xs px-1.5 py-0.5 rounded">
-                          {typeof video.duration === "number"
-                            ? `${Math.floor(video.duration / 60)}:${(video.duration % 60).toString().padStart(2, "0")}`
-                            : "0:00"}
-                        </div>
-                      </div>
-                      <div className="p-3">
-                        <h3 className="text-sm font-medium text-white line-clamp-1">{video.title}</h3>
-                        <p className="text-xs text-zinc-400 mt-1 line-clamp-2">{video.description}</p>
-                        <div className="mt-2 flex justify-between items-center">
-                          <span className="text-xs text-zinc-500">
-                            {new Date(video.createdAt).toLocaleDateString()}
-                          </span>
-                          <span className="text-xs text-amber-500 flex items-center">
-                            <Crown className="h-3 w-3 mr-1" /> Premium
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
+                  {/* Premium clips would be rendered here */}
+                  <div className="text-zinc-400">Premium clips would be displayed here</div>
                 </div>
               ) : (
-                // Keep the existing "No Premium Clips Yet" UI
                 <div className="py-16 text-center">
                   <div className="max-w-md mx-auto bg-zinc-900/40 backdrop-blur-sm border border-zinc-800/50 rounded-xl p-8">
                     <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gradient-to-br from-zinc-800 to-zinc-900 flex items-center justify-center">
