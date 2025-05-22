@@ -58,6 +58,7 @@ export default function UploadForm({ contentType }: UploadFormProps) {
   const [uploadError, setUploadError] = useState<string | null>(null)
   const [uploadSuccess, setUploadSuccess] = useState(false)
   const [showSuccessDialog, setShowSuccessDialog] = useState(false)
+  const [showSessionError, setShowSessionError] = useState(false)
 
   // Handle video file selection
   const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
@@ -117,6 +118,12 @@ export default function UploadForm({ contentType }: UploadFormProps) {
 
       if (!response.ok) {
         const errorData = await response.json()
+
+        // Check if this is an authentication error
+        if (response.status === 401) {
+          setShowSessionError(true)
+        }
+
         throw new Error(errorData.error || "Failed to get upload URL")
       }
 
@@ -158,12 +165,18 @@ export default function UploadForm({ contentType }: UploadFormProps) {
     })
   }
 
+  // Handle session error - redirect to login
+  const handleSessionError = () => {
+    router.push("/login?redirect=/dashboard/upload")
+  }
+
   // Handle form submission
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
 
     if (!user) {
       setUploadError("You must be logged in to upload content")
+      setShowSessionError(true)
       return
     }
 
@@ -242,6 +255,12 @@ export default function UploadForm({ contentType }: UploadFormProps) {
       setIsUploading(false)
     } catch (error) {
       console.error("Upload error:", error)
+
+      // Check if this is a session error
+      if (error instanceof Error && error.message.includes("Authentication")) {
+        setShowSessionError(true)
+      }
+
       setUploadError(error instanceof Error ? error.message : "An unexpected error occurred. Please try again.")
       setIsUploading(false)
     }
@@ -566,6 +585,29 @@ export default function UploadForm({ contentType }: UploadFormProps) {
               )}
             >
               View My Profile
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Session error dialog */}
+      <AlertDialog open={showSessionError} onOpenChange={setShowSessionError}>
+        <AlertDialogContent className="bg-zinc-900 border-zinc-800 text-white">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2 text-xl">
+              <AlertCircle className="h-6 w-6 text-red-500" />
+              Session Expired
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-zinc-400">
+              Your session has expired or is invalid. Please log in again to continue uploading content.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogAction
+              onClick={handleSessionError}
+              className="bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white"
+            >
+              Log In Again
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

@@ -128,12 +128,15 @@ export function AuthProvider({ children }: AuthProviderProps) {
   // Create a session cookie after authentication
   const createSession = async (idToken: string): Promise<boolean> => {
     try {
+      console.log("Creating session with token:", idToken.substring(0, 10) + "...")
+
       const response = await fetch("/api/auth/session", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({ idToken }),
+        credentials: "include", // Important: include cookies with the request
       })
 
       if (!response.ok) {
@@ -161,7 +164,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
       const user = result.user
 
       // Get the ID token
-      const idToken = await user.getIdToken()
+      const idToken = await user.getIdToken(true)
+      console.log("Got ID token after Google sign-in")
 
       // Create a session cookie
       const sessionCreated = await createSession(idToken)
@@ -216,7 +220,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
       const userCredential = await signInWithEmailAndPassword(auth, email, password)
 
       // Get the ID token
-      const idToken = await userCredential.user.getIdToken()
+      const idToken = await userCredential.user.getIdToken(true)
+      console.log("Got ID token after email sign-in")
 
       // Create a session cookie
       const sessionCreated = await createSession(idToken)
@@ -256,7 +261,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
       const { user: newUser } = await createUserWithEmailAndPassword(auth, email, password)
 
       // Get the ID token
-      const idToken = await newUser.getIdToken()
+      const idToken = await newUser.getIdToken(true)
+      console.log("Got ID token after sign-up")
 
       // Create a session cookie
       const sessionCreated = await createSession(idToken)
@@ -294,7 +300,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
       await firebaseSignOut(auth)
 
       // Clear the session cookie
-      await fetch("/api/auth/logout", { method: "POST" })
+      await fetch("/api/auth/logout", {
+        method: "POST",
+        credentials: "include", // Important: include cookies with the request
+      })
 
       // Clear any cached user data
       setUser(null)

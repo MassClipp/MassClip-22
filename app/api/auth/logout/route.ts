@@ -1,9 +1,17 @@
-import { cookies } from "next/headers"
 import { NextResponse } from "next/server"
+import { cookies } from "next/headers"
 
 export async function POST() {
-  // Clear the session cookie
-  cookies().delete("session")
+  try {
+    // Clear the session cookie
+    cookies().delete("session")
 
-  return NextResponse.json({ success: true })
+    return NextResponse.json({ success: true })
+  } catch (error) {
+    console.error("Error logging out:", error)
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "Unknown error occurred" },
+      { status: 500 },
+    )
+  }
 }

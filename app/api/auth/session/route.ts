@@ -1,5 +1,5 @@
+import { type NextRequest, NextResponse } from "next/server"
 import { cookies } from "next/headers"
-import { NextResponse, type NextRequest } from "next/server"
 import { initializeFirebaseAdmin } from "@/lib/firebase-admin"
 import { getAuth } from "firebase-admin/auth"
 
@@ -12,35 +12,50 @@ export async function POST(request: NextRequest) {
     const { idToken } = await request.json()
 
     if (!idToken) {
-      return NextResponse.json({ error: "No ID token provided" }, { status: 400 })
+      return NextResponse.json({ error: "ID token is required" }, { status: 400 })
     }
 
-    // Initialize Firebase Admin if not already initialized
+    // Initialize Firebase Admin
     initializeFirebaseAdmin()
-
-    // Create a session cookie using the ID token
     const auth = getAuth()
-    const sessionCookie = await auth.createSessionCookie(idToken, {
-      expiresIn: SESSION_EXPIRATION * 1000, // Firebase wants milliseconds
-    })
 
-    // Set the session cookie
-    cookies().set({
-      name: "session",
-      value: sessionCookie,
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      maxAge: SESSION_EXPIRATION,
-      path: "/",
-      sameSite: "lax",
-    })
+    // Verify the ID token
+    try {
+      // First verify the token is valid
+      const decodedToken = await auth.verifyIdToken(idToken)
 
-    return NextResponse.json({ success: true })
+      // Check that the user exists in Firebase Auth
+      const user = await auth.getUser(decodedToken.uid)
+
+      if (!user) {
+        console.error(`User ${decodedToken.uid} not found in Firebase Auth`)
+        return NextResponse.json({ error: "User not found" }, { status: 404 })
+      }
+
+      // Create a session cookie
+      const sessionCookie = await auth.createSessionCookie(idToken, { expiresIn: SESSION_EXPIRATION * 1000 })
+
+      // Set the cookie
+      cookies().set({
+        name: "session",
+        value: sessionCookie,
+        httpOnly: true,
+        secure: process.env.NODE_ENV === "production",
+        sameSite: "lax",
+        maxAge: SESSION_EXPIRATION,
+        path: "/",
+      })
+
+      return NextResponse.json({ success: true })
+    } catch (error) {
+      console.error("Error verifying ID token:", error)
+      return NextResponse.json({ error: error instanceof Error ? error.message : "Invalid ID token" }, { status: 401 })
+    }
   } catch (error) {
     console.error("Error creating session:", error)
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Failed to create session" },
-      { status: 401 },
+      { error: error instanceof Error ? error.message : "Unknown error occurred" },
+      { status: 500 },
     )
   }
 }

@@ -22,17 +22,37 @@ export async function POST(request: NextRequest) {
     const sessionCookie = cookies().get("session")?.value
 
     if (!sessionCookie) {
-      return NextResponse.json({ error: "No session cookie found" }, { status: 401 })
+      console.error("No session cookie found")
+      return NextResponse.json({ error: "Authentication required. Please log in again." }, { status: 401 })
     }
 
-    // Verify the session cookie
+    // Initialize Firebase Admin if not already initialized
     initializeFirebaseAdmin()
     const auth = getAuth()
-    const decodedClaims = await auth.verifySessionCookie(sessionCookie, true)
+
+    // Verify the session cookie
+    let decodedClaims
+    try {
+      decodedClaims = await auth.verifySessionCookie(sessionCookie, true)
+    } catch (error) {
+      console.error("Invalid session cookie:", error)
+      return NextResponse.json({ error: "Invalid session. Please log in again." }, { status: 401 })
+    }
+
+    // Extract user ID from the verified session
     const userId = decodedClaims.uid
 
     if (!userId) {
-      return NextResponse.json({ error: "Invalid session" }, { status: 401 })
+      console.error("No user ID found in session")
+      return NextResponse.json({ error: "Invalid user session. Please log in again." }, { status: 401 })
+    }
+
+    // Verify that the user exists in Firebase Auth
+    try {
+      await auth.getUser(userId)
+    } catch (error) {
+      console.error(`User ${userId} not found in Firebase Auth:`, error)
+      return NextResponse.json({ error: "User account not found. Please log in again." }, { status: 401 })
     }
 
     // Parse request body
