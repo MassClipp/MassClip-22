@@ -3,11 +3,11 @@
 import { useState, useEffect } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
 import Image from "next/image"
-import { Share2, Edit, Plus, Instagram, Twitter, Globe, Calendar, Film, Lock, Play, Clock } from "lucide-react"
+import { Share2, Edit, Plus, Instagram, Twitter, Globe, Calendar, Film, Lock, Play } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useAuth } from "@/contexts/auth-context"
 import { cn } from "@/lib/utils"
-import { collection, query, where, getDocs, orderBy, limit } from "firebase/firestore"
+import { collection, query, where, getDocs, limit } from "firebase/firestore"
 import { db } from "@/lib/firebase"
 import { trackFirestoreRead } from "@/lib/firestore-optimizer"
 import Link from "next/link"
@@ -29,15 +29,16 @@ interface Creator {
 interface VideoItem {
   id: string
   title: string
-  description: string
-  thumbnail: string
-  createdAt: string | Date
-  duration: number
-  isPremium: boolean
-  creatorId: string
-  videoUrl?: string
-  cloudflareUrl?: string
-  r2Url?: string
+  thumbnailUrl: string
+  url: string
+  type: string
+  status: string
+  isPublic: boolean
+  uid: string
+  username: string
+  views: number
+  likes: number
+  createdAt?: string | Date
 }
 
 export default function CreatorProfile({ creator }: { creator: Creator }) {
@@ -76,21 +77,21 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
         setLoading(true)
         console.log("Fetching videos for creator:", creator.uid)
 
-        // Query for free videos
+        // Query for free videos (type: "free")
         const freeVideosQuery = query(
           collection(db, "videos"),
-          where("creatorId", "==", creator.uid),
-          where("isPremium", "==", false),
-          orderBy("createdAt", "desc"),
+          where("uid", "==", creator.uid),
+          where("type", "==", "free"),
+          where("status", "==", "active"),
           limit(20),
         )
 
-        // Query for premium videos
+        // Query for premium videos (type: "premium")
         const premiumVideosQuery = query(
           collection(db, "videos"),
-          where("creatorId", "==", creator.uid),
-          where("isPremium", "==", true),
-          orderBy("createdAt", "desc"),
+          where("uid", "==", creator.uid),
+          where("type", "==", "premium"),
+          where("status", "==", "active"),
           limit(20),
         )
 
@@ -115,15 +116,16 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
           return {
             id: doc.id,
             title: data.title || "Untitled",
-            description: data.description || "",
-            thumbnail: data.thumbnail || "",
-            createdAt: data.createdAt?.toDate?.() || new Date(),
-            duration: data.duration || 0,
-            isPremium: false,
-            creatorId: data.creatorId || creator.uid,
-            videoUrl: data.videoUrl || "",
-            cloudflareUrl: data.cloudflareUrl || "",
-            r2Url: data.r2Url || "",
+            thumbnailUrl: data.thumbnailUrl || "",
+            url: data.url || "",
+            type: data.type || "free",
+            status: data.status || "active",
+            isPublic: data.isPublic !== false,
+            uid: data.uid || "",
+            username: data.username || "",
+            views: data.views || 0,
+            likes: data.likes || 0,
+            createdAt: data.createdAt || new Date(),
           }
         })
 
@@ -134,15 +136,16 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
           return {
             id: doc.id,
             title: data.title || "Untitled",
-            description: data.description || "",
-            thumbnail: data.thumbnail || "",
-            createdAt: data.createdAt?.toDate?.() || new Date(),
-            duration: data.duration || 0,
-            isPremium: true,
-            creatorId: data.creatorId || creator.uid,
-            videoUrl: data.videoUrl || "",
-            cloudflareUrl: data.cloudflareUrl || "",
-            r2Url: data.r2Url || "",
+            thumbnailUrl: data.thumbnailUrl || "",
+            url: data.url || "",
+            type: data.type || "premium",
+            status: data.status || "active",
+            isPublic: data.isPublic !== false,
+            uid: data.uid || "",
+            username: data.username || "",
+            views: data.views || 0,
+            likes: data.likes || 0,
+            createdAt: data.createdAt || new Date(),
           }
         })
 
@@ -183,12 +186,6 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
     return date.toLocaleDateString("en-US", { month: "long", year: "numeric" })
   }
 
-  const formatDuration = (seconds: number) => {
-    const minutes = Math.floor(seconds / 60)
-    const remainingSeconds = Math.floor(seconds % 60)
-    return `${minutes}:${remainingSeconds.toString().padStart(2, "0")}`
-  }
-
   const handleAddClip = (isPremium = false) => {
     if (isPremium) {
       router.push("/dashboard/upload?premium=true")
@@ -201,13 +198,13 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
   const VideoCard = ({ video }: { video: VideoItem }) => {
     return (
       <div className="group relative overflow-hidden rounded-lg bg-zinc-900 border border-zinc-800/50 transition-all duration-300 hover:border-zinc-700/50">
-        <div className="aspect-video relative overflow-hidden">
-          {video.thumbnail ? (
+        <div className="aspect-[9/16] relative overflow-hidden">
+          {video.thumbnailUrl ? (
             <Image
-              src={video.thumbnail || "/placeholder.svg"}
+              src={video.thumbnailUrl || "/placeholder.svg"}
               alt={video.title}
               width={320}
-              height={180}
+              height={568}
               className="object-cover w-full h-full transition-transform duration-500 group-hover:scale-105"
             />
           ) : (
@@ -216,13 +213,8 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
             </div>
           )}
 
-          {/* Duration badge */}
-          <div className="absolute bottom-2 right-2 bg-black/70 text-white text-xs px-1.5 py-0.5 rounded">
-            {formatDuration(video.duration)}
-          </div>
-
           {/* Premium badge */}
-          {video.isPremium && (
+          {video.type === "premium" && (
             <div className="absolute top-2 right-2 bg-gradient-to-r from-amber-400 to-amber-600 text-black text-xs font-bold px-2 py-0.5 rounded-full">
               PRO
             </div>
@@ -238,19 +230,35 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
 
         <div className="p-3">
           <h3 className="font-medium text-white line-clamp-1 mb-1">{video.title}</h3>
-          <div className="flex items-center text-xs text-zinc-400">
-            <Clock className="h-3 w-3 mr-1" />
-            <span>
-              {video.createdAt instanceof Date
-                ? video.createdAt.toLocaleDateString()
-                : new Date(video.createdAt).toLocaleDateString()}
-            </span>
+          <div className="flex items-center justify-between text-xs text-zinc-400">
+            <div className="flex items-center">
+              <span>{video.views} views</span>
+            </div>
+            <div className="flex items-center">
+              <span>{video.likes} likes</span>
+            </div>
           </div>
         </div>
 
         <Link href={`/video/${video.id}`} className="absolute inset-0" aria-label={`Watch ${video.title}`}>
           <span className="sr-only">Watch {video.title}</span>
         </Link>
+      </div>
+    )
+  }
+
+  // Video player component
+  const VideoPlayer = ({ video }: { video: VideoItem }) => {
+    return (
+      <div className="aspect-[9/16] relative overflow-hidden rounded-lg bg-black">
+        <video
+          src={video.url}
+          controls
+          className="w-full h-full object-contain"
+          poster={video.thumbnailUrl || undefined}
+        >
+          Your browser does not support the video tag.
+        </video>
       </div>
     )
   }
