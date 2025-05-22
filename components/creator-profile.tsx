@@ -17,8 +17,6 @@ import {
   Lock,
   Play,
   Pause,
-  Volume2,
-  VolumeX,
   Heart,
   Eye,
 } from "lucide-react"
@@ -171,11 +169,10 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
     }
   }
 
-  // Video card component with inline playback
+  // Video card component with inline playback - styled like Vimeo cards
   const VideoCard = ({ video }: { video: VideoItem }) => {
     const videoRef = useRef<HTMLVideoElement>(null)
     const [isPlaying, setIsPlaying] = useState(false)
-    const [isMuted, setIsMuted] = useState(true)
     const [isHovered, setIsHovered] = useState(false)
 
     const togglePlay = (e: React.MouseEvent) => {
@@ -190,18 +187,11 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
           if (v !== videoRef.current) v.pause()
         })
 
+        videoRef.current.muted = false // Ensure sound is on
         videoRef.current.play()
       }
 
       setIsPlaying(!isPlaying)
-    }
-
-    const toggleMute = (e: React.MouseEvent) => {
-      e.stopPropagation()
-      if (!videoRef.current) return
-
-      videoRef.current.muted = !videoRef.current.muted
-      setIsMuted(!isMuted)
     }
 
     // Handle video end
@@ -214,32 +204,20 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
 
     return (
       <div
-        className="group relative overflow-hidden rounded-lg transition-all duration-300 transform hover:scale-[1.02] hover:z-10"
+        className="group relative overflow-hidden rounded-lg transition-all duration-300 transform hover:-translate-y-1"
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
       >
-        {/* Elegant white border that fades in on hover */}
-        <div
-          className={`absolute inset-0 rounded-lg transition-opacity duration-300 pointer-events-none ${
-            isHovered ? "opacity-100" : "opacity-0"
-          }`}
-          style={{
-            boxShadow: "inset 0 0 0 1px rgba(255, 255, 255, 0.2)",
-          }}
-        ></div>
-
-        {/* Card background with subtle gradient */}
-        <div className="absolute inset-0 bg-gradient-to-b from-zinc-800/20 to-zinc-900/90 rounded-lg overflow-hidden"></div>
-
-        <div className="aspect-[9/16] relative overflow-hidden rounded-lg">
-          {/* Direct video element */}
+        {/* Premium Vimeo-style card design */}
+        <div className="aspect-[9/16] relative overflow-hidden rounded-lg bg-zinc-900 shadow-md">
+          {/* Video element */}
           <video
             ref={videoRef}
             src={video.url}
             className="w-full h-full object-cover"
             poster={video.thumbnailUrl || undefined}
             preload="metadata"
-            muted={isMuted}
+            muted={false} // Never muted
             playsInline
             onEnded={handleVideoEnd}
             onClick={(e) => e.stopPropagation()} // Prevent click from bubbling
@@ -247,50 +225,49 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
 
           {/* Premium badge */}
           {video.type === "premium" && (
-            <div className="absolute top-3 right-3 bg-gradient-to-r from-amber-400 to-amber-600 text-black text-xs font-medium px-2.5 py-0.5 rounded-full shadow-lg backdrop-blur-sm">
+            <div className="absolute top-2 right-2 bg-gradient-to-r from-amber-400 to-amber-600 text-black text-xs font-medium px-2 py-0.5 rounded-full shadow-sm">
               PRO
             </div>
           )}
 
-          {/* Video controls overlay - visible on hover */}
-          <div
-            className={`absolute inset-0 flex flex-col justify-between p-3 transition-opacity duration-300 ${
-              isHovered ? "opacity-100" : "opacity-0"
-            }`}
-          >
-            {/* Top controls */}
-            <div className="flex justify-end">
+          {/* Minimal modern play button - only visible when not playing */}
+          {!isPlaying && (
+            <div
+              className={`absolute inset-0 flex items-center justify-center transition-opacity duration-200 ${
+                isHovered ? "opacity-100" : "opacity-0"
+              }`}
+            >
               <button
-                onClick={toggleMute}
-                className="w-8 h-8 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center text-white transition-transform duration-200 hover:scale-110 hover:bg-black/60"
+                onClick={togglePlay}
+                className="w-10 h-10 rounded-full bg-black/30 backdrop-blur-sm flex items-center justify-center text-white transition-all duration-200 hover:bg-black/50"
+                aria-label="Play video"
               >
-                {isMuted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
+                <Play className="h-4 w-4 ml-0.5" />
               </button>
             </div>
+          )}
 
-            {/* Center play button */}
+          {/* Pause button - only visible when playing and hovered */}
+          {isPlaying && isHovered && (
             <div className="absolute inset-0 flex items-center justify-center">
               <button
                 onClick={togglePlay}
-                className={`w-14 h-14 rounded-full flex items-center justify-center text-white transition-all duration-300 ${
-                  isPlaying
-                    ? "bg-black/30 backdrop-blur-sm scale-90 hover:scale-100"
-                    : "bg-red-600/90 scale-100 hover:scale-110"
-                }`}
+                className="w-10 h-10 rounded-full bg-black/30 backdrop-blur-sm flex items-center justify-center text-white transition-all duration-200 hover:bg-black/50"
+                aria-label="Pause video"
               >
-                {isPlaying ? <Pause className="h-6 w-6" /> : <Play className="h-6 w-6 ml-1" fill="white" />}
+                <Pause className="h-4 w-4" />
               </button>
             </div>
+          )}
 
-            {/* Bottom gradient for better text visibility */}
-            <div className="absolute bottom-0 left-0 right-0 h-24 bg-gradient-to-t from-black/80 to-transparent pointer-events-none"></div>
-          </div>
+          {/* Bottom gradient for better text visibility */}
+          <div className="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-black/70 to-transparent pointer-events-none"></div>
         </div>
 
-        {/* Video info section */}
-        <div className="p-3 relative z-10">
-          <h3 className="font-medium text-sm text-white line-clamp-1 mb-2">{video.title}</h3>
-          <div className="flex items-center justify-between text-xs text-zinc-400">
+        {/* Video info section - Vimeo style */}
+        <div className="p-2 pt-3">
+          <h3 className="font-medium text-sm text-white line-clamp-1">{video.title}</h3>
+          <div className="flex items-center justify-between text-xs text-zinc-400 mt-1.5">
             <div className="flex items-center gap-1">
               <Eye className="h-3 w-3" />
               <span>{video.views.toLocaleString()}</span>
