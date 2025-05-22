@@ -246,8 +246,31 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
             <div>
               {creator.freeClips && creator.freeClips.length > 0 ? (
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-                  {/* Free clips would be rendered here */}
-                  <div className="text-zinc-400">Free clips would be displayed here</div>
+                  {creator.freeClips.map((clip) => (
+                    <div
+                      key={clip.id}
+                      className="bg-zinc-900/60 backdrop-blur-sm border border-zinc-800/50 rounded-lg overflow-hidden group hover:border-zinc-700/70 transition-all duration-200"
+                    >
+                      <div className="aspect-video relative overflow-hidden">
+                        {clip.thumbnailUrl ? (
+                          <Image
+                            src={clip.thumbnailUrl || "/placeholder.svg"}
+                            alt={clip.title || "Video clip"}
+                            fill
+                            className="object-cover group-hover:scale-105 transition-transform duration-300"
+                          />
+                        ) : (
+                          <div className="w-full h-full bg-zinc-800 flex items-center justify-center">
+                            <Film className="h-8 w-8 text-zinc-600" />
+                          </div>
+                        )}
+                      </div>
+                      <div className="p-3">
+                        <h3 className="text-sm font-medium text-white line-clamp-1">{clip.title || "Untitled Clip"}</h3>
+                        <p className="text-xs text-zinc-400 mt-1 line-clamp-1">{clip.description || ""}</p>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               ) : (
                 <div className="py-16 text-center">
@@ -281,8 +304,38 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
             <div>
               {creator.paidClips && creator.paidClips.length > 0 ? (
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-                  {/* Premium clips would be rendered here */}
-                  <div className="text-zinc-400">Premium clips would be displayed here</div>
+                  {creator.paidClips.map((clip) => (
+                    <div
+                      key={clip.id}
+                      className="bg-zinc-900/60 backdrop-blur-sm border border-zinc-800/50 rounded-lg overflow-hidden group hover:border-zinc-700/70 transition-all duration-200"
+                    >
+                      <div className="aspect-video relative overflow-hidden">
+                        {clip.thumbnailUrl ? (
+                          <Image
+                            src={clip.thumbnailUrl || "/placeholder.svg"}
+                            alt={clip.title || "Premium video clip"}
+                            fill
+                            className="object-cover group-hover:scale-105 transition-transform duration-300"
+                          />
+                        ) : (
+                          <div className="w-full h-full bg-zinc-800 flex items-center justify-center">
+                            <Lock className="h-8 w-8 text-zinc-600" />
+                          </div>
+                        )}
+                        <div className="absolute top-2 right-2">
+                          <span className="bg-gradient-to-r from-amber-400 to-amber-600 text-black text-xs font-bold px-2 py-0.5 rounded-full">
+                            PREMIUM
+                          </span>
+                        </div>
+                      </div>
+                      <div className="p-3">
+                        <h3 className="text-sm font-medium text-white line-clamp-1">
+                          {clip.title || "Untitled Premium Clip"}
+                        </h3>
+                        <p className="text-xs text-zinc-400 mt-1 line-clamp-1">{clip.description || ""}</p>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               ) : (
                 <div className="py-16 text-center">
