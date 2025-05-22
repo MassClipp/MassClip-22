@@ -114,36 +114,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
     }
   }, [pathname, router])
 
-  // Create a session cookie after authentication
-  const createSession = async (user: FirebaseUser): Promise<boolean> => {
-    try {
-      // Get the ID token
-      const idToken = await user.getIdToken()
-      console.log("Got ID token for session creation")
-
-      const response = await fetch("/api/auth/session", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ idToken }),
-        credentials: "include", // Include cookies with the request
-      })
-
-      if (!response.ok) {
-        const data = await response.json()
-        console.error("Failed to create session:", data.error)
-        return false
-      }
-
-      console.log("Session created successfully")
-      return true
-    } catch (error) {
-      console.error("Error creating session:", error)
-      return false
-    }
-  }
-
   // Manually refresh the session
   const refreshSession = async (): Promise<boolean> => {
     try {
@@ -154,18 +124,22 @@ export function AuthProvider({ children }: AuthProviderProps) {
         return false
       }
 
-      const idToken = await currentUser.getIdToken(true)
+      // Refresh the user data from Firestore
+      const db = getFirestore()
+      const userDoc = await getDoc(doc(db, "users", currentUser.uid))
 
-      const response = await fetch("/api/auth/session", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ idToken }),
-        credentials: "include",
-      })
+      if (userDoc.exists()) {
+        const userData = userDoc.data()
+        const enhancedUser = {
+          ...currentUser,
+          plan: userData.plan || "free",
+          username: userData.username || null,
+        } as User
 
-      return response.ok
+        setUser(enhancedUser)
+      }
+
+      return true
     } catch (error) {
       console.error("Error refreshing session:", error)
       return false
@@ -183,9 +157,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
       const result = await signInWithPopup(auth, provider)
       const user = result.user
       console.log("Google sign-in successful for user:", user.uid)
-
-      // Create a session cookie
-      await createSession(user)
 
       // Check if user document exists in Firestore
       const userDoc = await getDoc(doc(db, "users", user.uid))
@@ -233,9 +204,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
       const userCredential = await signInWithEmailAndPassword(auth, email, password)
       console.log("Email sign-in successful for user:", userCredential.user.uid)
 
-      // Create a session cookie
-      await createSession(userCredential.user)
-
       // Get redirect URL from query params if we're in the browser
       let redirectTo = "/dashboard"
 
@@ -267,9 +235,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
       const auth = getAuth()
       const { user: newUser } = await createUserWithEmailAndPassword(auth, email, password)
       console.log("Sign-up successful for user:", newUser.uid)
-
-      // Create a session cookie
-      await createSession(newUser)
 
       // Create user document in Firestore
       const db = getFirestore()
