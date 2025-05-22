@@ -19,6 +19,8 @@ import {
   Pause,
   Volume2,
   VolumeX,
+  Heart,
+  Eye,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useAuth } from "@/contexts/auth-context"
@@ -174,6 +176,7 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
     const videoRef = useRef<HTMLVideoElement>(null)
     const [isPlaying, setIsPlaying] = useState(false)
     const [isMuted, setIsMuted] = useState(true)
+    const [isHovered, setIsHovered] = useState(false)
 
     const togglePlay = (e: React.MouseEvent) => {
       e.stopPropagation()
@@ -210,8 +213,25 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
     }
 
     return (
-      <div className="group relative overflow-hidden rounded-lg bg-zinc-900 border border-zinc-800/50 transition-all duration-300 hover:border-zinc-700/50">
-        <div className="aspect-[9/16] relative overflow-hidden">
+      <div
+        className="group relative overflow-hidden rounded-lg transition-all duration-300 transform hover:scale-[1.02] hover:z-10"
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
+      >
+        {/* Elegant white border that fades in on hover */}
+        <div
+          className={`absolute inset-0 rounded-lg transition-opacity duration-300 pointer-events-none ${
+            isHovered ? "opacity-100" : "opacity-0"
+          }`}
+          style={{
+            boxShadow: "inset 0 0 0 1px rgba(255, 255, 255, 0.2)",
+          }}
+        ></div>
+
+        {/* Card background with subtle gradient */}
+        <div className="absolute inset-0 bg-gradient-to-b from-zinc-800/20 to-zinc-900/90 rounded-lg overflow-hidden"></div>
+
+        <div className="aspect-[9/16] relative overflow-hidden rounded-lg">
           {/* Direct video element */}
           <video
             ref={videoRef}
@@ -227,38 +247,58 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
 
           {/* Premium badge */}
           {video.type === "premium" && (
-            <div className="absolute top-2 right-2 bg-gradient-to-r from-amber-400 to-amber-600 text-black text-xs font-bold px-2 py-0.5 rounded-full">
+            <div className="absolute top-3 right-3 bg-gradient-to-r from-amber-400 to-amber-600 text-black text-xs font-medium px-2.5 py-0.5 rounded-full shadow-lg backdrop-blur-sm">
               PRO
             </div>
           )}
 
-          {/* Video controls overlay */}
-          <div className="absolute inset-0 flex flex-col justify-between p-2 bg-gradient-to-b from-black/40 via-transparent to-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+          {/* Video controls overlay - visible on hover */}
+          <div
+            className={`absolute inset-0 flex flex-col justify-between p-3 transition-opacity duration-300 ${
+              isHovered ? "opacity-100" : "opacity-0"
+            }`}
+          >
+            {/* Top controls */}
             <div className="flex justify-end">
               <button
                 onClick={toggleMute}
-                className="w-8 h-8 rounded-full bg-black/50 flex items-center justify-center text-white"
+                className="w-8 h-8 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center text-white transition-transform duration-200 hover:scale-110 hover:bg-black/60"
               >
                 {isMuted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
               </button>
             </div>
-            <div className="flex justify-center">
+
+            {/* Center play button */}
+            <div className="absolute inset-0 flex items-center justify-center">
               <button
                 onClick={togglePlay}
-                className="w-12 h-12 rounded-full bg-red-600/90 flex items-center justify-center text-white"
+                className={`w-14 h-14 rounded-full flex items-center justify-center text-white transition-all duration-300 ${
+                  isPlaying
+                    ? "bg-black/30 backdrop-blur-sm scale-90 hover:scale-100"
+                    : "bg-red-600/90 scale-100 hover:scale-110"
+                }`}
               >
-                {isPlaying ? <Pause className="h-6 w-6" /> : <Play className="h-6 w-6" fill="white" />}
+                {isPlaying ? <Pause className="h-6 w-6" /> : <Play className="h-6 w-6 ml-1" fill="white" />}
               </button>
             </div>
-            <div></div> {/* Empty div for flex spacing */}
+
+            {/* Bottom gradient for better text visibility */}
+            <div className="absolute bottom-0 left-0 right-0 h-24 bg-gradient-to-t from-black/80 to-transparent pointer-events-none"></div>
           </div>
         </div>
 
-        <div className="p-2">
-          <h3 className="font-medium text-sm text-white line-clamp-1">{video.title}</h3>
-          <div className="flex items-center justify-between text-xs text-zinc-400 mt-1">
-            <span>{video.views} views</span>
-            <span>{video.likes} likes</span>
+        {/* Video info section */}
+        <div className="p-3 relative z-10">
+          <h3 className="font-medium text-sm text-white line-clamp-1 mb-2">{video.title}</h3>
+          <div className="flex items-center justify-between text-xs text-zinc-400">
+            <div className="flex items-center gap-1">
+              <Eye className="h-3 w-3" />
+              <span>{video.views.toLocaleString()}</span>
+            </div>
+            <div className="flex items-center gap-1">
+              <Heart className="h-3 w-3" />
+              <span>{video.likes.toLocaleString()}</span>
+            </div>
           </div>
         </div>
       </div>
@@ -453,7 +493,7 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
                   <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-red-500"></div>
                 </div>
               ) : freeClips.length > 0 ? (
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
                   {freeClips.map((video) => (
                     <VideoCard key={video.id} video={video} />
                   ))}
@@ -493,7 +533,7 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
                   <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-red-500"></div>
                 </div>
               ) : paidClips.length > 0 ? (
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
                   {paidClips.map((video) => (
                     <VideoCard key={video.id} video={video} />
                   ))}
