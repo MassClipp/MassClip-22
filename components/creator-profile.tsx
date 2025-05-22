@@ -7,7 +7,7 @@ import { Share2, Edit, Plus, Instagram, Twitter, Globe, Calendar, Film, Lock, Pl
 import { Button } from "@/components/ui/button"
 import { useAuth } from "@/contexts/auth-context"
 import { cn } from "@/lib/utils"
-import { collection, query, where, getDocs, orderBy, limit } from "firebase/firestore"
+import { collection, query, where, getDocs, limit } from "firebase/firestore"
 import { db } from "@/lib/firebase"
 import { trackFirestoreRead } from "@/lib/firestore-optimizer"
 import Link from "next/link"
@@ -31,7 +31,7 @@ interface VideoItem {
   title: string
   description: string
   thumbnail: string
-  createdAt: string
+  createdAt: string | Date
   duration: number
   isPremium: boolean
   creatorId: string
@@ -48,6 +48,7 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
   const [freeClips, setFreeClips] = useState<VideoItem[]>([])
   const [paidClips, setPaidClips] = useState<VideoItem[]>([])
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   // Set active tab based on URL query parameter
   useEffect(() => {
@@ -62,80 +63,157 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
   // Fetch videos from Firestore
   useEffect(() => {
     const fetchVideos = async () => {
+      if (!creator || !creator.uid) {
+        console.error("Creator data is missing or invalid:", creator)
+        setError("Creator data is missing")
+        setLoading(false)
+        return
+      }
+
       try {
         setLoading(true)
+        console.log("Fetching videos for creator:", creator.uid)
 
-        // Query for free videos
-        const freeVideosQuery = query(
-          collection(db, "videos"),
-          where("creatorId", "==", creator.uid),
-          where("isPremium", "==", false),
-          orderBy("createdAt", "desc"),
-          limit(20),
-        )
+        // Try both "videos" and "video" collections
+        const collections = ["videos", "video", "clips"]
+        let freeVideos: VideoItem[] = []
+        let premiumVideos: VideoItem[] = []
+        let foundCollection = false
 
-        // Query for premium videos
-        const premiumVideosQuery = query(
-          collection(db, "videos"),
-          where("creatorId", "==", creator.uid),
-          where("isPremium", "==", true),
-          orderBy("createdAt", "desc"),
-          limit(20),
-        )
+        for (const collectionName of collections) {
+          try {
+            console.log(`Trying collection: ${collectionName}`)
 
-        // Execute both queries
-        const [freeSnapshot, premiumSnapshot] = await Promise.all([
-          getDocs(freeVideosQuery),
-          getDocs(premiumVideosQuery),
-        ])
+            // Query for free videos
+            const freeVideosQuery = query(
+              collection(db, collectionName),
+              where("creatorId", "==", creator.uid),
+              where("isPremium", "==", false),
+              limit(20),
+            )
 
-        // Track Firestore reads
-        trackFirestoreRead("CreatorProfile", freeSnapshot.size + premiumSnapshot.size)
+            // Query for premium videos
+            const premiumVideosQuery = query(
+              collection(db, collectionName),
+              where("creatorId", "==", creator.uid),
+              where("isPremium", "==", true),
+              limit(20),
+            )
 
-        // Process free videos
-        const freeVideos = freeSnapshot.docs.map((doc) => {
-          const data = doc.data()
-          return {
-            id: doc.id,
-            title: data.title || "Untitled",
-            description: data.description || "",
-            thumbnail: data.thumbnail || "",
-            createdAt: data.createdAt?.toDate?.() || new Date(),
-            duration: data.duration || 0,
-            isPremium: false,
-            creatorId: data.creatorId,
-            vimeoId: data.vimeoId || "",
-          } as VideoItem
-        })
+            // Execute both queries
+            const [freeSnapshot, premiumSnapshot] = await Promise.all([
+              getDocs(freeVideosQuery),
+              getDocs(premiumVideosQuery),
+            ])
 
-        // Process premium videos
-        const premiumVideos = premiumSnapshot.docs.map((doc) => {
-          const data = doc.data()
-          return {
-            id: doc.id,
-            title: data.title || "Untitled",
-            description: data.description || "",
-            thumbnail: data.thumbnail || "",
-            createdAt: data.createdAt?.toDate?.() || new Date(),
-            duration: data.duration || 0,
-            isPremium: true,
-            creatorId: data.creatorId,
-            vimeoId: data.vimeoId || "",
-          } as VideoItem
-        })
+            console.log(`Collection ${collectionName} results:`, {
+              free: freeSnapshot.size,
+              premium: premiumSnapshot.size,
+            })
+
+            if (freeSnapshot.size > 0 || premiumSnapshot.size > 0) {
+              foundCollection = true
+
+              // Track Firestore reads
+              trackFirestoreRead("CreatorProfile", freeSnapshot.size + premiumSnapshot.size)
+
+              // Process free videos
+              freeVideos = freeSnapshot.docs.map((doc) => {
+                const data = doc.data()
+                console.log("Free video data:", data)
+                return {
+                  id: doc.id,
+                  title: data.title || "Untitled",
+                  description: data.description || "",
+                  thumbnail: data.thumbnail || "",
+                  createdAt: data.createdAt?.toDate?.() || new Date(),
+                  duration: data.duration || 0,
+                  isPremium: false,
+                  creatorId: data.creatorId || creator.uid,
+                  vimeoId: data.vimeoId || "",
+                }
+              })
+
+              // Process premium videos
+              premiumVideos = premiumSnapshot.docs.map((doc) => {
+                const data = doc.data()
+                console.log("Premium video data:", data)
+                return {
+                  id: doc.id,
+                  title: data.title || "Untitled",
+                  description: data.description || "",
+                  thumbnail: data.thumbnail || "",
+                  createdAt: data.createdAt?.toDate?.() || new Date(),
+                  duration: data.duration || 0,
+                  isPremium: true,
+                  creatorId: data.creatorId || creator.uid,
+                  vimeoId: data.vimeoId || "",
+                }
+              })
+
+              break // Exit the loop if we found videos
+            }
+          } catch (err) {
+            console.error(`Error with collection ${collectionName}:`, err)
+          }
+        }
+
+        if (!foundCollection) {
+          // If we didn't find any videos in the standard collections, try a more general approach
+          console.log("Trying alternative approach - checking all collections for videos")
+
+          // Try to find videos by creator ID without specifying isPremium
+          const generalQuery = query(collection(db, "videos"), where("creatorId", "==", creator.uid), limit(50))
+
+          const snapshot = await getDocs(generalQuery)
+          console.log("General query results:", snapshot.size)
+
+          if (snapshot.size > 0) {
+            trackFirestoreRead("CreatorProfile", snapshot.size)
+
+            // Process videos and separate them by premium status
+            snapshot.docs.forEach((doc) => {
+              const data = doc.data()
+              console.log("Video data:", data)
+
+              const videoItem = {
+                id: doc.id,
+                title: data.title || "Untitled",
+                description: data.description || "",
+                thumbnail: data.thumbnail || "",
+                createdAt: data.createdAt?.toDate?.() || new Date(),
+                duration: data.duration || 0,
+                isPremium: data.isPremium === true,
+                creatorId: data.creatorId || creator.uid,
+                vimeoId: data.vimeoId || "",
+              }
+
+              if (data.isPremium === true) {
+                premiumVideos.push(videoItem)
+              } else {
+                freeVideos.push(videoItem)
+              }
+            })
+          }
+        }
 
         setFreeClips(freeVideos)
         setPaidClips(premiumVideos)
         console.log(`Loaded ${freeVideos.length} free clips and ${premiumVideos.length} premium clips`)
+
+        if (freeVideos.length === 0 && premiumVideos.length === 0) {
+          console.log("No videos found for creator:", creator.uid)
+        }
       } catch (error) {
         console.error("Error fetching videos:", error)
+        setError("Failed to load videos. Please try again later.")
       } finally {
         setLoading(false)
       }
     }
 
     fetchVideos()
-  }, [creator.uid])
+  }, [creator])
 
   const handleShare = async () => {
     if (navigator.share) {
@@ -217,7 +295,11 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
           <h3 className="font-medium text-white line-clamp-1 mb-1">{video.title}</h3>
           <div className="flex items-center text-xs text-zinc-400">
             <Clock className="h-3 w-3 mr-1" />
-            <span>{new Date(video.createdAt).toLocaleDateString()}</span>
+            <span>
+              {video.createdAt instanceof Date
+                ? video.createdAt.toLocaleDateString()
+                : new Date(video.createdAt).toLocaleDateString()}
+            </span>
           </div>
         </div>
 
@@ -402,6 +484,13 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
 
         {/* Content Area */}
         <div className="mt-8">
+          {/* Error message */}
+          {error && (
+            <div className="bg-red-900/20 border border-red-900/50 text-red-200 p-4 rounded-lg mb-8">
+              <p>{error}</p>
+            </div>
+          )}
+
           {activeTab === "free" && (
             <div>
               {loading ? (
