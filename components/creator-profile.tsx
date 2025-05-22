@@ -3,10 +3,14 @@
 import { useState, useEffect } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
 import Image from "next/image"
-import { Share2, Edit, Plus, Instagram, Twitter, Globe, Calendar, Film, Lock } from "lucide-react"
+import { Share2, Edit, Plus, Instagram, Twitter, Globe, Calendar, Film, Lock, Play, Clock } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useAuth } from "@/contexts/auth-context"
 import { cn } from "@/lib/utils"
+import { collection, query, where, getDocs, orderBy, limit } from "firebase/firestore"
+import { db } from "@/lib/firebase"
+import { trackFirestoreRead } from "@/lib/firestore-optimizer"
+import Link from "next/link"
 
 interface Creator {
   uid: string
@@ -14,8 +18,6 @@ interface Creator {
   displayName: string
   bio: string
   profilePic: string
-  freeClips: any[]
-  paidClips: any[]
   createdAt: string
   socialLinks?: {
     instagram?: string
@@ -24,12 +26,28 @@ interface Creator {
   }
 }
 
+interface VideoItem {
+  id: string
+  title: string
+  description: string
+  thumbnail: string
+  createdAt: string
+  duration: number
+  isPremium: boolean
+  creatorId: string
+  vimeoId: string
+}
+
 export default function CreatorProfile({ creator }: { creator: Creator }) {
   const { user } = useAuth()
   const searchParams = useSearchParams()
   const [activeTab, setActiveTab] = useState<"free" | "premium">("free")
   const isOwner = user && user.uid === creator.uid
   const router = useRouter()
+
+  const [freeClips, setFreeClips] = useState<VideoItem[]>([])
+  const [paidClips, setPaidClips] = useState<VideoItem[]>([])
+  const [loading, setLoading] = useState(true)
 
   // Set active tab based on URL query parameter
   useEffect(() => {
@@ -40,6 +58,84 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
       setActiveTab("free")
     }
   }, [searchParams])
+
+  // Fetch videos from Firestore
+  useEffect(() => {
+    const fetchVideos = async () => {
+      try {
+        setLoading(true)
+
+        // Query for free videos
+        const freeVideosQuery = query(
+          collection(db, "videos"),
+          where("creatorId", "==", creator.uid),
+          where("isPremium", "==", false),
+          orderBy("createdAt", "desc"),
+          limit(20),
+        )
+
+        // Query for premium videos
+        const premiumVideosQuery = query(
+          collection(db, "videos"),
+          where("creatorId", "==", creator.uid),
+          where("isPremium", "==", true),
+          orderBy("createdAt", "desc"),
+          limit(20),
+        )
+
+        // Execute both queries
+        const [freeSnapshot, premiumSnapshot] = await Promise.all([
+          getDocs(freeVideosQuery),
+          getDocs(premiumVideosQuery),
+        ])
+
+        // Track Firestore reads
+        trackFirestoreRead("CreatorProfile", freeSnapshot.size + premiumSnapshot.size)
+
+        // Process free videos
+        const freeVideos = freeSnapshot.docs.map((doc) => {
+          const data = doc.data()
+          return {
+            id: doc.id,
+            title: data.title || "Untitled",
+            description: data.description || "",
+            thumbnail: data.thumbnail || "",
+            createdAt: data.createdAt?.toDate?.() || new Date(),
+            duration: data.duration || 0,
+            isPremium: false,
+            creatorId: data.creatorId,
+            vimeoId: data.vimeoId || "",
+          } as VideoItem
+        })
+
+        // Process premium videos
+        const premiumVideos = premiumSnapshot.docs.map((doc) => {
+          const data = doc.data()
+          return {
+            id: doc.id,
+            title: data.title || "Untitled",
+            description: data.description || "",
+            thumbnail: data.thumbnail || "",
+            createdAt: data.createdAt?.toDate?.() || new Date(),
+            duration: data.duration || 0,
+            isPremium: true,
+            creatorId: data.creatorId,
+            vimeoId: data.vimeoId || "",
+          } as VideoItem
+        })
+
+        setFreeClips(freeVideos)
+        setPaidClips(premiumVideos)
+        console.log(`Loaded ${freeVideos.length} free clips and ${premiumVideos.length} premium clips`)
+      } catch (error) {
+        console.error("Error fetching videos:", error)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    fetchVideos()
+  }, [creator.uid])
 
   const handleShare = async () => {
     if (navigator.share) {
@@ -64,8 +160,72 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
     return date.toLocaleDateString("en-US", { month: "long", year: "numeric" })
   }
 
-  const handleAddClip = () => {
-    router.push("/dashboard/upload")
+  const formatDuration = (seconds: number) => {
+    const minutes = Math.floor(seconds / 60)
+    const remainingSeconds = Math.floor(seconds % 60)
+    return `${minutes}:${remainingSeconds.toString().padStart(2, "0")}`
+  }
+
+  const handleAddClip = (isPremium = false) => {
+    if (isPremium) {
+      router.push("/dashboard/upload?premium=true")
+    } else {
+      router.push("/dashboard/upload")
+    }
+  }
+
+  // Video card component
+  const VideoCard = ({ video }: { video: VideoItem }) => {
+    return (
+      <div className="group relative overflow-hidden rounded-lg bg-zinc-900 border border-zinc-800/50 transition-all duration-300 hover:border-zinc-700/50">
+        <div className="aspect-video relative overflow-hidden">
+          {video.thumbnail ? (
+            <Image
+              src={video.thumbnail || "/placeholder.svg"}
+              alt={video.title}
+              width={320}
+              height={180}
+              className="object-cover w-full h-full transition-transform duration-500 group-hover:scale-105"
+            />
+          ) : (
+            <div className="w-full h-full bg-zinc-800 flex items-center justify-center">
+              <Film className="h-10 w-10 text-zinc-600" />
+            </div>
+          )}
+
+          {/* Duration badge */}
+          <div className="absolute bottom-2 right-2 bg-black/70 text-white text-xs px-1.5 py-0.5 rounded">
+            {formatDuration(video.duration)}
+          </div>
+
+          {/* Premium badge */}
+          {video.isPremium && (
+            <div className="absolute top-2 right-2 bg-gradient-to-r from-amber-400 to-amber-600 text-black text-xs font-bold px-2 py-0.5 rounded-full">
+              PRO
+            </div>
+          )}
+
+          {/* Play button overlay */}
+          <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300 bg-black/30">
+            <div className="w-12 h-12 rounded-full bg-red-600/90 flex items-center justify-center">
+              <Play className="h-6 w-6 text-white" fill="white" />
+            </div>
+          </div>
+        </div>
+
+        <div className="p-3">
+          <h3 className="font-medium text-white line-clamp-1 mb-1">{video.title}</h3>
+          <div className="flex items-center text-xs text-zinc-400">
+            <Clock className="h-3 w-3 mr-1" />
+            <span>{new Date(video.createdAt).toLocaleDateString()}</span>
+          </div>
+        </div>
+
+        <Link href={`/video/${video.id}`} className="absolute inset-0" aria-label={`Watch ${video.title}`}>
+          <span className="sr-only">Watch {video.title}</span>
+        </Link>
+      </div>
+    )
   }
 
   return (
@@ -129,12 +289,12 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
                   <div className="bg-zinc-900/60 backdrop-blur-sm border border-zinc-800/50 rounded-lg p-3 text-center">
                     <Film className="h-4 w-4 mx-auto mb-1 text-zinc-400" />
                     <p className="text-xs text-zinc-400">Free clips</p>
-                    <p className="text-sm font-medium text-white">{creator.freeClips?.length || 0}</p>
+                    <p className="text-sm font-medium text-white">{freeClips.length}</p>
                   </div>
                   <div className="bg-zinc-900/60 backdrop-blur-sm border border-zinc-800/50 rounded-lg p-3 text-center">
                     <Lock className="h-4 w-4 mx-auto mb-1 text-zinc-400" />
                     <p className="text-xs text-zinc-400">Premium clips</p>
-                    <p className="text-sm font-medium text-white">{creator.paidClips?.length || 0}</p>
+                    <p className="text-sm font-medium text-white">{paidClips.length}</p>
                   </div>
                 </div>
 
@@ -244,10 +404,23 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
         <div className="mt-8">
           {activeTab === "free" && (
             <div>
-              {creator.freeClips && creator.freeClips.length > 0 ? (
+              {loading ? (
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-                  {/* Free clips would be rendered here */}
-                  <div className="text-zinc-400">Free clips would be displayed here</div>
+                  {[...Array(5)].map((_, i) => (
+                    <div key={i} className="bg-zinc-900/60 rounded-lg overflow-hidden">
+                      <div className="aspect-video bg-zinc-800 animate-pulse"></div>
+                      <div className="p-3">
+                        <div className="h-5 bg-zinc-800 rounded animate-pulse mb-2"></div>
+                        <div className="h-4 w-1/2 bg-zinc-800 rounded animate-pulse"></div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : freeClips.length > 0 ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+                  {freeClips.map((video) => (
+                    <VideoCard key={video.id} video={video} />
+                  ))}
                 </div>
               ) : (
                 <div className="py-16 text-center">
@@ -265,7 +438,7 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
                     {isOwner && (
                       <Button
                         className="bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white border-0"
-                        onClick={() => router.push("/dashboard/upload")}
+                        onClick={() => handleAddClip(false)}
                       >
                         <Plus className="h-4 w-4 mr-2" />
                         Add Clip
@@ -279,10 +452,23 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
 
           {activeTab === "premium" && (
             <div>
-              {creator.paidClips && creator.paidClips.length > 0 ? (
+              {loading ? (
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-                  {/* Premium clips would be rendered here */}
-                  <div className="text-zinc-400">Premium clips would be displayed here</div>
+                  {[...Array(5)].map((_, i) => (
+                    <div key={i} className="bg-zinc-900/60 rounded-lg overflow-hidden">
+                      <div className="aspect-video bg-zinc-800 animate-pulse"></div>
+                      <div className="p-3">
+                        <div className="h-5 bg-zinc-800 rounded animate-pulse mb-2"></div>
+                        <div className="h-4 w-1/2 bg-zinc-800 rounded animate-pulse"></div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : paidClips.length > 0 ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+                  {paidClips.map((video) => (
+                    <VideoCard key={video.id} video={video} />
+                  ))}
                 </div>
               ) : (
                 <div className="py-16 text-center">
@@ -300,7 +486,7 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
                     {isOwner && (
                       <Button
                         className="bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white border-0"
-                        onClick={() => router.push("/dashboard/upload?premium=true")}
+                        onClick={() => handleAddClip(true)}
                       >
                         <Plus className="h-4 w-4 mr-2" />
                         Add Premium Clip
