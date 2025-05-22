@@ -32,7 +32,7 @@ interface UploadFormProps {
 }
 
 export default function UploadForm({ contentType }: UploadFormProps) {
-  const { user, getIdToken } = useAuth()
+  const { user } = useAuth()
   const router = useRouter()
   const fileInputRef = useRef<HTMLInputElement>(null)
   const thumbnailInputRef = useRef<HTMLInputElement>(null)
@@ -102,23 +102,17 @@ export default function UploadForm({ contentType }: UploadFormProps) {
   // Get a signed upload URL from the server
   const getSignedUploadUrl = async (file: File, fileType: string) => {
     try {
-      const token = await getIdToken()
-
-      if (!token) {
-        throw new Error("Authentication token not available")
-      }
-
       const response = await fetch("/api/get-upload-url", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
           fileName: file.name,
           fileType: file.type,
           contentType: contentType,
         }),
+        credentials: "include", // Important: include cookies with the request
       })
 
       if (!response.ok) {

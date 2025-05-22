@@ -29,12 +29,11 @@ export interface User extends FirebaseUser {
 interface AuthContextType {
   user: User | null
   loading: boolean
-  signIn: (email: string, password: string) => Promise<void>
-  signInWithGoogle: () => Promise<void>
-  signUp: (email: string, password: string) => Promise<void>
+  signIn: (email: string, password: string) => Promise<{ success: boolean; error?: string }>
+  signInWithGoogle: () => Promise<{ success: boolean; error?: string }>
+  signUp: (email: string, password: string) => Promise<{ success: boolean; error?: string }>
   signOut: () => Promise<void>
   resetPassword: (email: string) => Promise<void>
-  getIdToken: () => Promise<string | null>
 }
 
 // Create the auth context
@@ -126,16 +125,27 @@ export function AuthProvider({ children }: AuthProviderProps) {
     }
   }, [pathname, router])
 
-  // Get Firebase ID token for API authentication
-  const getIdToken = async (): Promise<string | null> => {
+  // Create a session cookie after authentication
+  const createSession = async (idToken: string): Promise<boolean> => {
     try {
-      if (!user) return null
+      const response = await fetch("/api/auth/session", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ idToken }),
+      })
 
-      // Call the getIdToken method on the Firebase user object
-      return await user.getIdToken(true)
+      if (!response.ok) {
+        const data = await response.json()
+        console.error("Failed to create session:", data.error)
+        return false
+      }
+
+      return true
     } catch (error) {
-      console.error("Error getting ID token:", error)
-      return null
+      console.error("Error creating session:", error)
+      return false
     }
   }
 
@@ -149,6 +159,15 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
       const result = await signInWithPopup(auth, provider)
       const user = result.user
+
+      // Get the ID token
+      const idToken = await user.getIdToken()
+
+      // Create a session cookie
+      const sessionCreated = await createSession(idToken)
+      if (!sessionCreated) {
+        return { success: false, error: "Failed to create session" }
+      }
 
       // Check if user document exists in Firestore
       const userDoc = await getDoc(doc(db, "users", user.uid))
@@ -177,9 +196,13 @@ export function AuthProvider({ children }: AuthProviderProps) {
       }
 
       router.push(redirectTo)
+      return { success: true }
     } catch (error) {
       console.error("Error signing in with Google:", error)
-      throw error
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : "Failed to sign in with Google",
+      }
     } finally {
       setLoading(false)
     }
@@ -190,7 +213,16 @@ export function AuthProvider({ children }: AuthProviderProps) {
     try {
       setLoading(true)
       const auth = getAuth()
-      await signInWithEmailAndPassword(auth, email, password)
+      const userCredential = await signInWithEmailAndPassword(auth, email, password)
+
+      // Get the ID token
+      const idToken = await userCredential.user.getIdToken()
+
+      // Create a session cookie
+      const sessionCreated = await createSession(idToken)
+      if (!sessionCreated) {
+        return { success: false, error: "Failed to create session" }
+      }
 
       // Get redirect URL from query params if we're in the browser
       let redirectTo = "/dashboard"
@@ -204,9 +236,13 @@ export function AuthProvider({ children }: AuthProviderProps) {
       }
 
       router.push(redirectTo)
+      return { success: true }
     } catch (error) {
       console.error("Error signing in:", error)
-      throw error
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : "Failed to sign in",
+      }
     } finally {
       setLoading(false)
     }
@@ -219,6 +255,15 @@ export function AuthProvider({ children }: AuthProviderProps) {
       const auth = getAuth()
       const { user: newUser } = await createUserWithEmailAndPassword(auth, email, password)
 
+      // Get the ID token
+      const idToken = await newUser.getIdToken()
+
+      // Create a session cookie
+      const sessionCreated = await createSession(idToken)
+      if (!sessionCreated) {
+        return { success: false, error: "Failed to create session" }
+      }
+
       // Create user document in Firestore
       const db = getFirestore()
       await setDoc(doc(db, "users", newUser.uid), {
@@ -229,9 +274,13 @@ export function AuthProvider({ children }: AuthProviderProps) {
       })
 
       router.push("/dashboard")
+      return { success: true }
     } catch (error) {
       console.error("Error signing up:", error)
-      throw error
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : "Failed to sign up",
+      }
     } finally {
       setLoading(false)
     }
@@ -243,6 +292,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
       setLoading(true)
       const auth = getAuth()
       await firebaseSignOut(auth)
+
+      // Clear the session cookie
+      await fetch("/api/auth/logout", { method: "POST" })
 
       // Clear any cached user data
       setUser(null)
@@ -279,7 +331,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
         signUp,
         signOut,
         resetPassword,
-        getIdToken,
       }}
     >
       {children}

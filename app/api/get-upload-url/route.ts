@@ -1,4 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
+import { cookies } from "next/headers"
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3"
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner"
 import { initializeFirebaseAdmin } from "@/lib/firebase-admin"
@@ -17,21 +18,21 @@ const s3Client = new S3Client({
 
 export async function POST(request: NextRequest) {
   try {
-    // Get authorization token from header
-    const authHeader = request.headers.get("authorization")
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    // Get session cookie
+    const sessionCookie = cookies().get("session")?.value
+
+    if (!sessionCookie) {
+      return NextResponse.json({ error: "No session cookie found" }, { status: 401 })
     }
 
-    const token = authHeader.split("Bearer ")[1]
-
-    // Verify Firebase token
+    // Verify the session cookie
     initializeFirebaseAdmin()
-    const decodedToken = await getAuth().verifyIdToken(token)
-    const userId = decodedToken.uid
+    const auth = getAuth()
+    const decodedClaims = await auth.verifySessionCookie(sessionCookie, true)
+    const userId = decodedClaims.uid
 
     if (!userId) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+      return NextResponse.json({ error: "Invalid session" }, { status: 401 })
     }
 
     // Parse request body
