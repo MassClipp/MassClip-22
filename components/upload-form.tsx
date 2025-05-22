@@ -21,7 +21,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
-import { Upload, Video, CheckCircle2, AlertCircle, Loader2, User, Bug } from "lucide-react"
+import { Upload, Video, CheckCircle2, AlertCircle, Loader2, User } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 export default function UploadForm() {
@@ -48,11 +48,9 @@ export default function UploadForm() {
   const [uploadProgress, setUploadProgress] = useState(0)
   const [uploadError, setUploadError] = useState<string | null>(null)
   const [showSuccessDialog, setShowSuccessDialog] = useState(false)
-  const [uploadedVideoId, setUploadedVideoId] = useState<string | null>(null)
 
   // Debug state
   const [debugInfo, setDebugInfo] = useState<any>(null)
-  const [showDebug, setShowDebug] = useState(false)
 
   // Fetch the creator profile information
   useEffect(() => {
@@ -316,23 +314,20 @@ export default function UploadForm() {
         type: "free", // Make sure this matches what the profile page expects
       }
 
-      console.log("Saving video data to Firestore:", videoData)
+      // Add to videos collection
+      const videoRef = await addDoc(collection(db, "videos"), videoData)
+      console.log(`Video saved to Firestore with ID: ${videoRef.id}`)
 
-      // Add to freeClips collection first (this is what the profile page queries)
-      const freeClipRef = await addDoc(collection(db, "freeClips"), videoData)
-      console.log(`Video saved to freeClips with ID: ${freeClipRef.id}`)
-      setUploadedVideoId(freeClipRef.id)
-
-      // Also add to videos collection for compatibility
-      const videoRef = await addDoc(collection(db, "videos"), {
+      // Also add to freeClips collection for compatibility
+      const freeClipRef = await addDoc(collection(db, "freeClips"), {
         ...videoData,
-        freeClipId: freeClipRef.id,
+        videoId: videoRef.id,
       })
-      console.log(`Also saved to videos with ID: ${videoRef.id}`)
+      console.log(`Also saved to freeClips with ID: ${freeClipRef.id}`)
 
       // Also add to user's videos collection for easy access
-      await setDoc(doc(db, `users/${user.uid}/videos`, freeClipRef.id), {
-        videoId: freeClipRef.id,
+      await setDoc(doc(db, `users/${user.uid}/videos`, videoRef.id), {
+        videoId: videoRef.id,
         title,
         thumbnailUrl: "",
         createdAt: serverTimestamp(),
@@ -358,7 +353,6 @@ export default function UploadForm() {
     setFilePreview(null)
     setDuration(0)
     setUploadProgress(0)
-    setUploadedVideoId(null)
     if (fileInputRef.current) {
       fileInputRef.current.value = ""
     }
@@ -378,39 +372,6 @@ export default function UploadForm() {
     router.push("/dashboard/profile/edit")
   }
 
-  // Check if a video exists in Firestore
-  const checkVideoExists = async () => {
-    if (!uploadedVideoId) return
-
-    try {
-      // Check in freeClips collection
-      const freeClipRef = doc(db, "freeClips", uploadedVideoId)
-      const freeClipDoc = await getDoc(freeClipRef)
-
-      // Check in videos collection
-      const videosQuery = query(collection(db, "videos"), where("freeClipId", "==", uploadedVideoId))
-      const videosSnapshot = await getDocs(videosQuery)
-
-      // Check in user's videos collection
-      const userVideoRef = doc(db, `users/${user?.uid}/videos`, uploadedVideoId)
-      const userVideoDoc = await getDoc(userVideoRef)
-
-      setDebugInfo({
-        freeClipExists: freeClipDoc.exists(),
-        freeClipData: freeClipDoc.exists() ? freeClipDoc.data() : null,
-        videosExists: !videosSnapshot.empty,
-        videosData: !videosSnapshot.empty ? videosSnapshot.docs[0].data() : null,
-        userVideoExists: userVideoDoc.exists(),
-        userVideoData: userVideoDoc.exists() ? userVideoDoc.data() : null,
-      })
-    } catch (error) {
-      console.error("Error checking video existence:", error)
-      setDebugInfo({
-        error: error instanceof Error ? error.message : String(error),
-      })
-    }
-  }
-
   return (
     <>
       <div className="max-w-3xl mx-auto">
@@ -419,14 +380,6 @@ export default function UploadForm() {
             <CardTitle className="flex items-center gap-2">
               <Video className="h-5 w-5 text-red-500" />
               <span>Upload Content</span>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="ml-auto h-8 w-8 text-zinc-500 hover:text-white"
-                onClick={() => setShowDebug(!showDebug)}
-              >
-                <Bug className="h-4 w-4" />
-              </Button>
             </CardTitle>
             <CardDescription className="text-zinc-400">
               {creatorUsername ? (
@@ -535,29 +488,6 @@ export default function UploadForm() {
                   </div>
                 </div>
 
-                {/* Debug info */}
-                {showDebug && (
-                  <div className="mt-6 p-4 bg-zinc-900/50 border border-zinc-800 rounded-lg">
-                    <div className="flex justify-between items-center mb-2">
-                      <h3 className="text-sm font-medium text-zinc-300">Debug Information</h3>
-                      {uploadedVideoId && (
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          onClick={checkVideoExists}
-                          className="text-xs h-7 px-2"
-                        >
-                          Check Video
-                        </Button>
-                      )}
-                    </div>
-                    <div className="text-xs text-zinc-400 bg-black/30 p-2 rounded overflow-auto max-h-40">
-                      <pre>{JSON.stringify(debugInfo || { username: creatorUsername, uid: user?.uid }, null, 2)}</pre>
-                    </div>
-                  </div>
-                )}
-
                 {/* Error message */}
                 {uploadError && (
                   <div className="mt-6 p-4 bg-red-500/10 border border-red-500/20 rounded-lg flex items-start gap-3">
@@ -614,11 +544,6 @@ export default function UploadForm() {
             <AlertDialogDescription className="text-zinc-400">
               Your video has been uploaded successfully and is now available on your creator profile.
             </AlertDialogDescription>
-            {uploadedVideoId && (
-              <div className="mt-2 p-2 bg-black/30 rounded text-xs text-zinc-400">
-                <p>Video ID: {uploadedVideoId}</p>
-              </div>
-            )}
           </AlertDialogHeader>
           <AlertDialogFooter className="gap-2">
             <AlertDialogCancel onClick={resetForm} className="bg-zinc-800 border-zinc-700 text-white hover:bg-zinc-700">

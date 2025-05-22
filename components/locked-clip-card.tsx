@@ -6,7 +6,7 @@ interface LockedClipCardProps {
   thumbnailUrl?: string
 }
 
-export function LockedClipCard({ thumbnailUrl }: LockedClipCardProps) {
+export default function LockedClipCard({ thumbnailUrl }: LockedClipCardProps) {
   return (
     <div className="flex-shrink-0 w-[160px]">
       <div
@@ -42,5 +42,3 @@ export function LockedClipCard({ thumbnailUrl }: LockedClipCardProps) {
     </div>
   )
 }
-
-export default LockedClipCard
