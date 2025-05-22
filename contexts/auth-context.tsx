@@ -15,15 +15,11 @@ import {
 import { doc, getDoc, setDoc, getFirestore } from "firebase/firestore"
 import { useRouter, usePathname } from "next/navigation"
 import { initializeFirebaseApp } from "@/lib/firebase"
-import { checkAndRefreshSession, validateSession } from "@/lib/session-manager"
 
 // Define the user type
 export interface User extends FirebaseUser {
   plan?: string
-  permissions?: {
-    download?: boolean
-    premium?: boolean
-  }
+  username?: string
 }
 
 // Define the auth context type
@@ -63,28 +59,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
       // Subscribe to auth state changes
       const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
         if (firebaseUser) {
-          // Validate the session cookie
-          const isSessionValid = await validateSession()
-
-          if (!isSessionValid) {
-            console.log("Session invalid, attempting to refresh...")
-            const refreshed = await checkAndRefreshSession()
-
-            if (!refreshed) {
-              console.error("Failed to refresh session, logging out")
-              await firebaseSignOut(auth)
-              setUser(null)
-              setLoading(false)
-
-              // Redirect to login if on a protected route
-              const isProtectedRoute = pathname?.startsWith("/dashboard") || false
-              if (isProtectedRoute) {
-                router.push(`/login?redirect=${encodeURIComponent(pathname || "")}`)
-              }
-              return
-            }
-          }
-
           // Get additional user data from Firestore
           try {
             const userDoc = await getDoc(doc(db, "users", firebaseUser.uid))
@@ -95,7 +69,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
               const enhancedUser = {
                 ...firebaseUser,
                 plan: userData.plan || "free",
-                permissions: userData.permissions || { download: false, premium: false },
+                username: userData.username || null,
               } as User
 
               setUser(enhancedUser)
@@ -107,7 +81,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
                 photoURL: firebaseUser.photoURL,
                 createdAt: new Date(),
                 plan: "free",
-                permissions: { download: false, premium: false },
               }
 
               await setDoc(doc(db, "users", firebaseUser.uid), newUserData)
@@ -115,7 +88,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
               const enhancedUser = {
                 ...firebaseUser,
                 plan: "free",
-                permissions: { download: false, premium: false },
               } as User
 
               setUser(enhancedUser)
@@ -127,36 +99,14 @@ export function AuthProvider({ children }: AuthProviderProps) {
           }
         } else {
           setUser(null)
-
-          // Check if we need to redirect to login
-          // Use a safe way to check if we're on a protected route
-          const isProtectedRoute = pathname?.startsWith("/dashboard") || false
-
-          if (isProtectedRoute) {
-            // Use Next.js router for navigation instead of window.location
-            router.push(`/login?redirect=${encodeURIComponent(pathname || "")}`)
-          }
         }
 
         setLoading(false)
       })
 
-      // Set up periodic session refresh (every 30 minutes)
-      const refreshInterval = setInterval(
-        () => {
-          if (auth.currentUser) {
-            checkAndRefreshSession().catch((error) => {
-              console.error("Background session refresh failed:", error)
-            })
-          }
-        },
-        30 * 60 * 1000,
-      ) // 30 minutes
-
-      // Cleanup subscription and interval on unmount
+      // Cleanup subscription on unmount
       return () => {
         unsubscribe()
-        clearInterval(refreshInterval)
       }
     } catch (error) {
       console.error("Error initializing Firebase:", error)
@@ -167,12 +117,9 @@ export function AuthProvider({ children }: AuthProviderProps) {
   // Create a session cookie after authentication
   const createSession = async (user: FirebaseUser): Promise<boolean> => {
     try {
-      // Force token refresh to ensure we get a fresh token
-      await user.getIdToken(true)
-
-      // Get the fresh ID token
+      // Get the ID token
       const idToken = await user.getIdToken()
-      console.log("Got fresh ID token for session creation")
+      console.log("Got ID token for session creation")
 
       const response = await fetch("/api/auth/session", {
         method: "POST",
@@ -180,7 +127,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({ idToken }),
-        credentials: "include", // Important: include cookies with the request
+        credentials: "include", // Include cookies with the request
       })
 
       if (!response.ok) {
@@ -199,7 +146,30 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   // Manually refresh the session
   const refreshSession = async (): Promise<boolean> => {
-    return await checkAndRefreshSession()
+    try {
+      const auth = getAuth()
+      const currentUser = auth.currentUser
+
+      if (!currentUser) {
+        return false
+      }
+
+      const idToken = await currentUser.getIdToken(true)
+
+      const response = await fetch("/api/auth/session", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ idToken }),
+        credentials: "include",
+      })
+
+      return response.ok
+    } catch (error) {
+      console.error("Error refreshing session:", error)
+      return false
+    }
   }
 
   // Sign in with Google
@@ -215,11 +185,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       console.log("Google sign-in successful for user:", user.uid)
 
       // Create a session cookie
-      const sessionCreated = await createSession(user)
-      if (!sessionCreated) {
-        console.error("Failed to create session after Google sign-in")
-        return { success: false, error: "Failed to create session" }
-      }
+      await createSession(user)
 
       // Check if user document exists in Firestore
       const userDoc = await getDoc(doc(db, "users", user.uid))
@@ -232,7 +198,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
           photoURL: user.photoURL,
           createdAt: new Date(),
           plan: "free",
-          permissions: { download: false, premium: false },
         })
       }
 
@@ -269,11 +234,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       console.log("Email sign-in successful for user:", userCredential.user.uid)
 
       // Create a session cookie
-      const sessionCreated = await createSession(userCredential.user)
-      if (!sessionCreated) {
-        console.error("Failed to create session after email sign-in")
-        return { success: false, error: "Failed to create session" }
-      }
+      await createSession(userCredential.user)
 
       // Get redirect URL from query params if we're in the browser
       let redirectTo = "/dashboard"
@@ -308,11 +269,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       console.log("Sign-up successful for user:", newUser.uid)
 
       // Create a session cookie
-      const sessionCreated = await createSession(newUser)
-      if (!sessionCreated) {
-        console.error("Failed to create session after sign-up")
-        return { success: false, error: "Failed to create session" }
-      }
+      await createSession(newUser)
 
       // Create user document in Firestore
       const db = getFirestore()
@@ -320,7 +277,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
         email,
         createdAt: new Date(),
         plan: "free",
-        permissions: { download: false, premium: false },
       })
 
       router.push("/dashboard")
@@ -336,7 +292,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     }
   }
 
-  // Sign out function - fixed to properly handle errors and return a Promise
+  // Sign out function
   const signOut = async () => {
     try {
       setLoading(true)
@@ -346,7 +302,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       // Clear the session cookie
       await fetch("/api/auth/logout", {
         method: "POST",
-        credentials: "include", // Important: include cookies with the request
+        credentials: "include", // Include cookies with the request
       })
       console.log("Logged out and cleared session cookie")
 

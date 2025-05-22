@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useRef, useEffect, type ChangeEvent, type FormEvent } from "react"
+import { useState, useRef, type ChangeEvent, type FormEvent } from "react"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/contexts/auth-context"
 import { db } from "@/lib/firebase"
@@ -32,7 +32,7 @@ interface UploadFormProps {
 }
 
 export default function UploadForm({ contentType }: UploadFormProps) {
-  const { user, refreshSession } = useAuth()
+  const { user } = useAuth()
   const router = useRouter()
   const fileInputRef = useRef<HTMLInputElement>(null)
   const thumbnailInputRef = useRef<HTMLInputElement>(null)
@@ -58,24 +58,6 @@ export default function UploadForm({ contentType }: UploadFormProps) {
   const [uploadError, setUploadError] = useState<string | null>(null)
   const [uploadSuccess, setUploadSuccess] = useState(false)
   const [showSuccessDialog, setShowSuccessDialog] = useState(false)
-  const [showSessionError, setShowSessionError] = useState(false)
-  const [isRefreshingSession, setIsRefreshingSession] = useState(false)
-
-  // Refresh session when component mounts
-  useEffect(() => {
-    const validateCurrentSession = async () => {
-      try {
-        setIsRefreshingSession(true)
-        await refreshSession()
-      } catch (error) {
-        console.error("Failed to refresh session on component mount:", error)
-      } finally {
-        setIsRefreshingSession(false)
-      }
-    }
-
-    validateCurrentSession()
-  }, [refreshSession])
 
   // Handle video file selection
   const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
@@ -122,9 +104,6 @@ export default function UploadForm({ contentType }: UploadFormProps) {
     try {
       console.log("Requesting signed upload URL for file:", file.name)
 
-      // Try to refresh the session before making the request
-      await refreshSession()
-
       const response = await fetch("/api/get-upload-url", {
         method: "POST",
         headers: {
@@ -135,41 +114,12 @@ export default function UploadForm({ contentType }: UploadFormProps) {
           fileType: file.type,
           contentType: contentType,
         }),
-        credentials: "include", // Important: include cookies with the request
+        credentials: "include", // Include cookies with the request
       })
 
       if (!response.ok) {
         const errorData = await response.json()
         console.error("Failed to get upload URL:", errorData.error)
-
-        // Check if this is an authentication error
-        if (response.status === 401) {
-          // Try to refresh the session one more time
-          const refreshed = await refreshSession()
-
-          if (refreshed) {
-            // Try the request again
-            const retryResponse = await fetch("/api/get-upload-url", {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-              },
-              body: JSON.stringify({
-                fileName: file.name,
-                fileType: file.type,
-                contentType: contentType,
-              }),
-              credentials: "include",
-            })
-
-            if (retryResponse.ok) {
-              return await retryResponse.json()
-            }
-          }
-
-          setShowSessionError(true)
-        }
-
         throw new Error(errorData.error || "Failed to get upload URL")
       }
 
@@ -218,20 +168,9 @@ export default function UploadForm({ contentType }: UploadFormProps) {
     })
   }
 
-  // Handle session error - redirect to login
-  const handleSessionError = () => {
-    router.push("/login?redirect=/dashboard/upload")
-  }
-
   // Handle form submission
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
-
-    if (!user) {
-      setUploadError("You must be logged in to upload content")
-      setShowSessionError(true)
-      return
-    }
 
     if (!selectedFile) {
       setUploadError("Please select a video file to upload")
@@ -242,9 +181,6 @@ export default function UploadForm({ contentType }: UploadFormProps) {
       setIsUploading(true)
       setUploadError(null)
       setUploadProgress(0)
-
-      // Refresh session before starting upload
-      await refreshSession()
 
       // Step 1: Get signed URL for video upload
       const videoUploadData = await getSignedUploadUrl(selectedFile, "video")
@@ -282,7 +218,7 @@ export default function UploadForm({ contentType }: UploadFormProps) {
         videoUrl: videoUploadData.publicUrl,
         thumbnailUrl: thumbnailPublicUrl || "",
         duration,
-        creatorId: user.uid,
+        creatorId: user?.uid || "anonymous",
         createdAt: serverTimestamp(),
         isPremium: contentType === "premium",
         price: contentType === "premium" ? price : 0,
@@ -297,33 +233,24 @@ export default function UploadForm({ contentType }: UploadFormProps) {
       const clipRef = await addDoc(collection(db, collectionName), clipData)
       console.log(`Clip saved to Firestore with ID: ${clipRef.id}`)
 
-      // Also add to user's videos collection for easy access
-      await setDoc(doc(db, `users/${user.uid}/videos`, clipRef.id), {
-        clipId: clipRef.id,
-        collectionName,
-        title,
-        thumbnailUrl: thumbnailPublicUrl || "",
-        createdAt: serverTimestamp(),
-        isPremium: contentType === "premium",
-      })
-      console.log("Clip reference added to user's videos collection")
+      // Also add to user's videos collection for easy access if user is logged in
+      if (user?.uid) {
+        await setDoc(doc(db, `users/${user.uid}/videos`, clipRef.id), {
+          clipId: clipRef.id,
+          collectionName,
+          title,
+          thumbnailUrl: thumbnailPublicUrl || "",
+          createdAt: serverTimestamp(),
+          isPremium: contentType === "premium",
+        })
+        console.log("Clip reference added to user's videos collection")
+      }
 
       setUploadSuccess(true)
       setShowSuccessDialog(true)
       setIsUploading(false)
     } catch (error) {
       console.error("Upload error:", error)
-
-      // Check if this is a session error
-      if (
-        error instanceof Error &&
-        (error.message.includes("Authentication") ||
-          error.message.includes("session") ||
-          error.message.includes("log in"))
-      ) {
-        setShowSessionError(true)
-      }
-
       setUploadError(error instanceof Error ? error.message : "An unexpected error occurred. Please try again.")
       setIsUploading(false)
     }
@@ -388,13 +315,6 @@ export default function UploadForm({ contentType }: UploadFormProps) {
           </CardHeader>
 
           <CardContent className="pt-6 bg-black">
-            {isRefreshingSession && (
-              <div className="mb-4 p-2 bg-blue-500/10 border border-blue-500/20 rounded-lg flex items-center justify-center">
-                <Loader2 className="h-4 w-4 text-blue-500 mr-2 animate-spin" />
-                <p className="text-sm text-blue-200">Preparing secure upload environment...</p>
-              </div>
-            )}
-
             <form onSubmit={handleSubmit}>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 {/* Left column - File uploads */}
@@ -604,7 +524,7 @@ export default function UploadForm({ contentType }: UploadFormProps) {
               <CardFooter className="px-0 pt-6 pb-0 mt-6">
                 <Button
                   type="submit"
-                  disabled={isUploading || !selectedFile || isRefreshingSession}
+                  disabled={isUploading || !selectedFile}
                   className={cn(
                     "w-full py-6 text-base font-medium",
                     contentType === "premium"
@@ -616,11 +536,6 @@ export default function UploadForm({ contentType }: UploadFormProps) {
                     <>
                       <Loader2 className="mr-2 h-5 w-5 animate-spin" />
                       Uploading...
-                    </>
-                  ) : isRefreshingSession ? (
-                    <>
-                      <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-                      Preparing...
                     </>
                   ) : (
                     <>
@@ -644,7 +559,7 @@ export default function UploadForm({ contentType }: UploadFormProps) {
               Upload Successful!
             </AlertDialogTitle>
             <AlertDialogDescription className="text-zinc-400">
-              Your {contentType} content has been uploaded successfully and is now available on your profile.
+              Your {contentType} content has been uploaded successfully and is now available.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter className="gap-2">
@@ -660,29 +575,6 @@ export default function UploadForm({ contentType }: UploadFormProps) {
               )}
             >
               View My Profile
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      {/* Session error dialog */}
-      <AlertDialog open={showSessionError} onOpenChange={setShowSessionError}>
-        <AlertDialogContent className="bg-zinc-900 border-zinc-800 text-white">
-          <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2 text-xl">
-              <AlertCircle className="h-6 w-6 text-red-500" />
-              Session Expired
-            </AlertDialogTitle>
-            <AlertDialogDescription className="text-zinc-400">
-              Your session has expired or is invalid. Please log in again to continue uploading content.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogAction
-              onClick={handleSessionError}
-              className="bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white"
-            >
-              Log In Again
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

@@ -1,5 +1,4 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { getCurrentUser } from "@/lib/server-session"
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3"
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner"
 import { v4 as uuidv4 } from "uuid"
@@ -16,14 +15,6 @@ const s3Client = new S3Client({
 
 export async function POST(request: NextRequest) {
   try {
-    // Get the current user from the session cookie
-    const user = await getCurrentUser()
-
-    if (!user) {
-      console.error("No authenticated user found")
-      return NextResponse.json({ error: "Authentication required. Please log in again." }, { status: 401 })
-    }
-
     // Parse request body
     const { fileName, fileType, contentType } = await request.json()
 
@@ -32,7 +23,8 @@ export async function POST(request: NextRequest) {
     }
 
     // Generate a unique file name to prevent overwrites
-    const uniqueFileName = `${user.uid}/${uuidv4()}-${fileName}`
+    // Use a UUID instead of relying on user authentication
+    const uniqueFileName = `uploads/${uuidv4()}-${fileName}`
 
     // Set the bucket name from environment variable
     const bucketName = process.env.CLOUDFLARE_R2_BUCKET_NAME || process.env.R2_BUCKET_NAME
