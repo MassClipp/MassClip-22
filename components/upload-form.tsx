@@ -12,17 +12,20 @@ import { Label } from "@/components/ui/label"
 import { Slider } from "@/components/ui/slider"
 import { Switch } from "@/components/ui/switch"
 import { Progress } from "@/components/ui/progress"
+import { Separator } from "@/components/ui/separator"
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import {
   AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
   AlertDialogContent,
   AlertDialogDescription,
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
-import { Upload, ImageIcon, Tag, DollarSign, CheckCircle2, AlertCircle, Loader2, X, Plus, Info } from "lucide-react"
+import { Upload, Video, ImageIcon, Tag, DollarSign, CheckCircle2, AlertCircle, Loader2 } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { motion } from "framer-motion"
 
 interface UploadFormProps {
   contentType: "free" | "premium"
@@ -57,7 +60,6 @@ export default function UploadForm({ contentType }: UploadFormProps) {
   const [showSuccessDialog, setShowSuccessDialog] = useState(false)
   const [showSessionError, setShowSessionError] = useState(false)
   const [isRefreshingSession, setIsRefreshingSession] = useState(false)
-  const [showAdvancedOptions, setShowAdvancedOptions] = useState(false)
 
   // Refresh session when component mounts
   useEffect(() => {
@@ -113,23 +115,6 @@ export default function UploadForm({ contentType }: UploadFormProps) {
     const mins = Math.floor(seconds / 60)
     const secs = seconds % 60
     return `${mins}:${secs.toString().padStart(2, "0")}`
-  }
-
-  // Clear selected file
-  const clearSelectedFile = () => {
-    if (filePreview) URL.revokeObjectURL(filePreview)
-    setSelectedFile(null)
-    setFilePreview(null)
-    setDuration(0)
-    if (fileInputRef.current) fileInputRef.current.value = ""
-  }
-
-  // Clear selected thumbnail
-  const clearSelectedThumbnail = () => {
-    if (thumbnailPreview) URL.revokeObjectURL(thumbnailPreview)
-    setSelectedThumbnail(null)
-    setThumbnailPreview(null)
-    if (thumbnailInputRef.current) thumbnailInputRef.current.value = ""
   }
 
   // Get a signed upload URL from the server
@@ -372,245 +357,189 @@ export default function UploadForm({ contentType }: UploadFormProps) {
 
   return (
     <>
-      <div className="max-w-3xl mx-auto">
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.3 }}
-          className="bg-white dark:bg-zinc-900 rounded-xl shadow-sm overflow-hidden"
-        >
-          {/* Header */}
-          <div className="px-6 py-5 border-b border-gray-100 dark:border-zinc-800 flex items-center justify-between">
-            <div>
-              <h2 className="text-xl font-medium text-gray-800 dark:text-white">
-                {contentType === "premium" ? "Upload Premium Content" : "Upload Content"}
-              </h2>
-              <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                {contentType === "premium"
-                  ? "Share exclusive content with your subscribers"
-                  : "Share content with your audience"}
-              </p>
-            </div>
-            {contentType === "premium" && (
-              <div className="flex items-center gap-1.5 px-3 py-1 bg-amber-50 dark:bg-amber-900/20 text-amber-600 dark:text-amber-400 rounded-full text-xs font-medium">
-                <DollarSign className="h-3.5 w-3.5" />
-                <span>Premium</span>
+      <div className="max-w-4xl mx-auto">
+        <Card className="bg-black border-zinc-800 text-white">
+          <CardHeader
+            className={cn(
+              "pb-4",
+              contentType === "premium"
+                ? "bg-gradient-to-r from-amber-500/10 to-amber-600/10 border-b border-amber-500/20"
+                : "bg-gradient-to-r from-red-500/10 to-red-600/10 border-b border-red-500/20",
+            )}
+          >
+            <CardTitle className="flex items-center gap-2">
+              {contentType === "premium" ? (
+                <>
+                  <DollarSign className="h-5 w-5 text-amber-500" />
+                  <span>Upload Premium Content</span>
+                </>
+              ) : (
+                <>
+                  <Video className="h-5 w-5 text-red-500" />
+                  <span>Upload Free Content</span>
+                </>
+              )}
+            </CardTitle>
+            <CardDescription className="text-zinc-400">
+              {contentType === "premium"
+                ? "Share exclusive content with your paying subscribers"
+                : "Share free content with everyone to grow your audience"}
+            </CardDescription>
+          </CardHeader>
+
+          <CardContent className="pt-6 bg-black">
+            {isRefreshingSession && (
+              <div className="mb-4 p-2 bg-blue-500/10 border border-blue-500/20 rounded-lg flex items-center justify-center">
+                <Loader2 className="h-4 w-4 text-blue-500 mr-2 animate-spin" />
+                <p className="text-sm text-blue-200">Preparing secure upload environment...</p>
               </div>
             )}
-          </div>
 
-          {/* Session refresh indicator */}
-          {isRefreshingSession && (
-            <div className="px-6 py-2 bg-blue-50 dark:bg-blue-900/20 border-b border-blue-100 dark:border-blue-800/30 flex items-center justify-center">
-              <Loader2 className="h-3.5 w-3.5 text-blue-500 mr-2 animate-spin" />
-              <p className="text-xs text-blue-600 dark:text-blue-400">Preparing secure upload environment...</p>
-            </div>
-          )}
-
-          <form onSubmit={handleSubmit} className="p-6">
-            {/* Video upload section */}
-            <div className="mb-8">
-              <div className="flex items-center justify-between mb-2">
-                <Label htmlFor="video-upload" className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                  Video
-                </Label>
-                {selectedFile && (
-                  <span className="text-xs text-gray-500 dark:text-gray-400">{formatDuration(duration)}</span>
-                )}
-              </div>
-
-              {!selectedFile ? (
-                <div
-                  onClick={() => fileInputRef.current?.click()}
-                  className="border-2 border-dashed border-gray-200 dark:border-zinc-800 rounded-lg p-4 text-center cursor-pointer transition-all hover:bg-gray-50 dark:hover:bg-zinc-800/30"
-                >
-                  <div className="py-8 flex flex-col items-center">
-                    <div className="mb-3 p-3 rounded-full bg-gray-100 dark:bg-zinc-800">
-                      <Upload className="h-6 w-6 text-gray-500 dark:text-gray-400" />
-                    </div>
-                    <p className="text-sm font-medium text-gray-700 dark:text-gray-300">Click to upload video</p>
-                    <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">MP4, MOV or WebM (Max 500MB)</p>
-                  </div>
-                  <input
-                    ref={fileInputRef}
-                    id="video-upload"
-                    type="file"
-                    accept="video/*"
-                    className="hidden"
-                    onChange={handleFileChange}
-                  />
-                </div>
-              ) : (
-                <div className="relative rounded-lg overflow-hidden bg-black">
-                  <video src={filePreview!} className="w-full aspect-video object-contain" controls />
-                  <button
-                    type="button"
-                    onClick={clearSelectedFile}
-                    className="absolute top-2 right-2 p-1.5 bg-black/70 rounded-full text-white hover:bg-black/90 transition-colors"
-                  >
-                    <X className="h-4 w-4" />
-                  </button>
-                  <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-3 text-xs text-white">
-                    {selectedFile.name}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Basic info section */}
-            <div className="space-y-5">
-              <div>
-                <Label htmlFor="title" className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5 block">
-                  Title
-                </Label>
-                <Input
-                  id="title"
-                  placeholder="Enter a title for your content"
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  required
-                  className="bg-gray-50 dark:bg-zinc-800 border-gray-200 dark:border-zinc-700 focus-visible:ring-gray-300 dark:focus-visible:ring-zinc-600"
-                />
-              </div>
-
-              <div>
-                <Label
-                  htmlFor="description"
-                  className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5 block"
-                >
-                  Description
-                </Label>
-                <Textarea
-                  id="description"
-                  placeholder="Describe your content"
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  rows={3}
-                  className="bg-gray-50 dark:bg-zinc-800 border-gray-200 dark:border-zinc-700 focus-visible:ring-gray-300 dark:focus-visible:ring-zinc-600 resize-none"
-                />
-              </div>
-
-              <div>
-                <Label htmlFor="tags" className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5 block">
-                  Tags
-                </Label>
-                <div className="relative">
-                  <Tag className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 dark:text-gray-500 h-4 w-4" />
-                  <Input
-                    id="tags"
-                    placeholder="fitness, motivation, workout"
-                    value={tags}
-                    onChange={(e) => setTags(e.target.value)}
-                    className="bg-gray-50 dark:bg-zinc-800 border-gray-200 dark:border-zinc-700 focus-visible:ring-gray-300 dark:focus-visible:ring-zinc-600 pl-10"
-                  />
-                </div>
-                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1.5">Add relevant tags separated by commas</p>
-              </div>
-
-              {/* Advanced options toggle */}
-              <button
-                type="button"
-                onClick={() => setShowAdvancedOptions(!showAdvancedOptions)}
-                className="flex items-center text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-200 transition-colors mt-2"
-              >
-                {showAdvancedOptions ? (
-                  <span className="flex items-center">
-                    <span className="mr-1.5">Hide advanced options</span>
-                    <X className="h-3.5 w-3.5" />
-                  </span>
-                ) : (
-                  <span className="flex items-center">
-                    <span className="mr-1.5">Show advanced options</span>
-                    <Plus className="h-3.5 w-3.5" />
-                  </span>
-                )}
-              </button>
-
-              {/* Advanced options */}
-              {showAdvancedOptions && (
-                <motion.div
-                  initial={{ opacity: 0, height: 0 }}
-                  animate={{ opacity: 1, height: "auto" }}
-                  exit={{ opacity: 0, height: 0 }}
-                  transition={{ duration: 0.2 }}
-                  className="space-y-5 pt-2"
-                >
-                  {/* Thumbnail upload */}
+            <form onSubmit={handleSubmit}>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                {/* Left column - File uploads */}
+                <div className="md:col-span-1 space-y-6">
+                  {/* Video upload */}
                   <div>
-                    <Label
-                      htmlFor="thumbnail-upload"
-                      className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5 block"
-                    >
-                      Custom Thumbnail
+                    <Label htmlFor="video-upload" className="block mb-2 text-sm font-medium text-white">
+                      Video File
                     </Label>
-                    {!selectedThumbnail ? (
-                      <div
-                        onClick={() => thumbnailInputRef.current?.click()}
-                        className="border-2 border-dashed border-gray-200 dark:border-zinc-800 rounded-lg p-3 text-center cursor-pointer transition-all hover:bg-gray-50 dark:hover:bg-zinc-800/30"
-                      >
-                        <div className="py-4 flex flex-col items-center">
-                          <ImageIcon className="h-5 w-5 text-gray-400 dark:text-gray-500 mb-2" />
-                          <p className="text-xs text-gray-500 dark:text-gray-400">
-                            Click to upload a custom thumbnail (16:9)
-                          </p>
+                    <div
+                      className={cn(
+                        "border-2 border-dashed rounded-lg p-4 text-center cursor-pointer transition-all",
+                        "hover:bg-zinc-800/30 hover:border-zinc-700",
+                        selectedFile ? "border-green-500/50 bg-green-500/5" : "border-zinc-700 bg-zinc-800/30",
+                      )}
+                      onClick={() => fileInputRef.current?.click()}
+                    >
+                      {filePreview ? (
+                        <div className="aspect-video relative rounded overflow-hidden bg-black">
+                          <video src={filePreview} className="w-full h-full object-contain" controls />
                         </div>
-                        <input
-                          ref={thumbnailInputRef}
-                          id="thumbnail-upload"
-                          type="file"
-                          accept="image/*"
-                          className="hidden"
-                          onChange={handleThumbnailChange}
-                        />
-                      </div>
-                    ) : (
-                      <div className="relative rounded-lg overflow-hidden">
-                        <img
-                          src={thumbnailPreview! || "/placeholder.svg"}
-                          alt="Thumbnail preview"
-                          className="w-full aspect-video object-cover"
-                        />
-                        <button
-                          type="button"
-                          onClick={clearSelectedThumbnail}
-                          className="absolute top-2 right-2 p-1.5 bg-black/70 rounded-full text-white hover:bg-black/90 transition-colors"
-                        >
-                          <X className="h-4 w-4" />
-                        </button>
+                      ) : (
+                        <div className="py-8 flex flex-col items-center">
+                          <Upload className="h-10 w-10 text-zinc-500 mb-2" />
+                          <p className="text-sm font-medium text-white">Click to upload video</p>
+                          <p className="text-xs text-zinc-500 mt-1">MP4, MOV or WebM (Max 500MB)</p>
+                        </div>
+                      )}
+                      <input
+                        ref={fileInputRef}
+                        id="video-upload"
+                        type="file"
+                        accept="video/*"
+                        className="hidden"
+                        onChange={handleFileChange}
+                      />
+                    </div>
+                    {selectedFile && (
+                      <div className="mt-2 text-xs text-zinc-400 flex justify-between">
+                        <span>{selectedFile.name}</span>
+                        <span>{formatDuration(duration)}</span>
                       </div>
                     )}
                   </div>
 
-                  {/* Comments toggle */}
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <Label htmlFor="comments" className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                        Allow Comments
-                      </Label>
-                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                        Let viewers comment on your content
-                      </p>
+                  {/* Thumbnail upload */}
+                  <div>
+                    <Label htmlFor="thumbnail-upload" className="block mb-2 text-sm font-medium text-white">
+                      Custom Thumbnail (Optional)
+                    </Label>
+                    <div
+                      className={cn(
+                        "border-2 border-dashed rounded-lg p-4 text-center cursor-pointer transition-all",
+                        "hover:bg-zinc-800/30 hover:border-zinc-700",
+                        selectedThumbnail ? "border-green-500/50 bg-green-500/5" : "border-zinc-700 bg-zinc-800/30",
+                      )}
+                      onClick={() => thumbnailInputRef.current?.click()}
+                    >
+                      {thumbnailPreview ? (
+                        <div className="aspect-video relative rounded overflow-hidden bg-black">
+                          <img
+                            src={thumbnailPreview || "/placeholder.svg"}
+                            alt="Thumbnail preview"
+                            className="w-full h-full object-cover"
+                          />
+                        </div>
+                      ) : (
+                        <div className="py-6 flex flex-col items-center">
+                          <ImageIcon className="h-8 w-8 text-zinc-500 mb-2" />
+                          <p className="text-sm font-medium text-white">Click to upload thumbnail</p>
+                          <p className="text-xs text-zinc-500 mt-1">JPG or PNG (16:9 ratio)</p>
+                        </div>
+                      )}
+                      <input
+                        ref={thumbnailInputRef}
+                        id="thumbnail-upload"
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={handleThumbnailChange}
+                      />
                     </div>
-                    <Switch
-                      id="comments"
-                      checked={allowComments}
-                      onCheckedChange={setAllowComments}
-                      className="data-[state=checked]:bg-gray-900 dark:data-[state=checked]:bg-gray-100 data-[state=checked]:text-white dark:data-[state=checked]:text-gray-900"
+                  </div>
+                </div>
+
+                {/* Right column - Metadata */}
+                <div className="md:col-span-2 space-y-6">
+                  {/* Title */}
+                  <div>
+                    <Label htmlFor="title" className="block mb-2 text-sm font-medium text-white">
+                      Title
+                    </Label>
+                    <Input
+                      id="title"
+                      placeholder="Enter a catchy title for your clip"
+                      value={title}
+                      onChange={(e) => setTitle(e.target.value)}
+                      required
+                      className="bg-zinc-800/50 border-zinc-700 focus:border-red-500 text-white"
                     />
+                  </div>
+
+                  {/* Description */}
+                  <div>
+                    <Label htmlFor="description" className="block mb-2 text-sm font-medium text-white">
+                      Description
+                    </Label>
+                    <Textarea
+                      id="description"
+                      placeholder="Describe your clip to help viewers find it"
+                      value={description}
+                      onChange={(e) => setDescription(e.target.value)}
+                      rows={4}
+                      className="bg-zinc-800/50 border-zinc-700 focus:border-red-500 text-white resize-none"
+                    />
+                  </div>
+
+                  {/* Tags */}
+                  <div>
+                    <Label htmlFor="tags" className="block mb-2 text-sm font-medium text-white">
+                      Tags (comma separated)
+                    </Label>
+                    <div className="relative">
+                      <Tag className="absolute left-3 top-1/2 transform -translate-y-1/2 text-zinc-500 h-4 w-4" />
+                      <Input
+                        id="tags"
+                        placeholder="fitness, motivation, workout"
+                        value={tags}
+                        onChange={(e) => setTags(e.target.value)}
+                        className="bg-zinc-800/50 border-zinc-700 focus:border-red-500 text-white pl-10"
+                      />
+                    </div>
+                    <p className="text-xs text-zinc-500 mt-1">Add relevant tags to help users discover your content</p>
                   </div>
 
                   {/* Premium options */}
                   {contentType === "premium" && (
                     <>
-                      <div className="pt-2 border-t border-gray-100 dark:border-zinc-800">
-                        <div className="flex items-center justify-between mb-3">
-                          <Label htmlFor="price" className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                            Price (USD)
-                          </Label>
-                          <span className="text-sm font-medium text-amber-600 dark:text-amber-500">
-                            ${price.toFixed(2)}
-                          </span>
-                        </div>
+                      <Separator className="my-6 bg-zinc-800" />
+
+                      <div>
+                        <Label htmlFor="price" className="block mb-4 text-sm font-medium flex justify-between">
+                          <span>Price (USD)</span>
+                          <span className="text-amber-500 font-semibold">${price.toFixed(2)}</span>
+                        </Label>
                         <Slider
                           id="price"
                           min={1}
@@ -618,9 +547,9 @@ export default function UploadForm({ contentType }: UploadFormProps) {
                           step={1}
                           value={[price]}
                           onValueChange={(value) => setPrice(value[0])}
-                          className="my-4"
+                          className="my-6"
                         />
-                        <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400">
+                        <div className="flex justify-between text-xs text-zinc-500">
                           <span>$1.00</span>
                           <span>$25.00</span>
                           <span>$50.00</span>
@@ -628,144 +557,133 @@ export default function UploadForm({ contentType }: UploadFormProps) {
                       </div>
 
                       <div className="flex items-center justify-between">
-                        <div>
-                          <Label htmlFor="exclusive" className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                        <div className="space-y-1">
+                          <Label htmlFor="exclusive" className="text-sm font-medium">
                             Exclusive Content
                           </Label>
-                          <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                            Mark as exclusive to highlight premium value
-                          </p>
+                          <p className="text-xs text-zinc-500">Mark as exclusive to highlight premium value</p>
                         </div>
-                        <Switch
-                          id="exclusive"
-                          checked={isExclusive}
-                          onCheckedChange={setIsExclusive}
-                          className="data-[state=checked]:bg-amber-500 dark:data-[state=checked]:bg-amber-500"
-                        />
+                        <Switch id="exclusive" checked={isExclusive} onCheckedChange={setIsExclusive} />
                       </div>
                     </>
                   )}
-                </motion.div>
-              )}
-            </div>
 
-            {/* Error message */}
-            {uploadError && (
-              <div className="mt-6 p-3 bg-red-50 dark:bg-red-900/20 border border-red-100 dark:border-red-800/30 rounded-lg flex items-start gap-2.5">
-                <AlertCircle className="h-4 w-4 text-red-500 dark:text-red-400 mt-0.5 flex-shrink-0" />
-                <p className="text-sm text-red-600 dark:text-red-400">{uploadError}</p>
-              </div>
-            )}
-
-            {/* Upload progress */}
-            {isUploading && (
-              <div className="mt-6 space-y-2">
-                <div className="flex justify-between text-sm">
-                  <span className="text-gray-600 dark:text-gray-400">Uploading...</span>
-                  <span className="text-gray-900 dark:text-gray-100 font-medium">{Math.round(uploadProgress)}%</span>
+                  {/* Comments toggle */}
+                  <div className="flex items-center justify-between">
+                    <div className="space-y-1">
+                      <Label htmlFor="comments" className="text-sm font-medium">
+                        Allow Comments
+                      </Label>
+                      <p className="text-xs text-zinc-500">Let viewers comment on your content</p>
+                    </div>
+                    <Switch id="comments" checked={allowComments} onCheckedChange={setAllowComments} />
+                  </div>
                 </div>
-                <Progress
-                  value={uploadProgress}
-                  className="h-1.5 bg-gray-100 dark:bg-zinc-800"
-                  indicatorClassName="bg-gray-900 dark:bg-gray-100"
-                />
               </div>
-            )}
 
-            {/* Submit button */}
-            <div className="mt-8">
-              <Button
-                type="submit"
-                disabled={isUploading || !selectedFile || isRefreshingSession}
-                className={cn(
-                  "w-full py-5 text-base font-medium transition-all",
-                  "bg-gray-900 hover:bg-gray-800 text-white dark:bg-gray-100 dark:hover:bg-white dark:text-gray-900",
-                  "disabled:bg-gray-200 disabled:text-gray-500 dark:disabled:bg-zinc-800 dark:disabled:text-zinc-500",
-                )}
-              >
-                {isUploading ? (
-                  <span className="flex items-center justify-center">
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Uploading...
-                  </span>
-                ) : isRefreshingSession ? (
-                  <span className="flex items-center justify-center">
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Preparing...
-                  </span>
-                ) : (
-                  <span className="flex items-center justify-center">
-                    <Upload className="mr-2 h-4 w-4" />
-                    Publish Content
-                  </span>
-                )}
-              </Button>
-            </div>
-          </form>
-        </motion.div>
+              {/* Error message */}
+              {uploadError && (
+                <div className="mt-6 p-4 bg-red-500/10 border border-red-500/20 rounded-lg flex items-start gap-3">
+                  <AlertCircle className="h-5 w-5 text-red-500 mt-0.5 flex-shrink-0" />
+                  <p className="text-sm text-red-200">{uploadError}</p>
+                </div>
+              )}
 
-        {/* Info text */}
-        <div className="mt-4 flex items-start gap-2 px-4 text-xs text-gray-500 dark:text-gray-400">
-          <Info className="h-3.5 w-3.5 mt-0.5 flex-shrink-0" />
-          <p>
-            By uploading content, you agree to our{" "}
-            <a href="/terms" className="underline hover:text-gray-700 dark:hover:text-gray-300">
-              Terms of Service
-            </a>{" "}
-            and confirm that your content doesn't violate any rights.
-          </p>
-        </div>
+              {/* Upload progress */}
+              {isUploading && (
+                <div className="mt-6 space-y-2">
+                  <div className="flex justify-between text-sm">
+                    <span>Uploading...</span>
+                    <span>{Math.round(uploadProgress)}%</span>
+                  </div>
+                  <Progress value={uploadProgress} className="h-2" />
+                </div>
+              )}
+
+              {/* Submit button */}
+              <CardFooter className="px-0 pt-6 pb-0 mt-6">
+                <Button
+                  type="submit"
+                  disabled={isUploading || !selectedFile || isRefreshingSession}
+                  className={cn(
+                    "w-full py-6 text-base font-medium",
+                    contentType === "premium"
+                      ? "bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-black"
+                      : "bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white",
+                  )}
+                >
+                  {isUploading ? (
+                    <>
+                      <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                      Uploading...
+                    </>
+                  ) : isRefreshingSession ? (
+                    <>
+                      <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                      Preparing...
+                    </>
+                  ) : (
+                    <>
+                      <Upload className="mr-2 h-5 w-5" />
+                      {contentType === "premium" ? "Publish Premium Content" : "Publish Free Content"}
+                    </>
+                  )}
+                </Button>
+              </CardFooter>
+            </form>
+          </CardContent>
+        </Card>
       </div>
 
       {/* Success dialog */}
       <AlertDialog open={showSuccessDialog} onOpenChange={setShowSuccessDialog}>
-        <AlertDialogContent className="bg-white dark:bg-zinc-900 border-gray-200 dark:border-zinc-800 text-gray-900 dark:text-white">
+        <AlertDialogContent className="bg-zinc-900 border-zinc-800 text-white">
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center gap-2 text-xl">
-              <CheckCircle2 className="h-5 w-5 text-green-500" />
-              Upload Successful
+              <CheckCircle2 className="h-6 w-6 text-green-500" />
+              Upload Successful!
             </AlertDialogTitle>
-            <AlertDialogDescription className="text-gray-600 dark:text-gray-400">
-              Your content has been uploaded successfully and is now available on your profile.
+            <AlertDialogDescription className="text-zinc-400">
+              Your {contentType} content has been uploaded successfully and is now available on your profile.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter className="gap-2">
-            <Button
-              onClick={resetForm}
-              variant="outline"
-              className="border-gray-200 dark:border-zinc-800 hover:bg-gray-50 dark:hover:bg-zinc-800 text-gray-700 dark:text-gray-300"
-            >
+            <AlertDialogCancel onClick={resetForm} className="bg-zinc-800 border-zinc-700 text-white hover:bg-zinc-700">
               Upload Another
-            </Button>
-            <Button
+            </AlertDialogCancel>
+            <AlertDialogAction
               onClick={goToProfile}
-              className="bg-gray-900 hover:bg-gray-800 dark:bg-gray-100 dark:hover:bg-white dark:text-gray-900"
+              className={cn(
+                contentType === "premium"
+                  ? "bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-black"
+                  : "bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white",
+              )}
             >
               View My Profile
-            </Button>
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
 
       {/* Session error dialog */}
       <AlertDialog open={showSessionError} onOpenChange={setShowSessionError}>
-        <AlertDialogContent className="bg-white dark:bg-zinc-900 border-gray-200 dark:border-zinc-800 text-gray-900 dark:text-white">
+        <AlertDialogContent className="bg-zinc-900 border-zinc-800 text-white">
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center gap-2 text-xl">
-              <AlertCircle className="h-5 w-5 text-red-500" />
+              <AlertCircle className="h-6 w-6 text-red-500" />
               Session Expired
             </AlertDialogTitle>
-            <AlertDialogDescription className="text-gray-600 dark:text-gray-400">
+            <AlertDialogDescription className="text-zinc-400">
               Your session has expired or is invalid. Please log in again to continue uploading content.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <Button
+            <AlertDialogAction
               onClick={handleSessionError}
-              className="bg-gray-900 hover:bg-gray-800 dark:bg-gray-100 dark:hover:bg-white dark:text-gray-900"
+              className="bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white"
             >
               Log In Again
-            </Button>
+            </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
