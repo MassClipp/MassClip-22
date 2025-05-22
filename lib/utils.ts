@@ -1,6 +1,9 @@
 import { type ClassValue, clsx } from "clsx"
 import { twMerge } from "tailwind-merge"
 
+/**
+ * Combines class names using clsx and tailwind-merge
+ */
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
@@ -12,16 +15,14 @@ export function cn(...inputs: ClassValue[]) {
  */
 export function shuffleArray<T>(array: T[]): T[] {
   // Create a copy of the array to avoid mutating the original
-  const shuffled = [...array]
+  const newArray = [...array]
 
   // Fisher-Yates shuffle algorithm
-  for (let i = shuffled.length - 1; i > 0; i--) {
-    // Pick a random index from 0 to i
+  for (let i = newArray.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1))
-
-    // Swap elements at indices i and j
-    ;[shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]]
+    // Swap elements
+    ;[newArray[i], newArray[j]] = [newArray[j], newArray[i]]
   }
 
-  return shuffled
+  return newArray
 }

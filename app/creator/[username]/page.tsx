@@ -169,6 +169,57 @@ export default async function CreatorProfilePage({ params }: { params: { usernam
       socialLinks: serializedData.socialLinks || {},
     }
 
+    // Add this code to fetch videos on the server side
+    // Fetch videos for this creator
+    const videosRef = db.collection("videos")
+    const videosQuery = videosRef.where("uid", "==", uid).orderBy("createdAt", "desc")
+    const videosSnapshot = await videosQuery.get()
+
+    const freeClips: any[] = []
+    const paidClips: any[] = []
+
+    videosSnapshot.forEach((doc) => {
+      const videoData = doc.data()
+      const video = {
+        id: doc.id,
+        ...videoData,
+        createdAt: videoData.createdAt ? videoData.createdAt.toDate().toISOString() : new Date().toISOString(),
+      }
+
+      if (videoData.isPremium) {
+        paidClips.push(video)
+      } else {
+        freeClips.push(video)
+      }
+    })
+
+    // Also check freeClips collection for backward compatibility
+    const freeClipsRef = db.collection("freeClips")
+    const freeClipsQuery = freeClipsRef.where("uid", "==", uid).orderBy("createdAt", "desc")
+    const freeClipsSnapshot = await freeClipsQuery.get()
+
+    freeClipsSnapshot.forEach((doc) => {
+      const clipData = doc.data()
+      // Check if this clip is already in our list (by URL)
+      const existingVideo = freeClips.find((v: any) => v.url === clipData.url)
+
+      if (!existingVideo && clipData.url) {
+        freeClips.push({
+          id: doc.id,
+          ...clipData,
+          createdAt: clipData.createdAt ? clipData.createdAt.toDate().toISOString() : new Date().toISOString(),
+        })
+      }
+    })
+
+    console.log(
+      `[Page] Found ${freeClips.length} free videos and ${paidClips.length} premium videos for creator ${uid}`,
+    )
+
+    // Update the creator data to include the videos
+    creatorData.freeClips = freeClips
+    creatorData.paidClips = paidClips
+
     return <CreatorProfileWithSidebar creator={creatorData} />
   } catch (error) {
     console.error(`[Page] Error fetching creator profile for ${username}:`, error)
