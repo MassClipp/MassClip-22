@@ -34,6 +34,7 @@ interface AuthContextType {
   signUp: (email: string, password: string) => Promise<void>
   signOut: () => Promise<void>
   resetPassword: (email: string) => Promise<void>
+  getIdToken: () => Promise<string | null>
 }
 
 // Create the auth context
@@ -124,6 +125,19 @@ export function AuthProvider({ children }: AuthProviderProps) {
       setLoading(false)
     }
   }, [pathname, router])
+
+  // Get Firebase ID token for API authentication
+  const getIdToken = async (): Promise<string | null> => {
+    try {
+      if (!user) return null
+
+      // Call the getIdToken method on the Firebase user object
+      return await user.getIdToken(true)
+    } catch (error) {
+      console.error("Error getting ID token:", error)
+      return null
+    }
+  }
 
   // Sign in with Google
   const signInWithGoogle = async () => {
@@ -256,7 +270,18 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
   // Provide the auth context to children
   return (
-    <AuthContext.Provider value={{ user, loading, signIn, signInWithGoogle, signUp, signOut, resetPassword }}>
+    <AuthContext.Provider
+      value={{
+        user,
+        loading,
+        signIn,
+        signInWithGoogle,
+        signUp,
+        signOut,
+        resetPassword,
+        getIdToken,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   )
