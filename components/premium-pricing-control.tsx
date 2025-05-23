@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
-import { DollarSign, Settings, Save, Info, Lock, AlertCircle } from "lucide-react"
+import { DollarSign, Settings, Save, Info, Lock, AlertCircle, ExternalLink } from "lucide-react"
 import { db } from "@/lib/firebase"
 import { doc, getDoc, updateDoc } from "firebase/firestore"
 
@@ -20,6 +20,7 @@ export default function PremiumPricingControl({ creatorId, username, isOwner }: 
   const [currentPrice, setCurrentPrice] = useState(4.99)
   const [isEditing, setIsEditing] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
+  const [isConnectingStripe, setIsConnectingStripe] = useState(false)
   const [showSuccess, setShowSuccess] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [isStripeConnected, setIsStripeConnected] = useState(false)
@@ -57,6 +58,30 @@ export default function PremiumPricingControl({ creatorId, username, isOwner }: 
     }
   }, [creatorId])
 
+  const handleConnectStripe = async () => {
+    try {
+      setIsConnectingStripe(true)
+      setError(null)
+
+      // Call the API to get a fresh onboarding link
+      const response = await fetch("/api/stripe/onboard")
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || "Failed to connect Stripe account")
+      }
+
+      const data = await response.json()
+
+      // Redirect to the Stripe onboarding URL
+      window.location.href = data.url
+    } catch (error) {
+      console.error("Error connecting Stripe:", error)
+      setError("Failed to connect Stripe. Please try again.")
+      setIsConnectingStripe(false)
+    }
+  }
+
   const handleSavePrice = async () => {
     // Validate price
     const numPrice = Number.parseFloat(price)
@@ -75,25 +100,6 @@ export default function PremiumPricingControl({ creatorId, username, isOwner }: 
         premiumPrice: numPrice,
         premiumPriceUpdatedAt: new Date(),
       })
-
-      // If connected to Stripe, update the product price
-      if (isStripeConnected) {
-        // Call API to update Stripe product price
-        const response = await fetch("/api/stripe/update-price", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            creatorId,
-            price: numPrice,
-          }),
-        })
-
-        if (!response.ok) {
-          throw new Error("Failed to update Stripe price")
-        }
-      }
 
       setCurrentPrice(numPrice)
       setIsEditing(false)
@@ -173,9 +179,20 @@ export default function PremiumPricingControl({ creatorId, username, isOwner }: 
               <Button
                 className="mt-2 bg-amber-500 hover:bg-amber-600 text-white"
                 size="sm"
-                onClick={() => (window.location.href = "/dashboard/stripe")}
+                onClick={handleConnectStripe}
+                disabled={isConnectingStripe}
               >
-                Connect Stripe Account
+                {isConnectingStripe ? (
+                  <>
+                    <span className="animate-spin mr-2">⟳</span>
+                    Connecting...
+                  </>
+                ) : (
+                  <>
+                    <ExternalLink className="h-4 w-4 mr-2" />
+                    Connect Stripe Account
+                  </>
+                )}
               </Button>
             </div>
           </div>
