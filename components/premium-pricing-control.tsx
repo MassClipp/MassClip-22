@@ -5,9 +5,20 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
-import { DollarSign, Settings, Save, Info, Lock, AlertCircle, ExternalLink, CheckCircle, XCircle } from "lucide-react"
+import {
+  DollarSign,
+  Settings,
+  Save,
+  Info,
+  Lock,
+  AlertCircle,
+  ExternalLink,
+  CheckCircle,
+  XCircle,
+  RefreshCw,
+} from "lucide-react"
 import { db, auth } from "@/lib/firebase"
-import { doc, updateDoc, onSnapshot } from "firebase/firestore"
+import { doc, getDoc, updateDoc, onSnapshot } from "firebase/firestore"
 import { useSearchParams } from "next/navigation"
 
 interface PremiumPricingControlProps {
@@ -87,24 +98,49 @@ export default function PremiumPricingControl({ creatorId, username, isOwner }: 
 
       const idToken = await currentUser.getIdToken()
 
+      // Get the user's Stripe account ID from Firestore
+      const userDocRef = doc(db, "users", creatorId)
+      const userDoc = await getDoc(userDocRef)
+
+      if (!userDoc.exists() || !userDoc.data().stripeAccountId) {
+        throw new Error("No Stripe account found")
+      }
+
+      const stripeAccountId = userDoc.data().stripeAccountId
+
+      // Call the API to check Stripe account status
       const response = await fetch("/api/stripe/check-onboarding-status", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ idToken }),
+        body: JSON.stringify({
+          idToken,
+          stripeAccountId,
+        }),
       })
 
       if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.error || "Failed to check Stripe status")
+        throw new Error(`Failed to check Stripe status: ${response.status} ${response.statusText}`)
       }
 
       const data = await response.json()
+      console.log("Stripe status response:", data)
 
-      if (data.success && data.onboardingComplete) {
-        setShowSuccess(true)
-        setTimeout(() => setShowSuccess(false), 5000)
+      if (data.success) {
+        // Update local state
+        setStripeStatus({
+          isConnected: true,
+          chargesEnabled: data.chargesEnabled || false,
+          payoutsEnabled: data.payoutsEnabled || false,
+          onboardingComplete: data.onboardingComplete || false,
+        })
+
+        // Show success message if onboarding is complete
+        if (data.onboardingComplete) {
+          setShowSuccess(true)
+          setTimeout(() => setShowSuccess(false), 5000)
+        }
       }
     } catch (error) {
       console.error("Error checking Stripe status:", error)
@@ -294,7 +330,7 @@ export default function PremiumPricingControl({ creatorId, username, isOwner }: 
         )}
 
         {/* Status Check Button */}
-        {stripeStatus.isConnected && !stripeStatus.onboardingComplete && (
+        {stripeStatus.isConnected && (
           <div className="mb-4">
             <Button
               variant="outline"
@@ -310,7 +346,7 @@ export default function PremiumPricingControl({ creatorId, username, isOwner }: 
                 </>
               ) : (
                 <>
-                  <Info className="h-4 w-4 mr-2" />
+                  <RefreshCw className="h-4 w-4 mr-2" />
                   Refresh Status
                 </>
               )}
