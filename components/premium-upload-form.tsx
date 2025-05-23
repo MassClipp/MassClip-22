@@ -9,7 +9,6 @@ import { db } from "@/lib/firebase"
 import { collection, addDoc, serverTimestamp, doc, getDoc, query, where, getDocs, setDoc } from "firebase/firestore"
 import { Upload, User, Lock, DollarSign, X, ImageIcon, Tag, MessageSquare } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { toast } from "@/hooks/use-toast"
 
 export default function PremiumUploadForm() {
   const { user } = useAuth()
@@ -175,13 +174,13 @@ export default function PremiumUploadForm() {
   // Get a signed upload URL from the server
   const getSignedUploadUrl = async (file: File) => {
     try {
-      console.log("Requesting signed upload URL for file:", file.name)
+      console.log("Requesting signed upload URL for premium file:", file.name)
 
       // Create a sanitized title for the filename
       const sanitizedTitle = title.replace(/[^a-zA-Z0-9]/g, "-").toLowerCase()
       const timestamp = Date.now()
 
-      // Format: {creatorUsername}/{title}-{timestamp}.mp4
+      // Format: premium/{creatorUsername}/{title}-{timestamp}.mp4
       const fileName = `premium/${creatorUsername}/${sanitizedTitle}-${timestamp}.${file.name.split(".").pop()}`
 
       const response = await fetch("/api/get-upload-url", {
@@ -220,8 +219,8 @@ export default function PremiumUploadForm() {
       const sanitizedTitle = title.replace(/[^a-zA-Z0-9]/g, "-").toLowerCase()
       const timestamp = Date.now()
 
-      // Format: thumbnails/{creatorUsername}/{title}-{timestamp}.jpg
-      const fileName = `thumbnails/${creatorUsername}/${sanitizedTitle}-${timestamp}.${file.name.split(".").pop()}`
+      // Format: thumbnails/premium/{creatorUsername}/{title}-{timestamp}.jpg
+      const fileName = `thumbnails/premium/${creatorUsername}/${sanitizedTitle}-${timestamp}.${file.name.split(".").pop()}`
 
       const response = await fetch("/api/get-upload-url", {
         method: "POST",
@@ -310,6 +309,11 @@ export default function PremiumUploadForm() {
       return
     }
 
+    if (!description.trim()) {
+      setUploadError("Please enter a description for your video")
+      return
+    }
+
     if (tags.length === 0) {
       setUploadError("Please add at least one tag for your video")
       return
@@ -346,58 +350,52 @@ export default function PremiumUploadForm() {
 
       setUploadProgress(100)
 
-      // Step 4: Save video data to Firestore
+      // Step 4: Save video data to Firestore - following the exact same pattern as free uploads
       const videoData = {
         uid: user.uid,
         username: creatorUsername,
         title,
         description: description || "",
-        tags,
         url: uploadData.publicUrl,
-        thumbnailUrl,
+        thumbnailUrl: thumbnailUrl || "",
         status: "active",
         createdAt: serverTimestamp(),
         duration,
         views: 0,
         likes: 0,
         isPremium: true,
-        price,
-        allowComments,
         isPublic: true,
-        type: "video",
+        tags: tags,
+        type: "premium", // Mark as premium type
+        price: price,
+        allowComments: allowComments,
       }
 
-      // A. Add to videos collection (global index)
+      // Add to videos collection (main collection)
       const videoRef = await addDoc(collection(db, "videos"), videoData)
-      console.log(`Video saved to Firestore with ID: ${videoRef.id}`)
+      console.log(`Premium video saved to Firestore with ID: ${videoRef.id}`)
 
-      // B. Add to user's videos collection
-      await setDoc(doc(db, `users/${user.uid}/videos`, videoRef.id), {
-        videoId: videoRef.id,
-        title,
-        thumbnailUrl,
-        createdAt: serverTimestamp(),
-        isPremium: true,
-        price,
-        url: uploadData.publicUrl,
-      })
-      console.log("Video reference added to user's videos collection")
-
-      // C. Add to premiumClips collection
-      await addDoc(collection(db, "premiumClips"), {
+      // Also add to premiumClips collection for compatibility
+      const premiumClipRef = await addDoc(collection(db, "premiumClips"), {
         ...videoData,
         videoId: videoRef.id,
       })
-      console.log("Video added to premiumClips collection")
+      console.log(`Also saved to premiumClips with ID: ${premiumClipRef.id}`)
 
-      // Show success message
-      toast({
-        title: "Success!",
-        description: "Premium video uploaded successfully.",
-        variant: "success",
+      // Also add to user's videos collection for easy access
+      await setDoc(doc(db, `users/${user.uid}/videos`, videoRef.id), {
+        videoId: videoRef.id,
+        title,
+        thumbnailUrl: thumbnailUrl || "",
+        createdAt: serverTimestamp(),
+        isPremium: true,
+        url: uploadData.publicUrl,
+        price: price,
       })
+      console.log("Premium video reference added to user's videos collection")
 
-      // Redirect to profile
+      // Success - redirect to profile
+      setIsUploading(false)
       router.push(`/creator/${creatorUsername}`)
     } catch (error) {
       console.error("Upload error:", error)
