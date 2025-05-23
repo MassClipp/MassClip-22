@@ -279,7 +279,7 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
         onMouseLeave={() => setIsHovered(false)}
       >
         {/* Video container with 9:16 aspect ratio */}
-        <div className="relative aspect-[9/16] overflow-hidden rounded-lg bg-zinc-900 shadow-md">
+        <div className="relative aspect-[9/16] overflow-hidden rounded-lg bg-zinc-900 shadow-md ring-0 ring-white/30 transition-all duration-300 group-hover:ring-1">
           {/* Raw video element */}
           <video
             ref={videoRef}
