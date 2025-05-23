@@ -16,7 +16,6 @@ export default function UploadForm() {
   const [title, setTitle] = useState("")
   const [description, setDescription] = useState("")
   const [isPremium, setIsPremium] = useState(false)
-  const [price, setPrice] = useState("")
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [filePreview, setFilePreview] = useState<string | null>(null)
   const [isUploading, setIsUploading] = useState(false)
@@ -170,23 +169,6 @@ export default function UploadForm() {
       return
     }
 
-    // Validate price for premium videos
-    if (isPremium) {
-      const priceValue = Number.parseFloat(price)
-      if (!price || isNaN(priceValue) || priceValue <= 0) {
-        setError("Please enter a valid price for premium videos")
-        return
-      }
-      if (priceValue < 0.5) {
-        setError("Minimum price is $0.50")
-        return
-      }
-      if (priceValue > 999.99) {
-        setError("Maximum price is $999.99")
-        return
-      }
-    }
-
     try {
       setIsUploading(true)
       setError(null)
@@ -221,8 +203,7 @@ export default function UploadForm() {
       const videoData = {
         title: title.trim(),
         description: description.trim(),
-        type: isPremium ? "premium" : "free",
-        price: isPremium ? Number.parseFloat(price) : null, // Store price for premium videos
+        type: isPremium ? "premium" : "free", // This is the critical field!
         status: "active",
         isPublic: true,
         url: videoUrl,
@@ -233,8 +214,6 @@ export default function UploadForm() {
         createdAt: serverTimestamp(),
         views: 0,
         likes: 0,
-        totalSales: 0,
-        totalRevenue: 0,
         fileSize: selectedFile.size,
         duration: 0, // You could extract this if needed
       }
@@ -252,7 +231,6 @@ export default function UploadForm() {
       setFilePreview(null)
       setTitle("")
       setDescription("")
-      setPrice("")
       setIsPremium(false)
 
       // Redirect to dashboard
@@ -328,35 +306,13 @@ export default function UploadForm() {
             {isPremium && (
               <div className="mt-3 p-3 bg-zinc-800/30 border border-amber-500/20 rounded text-sm text-zinc-400 flex items-start">
                 <DollarSign className="h-4 w-4 text-amber-500 mr-2 mt-0.5 flex-shrink-0" />
-                <p>Premium videos will be available for purchase by viewers. Set your price below.</p>
+                <p>
+                  Premium videos will be included in your premium content pack. The price for your entire premium
+                  content is set in your creator profile settings.
+                </p>
               </div>
             )}
           </div>
-
-          {/* Price Input for Premium Videos */}
-          {isPremium && (
-            <div className="mb-6">
-              <label htmlFor="price" className="block text-white mb-2">
-                Price (USD)
-              </label>
-              <div className="relative">
-                <DollarSign className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-zinc-400" />
-                <input
-                  id="price"
-                  type="number"
-                  step="0.01"
-                  min="0.50"
-                  max="999.99"
-                  placeholder="4.99"
-                  value={price}
-                  onChange={(e) => setPrice(e.target.value)}
-                  className="w-full bg-zinc-900 border border-zinc-700 rounded-md p-3 pl-10 text-white focus:outline-none focus:ring-1 focus:ring-amber-500"
-                  required={isPremium}
-                />
-              </div>
-              <p className="text-xs text-zinc-500 mt-1">Minimum $0.50, Maximum $999.99</p>
-            </div>
-          )}
 
           {/* Video File */}
           <div className="mb-6">
@@ -452,15 +408,14 @@ export default function UploadForm() {
           {/* Submit Button */}
           <button
             type="submit"
-            disabled={isUploading || !selectedFile || !title.trim() || (isPremium && !price)}
+            disabled={isUploading || !selectedFile || !title.trim()}
             className={cn(
               "w-full py-3 rounded-md font-medium text-white transition-colors",
               isPremium ? "bg-amber-500 hover:bg-amber-600" : "bg-red-600 hover:bg-red-700",
-              (isUploading || !selectedFile || !title.trim() || (isPremium && !price)) &&
-                "opacity-50 cursor-not-allowed",
+              (isUploading || !selectedFile || !title.trim()) && "opacity-50 cursor-not-allowed",
             )}
           >
-            {isUploading ? "Uploading..." : isPremium ? `Publish for $${price || "0.00"}` : "Publish Video"}
+            {isUploading ? "Uploading..." : isPremium ? "Publish Premium Video" : "Publish Video"}
           </button>
         </form>
       </div>

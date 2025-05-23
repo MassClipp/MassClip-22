@@ -1,45 +1,110 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
-import { DollarSign, Settings, Save, Info, Lock } from "lucide-react"
+import { DollarSign, Settings, Save, Info, Lock, AlertCircle } from "lucide-react"
+import { db } from "@/lib/firebase"
+import { doc, getDoc, updateDoc } from "firebase/firestore"
 
 interface PremiumPricingControlProps {
   creatorId: string
   username: string
-  currentPrice?: number
   isOwner: boolean
 }
 
-export default function PremiumPricingControl({
-  creatorId,
-  username,
-  currentPrice = 4.99,
-  isOwner,
-}: PremiumPricingControlProps) {
-  const [price, setPrice] = useState(currentPrice.toString())
+export default function PremiumPricingControl({ creatorId, username, isOwner }: PremiumPricingControlProps) {
+  const [price, setPrice] = useState("4.99")
+  const [currentPrice, setCurrentPrice] = useState(4.99)
   const [isEditing, setIsEditing] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [showSuccess, setShowSuccess] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [isStripeConnected, setIsStripeConnected] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
+
+  // Fetch current price and Stripe status
+  useEffect(() => {
+    const fetchCreatorData = async () => {
+      try {
+        setIsLoading(true)
+        const creatorDocRef = doc(db, "users", creatorId)
+        const creatorDoc = await getDoc(creatorDocRef)
+
+        if (creatorDoc.exists()) {
+          const data = creatorDoc.data()
+          // Get premium price
+          if (data.premiumPrice) {
+            setCurrentPrice(data.premiumPrice)
+            setPrice(data.premiumPrice.toString())
+          }
+
+          // Check if Stripe is connected
+          setIsStripeConnected(!!data.stripeAccountId && data.stripeOnboardingComplete === true)
+        }
+      } catch (error) {
+        console.error("Error fetching creator data:", error)
+        setError("Failed to load creator data")
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    if (creatorId) {
+      fetchCreatorData()
+    }
+  }, [creatorId])
 
   const handleSavePrice = async () => {
     // Validate price
     const numPrice = Number.parseFloat(price)
     if (isNaN(numPrice) || numPrice < 0.99 || numPrice > 99.99) {
+      setError("Price must be between $0.99 and $99.99")
       return
     }
 
-    // Simulate saving
+    setError(null)
     setIsSaving(true)
-    setTimeout(() => {
-      setIsSaving(false)
+
+    try {
+      // Update price in Firestore
+      const userDocRef = doc(db, "users", creatorId)
+      await updateDoc(userDocRef, {
+        premiumPrice: numPrice,
+        premiumPriceUpdatedAt: new Date(),
+      })
+
+      // If connected to Stripe, update the product price
+      if (isStripeConnected) {
+        // Call API to update Stripe product price
+        const response = await fetch("/api/stripe/update-price", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            creatorId,
+            price: numPrice,
+          }),
+        })
+
+        if (!response.ok) {
+          throw new Error("Failed to update Stripe price")
+        }
+      }
+
+      setCurrentPrice(numPrice)
       setIsEditing(false)
       setShowSuccess(true)
       setTimeout(() => setShowSuccess(false), 3000)
-    }, 1000)
+    } catch (error) {
+      console.error("Error saving price:", error)
+      setError("Failed to save price. Please try again.")
+    } finally {
+      setIsSaving(false)
+    }
   }
 
   // If not the owner, just show the current price
@@ -57,6 +122,24 @@ export default function PremiumPricingControl({
           </div>
         </div>
       </div>
+    )
+  }
+
+  if (isLoading) {
+    return (
+      <Card className="bg-zinc-900/60 backdrop-blur-sm border border-zinc-800/50 mb-6">
+        <CardHeader className="pb-3">
+          <div className="flex items-center gap-2">
+            <Lock className="h-5 w-5 text-amber-500" />
+            <CardTitle className="text-lg text-white">Premium Content Pricing</CardTitle>
+          </div>
+          <div className="animate-pulse bg-zinc-800 h-4 w-3/4 rounded mt-2"></div>
+        </CardHeader>
+        <CardContent>
+          <div className="animate-pulse bg-zinc-800 h-12 w-full rounded mb-4"></div>
+          <div className="animate-pulse bg-zinc-800 h-8 w-1/2 rounded"></div>
+        </CardContent>
+      </Card>
     )
   }
 
@@ -79,10 +162,36 @@ export default function PremiumPricingControl({
       </CardHeader>
 
       <CardContent>
+        {!isStripeConnected && (
+          <div className="mb-4 p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg text-amber-400 text-sm flex items-start">
+            <AlertCircle className="h-4 w-4 mr-2 mt-0.5 flex-shrink-0" />
+            <div>
+              <p className="font-medium mb-1">Connect Stripe to receive payments</p>
+              <p className="text-zinc-400">
+                You need to connect your Stripe account before you can receive payments for your premium content.
+              </p>
+              <Button
+                className="mt-2 bg-amber-500 hover:bg-amber-600 text-white"
+                size="sm"
+                onClick={() => (window.location.href = "/dashboard/stripe")}
+              >
+                Connect Stripe Account
+              </Button>
+            </div>
+          </div>
+        )}
+
         {showSuccess && (
           <div className="mb-4 p-3 bg-green-500/10 border border-green-500/20 rounded-lg text-green-400 text-sm flex items-center gap-2">
             <Info className="h-4 w-4" />
             <span>Price updated successfully!</span>
+          </div>
+        )}
+
+        {error && (
+          <div className="mb-4 p-3 bg-red-500/10 border border-red-500/20 rounded-lg text-red-400 text-sm flex items-center gap-2">
+            <AlertCircle className="h-4 w-4" />
+            <span>{error}</span>
           </div>
         )}
 
@@ -142,6 +251,7 @@ export default function PremiumPricingControl({
             onClick={() => {
               setIsEditing(false)
               setPrice(currentPrice.toString())
+              setError(null)
             }}
             className="bg-zinc-800 border-zinc-700 hover:bg-zinc-700 text-white"
           >

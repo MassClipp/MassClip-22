@@ -27,6 +27,7 @@ import { cn } from "@/lib/utils"
 import { collection, query, where, getDocs, limit } from "firebase/firestore"
 import { db } from "@/lib/firebase"
 import { trackFirestoreRead } from "@/lib/firestore-optimizer"
+import PremiumPricingControl from "./premium-pricing-control"
 
 interface Creator {
   uid: string
@@ -520,6 +521,11 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
             <div className="bg-red-900/20 border border-red-900/50 text-red-200 p-4 rounded-lg mb-8">
               <p>{error}</p>
             </div>
+          )}
+
+          {/* Premium Pricing Control - Only show on premium tab */}
+          {activeTab === "premium" && (
+            <PremiumPricingControl creatorId={creator.uid} username={creator.username} isOwner={isOwner} />
           )}
 
           {activeTab === "free" && (
