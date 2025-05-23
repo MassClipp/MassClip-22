@@ -19,6 +19,7 @@ import {
   Pause,
   Heart,
   Eye,
+  X,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useAuth } from "@/contexts/auth-context"
@@ -66,6 +67,8 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
   const [paidClips, setPaidClips] = useState<VideoItem[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [deletingVideoId, setDeletingVideoId] = useState<string | null>(null)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null)
 
   // Set active tab based on URL query parameter
   useEffect(() => {
@@ -169,6 +172,36 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
     }
   }
 
+  const handleDeleteVideo = async (videoId: string) => {
+    if (!user) return
+
+    setDeletingVideoId(videoId)
+
+    try {
+      const response = await fetch(`/api/delete-video?videoId=${videoId}&userId=${user.uid}`, {
+        method: "DELETE",
+      })
+
+      const result = await response.json()
+
+      if (!response.ok) {
+        throw new Error(result.error || "Failed to delete video")
+      }
+
+      // Remove video from local state
+      setFreeClips((prev) => prev.filter((v) => v.id !== videoId))
+      setPaidClips((prev) => prev.filter((v) => v.id !== videoId))
+
+      console.log("Video deleted successfully")
+    } catch (error) {
+      console.error("Error deleting video:", error)
+      alert("Failed to delete video. Please try again.")
+    } finally {
+      setDeletingVideoId(null)
+      setShowDeleteConfirm(null)
+    }
+  }
+
   // Video card component with inline playback - styled like Vimeo cards
   const VideoCard = ({ video }: { video: VideoItem }) => {
     const videoRef = useRef<HTMLVideoElement>(null)
@@ -181,10 +214,8 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
 
       if (isPlaying) {
         videoRef.current.pause()
-        // Reset video to beginning when paused
         videoRef.current.currentTime = 0
       } else {
-        // Pause all other videos first and reset them
         document.querySelectorAll("video").forEach((v) => {
           if (v !== videoRef.current) {
             v.pause()
@@ -192,14 +223,13 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
           }
         })
 
-        videoRef.current.muted = false // Ensure sound is on
+        videoRef.current.muted = false
         videoRef.current.play()
       }
 
       setIsPlaying(!isPlaying)
     }
 
-    // Handle video end
     const handleVideoEnd = () => {
       setIsPlaying(false)
       if (videoRef.current) {
@@ -230,10 +260,10 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
             className="w-full h-full object-cover"
             poster={video.thumbnailUrl || undefined}
             preload="metadata"
-            muted={false} // Never muted
+            muted={false}
             playsInline
             onEnded={handleVideoEnd}
-            onClick={(e) => e.stopPropagation()} // Prevent click from bubbling
+            onClick={(e) => e.stopPropagation()}
           />
 
           {/* Premium badge */}
@@ -243,7 +273,28 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
             </div>
           )}
 
-          {/* Minimal modern play button - fades in/out on hover */}
+          {/* Delete button - only show for owner */}
+          {isOwner && (
+            <div className="absolute top-2 left-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+              <button
+                onClick={(e) => {
+                  e.stopPropagation()
+                  setShowDeleteConfirm(video.id)
+                }}
+                className="w-8 h-8 rounded-full bg-red-500/80 backdrop-blur-sm flex items-center justify-center text-white transition-all duration-200 hover:bg-red-600/90"
+                aria-label="Delete video"
+                disabled={deletingVideoId === video.id}
+              >
+                {deletingVideoId === video.id ? (
+                  <div className="w-3 h-3 border border-white border-t-transparent rounded-full animate-spin" />
+                ) : (
+                  <X className="h-4 w-4" />
+                )}
+              </button>
+            </div>
+          )}
+
+          {/* Play/Pause buttons */}
           {!isPlaying && (
             <div className="absolute inset-0 flex items-center justify-center transition-opacity duration-300 opacity-0 group-hover:opacity-100">
               <button
@@ -256,7 +307,6 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
             </div>
           )}
 
-          {/* Pause button - fades in/out on hover when playing */}
           {isPlaying && (
             <div className="absolute inset-0 flex items-center justify-center transition-opacity duration-300 opacity-0 group-hover:opacity-100">
               <button
@@ -273,7 +323,7 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
           <div className="absolute bottom-0 left-0 right-0 h-16 bg-gradient-to-t from-black/70 to-transparent pointer-events-none"></div>
         </div>
 
-        {/* Video info section - Vimeo style */}
+        {/* Video info section */}
         <div className="p-2 pt-3">
           <h3 className="font-medium text-sm text-white line-clamp-1">{video.title}</h3>
           <div className="flex items-center justify-between text-xs text-zinc-400 mt-1.5">
@@ -553,6 +603,41 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
           )}
         </div>
       </div>
+      {/* Delete Confirmation Modal */}
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+          <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 max-w-md w-full">
+            <h3 className="text-lg font-semibold text-white mb-2">Delete Video</h3>
+            <p className="text-zinc-400 mb-6">
+              Are you sure you want to delete this video? This action cannot be undone and will permanently remove the
+              video and its files.
+            </p>
+            <div className="flex gap-3 justify-end">
+              <Button
+                variant="outline"
+                onClick={() => setShowDeleteConfirm(null)}
+                className="bg-zinc-800 border-zinc-700 text-white hover:bg-zinc-700"
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={() => showDeleteConfirm && handleDeleteVideo(showDeleteConfirm)}
+                className="bg-red-600 hover:bg-red-700 text-white"
+                disabled={deletingVideoId === showDeleteConfirm}
+              >
+                {deletingVideoId === showDeleteConfirm ? (
+                  <>
+                    <div className="w-4 h-4 border border-white border-t-transparent rounded-full animate-spin mr-2" />
+                    Deleting...
+                  </>
+                ) : (
+                  "Delete Video"
+                )}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
