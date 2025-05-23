@@ -262,12 +262,14 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
     const toggleOptions = (e: React.MouseEvent) => {
       e.stopPropagation()
       e.preventDefault()
+      console.log("Toggle options for video:", video.id) // Debug log
       setShowOptionsFor(showOptionsFor === video.id ? null : video.id)
     }
 
     const handleDeleteClick = (e: React.MouseEvent) => {
       e.stopPropagation()
       e.preventDefault()
+      console.log("Delete clicked for video:", video.id) // Debug log
       setShowOptionsFor(null)
       setShowDeleteConfirm(video.id)
     }
@@ -306,39 +308,38 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
           {/* Minimal options button - only show for owner on hover */}
           {isOwner && (
             <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-20">
-              <button
-                onClick={toggleOptions}
-                className="w-8 h-8 rounded-full bg-black/30 backdrop-blur-sm flex items-center justify-center text-white transition-all duration-200 hover:bg-black/50"
-                aria-label="Video options"
-              >
-                <MoreHorizontal className="h-4 w-4" />
-              </button>
-
-              {/* Options dropdown */}
-              {showOptionsFor === video.id && (
-                <div
-                  className="absolute top-full right-0 mt-1 bg-zinc-800 rounded-md shadow-lg overflow-hidden z-30"
-                  onClick={(e) => e.stopPropagation()}
+              <div className="relative">
+                <button
+                  onClick={toggleOptions}
+                  className="w-8 h-8 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center text-white transition-all duration-200 hover:bg-black/70"
+                  aria-label="Video options"
                 >
-                  <button
-                    onClick={handleDeleteClick}
-                    className="flex items-center w-full px-4 py-2 text-sm text-white hover:bg-zinc-700 transition-colors"
-                    disabled={deletingVideoId === video.id}
-                  >
-                    {deletingVideoId === video.id ? (
-                      <>
-                        <div className="w-3 h-3 border border-white border-t-transparent rounded-full animate-spin mr-2" />
-                        <span>Deleting...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Trash2 className="h-3.5 w-3.5 mr-2 text-zinc-400" />
-                        <span>Delete</span>
-                      </>
-                    )}
-                  </button>
-                </div>
-              )}
+                  <MoreHorizontal className="h-4 w-4" />
+                </button>
+
+                {/* Options dropdown */}
+                {showOptionsFor === video.id && (
+                  <div className="absolute top-full right-0 mt-1 bg-zinc-800 border border-zinc-700 rounded-md shadow-xl overflow-hidden z-50 min-w-[120px]">
+                    <button
+                      onClick={handleDeleteClick}
+                      className="flex items-center w-full px-3 py-2 text-sm text-white hover:bg-red-600 transition-colors group/delete"
+                      disabled={deletingVideoId === video.id}
+                    >
+                      {deletingVideoId === video.id ? (
+                        <>
+                          <div className="w-3 h-3 border border-white border-t-transparent rounded-full animate-spin mr-2" />
+                          <span>Deleting...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Trash2 className="h-3.5 w-3.5 mr-2 text-zinc-400 group-hover/delete:text-white" />
+                          <span>Delete</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
           )}
 
