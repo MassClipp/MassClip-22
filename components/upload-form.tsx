@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useRef, type ChangeEvent, type FormEvent } from "react"
+import { useState, useRef, type ChangeEvent, type FormEvent, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Video, Upload, User, Lock, DollarSign } from "lucide-react"
 import { cn } from "@/lib/utils"
@@ -14,13 +14,20 @@ export default function UploadForm() {
   const [description, setDescription] = useState("")
   const [isPremium, setIsPremium] = useState(false)
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
+  // Update the state to include filePreview
+  const [filePreview, setFilePreview] = useState<string | null>(null)
   const [isUploading, setIsUploading] = useState(false)
 
   // Handle file selection
+  // Enhance the handleFileChange function to create a preview URL
   const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (file) {
       setSelectedFile(file)
+
+      // Create a preview URL for the video
+      const fileURL = URL.createObjectURL(file)
+      setFilePreview(fileURL)
     }
   }
 
@@ -45,6 +52,16 @@ export default function UploadForm() {
   const togglePremium = () => {
     setIsPremium(!isPremium)
   }
+
+  // Add cleanup for the preview URL when component unmounts
+  useEffect(() => {
+    return () => {
+      // Clean up the object URL when component unmounts or when file changes
+      if (filePreview) {
+        URL.revokeObjectURL(filePreview)
+      }
+    }
+  }, [filePreview])
 
   return (
     <div className="w-full max-w-4xl mx-auto">
@@ -104,17 +121,47 @@ export default function UploadForm() {
           <div className="mb-6">
             <label className="block text-white mb-2">Video File</label>
             <div
-              className="border-2 border-dashed border-zinc-700 rounded-lg p-8 text-center cursor-pointer hover:bg-zinc-800/30"
+              className={cn(
+                "border-2 border-dashed rounded-lg p-4 text-center cursor-pointer transition-all",
+                "hover:bg-zinc-800/30",
+                selectedFile
+                  ? isPremium
+                    ? "border-amber-500/50 bg-amber-500/5"
+                    : "border-red-500/50 bg-red-500/5"
+                  : "border-zinc-700 bg-zinc-800/30",
+              )}
               onClick={() => fileInputRef.current?.click()}
             >
-              <div className="flex flex-col items-center">
-                <Upload className="h-10 w-10 text-zinc-500 mb-2" />
-                <p className="text-white">Click to upload video</p>
-                <p className="text-xs text-zinc-500 mt-1">MP4, MOV or WebM (Max 500MB)</p>
-              </div>
+              {filePreview ? (
+                <div className="aspect-video relative rounded overflow-hidden bg-black">
+                  <video src={filePreview} className="w-full h-full object-contain" controls />
+                </div>
+              ) : (
+                <div className="py-8 flex flex-col items-center">
+                  <Upload className="h-10 w-10 text-zinc-500 mb-2" />
+                  <p className="text-white">Click to upload video</p>
+                  <p className="text-xs text-zinc-500 mt-1">MP4, MOV or WebM (Max 500MB)</p>
+                </div>
+              )}
               <input ref={fileInputRef} type="file" accept="video/*" className="hidden" onChange={handleFileChange} />
             </div>
-            {selectedFile && <p className="mt-2 text-sm text-zinc-400">{selectedFile.name}</p>}
+            {selectedFile && (
+              <div className="mt-2 text-sm flex justify-between">
+                <span className={isPremium ? "text-amber-400" : "text-red-400"}>{selectedFile.name}</span>
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setSelectedFile(null)
+                    setFilePreview(null)
+                    if (fileInputRef.current) fileInputRef.current.value = ""
+                  }}
+                  className="text-zinc-500 hover:text-zinc-300"
+                >
+                  Remove
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Title */}
