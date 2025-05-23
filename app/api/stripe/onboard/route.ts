@@ -1,25 +1,25 @@
-import { NextResponse } from "next/server"
+import { type NextRequest, NextResponse } from "next/server"
 import Stripe from "stripe"
 import { auth, db } from "@/lib/firebase-admin"
-import { cookies } from "next/headers"
 
 // Initialize Stripe with the secret key
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: "2023-10-16",
 })
 
-export async function GET() {
+export async function POST(request: NextRequest) {
   try {
-    // Get the session cookie
-    const sessionCookie = cookies().get("session")?.value
+    // Get the Firebase ID token from the request body
+    const { idToken } = await request.json()
 
-    if (!sessionCookie) {
+    if (!idToken) {
+      console.log("No ID token provided")
       return NextResponse.json({ error: "Authentication required" }, { status: 401 })
     }
 
-    // Verify the session cookie and get the user ID
-    const decodedClaims = await auth.verifySessionCookie(sessionCookie, true)
-    const uid = decodedClaims.uid
+    // Verify the ID token and get the user ID
+    const decodedToken = await auth.verifyIdToken(idToken)
+    const uid = decodedToken.uid
 
     console.log(`Processing Stripe onboarding for user ${uid}`)
 
@@ -27,6 +27,7 @@ export async function GET() {
     const userDoc = await db.collection("users").doc(uid).get()
 
     if (!userDoc.exists) {
+      console.log(`User document not found for ${uid}`)
       return NextResponse.json({ error: "User not found" }, { status: 404 })
     }
 

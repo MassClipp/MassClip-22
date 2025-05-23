@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { DollarSign, Settings, Save, Info, Lock, AlertCircle, ExternalLink } from "lucide-react"
-import { db } from "@/lib/firebase"
+import { db, auth } from "@/lib/firebase"
 import { doc, getDoc, updateDoc } from "firebase/firestore"
 
 interface PremiumPricingControlProps {
@@ -63,8 +63,22 @@ export default function PremiumPricingControl({ creatorId, username, isOwner }: 
       setIsConnectingStripe(true)
       setError(null)
 
+      // Get the current user's ID token
+      const currentUser = auth.currentUser
+      if (!currentUser) {
+        throw new Error("User not authenticated")
+      }
+
+      const idToken = await currentUser.getIdToken()
+
       // Call the API to get a fresh onboarding link
-      const response = await fetch("/api/stripe/onboard")
+      const response = await fetch("/api/stripe/onboard", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ idToken }),
+      })
 
       if (!response.ok) {
         const errorData = await response.json()
