@@ -30,6 +30,12 @@ export async function POST(request: NextRequest) {
 
     // Handle different event types
     switch (event.type) {
+      case "account.updated": {
+        const account = event.data.object as Stripe.Account
+        await handleAccountUpdated(account)
+        break
+      }
+
       case "checkout.session.completed": {
         const session = event.data.object as Stripe.Checkout.Session
         await handleCheckoutSessionCompleted(session)
@@ -42,12 +48,6 @@ export async function POST(request: NextRequest) {
         break
       }
 
-      case "account.updated": {
-        const account = event.data.object as Stripe.Account
-        await handleAccountUpdated(account)
-        break
-      }
-
       default:
         console.log(`Unhandled event type: ${event.type}`)
     }
@@ -56,6 +56,46 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error("Error handling webhook:", error)
     return NextResponse.json({ error: "Webhook handler failed" }, { status: 500 })
+  }
+}
+
+// Handle account.updated event - keeps Stripe status synced
+async function handleAccountUpdated(account: Stripe.Account) {
+  try {
+    // Get the Firebase UID from the account metadata
+    const firebaseUid = account.metadata?.firebaseUid
+
+    if (!firebaseUid) {
+      console.log("No Firebase UID in account metadata:", account.id)
+      return
+    }
+
+    // Check account status
+    const chargesEnabled = account.charges_enabled || false
+    const payoutsEnabled = account.payouts_enabled || false
+    const detailsSubmitted = account.details_submitted || false
+    const isFullyOnboarded = chargesEnabled && payoutsEnabled && detailsSubmitted
+
+    // Update the user's Stripe status in Firestore
+    await db
+      .collection("users")
+      .doc(firebaseUid)
+      .update({
+        stripeAccountId: account.id,
+        chargesEnabled,
+        payoutsEnabled,
+        stripeOnboardingComplete: isFullyOnboarded,
+        stripeStatusLastChecked: new Date(),
+        stripeRequirements: account.requirements?.currently_due || [],
+      })
+
+    console.log(`Updated Stripe status for user ${firebaseUid}:`, {
+      chargesEnabled,
+      payoutsEnabled,
+      isFullyOnboarded,
+    })
+  } catch (error) {
+    console.error("Error handling account.updated:", error)
   }
 }
 
@@ -144,32 +184,5 @@ async function handlePaymentIntentSucceeded(paymentIntent: Stripe.PaymentIntent)
     console.log(`Payment succeeded for video ${videoId}`)
   } catch (error) {
     console.error("Error handling payment_intent.succeeded:", error)
-  }
-}
-
-// Handle account.updated event
-async function handleAccountUpdated(account: Stripe.Account) {
-  try {
-    // Get the Firebase UID from the account metadata
-    const firebaseUid = account.metadata?.firebaseUid
-
-    if (!firebaseUid) {
-      console.log("No Firebase UID in account metadata:", account.id)
-      return
-    }
-
-    // Update the user's Stripe status in Firestore
-    const isOnboarded = account.details_submitted && account.charges_enabled
-    const canReceivePayments = account.payouts_enabled
-
-    await db.collection("users").doc(firebaseUid).update({
-      stripeOnboarded: isOnboarded,
-      stripePayoutsEnabled: canReceivePayments,
-      stripeStatusLastChecked: new Date(),
-    })
-
-    console.log(`Updated Stripe status for user ${firebaseUid}`)
-  } catch (error) {
-    console.error("Error handling account.updated:", error)
   }
 }

@@ -5,9 +5,10 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
-import { DollarSign, Settings, Save, Info, Lock, AlertCircle, ExternalLink } from "lucide-react"
+import { DollarSign, Settings, Save, Info, Lock, AlertCircle, ExternalLink, CheckCircle, XCircle } from "lucide-react"
 import { db, auth } from "@/lib/firebase"
-import { doc, getDoc, updateDoc } from "firebase/firestore"
+import { doc, updateDoc, onSnapshot } from "firebase/firestore"
+import { useSearchParams } from "next/navigation"
 
 interface PremiumPricingControlProps {
   creatorId: string
@@ -21,49 +22,64 @@ export default function PremiumPricingControl({ creatorId, username, isOwner }: 
   const [isEditing, setIsEditing] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [isConnectingStripe, setIsConnectingStripe] = useState(false)
+  const [isCheckingStatus, setIsCheckingStatus] = useState(false)
   const [showSuccess, setShowSuccess] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [isStripeConnected, setIsStripeConnected] = useState(false)
+  const [stripeStatus, setStripeStatus] = useState({
+    isConnected: false,
+    chargesEnabled: false,
+    payoutsEnabled: false,
+    onboardingComplete: false,
+  })
   const [isLoading, setIsLoading] = useState(true)
 
-  // Fetch current price and Stripe status
+  const searchParams = useSearchParams()
+
+  // Check for Stripe success/retry params
   useEffect(() => {
-    const fetchCreatorData = async () => {
-      try {
-        setIsLoading(true)
-        const creatorDocRef = doc(db, "users", creatorId)
-        const creatorDoc = await getDoc(creatorDocRef)
+    const success = searchParams.get("success")
+    const retry = searchParams.get("retry")
 
-        if (creatorDoc.exists()) {
-          const data = creatorDoc.data()
-          // Get premium price
-          if (data.premiumPrice) {
-            setCurrentPrice(data.premiumPrice)
-            setPrice(data.premiumPrice.toString())
-          }
+    if (success === "stripe" || retry === "stripe") {
+      // User returned from Stripe onboarding, check their status
+      checkStripeStatus()
+    }
+  }, [searchParams])
 
-          // Check if Stripe is connected
-          setIsStripeConnected(!!data.stripeAccountId && data.stripeOnboardingComplete === true)
+  // Real-time listener for Stripe status updates
+  useEffect(() => {
+    if (!creatorId || !isOwner) return
+
+    const userDocRef = doc(db, "users", creatorId)
+    const unsubscribe = onSnapshot(userDocRef, (doc) => {
+      if (doc.exists()) {
+        const data = doc.data()
+
+        // Update premium price
+        if (data.premiumPrice) {
+          setCurrentPrice(data.premiumPrice)
+          setPrice(data.premiumPrice.toString())
         }
-      } catch (error) {
-        console.error("Error fetching creator data:", error)
-        setError("Failed to load creator data")
-      } finally {
-        setIsLoading(false)
+
+        // Update Stripe status
+        setStripeStatus({
+          isConnected: !!data.stripeAccountId,
+          chargesEnabled: data.chargesEnabled || false,
+          payoutsEnabled: data.payoutsEnabled || false,
+          onboardingComplete: data.stripeOnboardingComplete || false,
+        })
       }
-    }
+      setIsLoading(false)
+    })
 
-    if (creatorId) {
-      fetchCreatorData()
-    }
-  }, [creatorId])
+    return () => unsubscribe()
+  }, [creatorId, isOwner])
 
-  const handleConnectStripe = async () => {
+  const checkStripeStatus = async () => {
     try {
-      setIsConnectingStripe(true)
+      setIsCheckingStatus(true)
       setError(null)
 
-      // Get the current user's ID token
       const currentUser = auth.currentUser
       if (!currentUser) {
         throw new Error("User not authenticated")
@@ -71,7 +87,45 @@ export default function PremiumPricingControl({ creatorId, username, isOwner }: 
 
       const idToken = await currentUser.getIdToken()
 
-      // Call the API to get a fresh onboarding link
+      const response = await fetch("/api/stripe/check-onboarding-status", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ idToken }),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || "Failed to check Stripe status")
+      }
+
+      const data = await response.json()
+
+      if (data.success && data.onboardingComplete) {
+        setShowSuccess(true)
+        setTimeout(() => setShowSuccess(false), 5000)
+      }
+    } catch (error) {
+      console.error("Error checking Stripe status:", error)
+      setError("Failed to check Stripe status. Please try again.")
+    } finally {
+      setIsCheckingStatus(false)
+    }
+  }
+
+  const handleConnectStripe = async () => {
+    try {
+      setIsConnectingStripe(true)
+      setError(null)
+
+      const currentUser = auth.currentUser
+      if (!currentUser) {
+        throw new Error("User not authenticated")
+      }
+
+      const idToken = await currentUser.getIdToken()
+
       const response = await fetch("/api/stripe/onboard", {
         method: "POST",
         headers: {
@@ -86,8 +140,6 @@ export default function PremiumPricingControl({ creatorId, username, isOwner }: 
       }
 
       const data = await response.json()
-
-      // Redirect to the Stripe onboarding URL
       window.location.href = data.url
     } catch (error) {
       console.error("Error connecting Stripe:", error)
@@ -97,7 +149,6 @@ export default function PremiumPricingControl({ creatorId, username, isOwner }: 
   }
 
   const handleSavePrice = async () => {
-    // Validate price
     const numPrice = Number.parseFloat(price)
     if (isNaN(numPrice) || numPrice < 0.99 || numPrice > 99.99) {
       setError("Price must be between $0.99 and $99.99")
@@ -108,7 +159,6 @@ export default function PremiumPricingControl({ creatorId, username, isOwner }: 
     setIsSaving(true)
 
     try {
-      // Update price in Firestore
       const userDocRef = doc(db, "users", creatorId)
       await updateDoc(userDocRef, {
         premiumPrice: numPrice,
@@ -182,7 +232,38 @@ export default function PremiumPricingControl({ creatorId, username, isOwner }: 
       </CardHeader>
 
       <CardContent>
-        {!isStripeConnected && (
+        {/* Stripe Connection Status */}
+        {stripeStatus.isConnected ? (
+          <div className="mb-4 p-3 bg-green-500/10 border border-green-500/20 rounded-lg">
+            <div className="flex items-start gap-2">
+              <CheckCircle className="h-4 w-4 text-green-400 mt-0.5 flex-shrink-0" />
+              <div>
+                <p className="font-medium text-green-400 mb-1">Stripe Connected</p>
+                <div className="text-sm text-zinc-400 space-y-1">
+                  <div className="flex items-center gap-2">
+                    {stripeStatus.chargesEnabled ? (
+                      <CheckCircle className="h-3 w-3 text-green-400" />
+                    ) : (
+                      <XCircle className="h-3 w-3 text-red-400" />
+                    )}
+                    <span>Charges: {stripeStatus.chargesEnabled ? "Enabled" : "Disabled"}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {stripeStatus.payoutsEnabled ? (
+                      <CheckCircle className="h-3 w-3 text-green-400" />
+                    ) : (
+                      <XCircle className="h-3 w-3 text-red-400" />
+                    )}
+                    <span>Payouts: {stripeStatus.payoutsEnabled ? "Enabled" : "Disabled"}</span>
+                  </div>
+                </div>
+                {!stripeStatus.onboardingComplete && (
+                  <p className="text-xs text-amber-400 mt-2">Complete your Stripe setup to start receiving payments.</p>
+                )}
+              </div>
+            </div>
+          </div>
+        ) : (
           <div className="mb-4 p-3 bg-amber-500/10 border border-amber-500/20 rounded-lg text-amber-400 text-sm flex items-start">
             <AlertCircle className="h-4 w-4 mr-2 mt-0.5 flex-shrink-0" />
             <div>
@@ -212,10 +293,37 @@ export default function PremiumPricingControl({ creatorId, username, isOwner }: 
           </div>
         )}
 
+        {/* Status Check Button */}
+        {stripeStatus.isConnected && !stripeStatus.onboardingComplete && (
+          <div className="mb-4">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={checkStripeStatus}
+              disabled={isCheckingStatus}
+              className="bg-zinc-800 border-zinc-700 hover:bg-zinc-700 text-white"
+            >
+              {isCheckingStatus ? (
+                <>
+                  <span className="animate-spin mr-2">⟳</span>
+                  Checking...
+                </>
+              ) : (
+                <>
+                  <Info className="h-4 w-4 mr-2" />
+                  Refresh Status
+                </>
+              )}
+            </Button>
+          </div>
+        )}
+
         {showSuccess && (
           <div className="mb-4 p-3 bg-green-500/10 border border-green-500/20 rounded-lg text-green-400 text-sm flex items-center gap-2">
             <Info className="h-4 w-4" />
-            <span>Price updated successfully!</span>
+            <span>
+              {stripeStatus.onboardingComplete ? "Stripe setup completed successfully!" : "Price updated successfully!"}
+            </span>
           </div>
         )}
 
@@ -226,51 +334,57 @@ export default function PremiumPricingControl({ creatorId, username, isOwner }: 
           </div>
         )}
 
-        {isEditing ? (
-          <div className="space-y-4">
-            <div>
-              <Label htmlFor="price" className="text-sm text-zinc-300">
-                Subscription Price (USD)
-              </Label>
-              <div className="relative mt-1.5">
-                <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
-                  <DollarSign className="h-4 w-4 text-zinc-500" />
+        {/* Price Setting (only show if Stripe is connected) */}
+        {stripeStatus.isConnected && (
+          <>
+            {isEditing ? (
+              <div className="space-y-4">
+                <div>
+                  <Label htmlFor="price" className="text-sm text-zinc-300">
+                    Subscription Price (USD)
+                  </Label>
+                  <div className="relative mt-1.5">
+                    <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
+                      <DollarSign className="h-4 w-4 text-zinc-500" />
+                    </div>
+                    <Input
+                      id="price"
+                      type="number"
+                      min="0.99"
+                      max="99.99"
+                      step="0.01"
+                      value={price}
+                      onChange={(e) => setPrice(e.target.value)}
+                      className="pl-8 bg-zinc-800/50 border-zinc-700 focus:border-amber-500 text-white"
+                    />
+                  </div>
+                  <p className="mt-1.5 text-xs text-zinc-500">Minimum price: $0.99, Maximum price: $99.99</p>
                 </div>
-                <Input
-                  id="price"
-                  type="number"
-                  min="0.99"
-                  max="99.99"
-                  step="0.01"
-                  value={price}
-                  onChange={(e) => setPrice(e.target.value)}
-                  className="pl-8 bg-zinc-800/50 border-zinc-700 focus:border-amber-500 text-white"
-                />
               </div>
-              <p className="mt-1.5 text-xs text-zinc-500">Minimum price: $0.99, Maximum price: $99.99</p>
-            </div>
-          </div>
-        ) : (
-          <div className="p-4 bg-zinc-800/30 rounded-lg">
-            <div className="flex items-center justify-between">
-              <div>
-                <p className="text-sm text-zinc-400">Current subscription price</p>
-                <p className="text-xl font-semibold text-white flex items-center">
-                  <DollarSign className="h-5 w-5 text-amber-500" />
-                  {currentPrice.toFixed(2)}
-                </p>
+            ) : (
+              <div className="p-4 bg-zinc-800/30 rounded-lg">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-zinc-400">Current subscription price</p>
+                    <p className="text-xl font-semibold text-white flex items-center">
+                      <DollarSign className="h-5 w-5 text-amber-500" />
+                      {currentPrice.toFixed(2)}
+                    </p>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setIsEditing(true)}
+                    disabled={!stripeStatus.onboardingComplete}
+                    className="bg-zinc-800 border-zinc-700 hover:bg-zinc-700 text-white disabled:opacity-50"
+                  >
+                    <Settings className="h-4 w-4 mr-2" />
+                    Change Price
+                  </Button>
+                </div>
               </div>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => setIsEditing(true)}
-                className="bg-zinc-800 border-zinc-700 hover:bg-zinc-700 text-white"
-              >
-                <Settings className="h-4 w-4 mr-2" />
-                Change Price
-              </Button>
-            </div>
-          </div>
+            )}
+          </>
         )}
       </CardContent>
 
