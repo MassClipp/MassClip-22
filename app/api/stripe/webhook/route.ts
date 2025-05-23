@@ -2,17 +2,23 @@ import { type NextRequest, NextResponse } from "next/server"
 import Stripe from "stripe"
 import { db } from "@/lib/firebase-admin"
 
+// Initialize Stripe with the secret key
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: "2024-06-20",
 })
 
+// Get the webhook secret from environment variables
 const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET!
 
 export async function POST(request: NextRequest) {
   try {
+    // Get the raw request body
     const body = await request.text()
+
+    // Get the Stripe signature from the headers
     const signature = request.headers.get("stripe-signature")!
 
+    // Verify the webhook signature
     let event: Stripe.Event
 
     try {
@@ -22,24 +28,23 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Invalid signature" }, { status: 400 })
     }
 
-    console.log("Received Stripe webhook:", event.type)
-
+    // Handle different event types
     switch (event.type) {
       case "checkout.session.completed": {
         const session = event.data.object as Stripe.Checkout.Session
-        await handleSuccessfulPayment(session)
+        await handleCheckoutSessionCompleted(session)
         break
       }
 
       case "payment_intent.succeeded": {
         const paymentIntent = event.data.object as Stripe.PaymentIntent
-        console.log("Payment succeeded:", paymentIntent.id)
+        await handlePaymentIntentSucceeded(paymentIntent)
         break
       }
 
       case "account.updated": {
         const account = event.data.object as Stripe.Account
-        await handleAccountUpdate(account)
+        await handleAccountUpdated(account)
         break
       }
 
@@ -49,23 +54,23 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ received: true })
   } catch (error) {
-    console.error("Webhook error:", error)
+    console.error("Error handling webhook:", error)
     return NextResponse.json({ error: "Webhook handler failed" }, { status: 500 })
   }
 }
 
-async function handleSuccessfulPayment(session: Stripe.Checkout.Session) {
+// Handle checkout.session.completed event
+async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session) {
   try {
+    // Get the metadata from the session
     const { videoId, buyerUid, creatorUid } = session.metadata!
 
-    console.log("Processing successful payment:", {
-      sessionId: session.id,
-      videoId,
-      buyerUid,
-      creatorUid,
-    })
+    if (!videoId || !buyerUid || !creatorUid) {
+      console.error("Missing metadata in checkout session:", session.id)
+      return
+    }
 
-    // Grant access to the buyer
+    // Grant access to the video for the buyer
     await db
       .collection("userAccess")
       .doc(buyerUid)
@@ -75,21 +80,21 @@ async function handleSuccessfulPayment(session: Stripe.Checkout.Session) {
         purchasedAt: new Date(),
         sessionId: session.id,
         amount: session.amount_total! / 100, // Convert from cents to dollars
-        creatorUid: creatorUid,
+        creatorUid,
       })
 
-    // Record sale for the creator
+    // Record the sale for the creator
     await db
       .collection("users")
       .doc(creatorUid)
       .collection("sales")
       .add({
-        videoId: videoId,
-        buyerUid: buyerUid,
+        videoId,
+        buyerUid,
         sessionId: session.id,
-        amount: session.amount_total! / 100,
-        platformFee: Math.round(session.amount_total! * 0.05) / 100,
-        netAmount: (session.amount_total! - Math.round(session.amount_total! * 0.05)) / 100,
+        amount: session.amount_total! / 100, // Convert from cents to dollars
+        platformFee: Math.floor(session.amount_total! * 0.05) / 100, // 5% platform fee
+        netAmount: (session.amount_total! - Math.floor(session.amount_total! * 0.05)) / 100, // Net amount after platform fee
         purchasedAt: new Date(),
         status: "completed",
       })
@@ -99,21 +104,61 @@ async function handleSuccessfulPayment(session: Stripe.Checkout.Session) {
       .collection("videos")
       .doc(videoId)
       .update({
-        totalSales: db.FieldValue.increment(1),
+        purchaseCount: db.FieldValue.increment(1),
         totalRevenue: db.FieldValue.increment(session.amount_total! / 100),
       })
 
-    console.log("Successfully processed payment and granted access")
+    console.log(`Successfully processed payment for video ${videoId} by user ${buyerUid}`)
   } catch (error) {
-    console.error("Error handling successful payment:", error)
+    console.error("Error handling checkout.session.completed:", error)
   }
 }
 
-async function handleAccountUpdate(account: Stripe.Account) {
+// Handle payment_intent.succeeded event
+async function handlePaymentIntentSucceeded(paymentIntent: Stripe.PaymentIntent) {
   try {
-    const firebaseUid = account.metadata?.firebaseUid
-    if (!firebaseUid) return
+    // Get the metadata from the payment intent
+    const { videoId, buyerUid, creatorUid } = paymentIntent.metadata
 
+    if (!videoId || !buyerUid || !creatorUid) {
+      console.log("No video metadata in payment intent:", paymentIntent.id)
+      return
+    }
+
+    // Update the payment status in Firestore
+    await db
+      .collection("users")
+      .doc(creatorUid)
+      .collection("sales")
+      .where("sessionId", "==", paymentIntent.metadata.sessionId)
+      .get()
+      .then((querySnapshot) => {
+        querySnapshot.forEach((doc) => {
+          doc.ref.update({
+            paymentIntentId: paymentIntent.id,
+            paymentStatus: "succeeded",
+          })
+        })
+      })
+
+    console.log(`Payment succeeded for video ${videoId}`)
+  } catch (error) {
+    console.error("Error handling payment_intent.succeeded:", error)
+  }
+}
+
+// Handle account.updated event
+async function handleAccountUpdated(account: Stripe.Account) {
+  try {
+    // Get the Firebase UID from the account metadata
+    const firebaseUid = account.metadata?.firebaseUid
+
+    if (!firebaseUid) {
+      console.log("No Firebase UID in account metadata:", account.id)
+      return
+    }
+
+    // Update the user's Stripe status in Firestore
     const isOnboarded = account.details_submitted && account.charges_enabled
     const canReceivePayments = account.payouts_enabled
 
@@ -123,8 +168,8 @@ async function handleAccountUpdate(account: Stripe.Account) {
       stripeStatusLastChecked: new Date(),
     })
 
-    console.log("Updated user Stripe status:", { firebaseUid, isOnboarded, canReceivePayments })
+    console.log(`Updated Stripe status for user ${firebaseUid}`)
   } catch (error) {
-    console.error("Error handling account update:", error)
+    console.error("Error handling account.updated:", error)
   }
 }
