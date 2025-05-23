@@ -188,7 +188,7 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
     }
   }
 
-  // Video card component with inline playback - updated to match reference design
+  // Video card component with inline playback - fixed for 9:16 format and proper video controls
   const VideoCard = ({ video }: { video: VideoItem }) => {
     const videoRef = useRef<HTMLVideoElement>(null)
     const [isPlaying, setIsPlaying] = useState(false)
@@ -196,12 +196,16 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
 
     const togglePlay = (e: React.MouseEvent) => {
       e.stopPropagation()
+      e.preventDefault()
+
       if (!videoRef.current) return
 
       if (isPlaying) {
         videoRef.current.pause()
         videoRef.current.currentTime = 0
+        setIsPlaying(false)
       } else {
+        // Pause all other videos first
         document.querySelectorAll("video").forEach((v) => {
           if (v !== videoRef.current) {
             v.pause()
@@ -210,10 +214,15 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
         })
 
         videoRef.current.muted = false
-        videoRef.current.play()
+        videoRef.current
+          .play()
+          .then(() => {
+            setIsPlaying(true)
+          })
+          .catch((error) => {
+            console.error("Error playing video:", error)
+          })
       }
-
-      setIsPlaying(!isPlaying)
     }
 
     const handleVideoEnd = () => {
@@ -223,43 +232,49 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
       }
     }
 
+    const handleDeleteClick = (e: React.MouseEvent) => {
+      e.stopPropagation()
+      e.preventDefault()
+      setShowDeleteConfirm(video.id)
+    }
+
     return (
       <div
         className="group relative transition-all duration-300"
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
       >
-        {/* Thumbnail container with new aspect ratio */}
-        <div className="relative aspect-[16/9] overflow-hidden rounded-lg bg-zinc-900 shadow-md">
-          {/* Video element */}
+        {/* Video container with 9:16 aspect ratio */}
+        <div className="relative aspect-[9/16] overflow-hidden rounded-lg bg-zinc-900 shadow-md">
+          {/* Raw video element */}
           <video
             ref={videoRef}
-            src={video.url}
-            className="w-full h-full object-cover"
+            className="w-full h-full object-cover cursor-pointer"
             poster={video.thumbnailUrl || undefined}
             preload="metadata"
             muted={false}
             playsInline
             onEnded={handleVideoEnd}
-            onClick={(e) => e.stopPropagation()}
-          />
+            onClick={togglePlay}
+            controls={false}
+          >
+            <source src={video.url} type="video/mp4" />
+            Your browser does not support the video tag.
+          </video>
 
           {/* Premium badge - only show on hover */}
           {video.type === "premium" && (
-            <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300 bg-gradient-to-r from-amber-400 to-amber-600 text-black text-xs font-medium px-2 py-0.5 rounded-full shadow-sm">
+            <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300 bg-gradient-to-r from-amber-400 to-amber-600 text-black text-xs font-medium px-2 py-0.5 rounded-full shadow-sm z-10">
               PRO
             </div>
           )}
 
           {/* Delete button - only show for owner on hover */}
           {isOwner && (
-            <div className="absolute top-2 left-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+            <div className="absolute top-2 left-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-10">
               <button
-                onClick={(e) => {
-                  e.stopPropagation()
-                  setShowDeleteConfirm(video.id)
-                }}
-                className="w-8 h-8 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center text-white transition-all duration-200 hover:bg-black/70"
+                onClick={handleDeleteClick}
+                className="w-8 h-8 rounded-full bg-red-500/80 backdrop-blur-sm flex items-center justify-center text-white transition-all duration-200 hover:bg-red-600/90"
                 aria-label="Delete video"
                 disabled={deletingVideoId === video.id}
               >
@@ -272,11 +287,11 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
             </div>
           )}
 
-          {/* Play/Pause buttons - only show on hover */}
-          <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+          {/* Play/Pause button - only show on hover */}
+          <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-10">
             <button
               onClick={togglePlay}
-              className="w-12 h-12 rounded-full bg-black/40 backdrop-blur-sm flex items-center justify-center text-white transition-all duration-200 hover:bg-black/60"
+              className="w-12 h-12 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center text-white transition-all duration-200 hover:bg-black/70"
               aria-label={isPlaying ? "Pause video" : "Play video"}
             >
               {isPlaying ? <Pause className="h-5 w-5" /> : <Play className="h-5 w-5 ml-0.5" />}
@@ -284,12 +299,12 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
           </div>
 
           {/* Overlay gradient for better visibility - only on hover */}
-          <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300"></div>
+          <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"></div>
         </div>
 
-        {/* Video title - simplified to match reference */}
+        {/* Video title */}
         <div className="mt-2">
-          <h3 className="text-sm text-white font-light">{video.title}</h3>
+          <h3 className="text-sm text-white font-light line-clamp-2">{video.title}</h3>
         </div>
       </div>
     )
@@ -490,7 +505,7 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
                   <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-red-500"></div>
                 </div>
               ) : freeClips.length > 0 ? (
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 gap-6">
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
                   {freeClips.map((video) => (
                     <VideoCard key={video.id} video={video} />
                   ))}
@@ -530,7 +545,7 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
                   <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-red-500"></div>
                 </div>
               ) : paidClips.length > 0 ? (
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-4 gap-6">
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
                   {paidClips.map((video) => (
                     <VideoCard key={video.id} video={video} />
                   ))}
