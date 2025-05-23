@@ -5,6 +5,9 @@ import { useRouter } from "next/navigation"
 import { Video, Upload, User, Lock, DollarSign } from "lucide-react"
 import { cn } from "@/lib/utils"
 
+import { auth, db } from "@/lib/firebase"
+import { collection, addDoc } from "firebase/firestore"
+
 export default function UploadForm() {
   const router = useRouter()
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -41,11 +44,41 @@ export default function UploadForm() {
 
     setIsUploading(true)
 
-    // Simulate upload
-    setTimeout(() => {
-      setIsUploading(false)
+    try {
+      // Get current user
+      const user = auth.currentUser
+      if (!user) {
+        throw new Error("User not authenticated")
+      }
+
+      // Create video document in Firestore
+      const videoData = {
+        title: title.trim(),
+        description: description.trim(),
+        type: isPremium ? "premium" : "free", // This is the key fix!
+        creatorId: user.uid,
+        creatorUsername: "jus", // You might want to get this from user data
+        createdAt: new Date(),
+        // Add other fields as needed
+      }
+
+      // Save to Firestore
+      const docRef = await addDoc(collection(db, "videos"), videoData)
+      console.log("Video saved with ID:", docRef.id)
+
+      // Reset form and redirect
+      setSelectedFile(null)
+      setFilePreview(null)
+      setTitle("")
+      setDescription("")
+      setIsPremium(false)
+
       router.push("/dashboard")
-    }, 2000)
+    } catch (error) {
+      console.error("Error uploading video:", error)
+    } finally {
+      setIsUploading(false)
+    }
   }
 
   // Toggle between free and premium
