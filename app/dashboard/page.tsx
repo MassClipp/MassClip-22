@@ -24,6 +24,8 @@ import { format } from "date-fns"
 import { motion } from "framer-motion"
 import { useRecentVideos } from "@/hooks/use-recent-videos"
 import { useToast } from "@/components/ui/use-toast"
+import { VideoPreview } from "@/components/dashboard/video-preview"
+import { VideoDiagnostic } from "@/components/dashboard/video-diagnostic"
 
 // Animation variants
 const containerVariants = {
@@ -113,17 +115,24 @@ export default function DashboardPage() {
         setStripeConnected(!!data.stripeAccountId && data.stripeOnboardingComplete)
       }
 
+      const username = userData?.username
+      if (!username) {
+        console.log("User has no username set")
+        setLoading(false)
+        return
+      }
+
       // Fetch video counts
       const freeVideosQuery = query(
         collection(db, "videos"),
-        where("uid", "==", user.uid),
+        where("username", "==", username),
         where("type", "==", "free"),
         where("status", "==", "active"),
       )
 
       const premiumVideosQuery = query(
         collection(db, "videos"),
-        where("uid", "==", user.uid),
+        where("username", "==", username),
         where("type", "==", "premium"),
         where("status", "==", "active"),
       )
@@ -377,36 +386,22 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent className="relative">
             {recentVideos.length > 0 ? (
-              <div className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {recentVideos.map((video) => (
                   <div
                     key={video.id}
-                    className="flex items-start gap-4 p-3 rounded-lg hover:bg-zinc-800/30 transition-colors"
+                    className="flex flex-col rounded-lg overflow-hidden bg-zinc-800/30 hover:bg-zinc-800/50 transition-colors"
                   >
-                    <div className="aspect-[9/16] w-16 bg-zinc-800 rounded-md overflow-hidden relative">
-                      {video.thumbnailUrl ? (
-                        <img
-                          src={video.thumbnailUrl || "/placeholder.svg"}
-                          alt={video.title}
-                          className="w-full h-full object-cover"
-                        />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center bg-zinc-800">
-                          <Film className="h-6 w-6 text-zinc-600" />
-                        </div>
-                      )}
-                      {video.type === "premium" ? (
-                        <div className="absolute top-1 right-1 bg-gradient-to-r from-amber-500 to-amber-600 text-black text-[10px] px-1 rounded-sm font-medium">
-                          PREMIUM
-                        </div>
-                      ) : (
-                        <div className="absolute top-1 right-1 bg-gradient-to-r from-blue-500 to-blue-600 text-white text-[10px] px-1 rounded-sm font-medium">
-                          FREE
-                        </div>
-                      )}
+                    <div className="aspect-[9/16] w-full h-48">
+                      <VideoPreview
+                        videoUrl={video.videoUrl}
+                        thumbnailUrl={video.thumbnailUrl}
+                        isPremium={video.type === "premium"}
+                        title={video.title}
+                      />
                     </div>
-                    <div className="flex-1 min-w-0">
-                      <h4 className="font-medium text-white truncate">{video.title}</h4>
+                    <div className="p-3">
+                      <h4 className="font-medium text-white text-sm truncate">{video.title}</h4>
                       <div className="flex items-center gap-3 mt-1 text-xs text-zinc-400">
                         <span className="flex items-center">
                           <Clock className="h-3 w-3 mr-1" />
@@ -513,6 +508,11 @@ export default function DashboardPage() {
             </CardContent>
           </Card>
         </div>
+      </motion.div>
+
+      {/* Temporary diagnostic */}
+      <motion.div variants={itemVariants}>
+        <VideoDiagnostic />
       </motion.div>
     </motion.div>
   )

@@ -164,6 +164,10 @@ export default function UploadFormEnhanced() {
         })
       }, 200)
 
+      // In a real app, you'd upload the file to storage and get a URL
+      // For this demo, we'll use the file preview URL as the video URL
+      const videoUrl = filePreview || ""
+
       // Generate a placeholder thumbnail URL (in a real app, you'd generate this from the video)
       const thumbnailUrl = `/placeholder.svg?height=720&width=1280&query=${encodeURIComponent(title)}`
 
@@ -174,13 +178,13 @@ export default function UploadFormEnhanced() {
         type: isPremium ? "premium" : "free",
         status: "active",
         uid: user?.uid,
+        username: creatorUsername, // Add username field
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
         views: 0,
         thumbnailUrl,
+        videoUrl, // Use the file preview URL for demo purposes
         duration,
-        // In a real app, you'd upload the file to storage and get a URL
-        videoUrl: "https://example.com/video.mp4", // Placeholder
       }
 
       console.log("Creating video document with data:", videoData)
