@@ -167,10 +167,6 @@ export default async function CreatorProfilePage({ params }: { params: { usernam
       profilePic: serializedData.photoURL || "",
       createdAt: serializedData.createdAt || new Date().toISOString(),
       socialLinks: serializedData.socialLinks || {},
-      premiumEnabled: serializedData.premiumEnabled || false,
-      premiumPrice: serializedData.premiumPrice || 0,
-      stripePriceId: serializedData.stripePriceId || "",
-      paymentMode: serializedData.paymentMode || "one-time",
     }
 
     return <CreatorProfileWithSidebar creator={creatorData} />

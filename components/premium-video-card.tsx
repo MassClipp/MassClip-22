@@ -99,6 +99,3 @@ export default function PremiumVideoCard({ video, onClick, className = "" }: Pre
     </div>
   )
 }
-
-// Named export for compatibility
-export { PremiumVideoCard }

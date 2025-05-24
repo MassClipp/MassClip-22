@@ -12,8 +12,6 @@ import { cn } from "@/lib/utils"
 import { collection, query, where, getDocs, limit } from "firebase/firestore"
 import { db } from "@/lib/firebase"
 import { trackFirestoreRead } from "@/lib/firestore-optimizer"
-import PremiumContentCTA from "./premium-content-cta"
-import PremiumAccessBanner from "./premium-access-banner"
 
 interface Creator {
   uid: string
@@ -27,10 +25,6 @@ interface Creator {
     twitter?: string
     website?: string
   }
-  premiumEnabled?: boolean
-  premiumPrice?: number
-  stripePriceId?: string
-  paymentMode?: "one-time" | "subscription"
 }
 
 interface VideoItem {
@@ -360,12 +354,6 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
                     <p className="text-zinc-300">{creator.bio}</p>
                   </div>
                 )}
-
-                {/* Premium Access Banner */}
-                <PremiumAccessBanner creatorId={creator.uid} displayName={creator.displayName} />
-
-                {/* Premium Content CTA - only show if premium is enabled and user is not the owner */}
-                {creator.premiumEnabled && !isOwner && <PremiumContentCTA creator={creator} />}
 
                 {/* Stats Cards Row */}
                 <div className="grid grid-cols-3 gap-3 max-w-md mb-6">

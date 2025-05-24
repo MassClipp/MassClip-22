@@ -652,6 +652,3 @@ export default function VimeoCard({ video }: VimeoCardProps) {
     </div>
   )
 }
-
-// Named export for compatibility
-export { VimeoCard }

@@ -1,43 +1,37 @@
-import type React from "react"
-import type { Creator } from "@/types"
-import VideoGrid from "./video-grid"
-import PremiumContentCTA from "./premium-content-cta"
+"use client"
+import { useAuth } from "@/contexts/auth-context"
+import CreatorProfile from "@/components/creator-profile"
+import { useMediaQuery } from "@/hooks/use-media-query"
+import { useRouter } from "next/navigation"
 
-interface CreatorProfileWithSidebarProps {
-  creator: Creator
+interface Creator {
+  uid: string
+  username: string
+  displayName: string
+  bio: string
+  profilePic: string
+  freeClips: any[]
+  paidClips: any[]
+  createdAt: string
+  socialLinks?: {
+    instagram?: string
+    twitter?: string
+    website?: string
+  }
 }
 
-const CreatorProfileWithSidebar: React.FC<CreatorProfileWithSidebarProps> = ({ creator }) => {
+export default function CreatorProfileWithSidebar({ creator }: { creator: Creator }) {
+  const { user } = useAuth()
+  const isDesktop = useMediaQuery("(min-width: 1024px)")
+  const isOwner = user && user.uid === creator.uid
+  const router = useRouter()
+
   return (
-    <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-      {/* Main Content */}
-      <div className="md:col-span-3">
-        {/* Creator Profile */}
-        <div className="mb-8">
-          <h2 className="text-2xl font-semibold text-white mb-4">{creator.name}</h2>
-          {/* Creator bio */}
-          <div className="mb-6">
-            <p className="text-zinc-300">{creator.bio || "No bio available"}</p>
-          </div>
-
-          {/* Premium Content CTA */}
-          <PremiumContentCTA creator={creator} />
-
-          {/* Video grid */}
-          <VideoGrid creatorId={creator.id} />
-        </div>
-      </div>
-
-      {/* Sidebar (Optional) */}
-      <div className="md:col-span-1">
-        {/* Add sidebar content here */}
-        <div className="bg-zinc-900 rounded-lg p-4">
-          <h3 className="text-lg font-semibold text-white mb-2">Sidebar</h3>
-          <p className="text-zinc-300">This is a placeholder for sidebar content.</p>
-        </div>
+    <div className="min-h-screen bg-black text-white">
+      {/* Main content */}
+      <div className="w-full">
+        <CreatorProfile creator={creator} />
       </div>
     </div>
   )
 }
-
-export default CreatorProfileWithSidebar

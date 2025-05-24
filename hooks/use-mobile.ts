@@ -3,23 +3,22 @@
 import { useState, useEffect } from "react"
 
 /**
- * Hook to detect if the current device is a mobile device
- * @returns boolean indicating if the current device is mobile
+ * A hook that detects if the current device is a mobile device
+ * @returns {boolean} True if the device is mobile, false otherwise
  */
-export function useMobile() {
-  const [isMobile, setIsMobile] = useState(false)
+export function useMobile(): boolean {
+  const [isMobile, setIsMobile] = useState<boolean>(false)
 
   useEffect(() => {
     const checkMobile = () => {
       const userAgent = navigator.userAgent || navigator.vendor || (window as any).opera
-
-      // Regular expression for mobile devices
-      const mobileRegex = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i
+      const mobileRegex = /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini/i
 
       // Check if screen width is less than 768px (typical mobile breakpoint)
       const isMobileWidth = window.innerWidth < 768
 
-      setIsMobile(mobileRegex.test(userAgent) || isMobileWidth)
+      // Consider it mobile if either the user agent matches or the screen width is small
+      setIsMobile(mobileRegex.test(userAgent.toLowerCase()) || isMobileWidth)
     }
 
     // Check on mount
@@ -28,9 +27,11 @@ export function useMobile() {
     // Check on resize
     window.addEventListener("resize", checkMobile)
 
-    // Cleanup
+    // Clean up
     return () => window.removeEventListener("resize", checkMobile)
   }, [])
 
   return isMobile
 }
+
+export default useMobile

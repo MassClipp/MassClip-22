@@ -10,14 +10,12 @@ import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Label } from "@/components/ui/label"
 import { Switch } from "@/components/ui/switch"
-import { AlertCircle, DollarSign, CreditCard, CalendarClock, Save, CheckCircle, Loader2 } from "lucide-react"
+import { AlertCircle, DollarSign, CreditCard, CalendarClock, Save, CheckCircle } from "lucide-react"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Skeleton } from "@/components/ui/skeleton"
-import { useToast } from "@/hooks/use-toast"
 
 export default function PremiumPricingPage() {
   const { user } = useAuth()
-  const { toast } = useToast()
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [saveSuccess, setSaveSuccess] = useState(false)
@@ -26,8 +24,6 @@ export default function PremiumPricingPage() {
   const [oneTimePrice, setOneTimePrice] = useState("")
   const [subscriptionPrice, setSubscriptionPrice] = useState("")
   const [enablePremiumContent, setEnablePremiumContent] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [displayName, setDisplayName] = useState("")
 
   useEffect(() => {
     const fetchUserData = async () => {
@@ -38,23 +34,14 @@ export default function PremiumPricingPage() {
         if (userDoc.exists()) {
           const userData = userDoc.data()
           setStripeConnected(!!userData.stripeAccountId && userData.stripeOnboardingComplete)
-          setDisplayName(userData.displayName || "")
 
           // Set pricing data
-          setEnablePremiumContent(userData.premiumEnabled || false)
-          setPricingModel(userData.paymentMode || "one-time")
-
-          if (userData.premiumPrice) {
-            if (userData.paymentMode === "subscription") {
-              setSubscriptionPrice(userData.premiumPrice.toString())
-              setOneTimePrice("4.99") // Default value
-            } else {
-              setOneTimePrice(userData.premiumPrice.toString())
-              setSubscriptionPrice("9.99") // Default value
-            }
-          } else {
-            setOneTimePrice("4.99")
-            setSubscriptionPrice("9.99")
+          if (userData.premiumContentSettings) {
+            const settings = userData.premiumContentSettings
+            setEnablePremiumContent(settings.enabled || false)
+            setPricingModel(settings.pricingModel || "one-time")
+            setOneTimePrice(settings.oneTimePrice?.toString() || "")
+            setSubscriptionPrice(settings.subscriptionPrice?.toString() || "")
           }
         }
         setLoading(false)
@@ -71,64 +58,27 @@ export default function PremiumPricingPage() {
     if (!user) return
 
     setSaving(true)
-    setError(null)
-
     try {
+      const userRef = doc(db, "users", user.uid)
+
       // Validate prices
-      const priceToUse = pricingModel === "one-time" ? oneTimePrice : subscriptionPrice
-      const priceNum = Number.parseFloat(priceToUse)
+      const oneTimePriceNum = Number.parseFloat(oneTimePrice)
+      const subscriptionPriceNum = Number.parseFloat(subscriptionPrice)
 
-      if (isNaN(priceNum) || priceNum < 0.99 || priceNum > 99.99) {
-        setError(`Price must be between $0.99 and $99.99`)
-        setSaving(false)
-        return
-      }
-
-      // Get the user's ID token for authentication
-      const idToken = await user.getIdToken()
-
-      // Call the API to create or update the Stripe product and price
-      const response = await fetch("/api/create-stripe-product", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${idToken}`,
+      await userRef.update({
+        premiumContentSettings: {
+          enabled: enablePremiumContent,
+          pricingModel,
+          oneTimePrice: isNaN(oneTimePriceNum) ? 0 : oneTimePriceNum,
+          subscriptionPrice: isNaN(subscriptionPriceNum) ? 0 : subscriptionPriceNum,
+          updatedAt: new Date().toISOString(),
         },
-        body: JSON.stringify({
-          creatorId: user.uid,
-          displayName: displayName,
-          priceInDollars: priceNum,
-          mode: pricingModel,
-          enablePremium: enablePremiumContent,
-        }),
       })
 
-      if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.error || "Failed to save premium pricing settings")
-      }
-
-      const data = await response.json()
-
-      if (data.success) {
-        setSaveSuccess(true)
-        toast({
-          title: enablePremiumContent ? "Premium content enabled" : "Settings updated",
-          description: enablePremiumContent
-            ? "Your content is now monetized. Fans can purchase access to your premium content."
-            : "Premium content has been disabled.",
-          variant: "default",
-        })
-        setTimeout(() => setSaveSuccess(false), 3000)
-      }
-    } catch (error: any) {
+      setSaveSuccess(true)
+      setTimeout(() => setSaveSuccess(false), 3000)
+    } catch (error) {
       console.error("Error saving pricing settings:", error)
-      setError(error.message || "Failed to save settings. Please try again.")
-      toast({
-        title: "Error",
-        description: error.message || "Failed to save settings. Please try again.",
-        variant: "destructive",
-      })
     } finally {
       setSaving(false)
     }
@@ -176,14 +126,6 @@ export default function PremiumPricingPage() {
     <div className="container max-w-4xl py-8">
       <h1 className="text-2xl font-bold mb-6">Premium Content Pricing</h1>
 
-      {error && (
-        <Alert variant="destructive" className="mb-6">
-          <AlertCircle className="h-4 w-4" />
-          <AlertTitle>Error</AlertTitle>
-          <AlertDescription>{error}</AlertDescription>
-        </Alert>
-      )}
-
       <Card className="mb-6">
         <CardHeader>
           <CardTitle>Enable Premium Content</CardTitle>
@@ -205,12 +147,15 @@ export default function PremiumPricingPage() {
         <CardHeader>
           <CardTitle>Premium Content Pricing</CardTitle>
           <CardDescription>
-            Set your pricing model and rates for premium content. You can offer one-time purchases or monthly
-            subscriptions.
+            Set your pricing model and rates for premium content. You can offer one-time purchases, monthly
+            subscriptions, or both.
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <Tabs value={pricingModel} onValueChange={(value) => setPricingModel(value as "one-time" | "subscription")}>
+          <Tabs
+            defaultValue={pricingModel}
+            onValueChange={(value) => setPricingModel(value as "one-time" | "subscription")}
+          >
             <TabsList className="grid w-full grid-cols-2 mb-6">
               <TabsTrigger value="one-time" className="flex items-center gap-2">
                 <CreditCard className="h-4 w-4" />
@@ -282,10 +227,7 @@ export default function PremiumPricingPage() {
             )}
             <Button onClick={handleSave} disabled={saving}>
               {saving ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Saving...
-                </>
+                <>Saving...</>
               ) : (
                 <>
                   <Save className="h-4 w-4 mr-2" />

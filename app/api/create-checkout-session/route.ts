@@ -16,47 +16,35 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Server configuration error" }, { status: 500 })
     }
 
+    if (!process.env.STRIPE_PRICE_ID) {
+      console.error("💰 CHECKOUT ERROR: Missing STRIPE_PRICE_ID")
+      return NextResponse.json({ error: "Server configuration error" }, { status: 500 })
+    }
+
     // Parse the request body
     const requestData = await request.json()
     console.log("💰 CHECKOUT: Request data:", JSON.stringify(requestData, null, 2))
 
     // Validate required fields
-    if (!requestData.priceId) {
-      console.error("💰 CHECKOUT ERROR: Missing priceId in request")
-      return NextResponse.json({ error: "Missing priceId" }, { status: 400 })
+    if (!requestData.userId) {
+      console.error("💰 CHECKOUT ERROR: Missing userId in request")
+      return NextResponse.json({ error: "Missing userId" }, { status: 400 })
     }
 
-    if (!requestData.creatorId) {
-      console.error("💰 CHECKOUT ERROR: Missing creatorId in request")
-      return NextResponse.json({ error: "Missing creatorId" }, { status: 400 })
-    }
-
-    if (!requestData.buyerEmail) {
-      console.error("💰 CHECKOUT ERROR: Missing buyerEmail in request")
-      return NextResponse.json({ error: "Missing buyerEmail" }, { status: 400 })
+    if (!requestData.email) {
+      console.error("💰 CHECKOUT ERROR: Missing email in request")
+      return NextResponse.json({ error: "Missing email" }, { status: 400 })
     }
 
     // Initialize Firebase Admin
     initializeFirebaseAdmin()
     const db = getFirestore()
 
-    // Get the creator document to check payment mode
-    const creatorDoc = await db.collection("users").doc(requestData.creatorId).get()
-    if (!creatorDoc.exists) {
-      console.error(`💰 CHECKOUT ERROR: Creator ${requestData.creatorId} does not exist in Firestore`)
-      return NextResponse.json({ error: "Creator not found" }, { status: 404 })
-    }
-
-    const creatorData = creatorDoc.data()
-    if (!creatorData?.premiumEnabled || !creatorData?.stripePriceId) {
-      console.error(`💰 CHECKOUT ERROR: Creator ${requestData.creatorId} has no premium content enabled`)
-      return NextResponse.json({ error: "Premium content not available" }, { status: 400 })
-    }
-
-    // Verify the price ID matches the creator's price ID
-    if (creatorData.stripePriceId !== requestData.priceId) {
-      console.error(`💰 CHECKOUT ERROR: Price ID mismatch for creator ${requestData.creatorId}`)
-      return NextResponse.json({ error: "Invalid price ID" }, { status: 400 })
+    // Verify that the user exists in Firestore
+    const userDoc = await db.collection("users").doc(requestData.userId).get()
+    if (!userDoc.exists) {
+      console.error(`💰 CHECKOUT ERROR: User ${requestData.userId} does not exist in Firestore`)
+      return NextResponse.json({ error: "User not found" }, { status: 404 })
     }
 
     // Initialize Stripe with proper error handling
@@ -73,46 +61,40 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Failed to connect to payment provider" }, { status: 500 })
     }
 
-    // Determine the mode based on the creator's payment mode
-    const mode = creatorData.paymentMode === "subscription" ? "subscription" : "payment"
-
     // Get the success and cancel URLs
     const uniqueParam = `t=${Date.now()}`
-    const successUrl = `${SITE_URL}/purchase/success?session_id={CHECKOUT_SESSION_ID}&${uniqueParam}`
-    const cancelUrl = `${SITE_URL}/creator/${creatorData.username || requestData.creatorId}?${uniqueParam}`
+    const successUrl = `${SITE_URL}/subscription/success?session_id={CHECKOUT_SESSION_ID}&${uniqueParam}`
+    const cancelUrl = `${SITE_URL}/subscription/cancel?${uniqueParam}`
 
     console.log(`💰 CHECKOUT: Success URL: ${successUrl}`)
     console.log(`💰 CHECKOUT: Cancel URL: ${cancelUrl}`)
 
     // Create metadata object with all required fields
     const metadata = {
-      creatorId: requestData.creatorId,
-      buyerEmail: requestData.buyerEmail,
-      buyerId: requestData.buyerId || "",
+      firebaseUid: requestData.userId,
+      email: requestData.email,
       timestamp: new Date().toISOString(),
-      siteUrl: SITE_URL,
+      siteUrl: SITE_URL, // Always use massclip.pro
       environment: "production",
     }
 
     console.log("💰 CHECKOUT: Metadata:", JSON.stringify(metadata, null, 2))
 
     // Store the session in Firestore before creating in Stripe
+    // This helps with recovery if metadata isn't sent correctly
     const sessionData = {
-      creatorId: requestData.creatorId,
-      buyerEmail: requestData.buyerEmail,
-      buyerId: requestData.buyerId || "",
+      userId: requestData.userId,
+      email: requestData.email,
       status: "created",
       createdAt: new Date(),
       metadata: metadata,
-      siteUrl: SITE_URL,
-      priceId: requestData.priceId,
-      mode: mode,
+      siteUrl: SITE_URL, // Always use massclip.pro
     }
 
     console.log("💰 CHECKOUT: Session data for Firestore:", JSON.stringify(sessionData, null, 2))
 
     // Create the checkout session with proper error handling
-    console.log(`💰 CHECKOUT: Creating checkout session for creator ${requestData.creatorId}`)
+    console.log(`💰 CHECKOUT: Creating checkout session for user ${requestData.userId}`)
     let session
 
     try {
@@ -120,15 +102,18 @@ export async function POST(request: Request) {
         payment_method_types: ["card"],
         line_items: [
           {
-            price: requestData.priceId,
+            price: process.env.STRIPE_PRICE_ID,
             quantity: 1,
           },
         ],
-        mode: mode,
+        mode: "subscription",
         success_url: successUrl,
         cancel_url: cancelUrl,
-        customer_email: requestData.buyerEmail,
+        customer_email: requestData.email,
         metadata: metadata,
+        subscription_data: {
+          metadata: metadata, // Add metadata to subscription as well
+        },
       })
 
       console.log(`💰 CHECKOUT: Created checkout session with ID: ${session.id}`)
@@ -147,12 +132,12 @@ export async function POST(request: Request) {
     // Now store the session in Firestore with the Stripe session ID
     try {
       await db
-        .collection("premiumCheckoutSessions")
+        .collection("stripeCheckoutSessions")
         .doc(session.id)
         .set({
           ...sessionData,
           sessionId: session.id,
-          checkoutUrl: session.url,
+          checkoutUrl: session.url, // Store the URL for debugging
         })
       console.log(`💰 CHECKOUT: Stored checkout session in Firestore with ID: ${session.id}`)
     } catch (error) {
