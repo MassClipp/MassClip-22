@@ -2,29 +2,36 @@
 
 import { useState, useEffect } from "react"
 
-export function useMobile(breakpoint = 768): boolean {
-  const [isMobile, setIsMobile] = useState(false)
+/**
+ * A hook that detects if the current device is a mobile device
+ * @returns {boolean} True if the device is mobile, false otherwise
+ */
+export function useMobile(): boolean {
+  const [isMobile, setIsMobile] = useState<boolean>(false)
 
   useEffect(() => {
-    // Check if window is defined (client-side)
-    if (typeof window === "undefined") return
+    const checkMobile = () => {
+      const userAgent = navigator.userAgent || navigator.vendor || (window as any).opera
+      const mobileRegex = /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini/i
 
-    // Initial check
-    setIsMobile(window.innerWidth < breakpoint)
+      // Check if screen width is less than 768px (typical mobile breakpoint)
+      const isMobileWidth = window.innerWidth < 768
 
-    // Handler for window resize
-    const handleResize = () => {
-      setIsMobile(window.innerWidth < breakpoint)
+      // Consider it mobile if either the user agent matches or the screen width is small
+      setIsMobile(mobileRegex.test(userAgent.toLowerCase()) || isMobileWidth)
     }
 
-    // Add event listener
-    window.addEventListener("resize", handleResize)
+    // Check on mount
+    checkMobile()
+
+    // Check on resize
+    window.addEventListener("resize", checkMobile)
 
     // Clean up
-    return () => {
-      window.removeEventListener("resize", handleResize)
-    }
-  }, [breakpoint])
+    return () => window.removeEventListener("resize", checkMobile)
+  }, [])
 
   return isMobile
 }
+
+export default useMobile

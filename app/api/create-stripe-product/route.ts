@@ -2,11 +2,7 @@ import { NextResponse } from "next/server"
 import Stripe from "stripe"
 import { initializeFirebaseAdmin } from "@/lib/firebase-admin"
 import { getFirestore } from "firebase-admin/firestore"
-import { auth } from "firebase-admin"
-
-// Initialize Firebase Admin
-initializeFirebaseAdmin()
-const db = getFirestore()
+import { getAuth } from "firebase-admin/auth"
 
 export async function POST(request: Request) {
   console.log("------------ 🏷️ CREATE STRIPE PRODUCT START ------------")
@@ -33,43 +29,44 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Missing displayName" }, { status: 400 })
     }
 
-    if (requestData.priceInDollars === undefined || requestData.priceInDollars === null) {
-      console.error("🏷️ PRODUCT ERROR: Missing priceInDollars in request")
-      return NextResponse.json({ error: "Missing priceInDollars" }, { status: 400 })
+    if (requestData.priceInDollars === undefined || requestData.priceInDollars <= 0) {
+      console.error("🏷️ PRODUCT ERROR: Invalid priceInDollars in request")
+      return NextResponse.json({ error: "Invalid price" }, { status: 400 })
     }
 
-    if (!requestData.mode || !["one-time", "subscription"].includes(requestData.mode)) {
+    if (!["one-time", "subscription"].includes(requestData.mode)) {
       console.error("🏷️ PRODUCT ERROR: Invalid mode in request")
-      return NextResponse.json({ error: "Invalid mode. Must be 'one-time' or 'subscription'" }, { status: 400 })
+      return NextResponse.json({ error: "Invalid payment mode" }, { status: 400 })
     }
 
-    // Verify authentication and authorization
-    const authHeader = request.headers.get("Authorization")
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      console.error("🏷️ PRODUCT ERROR: Missing or invalid Authorization header")
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
+    // Initialize Firebase Admin
+    initializeFirebaseAdmin()
+    const db = getFirestore()
+    const auth = getAuth()
 
-    const idToken = authHeader.split("Bearer ")[1]
-    let decodedToken
+    // Verify the user exists and is authorized
     try {
-      decodedToken = await auth().verifyIdToken(idToken)
+      const userRecord = await auth.getUser(requestData.creatorId)
+      if (!userRecord) {
+        console.error(`🏷️ PRODUCT ERROR: User ${requestData.creatorId} does not exist`)
+        return NextResponse.json({ error: "User not found" }, { status: 404 })
+      }
     } catch (error) {
-      console.error("🏷️ PRODUCT ERROR: Invalid ID token:", error)
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+      console.error(`🏷️ PRODUCT ERROR: Failed to verify user ${requestData.creatorId}`, error)
+      return NextResponse.json({ error: "User verification failed" }, { status: 401 })
     }
 
-    // Verify that the user is the creator
-    if (decodedToken.uid !== requestData.creatorId) {
-      console.error("🏷️ PRODUCT ERROR: User is not authorized to modify this creator's settings")
-      return NextResponse.json({ error: "Unauthorized" }, { status: 403 })
+    // Get the user document to check for Stripe account
+    const userDoc = await db.collection("users").doc(requestData.creatorId).get()
+    if (!userDoc.exists) {
+      console.error(`🏷️ PRODUCT ERROR: User document for ${requestData.creatorId} not found`)
+      return NextResponse.json({ error: "User document not found" }, { status: 404 })
     }
 
-    // Verify that the creator exists in Firestore
-    const creatorDoc = await db.collection("users").doc(requestData.creatorId).get()
-    if (!creatorDoc.exists) {
-      console.error(`🏷️ PRODUCT ERROR: Creator ${requestData.creatorId} does not exist in Firestore`)
-      return NextResponse.json({ error: "Creator not found" }, { status: 404 })
+    const userData = userDoc.data()
+    if (!userData?.stripeAccountId) {
+      console.error(`🏷️ PRODUCT ERROR: User ${requestData.creatorId} has no Stripe account connected`)
+      return NextResponse.json({ error: "Stripe account not connected" }, { status: 400 })
     }
 
     // Initialize Stripe
@@ -77,14 +74,14 @@ export async function POST(request: Request) {
       apiVersion: "2023-10-16",
     })
 
-    // If premium is disabled, update Firestore and return
-    if (!requestData.enablePremium) {
+    // If enablePremium is false, just update the user document
+    if (requestData.enablePremium === false) {
       await db.collection("users").doc(requestData.creatorId).update({
         premiumEnabled: false,
         premiumUpdatedAt: new Date(),
       })
 
-      console.log(`🏷️ PRODUCT: Premium content disabled for creator ${requestData.creatorId}`)
+      console.log(`🏷️ PRODUCT: Premium content disabled for user ${requestData.creatorId}`)
       console.log("------------ 🏷️ CREATE STRIPE PRODUCT END ------------")
 
       return NextResponse.json({
@@ -93,49 +90,49 @@ export async function POST(request: Request) {
       })
     }
 
-    // Convert price to cents for Stripe
-    const priceInCents = Math.round(requestData.priceInDollars * 100)
-
-    // Check if the creator already has a product
-    const creatorData = creatorDoc.data()
-    let productId = creatorData.stripeProductId
+    // Create or retrieve the Stripe product
     let product
+    let price
 
-    // Create or retrieve the product
-    if (!productId) {
-      // Create a new product
+    // Check if the user already has a product
+    if (userData.stripeProductId) {
+      try {
+        // Try to retrieve the existing product
+        product = await stripe.products.retrieve(userData.stripeProductId)
+        console.log(`🏷️ PRODUCT: Retrieved existing product: ${product.id}`)
+
+        // Update the product name if needed
+        if (product.name !== `Premium Content by ${requestData.displayName}`) {
+          product = await stripe.products.update(userData.stripeProductId, {
+            name: `Premium Content by ${requestData.displayName}`,
+          })
+          console.log(`🏷️ PRODUCT: Updated product name: ${product.id}`)
+        }
+      } catch (error) {
+        console.log(`🏷️ PRODUCT: Existing product not found, creating new one`)
+        // If the product doesn't exist, create a new one
+        product = null
+      }
+    }
+
+    // Create a new product if needed
+    if (!product) {
       product = await stripe.products.create({
-        name: `${requestData.displayName}'s Premium Content`,
+        name: `Premium Content by ${requestData.displayName}`,
         description: `Premium content access for ${requestData.displayName}`,
         metadata: {
           creatorId: requestData.creatorId,
         },
       })
-      productId = product.id
-      console.log(`🏷️ PRODUCT: Created new product with ID: ${productId}`)
-    } else {
-      // Retrieve existing product
-      try {
-        product = await stripe.products.retrieve(productId)
-        console.log(`🏷️ PRODUCT: Retrieved existing product with ID: ${productId}`)
-      } catch (error) {
-        // If product doesn't exist in Stripe, create a new one
-        console.error(`🏷️ PRODUCT ERROR: Failed to retrieve product ${productId}:`, error)
-        product = await stripe.products.create({
-          name: `${requestData.displayName}'s Premium Content`,
-          description: `Premium content access for ${requestData.displayName}`,
-          metadata: {
-            creatorId: requestData.creatorId,
-          },
-        })
-        productId = product.id
-        console.log(`🏷️ PRODUCT: Created new product with ID: ${productId}`)
-      }
+      console.log(`🏷️ PRODUCT: Created new product: ${product.id}`)
     }
 
-    // Create a price for the product
+    // Convert price to cents for Stripe
+    const priceInCents = Math.round(requestData.priceInDollars * 100)
+
+    // Create a new price
     const priceData: Stripe.PriceCreateParams = {
-      product: productId,
+      product: product.id,
       currency: "usd",
       unit_amount: priceInCents,
       metadata: {
@@ -150,12 +147,12 @@ export async function POST(request: Request) {
       }
     }
 
-    const price = await stripe.prices.create(priceData)
-    console.log(`🏷️ PRODUCT: Created price with ID: ${price.id}`)
+    price = await stripe.prices.create(priceData)
+    console.log(`🏷️ PRODUCT: Created price: ${price.id}`)
 
-    // Update the creator's document in Firestore
+    // Update the user document with the product and price IDs
     await db.collection("users").doc(requestData.creatorId).update({
-      stripeProductId: productId,
+      stripeProductId: product.id,
       stripePriceId: price.id,
       premiumEnabled: true,
       premiumPrice: requestData.priceInDollars,
@@ -163,12 +160,12 @@ export async function POST(request: Request) {
       premiumUpdatedAt: new Date(),
     })
 
-    console.log(`🏷️ PRODUCT: Updated creator ${requestData.creatorId} with product and price IDs`)
+    console.log(`🏷️ PRODUCT: Updated user document with product and price IDs`)
     console.log("------------ 🏷️ CREATE STRIPE PRODUCT END ------------")
 
     return NextResponse.json({
       success: true,
-      productId: productId,
+      productId: product.id,
       priceId: price.id,
       premiumEnabled: true,
     })

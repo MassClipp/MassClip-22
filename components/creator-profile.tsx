@@ -5,31 +5,15 @@ import type React from "react"
 import { useState, useEffect, useRef } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
 import Image from "next/image"
-import {
-  Share2,
-  Edit,
-  Plus,
-  Instagram,
-  Twitter,
-  Globe,
-  Calendar,
-  Film,
-  Lock,
-  Play,
-  Pause,
-  Trash2,
-  DollarSign,
-  CheckCircle,
-  CalendarClock,
-} from "lucide-react"
+import { Share2, Edit, Plus, Instagram, Twitter, Globe, Calendar, Film, Lock, Play, Pause, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useAuth } from "@/contexts/auth-context"
 import { cn } from "@/lib/utils"
-import { collection, query, where, getDocs, limit, getDoc, doc } from "firebase/firestore"
+import { collection, query, where, getDocs, limit } from "firebase/firestore"
 import { db } from "@/lib/firebase"
 import { trackFirestoreRead } from "@/lib/firestore-optimizer"
-import VideoPurchaseButton from "@/components/video-purchase-button"
-import PremiumContentCTA from "@/components/premium-content-cta"
+import PremiumContentCTA from "./premium-content-cta"
+import PremiumAccessBanner from "./premium-access-banner"
 
 interface Creator {
   uid: string
@@ -61,9 +45,6 @@ interface VideoItem {
   username: string
   views: number
   likes: number
-  price?: number
-  subscriptionPrice?: number
-  pricingModel?: "flat" | "subscription" | null
 }
 
 export default function CreatorProfile({ creator }: { creator: Creator }) {
@@ -79,8 +60,6 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
   const [error, setError] = useState<string | null>(null)
   const [deletingVideoId, setDeletingVideoId] = useState<string | null>(null)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null)
-  const [hasPremiumAccess, setHasPremiumAccess] = useState(false)
-  const [creatorData, setCreatorData] = useState<Creator>(creator)
 
   // Set active tab based on URL query parameter
   useEffect(() => {
@@ -91,49 +70,6 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
       setActiveTab("free")
     }
   }, [searchParams])
-
-  // Fetch creator data including premium settings
-  useEffect(() => {
-    const fetchCreatorData = async () => {
-      if (!creator || !creator.uid) return
-
-      try {
-        const creatorDoc = await getDoc(doc(db, "users", creator.uid))
-        if (creatorDoc.exists()) {
-          const data = creatorDoc.data()
-          setCreatorData({
-            ...creator,
-            premiumEnabled: data.premiumEnabled || false,
-            premiumPrice: data.premiumPrice || 4.99,
-            stripePriceId: data.stripePriceId || "",
-            paymentMode: data.paymentMode || "one-time",
-          })
-        }
-      } catch (error) {
-        console.error("Error fetching creator data:", error)
-      }
-    }
-
-    fetchCreatorData()
-  }, [creator])
-
-  // Check if user has premium access to this creator
-  useEffect(() => {
-    const checkPremiumAccess = async () => {
-      if (!user || !creator.uid) return
-
-      try {
-        // Check if user has premium access to this creator
-        const accessRef = doc(db, "premiumAccess", user.uid, "creators", creator.uid)
-        const accessDoc = await getDoc(accessRef)
-        setHasPremiumAccess(accessDoc.exists())
-      } catch (error) {
-        console.error("Error checking premium access:", error)
-      }
-    }
-
-    checkPremiumAccess()
-  }, [user, creator.uid])
 
   // Fetch videos from Firestore
   useEffect(() => {
@@ -174,9 +110,6 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
             username: data.username || "",
             views: data.views || 0,
             likes: data.likes || 0,
-            price: data.price || 4.99,
-            subscriptionPrice: data.subscriptionPrice || 9.99,
-            pricingModel: data.pricingModel || "flat",
           }
         })
 
@@ -270,25 +203,6 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
     const videoRef = useRef<HTMLVideoElement>(null)
     const [isPlaying, setIsPlaying] = useState(false)
     const [isHovered, setIsHovered] = useState(false)
-    const [hasAccess, setHasAccess] = useState(false)
-    const { user } = useAuth()
-
-    // Check if user has access to this premium video
-    useEffect(() => {
-      const checkAccess = async () => {
-        if (!user || video.type !== "premium") return
-
-        try {
-          const accessRef = doc(db, "userAccess", user.uid, "videos", video.id)
-          const accessDoc = await getDoc(accessRef)
-          setHasAccess(accessDoc.exists() || hasPremiumAccess)
-        } catch (error) {
-          console.error("Error checking video access:", error)
-        }
-      }
-
-      checkAccess()
-    }, [user, video.id, video.type])
 
     const togglePlay = (e: React.MouseEvent) => {
       e.preventDefault()
@@ -384,43 +298,13 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
             </button>
           </div>
 
-          {/* Premium content overlay */}
-          {video.type === "premium" && !hasAccess && !isOwner && !hasPremiumAccess && (
-            <div className="absolute inset-0 bg-black/60 flex flex-col items-center justify-center p-4 z-20">
-              <Lock className="h-8 w-8 text-amber-400 mb-2" />
-              <p className="text-white text-center text-sm mb-3">Premium Content</p>
-
-              <VideoPurchaseButton
-                videoId={video.id}
-                flatPrice={video.price || 4.99}
-                subscriptionPrice={video.subscriptionPrice || 9.99}
-                pricingModel={video.pricingModel}
-                title={video.title}
-                hasAccess={hasAccess || hasPremiumAccess}
-                className="text-xs py-1 px-3"
-              />
-            </div>
-          )}
-
           {/* Overlay gradient for better visibility - only on hover */}
           <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"></div>
         </div>
 
-        {/* Video title and price */}
+        {/* Video title */}
         <div className="mt-2">
           <h3 className="text-sm text-white font-light line-clamp-2">{video.title}</h3>
-
-          {/* Show price for premium content */}
-          {video.type === "premium" && !isOwner && !hasPremiumAccess && (
-            <div className="flex items-center mt-1">
-              <DollarSign className="h-3 w-3 text-amber-400 mr-1" />
-              <span className="text-xs text-amber-400">
-                {video.pricingModel === "subscription"
-                  ? `$${video.subscriptionPrice?.toFixed(2) || "9.99"}/month`
-                  : `$${video.price?.toFixed(2) || "4.99"}`}
-              </span>
-            </div>
-          )}
         </div>
       </div>
     )
@@ -477,29 +361,11 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
                   </div>
                 )}
 
-                {/* Premium Content CTA - only show if premium is enabled and user doesn't have access */}
-                {creatorData.premiumEnabled && !isOwner && !hasPremiumAccess && creatorData.stripePriceId && (
-                  <PremiumContentCTA
-                    creatorId={creator.uid}
-                    creatorName={creator.displayName}
-                    priceId={creatorData.stripePriceId}
-                    price={creatorData.premiumPrice || 4.99}
-                    paymentMode={creatorData.paymentMode || "one-time"}
-                  />
-                )}
+                {/* Premium Access Banner */}
+                <PremiumAccessBanner creatorId={creator.uid} displayName={creator.displayName} />
 
-                {/* Premium Access Badge - show if user has premium access */}
-                {hasPremiumAccess && !isOwner && (
-                  <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-4 mb-6 flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-amber-500/20 flex items-center justify-center">
-                      <CheckCircle className="h-5 w-5 text-amber-500" />
-                    </div>
-                    <div>
-                      <h3 className="font-medium text-amber-400">Premium Access Unlocked</h3>
-                      <p className="text-zinc-400 text-sm">You have full access to all premium content</p>
-                    </div>
-                  </div>
-                )}
+                {/* Premium Content CTA - only show if premium is enabled and user is not the owner */}
+                {creator.premiumEnabled && !isOwner && <PremiumContentCTA creator={creator} />}
 
                 {/* Stats Cards Row */}
                 <div className="grid grid-cols-3 gap-3 max-w-md mb-6">
@@ -673,42 +539,6 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
 
           {activeTab === "premium" && (
             <div>
-              {/* Premium content access message */}
-              {!isOwner && !hasPremiumAccess && creatorData.premiumEnabled && paidClips.length > 0 && (
-                <div className="mb-8 p-6 bg-zinc-900/40 border border-zinc-800/50 rounded-lg text-center">
-                  <Lock className="h-8 w-8 text-amber-500 mx-auto mb-3" />
-                  <h3 className="text-xl font-medium text-white mb-2">Premium Content</h3>
-                  <p className="text-zinc-400 mb-4 max-w-md mx-auto">
-                    Unlock all of {creator.displayName}'s premium content with a{" "}
-                    {creatorData.paymentMode === "subscription" ? "monthly subscription" : "one-time purchase"}.
-                  </p>
-
-                  <Button
-                    onClick={() => {
-                      if (!creatorData.stripePriceId) return
-
-                      const ctaElement = document.querySelector("[data-premium-cta]")
-                      if (ctaElement) {
-                        ctaElement.scrollIntoView({ behavior: "smooth" })
-                      }
-                    }}
-                    className="bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white"
-                  >
-                    {creatorData.paymentMode === "subscription" ? (
-                      <>
-                        <CalendarClock className="h-4 w-4 mr-2" />
-                        Subscribe for ${creatorData.premiumPrice?.toFixed(2) || "4.99"}/month
-                      </>
-                    ) : (
-                      <>
-                        <DollarSign className="h-4 w-4 mr-2" />
-                        Unlock for ${creatorData.premiumPrice?.toFixed(2) || "4.99"}
-                      </>
-                    )}
-                  </Button>
-                </div>
-              )}
-
               {loading ? (
                 <div className="flex justify-center items-center py-16">
                   <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-red-500"></div>
