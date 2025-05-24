@@ -6,7 +6,7 @@ import { Film, Lock, Upload, DollarSign, TrendingUp, Clock, AlertCircle, Plus, E
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { useAuth } from "@/contexts/auth-context"
-import { doc, getDoc, collection, query, where, getDocs, limit, orderBy } from "firebase/firestore"
+import { doc, getDoc, collection, query, where, getDocs, limit, orderBy, Timestamp } from "firebase/firestore"
 import { db } from "@/lib/firebase"
 import { format } from "date-fns"
 import { motion } from "framer-motion"
@@ -76,100 +76,140 @@ export default function DashboardPage() {
   // Random quote
   const randomQuote = quotes[Math.floor(Math.random() * quotes.length)]
 
-  useEffect(() => {
-    const fetchData = async () => {
-      if (!user) return
+  // Function to refresh data
+  const refreshData = async () => {
+    if (!user) return
 
-      try {
-        setLoading(true)
+    try {
+      setLoading(true)
 
-        // Fetch user data
-        const userDoc = await getDoc(doc(db, "users", user.uid))
-        if (userDoc.exists()) {
-          const data = userDoc.data()
-          setUserData(data)
-          setStripeConnected(!!data.stripeAccountId && data.stripeOnboardingComplete)
+      // Fetch user data
+      const userDoc = await getDoc(doc(db, "users", user.uid))
+      if (userDoc.exists()) {
+        const data = userDoc.data()
+        setUserData(data)
+        setStripeConnected(!!data.stripeAccountId && data.stripeOnboardingComplete)
+      }
+
+      // Fetch video counts
+      const freeVideosQuery = query(
+        collection(db, "videos"),
+        where("uid", "==", user.uid),
+        where("type", "==", "free"),
+        where("status", "==", "active"),
+      )
+
+      const premiumVideosQuery = query(
+        collection(db, "videos"),
+        where("uid", "==", user.uid),
+        where("type", "==", "premium"),
+        where("status", "==", "active"),
+      )
+
+      const [freeVideosSnapshot, premiumVideosSnapshot] = await Promise.all([
+        getDocs(freeVideosQuery),
+        getDocs(premiumVideosQuery),
+      ])
+
+      // Fetch recent videos - ensure we're sorting by createdAt in descending order
+      const recentVideosQuery = query(
+        collection(db, "videos"),
+        where("uid", "==", user.uid),
+        where("status", "==", "active"),
+        orderBy("createdAt", "desc"),
+        limit(5),
+      )
+
+      const recentVideosSnapshot = await getDocs(recentVideosQuery)
+      const recentVideosData = recentVideosSnapshot.docs.map((doc) => {
+        const data = doc.data()
+        // Handle different timestamp formats
+        let createdAt
+        if (data.createdAt instanceof Timestamp) {
+          createdAt = data.createdAt.toDate()
+        } else if (data.createdAt && typeof data.createdAt.toDate === "function") {
+          createdAt = data.createdAt.toDate()
+        } else if (data.createdAt && data.createdAt._seconds) {
+          // Handle Firebase timestamp object
+          createdAt = new Date(data.createdAt._seconds * 1000)
+        } else {
+          createdAt = new Date()
         }
 
-        // Fetch video counts
-        const freeVideosQuery = query(
-          collection(db, "videos"),
-          where("uid", "==", user.uid),
-          where("type", "==", "free"),
-          where("status", "==", "active"),
-        )
-
-        const premiumVideosQuery = query(
-          collection(db, "videos"),
-          where("uid", "==", user.uid),
-          where("type", "==", "premium"),
-          where("status", "==", "active"),
-        )
-
-        const [freeVideosSnapshot, premiumVideosSnapshot] = await Promise.all([
-          getDocs(freeVideosQuery),
-          getDocs(premiumVideosQuery),
-        ])
-
-        // Fetch recent videos
-        const recentVideosQuery = query(
-          collection(db, "videos"),
-          where("uid", "==", user.uid),
-          where("status", "==", "active"),
-          orderBy("createdAt", "desc"),
-          limit(5),
-        )
-
-        const recentVideosSnapshot = await getDocs(recentVideosQuery)
-        const recentVideosData = recentVideosSnapshot.docs.map((doc) => ({
+        return {
           id: doc.id,
-          ...doc.data(),
-          createdAt: doc.data().createdAt?.toDate() || new Date(),
-        }))
+          ...data,
+          createdAt,
+        }
+      })
 
-        setRecentVideos(recentVideosData)
+      console.log("Recent videos fetched:", recentVideosData)
+      setRecentVideos(recentVideosData)
 
-        // Calculate total views
-        let totalViews = 0
-        freeVideosSnapshot.docs.concat(premiumVideosSnapshot.docs).forEach((doc) => {
-          totalViews += doc.data().views || 0
-        })
+      // Calculate total views
+      let totalViews = 0
+      freeVideosSnapshot.docs.concat(premiumVideosSnapshot.docs).forEach((doc) => {
+        totalViews += doc.data().views || 0
+      })
 
-        // Fetch earnings data
-        const salesQuery = query(collection(db, "users", user.uid, "sales"), orderBy("purchasedAt", "desc"), limit(50))
+      // Fetch earnings data
+      const salesQuery = query(collection(db, "users", user.uid, "sales"), orderBy("purchasedAt", "desc"), limit(50))
 
-        const salesSnapshot = await getDocs(salesQuery)
-        const salesData = salesSnapshot.docs.map((doc) => ({
-          ...doc.data(),
-          purchasedAt: doc.data().purchasedAt?.toDate() || new Date(),
-        }))
+      const salesSnapshot = await getDocs(salesQuery)
+      const salesData = salesSnapshot.docs.map((doc) => {
+        const data = doc.data()
+        let purchasedAt
+        if (data.purchasedAt instanceof Timestamp) {
+          purchasedAt = data.purchasedAt.toDate()
+        } else if (data.purchasedAt && typeof data.purchasedAt.toDate === "function") {
+          purchasedAt = data.purchasedAt.toDate()
+        } else if (data.purchasedAt && data.purchasedAt._seconds) {
+          purchasedAt = new Date(data.purchasedAt._seconds * 1000)
+        } else {
+          purchasedAt = new Date()
+        }
 
-        // Calculate total earnings
-        const totalEarnings = salesData.reduce((sum, sale) => sum + (sale.netAmount || 0), 0)
+        return {
+          ...data,
+          purchasedAt,
+        }
+      })
 
-        // Calculate recent sales (last 30 days)
-        const thirtyDaysAgo = new Date()
-        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
-        const recentSales = salesData.filter((sale) => sale.purchasedAt >= thirtyDaysAgo).length
+      // Calculate total earnings
+      const totalEarnings = salesData.reduce((sum, sale) => sum + (sale.netAmount || 0), 0)
 
-        setStats({
-          freeVideos: freeVideosSnapshot.size,
-          premiumVideos: premiumVideosSnapshot.size,
-          totalViews,
-          totalEarnings,
-          recentSales,
-        })
-      } catch (error) {
-        console.error("Error fetching dashboard data:", error)
-      } finally {
-        setLoading(false)
-      }
+      // Calculate recent sales (last 30 days)
+      const thirtyDaysAgo = new Date()
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
+      const recentSales = salesData.filter((sale) => sale.purchasedAt >= thirtyDaysAgo).length
+
+      setStats({
+        freeVideos: freeVideosSnapshot.size,
+        premiumVideos: premiumVideosSnapshot.size,
+        totalViews,
+        totalEarnings,
+        recentSales,
+      })
+    } catch (error) {
+      console.error("Error fetching dashboard data:", error)
+    } finally {
+      setLoading(false)
     }
+  }
 
-    fetchData()
+  // Initial data fetch
+  useEffect(() => {
+    refreshData()
+
+    // Set up a listener for real-time updates
+    const intervalId = setInterval(() => {
+      refreshData()
+    }, 60000) // Refresh every minute
+
+    return () => clearInterval(intervalId)
   }, [user])
 
-  if (loading) {
+  if (loading && recentVideos.length === 0) {
     return (
       <div className="flex items-center justify-center h-[calc(100vh-4rem)]">
         <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-red-500"></div>
@@ -329,9 +369,13 @@ export default function DashboardPage() {
                           <Film className="h-6 w-6 text-zinc-600" />
                         </div>
                       )}
-                      {video.type === "premium" && (
+                      {video.type === "premium" ? (
                         <div className="absolute top-1 right-1 bg-gradient-to-r from-amber-500 to-amber-600 text-black text-[10px] px-1 rounded-sm font-medium">
-                          PRO
+                          PREMIUM
+                        </div>
+                      ) : (
+                        <div className="absolute top-1 right-1 bg-gradient-to-r from-blue-500 to-blue-600 text-white text-[10px] px-1 rounded-sm font-medium">
+                          FREE
                         </div>
                       )}
                     </div>
