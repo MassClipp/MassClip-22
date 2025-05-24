@@ -2,153 +2,150 @@ import { NextResponse } from "next/server"
 import Stripe from "stripe"
 import { initializeFirebaseAdmin } from "@/lib/firebase-admin"
 import { getFirestore } from "firebase-admin/firestore"
+import { auth } from "firebase-admin"
 
-// Hardcoded site URL for production - ALWAYS use massclip.pro
-const SITE_URL = "https://massclip.pro"
+// Initialize Firebase Admin
+initializeFirebaseAdmin()
+const db = getFirestore()
+
+// Site URL for redirects
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://massclip.pro"
 
 export async function POST(request: Request) {
-  console.log("------------ 💰 CREATE CHECKOUT SESSION START ------------")
+  console.log("------------ 🛒 CREATE CHECKOUT SESSION START ------------")
 
   try {
     // Check for required environment variables
     if (!process.env.STRIPE_SECRET_KEY) {
-      console.error("💰 CHECKOUT ERROR: Missing STRIPE_SECRET_KEY")
-      return NextResponse.json({ error: "Server configuration error" }, { status: 500 })
-    }
-
-    if (!process.env.STRIPE_PRICE_ID) {
-      console.error("💰 CHECKOUT ERROR: Missing STRIPE_PRICE_ID")
+      console.error("🛒 CHECKOUT ERROR: Missing STRIPE_SECRET_KEY")
       return NextResponse.json({ error: "Server configuration error" }, { status: 500 })
     }
 
     // Parse the request body
     const requestData = await request.json()
-    console.log("💰 CHECKOUT: Request data:", JSON.stringify(requestData, null, 2))
+    console.log("🛒 CHECKOUT: Request data:", JSON.stringify(requestData, null, 2))
 
     // Validate required fields
-    if (!requestData.userId) {
-      console.error("💰 CHECKOUT ERROR: Missing userId in request")
-      return NextResponse.json({ error: "Missing userId" }, { status: 400 })
+    if (!requestData.priceId) {
+      console.error("🛒 CHECKOUT ERROR: Missing priceId in request")
+      return NextResponse.json({ error: "Missing priceId" }, { status: 400 })
     }
 
-    if (!requestData.email) {
-      console.error("💰 CHECKOUT ERROR: Missing email in request")
-      return NextResponse.json({ error: "Missing email" }, { status: 400 })
+    if (!requestData.creatorId) {
+      console.error("🛒 CHECKOUT ERROR: Missing creatorId in request")
+      return NextResponse.json({ error: "Missing creatorId" }, { status: 400 })
     }
 
-    // Initialize Firebase Admin
-    initializeFirebaseAdmin()
-    const db = getFirestore()
+    // Verify authentication
+    const authHeader = request.headers.get("Authorization")
+    let buyerId = null
+    let buyerEmail = requestData.buyerEmail
 
-    // Verify that the user exists in Firestore
-    const userDoc = await db.collection("users").doc(requestData.userId).get()
-    if (!userDoc.exists) {
-      console.error(`💰 CHECKOUT ERROR: User ${requestData.userId} does not exist in Firestore`)
-      return NextResponse.json({ error: "User not found" }, { status: 404 })
+    if (authHeader && authHeader.startsWith("Bearer ")) {
+      try {
+        const idToken = authHeader.split("Bearer ")[1]
+        const decodedToken = await auth().verifyIdToken(idToken)
+        buyerId = decodedToken.uid
+
+        // Get buyer email if not provided
+        if (!buyerEmail) {
+          const buyerDoc = await db.collection("users").doc(buyerId).get()
+          if (buyerDoc.exists) {
+            buyerEmail = buyerDoc.data()?.email
+          }
+        }
+      } catch (error) {
+        console.error("🛒 CHECKOUT ERROR: Invalid ID token:", error)
+        // Continue without authentication for public access
+      }
     }
 
-    // Initialize Stripe with proper error handling
-    let stripe: Stripe
-    try {
-      stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
-        apiVersion: "2023-10-16",
-      })
-      // Test the connection
-      await stripe.customers.list({ limit: 1 })
-      console.log("💰 CHECKOUT: Stripe connection successful")
-    } catch (stripeError) {
-      console.error("💰 CHECKOUT ERROR: Failed to initialize Stripe:", stripeError)
-      return NextResponse.json({ error: "Failed to connect to payment provider" }, { status: 500 })
+    // Initialize Stripe
+    const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
+      apiVersion: "2023-10-16",
+    })
+
+    // Get creator information
+    const creatorDoc = await db.collection("users").doc(requestData.creatorId).get()
+    if (!creatorDoc.exists) {
+      console.error(`🛒 CHECKOUT ERROR: Creator ${requestData.creatorId} does not exist in Firestore`)
+      return NextResponse.json({ error: "Creator not found" }, { status: 404 })
     }
 
-    // Get the success and cancel URLs
-    const uniqueParam = `t=${Date.now()}`
-    const successUrl = `${SITE_URL}/subscription/success?session_id={CHECKOUT_SESSION_ID}&${uniqueParam}`
-    const cancelUrl = `${SITE_URL}/subscription/cancel?${uniqueParam}`
+    const creatorData = creatorDoc.data()
+    const paymentMode = creatorData.paymentMode || "one-time"
 
-    console.log(`💰 CHECKOUT: Success URL: ${successUrl}`)
-    console.log(`💰 CHECKOUT: Cancel URL: ${cancelUrl}`)
-
-    // Create metadata object with all required fields
+    // Create metadata for the checkout session
     const metadata = {
-      firebaseUid: requestData.userId,
-      email: requestData.email,
+      creatorId: requestData.creatorId,
+      buyerId: buyerId || "guest",
+      buyerEmail: buyerEmail || "guest@example.com",
       timestamp: new Date().toISOString(),
-      siteUrl: SITE_URL, // Always use massclip.pro
-      environment: "production",
+      environment: process.env.NODE_ENV || "development",
     }
 
-    console.log("💰 CHECKOUT: Metadata:", JSON.stringify(metadata, null, 2))
+    console.log("🛒 CHECKOUT: Metadata:", JSON.stringify(metadata, null, 2))
 
-    // Store the session in Firestore before creating in Stripe
-    // This helps with recovery if metadata isn't sent correctly
-    const sessionData = {
-      userId: requestData.userId,
-      email: requestData.email,
-      status: "created",
-      createdAt: new Date(),
-      metadata: metadata,
-      siteUrl: SITE_URL, // Always use massclip.pro
-    }
+    // Set success and cancel URLs
+    const uniqueParam = `t=${Date.now()}`
+    const successUrl = `${SITE_URL}/purchase/success?session_id={CHECKOUT_SESSION_ID}&${uniqueParam}`
+    const cancelUrl = `${SITE_URL}/purchase/cancel?${uniqueParam}`
 
-    console.log("💰 CHECKOUT: Session data for Firestore:", JSON.stringify(sessionData, null, 2))
-
-    // Create the checkout session with proper error handling
-    console.log(`💰 CHECKOUT: Creating checkout session for user ${requestData.userId}`)
-    let session
-
-    try {
-      session = await stripe.checkout.sessions.create({
-        payment_method_types: ["card"],
-        line_items: [
-          {
-            price: process.env.STRIPE_PRICE_ID,
-            quantity: 1,
-          },
-        ],
-        mode: "subscription",
-        success_url: successUrl,
-        cancel_url: cancelUrl,
-        customer_email: requestData.email,
-        metadata: metadata,
-        subscription_data: {
-          metadata: metadata, // Add metadata to subscription as well
+    // Create the checkout session
+    const sessionParams: Stripe.Checkout.SessionCreateParams = {
+      payment_method_types: ["card"],
+      line_items: [
+        {
+          price: requestData.priceId,
+          quantity: 1,
         },
+      ],
+      mode: paymentMode === "subscription" ? "subscription" : "payment",
+      success_url: successUrl,
+      cancel_url: cancelUrl,
+      metadata: metadata,
+    }
+
+    // Add customer email if available
+    if (buyerEmail) {
+      sessionParams.customer_email = buyerEmail
+    }
+
+    // Add subscription data for subscription mode
+    if (paymentMode === "subscription") {
+      sessionParams.subscription_data = {
+        metadata: metadata,
+      }
+    }
+
+    // Create the checkout session
+    const session = await stripe.checkout.sessions.create(sessionParams)
+    console.log(`🛒 CHECKOUT: Created checkout session with ID: ${session.id}`)
+
+    // Store the session in Firestore
+    await db
+      .collection("checkoutSessions")
+      .doc(session.id)
+      .set({
+        sessionId: session.id,
+        creatorId: requestData.creatorId,
+        buyerId: buyerId || "guest",
+        buyerEmail: buyerEmail || "guest@example.com",
+        priceId: requestData.priceId,
+        mode: paymentMode,
+        status: "created",
+        createdAt: new Date(),
+        metadata: metadata,
+        checkoutUrl: session.url,
       })
 
-      console.log(`💰 CHECKOUT: Created checkout session with ID: ${session.id}`)
-      console.log(`💰 CHECKOUT: Checkout URL: ${session.url}`)
-    } catch (checkoutError: any) {
-      console.error("💰 CHECKOUT ERROR: Failed to create checkout session:", checkoutError)
-      return NextResponse.json(
-        {
-          error: `Failed to create checkout session: ${checkoutError.message}`,
-          details: checkoutError,
-        },
-        { status: 500 },
-      )
-    }
-
-    // Now store the session in Firestore with the Stripe session ID
-    try {
-      await db
-        .collection("stripeCheckoutSessions")
-        .doc(session.id)
-        .set({
-          ...sessionData,
-          sessionId: session.id,
-          checkoutUrl: session.url, // Store the URL for debugging
-        })
-      console.log(`💰 CHECKOUT: Stored checkout session in Firestore with ID: ${session.id}`)
-    } catch (error) {
-      console.error("💰 CHECKOUT ERROR: Failed to store checkout session in Firestore:", error)
-      // Continue anyway, as this is not critical
-    }
-
-    console.log("------------ 💰 CREATE CHECKOUT SESSION END ------------")
-    return NextResponse.json({ url: session.url, sessionId: session.id })
+    console.log("------------ 🛒 CREATE CHECKOUT SESSION END ------------")
+    return NextResponse.json({
+      sessionId: session.id,
+      url: session.url,
+    })
   } catch (error: any) {
-    console.error("💰 CHECKOUT ERROR:", error)
+    console.error("🛒 CHECKOUT ERROR:", error)
     return NextResponse.json(
       {
         error: error.message || "Failed to create checkout session",
