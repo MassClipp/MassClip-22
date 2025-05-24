@@ -1,58 +1,67 @@
 import { type NextRequest, NextResponse } from "next/server"
-import Stripe from "stripe"
 import { auth } from "@/lib/firebase-admin"
 import { db } from "@/lib/firebase-admin"
+import Stripe from "stripe"
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: "2024-06-20",
+  apiVersion: "2023-10-16",
 })
 
 export async function POST(request: NextRequest) {
   try {
-    const { idToken } = await request.json()
+    // Get the ID token from the request
+    const { idToken, stripeAccountId } = await request.json()
 
     if (!idToken) {
-      return NextResponse.json({ error: "No authentication token provided" }, { status: 401 })
+      return NextResponse.json({ error: "No ID token provided" }, { status: 401 })
     }
 
-    // Verify the Firebase ID token
+    if (!stripeAccountId) {
+      return NextResponse.json({ error: "No Stripe account ID provided" }, { status: 400 })
+    }
+
+    // Verify the ID token
     const decodedToken = await auth.verifyIdToken(idToken)
     const uid = decodedToken.uid
 
-    // Get user's Stripe account ID
-    const userDoc = await db.collection("users").doc(uid).get()
-    const userData = userDoc.data()
+    console.log("Checking Stripe status for user:", uid)
+    console.log("Stripe account ID:", stripeAccountId)
 
-    if (!userData?.stripeAccountId) {
-      return NextResponse.json({
-        success: true,
-        isOnboarded: false,
-        canReceivePayments: false,
-      })
-    }
+    // Retrieve the Stripe account
+    const account = await stripe.accounts.retrieve(stripeAccountId)
 
-    // Check Stripe account status
-    const account = await stripe.accounts.retrieve(userData.stripeAccountId)
+    console.log("Stripe account retrieved:", {
+      id: account.id,
+      charges_enabled: account.charges_enabled,
+      payouts_enabled: account.payouts_enabled,
+      details_submitted: account.details_submitted,
+    })
 
-    const isOnboarded = account.details_submitted && account.charges_enabled
-    const canReceivePayments = account.payouts_enabled
+    // Check if onboarding is complete
+    const onboardingComplete = account.charges_enabled && account.payouts_enabled && account.details_submitted
 
-    // Update Firestore with current status
-    await db.collection("users").doc(uid).update({
-      stripeOnboarded: isOnboarded,
-      stripePayoutsEnabled: canReceivePayments,
-      stripeStatusLastChecked: new Date(),
+    // Update Firestore with the latest status
+    const userRef = db.collection("users").doc(uid)
+    await userRef.update({
+      stripeAccountId: account.id,
+      chargesEnabled: account.charges_enabled || false,
+      payoutsEnabled: account.payouts_enabled || false,
+      stripeOnboardingComplete: onboardingComplete,
+      stripeStatusLastChecked: new Date().toISOString(),
     })
 
     return NextResponse.json({
       success: true,
-      isOnboarded,
-      canReceivePayments,
-      accountId: userData.stripeAccountId,
-      requirements: account.requirements,
+      chargesEnabled: account.charges_enabled || false,
+      payoutsEnabled: account.payouts_enabled || false,
+      onboardingComplete,
+      detailsSubmitted: account.details_submitted || false,
     })
   } catch (error) {
     console.error("Error checking Stripe status:", error)
-    return NextResponse.json({ error: "Failed to check onboarding status" }, { status: 500 })
+    return NextResponse.json(
+      { error: "Failed to check Stripe status", details: error instanceof Error ? error.message : "Unknown error" },
+      { status: 500 },
+    )
   }
 }

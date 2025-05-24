@@ -51,40 +51,49 @@ export default function PremiumPricingControl({ creatorId, username, isOwner }: 
     const success = searchParams.get("success")
     const retry = searchParams.get("retry")
 
-    if (success === "stripe" || retry === "stripe") {
+    if ((success === "stripe" || retry === "stripe") && isOwner) {
       // User returned from Stripe onboarding, check their status
-      checkStripeStatus()
+      setTimeout(() => {
+        checkStripeStatus()
+      }, 1000) // Small delay to ensure Stripe has processed the update
     }
-  }, [searchParams])
+  }, [searchParams, isOwner])
 
   // Real-time listener for Stripe status updates
   useEffect(() => {
-    if (!creatorId || !isOwner) return
+    if (!creatorId) return
 
     const userDocRef = doc(db, "users", creatorId)
-    const unsubscribe = onSnapshot(userDocRef, (doc) => {
-      if (doc.exists()) {
-        const data = doc.data()
+    const unsubscribe = onSnapshot(
+      userDocRef,
+      (doc) => {
+        if (doc.exists()) {
+          const data = doc.data()
 
-        // Update premium price
-        if (data.premiumPrice) {
-          setCurrentPrice(data.premiumPrice)
-          setPrice(data.premiumPrice.toString())
+          // Update premium price
+          if (data.premiumPrice) {
+            setCurrentPrice(data.premiumPrice)
+            setPrice(data.premiumPrice.toString())
+          }
+
+          // Update Stripe status
+          setStripeStatus({
+            isConnected: !!data.stripeAccountId,
+            chargesEnabled: data.chargesEnabled || false,
+            payoutsEnabled: data.payoutsEnabled || false,
+            onboardingComplete: data.stripeOnboardingComplete || false,
+          })
         }
-
-        // Update Stripe status
-        setStripeStatus({
-          isConnected: !!data.stripeAccountId,
-          chargesEnabled: data.chargesEnabled || false,
-          payoutsEnabled: data.payoutsEnabled || false,
-          onboardingComplete: data.stripeOnboardingComplete || false,
-        })
-      }
-      setIsLoading(false)
-    })
+        setIsLoading(false)
+      },
+      (error) => {
+        console.error("Error listening to user data:", error)
+        setIsLoading(false)
+      },
+    )
 
     return () => unsubscribe()
-  }, [creatorId, isOwner])
+  }, [creatorId])
 
   const checkStripeStatus = async () => {
     try {
@@ -103,13 +112,13 @@ export default function PremiumPricingControl({ creatorId, username, isOwner }: 
       const userDoc = await getDoc(userDocRef)
 
       if (!userDoc.exists() || !userDoc.data().stripeAccountId) {
-        throw new Error("No Stripe account found")
+        throw new Error("No Stripe account found. Please connect your Stripe account first.")
       }
 
       const stripeAccountId = userDoc.data().stripeAccountId
 
       // Call the API to check Stripe account status
-      const response = await fetch("/api/stripe/check-onboarding-status", {
+      const response = await fetch("/api/stripe/check-status", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -120,11 +129,15 @@ export default function PremiumPricingControl({ creatorId, username, isOwner }: 
         }),
       })
 
+      const responseText = await response.text()
+      console.log("Response status:", response.status)
+      console.log("Response text:", responseText)
+
       if (!response.ok) {
         throw new Error(`Failed to check Stripe status: ${response.status} ${response.statusText}`)
       }
 
-      const data = await response.json()
+      const data = JSON.parse(responseText)
       console.log("Stripe status response:", data)
 
       if (data.success) {
@@ -137,14 +150,14 @@ export default function PremiumPricingControl({ creatorId, username, isOwner }: 
         })
 
         // Show success message if onboarding is complete
-        if (data.onboardingComplete) {
+        if (data.onboardingComplete && !stripeStatus.onboardingComplete) {
           setShowSuccess(true)
           setTimeout(() => setShowSuccess(false), 5000)
         }
       }
     } catch (error) {
       console.error("Error checking Stripe status:", error)
-      setError("Failed to check Stripe status. Please try again.")
+      setError(error instanceof Error ? error.message : "Failed to check Stripe status. Please try again.")
     } finally {
       setIsCheckingStatus(false)
     }
@@ -273,7 +286,7 @@ export default function PremiumPricingControl({ creatorId, username, isOwner }: 
           <div className="mb-4 p-3 bg-green-500/10 border border-green-500/20 rounded-lg">
             <div className="flex items-start gap-2">
               <CheckCircle className="h-4 w-4 text-green-400 mt-0.5 flex-shrink-0" />
-              <div>
+              <div className="flex-1">
                 <p className="font-medium text-green-400 mb-1">Stripe Connected</p>
                 <div className="text-sm text-zinc-400 space-y-1">
                   <div className="flex items-center gap-2">
