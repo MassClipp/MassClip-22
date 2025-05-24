@@ -5,13 +5,28 @@ import type React from "react"
 import { useState, useEffect, useRef } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
 import Image from "next/image"
-import { Share2, Edit, Plus, Instagram, Twitter, Globe, Calendar, Film, Lock, Play, Pause, Trash2 } from "lucide-react"
+import {
+  Share2,
+  Edit,
+  Plus,
+  Instagram,
+  Twitter,
+  Globe,
+  Calendar,
+  Film,
+  Lock,
+  Play,
+  Pause,
+  Trash2,
+  DollarSign,
+} from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useAuth } from "@/contexts/auth-context"
 import { cn } from "@/lib/utils"
-import { collection, query, where, getDocs, limit } from "firebase/firestore"
+import { collection, query, where, getDocs, limit, getDoc, doc } from "firebase/firestore"
 import { db } from "@/lib/firebase"
 import { trackFirestoreRead } from "@/lib/firestore-optimizer"
+import VideoPurchaseButton from "@/components/video-purchase-button"
 
 interface Creator {
   uid: string
@@ -39,6 +54,9 @@ interface VideoItem {
   username: string
   views: number
   likes: number
+  price?: number
+  subscriptionPrice?: number
+  pricingModel?: "flat" | "subscription" | null
 }
 
 export default function CreatorProfile({ creator }: { creator: Creator }) {
@@ -104,6 +122,9 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
             username: data.username || "",
             views: data.views || 0,
             likes: data.likes || 0,
+            price: data.price || 4.99,
+            subscriptionPrice: data.subscriptionPrice || 9.99,
+            pricingModel: data.pricingModel || "flat",
           }
         })
 
@@ -197,6 +218,25 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
     const videoRef = useRef<HTMLVideoElement>(null)
     const [isPlaying, setIsPlaying] = useState(false)
     const [isHovered, setIsHovered] = useState(false)
+    const [hasAccess, setHasAccess] = useState(false)
+    const { user } = useAuth()
+
+    // Check if user has access to this premium video
+    useEffect(() => {
+      const checkAccess = async () => {
+        if (!user || video.type !== "premium") return
+
+        try {
+          const accessRef = doc(db, "userAccess", user.uid, "videos", video.id)
+          const accessDoc = await getDoc(accessRef)
+          setHasAccess(accessDoc.exists())
+        } catch (error) {
+          console.error("Error checking video access:", error)
+        }
+      }
+
+      checkAccess()
+    }, [user, video.id, video.type])
 
     const togglePlay = (e: React.MouseEvent) => {
       e.preventDefault()
@@ -292,13 +332,43 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
             </button>
           </div>
 
+          {/* Premium content overlay */}
+          {video.type === "premium" && !hasAccess && !isOwner && (
+            <div className="absolute inset-0 bg-black/60 flex flex-col items-center justify-center p-4 z-20">
+              <Lock className="h-8 w-8 text-amber-400 mb-2" />
+              <p className="text-white text-center text-sm mb-3">Premium Content</p>
+
+              <VideoPurchaseButton
+                videoId={video.id}
+                flatPrice={video.price || 4.99}
+                subscriptionPrice={video.subscriptionPrice || 9.99}
+                pricingModel={video.pricingModel}
+                title={video.title}
+                hasAccess={hasAccess}
+                className="text-xs py-1 px-3"
+              />
+            </div>
+          )}
+
           {/* Overlay gradient for better visibility - only on hover */}
           <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"></div>
         </div>
 
-        {/* Video title */}
+        {/* Video title and price */}
         <div className="mt-2">
           <h3 className="text-sm text-white font-light line-clamp-2">{video.title}</h3>
+
+          {/* Show price for premium content */}
+          {video.type === "premium" && !isOwner && (
+            <div className="flex items-center mt-1">
+              <DollarSign className="h-3 w-3 text-amber-400 mr-1" />
+              <span className="text-xs text-amber-400">
+                {video.pricingModel === "subscription"
+                  ? `$${video.subscriptionPrice?.toFixed(2) || "9.99"}/month`
+                  : `$${video.price?.toFixed(2) || "4.99"}`}
+              </span>
+            </div>
+          )}
         </div>
       </div>
     )

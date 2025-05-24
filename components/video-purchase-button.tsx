@@ -96,7 +96,7 @@ export default function VideoPurchaseButton({
   }
 
   // If creator only offers one pricing model, show a simple button
-  if (pricingModel) {
+  if (pricingModel === "flat" || pricingModel === "subscription") {
     return (
       <Button
         onClick={() => handlePurchase(pricingModel)}
@@ -123,7 +123,7 @@ export default function VideoPurchaseButton({
     )
   }
 
-  // If creator offers both pricing models, show a dropdown
+  // If creator offers both pricing models or none specified, show a dropdown
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
