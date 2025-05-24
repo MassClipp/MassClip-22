@@ -12,7 +12,6 @@ import { cn } from "@/lib/utils"
 import { collection, query, where, getDocs, limit } from "firebase/firestore"
 import { db } from "@/lib/firebase"
 import { trackFirestoreRead } from "@/lib/firestore-optimizer"
-import PremiumPricingControl from "./premium-pricing-control"
 
 interface Creator {
   uid: string
@@ -306,7 +305,7 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
   }
 
   return (
-    <div className="min-h-screen bg-black text-white pt-16 md:pt-0">
+    <div className="min-h-screen bg-black text-white">
       {/* Hero Section with Gradient Background */}
       <div className="relative">
         {/* Background gradient with subtle pattern */}
@@ -456,7 +455,7 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
               )}
               onClick={() => setActiveTab("free")}
             >
-              Free Clips
+              Free Content
               {activeTab === "free" && (
                 <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-red-500 to-red-600"></div>
               )}
@@ -469,7 +468,7 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
               )}
               onClick={() => setActiveTab("premium")}
             >
-              Premium Clips
+              Premium Content
               {activeTab === "premium" && (
                 <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r from-red-500 to-red-600"></div>
               )}
@@ -483,13 +482,6 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
           {error && (
             <div className="bg-red-900/20 border border-red-900/50 text-red-200 p-4 rounded-lg mb-8">
               <p>{error}</p>
-            </div>
-          )}
-
-          {/* Premium Pricing Control - Only show on premium tab */}
-          {activeTab === "premium" && isOwner && (
-            <div className="mb-8">
-              <PremiumPricingControl creatorId={creator.uid} username={creator.username} isOwner={isOwner} />
             </div>
           )}
 
@@ -511,20 +503,20 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
                     <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gradient-to-br from-zinc-800 to-zinc-900 flex items-center justify-center">
                       <Film className="h-8 w-8 text-zinc-600" />
                     </div>
-                    <h3 className="text-xl font-medium text-white mb-2">No Free Clips Yet</h3>
+                    <h3 className="text-xl font-medium text-white mb-2">No Free Content Yet</h3>
                     <p className="text-zinc-400 mb-6">
                       {isOwner
-                        ? "Share your first free clip to attract viewers and showcase your content."
-                        : `${creator.displayName} hasn't shared any free clips yet.`}
+                        ? "Share your first free content to attract viewers and showcase your work."
+                        : `${creator.displayName} hasn't shared any free content yet.`}
                     </p>
 
                     {isOwner && (
                       <Button
                         className="bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white border-0"
-                        onClick={() => handleAddClip(false)}
+                        onClick={() => router.push("/dashboard/upload")}
                       >
                         <Plus className="h-4 w-4 mr-2" />
-                        Add Clip
+                        Add Content
                       </Button>
                     )}
                   </div>
@@ -551,20 +543,20 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
                     <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gradient-to-br from-zinc-800 to-zinc-900 flex items-center justify-center">
                       <Lock className="h-8 w-8 text-zinc-600" />
                     </div>
-                    <h3 className="text-xl font-medium text-white mb-2">No Premium Clips Yet</h3>
+                    <h3 className="text-xl font-medium text-white mb-2">No Premium Content Yet</h3>
                     <p className="text-zinc-400 mb-6">
                       {isOwner
-                        ? "Add premium clips to monetize your content and provide exclusive value to your subscribers."
-                        : `${creator.displayName} hasn't shared any premium clips yet.`}
+                        ? "Add premium content to monetize your work and provide exclusive value to your subscribers."
+                        : `${creator.displayName} hasn't shared any premium content yet.`}
                     </p>
 
                     {isOwner && (
                       <Button
                         className="bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white border-0"
-                        onClick={() => handleAddClip(true)}
+                        onClick={() => router.push("/dashboard/upload?premium=true")}
                       >
                         <Plus className="h-4 w-4 mr-2" />
-                        Add Premium Clip
+                        Add Premium Content
                       </Button>
                     )}
                   </div>
