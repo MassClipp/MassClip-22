@@ -43,16 +43,13 @@ export default function StripeStatus({ className }: StripeStatusProps) {
     try {
       setIsLoading(true)
 
-      // Get the user's ID token
-      const idToken = await user.getIdToken()
-
-      // Call the status API
+      // Call the status API with a different approach that doesn't rely on getIdToken
       const response = await fetch("/api/stripe/connect/status", {
-        method: "POST",
+        method: "GET",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ idToken }),
+        credentials: "include", // Include cookies for authentication
       })
 
       if (!response.ok) {
