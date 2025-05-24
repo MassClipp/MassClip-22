@@ -178,12 +178,11 @@ export default function UploadFormEnhanced() {
         type: isPremium ? "premium" : "free",
         status: "active",
         uid: user?.uid,
-        username: creatorUsername, // Add username field
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
         views: 0,
         thumbnailUrl,
-        videoUrl, // Use the file preview URL for demo purposes
+        url: videoUrl, // Use the field name that matches existing data
         duration,
       }
 

@@ -14,18 +14,17 @@ import {
   ExternalLink,
   Zap,
   RefreshCw,
+  Play,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { useAuth } from "@/contexts/auth-context"
-import { doc, getDoc, collection, query, where, getDocs, limit, orderBy, Timestamp } from "firebase/firestore"
+import { doc, getDoc, collection, query, where, getDocs, limit } from "firebase/firestore"
 import { db } from "@/lib/firebase"
 import { format } from "date-fns"
 import { motion } from "framer-motion"
 import { useRecentVideos } from "@/hooks/use-recent-videos"
 import { useToast } from "@/components/ui/use-toast"
-import { VideoPreview } from "@/components/dashboard/video-preview"
-import { VideoDiagnostic } from "@/components/dashboard/video-diagnostic"
 
 // Animation variants
 const containerVariants = {
@@ -115,26 +114,13 @@ export default function DashboardPage() {
         setStripeConnected(!!data.stripeAccountId && data.stripeOnboardingComplete)
       }
 
-      const username = userData?.username
-      if (!username) {
-        console.log("User has no username set")
-        setLoading(false)
-        return
-      }
-
-      // Fetch video counts
-      const freeVideosQuery = query(
-        collection(db, "videos"),
-        where("username", "==", username),
-        where("type", "==", "free"),
-        where("status", "==", "active"),
-      )
+      // Fetch video counts using simple queries
+      const freeVideosQuery = query(collection(db, "videos"), where("uid", "==", user.uid), where("type", "==", "free"))
 
       const premiumVideosQuery = query(
         collection(db, "videos"),
-        where("username", "==", username),
+        where("uid", "==", user.uid),
         where("type", "==", "premium"),
-        where("status", "==", "active"),
       )
 
       const [freeVideosSnapshot, premiumVideosSnapshot] = await Promise.all([
@@ -152,27 +138,10 @@ export default function DashboardPage() {
       })
 
       // Fetch earnings data
-      const salesQuery = query(collection(db, "users", user.uid, "sales"), orderBy("purchasedAt", "desc"), limit(50))
+      const salesQuery = query(collection(db, "users", user.uid, "sales"), limit(50))
 
       const salesSnapshot = await getDocs(salesQuery)
-      const salesData = salesSnapshot.docs.map((doc) => {
-        const data = doc.data()
-        let purchasedAt
-        if (data.purchasedAt instanceof Timestamp) {
-          purchasedAt = data.purchasedAt.toDate()
-        } else if (data.purchasedAt && typeof data.purchasedAt.toDate === "function") {
-          purchasedAt = data.purchasedAt.toDate()
-        } else if (data.purchasedAt && data.purchasedAt._seconds) {
-          purchasedAt = new Date(data.purchasedAt._seconds * 1000)
-        } else {
-          purchasedAt = new Date()
-        }
-
-        return {
-          ...data,
-          purchasedAt,
-        }
-      })
+      const salesData = salesSnapshot.docs.map((doc) => doc.data())
 
       // Calculate total earnings
       const totalEarnings = salesData.reduce((sum, sale) => sum + (sale.netAmount || 0), 0)
@@ -180,7 +149,10 @@ export default function DashboardPage() {
       // Calculate recent sales (last 30 days)
       const thirtyDaysAgo = new Date()
       thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
-      const recentSales = salesData.filter((sale) => sale.purchasedAt >= thirtyDaysAgo).length
+      const recentSales = salesData.filter((sale) => {
+        const purchasedAt = sale.purchasedAt ? new Date(sale.purchasedAt) : new Date()
+        return purchasedAt >= thirtyDaysAgo
+      }).length
 
       setStats({
         freeVideos: freeVideosSnapshot.size,
@@ -386,26 +358,43 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent className="relative">
             {recentVideos.length > 0 ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              <div className="space-y-4">
                 {recentVideos.map((video) => (
                   <div
                     key={video.id}
-                    className="flex flex-col rounded-lg overflow-hidden bg-zinc-800/30 hover:bg-zinc-800/50 transition-colors"
+                    className="flex items-start gap-4 p-3 rounded-lg hover:bg-zinc-800/30 transition-colors"
                   >
-                    <div className="aspect-[9/16] w-full h-48">
-                      <VideoPreview
-                        videoUrl={video.videoUrl}
-                        thumbnailUrl={video.thumbnailUrl}
-                        isPremium={video.type === "premium"}
-                        title={video.title}
-                      />
+                    <div className="aspect-[9/16] w-16 bg-zinc-800 rounded-md overflow-hidden relative">
+                      {video.thumbnailUrl ? (
+                        <img
+                          src={video.thumbnailUrl || "/placeholder.svg"}
+                          alt={video.title}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center bg-zinc-800">
+                          <Film className="h-6 w-6 text-zinc-600" />
+                        </div>
+                      )}
+                      {video.type === "premium" ? (
+                        <div className="absolute top-1 right-1 bg-gradient-to-r from-amber-500 to-amber-600 text-black text-[10px] px-1 rounded-sm font-medium">
+                          PREMIUM
+                        </div>
+                      ) : (
+                        <div className="absolute top-1 right-1 bg-gradient-to-r from-blue-500 to-blue-600 text-white text-[10px] px-1 rounded-sm font-medium">
+                          FREE
+                        </div>
+                      )}
+                      <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-40 opacity-0 hover:opacity-100 transition-opacity">
+                        <Play className="h-8 w-8 text-white" />
+                      </div>
                     </div>
-                    <div className="p-3">
-                      <h4 className="font-medium text-white text-sm truncate">{video.title}</h4>
+                    <div className="flex-1 min-w-0">
+                      <h4 className="font-medium text-white truncate">{video.title}</h4>
                       <div className="flex items-center gap-3 mt-1 text-xs text-zinc-400">
                         <span className="flex items-center">
                           <Clock className="h-3 w-3 mr-1" />
-                          {format(video.createdAt, "MMM d, yyyy")}
+                          {video.createdAt ? format(video.createdAt, "MMM d, yyyy") : "Unknown date"}
                         </span>
                         <span className="flex items-center">
                           <TrendingUp className="h-3 w-3 mr-1" />
@@ -508,11 +497,6 @@ export default function DashboardPage() {
             </CardContent>
           </Card>
         </div>
-      </motion.div>
-
-      {/* Temporary diagnostic */}
-      <motion.div variants={itemVariants}>
-        <VideoDiagnostic />
       </motion.div>
     </motion.div>
   )
