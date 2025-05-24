@@ -4,7 +4,7 @@ import { db } from "@/lib/firebase-admin"
 
 // Initialize Stripe with the secret key
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: "2024-06-20",
+  apiVersion: "2023-10-16",
 })
 
 // Get the webhook secret from environment variables
@@ -133,8 +133,8 @@ async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session) 
         buyerUid,
         sessionId: session.id,
         amount: session.amount_total! / 100, // Convert from cents to dollars
-        platformFee: Math.floor(session.amount_total! * 0.05) / 100, // 5% platform fee
-        netAmount: (session.amount_total! - Math.floor(session.amount_total! * 0.05)) / 100, // Net amount after platform fee
+        platformFee: Math.round(session.amount_total! * 0.05) / 100, // 5% platform fee
+        netAmount: (session.amount_total! - Math.round(session.amount_total! * 0.05)) / 100, // Net amount after platform fee
         purchasedAt: new Date(),
         status: "completed",
       })

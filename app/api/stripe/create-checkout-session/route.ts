@@ -1,10 +1,9 @@
 import { type NextRequest, NextResponse } from "next/server"
 import Stripe from "stripe"
-import { auth } from "@/lib/firebase-admin"
-import { db } from "@/lib/firebase-admin"
+import { auth, db } from "@/lib/firebase-admin"
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: "2024-06-20",
+  apiVersion: "2023-10-16",
 })
 
 export async function POST(request: NextRequest) {
@@ -27,9 +26,9 @@ export async function POST(request: NextRequest) {
 
     const videoData = videoDoc.data()!
 
-    // Check if video is premium and has a price
-    if (videoData.type !== "premium" || !videoData.price) {
-      return NextResponse.json({ error: "Video is not available for purchase" }, { status: 400 })
+    // Check if video is premium
+    if (videoData.type !== "premium") {
+      return NextResponse.json({ error: "Video is not premium content" }, { status: 400 })
     }
 
     // Check if user already owns this video
@@ -42,12 +41,15 @@ export async function POST(request: NextRequest) {
     const creatorDoc = await db.collection("users").doc(videoData.uid).get()
     const creatorData = creatorDoc.data()
 
-    if (!creatorData?.stripeAccountId || !creatorData?.stripeOnboarded) {
+    if (!creatorData?.stripeAccountId || !creatorData?.stripeOnboardingComplete) {
       return NextResponse.json({ error: "Creator is not set up to receive payments" }, { status: 400 })
     }
 
+    // Get the price from the creator's settings or use default
+    const creatorPrice = creatorData.premiumPrice || 4.99
+
     // Calculate amounts (price is stored in dollars, Stripe uses cents)
-    const priceInCents = Math.round(videoData.price * 100)
+    const priceInCents = Math.round(creatorPrice * 100)
     const platformFee = Math.round(priceInCents * 0.05) // 5% platform fee
 
     // Create or get Stripe product and price
