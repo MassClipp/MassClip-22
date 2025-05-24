@@ -1,21 +1,26 @@
 import type React from "react"
-import Sidebar from "@/app/ui/dashboard/sidebar/sidebar"
-import Navbar from "@/app/ui/dashboard/navbar/navbar"
+import { DownloadLimitProvider } from "@/components/providers/download-limit-provider"
+import { RedirectHelper } from "@/components/redirect-helper"
+import DashboardSidebar from "@/components/dashboard/sidebar"
+import DashboardHeader from "@/components/dashboard/header"
+import { Toaster } from "@/components/ui/toaster"
 
-export default function Layout({
+export default function DashboardLayout({
   children,
 }: {
   children: React.ReactNode
 }) {
   return (
-    <div className="flex">
-      <div className="w-64">
-        <Sidebar />
+    <DownloadLimitProvider>
+      <RedirectHelper />
+      <div className="min-h-screen bg-black text-white flex flex-col">
+        <DashboardHeader />
+        <div className="flex-1 flex flex-col md:flex-row">
+          <DashboardSidebar />
+          <main className="flex-1 p-4 md:p-6 lg:p-8 overflow-y-auto">{children}</main>
+        </div>
+        <Toaster />
       </div>
-      <div className="flex-1">
-        <Navbar />
-        <main className="p-6">{children}</main>
-      </div>
-    </div>
+    </DownloadLimitProvider>
   )
 }

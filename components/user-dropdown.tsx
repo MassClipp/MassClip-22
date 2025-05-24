@@ -18,7 +18,7 @@ import { doc, getDoc } from "firebase/firestore"
 import { db } from "@/lib/firebase"
 import { User, Globe, Settings, LogOut } from "lucide-react"
 
-export function UserDropdown() {
+export default function UserDropdown() {
   const { user, logOut } = useFirebaseAuth()
   const router = useRouter()
   const [username, setUsername] = useState<string | null>(null)
