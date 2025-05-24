@@ -69,6 +69,12 @@ export default function DashboardSidebar() {
       icon: <Upload className="h-5 w-5" />,
     },
     {
+      name: "Premium Pricing",
+      href: "/dashboard/premium-pricing",
+      icon: <DollarSign className="h-5 w-5" />,
+      description: "Set your premium content pricing",
+    },
+    {
       name: "Earnings",
       href: "/dashboard/earnings",
       icon: <DollarSign className="h-5 w-5" />,

@@ -106,6 +106,12 @@ export default function NavDropdown() {
           href: "/dashboard/upload",
           icon: <Upload className="h-4 w-4 mr-2" />,
         },
+        {
+          name: "Premium Pricing",
+          href: "/dashboard/premium-pricing",
+          icon: <DollarSign className="h-4 w-4 mr-2" />,
+          description: "Set your premium content pricing",
+        },
       ],
     },
     {

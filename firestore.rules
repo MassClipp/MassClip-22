@@ -1,9 +1,15 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Open read/write access to all collections
-    match /{document=**} {
-      allow read, write: if true;
+    match /users/{userId} {
+      allow read;
+      allow create: if request.auth.uid == userId;
+      allow update: if request.auth.uid == userId 
+        && (
+          request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['displayName', 'photoURL', 'username', 'bio', 'socialLinks', 'premiumContentSettings'])
+        );
+      allow delete: if request.auth.uid == userId;
     }
   }
 }
