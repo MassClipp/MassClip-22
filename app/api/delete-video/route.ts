@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { doc, deleteDoc, getDoc } from "firebase/firestore"
-import { db as clientDb } from "@/lib/firebase"
+import { db } from "@/lib/firebase"
 
 export async function DELETE(request: NextRequest) {
   try {
@@ -15,7 +15,7 @@ export async function DELETE(request: NextRequest) {
     console.log(`Attempting to delete video ${videoId} for user ${userId}`)
 
     // Get video document to verify ownership and get file URLs
-    const videoRef = doc(clientDb, "videos", videoId)
+    const videoRef = doc(db, "videos", videoId)
     const videoDoc = await getDoc(videoRef)
 
     if (!videoDoc.exists()) {
