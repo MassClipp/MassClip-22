@@ -2,7 +2,19 @@
 
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { Film, Lock, Upload, DollarSign, TrendingUp, Clock, AlertCircle, Plus, ExternalLink, Zap } from "lucide-react"
+import {
+  Film,
+  Lock,
+  Upload,
+  DollarSign,
+  TrendingUp,
+  Clock,
+  AlertCircle,
+  Plus,
+  ExternalLink,
+  Zap,
+  RefreshCw,
+} from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { useAuth } from "@/contexts/auth-context"
@@ -10,6 +22,8 @@ import { doc, getDoc, collection, query, where, getDocs, limit, orderBy, Timesta
 import { db } from "@/lib/firebase"
 import { format } from "date-fns"
 import { motion } from "framer-motion"
+import { useRecentVideos } from "@/hooks/use-recent-videos"
+import { useToast } from "@/components/ui/use-toast"
 
 // Animation variants
 const containerVariants = {
@@ -61,6 +75,7 @@ const quotes = [
 export default function DashboardPage() {
   const router = useRouter()
   const { user } = useAuth()
+  const { toast } = useToast()
   const [userData, setUserData] = useState<any>(null)
   const [stats, setStats] = useState({
     freeVideos: 0,
@@ -69,9 +84,15 @@ export default function DashboardPage() {
     totalEarnings: 0,
     recentSales: 0,
   })
-  const [recentVideos, setRecentVideos] = useState<any[]>([])
+  const {
+    videos: recentVideos,
+    loading: loadingVideos,
+    error: videosError,
+    refetch: refetchVideos,
+  } = useRecentVideos(5)
   const [loading, setLoading] = useState(true)
   const [stripeConnected, setStripeConnected] = useState(false)
+  const [refreshing, setRefreshing] = useState(false)
 
   // Random quote
   const randomQuote = quotes[Math.floor(Math.random() * quotes.length)]
@@ -82,6 +103,7 @@ export default function DashboardPage() {
 
     try {
       setLoading(true)
+      setRefreshing(true)
 
       // Fetch user data
       const userDoc = await getDoc(doc(db, "users", user.uid))
@@ -111,40 +133,8 @@ export default function DashboardPage() {
         getDocs(premiumVideosQuery),
       ])
 
-      // Fetch recent videos - ensure we're sorting by createdAt in descending order
-      const recentVideosQuery = query(
-        collection(db, "videos"),
-        where("uid", "==", user.uid),
-        where("status", "==", "active"),
-        orderBy("createdAt", "desc"),
-        limit(5),
-      )
-
-      const recentVideosSnapshot = await getDocs(recentVideosQuery)
-      const recentVideosData = recentVideosSnapshot.docs.map((doc) => {
-        const data = doc.data()
-        // Handle different timestamp formats
-        let createdAt
-        if (data.createdAt instanceof Timestamp) {
-          createdAt = data.createdAt.toDate()
-        } else if (data.createdAt && typeof data.createdAt.toDate === "function") {
-          createdAt = data.createdAt.toDate()
-        } else if (data.createdAt && data.createdAt._seconds) {
-          // Handle Firebase timestamp object
-          createdAt = new Date(data.createdAt._seconds * 1000)
-        } else {
-          createdAt = new Date()
-        }
-
-        return {
-          id: doc.id,
-          ...data,
-          createdAt,
-        }
-      })
-
-      console.log("Recent videos fetched:", recentVideosData)
-      setRecentVideos(recentVideosData)
+      // Also refresh the recent videos
+      refetchVideos()
 
       // Calculate total views
       let totalViews = 0
@@ -190,26 +180,46 @@ export default function DashboardPage() {
         totalEarnings,
         recentSales,
       })
+
+      if (refreshing) {
+        toast({
+          title: "Dashboard refreshed",
+          description: "Your dashboard data has been updated.",
+        })
+      }
     } catch (error) {
       console.error("Error fetching dashboard data:", error)
+      if (refreshing) {
+        toast({
+          title: "Refresh failed",
+          description: "There was an error refreshing your dashboard data.",
+          variant: "destructive",
+        })
+      }
     } finally {
       setLoading(false)
+      setRefreshing(false)
     }
   }
 
   // Initial data fetch
   useEffect(() => {
     refreshData()
-
-    // Set up a listener for real-time updates
-    const intervalId = setInterval(() => {
-      refreshData()
-    }, 60000) // Refresh every minute
-
-    return () => clearInterval(intervalId)
   }, [user])
 
-  if (loading && recentVideos.length === 0) {
+  // Handle video error
+  useEffect(() => {
+    if (videosError) {
+      console.error("Error loading recent videos:", videosError)
+      toast({
+        title: "Error loading videos",
+        description: "There was a problem loading your recent videos. Please try refreshing.",
+        variant: "destructive",
+      })
+    }
+  }, [videosError, toast])
+
+  if (loading && recentVideos.length === 0 && !loadingVideos) {
     return (
       <div className="flex items-center justify-center h-[calc(100vh-4rem)]">
         <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-red-500"></div>
@@ -237,6 +247,15 @@ export default function DashboardPage() {
           >
             <Upload className="h-4 w-4 mr-2" />
             Upload Content
+          </Button>
+
+          <Button
+            variant="outline"
+            onClick={() => refreshData()}
+            disabled={refreshing}
+            className="border-zinc-700 hover:bg-zinc-800"
+          >
+            <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
           </Button>
 
           {userData?.username && (
@@ -346,8 +365,15 @@ export default function DashboardPage() {
         <Card className="bg-gradient-to-br from-zinc-900/80 to-zinc-800/30 border-zinc-800/50 backdrop-blur-sm lg:col-span-2 overflow-hidden relative">
           <div className="absolute inset-0 bg-[url('/noise.png')] opacity-[0.03] mix-blend-soft-light"></div>
           <CardHeader className="relative">
-            <CardTitle>Recent Content</CardTitle>
-            <CardDescription>Your most recently uploaded videos</CardDescription>
+            <div className="flex justify-between items-center">
+              <div>
+                <CardTitle>Recent Content</CardTitle>
+                <CardDescription>Your most recently uploaded videos</CardDescription>
+              </div>
+              {loadingVideos && (
+                <div className="animate-spin rounded-full h-5 w-5 border-t-2 border-b-2 border-red-500"></div>
+              )}
+            </div>
           </CardHeader>
           <CardContent className="relative">
             {recentVideos.length > 0 ? (
@@ -394,6 +420,10 @@ export default function DashboardPage() {
                     </div>
                   </div>
                 ))}
+              </div>
+            ) : loadingVideos ? (
+              <div className="flex items-center justify-center py-12">
+                <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-red-500"></div>
               </div>
             ) : (
               <div className="text-center py-8">

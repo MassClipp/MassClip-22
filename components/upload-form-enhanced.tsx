@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/alert-dialog"
 import { Upload, Video, CheckCircle2, AlertCircle, Loader2, User, Lock } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { doc, getDoc } from "firebase/firestore"
+import { doc, getDoc, addDoc, collection, serverTimestamp } from "firebase/firestore"
 import { db } from "@/lib/firebase"
 import { useToast } from "@/components/ui/use-toast"
 
@@ -56,6 +56,7 @@ export default function UploadFormEnhanced() {
   const [uploadProgress, setUploadProgress] = useState(0)
   const [uploadError, setUploadError] = useState<string | null>(null)
   const [showSuccessDialog, setShowSuccessDialog] = useState(false)
+  const [uploadedVideoId, setUploadedVideoId] = useState<string | null>(null)
 
   // Fetch user profile data
   useEffect(() => {
@@ -146,23 +147,61 @@ export default function UploadFormEnhanced() {
       return
     }
 
-    // Simulate upload
+    // Start upload
     setIsUploading(true)
     setUploadError(null)
     setUploadProgress(0)
 
-    // Simulate progress
-    const interval = setInterval(() => {
-      setUploadProgress((prev) => {
-        if (prev >= 100) {
-          clearInterval(interval)
-          setShowSuccessDialog(true)
-          setIsUploading(false)
-          return 100
-        }
-        return prev + 5
-      })
-    }, 200)
+    try {
+      // Simulate file upload progress
+      const uploadInterval = setInterval(() => {
+        setUploadProgress((prev) => {
+          if (prev >= 90) {
+            clearInterval(uploadInterval)
+            return 90
+          }
+          return prev + 5
+        })
+      }, 200)
+
+      // Generate a placeholder thumbnail URL (in a real app, you'd generate this from the video)
+      const thumbnailUrl = `/placeholder.svg?height=720&width=1280&query=${encodeURIComponent(title)}`
+
+      // Create a video document in Firestore
+      const videoData = {
+        title,
+        description,
+        type: isPremium ? "premium" : "free",
+        status: "active",
+        uid: user?.uid,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+        views: 0,
+        thumbnailUrl,
+        duration,
+        // In a real app, you'd upload the file to storage and get a URL
+        videoUrl: "https://example.com/video.mp4", // Placeholder
+      }
+
+      console.log("Creating video document with data:", videoData)
+
+      // Add the document to Firestore
+      const docRef = await addDoc(collection(db, "videos"), videoData)
+      console.log("Video document created with ID:", docRef.id)
+
+      setUploadedVideoId(docRef.id)
+
+      // Complete the upload
+      clearInterval(uploadInterval)
+      setUploadProgress(100)
+      setIsUploading(false)
+      setShowSuccessDialog(true)
+    } catch (error) {
+      console.error("Error uploading video:", error)
+      setUploadError("Failed to upload video. Please try again.")
+      setIsUploading(false)
+      setUploadProgress(0)
+    }
   }
 
   // Reset form after successful upload
@@ -173,7 +212,8 @@ export default function UploadFormEnhanced() {
     setFilePreview(null)
     setDuration(0)
     setUploadProgress(0)
-    setIsPremium(false)
+    setIsPremium(isPremiumParam)
+    setUploadedVideoId(null)
     if (fileInputRef.current) {
       fileInputRef.current.value = ""
     }
@@ -186,6 +226,11 @@ export default function UploadFormEnhanced() {
     } else {
       router.push("/dashboard")
     }
+  }
+
+  // Go to dashboard
+  const goToDashboard = () => {
+    router.push("/dashboard")
   }
 
   return (
@@ -422,6 +467,12 @@ export default function UploadFormEnhanced() {
               className="bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white"
             >
               View My Profile
+            </AlertDialogAction>
+            <AlertDialogAction
+              onClick={goToDashboard}
+              className="bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white"
+            >
+              Go to Dashboard
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
