@@ -1,7 +1,7 @@
 "use client"
 
-import { useState, useRef, type ChangeEvent, type FormEvent } from "react"
-import { useRouter } from "next/navigation"
+import { useState, useRef, type ChangeEvent, type FormEvent, useEffect } from "react"
+import { useRouter, useSearchParams } from "next/navigation"
 import { useAuth } from "@/contexts/auth-context"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -9,7 +9,6 @@ import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
 import { Progress } from "@/components/ui/progress"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
-import { Switch } from "@/components/ui/switch"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -20,23 +19,32 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
-import { Upload, Video, CheckCircle2, AlertCircle, Loader2, User, DollarSign, Lock } from "lucide-react"
+import { Upload, Video, CheckCircle2, AlertCircle, Loader2, User, Lock } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { doc, getDoc } from "firebase/firestore"
+import { db } from "@/lib/firebase"
+import { useToast } from "@/components/ui/use-toast"
 
 export default function UploadFormEnhanced() {
   const { user } = useAuth()
   const router = useRouter()
+  const searchParams = useSearchParams()
+  const { toast } = useToast()
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  // Check if premium is set in URL
+  const isPremiumParam = searchParams.get("premium") === "true"
 
   // Form state
   const [title, setTitle] = useState("")
   const [description, setDescription] = useState("")
-  const [isPremium, setIsPremium] = useState(false)
+  const [isPremium, setIsPremium] = useState(isPremiumParam)
   const [price, setPrice] = useState("4.99")
 
   // Creator profile state
-  const [creatorUsername, setCreatorUsername] = useState<string>("jus")
+  const [creatorUsername, setCreatorUsername] = useState<string>("")
   const [isLoadingProfile, setIsLoadingProfile] = useState(false)
+  const [stripeConnected, setStripeConnected] = useState(false)
 
   // File state
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
@@ -49,12 +57,47 @@ export default function UploadFormEnhanced() {
   const [uploadError, setUploadError] = useState<string | null>(null)
   const [showSuccessDialog, setShowSuccessDialog] = useState(false)
 
+  // Fetch user profile data
+  useEffect(() => {
+    const fetchUserProfile = async () => {
+      if (!user) return
+
+      try {
+        setIsLoadingProfile(true)
+        const userDoc = await getDoc(doc(db, "users", user.uid))
+
+        if (userDoc.exists()) {
+          const userData = userDoc.data()
+          setCreatorUsername(userData.username || "")
+          setStripeConnected(!!userData.stripeAccountId && userData.stripeOnboardingComplete)
+
+          if (userData.premiumPrice) {
+            setPrice(userData.premiumPrice.toString())
+          }
+        }
+      } catch (error) {
+        console.error("Error fetching user profile:", error)
+      } finally {
+        setIsLoadingProfile(false)
+      }
+    }
+
+    fetchUserProfile()
+  }, [user])
+
   // Handle video file selection
   const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
 
+    // Check file size (500MB limit)
+    if (file.size > 500 * 1024 * 1024) {
+      setUploadError("File size exceeds 500MB limit")
+      return
+    }
+
     setSelectedFile(file)
+    setUploadError(null)
 
     // Create preview for video
     const fileURL = URL.createObjectURL(file)
@@ -77,7 +120,7 @@ export default function UploadFormEnhanced() {
     return `${mins}:${secs.toString().padStart(2, "0")}`
   }
 
-  // Handle form submission (mockup)
+  // Handle form submission
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
 
@@ -89,6 +132,17 @@ export default function UploadFormEnhanced() {
 
     if (!title.trim()) {
       setUploadError("Please enter a title for your video")
+      return
+    }
+
+    // Check if premium content requires Stripe connection
+    if (isPremium && !stripeConnected) {
+      toast({
+        title: "Stripe Account Required",
+        description: "You need to connect your Stripe account to upload premium content.",
+        variant: "destructive",
+      })
+      router.push("/dashboard/earnings")
       return
     }
 
@@ -137,23 +191,90 @@ export default function UploadFormEnhanced() {
   return (
     <>
       <div className="max-w-3xl mx-auto">
-        <Card className="bg-black border-zinc-800 text-white">
-          <CardHeader className="bg-gradient-to-r from-red-500/10 to-red-600/10 border-b border-red-500/20">
+        <Card className="bg-zinc-900/60 border-zinc-800/50 backdrop-blur-sm">
+          <CardHeader
+            className={cn(
+              "border-b border-zinc-800/50",
+              isPremium
+                ? "bg-gradient-to-r from-amber-500/10 to-amber-600/10 border-amber-500/20"
+                : "bg-gradient-to-r from-red-500/10 to-red-600/10 border-red-500/20",
+            )}
+          >
             <CardTitle className="flex items-center gap-2">
-              <Video className="h-5 w-5 text-red-500" />
-              <span>Upload Content</span>
+              <Video className={cn("h-5 w-5", isPremium ? "text-amber-500" : "text-red-500")} />
+              <span>Upload {isPremium ? "Premium" : "Free"} Content</span>
             </CardTitle>
             <CardDescription className="text-zinc-400">
               <span className="flex items-center gap-1.5">
                 <User className="h-3.5 w-3.5 text-zinc-500" />
-                Uploading as <span className="text-red-400">@{creatorUsername}</span>
+                Uploading as{" "}
+                <span className={isPremium ? "text-amber-400" : "text-red-400"}>@{creatorUsername || "creator"}</span>
               </span>
             </CardDescription>
           </CardHeader>
 
-          <CardContent className="pt-6 bg-black">
+          <CardContent className="pt-6">
             <form onSubmit={handleSubmit}>
               <div className="space-y-6">
+                {/* Content Type Toggle */}
+                <div className="flex justify-center space-x-2 w-full">
+                  <Button
+                    type="button"
+                    onClick={() => setIsPremium(false)}
+                    className={cn(
+                      "py-2 px-4 rounded-l-md flex-1 flex items-center justify-center gap-2 transition-colors",
+                      !isPremium
+                        ? "bg-gradient-to-r from-red-500 to-red-600 text-white"
+                        : "bg-zinc-800 text-zinc-400 hover:bg-zinc-700",
+                    )}
+                  >
+                    <span>Free Content</span>
+                  </Button>
+                  <Button
+                    type="button"
+                    onClick={() => setIsPremium(true)}
+                    className={cn(
+                      "py-2 px-4 rounded-r-md flex-1 flex items-center justify-center gap-2 transition-colors",
+                      isPremium
+                        ? "bg-gradient-to-r from-amber-500 to-amber-600 text-white"
+                        : "bg-zinc-800 text-zinc-400 hover:bg-zinc-700",
+                    )}
+                  >
+                    <Lock className="h-4 w-4" />
+                    <span>Premium Content</span>
+                  </Button>
+                </div>
+
+                {/* Premium Info */}
+                {isPremium && (
+                  <div className="bg-zinc-800/30 border border-amber-500/20 rounded-lg p-4">
+                    <div className="flex items-center gap-2">
+                      <Lock className="h-4 w-4 text-amber-500" />
+                      <h3 className="text-sm font-medium text-white">Premium Content</h3>
+                    </div>
+                    <p className="text-sm text-zinc-400 mt-2">
+                      This video will be available only to subscribers who pay for your premium content.
+                      {stripeConnected ? (
+                        <span className="block mt-1 text-green-400">
+                          Your Stripe account is connected and ready to receive payments.
+                        </span>
+                      ) : (
+                        <span className="block mt-1 text-amber-400">
+                          You need to connect your Stripe account to receive payments.
+                          <Button
+                            type="button"
+                            variant="link"
+                            className="p-0 h-auto text-amber-400 underline"
+                            onClick={() => router.push("/dashboard/earnings")}
+                          >
+                            Set up payments
+                          </Button>
+                        </span>
+                      )}
+                    </p>
+                  </div>
+                )}
+
                 {/* Video upload */}
                 <div>
                   <Label htmlFor="video-upload" className="block mb-2 text-sm font-medium text-white">
@@ -163,7 +284,11 @@ export default function UploadFormEnhanced() {
                     className={cn(
                       "border-2 border-dashed rounded-lg p-4 text-center cursor-pointer transition-all",
                       "hover:bg-zinc-800/30 hover:border-zinc-700",
-                      selectedFile ? "border-green-500/50 bg-green-500/5" : "border-zinc-700 bg-zinc-800/30",
+                      selectedFile
+                        ? isPremium
+                          ? "border-amber-500/50 bg-amber-500/5"
+                          : "border-red-500/50 bg-red-500/5"
+                        : "border-zinc-700 bg-zinc-800/30",
                     )}
                     onClick={() => fileInputRef.current?.click()}
                   >
@@ -224,38 +349,6 @@ export default function UploadFormEnhanced() {
                     className="bg-zinc-800/50 border-zinc-700 focus:border-red-500 text-white resize-none"
                   />
                 </div>
-
-                {/* Premium Toggle */}
-                <div className="bg-zinc-800/30 border border-zinc-700/50 rounded-lg p-4">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <Lock className="h-4 w-4 text-amber-500" />
-                      <Label htmlFor="premium-toggle" className="text-sm font-medium text-white cursor-pointer">
-                        Premium Content
-                      </Label>
-                    </div>
-                    <Switch
-                      id="premium-toggle"
-                      checked={isPremium}
-                      onCheckedChange={setIsPremium}
-                      className="data-[state=checked]:bg-amber-500"
-                    />
-                  </div>
-
-                  {isPremium && (
-                    <div className="mt-4 pt-4 border-t border-zinc-700/50">
-                      <p className="text-xs text-zinc-400 mb-3">
-                        This video will be available only to subscribers who pay for your premium content.
-                      </p>
-                      <div className="flex items-center gap-2">
-                        <DollarSign className="h-4 w-4 text-zinc-500" />
-                        <span className="text-sm text-zinc-300">
-                          Individual video price is set in your profile settings
-                        </span>
-                      </div>
-                    </div>
-                  )}
-                </div>
               </div>
 
               {/* Error message */}
@@ -281,7 +374,7 @@ export default function UploadFormEnhanced() {
               <CardFooter className="px-0 pt-6 pb-0 mt-6">
                 <Button
                   type="submit"
-                  disabled={isUploading || !selectedFile || !title.trim()}
+                  disabled={isUploading || !selectedFile || !title.trim() || (isPremium && !stripeConnected)}
                   className={cn(
                     "w-full py-6 text-base font-medium text-white",
                     isPremium
