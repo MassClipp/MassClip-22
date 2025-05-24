@@ -83,8 +83,12 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
 
   // Close options menu when clicking outside
   useEffect(() => {
-    const handleClickOutside = () => {
-      setShowOptionsFor(null)
+    const handleClickOutside = (e: MouseEvent) => {
+      // Only close if clicking outside the options menu
+      const target = e.target as HTMLElement
+      if (!target.closest(".options-menu")) {
+        setShowOptionsFor(null)
+      }
     }
 
     document.addEventListener("click", handleClickOutside)
@@ -189,6 +193,7 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
     if (!user) return
 
     setDeletingVideoId(videoId)
+    console.log("Deleting video:", videoId)
 
     try {
       const response = await fetch(`/api/delete-video?videoId=${videoId}&userId=${user.uid}`, {
@@ -196,6 +201,7 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
       })
 
       const result = await response.json()
+      console.log("Delete response:", result)
 
       if (!response.ok) {
         throw new Error(result.error || "Failed to delete video")
@@ -220,6 +226,7 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
     const videoRef = useRef<HTMLVideoElement>(null)
     const [isPlaying, setIsPlaying] = useState(false)
     const [isHovered, setIsHovered] = useState(false)
+    const optionsRef = useRef<HTMLDivElement>(null)
 
     const togglePlay = (e: React.MouseEvent) => {
       e.stopPropagation()
@@ -263,7 +270,13 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
       e.stopPropagation()
       e.preventDefault()
       console.log("Toggle options for video:", video.id) // Debug log
-      setShowOptionsFor(showOptionsFor === video.id ? null : video.id)
+
+      // Toggle options menu
+      if (showOptionsFor === video.id) {
+        setShowOptionsFor(null)
+      } else {
+        setShowOptionsFor(video.id)
+      }
     }
 
     const handleDeleteClick = (e: React.MouseEvent) => {
@@ -307,7 +320,10 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
 
           {/* Minimal options button - only show for owner on hover */}
           {isOwner && (
-            <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-20">
+            <div
+              className="options-menu absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-20"
+              ref={optionsRef}
+            >
               <div className="relative">
                 <button
                   onClick={toggleOptions}
