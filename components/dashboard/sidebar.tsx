@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import { usePathname, useRouter } from "next/navigation"
 import { useAuth } from "@/contexts/auth-context"
 import { cn } from "@/lib/utils"
-import { Home, Film, Lock, Upload, DollarSign, Settings, User, LogOut, Menu, X } from "lucide-react"
+import { Home, Film, Lock, Upload, DollarSign, Settings, User, LogOut, Menu, X, Search } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import Logo from "@/components/logo"
 import { doc, getDoc } from "firebase/firestore"
@@ -39,6 +39,12 @@ export default function DashboardSidebar() {
   }, [user])
 
   const navItems = [
+    {
+      name: "Explore",
+      href: "/dashboard/explore",
+      icon: <Search className="h-5 w-5" />,
+      description: "Discover content from other creators",
+    },
     {
       name: "Dashboard",
       href: "/dashboard",
