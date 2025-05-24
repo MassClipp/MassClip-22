@@ -306,7 +306,7 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
   }
 
   return (
-    <div className="min-h-screen bg-black text-white">
+    <div className="min-h-screen bg-black text-white pt-16 md:pt-0">
       {/* Hero Section with Gradient Background */}
       <div className="relative">
         {/* Background gradient with subtle pattern */}
