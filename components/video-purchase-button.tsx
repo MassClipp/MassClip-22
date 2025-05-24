@@ -2,24 +2,36 @@
 
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
-import { Loader2, Lock, DollarSign } from "lucide-react"
+import { Loader2, Lock, DollarSign, Calendar } from "lucide-react"
 import { useAuth } from "@/contexts/auth-context"
 import { useToast } from "@/hooks/use-toast"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 
 interface VideoPurchaseButtonProps {
   videoId: string
-  price: number
+  flatPrice: number
+  subscriptionPrice: number
+  pricingModel: "flat" | "subscription" | null
   title: string
   hasAccess: boolean
   className?: string
 }
 
-export default function VideoPurchaseButton({ videoId, price, title, hasAccess, className }: VideoPurchaseButtonProps) {
+export default function VideoPurchaseButton({
+  videoId,
+  flatPrice,
+  subscriptionPrice,
+  pricingModel,
+  title,
+  hasAccess,
+  className,
+}: VideoPurchaseButtonProps) {
   const { user } = useAuth()
   const { toast } = useToast()
   const [isLoading, setIsLoading] = useState(false)
+  const [selectedModel, setSelectedModel] = useState<"flat" | "subscription">(pricingModel || "flat")
 
-  const handlePurchase = async () => {
+  const handlePurchase = async (model: "flat" | "subscription" = selectedModel) => {
     if (!user) {
       toast({
         title: "Authentication Required",
@@ -49,6 +61,7 @@ export default function VideoPurchaseButton({ videoId, price, title, hasAccess, 
         body: JSON.stringify({
           idToken,
           videoId,
+          pricingModel: model,
         }),
       })
 
@@ -82,19 +95,62 @@ export default function VideoPurchaseButton({ videoId, price, title, hasAccess, 
     )
   }
 
+  // If creator only offers one pricing model, show a simple button
+  if (pricingModel) {
+    return (
+      <Button
+        onClick={() => handlePurchase(pricingModel)}
+        disabled={isLoading}
+        className={`bg-green-600 hover:bg-green-700 ${className}`}
+      >
+        {isLoading ? (
+          <>
+            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            Processing...
+          </>
+        ) : pricingModel === "flat" ? (
+          <>
+            <DollarSign className="h-4 w-4 mr-2" />
+            Buy for ${flatPrice.toFixed(2)}
+          </>
+        ) : (
+          <>
+            <Calendar className="h-4 w-4 mr-2" />
+            Subscribe for ${subscriptionPrice.toFixed(2)}/month
+          </>
+        )}
+      </Button>
+    )
+  }
+
+  // If creator offers both pricing models, show a dropdown
   return (
-    <Button onClick={handlePurchase} disabled={isLoading} className={`bg-green-600 hover:bg-green-700 ${className}`}>
-      {isLoading ? (
-        <>
-          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-          Processing...
-        </>
-      ) : (
-        <>
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button disabled={isLoading} className={`bg-green-600 hover:bg-green-700 ${className}`}>
+          {isLoading ? (
+            <>
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              Processing...
+            </>
+          ) : (
+            <>
+              <DollarSign className="h-4 w-4 mr-2" />
+              Purchase Options
+            </>
+          )}
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        <DropdownMenuItem onClick={() => handlePurchase("flat")}>
           <DollarSign className="h-4 w-4 mr-2" />
-          Buy for ${price.toFixed(2)}
-        </>
-      )}
-    </Button>
+          One-time payment: ${flatPrice.toFixed(2)}
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => handlePurchase("subscription")}>
+          <Calendar className="h-4 w-4 mr-2" />
+          Monthly subscription: ${subscriptionPrice.toFixed(2)}/month
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   )
 }

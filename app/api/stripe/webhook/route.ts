@@ -48,6 +48,18 @@ export async function POST(request: NextRequest) {
         break
       }
 
+      case "invoice.paid": {
+        const invoice = event.data.object as Stripe.Invoice
+        await handleInvoicePaid(invoice)
+        break
+      }
+
+      case "customer.subscription.deleted": {
+        const subscription = event.data.object as Stripe.Subscription
+        await handleSubscriptionDeleted(subscription)
+        break
+      }
+
       default:
         console.log(`Unhandled event type: ${event.type}`)
     }
@@ -103,12 +115,14 @@ async function handleAccountUpdated(account: Stripe.Account) {
 async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session) {
   try {
     // Get the metadata from the session
-    const { videoId, buyerUid, creatorUid } = session.metadata!
+    const { videoId, buyerUid, creatorUid, pricingModel } = session.metadata!
 
     if (!videoId || !buyerUid || !creatorUid) {
       console.error("Missing metadata in checkout session:", session.id)
       return
     }
+
+    const isSubscription = pricingModel === "subscription" || session.mode === "subscription"
 
     // Grant access to the video for the buyer
     await db
@@ -121,6 +135,9 @@ async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session) 
         sessionId: session.id,
         amount: session.amount_total! / 100, // Convert from cents to dollars
         creatorUid,
+        pricingModel: isSubscription ? "subscription" : "flat",
+        subscriptionId: session.subscription || null,
+        expiresAt: isSubscription ? null : null, // No expiration for one-time purchases
       })
 
     // Record the sale for the creator
@@ -137,6 +154,9 @@ async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session) 
         netAmount: (session.amount_total! - Math.round(session.amount_total! * 0.05)) / 100, // Net amount after platform fee
         purchasedAt: new Date(),
         status: "completed",
+        pricingModel: isSubscription ? "subscription" : "flat",
+        subscriptionId: session.subscription || null,
+        isRecurring: isSubscription,
       })
 
     // Update video stats
@@ -184,5 +204,83 @@ async function handlePaymentIntentSucceeded(paymentIntent: Stripe.PaymentIntent)
     console.log(`Payment succeeded for video ${videoId}`)
   } catch (error) {
     console.error("Error handling payment_intent.succeeded:", error)
+  }
+}
+
+// Handle invoice.paid event (for subscriptions)
+async function handleInvoicePaid(invoice: Stripe.Invoice) {
+  try {
+    // Skip if this is not a subscription invoice
+    if (!invoice.subscription) return
+
+    // Get the subscription
+    const subscription = await stripe.subscriptions.retrieve(invoice.subscription as string)
+
+    // Get metadata from the subscription
+    const { videoId, buyerUid, creatorUid } = subscription.metadata
+
+    if (!videoId || !buyerUid || !creatorUid) {
+      console.log("Missing metadata in subscription:", subscription.id)
+      return
+    }
+
+    // For recurring payments (not the first one, which is handled by checkout.session.completed)
+    if (invoice.billing_reason === "subscription_cycle") {
+      // Record the recurring payment
+      await db
+        .collection("users")
+        .doc(creatorUid)
+        .collection("sales")
+        .add({
+          videoId,
+          buyerUid,
+          invoiceId: invoice.id,
+          subscriptionId: subscription.id,
+          amount: invoice.amount_paid / 100,
+          platformFee: Math.round(invoice.amount_paid * 0.05) / 100, // 5% platform fee
+          netAmount: (invoice.amount_paid - Math.round(invoice.amount_paid * 0.05)) / 100,
+          purchasedAt: new Date(),
+          status: "completed",
+          pricingModel: "subscription",
+          isRecurring: true,
+          periodStart: new Date(subscription.current_period_start * 1000),
+          periodEnd: new Date(subscription.current_period_end * 1000),
+        })
+
+      // Update video stats
+      await db
+        .collection("videos")
+        .doc(videoId)
+        .update({
+          totalRevenue: db.FieldValue.increment(invoice.amount_paid / 100),
+        })
+
+      console.log(`Processed recurring payment for subscription ${subscription.id}`)
+    }
+  } catch (error) {
+    console.error("Error handling invoice.paid:", error)
+  }
+}
+
+// Handle customer.subscription.deleted event
+async function handleSubscriptionDeleted(subscription: Stripe.Subscription) {
+  try {
+    const { videoId, buyerUid, creatorUid } = subscription.metadata
+
+    if (!videoId || !buyerUid || !creatorUid) {
+      console.log("Missing metadata in deleted subscription:", subscription.id)
+      return
+    }
+
+    // Update the user's access to mark it as expired
+    await db.collection("userAccess").doc(buyerUid).collection("videos").doc(videoId).update({
+      expiresAt: new Date(),
+      subscriptionStatus: "canceled",
+      canceledAt: new Date(),
+    })
+
+    console.log(`Subscription ${subscription.id} for video ${videoId} has been canceled`)
+  } catch (error) {
+    console.error("Error handling subscription.deleted:", error)
   }
 }

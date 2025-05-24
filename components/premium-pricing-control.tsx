@@ -16,10 +16,14 @@ import {
   CheckCircle,
   XCircle,
   RefreshCw,
+  Calendar,
+  CreditCard,
 } from "lucide-react"
 import { db, auth } from "@/lib/firebase"
 import { doc, getDoc, updateDoc, onSnapshot } from "firebase/firestore"
 import { useSearchParams } from "next/navigation"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Switch } from "@/components/ui/switch"
 
 interface PremiumPricingControlProps {
   creatorId: string
@@ -28,10 +32,16 @@ interface PremiumPricingControlProps {
 }
 
 export default function PremiumPricingControl({ creatorId, username, isOwner }: PremiumPricingControlProps) {
-  const [price, setPrice] = useState("4.99")
-  const [currentPrice, setCurrentPrice] = useState(4.99)
+  // Pricing state
+  const [pricingModel, setPricingModel] = useState<"flat" | "subscription">("flat")
+  const [flatPrice, setFlatPrice] = useState("4.99")
+  const [subscriptionPrice, setSubscriptionPrice] = useState("9.99")
+  const [currentFlatPrice, setCurrentFlatPrice] = useState(4.99)
+  const [currentSubscriptionPrice, setCurrentSubscriptionPrice] = useState(9.99)
   const [isEditing, setIsEditing] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
+
+  // Stripe connection state
   const [isConnectingStripe, setIsConnectingStripe] = useState(false)
   const [isCheckingStatus, setIsCheckingStatus] = useState(false)
   const [showSuccess, setShowSuccess] = useState(false)
@@ -70,10 +80,23 @@ export default function PremiumPricingControl({ creatorId, username, isOwner }: 
         if (doc.exists()) {
           const data = doc.data()
 
-          // Update premium price
-          if (data.premiumPrice) {
-            setCurrentPrice(data.premiumPrice)
-            setPrice(data.premiumPrice.toString())
+          // Update premium pricing
+          if (data.premiumPricingModel) {
+            setPricingModel(data.premiumPricingModel)
+          }
+
+          if (data.premiumFlatPrice) {
+            setCurrentFlatPrice(data.premiumFlatPrice)
+            setFlatPrice(data.premiumFlatPrice.toString())
+          }
+
+          if (data.premiumSubscriptionPrice) {
+            setCurrentSubscriptionPrice(data.premiumSubscriptionPrice)
+            setSubscriptionPrice(data.premiumSubscriptionPrice.toString())
+          } else if (data.premiumPrice) {
+            // Legacy support for old pricing model
+            setCurrentFlatPrice(data.premiumPrice)
+            setFlatPrice(data.premiumPrice.toString())
           }
 
           // Update Stripe status
@@ -129,16 +152,11 @@ export default function PremiumPricingControl({ creatorId, username, isOwner }: 
         }),
       })
 
-      const responseText = await response.text()
-      console.log("Response status:", response.status)
-      console.log("Response text:", responseText)
-
       if (!response.ok) {
         throw new Error(`Failed to check Stripe status: ${response.status} ${response.statusText}`)
       }
 
-      const data = JSON.parse(responseText)
-      console.log("Stripe status response:", data)
+      const data = await response.json()
 
       if (data.success) {
         // Update local state
@@ -198,9 +216,17 @@ export default function PremiumPricingControl({ creatorId, username, isOwner }: 
   }
 
   const handleSavePrice = async () => {
-    const numPrice = Number.parseFloat(price)
-    if (isNaN(numPrice) || numPrice < 0.99 || numPrice > 99.99) {
-      setError("Price must be between $0.99 and $99.99")
+    // Validate flat price
+    const numFlatPrice = Number.parseFloat(flatPrice)
+    if (isNaN(numFlatPrice) || numFlatPrice < 0.99 || numFlatPrice > 99.99) {
+      setError("Flat price must be between $0.99 and $99.99")
+      return
+    }
+
+    // Validate subscription price
+    const numSubscriptionPrice = Number.parseFloat(subscriptionPrice)
+    if (isNaN(numSubscriptionPrice) || numSubscriptionPrice < 0.99 || numSubscriptionPrice > 99.99) {
+      setError("Subscription price must be between $0.99 and $99.99")
       return
     }
 
@@ -210,11 +236,15 @@ export default function PremiumPricingControl({ creatorId, username, isOwner }: 
     try {
       const userDocRef = doc(db, "users", creatorId)
       await updateDoc(userDocRef, {
-        premiumPrice: numPrice,
+        premiumPricingModel: pricingModel,
+        premiumFlatPrice: numFlatPrice,
+        premiumSubscriptionPrice: numSubscriptionPrice,
+        premiumPrice: pricingModel === "flat" ? numFlatPrice : numSubscriptionPrice, // For backward compatibility
         premiumPriceUpdatedAt: new Date(),
       })
 
-      setCurrentPrice(numPrice)
+      setCurrentFlatPrice(numFlatPrice)
+      setCurrentSubscriptionPrice(numSubscriptionPrice)
       setIsEditing(false)
       setShowSuccess(true)
       setTimeout(() => setShowSuccess(false), 3000)
@@ -237,7 +267,11 @@ export default function PremiumPricingControl({ creatorId, username, isOwner }: 
           </div>
           <div className="flex items-center gap-1.5 bg-amber-500/10 text-amber-400 px-3 py-1 rounded-full border border-amber-500/20">
             <DollarSign className="h-3.5 w-3.5" />
-            <span className="font-medium">{currentPrice.toFixed(2)}</span>
+            <span className="font-medium">
+              {pricingModel === "flat"
+                ? `${currentFlatPrice.toFixed(2)} (one-time)`
+                : `${currentSubscriptionPrice.toFixed(2)}/month`}
+            </span>
           </div>
         </div>
       </div>
@@ -272,11 +306,15 @@ export default function PremiumPricingControl({ creatorId, username, isOwner }: 
           </div>
           <div className="flex items-center gap-1.5 bg-amber-500/10 text-amber-400 px-3 py-1 rounded-full border border-amber-500/20">
             <DollarSign className="h-3.5 w-3.5" />
-            <span className="font-medium">{currentPrice.toFixed(2)}</span>
+            <span className="font-medium">
+              {pricingModel === "flat"
+                ? `${currentFlatPrice.toFixed(2)} (one-time)`
+                : `${currentSubscriptionPrice.toFixed(2)}/month`}
+            </span>
           </div>
         </div>
         <CardDescription className="text-zinc-400">
-          Set the price for all your premium content. Subscribers will pay this amount to access your premium videos.
+          Set the price for your premium content. Choose between a one-time payment or a monthly subscription.
         </CardDescription>
       </CardHeader>
 
@@ -387,50 +425,150 @@ export default function PremiumPricingControl({ creatorId, username, isOwner }: 
         {stripeStatus.isConnected && (
           <>
             {isEditing ? (
-              <div className="space-y-4">
-                <div>
-                  <Label htmlFor="price" className="text-sm text-zinc-300">
-                    Subscription Price (USD)
-                  </Label>
-                  <div className="relative mt-1.5">
-                    <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
-                      <DollarSign className="h-4 w-4 text-zinc-500" />
+              <div className="space-y-6">
+                <div className="p-4 bg-zinc-800/30 rounded-lg border border-zinc-700/50">
+                  <div className="flex items-center justify-between mb-4">
+                    <Label htmlFor="pricing-model" className="text-sm font-medium text-white">
+                      Pricing Model
+                    </Label>
+                    <div className="flex items-center space-x-2">
+                      <Label htmlFor="pricing-model" className="text-sm text-zinc-400">
+                        {pricingModel === "flat" ? "One-time Payment" : "Monthly Subscription"}
+                      </Label>
+                      <Switch
+                        id="pricing-model"
+                        checked={pricingModel === "subscription"}
+                        onCheckedChange={(checked) => setPricingModel(checked ? "subscription" : "flat")}
+                      />
                     </div>
-                    <Input
-                      id="price"
-                      type="number"
-                      min="0.99"
-                      max="99.99"
-                      step="0.01"
-                      value={price}
-                      onChange={(e) => setPrice(e.target.value)}
-                      className="pl-8 bg-zinc-800/50 border-zinc-700 focus:border-amber-500 text-white"
-                    />
                   </div>
-                  <p className="mt-1.5 text-xs text-zinc-500">Minimum price: $0.99, Maximum price: $99.99</p>
+
+                  <Tabs
+                    value={pricingModel}
+                    onValueChange={(value) => setPricingModel(value as "flat" | "subscription")}
+                  >
+                    <TabsList className="grid w-full grid-cols-2 mb-4">
+                      <TabsTrigger value="flat" className="flex items-center gap-2">
+                        <CreditCard className="h-4 w-4" />
+                        One-time Payment
+                      </TabsTrigger>
+                      <TabsTrigger value="subscription" className="flex items-center gap-2">
+                        <Calendar className="h-4 w-4" />
+                        Monthly Subscription
+                      </TabsTrigger>
+                    </TabsList>
+
+                    <TabsContent value="flat" className="space-y-4">
+                      <div>
+                        <Label htmlFor="flat-price" className="text-sm text-zinc-300">
+                          One-time Payment Price (USD)
+                        </Label>
+                        <div className="relative mt-1.5">
+                          <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
+                            <DollarSign className="h-4 w-4 text-zinc-500" />
+                          </div>
+                          <Input
+                            id="flat-price"
+                            type="number"
+                            min="0.99"
+                            max="99.99"
+                            step="0.01"
+                            value={flatPrice}
+                            onChange={(e) => setFlatPrice(e.target.value)}
+                            className="pl-8 bg-zinc-800/50 border-zinc-700 focus:border-amber-500 text-white"
+                          />
+                        </div>
+                        <p className="mt-1.5 text-xs text-zinc-500">
+                          Customers will pay this amount once to access all your premium content.
+                        </p>
+                      </div>
+                    </TabsContent>
+
+                    <TabsContent value="subscription" className="space-y-4">
+                      <div>
+                        <Label htmlFor="subscription-price" className="text-sm text-zinc-300">
+                          Monthly Subscription Price (USD)
+                        </Label>
+                        <div className="relative mt-1.5">
+                          <div className="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
+                            <DollarSign className="h-4 w-4 text-zinc-500" />
+                          </div>
+                          <Input
+                            id="subscription-price"
+                            type="number"
+                            min="0.99"
+                            max="99.99"
+                            step="0.01"
+                            value={subscriptionPrice}
+                            onChange={(e) => setSubscriptionPrice(e.target.value)}
+                            className="pl-8 bg-zinc-800/50 border-zinc-700 focus:border-amber-500 text-white"
+                          />
+                        </div>
+                        <p className="mt-1.5 text-xs text-zinc-500">
+                          Customers will pay this amount monthly to access all your premium content.
+                        </p>
+                      </div>
+                    </TabsContent>
+                  </Tabs>
                 </div>
               </div>
             ) : (
               <div className="p-4 bg-zinc-800/30 rounded-lg">
-                <div className="flex items-center justify-between">
+                <div className="flex items-center justify-between mb-4">
                   <div>
-                    <p className="text-sm text-zinc-400">Current subscription price</p>
-                    <p className="text-xl font-semibold text-white flex items-center">
-                      <DollarSign className="h-5 w-5 text-amber-500" />
-                      {currentPrice.toFixed(2)}
+                    <p className="text-sm text-zinc-400">Current pricing model</p>
+                    <p className="text-lg font-semibold text-white flex items-center">
+                      {pricingModel === "flat" ? (
+                        <>
+                          <CreditCard className="h-5 w-5 text-amber-500 mr-2" />
+                          One-time Payment
+                        </>
+                      ) : (
+                        <>
+                          <Calendar className="h-5 w-5 text-amber-500 mr-2" />
+                          Monthly Subscription
+                        </>
+                      )}
                     </p>
                   </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setIsEditing(true)}
-                    disabled={!stripeStatus.onboardingComplete}
-                    className="bg-zinc-800 border-zinc-700 hover:bg-zinc-700 text-white disabled:opacity-50"
-                  >
-                    <Settings className="h-4 w-4 mr-2" />
-                    Change Price
-                  </Button>
                 </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                  <div
+                    className={`p-3 rounded-lg ${pricingModel === "flat" ? "bg-amber-500/10 border border-amber-500/20" : "bg-zinc-800/50 border border-zinc-700/30"}`}
+                  >
+                    <p className="text-sm text-zinc-400">One-time payment price</p>
+                    <p className="text-xl font-semibold text-white flex items-center">
+                      <DollarSign
+                        className={`h-5 w-5 ${pricingModel === "flat" ? "text-amber-500" : "text-zinc-500"} mr-1`}
+                      />
+                      {currentFlatPrice.toFixed(2)}
+                    </p>
+                  </div>
+
+                  <div
+                    className={`p-3 rounded-lg ${pricingModel === "subscription" ? "bg-amber-500/10 border border-amber-500/20" : "bg-zinc-800/50 border border-zinc-700/30"}`}
+                  >
+                    <p className="text-sm text-zinc-400">Monthly subscription price</p>
+                    <p className="text-xl font-semibold text-white flex items-center">
+                      <DollarSign
+                        className={`h-5 w-5 ${pricingModel === "subscription" ? "text-amber-500" : "text-zinc-500"} mr-1`}
+                      />
+                      {currentSubscriptionPrice.toFixed(2)}/month
+                    </p>
+                  </div>
+                </div>
+
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setIsEditing(true)}
+                  disabled={!stripeStatus.onboardingComplete}
+                  className="bg-zinc-800 border-zinc-700 hover:bg-zinc-700 text-white disabled:opacity-50"
+                >
+                  <Settings className="h-4 w-4 mr-2" />
+                  Change Pricing
+                </Button>
               </div>
             )}
           </>
@@ -444,7 +582,8 @@ export default function PremiumPricingControl({ creatorId, username, isOwner }: 
             size="sm"
             onClick={() => {
               setIsEditing(false)
-              setPrice(currentPrice.toString())
+              setFlatPrice(currentFlatPrice.toString())
+              setSubscriptionPrice(currentSubscriptionPrice.toString())
               setError(null)
             }}
             className="bg-zinc-800 border-zinc-700 hover:bg-zinc-700 text-white"
@@ -465,7 +604,7 @@ export default function PremiumPricingControl({ creatorId, username, isOwner }: 
             ) : (
               <>
                 <Save className="h-4 w-4 mr-2" />
-                Save Price
+                Save Pricing
               </>
             )}
           </Button>
