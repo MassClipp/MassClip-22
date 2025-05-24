@@ -2,13 +2,61 @@
 
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
-import { Film, Lock, Upload, DollarSign, TrendingUp, Clock, AlertCircle, Plus, ExternalLink } from "lucide-react"
+import { Film, Lock, Upload, DollarSign, TrendingUp, Clock, AlertCircle, Plus, ExternalLink, Zap } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { useAuth } from "@/contexts/auth-context"
 import { doc, getDoc, collection, query, where, getDocs, limit, orderBy } from "firebase/firestore"
 import { db } from "@/lib/firebase"
 import { format } from "date-fns"
+import { motion } from "framer-motion"
+
+// Animation variants
+const containerVariants = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: {
+      staggerChildren: 0.1,
+    },
+  },
+}
+
+const itemVariants = {
+  hidden: { y: 20, opacity: 0 },
+  visible: {
+    y: 0,
+    opacity: 1,
+    transition: {
+      duration: 0.5,
+      ease: [0.25, 0.1, 0.25, 1.0],
+    },
+  },
+}
+
+// Motivational quotes
+const quotes = [
+  {
+    text: "Success is not final, failure is not fatal: It is the courage to continue that counts.",
+    author: "Winston Churchill",
+  },
+  {
+    text: "The way to get started is to quit talking and begin doing.",
+    author: "Walt Disney",
+  },
+  {
+    text: "Your time is limited, don't waste it living someone else's life.",
+    author: "Steve Jobs",
+  },
+  {
+    text: "The future belongs to those who believe in the beauty of their dreams.",
+    author: "Eleanor Roosevelt",
+  },
+  {
+    text: "Success is walking from failure to failure with no loss of enthusiasm.",
+    author: "Winston Churchill",
+  },
+]
 
 export default function DashboardPage() {
   const router = useRouter()
@@ -24,6 +72,9 @@ export default function DashboardPage() {
   const [recentVideos, setRecentVideos] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [stripeConnected, setStripeConnected] = useState(false)
+
+  // Random quote
+  const randomQuote = quotes[Math.floor(Math.random() * quotes.length)]
 
   useEffect(() => {
     const fetchData = async () => {
@@ -127,15 +178,23 @@ export default function DashboardPage() {
   }
 
   return (
-    <div className="space-y-8">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+    <motion.div className="space-y-8" variants={containerVariants} initial="hidden" animate="visible">
+      <motion.div
+        variants={itemVariants}
+        className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4"
+      >
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Creator Dashboard</h1>
+          <h1 className="text-3xl font-bold tracking-tight bg-gradient-to-r from-white to-zinc-400 bg-clip-text text-transparent">
+            Creator Dashboard
+          </h1>
           <p className="text-zinc-400 mt-1">Welcome back, {userData?.displayName || user?.displayName || "Creator"}</p>
         </div>
 
         <div className="flex gap-3">
-          <Button onClick={() => router.push("/dashboard/upload")} className="bg-red-600 hover:bg-red-700">
+          <Button
+            onClick={() => router.push("/dashboard/upload")}
+            className="bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 border-none shadow-lg shadow-red-900/20"
+          >
             <Upload className="h-4 w-4 mr-2" />
             Upload Content
           </Button>
@@ -151,98 +210,113 @@ export default function DashboardPage() {
             </Button>
           )}
         </div>
-      </div>
+      </motion.div>
 
       {!stripeConnected && (
-        <Card className="bg-amber-500/10 border-amber-500/20">
-          <CardContent className="p-6">
-            <div className="flex items-start gap-4">
-              <div className="bg-amber-500/20 p-3 rounded-full">
-                <AlertCircle className="h-6 w-6 text-amber-500" />
+        <motion.div variants={itemVariants}>
+          <Card className="bg-gradient-to-r from-amber-500/10 to-amber-600/5 border-amber-500/20 overflow-hidden relative">
+            <div className="absolute inset-0 bg-[url('/noise.png')] opacity-[0.03] mix-blend-soft-light"></div>
+            <CardContent className="p-6">
+              <div className="flex items-start gap-4">
+                <div className="bg-amber-500/20 p-3 rounded-full">
+                  <AlertCircle className="h-6 w-6 text-amber-500" />
+                </div>
+                <div className="space-y-2">
+                  <h3 className="text-lg font-medium text-white">Connect Stripe to Receive Payments</h3>
+                  <p className="text-zinc-400">
+                    You need to connect your Stripe account to receive payments for your premium content.
+                  </p>
+                  <Button
+                    onClick={() => router.push("/dashboard/earnings")}
+                    className="mt-2 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-black border-none shadow-lg shadow-amber-900/20"
+                  >
+                    Set Up Payments
+                  </Button>
+                </div>
               </div>
-              <div className="space-y-2">
-                <h3 className="text-lg font-medium text-white">Connect Stripe to Receive Payments</h3>
-                <p className="text-zinc-400">
-                  You need to connect your Stripe account to receive payments for your premium content.
-                </p>
-                <Button
-                  onClick={() => router.push("/dashboard/earnings")}
-                  className="mt-2 bg-amber-500 hover:bg-amber-600 text-black"
-                >
-                  Set Up Payments
-                </Button>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        </motion.div>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <Card className="bg-zinc-900/60 border-zinc-800/50 backdrop-blur-sm">
-          <CardHeader className="pb-2">
+      <motion.div variants={itemVariants} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <Card className="bg-gradient-to-br from-zinc-900/80 to-zinc-800/30 border-zinc-800/50 backdrop-blur-sm overflow-hidden relative group">
+          <div className="absolute inset-0 bg-[url('/noise.png')] opacity-[0.03] mix-blend-soft-light"></div>
+          <div className="absolute inset-0 bg-gradient-to-r from-blue-600/0 via-blue-600/0 to-blue-600/0 group-hover:from-blue-600/5 group-hover:via-blue-600/10 group-hover:to-blue-600/5 transition-all duration-700"></div>
+          <CardHeader className="pb-2 relative">
             <CardDescription>Free Videos</CardDescription>
             <CardTitle className="text-2xl flex items-center">
               <Film className="h-5 w-5 text-blue-500 mr-2" />
               {stats.freeVideos}
             </CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="relative">
             <p className="text-sm text-zinc-500">Public content</p>
           </CardContent>
         </Card>
 
-        <Card className="bg-zinc-900/60 border-zinc-800/50 backdrop-blur-sm">
-          <CardHeader className="pb-2">
+        <Card className="bg-gradient-to-br from-zinc-900/80 to-zinc-800/30 border-zinc-800/50 backdrop-blur-sm overflow-hidden relative group">
+          <div className="absolute inset-0 bg-[url('/noise.png')] opacity-[0.03] mix-blend-soft-light"></div>
+          <div className="absolute inset-0 bg-gradient-to-r from-amber-600/0 via-amber-600/0 to-amber-600/0 group-hover:from-amber-600/5 group-hover:via-amber-600/10 group-hover:to-amber-600/5 transition-all duration-700"></div>
+          <CardHeader className="pb-2 relative">
             <CardDescription>Premium Videos</CardDescription>
             <CardTitle className="text-2xl flex items-center">
               <Lock className="h-5 w-5 text-amber-500 mr-2" />
               {stats.premiumVideos}
             </CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="relative">
             <p className="text-sm text-zinc-500">Paid content</p>
           </CardContent>
         </Card>
 
-        <Card className="bg-zinc-900/60 border-zinc-800/50 backdrop-blur-sm">
-          <CardHeader className="pb-2">
+        <Card className="bg-gradient-to-br from-zinc-900/80 to-zinc-800/30 border-zinc-800/50 backdrop-blur-sm overflow-hidden relative group">
+          <div className="absolute inset-0 bg-[url('/noise.png')] opacity-[0.03] mix-blend-soft-light"></div>
+          <div className="absolute inset-0 bg-gradient-to-r from-green-600/0 via-green-600/0 to-green-600/0 group-hover:from-green-600/5 group-hover:via-green-600/10 group-hover:to-green-600/5 transition-all duration-700"></div>
+          <CardHeader className="pb-2 relative">
             <CardDescription>Total Views</CardDescription>
             <CardTitle className="text-2xl flex items-center">
               <TrendingUp className="h-5 w-5 text-green-500 mr-2" />
               {stats.totalViews.toLocaleString()}
             </CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="relative">
             <p className="text-sm text-zinc-500">Across all videos</p>
           </CardContent>
         </Card>
 
-        <Card className="bg-zinc-900/60 border-zinc-800/50 backdrop-blur-sm">
-          <CardHeader className="pb-2">
+        <Card className="bg-gradient-to-br from-zinc-900/80 to-zinc-800/30 border-zinc-800/50 backdrop-blur-sm overflow-hidden relative group">
+          <div className="absolute inset-0 bg-[url('/noise.png')] opacity-[0.03] mix-blend-soft-light"></div>
+          <div className="absolute inset-0 bg-gradient-to-r from-purple-600/0 via-purple-600/0 to-purple-600/0 group-hover:from-purple-600/5 group-hover:via-purple-600/10 group-hover:to-purple-600/5 transition-all duration-700"></div>
+          <CardHeader className="pb-2 relative">
             <CardDescription>Total Earnings</CardDescription>
             <CardTitle className="text-2xl flex items-center">
               <DollarSign className="h-5 w-5 text-purple-500 mr-2" />${stats.totalEarnings.toFixed(2)}
             </CardTitle>
           </CardHeader>
-          <CardContent>
+          <CardContent className="relative">
             <p className="text-sm text-zinc-500">
               {stats.recentSales} {stats.recentSales === 1 ? "sale" : "sales"} in 30 days
             </p>
           </CardContent>
         </Card>
-      </div>
+      </motion.div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <Card className="bg-zinc-900/60 border-zinc-800/50 backdrop-blur-sm lg:col-span-2">
-          <CardHeader>
+      <motion.div variants={itemVariants} className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <Card className="bg-gradient-to-br from-zinc-900/80 to-zinc-800/30 border-zinc-800/50 backdrop-blur-sm lg:col-span-2 overflow-hidden relative">
+          <div className="absolute inset-0 bg-[url('/noise.png')] opacity-[0.03] mix-blend-soft-light"></div>
+          <CardHeader className="relative">
             <CardTitle>Recent Content</CardTitle>
             <CardDescription>Your most recently uploaded videos</CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="relative">
             {recentVideos.length > 0 ? (
               <div className="space-y-4">
                 {recentVideos.map((video) => (
-                  <div key={video.id} className="flex items-start gap-4">
+                  <div
+                    key={video.id}
+                    className="flex items-start gap-4 p-3 rounded-lg hover:bg-zinc-800/30 transition-colors"
+                  >
                     <div className="aspect-[9/16] w-16 bg-zinc-800 rounded-md overflow-hidden relative">
                       {video.thumbnailUrl ? (
                         <img
@@ -256,7 +330,7 @@ export default function DashboardPage() {
                         </div>
                       )}
                       {video.type === "premium" && (
-                        <div className="absolute top-1 right-1 bg-amber-500 text-black text-[10px] px-1 rounded-sm font-medium">
+                        <div className="absolute top-1 right-1 bg-gradient-to-r from-amber-500 to-amber-600 text-black text-[10px] px-1 rounded-sm font-medium">
                           PRO
                         </div>
                       )}
@@ -282,7 +356,10 @@ export default function DashboardPage() {
                 <Film className="h-10 w-10 text-zinc-700 mx-auto mb-3" />
                 <h3 className="text-lg font-medium text-white mb-1">No videos yet</h3>
                 <p className="text-zinc-500 mb-4">Upload your first video to get started</p>
-                <Button onClick={() => router.push("/dashboard/upload")} className="bg-red-600 hover:bg-red-700">
+                <Button
+                  onClick={() => router.push("/dashboard/upload")}
+                  className="bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 border-none shadow-lg shadow-red-900/20"
+                >
                   <Upload className="h-4 w-4 mr-2" />
                   Upload Video
                 </Button>
@@ -290,7 +367,7 @@ export default function DashboardPage() {
             )}
           </CardContent>
           {recentVideos.length > 0 && (
-            <CardFooter className="border-t border-zinc-800/50 px-6 py-4">
+            <CardFooter className="border-t border-zinc-800/50 px-6 py-4 relative">
               <Button
                 variant="ghost"
                 className="w-full justify-center text-zinc-400 hover:text-white hover:bg-zinc-800"
@@ -302,48 +379,67 @@ export default function DashboardPage() {
           )}
         </Card>
 
-        <Card className="bg-zinc-900/60 border-zinc-800/50 backdrop-blur-sm">
-          <CardHeader>
-            <CardTitle>Quick Actions</CardTitle>
-            <CardDescription>Common tasks and shortcuts</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <Button
-              onClick={() => router.push("/dashboard/upload?premium=true")}
-              className="w-full justify-start bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-black"
-            >
-              <Plus className="h-4 w-4 mr-2" />
-              Add Premium Video
-            </Button>
+        <div className="space-y-6">
+          <Card className="bg-gradient-to-br from-zinc-900/80 to-zinc-800/30 border-zinc-800/50 backdrop-blur-sm overflow-hidden relative">
+            <div className="absolute inset-0 bg-[url('/noise.png')] opacity-[0.03] mix-blend-soft-light"></div>
+            <CardHeader className="relative">
+              <CardTitle>Quick Actions</CardTitle>
+              <CardDescription>Common tasks and shortcuts</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4 relative">
+              <Button
+                onClick={() => router.push("/dashboard/upload?premium=true")}
+                className="w-full justify-start bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-black border-none shadow-lg shadow-amber-900/20"
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Add Premium Video
+              </Button>
 
-            <Button
-              onClick={() => router.push("/dashboard/upload")}
-              className="w-full justify-start bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700"
-            >
-              <Plus className="h-4 w-4 mr-2" />
-              Add Free Video
-            </Button>
+              <Button
+                onClick={() => router.push("/dashboard/upload")}
+                className="w-full justify-start bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 border-none shadow-lg shadow-red-900/20"
+              >
+                <Plus className="h-4 w-4 mr-2" />
+                Add Free Video
+              </Button>
 
-            <Button
-              onClick={() => router.push("/dashboard/earnings")}
-              variant="outline"
-              className="w-full justify-start border-zinc-700 hover:bg-zinc-800"
-            >
-              <DollarSign className="h-4 w-4 mr-2" />
-              View Earnings
-            </Button>
+              <Button
+                onClick={() => router.push("/dashboard/earnings")}
+                variant="outline"
+                className="w-full justify-start border-zinc-700 hover:bg-zinc-800"
+              >
+                <DollarSign className="h-4 w-4 mr-2" />
+                View Earnings
+              </Button>
 
-            <Button
-              onClick={() => router.push("/dashboard/profile")}
-              variant="outline"
-              className="w-full justify-start border-zinc-700 hover:bg-zinc-800"
-            >
-              <Film className="h-4 w-4 mr-2" />
-              Edit Profile
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
-    </div>
+              <Button
+                onClick={() => router.push("/dashboard/profile")}
+                variant="outline"
+                className="w-full justify-start border-zinc-700 hover:bg-zinc-800"
+              >
+                <Film className="h-4 w-4 mr-2" />
+                Edit Profile
+              </Button>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-gradient-to-br from-zinc-900/80 to-zinc-800/30 border-zinc-800/50 backdrop-blur-sm overflow-hidden relative">
+            <div className="absolute inset-0 bg-[url('/noise.png')] opacity-[0.03] mix-blend-soft-light"></div>
+            <div className="absolute inset-0 bg-gradient-to-br from-red-600/5 via-amber-600/5 to-purple-600/5"></div>
+            <CardContent className="p-6 relative">
+              <div className="flex items-start gap-3">
+                <div className="bg-gradient-to-br from-red-500/20 to-amber-500/20 p-2 rounded-full">
+                  <Zap className="h-5 w-5 text-amber-500" />
+                </div>
+                <div>
+                  <p className="text-sm text-zinc-300 italic mb-2">"{randomQuote.text}"</p>
+                  <p className="text-xs text-zinc-500">— {randomQuote.author}</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </motion.div>
+    </motion.div>
   )
 }
