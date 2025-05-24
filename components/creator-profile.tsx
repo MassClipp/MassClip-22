@@ -5,21 +5,7 @@ import type React from "react"
 import { useState, useEffect, useRef } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
 import Image from "next/image"
-import {
-  Share2,
-  Edit,
-  Plus,
-  Instagram,
-  Twitter,
-  Globe,
-  Calendar,
-  Film,
-  Lock,
-  Play,
-  Pause,
-  Trash2,
-  MoreHorizontal,
-} from "lucide-react"
+import { Share2, Edit, Plus, Instagram, Twitter, Globe, Calendar, Film, Lock, Play, Pause, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useAuth } from "@/contexts/auth-context"
 import { cn } from "@/lib/utils"
@@ -69,7 +55,6 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
   const [error, setError] = useState<string | null>(null)
   const [deletingVideoId, setDeletingVideoId] = useState<string | null>(null)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null)
-  const [showOptionsFor, setShowOptionsFor] = useState<string | null>(null)
 
   // Set active tab based on URL query parameter
   useEffect(() => {
@@ -80,22 +65,6 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
       setActiveTab("free")
     }
   }, [searchParams])
-
-  // Close options menu when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      // Only close if clicking outside the options menu
-      const target = e.target as HTMLElement
-      if (!target.closest(".options-menu")) {
-        setShowOptionsFor(null)
-      }
-    }
-
-    document.addEventListener("click", handleClickOutside)
-    return () => {
-      document.removeEventListener("click", handleClickOutside)
-    }
-  }, [])
 
   // Fetch videos from Firestore
   useEffect(() => {
@@ -124,7 +93,6 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
         // Process videos
         const videos = snapshot.docs.map((doc) => {
           const data = doc.data()
-          console.log("Video data:", data)
           return {
             id: doc.id,
             title: data.title || "Untitled",
@@ -189,19 +157,23 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
     }
   }
 
+  // New simplified delete function
+  const confirmDeleteVideo = (videoId: string) => {
+    setShowDeleteConfirm(videoId)
+  }
+
   const handleDeleteVideo = async (videoId: string) => {
     if (!user) return
 
-    setDeletingVideoId(videoId)
-    console.log("Deleting video:", videoId)
-
     try {
+      setDeletingVideoId(videoId)
+      console.log("Deleting video:", videoId)
+
       const response = await fetch(`/api/delete-video?videoId=${videoId}&userId=${user.uid}`, {
         method: "DELETE",
       })
 
       const result = await response.json()
-      console.log("Delete response:", result)
 
       if (!response.ok) {
         throw new Error(result.error || "Failed to delete video")
@@ -221,15 +193,13 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
     }
   }
 
-  // Video card component with inline playback - fixed for 9:16 format and proper video controls
+  // Video card component with inline playback
   const VideoCard = ({ video }: { video: VideoItem }) => {
     const videoRef = useRef<HTMLVideoElement>(null)
     const [isPlaying, setIsPlaying] = useState(false)
     const [isHovered, setIsHovered] = useState(false)
-    const optionsRef = useRef<HTMLDivElement>(null)
 
     const togglePlay = (e: React.MouseEvent) => {
-      e.stopPropagation()
       e.preventDefault()
 
       if (!videoRef.current) return
@@ -266,27 +236,6 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
       }
     }
 
-    const toggleOptions = (e: React.MouseEvent) => {
-      e.stopPropagation()
-      e.preventDefault()
-      console.log("Toggle options for video:", video.id) // Debug log
-
-      // Toggle options menu
-      if (showOptionsFor === video.id) {
-        setShowOptionsFor(null)
-      } else {
-        setShowOptionsFor(video.id)
-      }
-    }
-
-    const handleDeleteClick = (e: React.MouseEvent) => {
-      e.stopPropagation()
-      e.preventDefault()
-      console.log("Delete clicked for video:", video.id) // Debug log
-      setShowOptionsFor(null)
-      setShowDeleteConfirm(video.id)
-    }
-
     return (
       <div
         className="group relative transition-all duration-300"
@@ -318,45 +267,19 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
             </div>
           )}
 
-          {/* Minimal options button - only show for owner on hover */}
+          {/* Delete button - only show for owner on hover */}
           {isOwner && (
-            <div
-              className="options-menu absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-20"
-              ref={optionsRef}
+            <button
+              onClick={(e) => {
+                e.stopPropagation()
+                e.preventDefault()
+                confirmDeleteVideo(video.id)
+              }}
+              className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-20 w-8 h-8 rounded-full bg-red-600/80 hover:bg-red-700 flex items-center justify-center text-white"
+              aria-label="Delete video"
             >
-              <div className="relative">
-                <button
-                  onClick={toggleOptions}
-                  className="w-8 h-8 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center text-white transition-all duration-200 hover:bg-black/70"
-                  aria-label="Video options"
-                >
-                  <MoreHorizontal className="h-4 w-4" />
-                </button>
-
-                {/* Options dropdown */}
-                {showOptionsFor === video.id && (
-                  <div className="absolute top-full right-0 mt-1 bg-zinc-800 border border-zinc-700 rounded-md shadow-xl overflow-hidden z-50 min-w-[120px]">
-                    <button
-                      onClick={handleDeleteClick}
-                      className="flex items-center w-full px-3 py-2 text-sm text-white hover:bg-red-600 transition-colors group/delete"
-                      disabled={deletingVideoId === video.id}
-                    >
-                      {deletingVideoId === video.id ? (
-                        <>
-                          <div className="w-3 h-3 border border-white border-t-transparent rounded-full animate-spin mr-2" />
-                          <span>Deleting...</span>
-                        </>
-                      ) : (
-                        <>
-                          <Trash2 className="h-3.5 w-3.5 mr-2 text-zinc-400 group-hover/delete:text-white" />
-                          <span>Delete</span>
-                        </>
-                      )}
-                    </button>
-                  </div>
-                )}
-              </div>
-            </div>
+              <Trash2 className="h-4 w-4" />
+            </button>
           )}
 
           {/* Play/Pause button - only show on hover */}
@@ -651,14 +574,14 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
           )}
         </div>
       </div>
+
       {/* Delete Confirmation Modal */}
       {showDeleteConfirm && (
-        <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+        <div className="fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
           <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 max-w-md w-full">
-            <h3 className="text-lg font-semibold text-white mb-2">Delete Video</h3>
-            <p className="text-zinc-400 mb-6">
-              Are you sure you want to delete this video? This action cannot be undone and will permanently remove the
-              video and its files.
+            <h3 className="text-xl font-semibold text-white mb-2">Delete Video</h3>
+            <p className="text-zinc-300 mb-6">
+              Are you sure you want to delete this video? This action cannot be undone.
             </p>
             <div className="flex gap-3 justify-end">
               <Button
@@ -675,7 +598,7 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
               >
                 {deletingVideoId === showDeleteConfirm ? (
                   <>
-                    <div className="w-4 h-4 border border-white border-t-transparent rounded-full animate-spin mr-2" />
+                    <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
                     Deleting...
                   </>
                 ) : (
