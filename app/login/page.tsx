@@ -1,7 +1,7 @@
 "use client"
 
 import type React from "react"
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { motion } from "framer-motion"
@@ -14,6 +14,8 @@ import Logo from "@/components/logo"
 import { Loader2, ArrowRight } from "lucide-react"
 import { GoogleAuthButton } from "@/components/google-auth-button"
 import { loginWithGoogle, loginWithGoogleRedirect } from "@/lib/auth"
+import { useAuthRedirect } from "@/hooks/use-auth-redirect"
+import { auth } from "@/lib/firebase"
 
 export default function LoginPage() {
   const [email, setEmail] = useState("")
@@ -21,8 +23,21 @@ export default function LoginPage() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [isGoogleLoading, setIsGoogleLoading] = useState(false)
+  const [authInitialized, setAuthInitialized] = useState(false)
   const { signIn } = useFirebaseAuth()
   const router = useRouter()
+
+  // Use the auth redirect hook
+  useAuthRedirect()
+
+  // Check if auth is initialized
+  useEffect(() => {
+    const unsubscribe = auth.onAuthStateChanged(() => {
+      setAuthInitialized(true)
+    })
+
+    return () => unsubscribe()
+  }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -85,6 +100,17 @@ export default function LoginPage() {
     }
   }
 
+  // Don't render the login form until auth is initialized
+  if (!authInitialized) {
+    return (
+      <div className="min-h-screen bg-black flex flex-col justify-center items-center">
+        <div className="fixed inset-0 z-0 bg-gradient-to-b from-black via-black to-gray-900"></div>
+        <Loader2 className="h-8 w-8 animate-spin text-red-500" />
+      </div>
+    )
+  }
+
+  // If auth is initialized and we're still on this page, render the login form
   return (
     <div className="min-h-screen bg-black flex flex-col justify-center items-center px-4">
       {/* Premium Gradient Background */}

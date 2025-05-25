@@ -1,53 +1,86 @@
 import { auth } from "@/lib/firebase"
-import { GoogleAuthProvider, signInWithPopup, setPersistence, browserLocalPersistence } from "firebase/auth"
+import {
+  GoogleAuthProvider,
+  signInWithPopup,
+  signInWithRedirect,
+  setPersistence,
+  browserLocalPersistence,
+} from "firebase/auth"
 
+// Set up persistence to local storage
+const setupPersistence = async () => {
+  try {
+    await setPersistence(auth, browserLocalPersistence)
+    console.log("Auth persistence set to local")
+  } catch (error) {
+    console.error("Error setting persistence:", error)
+  }
+}
+
+// Initialize persistence
+setupPersistence()
+
+// Login with Google using popup
 export const loginWithGoogle = async () => {
   const provider = new GoogleAuthProvider()
 
-  // Force account selection
+  // Add custom parameters
   provider.setCustomParameters({
     prompt: "select_account",
   })
 
   try {
-    console.log("Setting persistence to local...")
-    await setPersistence(auth, browserLocalPersistence)
-
     console.log("Opening Google sign-in popup...")
 
-    // Add a small delay to ensure the button click is registered
+    // Set persistence before sign-in
+    await setPersistence(auth, browserLocalPersistence)
+
+    // Small delay to ensure click event is fully processed
     await new Promise((resolve) => setTimeout(resolve, 100))
 
     const result = await signInWithPopup(auth, provider)
     const user = result.user
-    console.log("User signed in successfully:", user.email)
-    return { success: true, user }
-  } catch (err: any) {
-    if (err.code === "auth/popup-closed-by-user") {
-      console.warn("Popup was closed by user or browser")
-    } else if (err.code === "auth/popup-blocked") {
-      console.error("Popup was blocked by the browser")
-      alert(
-        "Please allow popups for this site to sign in with Google. Check your browser's address bar for a popup blocker icon.",
-      )
-    } else {
-      console.error("Login error:", err.code, err.message)
+    console.log("User signed in:", user.email)
+
+    return {
+      success: true,
+      user,
     }
-    return { success: false, error: err }
+  } catch (error: any) {
+    console.error("Login error:", error.code, error.message)
+
+    return {
+      success: false,
+      error,
+    }
   }
 }
 
-// Alternative: Try redirect method if popup fails
+// Login with Google using redirect (fallback)
 export const loginWithGoogleRedirect = async () => {
   const provider = new GoogleAuthProvider()
 
+  // Add custom parameters
+  provider.setCustomParameters({
+    prompt: "select_account",
+  })
+
   try {
-    console.log("Using redirect method for Google sign-in...")
-    const { signInWithRedirect } = await import("firebase/auth")
+    console.log("Redirecting to Google sign-in...")
+
+    // Set persistence before sign-in
+    await setPersistence(auth, browserLocalPersistence)
+
     await signInWithRedirect(auth, provider)
-    // This won't return - the page will redirect
-  } catch (err: any) {
-    console.error("Redirect login error:", err.code, err.message)
-    return { success: false, error: err }
+
+    // This function won't return normally - the page will redirect
+    return { success: true }
+  } catch (error: any) {
+    console.error("Login redirect error:", error.code, error.message)
+
+    return {
+      success: false,
+      error,
+    }
   }
 }
