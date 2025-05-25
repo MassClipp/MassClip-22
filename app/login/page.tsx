@@ -49,11 +49,11 @@ export default function LoginPage() {
     setIsGoogleLoading(true)
 
     try {
+      // We're just initiating the redirect here
       const result = await signInWithGoogle()
 
-      if (result.success) {
-        router.push("/dashboard")
-      } else {
+      // This code won't run until after redirect completes
+      if (!result.success) {
         setErrorMessage(result.error || "Failed to sign in with Google")
       }
     } catch (error) {

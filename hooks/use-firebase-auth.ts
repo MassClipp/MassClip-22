@@ -10,6 +10,7 @@ import {
   sendPasswordResetEmail,
   GoogleAuthProvider,
   signInWithPopup,
+  getRedirectResult,
 } from "firebase/auth"
 import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore"
 import { auth, isFirebaseConfigured, db } from "@/lib/firebase"
@@ -40,8 +41,10 @@ export function useFirebaseAuth() {
       auth,
       (authUser) => {
         if (authUser) {
+          console.log("Auth state changed: User logged in", authUser.email)
           setUser(authUser)
         } else {
+          console.log("Auth state changed: User logged out")
           setUser(null)
         }
         setLoading(false)
@@ -52,6 +55,20 @@ export function useFirebaseAuth() {
         setLoading(false)
       },
     )
+
+    // Check for redirect result on initial load
+    const checkRedirectResult = async () => {
+      try {
+        const result = await getRedirectResult(auth)
+        if (result) {
+          console.log("Redirect result processed successfully")
+        }
+      } catch (err) {
+        console.error("Error processing redirect result:", err)
+      }
+    }
+
+    checkRedirectResult()
 
     return () => unsubscribe()
   }, [])
@@ -127,6 +144,13 @@ export function useFirebaseAuth() {
     try {
       setLoading(true)
       const provider = new GoogleAuthProvider()
+
+      // Add these lines to fix COOP issues
+      provider.setCustomParameters({
+        prompt: "select_account",
+      })
+
+      console.log("Initiating Google sign in with popup...")
       const result = await signInWithPopup(auth, provider)
       const user = result.user
 
