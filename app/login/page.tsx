@@ -14,8 +14,14 @@ import Logo from "@/components/logo"
 import { Loader2, ArrowRight } from "lucide-react"
 import { GoogleAuthButton } from "@/components/google-auth-button"
 import { loginWithGoogle, loginWithGoogleRedirect } from "@/lib/auth"
-import { useAuthRedirect } from "@/hooks/use-auth-redirect"
 import { auth } from "@/lib/firebase"
+import { onAuthStateChanged } from "firebase/auth"
+
+// Diagnostic logging function
+const log = (step: string, data?: any) => {
+  const timestamp = new Date().toISOString()
+  console.log(`[LOGIN DIAGNOSTIC ${timestamp}] ${step}`, data || "")
+}
 
 export default function LoginPage() {
   const [email, setEmail] = useState("")
@@ -24,37 +30,91 @@ export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false)
   const [isGoogleLoading, setIsGoogleLoading] = useState(false)
   const [authInitialized, setAuthInitialized] = useState(false)
+  const [diagnosticInfo, setDiagnosticInfo] = useState<string[]>([])
   const { signIn } = useFirebaseAuth()
   const router = useRouter()
 
-  // Use the auth redirect hook
-  useAuthRedirect()
+  // Add diagnostic info
+  const addDiagnostic = (info: string) => {
+    const timestamp = new Date().toLocaleTimeString()
+    setDiagnosticInfo((prev) => [...prev, `[${timestamp}] ${info}`])
+  }
 
-  // Check if auth is initialized
+  // Check router functionality
   useEffect(() => {
-    const unsubscribe = auth.onAuthStateChanged(() => {
+    log("Router initialized", { pathname: window.location.pathname })
+    addDiagnostic(`Router ready at ${window.location.pathname}`)
+  }, [])
+
+  // Set up auth state listener with detailed logging
+  useEffect(() => {
+    log("Setting up auth state listener")
+    addDiagnostic("Setting up auth state listener")
+
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      log("Auth state changed", {
+        user: user ? { email: user.email, uid: user.uid } : null,
+        currentPath: window.location.pathname,
+      })
+
+      if (user) {
+        addDiagnostic(`User detected: ${user.email}`)
+        addDiagnostic(`Current path: ${window.location.pathname}`)
+        addDiagnostic("Attempting redirect to /dashboard...")
+
+        // Try multiple redirect methods
+        try {
+          log("Attempting router.push")
+          router.push("/dashboard")
+          addDiagnostic("router.push('/dashboard') called")
+
+          // Fallback redirect after delay
+          setTimeout(() => {
+            if (window.location.pathname !== "/dashboard") {
+              log("Router.push failed, trying window.location")
+              addDiagnostic("Router.push failed, trying window.location")
+              window.location.href = "/dashboard"
+            }
+          }, 1000)
+        } catch (error) {
+          log("Redirect error", error)
+          addDiagnostic(`Redirect error: ${error}`)
+        }
+      } else {
+        addDiagnostic("No user detected")
+      }
+
       setAuthInitialized(true)
     })
 
-    return () => unsubscribe()
-  }, [])
+    return () => {
+      log("Cleaning up auth listener")
+      unsubscribe()
+    }
+  }, [router])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setErrorMessage(null)
     setIsLoading(true)
+    addDiagnostic("Starting email/password login...")
 
     try {
+      log("Attempting email/password sign in", { email })
       const result = await signIn(email, password)
+      log("Sign in result", result)
 
       if (result.success) {
-        router.push("/dashboard")
+        addDiagnostic("Sign in successful, waiting for auth state change...")
+        // Don't redirect here - let auth state listener handle it
       } else {
+        addDiagnostic(`Sign in failed: ${result.error}`)
         setErrorMessage(result.error || "Failed to sign in")
       }
     } catch (error) {
+      log("Sign in error", error)
+      addDiagnostic(`Sign in error: ${error}`)
       setErrorMessage("An unexpected error occurred")
-      console.error(error)
     } finally {
       setIsLoading(false)
     }
@@ -63,56 +123,76 @@ export default function LoginPage() {
   const handleGoogleSignIn = async () => {
     setErrorMessage(null)
     setIsGoogleLoading(true)
+    addDiagnostic("Starting Google sign in...")
 
     try {
-      // Try popup method first
+      log("Attempting Google sign in")
       const result = await loginWithGoogle()
+      log("Google sign in result", result)
 
       if (result.success) {
-        // Get redirect URL from query params if we're in the browser
-        let redirectTo = "/dashboard"
-
-        if (typeof window !== "undefined") {
-          const params = new URLSearchParams(window.location.search)
-          const redirect = params.get("redirect")
-          if (redirect) {
-            redirectTo = redirect
-          }
-        }
-
-        router.push(redirectTo)
+        addDiagnostic("Google sign in successful, waiting for auth state change...")
+        // Don't redirect here - let auth state listener handle it
       } else {
         if (result.error?.code === "auth/popup-closed-by-user") {
+          addDiagnostic("Popup closed by user")
           setErrorMessage("Sign-in popup was closed. Please try again.")
         } else if (result.error?.code === "auth/popup-blocked") {
-          // If popup is blocked, try redirect method
-          console.log("Popup blocked, trying redirect method...")
+          addDiagnostic("Popup blocked, trying redirect method")
           await loginWithGoogleRedirect()
         } else {
+          addDiagnostic(`Google sign in failed: ${result.error?.message}`)
           setErrorMessage("Failed to sign in with Google. Please try again.")
         }
       }
     } catch (error) {
+      log("Google sign in error", error)
+      addDiagnostic(`Google sign in error: ${error}`)
       setErrorMessage("An unexpected error occurred")
-      console.error(error)
     } finally {
       setIsGoogleLoading(false)
     }
   }
 
-  // Don't render the login form until auth is initialized
+  // Manual redirect test button
+  const testRedirect = () => {
+    addDiagnostic("Testing manual redirect...")
+    try {
+      router.push("/dashboard")
+      addDiagnostic("router.push called")
+      setTimeout(() => {
+        addDiagnostic(`Current path after redirect: ${window.location.pathname}`)
+      }, 500)
+    } catch (error) {
+      addDiagnostic(`Manual redirect error: ${error}`)
+    }
+  }
+
   if (!authInitialized) {
     return (
       <div className="min-h-screen bg-black flex flex-col justify-center items-center">
         <div className="fixed inset-0 z-0 bg-gradient-to-b from-black via-black to-gray-900"></div>
         <Loader2 className="h-8 w-8 animate-spin text-red-500" />
+        <p className="text-white mt-4">Initializing authentication...</p>
       </div>
     )
   }
 
-  // If auth is initialized and we're still on this page, render the login form
   return (
     <div className="min-h-screen bg-black flex flex-col justify-center items-center px-4">
+      {/* Diagnostic Panel */}
+      <div className="fixed top-0 right-0 w-96 max-h-96 overflow-y-auto bg-black/90 border border-red-500 p-4 m-4 rounded-lg z-50">
+        <h3 className="text-red-500 font-bold mb-2">Login Diagnostics</h3>
+        <div className="text-xs text-gray-300 space-y-1">
+          {diagnosticInfo.map((info, index) => (
+            <div key={index}>{info}</div>
+          ))}
+        </div>
+        <Button onClick={testRedirect} className="mt-2 text-xs" size="sm" variant="outline">
+          Test Manual Redirect
+        </Button>
+      </div>
+
       {/* Premium Gradient Background */}
       <div className="fixed inset-0 z-0 bg-gradient-to-b from-black via-black to-gray-900"></div>
 
@@ -256,15 +336,6 @@ export default function LoginPage() {
           <Link href="/signup" className="text-red-500 hover:text-red-400 transition-colors">
             Sign up
           </Link>
-        </motion.div>
-
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.9, duration: 0.5 }}
-          className="text-center text-xs text-gray-500 mt-4"
-        >
-          Having trouble? Make sure popups are enabled for this site.
         </motion.div>
       </motion.div>
     </div>
