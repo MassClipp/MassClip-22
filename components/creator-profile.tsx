@@ -19,11 +19,12 @@ import {
   Pause,
   Trash2,
   CreditCard,
+  Unlock,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useAuth } from "@/contexts/auth-context"
 import { cn } from "@/lib/utils"
-import { collection, query, where, getDocs, limit } from "firebase/firestore"
+import { collection, query, where, getDocs, limit, doc, getDoc } from "firebase/firestore"
 import { db } from "@/lib/firebase"
 import { trackFirestoreRead } from "@/lib/firestore-optimizer"
 import getStripe from "@/lib/getStripe"
@@ -74,6 +75,7 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
   const [error, setError] = useState<string | null>(null)
   const [deletingVideoId, setDeletingVideoId] = useState<string | null>(null)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<string | null>(null)
+  const [userPurchases, setUserPurchases] = useState<Record<string, boolean>>({})
 
   // Set active tab based on URL query parameter
   useEffect(() => {
@@ -84,6 +86,31 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
       setActiveTab("free")
     }
   }, [searchParams])
+
+  // Check if user has purchased premium content
+  useEffect(() => {
+    const checkPurchases = async () => {
+      if (!user || !paidClips.length) return
+
+      try {
+        // For each premium clip, check if the user has access
+        const purchases: Record<string, boolean> = {}
+
+        for (const clip of paidClips) {
+          // Check if user has access to this clip
+          const accessRef = doc(db, "userAccess", user.uid, "videos", clip.id)
+          const accessDoc = await getDoc(accessRef)
+          purchases[clip.id] = accessDoc.exists()
+        }
+
+        setUserPurchases(purchases)
+      } catch (error) {
+        console.error("Error checking purchases:", error)
+      }
+    }
+
+    checkPurchases()
+  }, [user, paidClips])
 
   // Fetch videos from Firestore
   useEffect(() => {
@@ -212,7 +239,7 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
     }
   }
 
-  // Handle Buy Now button click
+  // Handle Buy Now button click for creator profile
   const handleBuyNow = async () => {
     if (!user) {
       // Redirect to login if user is not logged in
@@ -234,6 +261,67 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
         body: JSON.stringify({
           priceId: creator.stripePriceId,
           customerEmail: user.email,
+          creatorId: creator.uid,
+          creatorUsername: creator.username,
+          metadata: {
+            type: "creator_premium",
+            creatorId: creator.uid,
+            userId: user.uid,
+          },
+        }),
+      })
+
+      if (!res.ok) {
+        const errorData = await res.json()
+        throw new Error(errorData.error || "Failed to create checkout session")
+      }
+
+      const { sessionId } = await res.json()
+      const stripe = await getStripe()
+
+      if (stripe) {
+        await stripe.redirectToCheckout({ sessionId })
+      } else {
+        throw new Error("Failed to initialize Stripe")
+      }
+    } catch (error) {
+      console.error("Error creating checkout session:", error)
+      alert("Something went wrong. Please try again.")
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  // Handle Buy Now button click for individual video
+  const handleBuyVideo = async (videoId: string) => {
+    if (!user) {
+      // Redirect to login if user is not logged in
+      router.push(`/login?redirect=${encodeURIComponent(window.location.pathname)}`)
+      return
+    }
+
+    if (!creator.stripePriceId) {
+      console.error("No price ID available for this creator")
+      return
+    }
+
+    try {
+      setIsLoading(true)
+
+      const res = await fetch("/api/create-checkout-session", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          priceId: creator.stripePriceId,
+          customerEmail: user.email,
+          creatorId: creator.uid,
+          creatorUsername: creator.username,
+          metadata: {
+            type: "video_premium",
+            videoId: videoId,
+            creatorId: creator.uid,
+            userId: user.uid,
+          },
         }),
       })
 
@@ -263,9 +351,18 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
     const videoRef = useRef<HTMLVideoElement>(null)
     const [isPlaying, setIsPlaying] = useState(false)
     const [isHovered, setIsHovered] = useState(false)
+    const hasUserPurchased = userPurchases[video.id] || false
+    const isPremium = video.type === "premium"
+    const showLockOverlay = isPremium && !hasUserPurchased && !isOwner
 
     const togglePlay = (e: React.MouseEvent) => {
       e.preventDefault()
+
+      // If premium and not purchased, don't play
+      if (showLockOverlay) {
+        handleBuyVideo(video.id)
+        return
+      }
 
       if (!videoRef.current) return
 
@@ -312,7 +409,7 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
           {/* Raw video element */}
           <video
             ref={videoRef}
-            className="w-full h-full object-cover cursor-pointer"
+            className={cn("w-full h-full object-cover cursor-pointer", showLockOverlay && "brightness-50 blur-sm")}
             poster={video.thumbnailUrl || undefined}
             preload="metadata"
             muted={false}
@@ -326,9 +423,28 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
           </video>
 
           {/* Premium badge - only show on hover */}
-          {video.type === "premium" && (
+          {isPremium && !showLockOverlay && (
             <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300 bg-gradient-to-r from-amber-400 to-amber-600 text-black text-xs font-medium px-2 py-0.5 rounded-full shadow-sm z-10">
               PRO
+            </div>
+          )}
+
+          {/* Lock overlay for premium content */}
+          {showLockOverlay && (
+            <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/60 text-white z-20">
+              <Lock className="h-10 w-10 text-amber-500 mb-2" />
+              <p className="text-lg font-semibold">Premium Content</p>
+              <p className="mb-3 text-sm text-zinc-300">Unlock for ${(creator.premiumPrice || 9.99).toFixed(2)}</p>
+              <button
+                onClick={(e) => {
+                  e.stopPropagation()
+                  handleBuyVideo(video.id)
+                }}
+                className="bg-gradient-to-r from-amber-400 to-amber-600 hover:from-amber-500 hover:to-amber-700 text-black font-medium px-4 py-2 rounded-md shadow-md flex items-center"
+              >
+                <Unlock className="h-4 w-4 mr-2" />
+                Unlock Now
+              </button>
             </div>
           )}
 
@@ -347,19 +463,23 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
             </button>
           )}
 
-          {/* Play/Pause button - only show on hover */}
-          <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-10">
-            <button
-              onClick={togglePlay}
-              className="w-12 h-12 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center text-white transition-all duration-200 hover:bg-black/70"
-              aria-label={isPlaying ? "Pause video" : "Play video"}
-            >
-              {isPlaying ? <Pause className="h-5 w-5" /> : <Play className="h-5 w-5 ml-0.5" />}
-            </button>
-          </div>
+          {/* Play/Pause button - only show on hover and not for locked content */}
+          {!showLockOverlay && (
+            <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-10">
+              <button
+                onClick={togglePlay}
+                className="w-12 h-12 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center text-white transition-all duration-200 hover:bg-black/70"
+                aria-label={isPlaying ? "Pause video" : "Play video"}
+              >
+                {isPlaying ? <Pause className="h-5 w-5" /> : <Play className="h-5 w-5 ml-0.5" />}
+              </button>
+            </div>
+          )}
 
           {/* Overlay gradient for better visibility - only on hover */}
-          <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"></div>
+          {!showLockOverlay && (
+            <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"></div>
+          )}
         </div>
 
         {/* Video title */}
@@ -422,7 +542,7 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
                 )}
 
                 {/* Premium Content Buy Now Button - only show if premium is enabled and user is not the owner */}
-                {creator.premiumEnabled && creator.stripePriceId && !isOwner && (
+                {creator.premiumEnabled && creator.stripePriceId && !isOwner && paidClips.length > 0 && (
                   <div className="mb-6">
                     <Button
                       onClick={handleBuyNow}
@@ -437,7 +557,7 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
                       ) : (
                         <>
                           <CreditCard className="h-4 w-4 mr-2" />
-                          Unlock Premium – ${(creator.premiumPrice || 9.99).toFixed(2)}
+                          Unlock All Premium – ${(creator.premiumPrice || 9.99).toFixed(2)}
                         </>
                       )}
                     </Button>
