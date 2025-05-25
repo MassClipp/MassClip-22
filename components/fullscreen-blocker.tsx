@@ -7,6 +7,12 @@ export function FullscreenBlocker() {
   const { isTikTokBrowser } = useTikTokDetection()
 
   useEffect(() => {
+    // Only block fullscreen on the main window, not popups
+    if (window.opener) {
+      console.log("Fullscreen blocker: Skipping popup window")
+      return
+    }
+
     if (!isTikTokBrowser) return
 
     // Store original methods
@@ -62,6 +68,35 @@ export function FullscreenBlocker() {
       return originalPostMessage.call(this, message, targetOrigin, transfer)
     }
 
+    const handleFullscreenChange = () => {
+      if (document.fullscreenElement) {
+        console.log("Fullscreen detected, exiting...")
+        document.exitFullscreen().catch((err) => {
+          console.error("Error exiting fullscreen:", err)
+        })
+      }
+    }
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Block F11 and other fullscreen shortcuts
+      if (
+        e.key === "F11" ||
+        ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key === "F") ||
+        ((e.ctrlKey || e.metaKey) && e.key === "Enter")
+      ) {
+        e.preventDefault()
+        e.stopPropagation()
+        console.log("Fullscreen shortcut blocked")
+      }
+    }
+
+    // Add event listeners
+    document.addEventListener("fullscreenchange", handleFullscreenChange)
+    document.addEventListener("webkitfullscreenchange", handleFullscreenChange)
+    document.addEventListener("mozfullscreenchange", handleFullscreenChange)
+    document.addEventListener("MSFullscreenChange", handleFullscreenChange)
+    document.addEventListener("keydown", handleKeyDown, true)
+
     // Cleanup function to restore original methods
     return () => {
       Element.prototype.requestFullscreen = originalRequestFullscreen
@@ -75,6 +110,11 @@ export function FullscreenBlocker() {
         Element.prototype.msRequestFullscreen = originalMsRequestFullscreen
       }
       window.postMessage = originalPostMessage
+      document.removeEventListener("fullscreenchange", handleFullscreenChange)
+      document.removeEventListener("webkitfullscreenchange", handleFullscreenChange)
+      document.removeEventListener("mozfullscreenchange", handleFullscreenChange)
+      document.removeEventListener("MSFullscreenChange", handleFullscreenChange)
+      document.removeEventListener("keydown", handleKeyDown, true)
     }
   }, [isTikTokBrowser])
 

@@ -13,7 +13,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import Logo from "@/components/logo"
 import { Loader2, ArrowRight } from "lucide-react"
 import { GoogleAuthButton } from "@/components/google-auth-button"
-import { loginWithGoogle } from "@/lib/auth"
+import { loginWithGoogle, loginWithGoogleRedirect } from "@/lib/auth"
 
 export default function LoginPage() {
   const [email, setEmail] = useState("")
@@ -50,7 +50,7 @@ export default function LoginPage() {
     setIsGoogleLoading(true)
 
     try {
-      // Use the dedicated login handler
+      // Try popup method first
       const result = await loginWithGoogle()
 
       if (result.success) {
@@ -69,6 +69,10 @@ export default function LoginPage() {
       } else {
         if (result.error?.code === "auth/popup-closed-by-user") {
           setErrorMessage("Sign-in popup was closed. Please try again.")
+        } else if (result.error?.code === "auth/popup-blocked") {
+          // If popup is blocked, try redirect method
+          console.log("Popup blocked, trying redirect method...")
+          await loginWithGoogleRedirect()
         } else {
           setErrorMessage("Failed to sign in with Google. Please try again.")
         }
@@ -226,6 +230,15 @@ export default function LoginPage() {
           <Link href="/signup" className="text-red-500 hover:text-red-400 transition-colors">
             Sign up
           </Link>
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.9, duration: 0.5 }}
+          className="text-center text-xs text-gray-500 mt-4"
+        >
+          Having trouble? Make sure popups are enabled for this site.
         </motion.div>
       </motion.div>
     </div>
