@@ -105,8 +105,6 @@ export function useFirebaseAuth() {
       const userDoc = await getDoc(doc(db, "users", userCredential.user.uid))
       const username = userDoc.exists() ? userDoc.data().username : null
 
-      // Redirect will be handled by the auth context in the component
-
       return { success: true, username }
     } catch (err) {
       console.error("Error signing in:", err)

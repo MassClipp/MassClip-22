@@ -1,7 +1,7 @@
 "use client"
 
 import type React from "react"
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { motion } from "framer-motion"
@@ -13,7 +13,6 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import Logo from "@/components/logo"
 import { Loader2, ArrowRight } from "lucide-react"
 import { GoogleAuthButton } from "@/components/google-auth-button"
-import { useAuth } from "@/contexts/auth-context"
 
 export default function LoginPage() {
   const [email, setEmail] = useState("")
@@ -24,18 +23,6 @@ export default function LoginPage() {
   const { signIn, signInWithGoogle } = useFirebaseAuth()
   const router = useRouter()
 
-  const { user, loading: authLoading } = useAuth()
-
-  useEffect(() => {
-    // Only redirect if auth is not loading and user exists
-    if (!authLoading && user) {
-      // Get redirect URL from query params
-      const params = new URLSearchParams(window.location.search)
-      const redirectTo = params.get("redirect") || "/dashboard"
-      router.push(redirectTo)
-    }
-  }, [user, authLoading, router])
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setErrorMessage(null)
@@ -45,8 +32,7 @@ export default function LoginPage() {
       const result = await signIn(email, password)
 
       if (result.success) {
-        // Just return success, let the auth context handle redirect
-        return
+        router.push("/dashboard")
       } else {
         setErrorMessage(result.error || "Failed to sign in")
       }
@@ -66,8 +52,7 @@ export default function LoginPage() {
       const result = await signInWithGoogle()
 
       if (result.success) {
-        // The function should just handle the sign-in and let the useEffect handle the redirect.
-        return
+        router.push("/dashboard")
       } else {
         setErrorMessage(result.error || "Failed to sign in with Google")
       }
@@ -197,7 +182,7 @@ export default function LoginPage() {
             <Button
               type="submit"
               className="w-full bg-red-600 hover:bg-red-700 text-white transition-all duration-300 flex items-center justify-center gap-2 group"
-              disabled={isLoading || authLoading}
+              disabled={isLoading}
             >
               {isLoading ? (
                 <>
