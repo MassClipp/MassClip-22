@@ -31,8 +31,14 @@ export async function POST(request: Request) {
       ],
       mode: "payment",
       customer_email: customerEmail || undefined,
-      success_url: `${SITE_URL}/success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${SITE_URL}/cancel`,
+      success_url: "https://massclip.pro/success?session_id={CHECKOUT_SESSION_ID}",
+      cancel_url: "https://massclip.pro/cancel",
+      metadata: {
+        creatorId: body.creatorId || "",
+        creatorUsername: body.creatorUsername || "",
+        userId: body.metadata?.userId || "",
+        type: body.metadata?.type || "creator_premium",
+      },
     })
 
     // Return the session ID

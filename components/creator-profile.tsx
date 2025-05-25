@@ -256,6 +256,7 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
 
     if (!creator.stripePriceId) {
       console.error("No price ID available for this creator")
+      alert("This creator hasn't set up premium pricing yet.")
       return
     }
 
@@ -268,31 +269,23 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
         body: JSON.stringify({
           priceId: creator.stripePriceId,
           customerEmail: user.email,
-          creatorId: creator.uid,
-          creatorUsername: creator.username,
-          metadata: {
-            type: "creator_premium",
-            creatorId: creator.uid,
-            userId: user.uid,
-          },
         }),
       })
 
-      if (!res.ok) {
-        const errorData = await res.json()
-        throw new Error(errorData.error || "Failed to create checkout session")
+      const data = await res.json()
+
+      if (!data.sessionId) {
+        throw new Error("No session ID returned")
       }
 
-      const { sessionId } = await res.json()
       const stripe = await getStripe()
-
-      if (stripe) {
-        await stripe.redirectToCheckout({ sessionId })
-      } else {
+      if (!stripe) {
         throw new Error("Failed to initialize Stripe")
       }
-    } catch (error) {
-      console.error("Error creating checkout session:", error)
+
+      await stripe.redirectToCheckout({ sessionId: data.sessionId })
+    } catch (err) {
+      console.error("Checkout Error:", err)
       alert("Something went wrong. Please try again.")
     } finally {
       setIsLoading(false)
@@ -568,10 +561,10 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
                 {/* Premium Content Buy Now Button - only show if premium is enabled and user is not the owner */}
                 {creator.premiumEnabled && creator.stripePriceId && !isOwner && paidClips.length > 0 && (
                   <div className="mb-6">
-                    <Button
+                    <button
                       onClick={handleBuyNow}
                       disabled={isLoading}
-                      className="bg-gradient-to-r from-amber-400 to-amber-600 hover:from-amber-500 hover:to-amber-700 text-black font-semibold px-6 py-2 rounded-md shadow-lg"
+                      className="bg-yellow-500 hover:bg-yellow-600 text-black font-bold px-6 py-2 rounded shadow-lg transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
                     >
                       {isLoading ? (
                         <>
@@ -581,10 +574,10 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
                       ) : (
                         <>
                           <CreditCard className="h-4 w-4 mr-2" />
-                          Unlock All Premium – ${getCreatorPrice().toFixed(2)}
+                          Unlock Premium – ${getCreatorPrice().toFixed(2)}
                         </>
                       )}
-                    </Button>
+                    </button>
                   </div>
                 )}
 
