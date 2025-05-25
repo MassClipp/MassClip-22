@@ -431,19 +431,19 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
 
           {/* Lock overlay for premium content */}
           {showLockOverlay && (
-            <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/60 text-white z-20">
-              <Lock className="h-10 w-10 text-amber-500 mb-2" />
-              <p className="text-lg font-semibold">Premium Content</p>
-              <p className="mb-3 text-sm text-zinc-300">Unlock for ${(creator.premiumPrice || 9.99).toFixed(2)}</p>
+            <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/50 text-white z-20">
+              <Lock className="h-6 w-6 text-amber-500 mb-1" />
+              <p className="text-sm font-medium">Premium</p>
+              <p className="mb-2 text-xs text-zinc-300">${(creator.premiumPrice || 9.99).toFixed(2)}</p>
               <button
                 onClick={(e) => {
                   e.stopPropagation()
                   handleBuyVideo(video.id)
                 }}
-                className="bg-gradient-to-r from-amber-400 to-amber-600 hover:from-amber-500 hover:to-amber-700 text-black font-medium px-4 py-2 rounded-md shadow-md flex items-center"
+                className="bg-gradient-to-r from-amber-400 to-amber-600 hover:from-amber-500 hover:to-amber-700 text-black text-xs font-medium px-3 py-1 rounded-md shadow-sm flex items-center"
               >
-                <Unlock className="h-4 w-4 mr-2" />
-                Unlock Now
+                <Unlock className="h-3 w-3 mr-1" />
+                Unlock
               </button>
             </div>
           )}
