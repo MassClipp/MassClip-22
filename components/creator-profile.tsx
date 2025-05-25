@@ -234,6 +234,8 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
         body: JSON.stringify({
           priceId: creator.stripePriceId,
           customerEmail: user.email,
+          creatorId: creator.uid,
+          creatorUsername: creator.username,
         }),
       })
 
@@ -422,7 +424,7 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
                 )}
 
                 {/* Premium Content Buy Now Button - only show if premium is enabled and user is not the owner */}
-                {creator.premiumEnabled && creator.stripePriceId && !isOwner && (
+                {paidClips.length > 0 && !isOwner && (
                   <div className="mb-6">
                     <Button
                       onClick={handleBuyNow}
@@ -687,20 +689,6 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
                 )}
               </Button>
             </div>
-          </div>
-        </div>
-      )}
-      {/* Temporary debug info - remove after testing */}
-      {process.env.NODE_ENV === "development" && (
-        <div className="fixed bottom-4 right-4 bg-zinc-900 border border-zinc-700 rounded-lg p-4 text-xs text-white max-w-sm z-50">
-          <h3 className="font-bold mb-2">Debug Info</h3>
-          <div className="space-y-1">
-            <p>Premium Enabled: {creator.premiumEnabled ? "Yes" : "No"}</p>
-            <p>Stripe Price ID: {creator.stripePriceId || "Not set"}</p>
-            <p>Premium Price: ${creator.premiumPrice || 0}</p>
-            <p>Is Owner: {isOwner ? "Yes" : "No"}</p>
-            <p>Current User: {user?.email || "Not logged in"}</p>
-            <p>Show Button: {creator.premiumEnabled && creator.stripePriceId && !isOwner ? "Yes" : "No"}</p>
           </div>
         </div>
       )}

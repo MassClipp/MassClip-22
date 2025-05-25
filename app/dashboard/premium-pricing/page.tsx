@@ -1,18 +1,41 @@
 "use client"
 
-import { useState } from "react"
-import { useAuth } from "@/context/AuthContext"
-import { db } from "@/firebase"
-import { doc, writeBatch } from "firebase/firestore"
+import { useState, useEffect } from "react"
+import { useAuth } from "@/contexts/auth-context"
+import { doc, getDoc, updateDoc } from "firebase/firestore"
+import { db } from "@/lib/firebase"
 
-const PremiumPricingPage = () => {
+export default function PremiumPricingPage() {
   const { user } = useAuth()
   const [price, setPrice] = useState("")
   const [priceId, setPriceId] = useState("")
   const [paymentMode, setPaymentMode] = useState("recurring")
-  const [loading, setLoading] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
   const [successMessage, setSuccessMessage] = useState("")
   const [errorMessage, setErrorMessage] = useState("")
+
+  useEffect(() => {
+    const fetchUserData = async () => {
+      if (!user) return
+
+      try {
+        const userDoc = await getDoc(doc(db, "users", user.uid))
+        if (userDoc.exists()) {
+          const userData = userDoc.data()
+          if (userData.premiumPrice) setPrice(userData.premiumPrice.toString())
+          if (userData.stripePriceId) setPriceId(userData.stripePriceId)
+          if (userData.paymentMode) setPaymentMode(userData.paymentMode)
+        }
+        setLoading(false)
+      } catch (error) {
+        console.error("Error fetching user data:", error)
+        setLoading(false)
+      }
+    }
+
+    fetchUserData()
+  }, [user])
 
   const handleSaveSettings = async () => {
     if (!user) {
@@ -25,51 +48,61 @@ const PremiumPricingPage = () => {
       return
     }
 
-    setLoading(true)
+    setSaving(true)
     setSuccessMessage("")
     setErrorMessage("")
 
     try {
-      const batch = writeBatch(db)
+      const userRef = doc(db, "users", user.uid)
 
-      // Update user document with premium settings
-      const userUpdate = {
+      await updateDoc(userRef, {
         premiumEnabled: true,
         premiumPrice: Number.parseFloat(price),
         stripePriceId: priceId,
         paymentMode: paymentMode,
         updatedAt: new Date().toISOString(),
-      }
-
-      batch.update(doc(db, "users", user.uid), userUpdate)
-
-      await batch.commit()
+      })
 
       setSuccessMessage("Premium pricing settings saved successfully!")
+      setTimeout(() => setSuccessMessage(""), 3000)
     } catch (error: any) {
       console.error("Error saving premium pricing settings:", error)
       setErrorMessage(`Failed to save settings: ${error.message || "An unexpected error occurred."}`)
     } finally {
-      setLoading(false)
+      setSaving(false)
     }
   }
 
+  if (loading) {
+    return (
+      <div className="p-6">
+        <h1 className="text-2xl font-bold mb-6">Premium Pricing Settings</h1>
+        <p>Loading...</p>
+      </div>
+    )
+  }
+
   return (
-    <div className="container mx-auto p-4">
-      <h1 className="text-2xl font-bold mb-4">Premium Pricing Settings</h1>
+    <div className="p-6">
+      <h1 className="text-2xl font-bold mb-6">Premium Pricing Settings</h1>
 
-      {successMessage && <div className="bg-green-200 text-green-800 p-2 mb-4 rounded">{successMessage}</div>}
+      {successMessage && (
+        <div className="bg-green-500 bg-opacity-10 border border-green-500 text-green-500 px-4 py-3 rounded mb-4">
+          {successMessage}
+        </div>
+      )}
 
-      {errorMessage && <div className="bg-red-200 text-red-800 p-2 mb-4 rounded">{errorMessage}</div>}
+      {errorMessage && (
+        <div className="bg-red-500 bg-opacity-10 border border-red-500 text-red-500 px-4 py-3 rounded mb-4">
+          {errorMessage}
+        </div>
+      )}
 
       <div className="mb-4">
-        <label htmlFor="price" className="block text-gray-700 text-sm font-bold mb-2">
-          Price:
-        </label>
+        <label className="block text-gray-400 mb-2">Price:</label>
         <input
           type="number"
-          id="price"
-          className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+          className="w-full p-2 bg-transparent border border-gray-700 rounded focus:outline-none focus:border-blue-500"
           placeholder="Enter price"
           value={price}
           onChange={(e) => setPrice(e.target.value)}
@@ -77,26 +110,20 @@ const PremiumPricingPage = () => {
       </div>
 
       <div className="mb-4">
-        <label htmlFor="priceId" className="block text-gray-700 text-sm font-bold mb-2">
-          Price ID:
-        </label>
+        <label className="block text-gray-400 mb-2">Price ID:</label>
         <input
           type="text"
-          id="priceId"
-          className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+          className="w-full p-2 bg-transparent border border-gray-700 rounded focus:outline-none focus:border-blue-500"
           placeholder="Enter Price ID"
           value={priceId}
           onChange={(e) => setPriceId(e.target.value)}
         />
       </div>
 
-      <div className="mb-4">
-        <label htmlFor="paymentMode" className="block text-gray-700 text-sm font-bold mb-2">
-          Payment Mode:
-        </label>
+      <div className="mb-6">
+        <label className="block text-gray-400 mb-2">Payment Mode:</label>
         <select
-          id="paymentMode"
-          className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+          className="w-full p-2 bg-transparent border border-gray-700 rounded focus:outline-none focus:border-blue-500"
           value={paymentMode}
           onChange={(e) => setPaymentMode(e.target.value)}
         >
@@ -106,14 +133,12 @@ const PremiumPricingPage = () => {
       </div>
 
       <button
-        className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline"
+        className="bg-blue-500 hover:bg-blue-600 text-white font-medium py-2 px-4 rounded focus:outline-none"
         onClick={handleSaveSettings}
-        disabled={loading}
+        disabled={saving}
       >
-        {loading ? "Saving..." : "Save Settings"}
+        {saving ? "Saving..." : "Save Settings"}
       </button>
     </div>
   )
 }
-
-export default PremiumPricingPage

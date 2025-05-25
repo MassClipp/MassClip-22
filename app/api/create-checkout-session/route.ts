@@ -1,26 +1,20 @@
-import { NextResponse } from "next/server"
+import { type NextRequest, NextResponse } from "next/server"
 import Stripe from "stripe"
 
-// Initialize Stripe with the secret key
+// Initialize Stripe with your secret key
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: "2023-10-16",
 })
 
-// Site URL for redirects
-const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL || "https://massclip.pro"
-
-export async function POST(request: Request) {
+export async function POST(req: NextRequest) {
   try {
-    // Parse the request body
-    const body = await request.json()
-    const { priceId, customerEmail } = body
+    const { priceId, customerEmail, creatorId, creatorUsername } = await req.json()
 
-    // Validate required fields
     if (!priceId) {
-      return NextResponse.json({ error: "Missing priceId" }, { status: 400 })
+      return NextResponse.json({ error: "Price ID is required" }, { status: 400 })
     }
 
-    // Create the checkout session
+    // Create a checkout session
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ["card"],
       line_items: [
@@ -30,15 +24,18 @@ export async function POST(request: Request) {
         },
       ],
       mode: "payment",
-      customer_email: customerEmail || undefined,
-      success_url: `${SITE_URL}/success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${SITE_URL}/cancel`,
+      success_url: `${process.env.NEXT_PUBLIC_SITE_URL}/purchase/success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${process.env.NEXT_PUBLIC_SITE_URL}/creator/${creatorUsername || ""}`,
+      customer_email: customerEmail,
+      metadata: {
+        creatorId: creatorId || "",
+        creatorUsername: creatorUsername || "",
+      },
     })
 
-    // Return the session ID
-    return NextResponse.json({ sessionId: session.id, url: session.url })
+    return NextResponse.json({ sessionId: session.id })
   } catch (error: any) {
-    console.error("Checkout session error:", error)
-    return NextResponse.json({ error: error.message || "Internal server error" }, { status: 500 })
+    console.error("Error creating checkout session:", error)
+    return NextResponse.json({ error: error.message || "Failed to create checkout session" }, { status: 500 })
   }
 }
