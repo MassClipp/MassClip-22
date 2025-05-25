@@ -1,7 +1,7 @@
 "use client"
 
 import type React from "react"
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { motion } from "framer-motion"
@@ -34,16 +34,30 @@ export default function LoginPage() {
   const { signIn } = useFirebaseAuth()
   const router = useRouter()
 
+  // Use useRef instead of let for redirectAttempted to persist across renders
+  const redirectAttempted = useRef(false)
+
   // Add diagnostic info
   const addDiagnostic = (info: string) => {
     const timestamp = new Date().toLocaleTimeString()
     setDiagnosticInfo((prev) => [...prev, `[${timestamp}] ${info}`])
+    // Also log to console for easier debugging
+    log(info)
   }
 
   // Check router functionality
   useEffect(() => {
     log("Router initialized", { pathname: window.location.pathname })
     addDiagnostic(`Router ready at ${window.location.pathname}`)
+
+    // Check if user is already logged in on initial load
+    if (auth.currentUser) {
+      addDiagnostic(`User already logged in on page load: ${auth.currentUser.email}`)
+      log("User already logged in on page load", {
+        email: auth.currentUser.email,
+        uid: auth.currentUser.uid,
+      })
+    }
   }, [])
 
   // Set up auth state listener with detailed logging
@@ -51,40 +65,65 @@ export default function LoginPage() {
     log("Setting up auth state listener")
     addDiagnostic("Setting up auth state listener")
 
-    // Flag to prevent multiple redirects
-    let redirectAttempted = false
-
     const unsubscribe = onAuthStateChanged(auth, (user) => {
+      // Log every auth state change with detailed info
       log("Auth state changed", {
         user: user ? { email: user.email, uid: user.uid } : null,
         currentPath: window.location.pathname,
+        redirectAttempted: redirectAttempted.current,
       })
 
-      if (user && !redirectAttempted) {
-        addDiagnostic(`User detected: ${user.email}`)
-        addDiagnostic(`Current path: ${window.location.pathname}`)
+      addDiagnostic(`Auth state changed: user ${user ? "present" : "absent"}, path: ${window.location.pathname}`)
 
-        // Only redirect if we're actually on the login page
-        // This prevents redirect loops
-        if (window.location.pathname === "/login") {
+      if (user) {
+        addDiagnostic(`User detected: ${user.email}`)
+
+        // Only redirect if we're actually on the login page and haven't attempted redirect yet
+        if (window.location.pathname === "/login" && !redirectAttempted.current) {
           addDiagnostic("On login page with authenticated user - attempting redirect...")
-          redirectAttempted = true
+          redirectAttempted.current = true
 
           try {
-            log("Attempting router.push")
-            router.push("/dashboard")
-            addDiagnostic("router.push('/dashboard') called")
+            log("Attempting router.push to /dashboard")
+
+            // Verify router.push is actually being hit
+            addDiagnostic("Executing router.push('/dashboard')")
+
+            // Use a promise to track router.push completion
+            Promise.resolve(router.push("/dashboard"))
+              .then(() => {
+                addDiagnostic("router.push('/dashboard') completed")
+
+                // Check if we're still on the login page after router.push
+                setTimeout(() => {
+                  addDiagnostic(`Path after router.push: ${window.location.pathname}`)
+                  if (window.location.pathname === "/login") {
+                    addDiagnostic("Still on login page after router.push, trying window.location")
+                    window.location.href = "/dashboard"
+                  }
+                }, 500)
+              })
+              .catch((error) => {
+                addDiagnostic(`router.push error: ${error}`)
+                // Fallback to window.location if router.push fails
+                addDiagnostic("Falling back to window.location.href")
+                window.location.href = "/dashboard"
+              })
           } catch (error) {
             log("Redirect error", error)
             addDiagnostic(`Redirect error: ${error}`)
+            // Fallback to window.location if router.push throws
+            window.location.href = "/dashboard"
           }
+        } else if (redirectAttempted.current) {
+          addDiagnostic("Redirect already attempted, not redirecting again")
         } else {
           addDiagnostic("Not on login page, skipping redirect")
         }
-      } else if (!user) {
+      } else {
         addDiagnostic("No user detected")
         // Reset the redirect flag when user is null
-        redirectAttempted = false
+        redirectAttempted.current = false
       }
 
       setAuthInitialized(true)
@@ -109,6 +148,14 @@ export default function LoginPage() {
 
       if (result.success) {
         addDiagnostic("Sign in successful, waiting for auth state change...")
+
+        // Verify user is actually logged in
+        if (auth.currentUser) {
+          addDiagnostic(`User confirmed in auth.currentUser: ${auth.currentUser.email}`)
+        } else {
+          addDiagnostic("Warning: auth.currentUser is null after successful login")
+        }
+
         // Don't redirect here - let auth state listener handle it
       } else {
         addDiagnostic(`Sign in failed: ${result.error}`)
@@ -135,6 +182,18 @@ export default function LoginPage() {
 
       if (result.success) {
         addDiagnostic("Google sign in successful, waiting for auth state change...")
+
+        // Verify user is actually logged in
+        if (auth.currentUser) {
+          addDiagnostic(`User confirmed in auth.currentUser after Google login: ${auth.currentUser.email}`)
+          log("User confirmed in auth.currentUser", {
+            email: auth.currentUser.email,
+            uid: auth.currentUser.uid,
+          })
+        } else {
+          addDiagnostic("Warning: auth.currentUser is null after successful Google login")
+        }
+
         // Don't redirect here - let auth state listener handle it
       } else {
         if (result.error?.code === "auth/popup-closed-by-user") {
@@ -161,14 +220,28 @@ export default function LoginPage() {
   const testRedirect = () => {
     addDiagnostic("Testing manual redirect...")
     try {
+      addDiagnostic("Executing router.push('/dashboard')")
       router.push("/dashboard")
-      addDiagnostic("router.push called")
+
+      // Check if redirect worked after a short delay
       setTimeout(() => {
-        addDiagnostic(`Current path after redirect: ${window.location.pathname}`)
+        addDiagnostic(`Current path after redirect attempt: ${window.location.pathname}`)
+        if (window.location.pathname === "/login") {
+          addDiagnostic("Still on login page, trying window.location.href")
+          window.location.href = "/dashboard"
+        }
       }, 500)
     } catch (error) {
       addDiagnostic(`Manual redirect error: ${error}`)
+      // Fallback
+      window.location.href = "/dashboard"
     }
+  }
+
+  // Force redirect to dashboard if user is already logged in
+  const forceRedirect = () => {
+    addDiagnostic("Forcing redirect to dashboard...")
+    window.location.href = "/dashboard"
   }
 
   if (!authInitialized) {
@@ -191,9 +264,14 @@ export default function LoginPage() {
             <div key={index}>{info}</div>
           ))}
         </div>
-        <Button onClick={testRedirect} className="mt-2 text-xs" size="sm" variant="outline">
-          Test Manual Redirect
-        </Button>
+        <div className="flex gap-2 mt-2">
+          <Button onClick={testRedirect} className="text-xs" size="sm" variant="outline">
+            Test Manual Redirect
+          </Button>
+          <Button onClick={forceRedirect} className="text-xs" size="sm" variant="destructive">
+            Force Redirect
+          </Button>
+        </div>
       </div>
 
       {/* Premium Gradient Background */}

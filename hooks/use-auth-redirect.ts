@@ -1,42 +1,58 @@
 "use client"
 
 import { useEffect } from "react"
-import { useRouter, usePathname } from "next/navigation"
-import { onAuthStateChanged } from "firebase/auth"
+import { useRouter } from "next/navigation"
 import { auth } from "@/lib/firebase"
 
 export function useAuthRedirect() {
   const router = useRouter()
-  const pathname = usePathname()
 
   useEffect(() => {
-    // Only set up the listener if we're in the browser
-    if (typeof window === "undefined") return
+    // Enhanced logging
+    const logRedirect = (message: string, data?: any) => {
+      console.log(`[AUTH REDIRECT ${new Date().toISOString()}] ${message}`, data || "")
+    }
 
-    console.log("Setting up auth redirect listener")
+    logRedirect("Setting up auth redirect hook")
 
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      if (user) {
-        console.log("User is logged in:", user.email)
+    // Check if user is already logged in
+    if (auth.currentUser) {
+      logRedirect("User already logged in on hook mount", {
+        uid: auth.currentUser.uid,
+        email: auth.currentUser.email,
+        currentPath: window.location.pathname,
+      })
 
-        // Redirect away from auth pages if already logged in
-        if (pathname === "/login" || pathname === "/signup" || pathname === "/") {
-          console.log("Redirecting to dashboard")
+      // Only redirect if we're on the login page
+      if (window.location.pathname === "/login") {
+        logRedirect("Redirecting to dashboard from login page")
+        router.push("/dashboard")
+      }
+    }
+
+    // Set up auth state listener
+    const unsubscribe = auth.onAuthStateChanged((user) => {
+      logRedirect("Auth state changed in redirect hook", {
+        user: user ? { uid: user.uid, email: user.email } : null,
+        currentPath: window.location.pathname,
+      })
+
+      if (user && window.location.pathname === "/login") {
+        logRedirect("User authenticated, redirecting to dashboard")
+
+        // Try router.push first
+        try {
           router.push("/dashboard")
+        } catch (error) {
+          logRedirect("Router.push failed, using window.location", { error })
+          window.location.href = "/dashboard"
         }
-      } else {
-        console.log("User is not logged in")
-
-        // Optional: Redirect to login if accessing protected pages
-        // if (pathname.startsWith("/dashboard")) {
-        //   router.push("/login")
-        // }
       }
     })
 
     return () => {
-      console.log("Cleaning up auth redirect listener")
+      logRedirect("Cleaning up auth redirect hook")
       unsubscribe()
     }
-  }, [pathname, router])
+  }, [router])
 }
