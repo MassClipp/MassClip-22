@@ -31,9 +31,7 @@ export default function RootLayoutClient({
 
         if (result) {
           console.log("Successfully signed in after redirect")
-
-          // Use window.location for more reliable redirect
-          window.location.href = "/dashboard"
+          router.push("/dashboard")
         }
       } catch (error) {
         console.error("Error handling redirect result:", error)

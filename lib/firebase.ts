@@ -1,7 +1,7 @@
 "use client"
 
 import { initializeApp, getApps } from "firebase/app"
-import { getAuth, setPersistence, browserLocalPersistence } from "firebase/auth"
+import { getAuth } from "firebase/auth"
 import { getFirestore } from "firebase/firestore"
 import { getStorage } from "firebase/storage"
 
@@ -35,18 +35,6 @@ export function initializeFirebaseApp() {
 
     // Initialize Firebase services
     auth = getAuth(app)
-
-    // Set persistence to LOCAL (survives browser restarts)
-    if (typeof window !== "undefined") {
-      setPersistence(auth, browserLocalPersistence)
-        .then(() => {
-          console.log("Firebase persistence set to LOCAL")
-        })
-        .catch((error) => {
-          console.error("Error setting persistence:", error)
-        })
-    }
-
     db = getFirestore(app)
     storage = getStorage(app)
   } catch (error) {
@@ -68,18 +56,6 @@ try {
 
   // Initialize Firebase services
   auth = getAuth(app)
-
-  // Set persistence to LOCAL (survives browser restarts)
-  if (typeof window !== "undefined") {
-    setPersistence(auth, browserLocalPersistence)
-      .then(() => {
-        console.log("Firebase persistence set to LOCAL")
-      })
-      .catch((error) => {
-        console.error("Error setting persistence:", error)
-      })
-  }
-
   db = getFirestore(app)
   storage = getStorage(app)
 } catch (error) {
