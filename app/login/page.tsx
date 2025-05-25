@@ -13,6 +13,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import Logo from "@/components/logo"
 import { Loader2, ArrowRight } from "lucide-react"
 import { GoogleAuthButton } from "@/components/google-auth-button"
+import { loginWithGoogle } from "@/lib/auth"
 
 export default function LoginPage() {
   const [email, setEmail] = useState("")
@@ -20,7 +21,7 @@ export default function LoginPage() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [isGoogleLoading, setIsGoogleLoading] = useState(false)
-  const { signIn, signInWithGoogle } = useFirebaseAuth()
+  const { signIn } = useFirebaseAuth()
   const router = useRouter()
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -49,12 +50,28 @@ export default function LoginPage() {
     setIsGoogleLoading(true)
 
     try {
-      // We're just initiating the redirect here
-      const result = await signInWithGoogle()
+      // Use the dedicated login handler
+      const result = await loginWithGoogle()
 
-      // This code won't run until after redirect completes
-      if (!result.success) {
-        setErrorMessage(result.error || "Failed to sign in with Google")
+      if (result.success) {
+        // Get redirect URL from query params if we're in the browser
+        let redirectTo = "/dashboard"
+
+        if (typeof window !== "undefined") {
+          const params = new URLSearchParams(window.location.search)
+          const redirect = params.get("redirect")
+          if (redirect) {
+            redirectTo = redirect
+          }
+        }
+
+        router.push(redirectTo)
+      } else {
+        if (result.error?.code === "auth/popup-closed-by-user") {
+          setErrorMessage("Sign-in popup was closed. Please try again.")
+        } else {
+          setErrorMessage("Failed to sign in with Google. Please try again.")
+        }
       }
     } catch (error) {
       setErrorMessage("An unexpected error occurred")
