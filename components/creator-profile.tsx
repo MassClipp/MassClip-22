@@ -45,13 +45,6 @@ interface Creator {
   premiumPrice?: number
   stripePriceId?: string
   paymentMode?: "one-time" | "subscription"
-  // Add these fields to ensure we can read from either location
-  premiumContentSettings?: {
-    enabled?: boolean
-    pricingModel?: "one-time" | "subscription"
-    oneTimePrice?: number
-    subscriptionPrice?: number
-  }
 }
 
 interface VideoItem {
@@ -353,23 +346,6 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
     }
   }
 
-  // Helper function to get the correct price based on payment mode
-  const getCreatorPrice = () => {
-    if (creator.premiumPrice) {
-      return creator.premiumPrice
-    }
-
-    if (creator.premiumContentSettings) {
-      const settings = creator.premiumContentSettings
-      if (creator.paymentMode === "subscription" || settings.pricingModel === "subscription") {
-        return settings.subscriptionPrice || 9.99
-      }
-      return settings.oneTimePrice || 9.99
-    }
-
-    return 9.99
-  }
-
   // Video card component with inline playback
   const VideoCard = ({ video }: { video: VideoItem }) => {
     const videoRef = useRef<HTMLVideoElement>(null)
@@ -458,7 +434,7 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
             <div className="absolute inset-0 flex flex-col items-center justify-center bg-black/50 text-white z-20">
               <Lock className="h-6 w-6 text-amber-500 mb-1" />
               <p className="text-sm font-medium">Premium</p>
-              <p className="mb-2 text-xs text-zinc-300">${getCreatorPrice().toFixed(2)}</p>
+              <p className="mb-2 text-xs text-zinc-300">${(creator.premiumPrice || 9.99).toFixed(2)}</p>
               <button
                 onClick={(e) => {
                   e.stopPropagation()
@@ -581,7 +557,7 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
                       ) : (
                         <>
                           <CreditCard className="h-4 w-4 mr-2" />
-                          Unlock All Premium – ${getCreatorPrice().toFixed(2)}
+                          Unlock All Premium – ${(creator.premiumPrice || 9.99).toFixed(2)}
                         </>
                       )}
                     </Button>

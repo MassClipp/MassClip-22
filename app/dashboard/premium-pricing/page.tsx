@@ -59,45 +59,18 @@ export default function PremiumPricingPage() {
 
     setSaving(true)
     try {
-      // Determine which price to use based on the selected pricing model
-      const priceToUse = pricingModel === "one-time" ? oneTimePrice : subscriptionPrice
-      const priceNum = Number.parseFloat(priceToUse)
-
-      if (enablePremiumContent && (isNaN(priceNum) || priceNum <= 0)) {
-        alert("Please enter a valid price greater than 0")
-        setSaving(false)
-        return
-      }
-
-      // Call the API to create/update Stripe product and price
-      const response = await fetch("/api/create-stripe-product", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          creatorId: user.uid,
-          displayName: user.displayName || "Creator",
-          priceInDollars: enablePremiumContent ? priceNum : 0,
-          mode: pricingModel,
-          enablePremium: enablePremiumContent,
-        }),
-      })
-
-      const result = await response.json()
-
-      if (!response.ok) {
-        throw new Error(result.error || "Failed to update pricing")
-      }
-
-      // Also update the local Firestore settings for immediate UI feedback
       const userRef = doc(db, "users", user.uid)
+
+      // Validate prices
+      const oneTimePriceNum = Number.parseFloat(oneTimePrice)
+      const subscriptionPriceNum = Number.parseFloat(subscriptionPrice)
+
       await userRef.update({
         premiumContentSettings: {
           enabled: enablePremiumContent,
           pricingModel,
-          oneTimePrice: pricingModel === "one-time" ? priceNum : Number.parseFloat(oneTimePrice) || 0,
-          subscriptionPrice: pricingModel === "subscription" ? priceNum : Number.parseFloat(subscriptionPrice) || 0,
+          oneTimePrice: isNaN(oneTimePriceNum) ? 0 : oneTimePriceNum,
+          subscriptionPrice: isNaN(subscriptionPriceNum) ? 0 : subscriptionPriceNum,
           updatedAt: new Date().toISOString(),
         },
       })
@@ -106,7 +79,6 @@ export default function PremiumPricingPage() {
       setTimeout(() => setSaveSuccess(false), 3000)
     } catch (error) {
       console.error("Error saving pricing settings:", error)
-      alert("Failed to save pricing settings. Please try again.")
     } finally {
       setSaving(false)
     }
