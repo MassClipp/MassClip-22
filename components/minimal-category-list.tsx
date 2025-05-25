@@ -33,6 +33,11 @@ export default function MinimalCategoryList({ categories, showcaseIds = {} }: Mi
           return "/category/browse-all"
         }
 
+        // Map Introspection to Mindset for URL purposes
+        if (normalizeCategory(category) === "introspection") {
+          return "/category/mindset"
+        }
+
         // Check if we have a direct showcase mapping in showcaseIds
         const directShowcaseId = Object.entries(showcaseIds).find(
           ([name]) => normalizeCategory(name) === normalizeCategory(category),
@@ -57,6 +62,11 @@ export default function MinimalCategoryList({ categories, showcaseIds = {} }: Mi
       },
     [showcaseIds, categoryToShowcaseMap, normalizeCategory],
   )
+
+  // Function to display the category name, mapping Introspection to Mindset
+  const displayCategoryName = (category: string) => {
+    return category.toLowerCase() === "introspection" ? "Mindset" : category
+  }
 
   // Animation variants
   const container = {
@@ -92,7 +102,7 @@ export default function MinimalCategoryList({ categories, showcaseIds = {} }: Mi
             >
               <div className="flex items-center justify-between">
                 <span className="inline-block font-extralight text-2xl tracking-wide text-gray-300 group-hover:text-white transition-colors duration-300">
-                  {category}
+                  {displayCategoryName(category)}
                 </span>
 
                 <motion.div

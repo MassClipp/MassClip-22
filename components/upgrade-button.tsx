@@ -1,44 +1,108 @@
 "use client"
 
 import type React from "react"
+
+import { useState } from "react"
 import { useRouter } from "next/navigation"
+import { Button } from "@/components/ui/button"
+import { cn } from "@/lib/utils"
 import { useAuth } from "@/contexts/auth-context"
-import { getProductionUrl } from "@/lib/url-utils"
+import { useUserPlan } from "@/hooks/use-user-plan"
 
 interface UpgradeButtonProps {
-  className?: string
   children?: React.ReactNode
+  className?: string
   onClick?: () => void
+  navigateOnly?: boolean
 }
 
-export default function UpgradeButton({ className = "", children, onClick }: UpgradeButtonProps) {
+export default function UpgradeButton({ children, className, onClick, navigateOnly = false }: UpgradeButtonProps) {
+  const [isLoading, setIsLoading] = useState(false)
   const router = useRouter()
   const { user } = useAuth()
+  const { isProUser, loading: planLoading } = useUserPlan()
 
-  const handleSubscribe = () => {
+  // If loading or user is already a pro user, don't show the button
+  if (planLoading || isProUser) {
+    return null
+  }
+
+  const handleClick = async () => {
     if (onClick) {
       onClick()
+    }
+
+    // If navigateOnly is true, just navigate to the membership plans page
+    if (navigateOnly) {
+      router.push("/membership-plans")
       return
     }
 
-    if (!user) {
-      // Use production URL for login redirect
-      const productionUrl = getProductionUrl()
-      router.push(`${productionUrl}/login?redirect=/membership-plans`)
-      return
-    }
+    try {
+      setIsLoading(true)
 
-    // Redirect to membership plans page
-    const productionUrl = getProductionUrl()
-    router.push(`${productionUrl}/membership-plans`)
+      // Log the payment click for analytics
+      try {
+        await fetch("/api/log-payment-click", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            userId: user?.uid || "anonymous",
+            source: "upgrade_button",
+          }),
+        })
+      } catch (error) {
+        console.error("Failed to log payment click:", error)
+      }
+
+      // Create checkout session
+      const response = await fetch("/api/create-checkout-session", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          userId: user?.uid,
+          userEmail: user?.email,
+        }),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.message || "Failed to create checkout session")
+      }
+
+      const data = await response.json()
+      router.push(data.url)
+    } catch (error) {
+      console.error("Error creating checkout session:", error)
+      // If there's an error, redirect to the membership plans page as a fallback
+      router.push("/membership-plans")
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   return (
-    <button
-      onClick={handleSubscribe}
-      className={`premium-button bg-crimson hover:bg-crimson-dark text-white font-light text-sm py-2 px-4 rounded-md transition-all duration-300 ${className}`}
+    <Button
+      onClick={handleClick}
+      className={cn(
+        "bg-crimson hover:bg-crimson-dark text-white",
+        isLoading && "opacity-70 cursor-not-allowed",
+        className,
+      )}
+      disabled={isLoading}
     >
-      {children || "Upgrade to Creator Pro"}
-    </button>
+      {isLoading ? (
+        <div className="flex items-center">
+          <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
+          <span>Loading...</span>
+        </div>
+      ) : (
+        children || "Upgrade to Pro"
+      )}
+    </Button>
   )
 }

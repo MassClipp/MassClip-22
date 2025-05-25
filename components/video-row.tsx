@@ -3,12 +3,14 @@
 import { useState, useRef, useEffect } from "react"
 import Link from "next/link"
 import { motion } from "framer-motion"
-import { ChevronRight, ChevronLeft } from "lucide-react"
+import { ChevronRight, ChevronLeft, ArrowRight } from "lucide-react"
 import type { VimeoVideo } from "@/lib/types"
 import VimeoCard from "@/components/vimeo-card"
 import VideoSkeleton from "@/components/video-skeleton"
 import { shuffleArray } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
+import LockedClipCard from "@/components/locked-clip-card"
+import { useUserPlan } from "@/hooks/use-user-plan"
 
 interface VideoRowProps {
   title: string
@@ -18,13 +20,15 @@ interface VideoRowProps {
   showcaseId?: string
 }
 
-export default function VideoRow({ title, videos, limit = 6, isShowcase = false, showcaseId }: VideoRowProps) {
+export default function VideoRow({ title, videos, limit = 10, isShowcase = false, showcaseId }: VideoRowProps) {
   const [visibleVideos, setVisibleVideos] = useState<VimeoVideo[]>([])
   const [isIntersecting, setIsIntersecting] = useState(false)
   const [scrollPosition, setScrollPosition] = useState(0)
   const [maxScroll, setMaxScroll] = useState(0)
+  const [isHovered, setIsHovered] = useState(false)
   const rowRef = useRef<HTMLDivElement>(null)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
+  const { isProUser } = useUserPlan()
 
   // Create a URL-friendly name
   const slug = encodeURIComponent(title.toLowerCase().replace(/\s+/g, "-"))
@@ -59,11 +63,27 @@ export default function VideoRow({ title, videos, limit = 6, isShowcase = false,
   // Load videos when row becomes visible
   useEffect(() => {
     if (isIntersecting && videos) {
-      // Shuffle videos instead of sorting alphabetically
-      const shuffledVideos = shuffleArray([...videos]).slice(0, limit)
-      setVisibleVideos(shuffledVideos)
+      if (isProUser) {
+        // Pro users get completely random videos - no organization at all
+        // Use a different random seed each time for maximum randomness
+        const shuffledVideos = shuffleArray([...videos], Math.random()).slice(0, limit)
+        setVisibleVideos(shuffledVideos)
+      } else {
+        // Free users get alphabetically sorted videos
+        const sortedVideos = [...videos]
+          .sort((a, b) => {
+            // Sort by name, or if names are equal, by URI
+            if (a.name && b.name) {
+              const nameCompare = a.name.localeCompare(b.name)
+              if (nameCompare !== 0) return nameCompare
+            }
+            return a.uri?.localeCompare(b.uri || "") || 0
+          })
+          .slice(0, limit)
+        setVisibleVideos(sortedVideos)
+      }
     }
-  }, [isIntersecting, videos, limit])
+  }, [isIntersecting, videos, limit, isProUser])
 
   // Calculate max scroll position
   useEffect(() => {
@@ -117,39 +137,53 @@ export default function VideoRow({ title, videos, limit = 6, isShowcase = false,
   const hasMore = videos.length > limit
 
   return (
-    <section className="mb-12 category-section" ref={rowRef}>
+    <section
+      className="mb-12 category-section"
+      ref={rowRef}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+    >
       <div className="px-6 mb-4 flex items-center justify-between">
-        <h2 className="text-2xl font-extralight tracking-wider text-white category-title">{title}</h2>
+        <h2 className="text-2xl font-extralight tracking-wider text-white category-title group-hover:text-crimson transition-colors duration-300">
+          {title}
+        </h2>
         {hasMore && (
-          <Link href={linkPath} className="text-zinc-400 hover:text-white flex items-center group">
-            <span className="mr-1">{buttonText}</span>
-            <ChevronRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" />
+          <Link
+            href={linkPath}
+            className="text-zinc-400 hover:text-white flex items-center group bg-zinc-900/30 hover:bg-zinc-900/50 px-3 py-1 rounded-full transition-all duration-300"
+          >
+            <span className="mr-1 text-sm">{buttonText}</span>
+            <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
           </Link>
         )}
       </div>
       <div className="relative">
         {/* Left scroll button */}
         {scrollPosition > 0 && (
-          <Button
-            variant="ghost"
-            size="icon"
-            className="absolute left-1 top-1/2 -translate-y-1/2 z-10 bg-black/50 backdrop-blur-sm hover:bg-black/70 rounded-full h-8 w-8"
-            onClick={() => handleScroll("left")}
-          >
-            <ChevronLeft className="h-4 w-4" />
-          </Button>
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: isHovered ? 1 : 0 }} transition={{ duration: 0.2 }}>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="absolute left-1 top-1/2 -translate-y-1/2 z-10 bg-black/50 backdrop-blur-sm hover:bg-black/70 rounded-full h-8 w-8 shadow-lg"
+              onClick={() => handleScroll("left")}
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+          </motion.div>
         )}
 
         {/* Right scroll button */}
         {scrollPosition < maxScroll && maxScroll > 0 && (
-          <Button
-            variant="ghost"
-            size="icon"
-            className="absolute right-1 top-1/2 -translate-y-1/2 z-10 bg-black/50 backdrop-blur-sm hover:bg-black/70 rounded-full h-8 w-8"
-            onClick={() => handleScroll("right")}
-          >
-            <ChevronRight className="h-4 w-4" />
-          </Button>
+          <motion.div initial={{ opacity: 0 }} animate={{ opacity: isHovered ? 1 : 0 }} transition={{ duration: 0.2 }}>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="absolute right-1 top-1/2 -translate-y-1/2 z-10 bg-black/50 backdrop-blur-sm hover:bg-black/70 rounded-full h-8 w-8 shadow-lg"
+              onClick={() => handleScroll("right")}
+            >
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </motion.div>
         )}
 
         <div
@@ -158,18 +192,39 @@ export default function VideoRow({ title, videos, limit = 6, isShowcase = false,
           onScroll={handleManualScroll}
         >
           {isIntersecting
-            ? visibleVideos.map((video) => (
-                <motion.div
-                  key={video.uri}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.5 }}
-                >
-                  <VimeoCard video={video} />
-                </motion.div>
-              ))
+            ? visibleVideos.map((video, index) => {
+                // For free users, show locked cards after the first 5 videos
+                if (!isProUser && index >= 5) {
+                  // Get thumbnail URL for the locked card background
+                  const thumbnailUrl = video?.pictures?.sizes
+                    ? [...video.pictures.sizes].sort((a, b) => b.width - a.width)[0].link
+                    : undefined
+
+                  return (
+                    <motion.div
+                      key={`locked-${index}`}
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.5 }}
+                    >
+                      <LockedClipCard thumbnailUrl={thumbnailUrl} />
+                    </motion.div>
+                  )
+                }
+
+                return (
+                  <motion.div
+                    key={video.uri}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.5 }}
+                  >
+                    <VimeoCard video={video} />
+                  </motion.div>
+                )
+              })
             : // Show skeleton loaders while waiting for intersection
-              Array.from({ length: Math.min(limit, 6) }).map((_, index) => <VideoSkeleton key={index} />)}
+              Array.from({ length: Math.min(limit, 10) }).map((_, index) => <VideoSkeleton key={index} />)}
         </div>
       </div>
     </section>

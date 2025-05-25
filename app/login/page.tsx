@@ -12,13 +12,15 @@ import { useFirebaseAuth } from "@/hooks/use-firebase-auth"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import Logo from "@/components/logo"
 import { Loader2, ArrowRight } from "lucide-react"
+import { GoogleAuthButton } from "@/components/google-auth-button"
 
 export default function LoginPage() {
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
-  const { signIn } = useFirebaseAuth()
+  const [isGoogleLoading, setIsGoogleLoading] = useState(false)
+  const { signIn, signInWithGoogle } = useFirebaseAuth()
   const router = useRouter()
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -39,6 +41,26 @@ export default function LoginPage() {
       console.error(error)
     } finally {
       setIsLoading(false)
+    }
+  }
+
+  const handleGoogleSignIn = async () => {
+    setErrorMessage(null)
+    setIsGoogleLoading(true)
+
+    try {
+      const result = await signInWithGoogle()
+
+      if (result.success) {
+        router.push("/dashboard")
+      } else {
+        setErrorMessage(result.error || "Failed to sign in with Google")
+      }
+    } catch (error) {
+      setErrorMessage("An unexpected error occurred")
+      console.error(error)
+    } finally {
+      setIsGoogleLoading(false)
     }
   }
 
@@ -86,12 +108,32 @@ export default function LoginPage() {
           </motion.div>
         )}
 
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.4, duration: 0.5 }}
+        >
+          <GoogleAuthButton onClick={handleGoogleSignIn} isLoading={isGoogleLoading} text="Continue with Google" />
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.45, duration: 0.5 }}
+          className="relative flex items-center justify-center"
+        >
+          <div className="absolute inset-0 flex items-center">
+            <div className="w-full border-t border-gray-700"></div>
+          </div>
+          <div className="relative px-4 bg-black text-xs text-gray-500">or continue with email</div>
+        </motion.div>
+
         <form onSubmit={handleSubmit} className="space-y-6">
           <motion.div
             className="space-y-2"
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.4, duration: 0.5 }}
+            transition={{ delay: 0.5, duration: 0.5 }}
           >
             <Label htmlFor="email" className="text-white">
               Email
@@ -111,7 +153,7 @@ export default function LoginPage() {
             className="space-y-2"
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.5, duration: 0.5 }}
+            transition={{ delay: 0.6, duration: 0.5 }}
           >
             <div className="flex items-center justify-between">
               <Label htmlFor="password" className="text-white">
@@ -135,7 +177,7 @@ export default function LoginPage() {
           <motion.div
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.6, duration: 0.5 }}
+            transition={{ delay: 0.7, duration: 0.5 }}
           >
             <Button
               type="submit"
@@ -160,7 +202,7 @@ export default function LoginPage() {
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          transition={{ delay: 0.7, duration: 0.5 }}
+          transition={{ delay: 0.8, duration: 0.5 }}
           className="text-center text-sm text-gray-400"
         >
           Don&apos;t have an account?{" "}

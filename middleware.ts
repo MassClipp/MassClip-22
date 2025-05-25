@@ -1,38 +1,34 @@
 import { NextResponse } from "next/server"
 import type { NextRequest } from "next/server"
 
-// This function can be marked `async` if using `await` inside
+// Define protected routes that require authentication
+const PROTECTED_ROUTES = ["/dashboard", "/upload", "/profile", "/settings", "/subscription"]
+
 export function middleware(request: NextRequest) {
-  // Get the hostname from the request
-  const hostname = request.headers.get("host") || ""
-  const url = request.nextUrl.clone()
+  // Check if the path is a protected route
+  const isProtectedRoute = PROTECTED_ROUTES.some((route) => request.nextUrl.pathname.startsWith(route))
 
-  // Check if we're in production and not on the production domain
-  const isProduction = process.env.NODE_ENV === "production"
-  const isVercelPreview = process.env.NEXT_PUBLIC_VERCEL_ENV?.includes("preview")
-  const isProductionDomain = hostname.includes("massclip.pro")
-
-  // Only redirect in production and when not on the production domain
-  // Skip for Vercel preview deployments
-  if (isProduction && !isProductionDomain && !isVercelPreview) {
-    // Create the redirect URL to the production domain
-    const redirectUrl = new URL(url.pathname + url.search, "https://massclip.pro")
-
-    // Log the redirect for debugging
-    console.log(`Redirecting from ${hostname} to ${redirectUrl.toString()}`)
-
-    // Return the redirect response
-    return NextResponse.redirect(redirectUrl)
+  // If it's not a protected route, continue
+  if (!isProtectedRoute) {
+    return NextResponse.next()
   }
 
-  // Continue with the request if no redirect is needed
+  // Get the session cookie
+  const sessionCookie = request.cookies.get("session")?.value
+
+  // If there's no session cookie, redirect to login
+  if (!sessionCookie) {
+    const url = new URL("/login", request.url)
+    url.searchParams.set("redirect", request.nextUrl.pathname)
+    return NextResponse.redirect(url)
+  }
+
+  // We can't verify the session cookie in middleware because firebase-admin
+  // can't run at the edge. We'll rely on the API routes to verify the session.
   return NextResponse.next()
 }
 
-// Only run the middleware on specific paths
+// Configure the middleware to run only on specific paths
 export const config = {
-  matcher: [
-    // Match all paths except for API routes, static files, etc.
-    "/((?!api|_next/static|_next/image|favicon.ico).*)",
-  ],
+  matcher: ["/dashboard/:path*", "/upload/:path*", "/profile/:path*", "/settings/:path*", "/subscription/:path*"],
 }
