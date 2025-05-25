@@ -30,19 +30,10 @@ export default function RootLayoutClient({
         const result = await getRedirectResult(auth)
 
         if (result) {
-          console.log("Successfully signed in after redirect", {
-            user: {
-              uid: result.user.uid,
-              email: result.user.email,
-            },
-            currentPath: window.location.pathname,
-          })
+          console.log("Successfully signed in after redirect")
 
-          // Only redirect if we're not already on the dashboard
-          if (window.location.pathname !== "/dashboard") {
-            console.log("Redirecting to dashboard after Google redirect sign-in")
-            router.push("/dashboard")
-          }
+          // Use window.location for more reliable redirect
+          window.location.href = "/dashboard"
         }
       } catch (error) {
         console.error("Error handling redirect result:", error)

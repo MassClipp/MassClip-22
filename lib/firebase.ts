@@ -37,13 +37,15 @@ export function initializeFirebaseApp() {
     auth = getAuth(app)
 
     // Set persistence to LOCAL (survives browser restarts)
-    setPersistence(auth, browserLocalPersistence)
-      .then(() => {
-        console.log("Firebase persistence set to LOCAL")
-      })
-      .catch((error) => {
-        console.error("Error setting persistence:", error)
-      })
+    if (typeof window !== "undefined") {
+      setPersistence(auth, browserLocalPersistence)
+        .then(() => {
+          console.log("Firebase persistence set to LOCAL")
+        })
+        .catch((error) => {
+          console.error("Error setting persistence:", error)
+        })
+    }
 
     db = getFirestore(app)
     storage = getStorage(app)
@@ -68,13 +70,15 @@ try {
   auth = getAuth(app)
 
   // Set persistence to LOCAL (survives browser restarts)
-  setPersistence(auth, browserLocalPersistence)
-    .then(() => {
-      console.log("Firebase persistence set to LOCAL")
-    })
-    .catch((error) => {
-      console.error("Error setting persistence:", error)
-    })
+  if (typeof window !== "undefined") {
+    setPersistence(auth, browserLocalPersistence)
+      .then(() => {
+        console.log("Firebase persistence set to LOCAL")
+      })
+      .catch((error) => {
+        console.error("Error setting persistence:", error)
+      })
+  }
 
   db = getFirestore(app)
   storage = getStorage(app)
