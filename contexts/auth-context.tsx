@@ -1,27 +1,20 @@
 "use client"
 
-import type React from "react"
-import { createContext, useContext, useEffect, useState } from "react"
-import { auth } from "@/lib/firebase"
-import { onAuthStateChanged, signOut as firebaseSignOut, setPersistence, browserLocalPersistence } from "firebase/auth"
-import { useRouter } from "next/navigation"
+import { createContext, useContext, useState, useEffect, type ReactNode } from "react"
 import {
   getAuth,
+  onAuthStateChanged,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
+  signOut as firebaseSignOut,
   type User as FirebaseUser,
   sendPasswordResetEmail,
   GoogleAuthProvider,
   signInWithPopup,
 } from "firebase/auth"
 import { doc, getDoc, setDoc, getFirestore } from "firebase/firestore"
-import { usePathname } from "next/navigation"
+import { useRouter, usePathname } from "next/navigation"
 import { initializeFirebaseApp } from "@/lib/firebase"
-
-// Set persistence to local
-setPersistence(auth, browserLocalPersistence)
-  .then(() => console.log("Firebase persistence set to local"))
-  .catch((error) => console.error("Error setting persistence:", error))
 
 // Define the user type
 export interface User extends FirebaseUser {
@@ -30,53 +23,51 @@ export interface User extends FirebaseUser {
 }
 
 // Define the auth context type
-type AuthContextType = {
-  user: any
+interface AuthContextType {
+  user: User | null
   loading: boolean
+  signIn: (email: string, password: string) => Promise<{ success: boolean; error?: string }>
+  signInWithGoogle: () => Promise<{ success: boolean; error?: string }>
+  signUp: (email: string, password: string) => Promise<{ success: boolean; error?: string }>
   signOut: () => Promise<void>
+  resetPassword: (email: string) => Promise<void>
+  refreshSession: () => Promise<boolean>
 }
 
 // Create the auth context
-const AuthContext = createContext<AuthContextType>({
-  user: null,
-  loading: true,
-  signOut: async () => {},
-})
-
-export const useAuth = () => useContext(AuthContext)
+const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
 // Auth provider props
 interface AuthProviderProps {
-  children: React.ReactNode
+  children: ReactNode
 }
 
 // Create the auth provider component
-export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<any>(null)
+export function AuthProvider({ children }: AuthProviderProps) {
+  const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
   const router = useRouter()
   const pathname = usePathname()
 
   // Initialize Firebase when the component mounts
   useEffect(() => {
-    console.log("Setting up auth state listener...")
     try {
       initializeFirebaseApp()
+      const auth = getAuth()
       const db = getFirestore()
 
       // Subscribe to auth state changes
-      const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-        console.log("🔥 Auth context state changed:", currentUser?.email || "Not logged in")
-        if (currentUser) {
+      const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+        if (firebaseUser) {
           // Get additional user data from Firestore
           try {
-            const userDoc = await getDoc(doc(db, "users", currentUser.uid))
+            const userDoc = await getDoc(doc(db, "users", firebaseUser.uid))
 
             if (userDoc.exists()) {
               // Combine Firebase user with Firestore data
               const userData = userDoc.data()
               const enhancedUser = {
-                ...currentUser,
+                ...firebaseUser,
                 plan: userData.plan || "free",
                 username: userData.username || null,
               } as User
@@ -85,17 +76,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             } else {
               // Create a new user document if it doesn't exist
               const newUserData = {
-                email: currentUser.email,
-                displayName: currentUser.displayName,
-                photoURL: currentUser.photoURL,
+                email: firebaseUser.email,
+                displayName: firebaseUser.displayName,
+                photoURL: firebaseUser.photoURL,
                 createdAt: new Date(),
                 plan: "free",
               }
 
-              await setDoc(doc(db, "users", currentUser.uid), newUserData)
+              await setDoc(doc(db, "users", firebaseUser.uid), newUserData)
 
               const enhancedUser = {
-                ...currentUser,
+                ...firebaseUser,
                 plan: "free",
               } as User
 
@@ -104,7 +95,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           } catch (error) {
             console.error("Error fetching user data:", error)
             // Still set the basic user even if Firestore fails
-            setUser(currentUser as User)
+            setUser(firebaseUser as User)
           }
         } else {
           setUser(null)
@@ -266,13 +257,30 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   }
 
+  // Sign out function
   const signOut = async () => {
     try {
+      setLoading(true)
+      const auth = getAuth()
       await firebaseSignOut(auth)
-      console.log("User signed out")
-      router.push("/login")
+
+      // Clear the session cookie
+      await fetch("/api/auth/logout", {
+        method: "POST",
+        credentials: "include", // Include cookies with the request
+      })
+      console.log("Logged out and cleared session cookie")
+
+      // Clear any cached user data
+      setUser(null)
+
+      // Return a resolved promise
+      return Promise.resolve()
     } catch (error) {
       console.error("Error signing out:", error)
+      return Promise.reject(error)
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -288,5 +296,29 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }
 
   // Provide the auth context to children
-  return <AuthContext.Provider value={{ user, loading, signOut }}>{children}</AuthContext.Provider>
+  return (
+    <AuthContext.Provider
+      value={{
+        user,
+        loading,
+        signIn,
+        signInWithGoogle,
+        signUp,
+        signOut,
+        resetPassword,
+        refreshSession,
+      }}
+    >
+      {children}
+    </AuthContext.Provider>
+  )
+}
+
+// Custom hook to use the auth context
+export function useAuth() {
+  const context = useContext(AuthContext)
+  if (context === undefined) {
+    throw new Error("useAuth must be used within an AuthProvider")
+  }
+  return context
 }

@@ -9,10 +9,9 @@ import { DownloadLimitProvider } from "@/contexts/download-limit-context"
 import { TikTokBrowserBanner } from "@/components/tiktok-browser-banner"
 import { FullscreenBlocker } from "@/components/fullscreen-blocker"
 import { ZoomPrevention } from "@/components/zoom-prevention"
-import { useEffect, useState } from "react"
-import { getAuth, getRedirectResult, onAuthStateChanged } from "firebase/auth"
+import { useEffect } from "react"
+import { getAuth, getRedirectResult } from "firebase/auth"
 import { useRouter } from "next/navigation"
-import { AuthDebugBanner } from "./auth-debug-banner"
 
 const inter = Inter({ subsets: ["latin"] })
 
@@ -22,8 +21,6 @@ export default function RootLayoutClient({
   children: React.ReactNode
 }>) {
   const router = useRouter()
-  const [user, setUser] = useState<any>(null)
-  const [authInitialized, setAuthInitialized] = useState(false)
 
   useEffect(() => {
     // Handle redirect result from Google Sign In
@@ -42,16 +39,6 @@ export default function RootLayoutClient({
     }
 
     handleRedirectResult()
-
-    // Set up auth state listener
-    const auth = getAuth()
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-      console.log("🔥 Global auth state changed:", currentUser?.email || "Not logged in")
-      setUser(currentUser)
-      setAuthInitialized(true)
-    })
-
-    return () => unsubscribe()
   }, [router])
 
   return (
@@ -91,7 +78,6 @@ export default function RootLayoutClient({
       <body className={`${inter.className} prevent-zoom`}>
         <AuthProvider>
           <DownloadLimitProvider>
-            <AuthDebugBanner />
             <ZoomPrevention />
             <FullscreenBlocker />
             <TikTokBrowserBanner />

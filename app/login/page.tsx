@@ -14,7 +14,8 @@ import Logo from "@/components/logo"
 import { Loader2, ArrowRight } from "lucide-react"
 import { GoogleAuthButton } from "@/components/google-auth-button"
 import { loginWithGoogle, loginWithGoogleRedirect } from "@/lib/auth"
-import { useAuth } from "@/contexts/auth-context"
+import { useAuthRedirect } from "@/hooks/use-auth-redirect"
+import { auth } from "@/lib/firebase"
 
 export default function LoginPage() {
   const [email, setEmail] = useState("")
@@ -22,17 +23,21 @@ export default function LoginPage() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [isGoogleLoading, setIsGoogleLoading] = useState(false)
+  const [authInitialized, setAuthInitialized] = useState(false)
   const { signIn } = useFirebaseAuth()
   const router = useRouter()
-  const { user, loading } = useAuth()
 
-  // Redirect to dashboard if user is already logged in
+  // Use the auth redirect hook
+  useAuthRedirect()
+
+  // Check if auth is initialized
   useEffect(() => {
-    if (user && !loading) {
-      console.log("User already logged in, redirecting to dashboard...")
-      router.push("/dashboard")
-    }
-  }, [user, loading, router])
+    const unsubscribe = auth.onAuthStateChanged(() => {
+      setAuthInitialized(true)
+    })
+
+    return () => unsubscribe()
+  }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -43,8 +48,7 @@ export default function LoginPage() {
       const result = await signIn(email, password)
 
       if (result.success) {
-        console.log("Login successful, waiting for auth state to update...")
-        // Don't redirect here - let the auth state listener handle it
+        router.push("/dashboard")
       } else {
         setErrorMessage(result.error || "Failed to sign in")
       }
@@ -65,8 +69,18 @@ export default function LoginPage() {
       const result = await loginWithGoogle()
 
       if (result.success) {
-        console.log("Google login successful, waiting for auth state to update...")
-        // Don't redirect here - let the auth state listener handle it
+        // Get redirect URL from query params if we're in the browser
+        let redirectTo = "/dashboard"
+
+        if (typeof window !== "undefined") {
+          const params = new URLSearchParams(window.location.search)
+          const redirect = params.get("redirect")
+          if (redirect) {
+            redirectTo = redirect
+          }
+        }
+
+        router.push(redirectTo)
       } else {
         if (result.error?.code === "auth/popup-closed-by-user") {
           setErrorMessage("Sign-in popup was closed. Please try again.")
@@ -87,28 +101,16 @@ export default function LoginPage() {
   }
 
   // Don't render the login form until auth is initialized
-  if (loading) {
+  if (!authInitialized) {
     return (
       <div className="min-h-screen bg-black flex flex-col justify-center items-center">
         <div className="fixed inset-0 z-0 bg-gradient-to-b from-black via-black to-gray-900"></div>
         <Loader2 className="h-8 w-8 animate-spin text-red-500" />
-        <p className="mt-4 text-white">Checking authentication status...</p>
       </div>
     )
   }
 
-  // If user is already logged in, don't render the login form
-  if (user) {
-    return (
-      <div className="min-h-screen bg-black flex flex-col justify-center items-center">
-        <div className="fixed inset-0 z-0 bg-gradient-to-b from-black via-black to-gray-900"></div>
-        <Loader2 className="h-8 w-8 animate-spin text-red-500" />
-        <p className="mt-4 text-white">Already logged in, redirecting to dashboard...</p>
-      </div>
-    )
-  }
-
-  // If auth is initialized and user is not logged in, render the login form
+  // If auth is initialized and we're still on this page, render the login form
   return (
     <div className="min-h-screen bg-black flex flex-col justify-center items-center px-4">
       {/* Premium Gradient Background */}
