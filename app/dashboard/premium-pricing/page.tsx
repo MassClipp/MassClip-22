@@ -1,243 +1,119 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import { useAuth } from "@/contexts/auth-context"
-import { doc, getDoc } from "firebase/firestore"
-import { db } from "@/lib/firebase"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
-import { Button } from "@/components/ui/button"
-import { Label } from "@/components/ui/label"
-import { Switch } from "@/components/ui/switch"
-import { AlertCircle, DollarSign, CreditCard, CalendarClock, Save, CheckCircle } from "lucide-react"
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
-import { Skeleton } from "@/components/ui/skeleton"
+import { useState } from "react"
+import { useAuth } from "@/context/AuthContext"
+import { db } from "@/firebase"
+import { doc, writeBatch } from "firebase/firestore"
 
-export default function PremiumPricingPage() {
+const PremiumPricingPage = () => {
   const { user } = useAuth()
-  const [loading, setLoading] = useState(true)
-  const [saving, setSaving] = useState(false)
-  const [saveSuccess, setSaveSuccess] = useState(false)
-  const [stripeConnected, setStripeConnected] = useState(false)
-  const [pricingModel, setPricingModel] = useState<"one-time" | "subscription">("one-time")
-  const [oneTimePrice, setOneTimePrice] = useState("")
-  const [subscriptionPrice, setSubscriptionPrice] = useState("")
-  const [enablePremiumContent, setEnablePremiumContent] = useState(false)
+  const [price, setPrice] = useState("")
+  const [priceId, setPriceId] = useState("")
+  const [paymentMode, setPaymentMode] = useState("recurring")
+  const [loading, setLoading] = useState(false)
+  const [successMessage, setSuccessMessage] = useState("")
+  const [errorMessage, setErrorMessage] = useState("")
 
-  useEffect(() => {
-    const fetchUserData = async () => {
-      if (!user) return
-
-      try {
-        const userDoc = await getDoc(doc(db, "users", user.uid))
-        if (userDoc.exists()) {
-          const userData = userDoc.data()
-          setStripeConnected(!!userData.stripeAccountId && userData.stripeOnboardingComplete)
-
-          // Set pricing data
-          if (userData.premiumContentSettings) {
-            const settings = userData.premiumContentSettings
-            setEnablePremiumContent(settings.enabled || false)
-            setPricingModel(settings.pricingModel || "one-time")
-            setOneTimePrice(settings.oneTimePrice?.toString() || "")
-            setSubscriptionPrice(settings.subscriptionPrice?.toString() || "")
-          }
-        }
-        setLoading(false)
-      } catch (error) {
-        console.error("Error fetching user data:", error)
-        setLoading(false)
-      }
+  const handleSaveSettings = async () => {
+    if (!user) {
+      setErrorMessage("You must be logged in to save settings.")
+      return
     }
 
-    fetchUserData()
-  }, [user])
+    if (!price || !priceId) {
+      setErrorMessage("Price and Price ID are required.")
+      return
+    }
 
-  const handleSave = async () => {
-    if (!user) return
+    setLoading(true)
+    setSuccessMessage("")
+    setErrorMessage("")
 
-    setSaving(true)
     try {
-      const userRef = doc(db, "users", user.uid)
+      const batch = writeBatch(db)
 
-      // Validate prices
-      const oneTimePriceNum = Number.parseFloat(oneTimePrice)
-      const subscriptionPriceNum = Number.parseFloat(subscriptionPrice)
+      // Update user document with premium settings
+      const userUpdate = {
+        premiumEnabled: true,
+        premiumPrice: Number.parseFloat(price),
+        stripePriceId: priceId,
+        paymentMode: paymentMode,
+        updatedAt: new Date().toISOString(),
+      }
 
-      await userRef.update({
-        premiumContentSettings: {
-          enabled: enablePremiumContent,
-          pricingModel,
-          oneTimePrice: isNaN(oneTimePriceNum) ? 0 : oneTimePriceNum,
-          subscriptionPrice: isNaN(subscriptionPriceNum) ? 0 : subscriptionPriceNum,
-          updatedAt: new Date().toISOString(),
-        },
-      })
+      batch.update(doc(db, "users", user.uid), userUpdate)
 
-      setSaveSuccess(true)
-      setTimeout(() => setSaveSuccess(false), 3000)
-    } catch (error) {
-      console.error("Error saving pricing settings:", error)
+      await batch.commit()
+
+      setSuccessMessage("Premium pricing settings saved successfully!")
+    } catch (error: any) {
+      console.error("Error saving premium pricing settings:", error)
+      setErrorMessage(`Failed to save settings: ${error.message || "An unexpected error occurred."}`)
     } finally {
-      setSaving(false)
+      setLoading(false)
     }
-  }
-
-  if (loading) {
-    return (
-      <div className="container max-w-4xl py-8">
-        <h1 className="text-2xl font-bold mb-6">Premium Content Pricing</h1>
-        <Card>
-          <CardHeader>
-            <Skeleton className="h-8 w-3/4" />
-            <Skeleton className="h-4 w-full mt-2" />
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <Skeleton className="h-10 w-full" />
-              <Skeleton className="h-10 w-full" />
-              <Skeleton className="h-10 w-full" />
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    )
-  }
-
-  if (!stripeConnected) {
-    return (
-      <div className="container max-w-4xl py-8">
-        <h1 className="text-2xl font-bold mb-6">Premium Content Pricing</h1>
-        <Alert variant="destructive" className="mb-6">
-          <AlertCircle className="h-4 w-4" />
-          <AlertTitle>Stripe Account Required</AlertTitle>
-          <AlertDescription>
-            You need to connect your Stripe account before you can set up premium content pricing. Please go to the
-            Earnings section to complete your Stripe onboarding.
-          </AlertDescription>
-        </Alert>
-        <Button onClick={() => (window.location.href = "/dashboard/earnings")}>Go to Earnings</Button>
-      </div>
-    )
   }
 
   return (
-    <div className="container max-w-4xl py-8">
-      <h1 className="text-2xl font-bold mb-6">Premium Content Pricing</h1>
+    <div className="container mx-auto p-4">
+      <h1 className="text-2xl font-bold mb-4">Premium Pricing Settings</h1>
 
-      <Card className="mb-6">
-        <CardHeader>
-          <CardTitle>Enable Premium Content</CardTitle>
-          <CardDescription>
-            Toggle this option to enable or disable premium content features for your profile.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-center space-x-2">
-            <Switch id="enable-premium" checked={enablePremiumContent} onCheckedChange={setEnablePremiumContent} />
-            <Label htmlFor="enable-premium">
-              {enablePremiumContent ? "Premium content enabled" : "Premium content disabled"}
-            </Label>
-          </div>
-        </CardContent>
-      </Card>
+      {successMessage && <div className="bg-green-200 text-green-800 p-2 mb-4 rounded">{successMessage}</div>}
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Premium Content Pricing</CardTitle>
-          <CardDescription>
-            Set your pricing model and rates for premium content. You can offer one-time purchases, monthly
-            subscriptions, or both.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Tabs
-            defaultValue={pricingModel}
-            onValueChange={(value) => setPricingModel(value as "one-time" | "subscription")}
-          >
-            <TabsList className="grid w-full grid-cols-2 mb-6">
-              <TabsTrigger value="one-time" className="flex items-center gap-2">
-                <CreditCard className="h-4 w-4" />
-                <span>One-Time Payment</span>
-              </TabsTrigger>
-              <TabsTrigger value="subscription" className="flex items-center gap-2">
-                <CalendarClock className="h-4 w-4" />
-                <span>Monthly Subscription</span>
-              </TabsTrigger>
-            </TabsList>
+      {errorMessage && <div className="bg-red-200 text-red-800 p-2 mb-4 rounded">{errorMessage}</div>}
 
-            <TabsContent value="one-time">
-              <div className="space-y-4">
-                <div>
-                  <Label htmlFor="one-time-price">One-Time Payment Price ($)</Label>
-                  <div className="relative mt-1">
-                    <DollarSign className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-                    <Input
-                      id="one-time-price"
-                      type="number"
-                      min="0.99"
-                      step="0.01"
-                      placeholder="9.99"
-                      className="pl-9"
-                      value={oneTimePrice}
-                      onChange={(e) => setOneTimePrice(e.target.value)}
-                    />
-                  </div>
-                  <p className="text-sm text-gray-500 mt-1">
-                    This is the amount customers will pay once to access your premium content.
-                  </p>
-                </div>
-              </div>
-            </TabsContent>
+      <div className="mb-4">
+        <label htmlFor="price" className="block text-gray-700 text-sm font-bold mb-2">
+          Price:
+        </label>
+        <input
+          type="number"
+          id="price"
+          className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+          placeholder="Enter price"
+          value={price}
+          onChange={(e) => setPrice(e.target.value)}
+        />
+      </div>
 
-            <TabsContent value="subscription">
-              <div className="space-y-4">
-                <div>
-                  <Label htmlFor="subscription-price">Monthly Subscription Price ($)</Label>
-                  <div className="relative mt-1">
-                    <DollarSign className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-                    <Input
-                      id="subscription-price"
-                      type="number"
-                      min="0.99"
-                      step="0.01"
-                      placeholder="4.99"
-                      className="pl-9"
-                      value={subscriptionPrice}
-                      onChange={(e) => setSubscriptionPrice(e.target.value)}
-                    />
-                  </div>
-                  <p className="text-sm text-gray-500 mt-1">
-                    This is the amount customers will pay monthly to access your premium content.
-                  </p>
-                </div>
-              </div>
-            </TabsContent>
-          </Tabs>
-        </CardContent>
-        <CardFooter className="flex justify-between">
-          <p className="text-sm text-gray-500">Platform fee: 10% of each transaction</p>
-          <div className="flex items-center gap-2">
-            {saveSuccess && (
-              <span className="text-green-500 flex items-center gap-1">
-                <CheckCircle className="h-4 w-4" />
-                Saved
-              </span>
-            )}
-            <Button onClick={handleSave} disabled={saving}>
-              {saving ? (
-                <>Saving...</>
-              ) : (
-                <>
-                  <Save className="h-4 w-4 mr-2" />
-                  Save Settings
-                </>
-              )}
-            </Button>
-          </div>
-        </CardFooter>
-      </Card>
+      <div className="mb-4">
+        <label htmlFor="priceId" className="block text-gray-700 text-sm font-bold mb-2">
+          Price ID:
+        </label>
+        <input
+          type="text"
+          id="priceId"
+          className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+          placeholder="Enter Price ID"
+          value={priceId}
+          onChange={(e) => setPriceId(e.target.value)}
+        />
+      </div>
+
+      <div className="mb-4">
+        <label htmlFor="paymentMode" className="block text-gray-700 text-sm font-bold mb-2">
+          Payment Mode:
+        </label>
+        <select
+          id="paymentMode"
+          className="shadow appearance-none border rounded w-full py-2 px-3 text-gray-700 leading-tight focus:outline-none focus:shadow-outline"
+          value={paymentMode}
+          onChange={(e) => setPaymentMode(e.target.value)}
+        >
+          <option value="recurring">Recurring</option>
+          <option value="one-time">One-Time</option>
+        </select>
+      </div>
+
+      <button
+        className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline"
+        onClick={handleSaveSettings}
+        disabled={loading}
+      >
+        {loading ? "Saving..." : "Save Settings"}
+      </button>
     </div>
   )
 }
+
+export default PremiumPricingPage

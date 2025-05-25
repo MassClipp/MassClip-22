@@ -690,6 +690,20 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
           </div>
         </div>
       )}
+      {/* Temporary debug info - remove after testing */}
+      {process.env.NODE_ENV === "development" && (
+        <div className="fixed bottom-4 right-4 bg-zinc-900 border border-zinc-700 rounded-lg p-4 text-xs text-white max-w-sm z-50">
+          <h3 className="font-bold mb-2">Debug Info</h3>
+          <div className="space-y-1">
+            <p>Premium Enabled: {creator.premiumEnabled ? "Yes" : "No"}</p>
+            <p>Stripe Price ID: {creator.stripePriceId || "Not set"}</p>
+            <p>Premium Price: ${creator.premiumPrice || 0}</p>
+            <p>Is Owner: {isOwner ? "Yes" : "No"}</p>
+            <p>Current User: {user?.email || "Not logged in"}</p>
+            <p>Show Button: {creator.premiumEnabled && creator.stripePriceId && !isOwner ? "Yes" : "No"}</p>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
