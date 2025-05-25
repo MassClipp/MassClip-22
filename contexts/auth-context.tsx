@@ -11,6 +11,8 @@ import {
   sendPasswordResetEmail,
   GoogleAuthProvider,
   signInWithPopup,
+  setPersistence,
+  browserLocalPersistence,
 } from "firebase/auth"
 import { doc, getDoc, setDoc, getFirestore } from "firebase/firestore"
 import { useRouter, usePathname } from "next/navigation"
@@ -54,6 +56,12 @@ export function AuthProvider({ children }: AuthProviderProps) {
     try {
       initializeFirebaseApp()
       const auth = getAuth()
+
+      // Set persistence before listening to auth changes
+      setPersistence(auth, browserLocalPersistence).catch((error) => {
+        console.error("Error setting persistence:", error)
+      })
+
       const db = getFirestore()
 
       // Subscribe to auth state changes
