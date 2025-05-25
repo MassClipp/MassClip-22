@@ -51,37 +51,40 @@ export default function LoginPage() {
     log("Setting up auth state listener")
     addDiagnostic("Setting up auth state listener")
 
+    // Flag to prevent multiple redirects
+    let redirectAttempted = false
+
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       log("Auth state changed", {
         user: user ? { email: user.email, uid: user.uid } : null,
         currentPath: window.location.pathname,
       })
 
-      if (user) {
+      if (user && !redirectAttempted) {
         addDiagnostic(`User detected: ${user.email}`)
         addDiagnostic(`Current path: ${window.location.pathname}`)
-        addDiagnostic("Attempting redirect to /dashboard...")
 
-        // Try multiple redirect methods
-        try {
-          log("Attempting router.push")
-          router.push("/dashboard")
-          addDiagnostic("router.push('/dashboard') called")
+        // Only redirect if we're actually on the login page
+        // This prevents redirect loops
+        if (window.location.pathname === "/login") {
+          addDiagnostic("On login page with authenticated user - attempting redirect...")
+          redirectAttempted = true
 
-          // Fallback redirect after delay
-          setTimeout(() => {
-            if (window.location.pathname !== "/dashboard") {
-              log("Router.push failed, trying window.location")
-              addDiagnostic("Router.push failed, trying window.location")
-              window.location.href = "/dashboard"
-            }
-          }, 1000)
-        } catch (error) {
-          log("Redirect error", error)
-          addDiagnostic(`Redirect error: ${error}`)
+          try {
+            log("Attempting router.push")
+            router.push("/dashboard")
+            addDiagnostic("router.push('/dashboard') called")
+          } catch (error) {
+            log("Redirect error", error)
+            addDiagnostic(`Redirect error: ${error}`)
+          }
+        } else {
+          addDiagnostic("Not on login page, skipping redirect")
         }
-      } else {
+      } else if (!user) {
         addDiagnostic("No user detected")
+        // Reset the redirect flag when user is null
+        redirectAttempted = false
       }
 
       setAuthInitialized(true)
