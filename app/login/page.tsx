@@ -1,8 +1,7 @@
 "use client"
 
 import type React from "react"
-import { useState, useEffect, useRef } from "react"
-import { useRouter } from "next/navigation"
+import { useState } from "react"
 import Link from "next/link"
 import { motion } from "framer-motion"
 import { Button } from "@/components/ui/button"
@@ -14,8 +13,6 @@ import Logo from "@/components/logo"
 import { Loader2, ArrowRight } from "lucide-react"
 import { GoogleAuthButton } from "@/components/google-auth-button"
 import { loginWithGoogle, loginWithGoogleRedirect } from "@/lib/auth"
-import { auth } from "@/lib/firebase"
-import { onAuthStateChanged } from "firebase/auth"
 
 export default function LoginPage() {
   const [email, setEmail] = useState("")
@@ -23,36 +20,7 @@ export default function LoginPage() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [isGoogleLoading, setIsGoogleLoading] = useState(false)
-  const [authInitialized, setAuthInitialized] = useState(false)
   const { signIn } = useFirebaseAuth()
-  const router = useRouter()
-
-  // Use ref to track redirect attempts
-  const redirectAttemptedRef = useRef(false)
-
-  // Set up auth state listener
-  useEffect(() => {
-    // Only run this once
-    const unsubscribe = onAuthStateChanged(auth, (user) => {
-      // Set auth as initialized
-      setAuthInitialized(true)
-
-      if (user && !redirectAttemptedRef.current) {
-        // Only redirect if we're on the login page and haven't tried yet
-        if (window.location.pathname === "/login") {
-          redirectAttemptedRef.current = true
-
-          // Use window.location for reliable redirect
-          window.location.href = "/dashboard"
-        }
-      } else if (!user) {
-        // Reset the redirect flag when user is null
-        redirectAttemptedRef.current = false
-      }
-    })
-
-    return () => unsubscribe()
-  }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -63,13 +31,8 @@ export default function LoginPage() {
       const result = await signIn(email, password)
 
       if (result.success) {
-        // Redirect will be handled by auth state listener
-        // But add a fallback just in case
-        setTimeout(() => {
-          if (window.location.pathname === "/login" && auth.currentUser) {
-            window.location.href = "/dashboard"
-          }
-        }, 1000)
+        // Direct redirect without any auth state listener
+        window.location.href = "/dashboard"
       } else {
         setErrorMessage(result.error || "Failed to sign in")
       }
@@ -89,13 +52,8 @@ export default function LoginPage() {
       const result = await loginWithGoogle()
 
       if (result.success) {
-        // Redirect will be handled by auth state listener
-        // But add a fallback just in case
-        setTimeout(() => {
-          if (window.location.pathname === "/login" && auth.currentUser) {
-            window.location.href = "/dashboard"
-          }
-        }, 1000)
+        // Direct redirect without any auth state listener
+        window.location.href = "/dashboard"
       } else {
         if (result.error?.code === "auth/popup-closed-by-user") {
           setErrorMessage("Sign-in popup was closed. Please try again.")
@@ -111,16 +69,6 @@ export default function LoginPage() {
     } finally {
       setIsGoogleLoading(false)
     }
-  }
-
-  if (!authInitialized) {
-    return (
-      <div className="min-h-screen bg-black flex flex-col justify-center items-center">
-        <div className="fixed inset-0 z-0 bg-gradient-to-b from-black via-black to-gray-900"></div>
-        <Loader2 className="h-8 w-8 animate-spin text-red-500" />
-        <p className="text-white mt-4">Initializing authentication...</p>
-      </div>
-    )
   }
 
   return (
