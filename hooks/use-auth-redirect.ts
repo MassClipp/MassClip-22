@@ -22,15 +22,29 @@ export function useAuthRedirect() {
         // Redirect away from auth pages if already logged in
         if (pathname === "/login" || pathname === "/signup" || pathname === "/") {
           console.log("Redirecting to dashboard")
-          router.push("/dashboard")
+
+          // Try router.push first
+          try {
+            router.push("/dashboard")
+
+            // Fallback to window.location if router.push doesn't work
+            setTimeout(() => {
+              if (
+                window.location.pathname === "/login" ||
+                window.location.pathname === "/signup" ||
+                window.location.pathname === "/"
+              ) {
+                console.log("Still on auth page, using window.location.href")
+                window.location.href = "/dashboard"
+              }
+            }, 500)
+          } catch (error) {
+            console.error("Router push error:", error)
+            window.location.href = "/dashboard"
+          }
         }
       } else {
         console.log("User is not logged in")
-
-        // Optional: Redirect to login if accessing protected pages
-        // if (pathname.startsWith("/dashboard")) {
-        //   router.push("/login")
-        // }
       }
     })
 

@@ -1,7 +1,7 @@
 "use client"
 
 import type React from "react"
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { motion } from "framer-motion"
@@ -34,6 +34,9 @@ export default function LoginPage() {
   const { signIn } = useFirebaseAuth()
   const router = useRouter()
 
+  // Use ref to track redirect attempts
+  const redirectAttemptedRef = useRef(false)
+
   // Add diagnostic info
   const addDiagnostic = (info: string) => {
     const timestamp = new Date().toLocaleTimeString()
@@ -46,13 +49,16 @@ export default function LoginPage() {
     addDiagnostic(`Router ready at ${window.location.pathname}`)
   }, [])
 
+  // Force redirect if needed
+  const forceRedirect = () => {
+    addDiagnostic("Forcing redirect with window.location...")
+    window.location.href = "/dashboard"
+  }
+
   // Set up auth state listener with detailed logging
   useEffect(() => {
     log("Setting up auth state listener")
     addDiagnostic("Setting up auth state listener")
-
-    // Flag to prevent multiple redirects
-    let redirectAttempted = false
 
     const unsubscribe = onAuthStateChanged(auth, (user) => {
       log("Auth state changed", {
@@ -60,23 +66,34 @@ export default function LoginPage() {
         currentPath: window.location.pathname,
       })
 
-      if (user && !redirectAttempted) {
+      if (user && !redirectAttemptedRef.current) {
         addDiagnostic(`User detected: ${user.email}`)
         addDiagnostic(`Current path: ${window.location.pathname}`)
 
         // Only redirect if we're actually on the login page
-        // This prevents redirect loops
         if (window.location.pathname === "/login") {
           addDiagnostic("On login page with authenticated user - attempting redirect...")
-          redirectAttempted = true
+          redirectAttemptedRef.current = true
 
           try {
             log("Attempting router.push")
-            router.push("/dashboard")
             addDiagnostic("router.push('/dashboard') called")
+
+            // Try Next.js router first
+            router.push("/dashboard")
+
+            // Set a fallback to window.location if router.push doesn't work
+            setTimeout(() => {
+              if (window.location.pathname === "/login") {
+                addDiagnostic("Still on login page after router.push, using window.location.href")
+                window.location.href = "/dashboard"
+              }
+            }, 500)
           } catch (error) {
             log("Redirect error", error)
             addDiagnostic(`Redirect error: ${error}`)
+            // Fallback to direct location change
+            forceRedirect()
           }
         } else {
           addDiagnostic("Not on login page, skipping redirect")
@@ -84,7 +101,7 @@ export default function LoginPage() {
       } else if (!user) {
         addDiagnostic("No user detected")
         // Reset the redirect flag when user is null
-        redirectAttempted = false
+        redirectAttemptedRef.current = false
       }
 
       setAuthInitialized(true)
@@ -109,7 +126,14 @@ export default function LoginPage() {
 
       if (result.success) {
         addDiagnostic("Sign in successful, waiting for auth state change...")
-        // Don't redirect here - let auth state listener handle it
+
+        // If auth state doesn't trigger redirect, force it
+        setTimeout(() => {
+          if (window.location.pathname === "/login" && auth.currentUser) {
+            addDiagnostic("Auth state didn't trigger redirect, forcing redirect...")
+            forceRedirect()
+          }
+        }, 1000)
       } else {
         addDiagnostic(`Sign in failed: ${result.error}`)
         setErrorMessage(result.error || "Failed to sign in")
@@ -135,7 +159,14 @@ export default function LoginPage() {
 
       if (result.success) {
         addDiagnostic("Google sign in successful, waiting for auth state change...")
-        // Don't redirect here - let auth state listener handle it
+
+        // If auth state doesn't trigger redirect, force it
+        setTimeout(() => {
+          if (window.location.pathname === "/login" && auth.currentUser) {
+            addDiagnostic("Auth state didn't trigger redirect, forcing redirect...")
+            forceRedirect()
+          }
+        }, 1000)
       } else {
         if (result.error?.code === "auth/popup-closed-by-user") {
           addDiagnostic("Popup closed by user")
@@ -160,15 +191,7 @@ export default function LoginPage() {
   // Manual redirect test button
   const testRedirect = () => {
     addDiagnostic("Testing manual redirect...")
-    try {
-      router.push("/dashboard")
-      addDiagnostic("router.push called")
-      setTimeout(() => {
-        addDiagnostic(`Current path after redirect: ${window.location.pathname}`)
-      }, 500)
-    } catch (error) {
-      addDiagnostic(`Manual redirect error: ${error}`)
-    }
+    forceRedirect()
   }
 
   if (!authInitialized) {

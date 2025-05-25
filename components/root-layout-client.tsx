@@ -11,7 +11,6 @@ import { FullscreenBlocker } from "@/components/fullscreen-blocker"
 import { ZoomPrevention } from "@/components/zoom-prevention"
 import { useEffect } from "react"
 import { getAuth, getRedirectResult } from "firebase/auth"
-import { useRouter } from "next/navigation"
 
 const inter = Inter({ subsets: ["latin"] })
 
@@ -20,8 +19,6 @@ export default function RootLayoutClient({
 }: Readonly<{
   children: React.ReactNode
 }>) {
-  const router = useRouter()
-
   useEffect(() => {
     // Handle redirect result from Google Sign In
     const handleRedirectResult = async () => {
@@ -31,7 +28,9 @@ export default function RootLayoutClient({
 
         if (result) {
           console.log("Successfully signed in after redirect")
-          router.push("/dashboard")
+
+          // Use window.location for more reliable redirect
+          window.location.href = "/dashboard"
         }
       } catch (error) {
         console.error("Error handling redirect result:", error)
@@ -39,7 +38,7 @@ export default function RootLayoutClient({
     }
 
     handleRedirectResult()
-  }, [router])
+  }, [])
 
   return (
     <html lang="en" className="prevent-zoom">
