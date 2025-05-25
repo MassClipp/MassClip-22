@@ -1,6 +1,5 @@
 import { cert, initializeApp, getApps } from "firebase-admin/app"
 import { getFirestore } from "firebase-admin/firestore"
-import { getAuth } from "firebase-admin/auth"
 
 /**
  * Initializes Firebase Admin SDK if it hasn't been initialized already
@@ -39,6 +38,3 @@ initializeFirebaseAdmin()
 
 // Export the Firestore database
 export const db = getFirestore()
-
-// Export the Auth service
-export const auth = getAuth()

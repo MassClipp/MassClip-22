@@ -20,7 +20,7 @@ interface LogoProps {
  * @param linkClassName - Additional classes for the link wrapper (when href is provided)
  * @param size - Size variant of the logo: "sm", "md", or "lg"
  */
-function Logo({ className, href, linkClassName, size = "md" }: LogoProps) {
+export default function Logo({ className, href, linkClassName, size = "md" }: LogoProps) {
   const content = (
     <div className={cn("flex flex-col items-center", className)}>
       <div className="flex items-center">
@@ -50,7 +50,3 @@ function Logo({ className, href, linkClassName, size = "md" }: LogoProps) {
 
   return content
 }
-
-// Export as both default and named export for compatibility
-export default Logo
-export { Logo }

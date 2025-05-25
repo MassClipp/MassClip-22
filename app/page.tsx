@@ -63,7 +63,7 @@ export default function LandingPage() {
           <div className="container mx-auto max-w-6xl">
             <div className="flex flex-col items-center text-center mb-12">
               <motion.h1
-                className="text-4xl md:text-7xl lg:text-8xl font-light text-white mb-6 max-w-4xl leading-tight"
+                className="text-5xl md:text-7xl lg:text-8xl font-light text-white mb-6 max-w-4xl leading-tight"
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.8, delay: 0.2 }}
@@ -72,7 +72,7 @@ export default function LandingPage() {
               </motion.h1>
 
               <motion.p
-                className="text-lg md:text-2xl font-light text-white/70 mb-8 md:mb-12 max-w-2xl"
+                className="text-xl md:text-2xl font-light text-white/70 mb-12 max-w-2xl"
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.8, delay: 0.4 }}
@@ -109,13 +109,13 @@ export default function LandingPage() {
               >
                 <Button
                   onClick={handleExploreClips}
-                  className="flex-1 py-3 sm:py-6 bg-white/5 hover:bg-white/10 text-white text-sm sm:text-lg border border-white/10 premium-button"
+                  className="flex-1 py-6 bg-white/5 hover:bg-white/10 text-white text-lg border border-white/10 premium-button"
                 >
                   EXPLORE CLIPS
                 </Button>
                 <Button
                   onClick={handleStartFree}
-                  className="flex-1 py-3 sm:py-6 bg-crimson hover:bg-crimson-dark text-white text-sm sm:text-lg premium-button"
+                  className="flex-1 py-6 bg-crimson hover:bg-crimson-dark text-white text-lg premium-button"
                 >
                   START FREE
                 </Button>
@@ -201,13 +201,13 @@ export default function LandingPage() {
                 transition={{ duration: 0.6 }}
                 viewport={{ once: true, margin: "-100px" }}
               >
-                <h2 className="text-3xl md:text-4xl font-light text-white mb-4">FEATURED CATEGORIES</h2>
+                <h2 className="text-3xl md:text-4xl font-light text-white mb-4">ELITE CATEGORIES</h2>
                 <p className="text-white/70 max-w-2xl mx-auto">
                   Curated collections of high-performing content across niches.
                 </p>
               </motion.div>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 {/* Money & Wealth Category */}
                 <motion.div
                   className="relative overflow-hidden group cursor-pointer bg-black/20 border border-white/5 aspect-video flex items-center justify-center"
@@ -218,13 +218,13 @@ export default function LandingPage() {
                   viewport={{ once: true, margin: "-100px" }}
                 >
                   <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/30 to-transparent opacity-70 group-hover:opacity-40 transition-opacity duration-300"></div>
-                  <div className="relative z-10 text-center px-4">
-                    <h3 className="text-lg md:text-xl lg:text-2xl font-light text-white mb-2 group-hover:text-crimson transition-colors duration-300">
+                  <div className="relative z-10 text-center">
+                    <h3 className="text-2xl font-light text-white mb-2 group-hover:text-crimson transition-colors duration-300">
                       Money & Wealth
                     </h3>
-                    <div className="flex items-center justify-center text-white/50 text-xs md:text-sm">
-                      <Play className="h-3 w-3 md:h-4 md:w-4 mr-1 md:mr-2" />
-                      <span>Explore</span>
+                    <div className="flex items-center justify-center text-white/50 text-sm">
+                      <Play className="h-4 w-4 mr-2" />
+                      <span>Explore Collection</span>
                     </div>
                   </div>
                 </motion.div>
@@ -239,34 +239,34 @@ export default function LandingPage() {
                   viewport={{ once: true, margin: "-100px" }}
                 >
                   <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/30 to-transparent opacity-70 group-hover:opacity-40 transition-opacity duration-300"></div>
-                  <div className="relative z-10 text-center px-4">
-                    <h3 className="text-lg md:text-xl lg:text-2xl font-light text-white mb-2 group-hover:text-crimson transition-colors duration-300">
+                  <div className="relative z-10 text-center">
+                    <h3 className="text-2xl font-light text-white mb-2 group-hover:text-crimson transition-colors duration-300">
                       Hustle Mentality
                     </h3>
-                    <div className="flex items-center justify-center text-white/50 text-xs md:text-sm">
-                      <Play className="h-3 w-3 md:h-4 md:w-4 mr-1 md:mr-2" />
-                      <span>Explore</span>
+                    <div className="flex items-center justify-center text-white/50 text-sm">
+                      <Play className="h-4 w-4 mr-2" />
+                      <span>Explore Collection</span>
                     </div>
                   </div>
                 </motion.div>
 
-                {/* Mindset Category (previously Introspection) */}
+                {/* Introspection Category */}
                 <motion.div
                   className="relative overflow-hidden group cursor-pointer bg-black/20 border border-white/5 aspect-video flex items-center justify-center"
-                  onClick={() => handleCategoryClick("mindset")}
+                  onClick={() => handleCategoryClick("introspection")}
                   initial={{ opacity: 0, y: 20 }}
                   whileInView={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.6, delay: 0.4 }}
                   viewport={{ once: true, margin: "-100px" }}
                 >
                   <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/30 to-transparent opacity-70 group-hover:opacity-40 transition-opacity duration-300"></div>
-                  <div className="relative z-10 text-center px-4">
-                    <h3 className="text-lg md:text-xl lg:text-2xl font-light text-white mb-2 group-hover:text-crimson transition-colors duration-300">
-                      Mindset
+                  <div className="relative z-10 text-center">
+                    <h3 className="text-2xl font-light text-white mb-2 group-hover:text-crimson transition-colors duration-300">
+                      Introspection
                     </h3>
-                    <div className="flex items-center justify-center text-white/50 text-xs md:text-sm">
-                      <Play className="h-3 w-3 md:h-4 md:w-4 mr-1 md:mr-2" />
-                      <span>Explore</span>
+                    <div className="flex items-center justify-center text-white/50 text-sm">
+                      <Play className="h-4 w-4 mr-2" />
+                      <span>Explore Collection</span>
                     </div>
                   </div>
                 </motion.div>
@@ -281,7 +281,7 @@ export default function LandingPage() {
               >
                 <Button
                   onClick={handleExploreClips}
-                  className="bg-transparent hover:bg-white/5 text-white border border-white/10 px-6 sm:px-8 py-3 sm:py-6 text-sm sm:text-base premium-button"
+                  className="bg-transparent hover:bg-white/5 text-white border border-white/10 px-8 py-6 premium-button"
                 >
                   VIEW ALL CATEGORIES <ArrowRight className="ml-2 h-4 w-4" />
                 </Button>
@@ -302,7 +302,7 @@ export default function LandingPage() {
               </p>
               <Button
                 onClick={handleStartFree}
-                className="bg-crimson hover:bg-crimson-dark text-white text-sm sm:text-lg px-8 sm:px-12 py-3 sm:py-6 premium-button"
+                className="bg-crimson hover:bg-crimson-dark text-white text-lg px-12 py-6 premium-button"
               >
                 START FREE TODAY
               </Button>
@@ -340,12 +340,7 @@ export default function LandingPage() {
               © {new Date().getFullYear()} MassClip. All rights reserved.
             </p>
             <div className="flex gap-4">
-              <a
-                href="https://www.instagram.com/massclipp?igsh=MTZtY2w0bnQwaHI1OA%3D%3D&utm_source=qr"
-                className="text-white/30 hover:text-white transition-colors"
-                target="_blank"
-                rel="noopener noreferrer"
-              >
+              <a href="#" className="text-white/30 hover:text-white transition-colors">
                 <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                   <path
                     fillRule="evenodd"

@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
@@ -14,21 +14,9 @@ export default function StripeSettingsPage() {
   const { user } = useAuth()
   const router = useRouter()
 
-  // Use useEffect for any browser-only code
-  useEffect(() => {
-    // Any code that needs to access browser APIs should go here
-    // This ensures it only runs on the client side
-  }, [])
-
-  // Redirect if not logged in - this needs to be inside useEffect
-  useEffect(() => {
-    if (!user) {
-      router.push("/login?redirect=/dashboard/settings/stripe")
-    }
-  }, [user, router])
-
-  // Don't render anything if user is not logged in
+  // Redirect if not logged in
   if (!user) {
+    router.push("/login?redirect=/dashboard/settings/stripe")
     return null
   }
 

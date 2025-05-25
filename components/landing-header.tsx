@@ -41,10 +41,10 @@ export default function LandingHeader() {
   }, [isMenuOpen])
 
   const navigationItems = [
-    { name: "Home", href: "/" },
-    { name: "Explore", href: "/dashboard" },
-    { name: "Pricing", href: "/membership-plans" },
-    { name: "Categories", href: "/dashboard/categories" },
+    { name: "HOME", href: "/" },
+    { name: "EXPLORE", href: "/dashboard" },
+    { name: "PRICING", href: "/membership-plans" },
+    { name: "CATEGORIES", href: "/dashboard/categories" },
   ]
 
   return (
@@ -84,11 +84,11 @@ export default function LandingHeader() {
         {/* Desktop CTA */}
         <div className="hidden md:flex items-center gap-6">
           <Link href="/login" className="text-sm text-white/80 hover:text-white transition-colors">
-            Log in
+            LOG IN
           </Link>
           <Link href="/signup">
             <Button className="bg-crimson hover:bg-crimson-dark text-white text-sm px-6 py-2 rounded-none">
-              Sign up
+              SIGN UP
             </Button>
           </Link>
         </div>
@@ -156,16 +156,16 @@ export default function LandingHeader() {
                 className="flex items-center justify-between py-3 px-4 text-amber-400 hover:text-amber-300 hover:bg-white/5 rounded-lg transition-colors group"
                 onClick={() => setIsMenuOpen(false)}
               >
-                <span className="text-sm font-light tracking-wide">Beta Notice</span>
+                <span className="text-sm font-light tracking-wide">BETA NOTICE</span>
                 <ChevronRight className="h-4 w-4 text-zinc-500 group-hover:text-amber-300 transition-colors" />
               </Link>
             </div>
 
             {/* Social Links */}
             <div className="mt-8 pt-6 border-t border-zinc-800/50 bg-black">
-              <p className="text-xs text-zinc-500 font-light px-4 mb-4">Follow Us</p>
+              <p className="text-xs text-zinc-500 font-light px-4 mb-4">FOLLOW US</p>
               <a
-                href="https://www.instagram.com/massclipp?igsh=MTZtY2w0bnQwaHI1OA%3D%3D&utm_source=qr"
+                href="https://instagram.com"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex items-center py-3 px-4 text-white/90 hover:text-white hover:bg-white/5 rounded-lg transition-colors"
@@ -183,14 +183,14 @@ export default function LandingHeader() {
               className="flex items-center justify-center w-full py-2.5 text-sm text-white/90 hover:text-white bg-zinc-800/50 hover:bg-zinc-800 rounded-lg transition-colors"
               onClick={() => setIsMenuOpen(false)}
             >
-              Log in
+              LOG IN
             </Link>
             <Link
               href="/signup"
               className="flex items-center justify-center w-full py-2.5 text-sm text-white bg-crimson hover:bg-crimson-dark rounded-lg transition-colors"
               onClick={() => setIsMenuOpen(false)}
             >
-              Sign up
+              SIGN UP
             </Link>
           </div>
         </div>

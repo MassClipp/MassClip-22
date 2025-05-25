@@ -2,70 +2,72 @@
 
 import type React from "react"
 
-import { useRouter } from "next/navigation"
-import { useAuth } from "@/contexts/auth-context"
-import { getSiteUrl } from "@/lib/url-utils"
 import { useState } from "react"
+import { Button } from "@/components/ui/button"
+import { useAuth } from "@/contexts/auth-context"
+import { useToast } from "@/hooks/use-toast"
 
 interface DirectPaymentLinkProps {
   className?: string
+  variant?: "default" | "outline" | "secondary" | "ghost" | "link" | "destructive"
+  size?: "default" | "sm" | "lg" | "icon"
   children?: React.ReactNode
-  onClick?: () => void
-  trackingId?: string
 }
 
-export default function DirectPaymentLink({ className = "", children, onClick, trackingId }: DirectPaymentLinkProps) {
-  const router = useRouter()
+export function DirectPaymentLink({
+  className,
+  variant = "default",
+  size = "default",
+  children = "Subscribe Now",
+}: DirectPaymentLinkProps) {
   const { user } = useAuth()
-  const [hasLogged, setHasLogged] = useState(false)
+  const { toast } = useToast()
+  const [isRedirecting, setIsRedirecting] = useState(false)
 
-  // Log click for analytics
-  const logClick = async () => {
-    if (hasLogged || !trackingId) return
+  // The direct Stripe payment link
+  const PAYMENT_LINK = "https://buy.stripe.com/cN22be92y96c3nybIL"
+
+  const handleClick = async () => {
+    if (!user) {
+      toast({
+        title: "Login Required",
+        description: "Please login or create an account first.",
+        variant: "destructive",
+      })
+      return
+    }
+
+    setIsRedirecting(true)
 
     try {
-      await fetch("/api/log-payment-click", {
+      // Log the payment attempt in Firestore for tracking
+      // This is optional but helpful for analytics
+      const response = await fetch("/api/log-payment-click", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          trackingId,
-          userId: user?.uid || "anonymous",
+          userId: user.uid,
+          email: user.email,
+          timestamp: new Date().toISOString(),
+          paymentLink: PAYMENT_LINK,
         }),
       })
-      setHasLogged(true)
+
+      // Redirect to the Stripe payment link
+      window.location.href = PAYMENT_LINK
     } catch (error) {
-      console.error("Failed to log payment click:", error)
+      console.error("Error logging payment click:", error)
+      // Still redirect even if logging fails
+      window.location.href = PAYMENT_LINK
+      setIsRedirecting(false)
     }
-  }
-
-  const handleClick = () => {
-    if (onClick) {
-      onClick()
-    }
-
-    logClick()
-
-    // Get current site URL
-    const currentSiteUrl = getSiteUrl()
-
-    if (!user) {
-      // Redirect to login first
-      router.push(`${currentSiteUrl}/login?redirect=/membership-plans`)
-      return
-    }
-
-    // Direct to membership plans
-    router.push(`${currentSiteUrl}/membership-plans`)
   }
 
   return (
-    <button
-      onClick={handleClick}
-      className={`bg-crimson hover:bg-crimson-dark text-white font-medium py-2 px-4 rounded-md transition-all duration-300 ${className}`}
-    >
-      {children || "Get Creator Pro"}
-    </button>
+    <Button onClick={handleClick} className={className} variant={variant} size={size} disabled={isRedirecting}>
+      {isRedirecting ? "Redirecting..." : children}
+    </Button>
   )
 }

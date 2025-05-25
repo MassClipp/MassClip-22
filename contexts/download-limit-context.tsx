@@ -10,7 +10,6 @@ interface DownloadLimitContextType {
   remainingDownloads: number
   isProUser: boolean
   forceRefresh: () => void
-  loading: boolean
 }
 
 const DownloadLimitContext = createContext<DownloadLimitContextType>({
@@ -18,7 +17,6 @@ const DownloadLimitContext = createContext<DownloadLimitContextType>({
   remainingDownloads: 10,
   isProUser: false,
   forceRefresh: () => {},
-  loading: true,
 })
 
 export function DownloadLimitProvider({ children }: { children: ReactNode }) {
@@ -27,7 +25,6 @@ export function DownloadLimitProvider({ children }: { children: ReactNode }) {
   const [remainingDownloads, setRemainingDownloads] = useState(10)
   const [isProUser, setIsProUser] = useState(false)
   const [refreshCounter, setRefreshCounter] = useState(0)
-  const [loading, setLoading] = useState(true)
 
   // Force a refresh of the limit status
   const forceRefresh = useCallback(() => {
@@ -40,11 +37,9 @@ export function DownloadLimitProvider({ children }: { children: ReactNode }) {
       setHasReachedLimit(false)
       setRemainingDownloads(10)
       setIsProUser(false)
-      setLoading(false)
       return
     }
 
-    setLoading(true)
     const userDocRef = doc(db, "users", user.uid)
 
     // Initial fetch
@@ -60,11 +55,9 @@ export function DownloadLimitProvider({ children }: { children: ReactNode }) {
           setRemainingDownloads(Math.max(0, limit - downloads))
           setHasReachedLimit(!isPro && downloads >= limit)
         }
-        setLoading(false)
       })
       .catch((err) => {
         console.error("Error fetching initial user plan:", err)
-        setLoading(false)
       })
 
     // Set up real-time listener
@@ -81,11 +74,9 @@ export function DownloadLimitProvider({ children }: { children: ReactNode }) {
           setRemainingDownloads(Math.max(0, limit - downloads))
           setHasReachedLimit(!isPro && downloads >= limit)
         }
-        setLoading(false)
       },
       (error) => {
         console.error("Error in download limit listener:", error)
-        setLoading(false)
       },
     )
 
@@ -99,7 +90,6 @@ export function DownloadLimitProvider({ children }: { children: ReactNode }) {
         remainingDownloads,
         isProUser,
         forceRefresh,
-        loading,
       }}
     >
       {children}

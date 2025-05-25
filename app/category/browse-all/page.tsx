@@ -2,7 +2,7 @@
 
 import { useRef, useState, useEffect, useCallback } from "react"
 import Link from "next/link"
-import { ChevronLeft, Search, Filter, Lock } from "lucide-react"
+import { ChevronLeft, Search, Filter } from "lucide-react"
 import { motion, AnimatePresence } from "framer-motion"
 import DashboardHeader from "@/components/dashboard-header"
 import VimeoCard from "@/components/vimeo-card"
@@ -10,7 +10,6 @@ import VideoSkeleton from "@/components/video-skeleton"
 import { Button } from "@/components/ui/button"
 import type { VimeoApiResponse, VimeoVideo } from "@/lib/types"
 import { shuffleArray } from "@/lib/utils"
-import { useUserPlan } from "@/hooks/use-user-plan"
 
 export default function BrowseAllPage() {
   const [videos, setVideos] = useState<VimeoVideo[]>([])
@@ -22,7 +21,6 @@ export default function BrowseAllPage() {
   const [searchQuery, setSearchQuery] = useState("")
   const [filteredVideos, setFilteredVideos] = useState<VimeoVideo[]>([])
   const [showSearch, setShowSearch] = useState(false)
-  const { isProUser } = useUserPlan()
 
   const observer = useRef<IntersectionObserver | null>(null)
   const pageSize = 36
@@ -61,20 +59,8 @@ export default function BrowseAllPage() {
         // Combine previous and new videos
         const combinedVideos = [...prev, ...newVideos]
 
-        // For pro users, shuffle videos
-        // For free users, sort alphabetically by title
-        if (isProUser) {
-          return shuffleArray(combinedVideos)
-        } else {
-          return combinedVideos.sort((a, b) => {
-            // Sort by name, or if names are equal, by URI
-            if (a.name && b.name) {
-              const nameCompare = a.name.localeCompare(b.name)
-              if (nameCompare !== 0) return nameCompare
-            }
-            return a.uri?.localeCompare(b.uri || "") || 0
-          })
-        }
+        // Shuffle videos instead of sorting alphabetically
+        return shuffleArray(combinedVideos)
       })
 
       // Check if there are more videos to load
@@ -142,61 +128,6 @@ export default function BrowseAllPage() {
       }
     }
   }, [])
-
-  // If user is not pro, show upgrade message
-  if (!isProUser) {
-    return (
-      <div className="relative min-h-screen bg-black text-white">
-        {/* Premium Gradient Background */}
-        <div className="fixed inset-0 z-0 bg-gradient-to-b from-black via-black to-gray-900"></div>
-
-        <DashboardHeader />
-
-        <main className="pt-20 pb-16 relative z-10">
-          <motion.div
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3 }}
-            className="container mx-auto px-4 sm:px-6"
-          >
-            {/* Header with back button and title */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-8 gap-4">
-              <div className="flex items-center">
-                <Link
-                  href="/dashboard/categories"
-                  className="mr-4 p-2 rounded-full bg-gray-900/80 hover:bg-gray-800 transition-colors"
-                >
-                  <ChevronLeft className="h-5 w-5 text-gray-400" />
-                </Link>
-                <h1 className="text-3xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-white to-gray-400">
-                  Browse All Videos
-                </h1>
-              </div>
-            </div>
-
-            {/* Upgrade message */}
-            <div className="max-w-3xl mx-auto text-center py-16">
-              <div className="bg-black/40 border border-crimson/20 rounded-lg p-8 backdrop-blur-sm">
-                <div className="mb-6 p-4 bg-crimson/10 inline-block rounded-full">
-                  <Lock className="h-12 w-12 text-crimson" />
-                </div>
-                <h2 className="text-3xl font-bold text-white mb-4">Premium Feature</h2>
-                <p className="text-lg text-gray-300 mb-8">
-                  The "Browse All" feature is exclusive to Creator Pro members. Upgrade your account to access our
-                  entire library of premium content.
-                </p>
-                <Link href="/pricing">
-                  <Button className="bg-crimson hover:bg-crimson/80 text-white px-8 py-6 text-lg">
-                    Upgrade to Creator Pro
-                  </Button>
-                </Link>
-              </div>
-            </div>
-          </motion.div>
-        </main>
-      </div>
-    )
-  }
 
   return (
     <div className="relative min-h-screen bg-black text-white">

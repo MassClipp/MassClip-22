@@ -3,17 +3,15 @@
 import { useRef, useCallback, useEffect, useState } from "react"
 import { useParams, useRouter } from "next/navigation"
 import Link from "next/link"
-import { ChevronLeft, Search, Filter, ArrowUpRight, Lock } from "lucide-react"
+import { ChevronLeft, Search, Filter, ArrowUpRight } from "lucide-react"
 import { motion, AnimatePresence } from "framer-motion"
 import DashboardHeader from "@/components/dashboard-header"
 import VimeoCard from "@/components/vimeo-card"
-import LockedClipCard from "@/components/locked-clip-card"
 import { useVimeoTagVideos } from "@/hooks/use-vimeo-tag-videos"
 import { useVimeoShowcases } from "@/hooks/use-vimeo-showcases"
 import { Button } from "@/components/ui/button"
 import VideoSkeleton from "@/components/video-skeleton"
 import { shuffleArray } from "@/lib/utils"
-import { useUserPlan } from "@/hooks/use-user-plan"
 
 export default function CategoryPage() {
   const params = useParams()
@@ -24,11 +22,10 @@ export default function CategoryPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [noContentMessage, setNoContentMessage] = useState<string | null>(null)
   const [redirectInProgress, setRedirectInProgress] = useState(false)
-  const [processedVideos, setProcessedVideos] = useState<any[]>([])
+  const [shuffledVideos, setShuffledVideos] = useState<any[]>([])
   const [searchQuery, setSearchQuery] = useState("")
   const [filteredVideos, setFilteredVideos] = useState<any[]>([])
   const [showSearch, setShowSearch] = useState(false)
-  const { isProUser } = useUserPlan()
 
   // Special case for "browse all"
   useEffect(() => {
@@ -84,50 +81,30 @@ export default function CategoryPage() {
   const { videos, loading, error, hasMore, loadMore } = useVimeoTagVideos(tag)
   const observer = useRef<IntersectionObserver | null>(null)
 
-  // Process videos when they change - completely random for pro users
+  // Shuffle videos when they change
   useEffect(() => {
     if (videos && videos.length > 0) {
-      if (isProUser) {
-        // Pro users get completely random videos - no organization at all
-        // Use a different random seed each time to ensure maximum randomness
-        const shuffled = shuffleArray([...videos], Math.random())
-        setProcessedVideos(shuffled)
-      } else {
-        // Free users get consistently sorted videos (by name)
-        const sorted = [...videos].sort((a, b) => {
-          // Sort by name, or if names are equal, by URI
-          if (a.name && b.name) {
-            const nameCompare = a.name.localeCompare(b.name)
-            if (nameCompare !== 0) return nameCompare
-          }
-          return a.uri?.localeCompare(b.uri || "") || 0
-        })
-        setProcessedVideos(sorted)
-      }
+      const shuffled = shuffleArray([...videos])
+      setShuffledVideos(shuffled)
+      setFilteredVideos(shuffled)
     }
-  }, [videos, isProUser])
+  }, [videos])
 
   // Filter videos based on search query
   useEffect(() => {
     if (searchQuery.trim() === "") {
-      setFilteredVideos(processedVideos)
+      setFilteredVideos(shuffledVideos)
     } else {
       const query = searchQuery.toLowerCase()
-      const filtered = processedVideos.filter(
+      const filtered = shuffledVideos.filter(
         (video) =>
           video.name?.toLowerCase().includes(query) ||
           video.description?.toLowerCase().includes(query) ||
           video.tags?.some((tag: any) => tag.name.toLowerCase().includes(query)),
       )
-
-      // For pro users, keep search results randomly ordered with a new shuffle
-      if (isProUser) {
-        setFilteredVideos(shuffleArray(filtered, Math.random()))
-      } else {
-        setFilteredVideos(filtered)
-      }
+      setFilteredVideos(filtered)
     }
-  }, [searchQuery, processedVideos, isProUser])
+  }, [searchQuery, shuffledVideos])
 
   // Reference for infinite scrolling
   const lastVideoElementRef = useCallback(
@@ -189,12 +166,6 @@ export default function CategoryPage() {
       </div>
     )
   }
-
-  // Get the total number of videos
-  const totalVideosCount = filteredVideos.length
-
-  // Determine if we need to show the upgrade banner
-  const showUpgradeBanner = !isProUser && totalVideosCount > 5
 
   return (
     <div className="relative min-h-screen bg-black text-white">
@@ -274,26 +245,6 @@ export default function CategoryPage() {
             </div>
           </div>
 
-          {/* Upgrade banner for free users */}
-          {showUpgradeBanner && (
-            <div className="mb-6 p-4 bg-gradient-to-r from-red-900/20 to-red-900/10 border border-red-900/30 rounded-lg">
-              <div className="flex flex-col sm:flex-row items-center justify-between">
-                <div className="flex items-center mb-3 sm:mb-0">
-                  <Lock className="h-5 w-5 text-red-500 mr-2" />
-                  <span className="text-sm text-white">
-                    Free users can view 5 of {totalVideosCount} videos in this category
-                  </span>
-                </div>
-                <Button
-                  onClick={() => router.push("/pricing")}
-                  className="bg-red-600 hover:bg-red-700 text-white text-sm"
-                >
-                  Upgrade to Pro
-                </Button>
-              </div>
-            </div>
-          )}
-
           {/* Error state */}
           {error && (
             <motion.div
@@ -334,41 +285,18 @@ export default function CategoryPage() {
                       Found {filteredVideos.length} results for "{searchQuery}"
                     </div>
                   )}
-
                   <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-6">
-                    {filteredVideos.map((video, index) => {
-                      // For free users, show locked cards after the first 5 videos
-                      if (!isProUser && index >= 5) {
-                        // Get thumbnail URL for the locked card background
-                        const thumbnailUrl = video?.pictures?.sizes
-                          ? [...video.pictures.sizes].sort((a, b) => b.width - a.width)[0].link
-                          : undefined
-
-                        return (
-                          <motion.div
-                            key={`locked-${video.uri || index}`}
-                            initial={{ opacity: 0, y: 20 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ duration: 0.3, delay: Math.min(index * 0.05, 1) }}
-                          >
-                            <LockedClipCard thumbnailUrl={thumbnailUrl} />
-                          </motion.div>
-                        )
-                      }
-
-                      // Regular video card for all users (or first 5 for free users)
-                      return (
-                        <motion.div
-                          key={video.uri}
-                          ref={index === filteredVideos.length - 1 ? lastVideoElementRef : undefined}
-                          initial={{ opacity: 0, y: 20 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          transition={{ duration: 0.3, delay: Math.min(index * 0.05, 1) }}
-                        >
-                          <VimeoCard video={video} />
-                        </motion.div>
-                      )
-                    })}
+                    {filteredVideos.map((video, index) => (
+                      <motion.div
+                        key={video.uri}
+                        ref={index === filteredVideos.length - 1 ? lastVideoElementRef : undefined}
+                        initial={{ opacity: 0, y: 20 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.3, delay: Math.min(index * 0.05, 1) }}
+                      >
+                        <VimeoCard video={video} />
+                      </motion.div>
+                    ))}
 
                     {/* Show skeleton loaders while loading more */}
                     {loading &&
@@ -403,7 +331,7 @@ export default function CategoryPage() {
           )}
 
           {/* Manual load more button */}
-          {!loading && filteredVideos.length > 0 && hasMore && (isProUser || filteredVideos.length <= 5) && (
+          {!loading && filteredVideos.length > 0 && hasMore && (
             <div className="py-8 text-center">
               <Button onClick={loadMore} className="bg-red-600 hover:bg-red-700 text-white px-8">
                 Load More Videos

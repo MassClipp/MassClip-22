@@ -1,15 +1,54 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    // Base rule - deny all by default
+    match /{document=**} {
+      allow read, write: if false;
+    }
+    
+    // User profile data
     match /users/{userId} {
-      allow read;
-      allow create: if request.auth.uid == userId;
-      allow update: if request.auth.uid == userId 
-        && (
-          request.resource.data.diff(resource.data).affectedKeys()
-            .hasOnly(['displayName', 'photoURL', 'username', 'bio', 'socialLinks', 'premiumContentSettings'])
-        );
-      allow delete: if request.auth.uid == userId;
+      // Allow users to read and write their own profile
+      allow read: if request.auth != null && request.auth.uid == userId;
+      
+      // Allow users to update their own profile with restrictions
+      allow update: if request.auth != null && 
+                     request.auth.uid == userId && 
+                     (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['plan']) || 
+                      // Only allow plan changes if they're upgrading to pro
+                      (resource.data.plan == 'free' && request.resource.data.plan == 'pro'));
+      
+      // Allow creation of user profile
+      allow create: if request.auth != null && 
+                     request.auth.uid == userId && 
+                     request.resource.data.plan == 'free';
+      
+      // Allow users to read and write their own favorites
+      match /favorites/{favoriteId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+      
+      // Allow users to read and write their own history
+      match /history/{historyId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+    }
+    
+    // Function to check if a user has reached their download limit
+    function hasReachedDownloadLimit(userId) {
+      let user = get(/databases/$(database)/documents/users/$(userId)).data;
+      return user.plan == 'free' && user.downloads >= 15;
+    }
+    
+    // Function to check if it's a new month since last reset
+    function isNewMonth(userId) {
+      let user = get(/databases/$(database)/documents/users/$(userId)).data;
+      let lastReset = user.lastReset.toMillis();
+      let lastResetDate = new DateTime(lastReset);
+      let now = request.time;
+      
+      return lastResetDate.getMonth() != now.getMonth() || 
+             lastResetDate.getYear() != now.getYear();
     }
   }
 }
