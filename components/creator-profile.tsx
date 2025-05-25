@@ -5,13 +5,28 @@ import type React from "react"
 import { useState, useEffect, useRef } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
 import Image from "next/image"
-import { Share2, Edit, Plus, Instagram, Twitter, Globe, Calendar, Film, Lock, Play, Pause, Trash2 } from "lucide-react"
+import {
+  Share2,
+  Edit,
+  Plus,
+  Instagram,
+  Twitter,
+  Globe,
+  Calendar,
+  Film,
+  Lock,
+  Play,
+  Pause,
+  Trash2,
+  CreditCard,
+} from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useAuth } from "@/contexts/auth-context"
 import { cn } from "@/lib/utils"
 import { collection, query, where, getDocs, limit } from "firebase/firestore"
 import { db } from "@/lib/firebase"
 import { trackFirestoreRead } from "@/lib/firestore-optimizer"
+import getStripe from "@/lib/getStripe"
 
 interface Creator {
   uid: string
@@ -25,6 +40,10 @@ interface Creator {
     twitter?: string
     website?: string
   }
+  premiumEnabled?: boolean
+  premiumPrice?: number
+  stripePriceId?: string
+  paymentMode?: "one-time" | "subscription"
 }
 
 interface VideoItem {
@@ -47,6 +66,7 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
   const [activeTab, setActiveTab] = useState<"free" | "premium">("free")
   const isOwner = user && user.uid === creator.uid
   const router = useRouter()
+  const [isLoading, setIsLoading] = useState(false)
 
   const [freeClips, setFreeClips] = useState<VideoItem[]>([])
   const [paidClips, setPaidClips] = useState<VideoItem[]>([])
@@ -189,6 +209,52 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
     } finally {
       setDeletingVideoId(null)
       setShowDeleteConfirm(null)
+    }
+  }
+
+  // Handle Buy Now button click
+  const handleBuyNow = async () => {
+    if (!user) {
+      // Redirect to login if user is not logged in
+      router.push(`/login?redirect=${encodeURIComponent(window.location.pathname)}`)
+      return
+    }
+
+    if (!creator.stripePriceId) {
+      console.error("No price ID available for this creator")
+      return
+    }
+
+    try {
+      setIsLoading(true)
+
+      const res = await fetch("/api/create-checkout-session", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          priceId: creator.stripePriceId,
+          customerEmail: user.email,
+        }),
+      })
+
+      if (!res.ok) {
+        const errorData = await res.json()
+        throw new Error(errorData.error || "Failed to create checkout session")
+      }
+
+      const { sessionId } = await res.json()
+      const stripe = await getStripe()
+
+      if (stripe) {
+        await stripe.redirectToCheckout({ sessionId })
+      } else {
+        throw new Error("Failed to initialize Stripe")
+      }
+    } catch (error) {
+      console.error("Error creating checkout session:", error)
+      alert("Something went wrong. Please try again.")
+    } finally {
+      setIsLoading(false)
     }
   }
 
@@ -352,6 +418,29 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
                 {creator.bio && (
                   <div className="relative max-w-2xl mb-6 text-sm bg-zinc-900/50 p-4 rounded-lg border border-zinc-800/50 backdrop-blur-sm">
                     <p className="text-zinc-300">{creator.bio}</p>
+                  </div>
+                )}
+
+                {/* Premium Content Buy Now Button - only show if premium is enabled and user is not the owner */}
+                {creator.premiumEnabled && creator.stripePriceId && !isOwner && (
+                  <div className="mb-6">
+                    <Button
+                      onClick={handleBuyNow}
+                      disabled={isLoading}
+                      className="bg-gradient-to-r from-amber-400 to-amber-600 hover:from-amber-500 hover:to-amber-700 text-black font-semibold px-6 py-2 rounded-md shadow-lg"
+                    >
+                      {isLoading ? (
+                        <>
+                          <div className="w-4 h-4 border-2 border-black border-t-transparent rounded-full animate-spin mr-2" />
+                          Processing...
+                        </>
+                      ) : (
+                        <>
+                          <CreditCard className="h-4 w-4 mr-2" />
+                          Unlock Premium – ${(creator.premiumPrice || 9.99).toFixed(2)}
+                        </>
+                      )}
+                    </Button>
                   </div>
                 )}
 
