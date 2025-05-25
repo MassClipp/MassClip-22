@@ -16,6 +16,7 @@ import { Loader2, ArrowRight, Check, X } from "lucide-react"
 import { GoogleAuthButton } from "@/components/google-auth-button"
 import { doc, getDoc, getFirestore } from "firebase/firestore"
 import { initializeFirebaseApp } from "@/lib/firebase"
+import { auth } from "@/lib/firebase"
 
 export default function SignupPage() {
   const [displayName, setDisplayName] = useState("")
@@ -29,8 +30,22 @@ export default function SignupPage() {
   const [isCheckingUsername, setIsCheckingUsername] = useState(false)
   const [usernameAvailable, setUsernameAvailable] = useState<boolean | null>(null)
   const [usernameError, setUsernameError] = useState<string | null>(null)
+  const [authInitialized, setAuthInitialized] = useState(false)
   const { signUp, signInWithGoogle } = useFirebaseAuth()
   const router = useRouter()
+
+  // Check if auth is initialized
+  useEffect(() => {
+    const unsubscribe = auth.onAuthStateChanged((user) => {
+      setAuthInitialized(true)
+      if (user) {
+        // If user is already logged in, redirect to dashboard
+        router.push("/dashboard")
+      }
+    })
+
+    return () => unsubscribe()
+  }, [router])
 
   useEffect(() => {
     try {
@@ -141,9 +156,9 @@ export default function SignupPage() {
       const result = await signUp(email, password, username, displayName)
 
       if (result.success) {
-        console.log("Signup successful, redirecting to:", `/creator/${username}`)
-        // Redirect to their public profile
-        router.push(`/creator/${username}`)
+        console.log("Signup successful, redirecting to dashboard")
+        // Redirect to dashboard
+        router.push("/dashboard")
       } else {
         setErrorMessage(result.error || "Failed to create account")
       }
@@ -185,8 +200,9 @@ export default function SignupPage() {
       const result = await signInWithGoogle(username, displayName)
 
       if (result.success) {
-        console.log("Google signup successful, redirecting to:", `/creator/${username}`)
-        router.push(`/creator/${username}`)
+        console.log("Google signup successful, redirecting to dashboard")
+        // Redirect to dashboard
+        router.push("/dashboard")
       } else {
         setErrorMessage(result.error || "Failed to sign up with Google")
       }
@@ -196,6 +212,16 @@ export default function SignupPage() {
     } finally {
       setIsGoogleLoading(false)
     }
+  }
+
+  // Don't render the signup form until auth is initialized
+  if (!authInitialized) {
+    return (
+      <div className="min-h-screen bg-black flex flex-col justify-center items-center">
+        <div className="fixed inset-0 z-0 bg-gradient-to-b from-black via-black to-gray-900"></div>
+        <Loader2 className="h-8 w-8 animate-spin text-red-500" />
+      </div>
+    )
   }
 
   return (
