@@ -104,14 +104,14 @@ export default function BrowseAllPage() {
     }
   }, [searchQuery, videos])
 
-  // Load more videos - memoized to prevent recreation
-  const loadMore = useCallback(() => {
+  // Load more videos
+  const loadMore = () => {
     if (!loading && !isFetching && hasMore) {
       const nextPage = page + 1
       setPage(nextPage)
       fetchVideos(nextPage)
     }
-  }, [loading, isFetching, hasMore, page])
+  }
 
   // Reference for infinite scrolling
   const lastVideoElementRef = useCallback(
@@ -120,24 +120,20 @@ export default function BrowseAllPage() {
       if (observer.current) observer.current.disconnect()
 
       observer.current = new IntersectionObserver((entries) => {
-        if (entries[0].isIntersecting && hasMore && !loading && !isFetching) {
+        if (entries[0].isIntersecting && hasMore) {
           loadMore()
         }
       })
 
       if (node) observer.current.observe(node)
     },
-    [loading, hasMore, isFetching, loadMore],
+    [loading, hasMore],
   )
 
   // Fetch videos on mount
   useEffect(() => {
     isMounted.current = true
-
-    // Only fetch if we're in the browser
-    if (typeof window !== "undefined") {
-      fetchVideos(1)
-    }
+    fetchVideos(1)
 
     return () => {
       isMounted.current = false
@@ -145,7 +141,7 @@ export default function BrowseAllPage() {
         observer.current.disconnect()
       }
     }
-  }, []) // Empty dependency array - only run on mount
+  }, [])
 
   // If user is not pro, show upgrade message
   if (!isProUser) {
