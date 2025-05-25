@@ -17,12 +17,6 @@ import { loginWithGoogle, loginWithGoogleRedirect } from "@/lib/auth"
 import { auth } from "@/lib/firebase"
 import { onAuthStateChanged } from "firebase/auth"
 
-// Diagnostic logging function
-const log = (step: string, data?: any) => {
-  const timestamp = new Date().toISOString()
-  console.log(`[LOGIN DIAGNOSTIC ${timestamp}] ${step}`, data || "")
-}
-
 export default function LoginPage() {
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
@@ -30,118 +24,58 @@ export default function LoginPage() {
   const [isLoading, setIsLoading] = useState(false)
   const [isGoogleLoading, setIsGoogleLoading] = useState(false)
   const [authInitialized, setAuthInitialized] = useState(false)
-  const [diagnosticInfo, setDiagnosticInfo] = useState<string[]>([])
   const { signIn } = useFirebaseAuth()
   const router = useRouter()
 
   // Use ref to track redirect attempts
   const redirectAttemptedRef = useRef(false)
 
-  // Add diagnostic info
-  const addDiagnostic = (info: string) => {
-    const timestamp = new Date().toLocaleTimeString()
-    setDiagnosticInfo((prev) => [...prev, `[${timestamp}] ${info}`])
-  }
-
-  // Check router functionality
+  // Set up auth state listener
   useEffect(() => {
-    log("Router initialized", { pathname: window.location.pathname })
-    addDiagnostic(`Router ready at ${window.location.pathname}`)
-  }, [])
-
-  // Force redirect if needed
-  const forceRedirect = () => {
-    addDiagnostic("Forcing redirect with window.location...")
-    window.location.href = "/dashboard"
-  }
-
-  // Set up auth state listener with detailed logging
-  useEffect(() => {
-    log("Setting up auth state listener")
-    addDiagnostic("Setting up auth state listener")
-
+    // Only run this once
     const unsubscribe = onAuthStateChanged(auth, (user) => {
-      log("Auth state changed", {
-        user: user ? { email: user.email, uid: user.uid } : null,
-        currentPath: window.location.pathname,
-      })
+      // Set auth as initialized
+      setAuthInitialized(true)
 
       if (user && !redirectAttemptedRef.current) {
-        addDiagnostic(`User detected: ${user.email}`)
-        addDiagnostic(`Current path: ${window.location.pathname}`)
-
-        // Only redirect if we're actually on the login page
+        // Only redirect if we're on the login page and haven't tried yet
         if (window.location.pathname === "/login") {
-          addDiagnostic("On login page with authenticated user - attempting redirect...")
           redirectAttemptedRef.current = true
 
-          try {
-            log("Attempting router.push")
-            addDiagnostic("router.push('/dashboard') called")
-
-            // Try Next.js router first
-            router.push("/dashboard")
-
-            // Set a fallback to window.location if router.push doesn't work
-            setTimeout(() => {
-              if (window.location.pathname === "/login") {
-                addDiagnostic("Still on login page after router.push, using window.location.href")
-                window.location.href = "/dashboard"
-              }
-            }, 500)
-          } catch (error) {
-            log("Redirect error", error)
-            addDiagnostic(`Redirect error: ${error}`)
-            // Fallback to direct location change
-            forceRedirect()
-          }
-        } else {
-          addDiagnostic("Not on login page, skipping redirect")
+          // Use window.location for reliable redirect
+          window.location.href = "/dashboard"
         }
       } else if (!user) {
-        addDiagnostic("No user detected")
         // Reset the redirect flag when user is null
         redirectAttemptedRef.current = false
       }
-
-      setAuthInitialized(true)
     })
 
-    return () => {
-      log("Cleaning up auth listener")
-      unsubscribe()
-    }
-  }, [router])
+    return () => unsubscribe()
+  }, [])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setErrorMessage(null)
     setIsLoading(true)
-    addDiagnostic("Starting email/password login...")
 
     try {
-      log("Attempting email/password sign in", { email })
       const result = await signIn(email, password)
-      log("Sign in result", result)
 
       if (result.success) {
-        addDiagnostic("Sign in successful, waiting for auth state change...")
-
-        // If auth state doesn't trigger redirect, force it
+        // Redirect will be handled by auth state listener
+        // But add a fallback just in case
         setTimeout(() => {
           if (window.location.pathname === "/login" && auth.currentUser) {
-            addDiagnostic("Auth state didn't trigger redirect, forcing redirect...")
-            forceRedirect()
+            window.location.href = "/dashboard"
           }
         }, 1000)
       } else {
-        addDiagnostic(`Sign in failed: ${result.error}`)
         setErrorMessage(result.error || "Failed to sign in")
       }
     } catch (error) {
-      log("Sign in error", error)
-      addDiagnostic(`Sign in error: ${error}`)
       setErrorMessage("An unexpected error occurred")
+      console.error(error)
     } finally {
       setIsLoading(false)
     }
@@ -150,48 +84,33 @@ export default function LoginPage() {
   const handleGoogleSignIn = async () => {
     setErrorMessage(null)
     setIsGoogleLoading(true)
-    addDiagnostic("Starting Google sign in...")
 
     try {
-      log("Attempting Google sign in")
       const result = await loginWithGoogle()
-      log("Google sign in result", result)
 
       if (result.success) {
-        addDiagnostic("Google sign in successful, waiting for auth state change...")
-
-        // If auth state doesn't trigger redirect, force it
+        // Redirect will be handled by auth state listener
+        // But add a fallback just in case
         setTimeout(() => {
           if (window.location.pathname === "/login" && auth.currentUser) {
-            addDiagnostic("Auth state didn't trigger redirect, forcing redirect...")
-            forceRedirect()
+            window.location.href = "/dashboard"
           }
         }, 1000)
       } else {
         if (result.error?.code === "auth/popup-closed-by-user") {
-          addDiagnostic("Popup closed by user")
           setErrorMessage("Sign-in popup was closed. Please try again.")
         } else if (result.error?.code === "auth/popup-blocked") {
-          addDiagnostic("Popup blocked, trying redirect method")
           await loginWithGoogleRedirect()
         } else {
-          addDiagnostic(`Google sign in failed: ${result.error?.message}`)
           setErrorMessage("Failed to sign in with Google. Please try again.")
         }
       }
     } catch (error) {
-      log("Google sign in error", error)
-      addDiagnostic(`Google sign in error: ${error}`)
       setErrorMessage("An unexpected error occurred")
+      console.error(error)
     } finally {
       setIsGoogleLoading(false)
     }
-  }
-
-  // Manual redirect test button
-  const testRedirect = () => {
-    addDiagnostic("Testing manual redirect...")
-    forceRedirect()
   }
 
   if (!authInitialized) {
@@ -206,19 +125,6 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen bg-black flex flex-col justify-center items-center px-4">
-      {/* Diagnostic Panel */}
-      <div className="fixed top-0 right-0 w-96 max-h-96 overflow-y-auto bg-black/90 border border-red-500 p-4 m-4 rounded-lg z-50">
-        <h3 className="text-red-500 font-bold mb-2">Login Diagnostics</h3>
-        <div className="text-xs text-gray-300 space-y-1">
-          {diagnosticInfo.map((info, index) => (
-            <div key={index}>{info}</div>
-          ))}
-        </div>
-        <Button onClick={testRedirect} className="mt-2 text-xs" size="sm" variant="outline">
-          Test Manual Redirect
-        </Button>
-      </div>
-
       {/* Premium Gradient Background */}
       <div className="fixed inset-0 z-0 bg-gradient-to-b from-black via-black to-gray-900"></div>
 
