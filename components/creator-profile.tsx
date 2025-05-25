@@ -234,8 +234,6 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
         body: JSON.stringify({
           priceId: creator.stripePriceId,
           customerEmail: user.email,
-          creatorId: creator.uid,
-          creatorUsername: creator.username,
         }),
       })
 
@@ -424,7 +422,7 @@ export default function CreatorProfile({ creator }: { creator: Creator }) {
                 )}
 
                 {/* Premium Content Buy Now Button - only show if premium is enabled and user is not the owner */}
-                {paidClips.length > 0 && !isOwner && (
+                {creator.premiumEnabled && creator.stripePriceId && !isOwner && (
                   <div className="mb-6">
                     <Button
                       onClick={handleBuyNow}
