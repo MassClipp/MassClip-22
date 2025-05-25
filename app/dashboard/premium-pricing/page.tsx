@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react"
 import { useAuth } from "@/contexts/auth-context"
-import { doc, getDoc } from "firebase/firestore"
+import { doc, getDoc, updateDoc } from "firebase/firestore"
 import { db } from "@/lib/firebase"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
@@ -92,7 +92,7 @@ export default function PremiumPricingPage() {
 
       // Also update the local Firestore settings for immediate UI feedback
       const userRef = doc(db, "users", user.uid)
-      await userRef.update({
+      await updateDoc(userRef, {
         premiumContentSettings: {
           enabled: enablePremiumContent,
           pricingModel,
