@@ -35,3 +35,6 @@ export function useMobile(): boolean {
 }
 
 export default useMobile
+
+// Export alias for backward compatibility
+export const useIsMobile = useMobile

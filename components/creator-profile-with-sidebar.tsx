@@ -10,9 +10,8 @@ interface Creator {
   displayName: string
   bio: string
   profilePic: string
-  freeClips: any[]
-  paidClips: any[]
   createdAt: string
+  isPro?: boolean
   socialLinks?: {
     instagram?: string
     twitter?: string

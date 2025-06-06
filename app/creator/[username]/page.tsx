@@ -49,8 +49,12 @@ export async function generateMetadata({ params }: { params: { username: string 
         displayName: userData.displayName,
         username: userData.username,
         hasPhotoURL: !!userData.photoURL,
+        hasProfilePic: !!userData.profilePic,
       }),
     )
+
+    // Prioritize profilePic over photoURL
+    const profileImage = userData.profilePic || userData.photoURL || "https://massclip.pro/og-image.jpg"
 
     return {
       title: `${userData?.displayName || username} | MassClip`,
@@ -62,7 +66,7 @@ export async function generateMetadata({ params }: { params: { username: string 
         siteName: "MassClip",
         images: [
           {
-            url: userData?.photoURL || "https://massclip.pro/og-image.jpg",
+            url: profileImage,
             width: 1200,
             height: 630,
             alt: userData?.displayName || username,
@@ -151,7 +155,7 @@ export default async function CreatorProfilePage({ params }: { params: { usernam
         displayName: userData.displayName,
         username: userData.username,
         hasPhotoURL: !!userData.photoURL,
-        hasBio: !!userData.bio,
+        hasProfilePic: !!userData.profilePic,
       }),
     )
 
@@ -159,12 +163,15 @@ export default async function CreatorProfilePage({ params }: { params: { usernam
     const serializedData = serializeData(userData)
 
     // Format the creator data for the component
+    // Prioritize profilePic over photoURL for profile picture
+    const profilePicture = serializedData.profilePic || serializedData.photoURL || ""
+
     const creatorData = {
       uid: uid,
       username: serializedData.username || username,
       displayName: serializedData.displayName || username,
       bio: serializedData.bio || "",
-      profilePic: serializedData.photoURL || "",
+      profilePic: profilePicture,
       createdAt: serializedData.createdAt || new Date().toISOString(),
       socialLinks: serializedData.socialLinks || {},
     }

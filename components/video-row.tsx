@@ -6,10 +6,10 @@ import { motion } from "framer-motion"
 import { ChevronRight, ChevronLeft, ArrowRight } from "lucide-react"
 import type { VimeoVideo } from "@/lib/types"
 import VimeoCard from "@/components/vimeo-card"
+import CreatorUploadCard from "@/components/creator-upload-card"
 import VideoSkeleton from "@/components/video-skeleton"
 import { shuffleArray } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
-import LockedClipCard from "@/components/locked-clip-card"
 import { useUserPlan } from "@/hooks/use-user-plan"
 
 interface VideoRowProps {
@@ -18,9 +18,17 @@ interface VideoRowProps {
   limit?: number
   isShowcase?: boolean
   showcaseId?: string
+  isCreatorUploads?: boolean
 }
 
-export default function VideoRow({ title, videos, limit = 10, isShowcase = false, showcaseId }: VideoRowProps) {
+export function VideoRow({
+  title,
+  videos,
+  limit = 10,
+  isShowcase = false,
+  showcaseId,
+  isCreatorUploads = false,
+}: VideoRowProps) {
   const [visibleVideos, setVisibleVideos] = useState<VimeoVideo[]>([])
   const [isIntersecting, setIsIntersecting] = useState(false)
   const [scrollPosition, setScrollPosition] = useState(0)
@@ -63,27 +71,11 @@ export default function VideoRow({ title, videos, limit = 10, isShowcase = false
   // Load videos when row becomes visible
   useEffect(() => {
     if (isIntersecting && videos) {
-      if (isProUser) {
-        // Pro users get completely random videos - no organization at all
-        // Use a different random seed each time for maximum randomness
-        const shuffledVideos = shuffleArray([...videos], Math.random()).slice(0, limit)
-        setVisibleVideos(shuffledVideos)
-      } else {
-        // Free users get alphabetically sorted videos
-        const sortedVideos = [...videos]
-          .sort((a, b) => {
-            // Sort by name, or if names are equal, by URI
-            if (a.name && b.name) {
-              const nameCompare = a.name.localeCompare(b.name)
-              if (nameCompare !== 0) return nameCompare
-            }
-            return a.uri?.localeCompare(b.uri || "") || 0
-          })
-          .slice(0, limit)
-        setVisibleVideos(sortedVideos)
-      }
+      // All users get shuffled videos for dynamic experience
+      const shuffledVideos = shuffleArray([...videos], Math.random()).slice(0, limit)
+      setVisibleVideos(shuffledVideos)
     }
-  }, [isIntersecting, videos, limit, isProUser])
+  }, [isIntersecting, videos, limit])
 
   // Calculate max scroll position
   useEffect(() => {
@@ -147,7 +139,7 @@ export default function VideoRow({ title, videos, limit = 10, isShowcase = false
         <h2 className="text-2xl font-extralight tracking-wider text-white category-title group-hover:text-crimson transition-colors duration-300">
           {title}
         </h2>
-        {hasMore && (
+        {hasMore && !isCreatorUploads && (
           <Link
             href={linkPath}
             className="text-zinc-400 hover:text-white flex items-center group bg-zinc-900/30 hover:bg-zinc-900/50 px-3 py-1 rounded-full transition-all duration-300"
@@ -188,45 +180,47 @@ export default function VideoRow({ title, videos, limit = 10, isShowcase = false
 
         <div
           ref={scrollContainerRef}
-          className="flex overflow-x-auto scrollbar-hide gap-4 px-6 pb-4"
+          className="flex overflow-x-auto scrollbar-hide gap-4 px-6 py-4" // Changed pb-4 to py-4 to add padding at the top
           onScroll={handleManualScroll}
         >
           {isIntersecting
             ? visibleVideos.map((video, index) => {
-                // For free users, show locked cards after the first 5 videos
-                if (!isProUser && index >= 5) {
-                  // Get thumbnail URL for the locked card background
-                  const thumbnailUrl = video?.pictures?.sizes
-                    ? [...video.pictures.sizes].sort((a, b) => b.width - a.width)[0].link
-                    : undefined
-
-                  return (
-                    <motion.div
-                      key={`locked-${index}`}
-                      initial={{ opacity: 0, y: 20 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ duration: 0.5 }}
-                    >
-                      <LockedClipCard thumbnailUrl={thumbnailUrl} />
-                    </motion.div>
-                  )
-                }
-
                 return (
                   <motion.div
                     key={video.uri}
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.5 }}
+                    className="pt-1" // Add padding top to ensure cards aren't cut off
                   >
-                    <VimeoCard video={video} />
+                    {isCreatorUploads ? (
+                      <CreatorUploadCard
+                        video={{
+                          id: video.uri.split("/").pop() || "",
+                          title: video.name || "Untitled",
+                          fileUrl: video.link || "",
+                          thumbnailUrl: video.pictures?.sizes?.[0]?.link,
+                          creatorName: video.user?.name,
+                          uid: video.user?.uri?.split("/").pop(),
+                          views: video.stats?.plays,
+                        }}
+                      />
+                    ) : (
+                      <VimeoCard video={video} />
+                    )}
                   </motion.div>
                 )
               })
             : // Show skeleton loaders while waiting for intersection
-              Array.from({ length: Math.min(limit, 10) }).map((_, index) => <VideoSkeleton key={index} />)}
+              Array.from({ length: Math.min(limit, 10) }).map((_, index) => (
+                <div key={index} className="pt-1">
+                  <VideoSkeleton />
+                </div>
+              ))}
         </div>
       </div>
     </section>
   )
 }
+
+export default VideoRow

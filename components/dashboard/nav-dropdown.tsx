@@ -5,18 +5,19 @@ import { usePathname, useRouter } from "next/navigation"
 import { useAuth } from "@/contexts/auth-context"
 import { cn } from "@/lib/utils"
 import {
-  Home,
   Film,
-  Lock,
   Upload,
   DollarSign,
-  Settings,
   User,
   Menu,
   ChevronRight,
   Compass,
   BarChart3,
-  Rocket,
+  LayoutDashboard,
+  Package,
+  ShoppingBag,
+  Heart,
+  Crown,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import {
@@ -72,82 +73,112 @@ export default function NavDropdown() {
     }
   }
 
-  const navItems = [
-    {
-      name: "Dashboard",
-      href: "/dashboard",
-      icon: <Home className="h-4 w-4 mr-2" />,
-      description: "Your creator overview",
-    },
-    {
-      name: "Explore Content",
-      href: "/dashboard/explore",
-      icon: <Compass className="h-4 w-4 mr-2" />,
-      description: "Discover videos from creators",
-    },
-    {
-      name: "Content Management",
-      icon: <Film className="h-4 w-4 mr-2" />,
-      submenu: [
-        {
-          name: "Free Content",
-          href: username ? `/creator/${username}?tab=free` : "/dashboard",
-          icon: <Film className="h-4 w-4 mr-2" />,
-          external: true,
-        },
-        {
-          name: "Premium Content",
-          href: username ? `/creator/${username}?tab=premium` : "/dashboard",
-          icon: <Lock className="h-4 w-4 mr-2" />,
-          external: true,
-        },
-        {
-          name: "Upload New Content",
-          href: "/dashboard/upload",
-          icon: <Upload className="h-4 w-4 mr-2" />,
-        },
-        {
-          name: "Premium Pricing",
-          href: "/dashboard/premium-pricing",
-          icon: <DollarSign className="h-4 w-4 mr-2" />,
-          description: "Set your premium content pricing",
-        },
-      ],
-    },
-    {
-      name: "Business",
-      icon: <BarChart3 className="h-4 w-4 mr-2" />,
-      submenu: [
-        {
-          name: "Earnings & Analytics",
-          href: "/dashboard/earnings",
-          icon: <DollarSign className="h-4 w-4 mr-2" />,
-          alert: !stripeConnected,
-        },
-        {
-          name: "Growth Strategies",
-          href: "/dashboard/growth",
-          icon: <Rocket className="h-4 w-4 mr-2" />,
-        },
-      ],
-    },
-    {
-      name: "Settings",
-      icon: <Settings className="h-4 w-4 mr-2" />,
-      submenu: [
-        {
-          name: "Profile Settings",
-          href: "/dashboard/profile",
-          icon: <User className="h-4 w-4 mr-2" />,
-        },
-        {
-          name: "Account Settings",
-          href: "/dashboard/settings",
-          icon: <Settings className="h-4 w-4 mr-2" />,
-        },
-      ],
-    },
-  ]
+  const data = {
+    navMain: [
+      {
+        title: "Dashboard",
+        url: "/dashboard",
+        items: [
+          {
+            title: "Overview",
+            url: "/dashboard",
+            icon: <LayoutDashboard className="h-4 w-4 mr-2" />,
+          },
+        ],
+      },
+      {
+        title: "Explore",
+        url: "#",
+        items: [
+          {
+            title: "Discover Content",
+            url: "/dashboard/explore",
+            icon: <Compass className="h-4 w-4 mr-2" />,
+          },
+          {
+            title: "My Purchases",
+            url: "/dashboard/purchases",
+            icon: <ShoppingBag className="h-4 w-4 mr-2" />,
+          },
+          {
+            title: "Favorites",
+            url: "/dashboard/favorites",
+            icon: <Heart className="h-4 w-4 mr-2" />,
+          },
+          {
+            title: "Memberships",
+            url: "/dashboard/membership",
+            icon: <Crown className="h-4 w-4 mr-2" />,
+          },
+        ],
+      },
+      {
+        title: "Content Management",
+        url: "#",
+        items: [
+          {
+            title: "Free Content",
+            url: "/dashboard/free-content",
+            icon: <Film className="h-4 w-4 mr-2" />,
+          },
+          {
+            title: "Upload Content",
+            url: "/dashboard/upload",
+            icon: <Upload className="h-4 w-4 mr-2" />,
+          },
+          {
+            title: "Product Boxes",
+            url: "/dashboard/product-boxes",
+            icon: <Package className="h-4 w-4 mr-2" />,
+          },
+        ],
+      },
+      {
+        title: "Business",
+        url: "#",
+        items: [
+          {
+            title: "Earnings",
+            url: "/dashboard/earnings",
+            alert: !stripeConnected,
+            icon: <DollarSign className="h-4 w-4 mr-2" />,
+          },
+          {
+            title: "Analytics",
+            url: "/dashboard/analytics",
+            icon: <BarChart3 className="h-4 w-4 mr-2" />,
+          },
+        ],
+      },
+      {
+        title: "Settings",
+        url: "#",
+        items: [
+          {
+            title: "Profile Settings",
+            url: "/dashboard/profile",
+            icon: <User className="h-4 w-4 mr-2" />,
+          },
+        ],
+      },
+    ],
+  }
+
+  const navItems = data.navMain.map((section) => ({
+    name: section.title,
+    href: section.url === "#" ? undefined : section.url,
+    icon: section.items[0]?.icon || <Compass className="h-4 w-4 mr-2" />, // Use Compass for Explore
+    submenu:
+      section.items.length > 0
+        ? section.items.map((item) => ({
+            name: item.title,
+            href: item.url,
+            external: item.external,
+            alert: item.alert,
+            icon: item.icon,
+          }))
+        : undefined,
+  }))
 
   return (
     <DropdownMenu open={isOpen} onOpenChange={setIsOpen}>
@@ -170,7 +201,7 @@ export default function NavDropdown() {
         <DropdownMenuSeparator className="bg-zinc-800" />
         <DropdownMenuGroup>
           {navItems.map((item) => {
-            if (item.submenu) {
+            if (item.submenu && item.submenu.length > 0 && item.href === undefined) {
               return (
                 <DropdownMenuSub key={item.name}>
                   <DropdownMenuSubTrigger
@@ -216,22 +247,24 @@ export default function NavDropdown() {
               )
             }
 
-            const isActive = pathname === item.href
-            return (
-              <DropdownMenuItem
-                key={item.name}
-                className={cn(
-                  "px-2 py-1.5 rounded-lg text-sm cursor-pointer",
-                  isActive ? "bg-red-600/10 text-red-500" : "hover:bg-zinc-800 focus:bg-zinc-800",
-                )}
-                onClick={() => handleNavigation(item.href)}
-              >
-                <div className="flex items-center">
-                  {item.icon}
-                  <span>{item.name}</span>
-                </div>
-              </DropdownMenuItem>
-            )
+            if (item.href) {
+              const isActive = pathname === item.href
+              return (
+                <DropdownMenuItem
+                  key={item.name}
+                  className={cn(
+                    "px-2 py-1.5 rounded-lg text-sm cursor-pointer",
+                    isActive ? "bg-red-600/10 text-red-500" : "hover:bg-zinc-800 focus:bg-zinc-800",
+                  )}
+                  onClick={() => router.push(item.href)}
+                >
+                  <div className="flex items-center">
+                    {item.icon}
+                    <span>{item.name}</span>
+                  </div>
+                </DropdownMenuItem>
+              )
+            }
           })}
         </DropdownMenuGroup>
         <DropdownMenuSeparator className="bg-zinc-800 my-2" />

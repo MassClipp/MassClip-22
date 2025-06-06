@@ -1,41 +1,19 @@
-// This script runs immediately when loaded
+// Zoom prevention script
 ;(() => {
-  try {
+  // Prevent zoom on mobile devices
+  function preventZoom() {
     // Set viewport meta tag
-    var meta = document.querySelector('meta[name="viewport"]')
-    if (!meta) {
-      meta = document.createElement("meta")
-      meta.setAttribute("name", "viewport")
-      document.head.appendChild(meta)
+    let viewport = document.querySelector('meta[name="viewport"]')
+    if (!viewport) {
+      viewport = document.createElement("meta")
+      viewport.name = "viewport"
+      document.head.appendChild(viewport)
     }
-    meta.setAttribute(
-      "content",
-      "width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, shrink-to-fit=no",
-    )
-
-    // Add CSS to prevent zoom
-    var style = document.createElement("style")
-    style.textContent = `
-      html, body {
-        touch-action: pan-x pan-y !important;
-        -ms-touch-action: pan-x pan-y !important;
-        -webkit-touch-callout: none !important;
-        -webkit-user-select: none !important;
-        -moz-user-select: none !important;
-        -ms-user-select: none !important;
-        user-select: none !important;
-        overscroll-behavior: none !important;
-        -ms-content-zooming: none !important;
-        -webkit-text-size-adjust: 100% !important;
-        -moz-text-size-adjust: 100% !important;
-        text-size-adjust: 100% !important;
-      }
-    `
-    document.head.appendChild(style)
+    viewport.content = "width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, shrink-to-fit=no"
 
     // Prevent pinch zoom
     document.addEventListener(
-      "touchmove",
+      "touchstart",
       (e) => {
         if (e.touches.length > 1) {
           e.preventDefault()
@@ -45,11 +23,11 @@
     )
 
     // Prevent double-tap zoom
-    var lastTouchEnd = 0
+    let lastTouchEnd = 0
     document.addEventListener(
       "touchend",
       (e) => {
-        var now = Date.now()
+        const now = Date.now()
         if (now - lastTouchEnd < 300) {
           e.preventDefault()
         }
@@ -58,7 +36,7 @@
       { passive: false },
     )
 
-    // Prevent wheel zoom (for trackpads)
+    // Prevent wheel zoom
     document.addEventListener(
       "wheel",
       (e) => {
@@ -68,9 +46,12 @@
       },
       { passive: false },
     )
+  }
 
-    console.log("Zoom prevention initialized")
-  } catch (e) {
-    console.error("Error in zoom prevention script:", e)
+  // Run when DOM is ready
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", preventZoom)
+  } else {
+    preventZoom()
   }
 })()

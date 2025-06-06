@@ -15,6 +15,7 @@ export function initializeFirebaseAdmin() {
 
     if (!projectId || !clientEmail || !privateKey) {
       console.error("Missing Firebase Admin SDK credentials in environment variables")
+      console.error("Required: FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, FIREBASE_PRIVATE_KEY")
       throw new Error("Firebase Admin SDK credentials are required")
     }
 
@@ -26,18 +27,20 @@ export function initializeFirebaseAdmin() {
           privateKey,
         }),
       })
-      console.log("Firebase Admin SDK initialized successfully")
+      console.log("✅ Firebase Admin SDK initialized successfully")
     } catch (error) {
-      console.error("Error initializing Firebase Admin SDK:", error)
+      console.error("❌ Error initializing Firebase Admin SDK:", error)
       throw error
     }
+  } else {
+    console.log("✅ Firebase Admin SDK already initialized")
   }
 }
 
 // Initialize Firebase Admin if not already initialized
 initializeFirebaseAdmin()
 
-// Export the Firestore database
+// Export the Firestore database using Admin SDK
 export const db = getFirestore()
 
 // Export the Auth service

@@ -22,3 +22,18 @@ export function shuffleArray<T>(array: T[]): T[] {
 
   return shuffled
 }
+
+/**
+ * Generates an absolute URL from a relative path
+ * @param path The relative path to convert to an absolute URL
+ * @returns The absolute URL
+ */
+export function absoluteUrl(path: string) {
+  const baseUrl =
+    process.env.NEXT_PUBLIC_APP_URL ||
+    process.env.NEXT_PUBLIC_SITE_URL ||
+    process.env.NEXT_PUBLIC_VERCEL_URL ||
+    "http://localhost:3000"
+
+  return `${baseUrl}${path.startsWith("/") ? path : `/${path}`}`
+}
