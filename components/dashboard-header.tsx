@@ -4,7 +4,7 @@ import type React from "react"
 
 import { useState, useEffect } from "react"
 import { useRouter, usePathname } from "next/navigation"
-import { Menu, X, Heart, Search } from "lucide-react"
+import { Search, Menu, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import UserDropdown from "@/components/user-dropdown"
 import Logo from "@/components/logo"
@@ -15,6 +15,7 @@ interface DashboardHeaderProps {
 }
 
 export default function DashboardHeader({ initialSearchQuery = "" }: DashboardHeaderProps) {
+  const [searchQuery, setSearchQuery] = useState(initialSearchQuery)
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
   const router = useRouter()
   const pathname = usePathname()
@@ -22,8 +23,6 @@ export default function DashboardHeader({ initialSearchQuery = "" }: DashboardHe
 
   // Only show search on explore page
   const showSearch = pathname === "/dashboard/explore"
-
-  const [searchQuery, setSearchQuery] = useState(initialSearchQuery)
 
   useEffect(() => {
     setSearchQuery(initialSearchQuery)
@@ -79,20 +78,6 @@ export default function DashboardHeader({ initialSearchQuery = "" }: DashboardHe
             </div>
           )}
 
-          {/* Favorites Button - only on explore page */}
-          {showSearch && (
-            <div className="hidden md:block">
-              <Button
-                onClick={() => router.push("/dashboard/favorites")}
-                variant="ghost"
-                className="text-zinc-400 hover:text-white hover:bg-zinc-900/50 rounded-lg px-4 py-2 transition-all duration-300 flex items-center gap-2"
-              >
-                <Heart className="h-4 w-4" />
-                Favorites
-              </Button>
-            </div>
-          )}
-
           {/* Right Section */}
           <div className="flex items-center gap-4">
             {/* User Dropdown - Desktop */}
@@ -136,20 +121,6 @@ export default function DashboardHeader({ initialSearchQuery = "" }: DashboardHe
             </form>
           </div>
         )}
-
-        {/* Mobile Favorites Button (only on explore page) */}
-        {showSearch && (
-          <div className="md:hidden pb-2">
-            <Button
-              onClick={() => router.push("/dashboard/favorites")}
-              variant="ghost"
-              className="w-full text-zinc-400 hover:text-white hover:bg-zinc-900/50 rounded-lg px-4 py-2 transition-all duration-300 flex items-center justify-center gap-2"
-            >
-              <Heart className="h-4 w-4" />
-              Favorites
-            </Button>
-          </div>
-        )}
       </div>
 
       {/* Mobile Menu */}
@@ -163,6 +134,3 @@ export default function DashboardHeader({ initialSearchQuery = "" }: DashboardHe
     </header>
   )
 }
-
-// Named export for compatibility
-export { DashboardHeader }

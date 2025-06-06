@@ -54,11 +54,3 @@ export async function getCurrentUser() {
     return null
   }
 }
-
-/**
- * Gets the server session (alias for getCurrentUser for compatibility)
- * @returns The user record if valid, null otherwise
- */
-export async function getServerSession() {
-  return await getCurrentUser()
-}

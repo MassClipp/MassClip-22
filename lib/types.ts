@@ -393,22 +393,3 @@ export interface VimeoVideo {
     md5?: string
   }>
 }
-
-export interface ProductBox {
-  id: string
-  title: string
-  description: string | null
-  price: number
-  currency: string
-  type: string
-  coverImage: string | null
-  contentItems: string[]
-  productId: string
-  priceId: string
-  active: boolean
-  createdAt: any
-  updatedAt: any
-  // Add custom preview fields
-  customPreviewThumbnail?: string | null
-  customPreviewDescription?: string | null
-}

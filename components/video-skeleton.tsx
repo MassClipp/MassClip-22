@@ -1,6 +1,4 @@
-"use client"
-
-export function VideoSkeleton() {
+export default function VideoSkeleton() {
   return (
     <div className="flex-shrink-0 w-[160px]">
       <div
@@ -17,6 +15,3 @@ export function VideoSkeleton() {
     </div>
   )
 }
-
-// Keep default export for backward compatibility
-export default VideoSkeleton

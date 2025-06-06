@@ -7,17 +7,17 @@ export async function POST() {
     cookies().set({
       name: "session",
       value: "",
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      maxAge: 0, // Expire immediately
+      expires: new Date(0),
       path: "/",
-      sameSite: "lax",
     })
 
-    console.log("Session cookie cleared")
+    console.log("Session cookie cleared successfully")
     return NextResponse.json({ success: true })
   } catch (error) {
     console.error("Error clearing session:", error)
-    return NextResponse.json({ error: "Failed to clear session" }, { status: 500 })
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "Failed to clear session" },
+      { status: 500 },
+    )
   }
 }

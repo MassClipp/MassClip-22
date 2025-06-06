@@ -43,7 +43,7 @@ export function useUserPlan() {
           setPlanData({
             plan: userPlan,
             downloads: userData.downloads || 0,
-            downloadsLimit: userPlan === "creator_pro" ? Number.POSITIVE_INFINITY : 25,
+            downloadsLimit: userPlan === "creator_pro" ? Number.POSITIVE_INFINITY : 10, // Updated from 5 to 10
             lastReset: userData.lastReset ? userData.lastReset.toDate() : null,
           })
         } else {
@@ -63,7 +63,7 @@ export function useUserPlan() {
           setPlanData({
             plan: "free",
             downloads: 0,
-            downloadsLimit: 25,
+            downloadsLimit: 10, // Updated from 5 to 10
             lastReset: new Date(),
           })
         }
@@ -76,7 +76,7 @@ export function useUserPlan() {
         setPlanData({
           plan: "free",
           downloads: 0,
-          downloadsLimit: 25,
+          downloadsLimit: 10, // Updated from 5 to 10
           lastReset: null,
         })
       } finally {

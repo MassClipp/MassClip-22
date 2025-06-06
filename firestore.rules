@@ -1,65 +1,15 @@
 rules_version = '2';
-
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Users can read and write their own user document
     match /users/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
-    }
-    
-    // Users can read and write their own creator profile
-    match /creators/{username} {
-      allow read: if true; // Public read access for creator profiles
-      allow write: if request.auth != null && 
-        (request.auth.uid == resource.data.userId || 
-         request.auth.uid == request.resource.data.userId);
-    }
-    
-    // Users can read and write their own uploads
-    match /uploads/{uploadId} {
-      allow read: if true; // Public read access
-      allow write: if request.auth != null && 
-        (request.auth.uid == resource.data.userId || 
-         request.auth.uid == request.resource.data.userId);
-    }
-    
-    // Users can read and write their own product boxes
-    match /productBoxes/{boxId} {
-      allow read: if true; // Public read access
-      allow write: if request.auth != null && 
-        (request.auth.uid == resource.data.creatorId || 
-         request.auth.uid == request.resource.data.creatorId);
-    }
-    
-    // Free content is publicly readable
-    match /freeContent/{contentId} {
-      allow read: if true;
-      allow write: if request.auth != null && 
-        (request.auth.uid == resource.data.creatorId || 
-         request.auth.uid == request.resource.data.creatorId);
-    }
-    
-    // User purchases
-    match /purchases/{purchaseId} {
-      allow read, write: if request.auth != null && 
-        (request.auth.uid == resource.data.userId || 
-         request.auth.uid == request.resource.data.userId);
-    }
-    
-    // User favorites
-    match /users/{userId}/favorites/{favoriteId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
-    }
-    
-    // User history
-    match /users/{userId}/history/{historyId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
-    }
-    
-    // Allow all authenticated users to read and write to any document (temporary for debugging)
-    // Remove this rule once specific rules are working
-    match /{document=**} {
-      allow read, write: if request.auth != null;
+      allow read;
+      allow create: if request.auth.uid == userId;
+      allow update: if request.auth.uid == userId 
+        && (
+          request.resource.data.diff(resource.data).affectedKeys()
+            .hasOnly(['displayName', 'photoURL', 'username', 'bio', 'socialLinks', 'premiumContentSettings'])
+        );
+      allow delete: if request.auth.uid == userId;
     }
   }
 }

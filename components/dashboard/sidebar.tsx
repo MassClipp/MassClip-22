@@ -4,7 +4,7 @@ import { useState, useEffect } from "react"
 import { usePathname, useRouter } from "next/navigation"
 import { useAuth } from "@/contexts/auth-context"
 import { cn } from "@/lib/utils"
-import { Home, Film, Upload, DollarSign, Settings, User, LogOut, Menu, X, Search, Package } from "lucide-react"
+import { Home, Film, Lock, Upload, DollarSign, Settings, User, LogOut, Menu, X, Search } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import Logo from "@/components/logo"
 import { doc, getDoc } from "firebase/firestore"
@@ -53,32 +53,32 @@ export default function DashboardSidebar() {
     },
     {
       name: "Free Content",
-      href: "/dashboard/free-content",
+      href: username ? `/creator/${username}?tab=free` : "/dashboard",
       icon: <Film className="h-5 w-5" />,
-      description: "Manage your public free content",
+      external: true,
     },
     {
-      name: "My Uploads",
-      href: "/dashboard/uploads",
-      icon: <Package className="h-5 w-5" />,
-      description: "Manage your content library",
+      name: "Premium Content",
+      href: username ? `/creator/${username}?tab=premium` : "/dashboard",
+      icon: <Lock className="h-5 w-5" />,
+      external: true,
     },
     {
-      name: "Upload Video",
+      name: "Upload",
       href: "/dashboard/upload",
       icon: <Upload className="h-5 w-5" />,
-      description: "Quick video upload",
+    },
+    {
+      name: "Premium Pricing",
+      href: "/dashboard/premium-pricing",
+      icon: <DollarSign className="h-5 w-5" />,
+      description: "Set your premium content pricing",
     },
     {
       name: "Earnings",
       href: "/dashboard/earnings",
       icon: <DollarSign className="h-5 w-5" />,
       alert: !stripeConnected,
-    },
-    {
-      name: "My Purchases",
-      href: "/dashboard/purchases",
-      icon: <Package className="h-5 w-5" />,
     },
     {
       name: "Profile Settings",
@@ -92,9 +92,13 @@ export default function DashboardSidebar() {
     },
   ]
 
-  const handleNavigation = (href: string) => {
+  const handleNavigation = (href: string, external = false) => {
     setIsMobileOpen(false)
-    router.push(href)
+    if (external && href.startsWith("/creator/")) {
+      window.open(href, "_blank")
+    } else {
+      router.push(href)
+    }
   }
 
   const handleSignOut = async () => {
@@ -146,7 +150,7 @@ export default function DashboardSidebar() {
               return (
                 <li key={item.name}>
                   <button
-                    onClick={() => handleNavigation(item.href)}
+                    onClick={() => handleNavigation(item.href, item.external)}
                     className={cn(
                       "w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors",
                       isActive ? "bg-red-600/10 text-red-500" : "text-zinc-400 hover:text-white hover:bg-zinc-800/50",
@@ -155,6 +159,7 @@ export default function DashboardSidebar() {
                     {item.icon}
                     <span>{item.name}</span>
                     {item.alert && <span className="ml-auto flex h-2 w-2 rounded-full bg-red-500"></span>}
+                    {item.external && <span className="ml-auto text-xs text-zinc-600">↗</span>}
                   </button>
                 </li>
               )

@@ -19,18 +19,11 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
-import { Upload, Video, CheckCircle2, AlertCircle, Loader2, User, Lock, Brain, FileText } from "lucide-react"
+import { Upload, Video, CheckCircle2, AlertCircle, Loader2, User, Lock } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { doc, getDoc, addDoc, collection, serverTimestamp } from "firebase/firestore"
 import { db } from "@/lib/firebase"
 import { useToast } from "@/components/ui/use-toast"
-
-interface Classification {
-  niche: string
-  tone: string
-  speaker: string
-  content_type: string
-}
 
 export default function UploadFormEnhanced() {
   const { user } = useAuth()
@@ -38,7 +31,6 @@ export default function UploadFormEnhanced() {
   const searchParams = useSearchParams()
   const { toast } = useToast()
   const fileInputRef = useRef<HTMLInputElement>(null)
-  const transcriptFileRef = useRef<HTMLInputElement>(null)
 
   // Check if premium is set in URL
   const isPremiumParam = searchParams.get("premium") === "true"
@@ -59,22 +51,12 @@ export default function UploadFormEnhanced() {
   const [filePreview, setFilePreview] = useState<string | null>(null)
   const [duration, setDuration] = useState(0)
 
-  // Transcript state
-  const [transcript, setTranscript] = useState("")
-  const [transcriptFile, setTranscriptFile] = useState<File | null>(null)
-  const [isProcessingTranscript, setIsProcessingTranscript] = useState(false)
-
   // Upload state
   const [isUploading, setIsUploading] = useState(false)
   const [uploadProgress, setUploadProgress] = useState(0)
   const [uploadError, setUploadError] = useState<string | null>(null)
   const [showSuccessDialog, setShowSuccessDialog] = useState(false)
   const [uploadedVideoId, setUploadedVideoId] = useState<string | null>(null)
-
-  // Classification state
-  const [isClassifying, setIsClassifying] = useState(false)
-  const [classification, setClassification] = useState<Classification | null>(null)
-  const [classificationError, setClassificationError] = useState<string | null>(null)
 
   // Fetch user profile data
   useEffect(() => {
@@ -104,58 +86,6 @@ export default function UploadFormEnhanced() {
     fetchUserProfile()
   }, [user])
 
-  // Auto-classify when title, description, or transcript changes
-  useEffect(() => {
-    const classifyContent = async () => {
-      // Only classify if we have meaningful content
-      if (!title.trim() && !description.trim() && !transcript.trim()) {
-        setClassification(null)
-        return
-      }
-
-      // Debounce classification
-      const timeoutId = setTimeout(async () => {
-        setIsClassifying(true)
-        setClassificationError(null)
-
-        try {
-          console.log("🤖 [Upload] Auto-classifying content...")
-          const response = await fetch("/api/classify", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              title: title.trim(),
-              transcript: transcript.trim() || description.trim(), // Use transcript if available, otherwise description
-            }),
-          })
-
-          if (response.ok) {
-            const data = await response.json()
-            if (data.success) {
-              setClassification(data.classification)
-              console.log("✅ [Upload] Auto-classification successful:", data.classification)
-            } else {
-              setClassificationError("Classification failed")
-            }
-          } else {
-            setClassificationError("Classification service unavailable")
-          }
-        } catch (error) {
-          console.error("❌ [Upload] Classification error:", error)
-          setClassificationError("Classification failed")
-        } finally {
-          setIsClassifying(false)
-        }
-      }, 1000) // 1 second debounce
-
-      return () => clearTimeout(timeoutId)
-    }
-
-    classifyContent()
-  }, [title, description, transcript])
-
   // Handle video file selection
   const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -182,37 +112,6 @@ export default function UploadFormEnhanced() {
       video.remove()
     }
     video.src = fileURL
-  }
-
-  // Handle transcript file selection
-  const handleTranscriptFileChange = async (e: ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-
-    setTranscriptFile(file)
-    setIsProcessingTranscript(true)
-
-    try {
-      // Read the transcript file
-      const text = await file.text()
-      setTranscript(text)
-      console.log("✅ [Upload] Transcript loaded:", text.substring(0, 100) + "...")
-
-      // Show success toast
-      toast({
-        title: "Transcript loaded",
-        description: `${file.name} (${(file.size / 1024).toFixed(1)} KB) loaded successfully.`,
-      })
-    } catch (error) {
-      console.error("❌ [Upload] Error reading transcript file:", error)
-      toast({
-        title: "Error loading transcript",
-        description: "Failed to read the transcript file. Please try again.",
-        variant: "destructive",
-      })
-    } finally {
-      setIsProcessingTranscript(false)
-    }
   }
 
   // Format duration to MM:SS
@@ -272,7 +171,7 @@ export default function UploadFormEnhanced() {
       // Generate a placeholder thumbnail URL (in a real app, you'd generate this from the video)
       const thumbnailUrl = `/placeholder.svg?height=720&width=1280&query=${encodeURIComponent(title)}`
 
-      // Create a video document in Firestore with classification
+      // Create a video document in Firestore
       const videoData = {
         title,
         description,
@@ -283,18 +182,8 @@ export default function UploadFormEnhanced() {
         updatedAt: serverTimestamp(),
         views: 0,
         thumbnailUrl,
-        url: videoUrl,
+        url: videoUrl, // Use the field name that matches existing data
         duration,
-        // Add transcript if available
-        ...(transcript && { transcript }),
-        // Add classification data
-        ...(classification && {
-          niche: classification.niche,
-          tone: classification.tone,
-          speaker: classification.speaker,
-          content_type: classification.content_type,
-          classified: true,
-        }),
       }
 
       console.log("Creating video document with data:", videoData)
@@ -328,15 +217,8 @@ export default function UploadFormEnhanced() {
     setUploadProgress(0)
     setIsPremium(isPremiumParam)
     setUploadedVideoId(null)
-    setClassification(null)
-    setClassificationError(null)
-    setTranscript("")
-    setTranscriptFile(null)
     if (fileInputRef.current) {
       fileInputRef.current.value = ""
-    }
-    if (transcriptFileRef.current) {
-      transcriptFileRef.current.value = ""
     }
   }
 
@@ -504,7 +386,7 @@ export default function UploadFormEnhanced() {
                 {/* Description */}
                 <div>
                   <Label htmlFor="description" className="block mb-2 text-sm font-medium text-white">
-                    Description
+                    Description (Optional)
                   </Label>
                   <Textarea
                     id="description"
@@ -515,102 +397,6 @@ export default function UploadFormEnhanced() {
                     className="bg-zinc-800/50 border-zinc-700 focus:border-red-500 text-white resize-none"
                   />
                 </div>
-
-                {/* Transcript Upload */}
-                <div>
-                  <div className="flex justify-between items-center mb-2">
-                    <Label htmlFor="transcript-upload" className="text-sm font-medium text-white">
-                      Transcript (Optional)
-                    </Label>
-                    <span className="text-xs text-zinc-500">Improves AI classification accuracy</span>
-                  </div>
-
-                  <div className="flex gap-3 items-center">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      className="bg-zinc-800 border-zinc-700 text-white hover:bg-zinc-700 flex-shrink-0"
-                      onClick={() => transcriptFileRef.current?.click()}
-                      disabled={isProcessingTranscript}
-                    >
-                      {isProcessingTranscript ? (
-                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      ) : (
-                        <FileText className="h-4 w-4 mr-2" />
-                      )}
-                      Upload Transcript
-                    </Button>
-
-                    <div className="flex-1 text-sm text-zinc-400 truncate">
-                      {transcriptFile ? (
-                        <span className="text-green-400">
-                          {transcriptFile.name} ({(transcriptFile.size / 1024).toFixed(1)} KB)
-                        </span>
-                      ) : (
-                        <span>Upload a .txt file with your video transcript</span>
-                      )}
-                    </div>
-
-                    <input
-                      ref={transcriptFileRef}
-                      id="transcript-upload"
-                      type="file"
-                      accept=".txt,.srt,.vtt"
-                      className="hidden"
-                      onChange={handleTranscriptFileChange}
-                    />
-                  </div>
-
-                  {transcript && (
-                    <div className="mt-2 bg-zinc-800/30 border border-zinc-700 rounded p-2 max-h-32 overflow-y-auto">
-                      <p className="text-xs text-zinc-400 whitespace-pre-line">
-                        {transcript.substring(0, 300)}
-                        {transcript.length > 300 && "..."}
-                      </p>
-                    </div>
-                  )}
-                </div>
-
-                {/* AI Classification Preview */}
-                {(classification || isClassifying || classificationError) && (
-                  <div className="bg-zinc-800/30 border border-blue-500/20 rounded-lg p-4">
-                    <div className="flex items-center gap-2 mb-3">
-                      <Brain className="h-4 w-4 text-blue-500" />
-                      <h3 className="text-sm font-medium text-white">AI Classification</h3>
-                      {isClassifying && <Loader2 className="h-3 w-3 animate-spin text-blue-500" />}
-                    </div>
-
-                    {isClassifying && <p className="text-sm text-zinc-400">Analyzing content...</p>}
-
-                    {classificationError && <p className="text-sm text-red-400">{classificationError}</p>}
-
-                    {classification && !isClassifying && (
-                      <div className="grid grid-cols-2 gap-3 text-sm">
-                        <div>
-                          <span className="text-zinc-400">Niche:</span>
-                          <span className="ml-2 text-blue-400">{classification.niche}</span>
-                        </div>
-                        <div>
-                          <span className="text-zinc-400">Tone:</span>
-                          <span className="ml-2 text-blue-400">{classification.tone}</span>
-                        </div>
-                        <div>
-                          <span className="text-zinc-400">Speaker:</span>
-                          <span className="ml-2 text-blue-400">{classification.speaker}</span>
-                        </div>
-                        <div>
-                          <span className="text-zinc-400">Type:</span>
-                          <span className="ml-2 text-blue-400">{classification.content_type}</span>
-                        </div>
-                      </div>
-                    )}
-
-                    <p className="text-xs text-zinc-500 mt-2">
-                      These tags will be automatically added to help users discover your content.
-                    </p>
-                  </div>
-                )}
               </div>
 
               {/* Error message */}
@@ -671,8 +457,8 @@ export default function UploadFormEnhanced() {
               Upload Successful!
             </AlertDialogTitle>
             <AlertDialogDescription className="text-zinc-400">
-              Your {isPremium ? "premium" : "free"} video has been uploaded successfully
-              {classification && " with AI-powered tags"} and is now available on your creator profile.
+              Your {isPremium ? "premium" : "free"} video has been uploaded successfully and is now available on your
+              creator profile.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter className="gap-2">

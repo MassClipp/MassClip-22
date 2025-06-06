@@ -13,7 +13,6 @@ import { filterCategoriesBySearch } from "@/lib/search-utils"
 import VimeoCard from "@/components/vimeo-card"
 import { shuffleArray } from "@/lib/utils"
 import { useUserPlan } from "@/hooks/use-user-plan"
-import { useCreatorUploads } from "@/hooks/use-creator-uploads"
 
 export default function ExplorePage() {
   // Get search query from URL
@@ -35,18 +34,6 @@ export default function ExplorePage() {
 
   // Fetch all videos for comprehensive search
   const { videos, videosByTag, loading: loadingVideos } = useVimeoVideos()
-
-  // Fetch creator uploads
-  const { videos: creatorUploads, loading: creatorUploadsLoading } = useCreatorUploads()
-
-  // Debug creator uploads
-  useEffect(() => {
-    console.log("🎬 [Explore] Creator uploads debug:", {
-      loading: creatorUploadsLoading,
-      videosCount: creatorUploads?.length || 0,
-      videos: creatorUploads,
-    })
-  }, [creatorUploads, creatorUploadsLoading])
 
   const router = useRouter()
 
@@ -83,7 +70,7 @@ export default function ExplorePage() {
 
       // If no results in showcases but we have the search query from localStorage,
       // we can also search through all videos as a fallback
-      if (!hasResults && typeof window !== "undefined" && localStorage.getItem("lastSearchQuery") === searchQuery) {
+      if (!hasResults && localStorage.getItem("lastSearchQuery") === searchQuery) {
         // This would be a place to implement a more comprehensive search
         // through all videos if needed
       }
@@ -92,24 +79,24 @@ export default function ExplorePage() {
       if (isProUser) {
         // For pro users, shuffle each category's videos
         const shuffledShowcases: Record<string, any[]> = {}
-        Object.entries(showcaseVideos || {}).forEach(([key, videos]) => {
+        Object.entries(showcaseVideos).forEach(([key, videos]) => {
           shuffledShowcases[key] = shuffleArray([...videos], Math.random())
         })
         setFilteredShowcaseVideos(shuffledShowcases)
       } else {
-        setFilteredShowcaseVideos(showcaseVideos || {})
+        setFilteredShowcaseVideos(showcaseVideos)
       }
 
-      setHasSearchResults(Object.keys(showcaseVideos || {}).length > 0)
+      setHasSearchResults(Object.keys(showcaseVideos).length > 0)
     }
   }, [searchQuery, showcaseVideos, loadingShowcases, loadingVideos, videosByTag, videos, isProUser])
 
   // Get showcase names based on whether we're searching or not
-  const showcaseNames = Object.keys(searchQuery ? filteredShowcaseVideos : showcaseVideos || {})
+  const showcaseNames = Object.keys(searchQuery ? filteredShowcaseVideos : showcaseVideos)
 
   // Prepare featured videos from all showcases
   useEffect(() => {
-    if (!loadingShowcases && !loadingVideos && showcaseVideos && Object.keys(showcaseVideos).length > 0) {
+    if (!loadingShowcases && !loadingVideos && Object.keys(showcaseVideos).length > 0) {
       // Collect videos from all showcases (not all videos from account)
       const allShowcaseVideos = Object.values(showcaseVideos).flat()
 
@@ -152,26 +139,24 @@ export default function ExplorePage() {
     },
   }
 
-  // Check if we have the specific showcases - add null checks
+  // Check if we have the specific showcases
   const hasMindset = showcaseNames.some(
     (name) =>
-      name &&
-      (name.toLowerCase().includes("mindset") ||
-        name.toLowerCase().includes("introspection") ||
-        name.toLowerCase().includes("reflection") ||
-        name.toLowerCase().includes("mindfulness")),
+      name.toLowerCase().includes("mindset") ||
+      name.toLowerCase().includes("introspection") ||
+      name.toLowerCase().includes("reflection") ||
+      name.toLowerCase().includes("mindfulness"),
   )
 
   const hasHustleMentality = showcaseNames.some(
     (name) =>
-      name &&
-      (name.toLowerCase().includes("hustle") ||
-        name.toLowerCase().includes("grind") ||
-        name.toLowerCase().includes("entrepreneur")),
+      name.toLowerCase().includes("hustle") ||
+      name.toLowerCase().includes("grind") ||
+      name.toLowerCase().includes("entrepreneur"),
   )
 
   const hasCinema = showcaseNames.some(
-    (name) => name && (name.toLowerCase().includes("cinema") || name.toLowerCase().includes("film")),
+    (name) => name.toLowerCase().includes("cinema") || name.toLowerCase().includes("film"),
   )
 
   // Quick category navigation
@@ -202,28 +187,6 @@ export default function ExplorePage() {
     },
   ]
 
-  // Listen for upload updates and refresh creator uploads
-  useEffect(() => {
-    const handleCreatorUploadsUpdate = () => {
-      console.log("🔄 [Explore] Creator uploads updated, refreshing...")
-      // Force refetch of creator uploads
-      if (typeof window !== "undefined") {
-        // Add a small delay to ensure database has been updated
-        setTimeout(() => {
-          window.location.reload() // Simple but effective refresh
-        }, 500)
-      }
-    }
-
-    if (typeof window !== "undefined") {
-      window.addEventListener("creatorUploadsUpdated", handleCreatorUploadsUpdate)
-
-      return () => {
-        window.removeEventListener("creatorUploadsUpdated", handleCreatorUploadsUpdate)
-      }
-    }
-  }, [])
-
   return (
     <div className="space-y-8">
       {/* Page Header */}
@@ -239,7 +202,7 @@ export default function ExplorePage() {
             e.preventDefault()
             const formData = new FormData(e.currentTarget)
             const query = formData.get("search") as string
-            if (query && query.trim()) {
+            if (query.trim()) {
               router.push(`/dashboard/explore?search=${encodeURIComponent(query.trim())}`)
             }
           }}
@@ -283,7 +246,7 @@ export default function ExplorePage() {
               <span className="text-gradient-accent">Featured</span> Clips
             </h2>
             <Button
-              onClick={() => router.push(isProUser ? "/category/browse-all" : "/dashboard/membership")}
+              onClick={() => router.push(isProUser ? "/category/browse-all" : "/pricing")}
               variant="ghost"
               className="text-zinc-400 hover:text-white hover:bg-zinc-900/50 rounded-full px-4 py-2 transition-all duration-300"
             >
@@ -337,7 +300,7 @@ export default function ExplorePage() {
                 return (
                   <Button
                     key={category.name}
-                    onClick={() => router.push("/dashboard/membership")}
+                    onClick={() => router.push("/pricing")}
                     variant="outline"
                     className="flex items-center justify-start h-auto py-4 px-5 bg-zinc-900/30 backdrop-blur-sm border-zinc-800/50 hover:bg-zinc-900/50 hover:border-zinc-700 rounded-xl transition-all duration-300"
                   >
@@ -397,48 +360,19 @@ export default function ExplorePage() {
         </div>
       )}
 
-      {/* Creator Uploads Row - ADDED HERE */}
-      {!creatorUploadsLoading && (
-        <motion.div variants={containerVariants} initial="hidden" animate="visible">
-          <motion.div variants={itemVariants}>
-            {creatorUploads && creatorUploads.length > 0 ? (
-              <VideoRow title="Creator Uploads" videos={creatorUploads} limit={20} isCreatorUploads={true} />
-            ) : (
-              <div className="px-6 py-4 bg-zinc-900/30 rounded-xl">
-                <h3 className="text-lg font-light text-white mb-2">Creator Uploads</h3>
-                <p className="text-zinc-400 text-sm">
-                  No creator uploads found.{" "}
-                  {creatorUploads ? `Found ${creatorUploads.length} videos` : "No data loaded"}
-                </p>
-              </div>
-            )}
-          </motion.div>
-        </motion.div>
-      )}
-
-      {/* Loading state for Creator Uploads */}
-      {creatorUploadsLoading && (
-        <div className="px-6 py-4 bg-zinc-900/30 rounded-xl">
-          <h3 className="text-lg font-light text-white mb-2">Creator Uploads</h3>
-          <p className="text-zinc-400 text-sm">Loading creator uploads...</p>
-        </div>
-      )}
-
       {/* Showcase-based categories */}
       {showcaseNames.length > 0 && (
         <motion.div variants={containerVariants} initial="hidden" animate="visible" className="space-y-12">
           {showcaseNames.map((showcaseName, index) => {
-            const videosToShow = searchQuery
-              ? filteredShowcaseVideos[showcaseName]
-              : (showcaseVideos || {})[showcaseName]
+            const videosToShow = searchQuery ? filteredShowcaseVideos[showcaseName] : showcaseVideos[showcaseName]
             return (
               <motion.div key={`showcase-${showcaseName}`} variants={itemVariants}>
                 <VideoRow
                   title={showcaseName}
-                  videos={videosToShow || []}
+                  videos={videosToShow}
                   limit={10}
                   isShowcase={true}
-                  showcaseId={(showcaseIds || {})[showcaseName]}
+                  showcaseId={showcaseIds[showcaseName]}
                 />
               </motion.div>
             )

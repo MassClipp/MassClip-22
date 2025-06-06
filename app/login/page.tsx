@@ -2,8 +2,8 @@
 
 import type React from "react"
 import { useState, useEffect } from "react"
+import { useRouter } from "next/navigation"
 import Link from "next/link"
-import { useRouter, useSearchParams } from "next/navigation"
 import { motion } from "framer-motion"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -11,9 +11,9 @@ import { Label } from "@/components/ui/label"
 import { useFirebaseAuth } from "@/hooks/use-firebase-auth"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import Logo from "@/components/logo"
-import { Loader2, ArrowRight, AlertCircle } from "lucide-react"
+import { Loader2, ArrowRight } from "lucide-react"
 import { GoogleAuthButton } from "@/components/google-auth-button"
-import { FirebaseStatus } from "@/components/firebase-status"
+import { useAuth } from "@/contexts/auth-context"
 
 export default function LoginPage() {
   const [email, setEmail] = useState("")
@@ -21,29 +21,20 @@ export default function LoginPage() {
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [isGoogleLoading, setIsGoogleLoading] = useState(false)
-  const [showDebug, setShowDebug] = useState(false)
-
+  const { signIn, signInWithGoogle } = useFirebaseAuth()
   const router = useRouter()
-  const searchParams = useSearchParams()
-  const redirectTo = searchParams.get("redirect") || "/dashboard"
 
-  const { signIn, signInWithGoogle, authChecked, user, loading, firebaseReady } = useFirebaseAuth()
+  const { user, loading: authLoading } = useAuth()
 
-  // Redirect if already authenticated
   useEffect(() => {
-    if (authChecked && user) {
-      router.replace(redirectTo)
+    // Only redirect if auth is not loading and user exists
+    if (!authLoading && user) {
+      // Get redirect URL from query params
+      const params = new URLSearchParams(window.location.search)
+      const redirectTo = params.get("redirect") || "/dashboard"
+      router.push(redirectTo)
     }
-  }, [authChecked, user, router, redirectTo])
-
-  // Show loading while checking auth state
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-black flex items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-white" />
-      </div>
-    )
-  }
+  }, [user, authLoading, router])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -53,10 +44,12 @@ export default function LoginPage() {
     try {
       const result = await signIn(email, password)
 
-      if (!result.success) {
+      if (result.success) {
+        // Just return success, let the auth context handle redirect
+        return
+      } else {
         setErrorMessage(result.error || "Failed to sign in")
       }
-      // Success handling is done in useEffect with router.replace
     } catch (error) {
       setErrorMessage("An unexpected error occurred")
       console.error(error)
@@ -72,10 +65,12 @@ export default function LoginPage() {
     try {
       const result = await signInWithGoogle()
 
-      if (!result.success) {
+      if (result.success) {
+        // The function should just handle the sign-in and let the useEffect handle the redirect.
+        return
+      } else {
         setErrorMessage(result.error || "Failed to sign in with Google")
       }
-      // Success handling is done in useEffect with router.replace
     } catch (error) {
       setErrorMessage("An unexpected error occurred")
       console.error(error)
@@ -84,36 +79,12 @@ export default function LoginPage() {
     }
   }
 
-  const toggleDebug = () => {
-    setShowDebug(!showDebug)
-  }
-
   return (
     <div className="min-h-screen bg-black flex flex-col justify-center items-center px-4">
       {/* Premium Gradient Background */}
       <div className="fixed inset-0 z-0 bg-gradient-to-b from-black via-black to-gray-900"></div>
 
       <Logo href="/" size="md" linkClassName="absolute top-8 left-8 z-10" />
-
-      {/* Debug toggle button */}
-      <button onClick={toggleDebug} className="absolute top-8 right-8 z-10 text-gray-500 hover:text-gray-300 text-sm">
-        {showDebug ? "Hide Debug" : "Show Debug"}
-      </button>
-
-      {showDebug && (
-        <div className="w-full max-w-md mb-4 z-10">
-          <FirebaseStatus />
-        </div>
-      )}
-
-      {!firebaseReady && (
-        <Alert variant="destructive" className="w-full max-w-md mb-4 z-10 bg-red-900/20 border-red-900/30 text-red-400">
-          <AlertCircle className="h-4 w-4" />
-          <AlertDescription>
-            Firebase is not configured properly. Please try refreshing the page or contact support.
-          </AlertDescription>
-        </Alert>
-      )}
 
       <motion.div
         initial={{ opacity: 0, y: 20 }}
@@ -157,12 +128,7 @@ export default function LoginPage() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.4, duration: 0.5 }}
         >
-          <GoogleAuthButton
-            onClick={handleGoogleSignIn}
-            isLoading={isGoogleLoading}
-            text="Continue with Google"
-            disabled={!firebaseReady}
-          />
+          <GoogleAuthButton onClick={handleGoogleSignIn} isLoading={isGoogleLoading} text="Continue with Google" />
         </motion.div>
 
         <motion.div
@@ -195,7 +161,6 @@ export default function LoginPage() {
               placeholder="Enter your email"
               className="bg-gray-900/80 border-gray-800 text-white placeholder:text-gray-500 focus:border-red-500 focus:ring-red-500"
               required
-              disabled={!firebaseReady}
             />
           </motion.div>
 
@@ -221,7 +186,6 @@ export default function LoginPage() {
               placeholder="Enter your password"
               className="bg-gray-900/80 border-gray-800 text-white placeholder:text-gray-500 focus:border-red-500 focus:ring-red-500"
               required
-              disabled={!firebaseReady}
             />
           </motion.div>
 
@@ -233,7 +197,7 @@ export default function LoginPage() {
             <Button
               type="submit"
               className="w-full bg-red-600 hover:bg-red-700 text-white transition-all duration-300 flex items-center justify-center gap-2 group"
-              disabled={isLoading || !firebaseReady}
+              disabled={isLoading || authLoading}
             >
               {isLoading ? (
                 <>
@@ -262,15 +226,6 @@ export default function LoginPage() {
           </Link>
         </motion.div>
       </motion.div>
-
-      {/* Debug link */}
-      {showDebug && (
-        <div className="mt-4 z-10">
-          <Link href="/firebase-debug" className="text-sm text-gray-500 hover:text-gray-300">
-            Go to Firebase Debug Page
-          </Link>
-        </div>
-      )}
     </div>
   )
 }

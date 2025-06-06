@@ -1,35 +1,48 @@
 "use client"
 
 import { useEffect } from "react"
-import { usePathname } from "next/navigation"
-import { useFirebaseAuth } from "@/hooks/use-firebase-auth"
+import { useMobile } from "@/hooks/use-mobile"
 
 export function RedirectHelper() {
-  const { user, authChecked } = useFirebaseAuth()
-  const pathname = usePathname()
+  const isMobile = useMobile()
 
   useEffect(() => {
-    // Don't redirect until auth state is checked
-    if (!authChecked) return
+    // Only run on mobile devices
+    if (!isMobile) return
 
-    // Protected routes that require authentication
-    const protectedRoutes = ["/dashboard", "/upload", "/profile", "/settings", "/subscription"]
-    const isProtectedRoute = protectedRoutes.some((route) => pathname.startsWith(route))
+    // Check if we need to redirect
+    const limitReached = localStorage.getItem("downloadLimitReached")
 
-    // If on a protected route and not authenticated, redirect to login
-    if (isProtectedRoute && !user) {
-      if (typeof window !== "undefined") {
-        window.location.href = `/login?redirect=${encodeURIComponent(pathname)}`
-      }
+    if (limitReached === "true" && !window.location.pathname.includes("/dashboard")) {
+      console.log("Redirect helper: Detected download limit reached, redirecting to dashboard")
+
+      // Clear the flag to prevent redirect loops
+      localStorage.removeItem("downloadLimitReached")
+
+      // Redirect to dashboard
+      window.location.href = "/dashboard"
     }
 
-    // If on login/signup and already authenticated, redirect to dashboard
-    if ((pathname === "/login" || pathname === "/signup") && user) {
-      if (typeof window !== "undefined") {
+    // Set up a periodic check for mobile devices
+    const intervalId = setInterval(() => {
+      // Check if we have the download limit reached flag
+      const limitReached = localStorage.getItem("downloadLimitReached")
+
+      if (limitReached === "true" && !window.location.pathname.includes("/dashboard")) {
+        console.log("Redirect helper: Detected download limit reached via interval")
+
+        // Clear the flag to prevent redirect loops
+        localStorage.removeItem("downloadLimitReached")
+
+        // Redirect to dashboard
         window.location.href = "/dashboard"
       }
+    }, 3000) // Check every 3 seconds
+
+    return () => {
+      clearInterval(intervalId)
     }
-  }, [user, authChecked, pathname])
+  }, [isMobile])
 
   return null
 }

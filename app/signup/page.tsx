@@ -1,23 +1,21 @@
 "use client"
 
 import type React from "react"
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect } from "react"
+import { useRouter } from "next/navigation"
 import Link from "next/link"
-import { useRouter, useSearchParams } from "next/navigation"
 import { motion } from "framer-motion"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Checkbox } from "@/components/ui/checkbox"
-import { useFirebaseAuthSafe } from "@/hooks/use-firebase-auth-safe"
-import { useAuthRedirect } from "@/hooks/use-auth-redirect"
+import { useFirebaseAuth } from "@/hooks/use-firebase-auth"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import Logo from "@/components/logo"
 import { Loader2, ArrowRight, Check, X } from "lucide-react"
 import { GoogleAuthButton } from "@/components/google-auth-button"
 import { doc, getDoc, getFirestore } from "firebase/firestore"
 import { initializeFirebaseApp } from "@/lib/firebase"
-import { FirebaseConfigBanner } from "@/components/firebase-config-banner"
 
 export default function SignupPage() {
   const [displayName, setDisplayName] = useState("")
@@ -31,16 +29,19 @@ export default function SignupPage() {
   const [isCheckingUsername, setIsCheckingUsername] = useState(false)
   const [usernameAvailable, setUsernameAvailable] = useState<boolean | null>(null)
   const [usernameError, setUsernameError] = useState<string | null>(null)
-  const [authCheckLoading, setAuthCheckLoading] = useState(true)
-
+  const { signUp, signInWithGoogle } = useFirebaseAuth()
   const router = useRouter()
-  const searchParams = useSearchParams()
-  const redirectTo = searchParams.get("redirect") || "/dashboard"
 
-  const { signUp, signInWithGoogle, authChecked, user, loading, configError, isConfigured } = useFirebaseAuthSafe()
-  const { hasRedirected } = useAuthRedirect({ user, loading, redirectTo })
+  useEffect(() => {
+    try {
+      initializeFirebaseApp()
+    } catch (error) {
+      console.error("Error initializing Firebase:", error)
+    }
+  }, [])
 
-  const validateUsername = useCallback((username: string): { valid: boolean; error?: string } => {
+  // Username validation
+  const validateUsername = (username: string): { valid: boolean; error?: string } => {
     if (!username) return { valid: false, error: "Username is required" }
 
     if (username.length < 3 || username.length > 20) {
@@ -53,63 +54,40 @@ export default function SignupPage() {
     }
 
     return { valid: true }
-  }, [])
+  }
 
   // Check if username is available
-  const checkUsernameAvailability = useCallback(
-    async (username: string) => {
-      if (!username) return
+  const checkUsernameAvailability = async (username: string) => {
+    if (!username) return
 
-      const validation = validateUsername(username)
-      if (!validation.valid) {
-        setUsernameError(validation.error)
-        setUsernameAvailable(false)
-        return
-      }
+    const validation = validateUsername(username)
+    if (!validation.valid) {
+      setUsernameError(validation.error)
+      setUsernameAvailable(false)
+      return
+    }
 
-      setIsCheckingUsername(true)
-      setUsernameError(null)
+    setIsCheckingUsername(true)
+    setUsernameError(null)
 
-      try {
-        const db = getFirestore()
-        const usernameSnapshot = await getDoc(doc(db, "usernames", username))
-        const isAvailable = !usernameSnapshot.exists()
-
-        setUsernameAvailable(isAvailable)
-        if (!isAvailable) {
-          setUsernameError("Username is already taken")
-        }
-      } catch (error) {
-        console.error("Error checking username:", error)
-        setUsernameError("Error checking username availability")
-      } finally {
-        setIsCheckingUsername(false)
-      }
-    },
-    [validateUsername],
-  )
-
-  useEffect(() => {
     try {
-      initializeFirebaseApp()
+      const db = getFirestore()
+
+      // Check in usernames collection
+      const usernameSnapshot = await getDoc(doc(db, "usernames", username))
+
+      const isAvailable = !usernameSnapshot.exists()
+
+      setUsernameAvailable(isAvailable)
+      if (!isAvailable) {
+        setUsernameError("Username is already taken")
+      }
     } catch (error) {
-      console.error("Error initializing Firebase:", error)
+      console.error("Error checking username:", error)
+      setUsernameError("Error checking username availability")
+    } finally {
+      setIsCheckingUsername(false)
     }
-  }, [])
-
-  useEffect(() => {
-    if (authChecked && !hasRedirected) {
-      setAuthCheckLoading(false)
-    }
-  }, [authChecked, hasRedirected])
-
-  // Show loading while checking auth state or if redirecting
-  if (authCheckLoading) {
-    return (
-      <div className="min-h-screen bg-black flex items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-white" />
-      </div>
-    )
   }
 
   // Check username availability when username changes
@@ -124,7 +102,7 @@ export default function SignupPage() {
     }, 500)
 
     return () => clearTimeout(timer)
-  }, [username, checkUsernameAvailability])
+  }, [username])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -163,8 +141,9 @@ export default function SignupPage() {
       const result = await signUp(email, password, username, displayName)
 
       if (result.success) {
-        console.log("Signup successful, redirecting to:", redirectTo)
-        router.replace(redirectTo)
+        console.log("Signup successful, redirecting to:", `/creator/${username}`)
+        // Redirect to their public profile
+        router.push(`/creator/${username}`)
       } else {
         setErrorMessage(result.error || "Failed to create account")
       }
@@ -206,8 +185,8 @@ export default function SignupPage() {
       const result = await signInWithGoogle(username, displayName)
 
       if (result.success) {
-        console.log("Google signup successful, redirecting to:", redirectTo)
-        router.replace(redirectTo)
+        console.log("Google signup successful, redirecting to:", `/creator/${username}`)
+        router.push(`/creator/${username}`)
       } else {
         setErrorMessage(result.error || "Failed to sign up with Google")
       }
@@ -225,7 +204,6 @@ export default function SignupPage() {
       <div className="fixed inset-0 z-0 bg-gradient-to-b from-black via-black to-gray-900"></div>
 
       <Logo href="/" size="md" linkClassName="absolute top-8 left-8 z-10" />
-      <FirebaseConfigBanner />
 
       <motion.div
         initial={{ opacity: 0, y: 20 }}

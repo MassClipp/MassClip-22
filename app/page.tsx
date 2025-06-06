@@ -6,7 +6,7 @@ import { useState } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { motion } from "framer-motion"
-import { Upload, Share2, DollarSign, Shield, StoreIcon as Storefront, Download, EyeOff, Zap } from "lucide-react"
+import { Search, ArrowRight, Clock, TrendingUp, Download, Play } from "lucide-react"
 import LandingHeader from "@/components/landing-header"
 import { Button } from "@/components/ui/button"
 
@@ -24,12 +24,16 @@ export default function LandingPage() {
     }
   }
 
-  const handleStartSelling = () => {
+  const handleExploreClips = () => {
+    router.push("/dashboard")
+  }
+
+  const handleStartFree = () => {
     router.push("/signup")
   }
 
-  const handleExploreFreeClips = () => {
-    router.push("/dashboard")
+  const handleCategoryClick = (category: string) => {
+    router.push(`/category/${encodeURIComponent(category)}`)
   }
 
   const scrollToContent = () => {
@@ -59,64 +63,62 @@ export default function LandingPage() {
           <div className="container mx-auto max-w-6xl">
             <div className="flex flex-col items-center text-center mb-12">
               <motion.h1
-                className="text-4xl md:text-7xl lg:text-8xl font-light text-white mb-6 max-w-5xl leading-tight"
+                className="text-4xl md:text-7xl lg:text-8xl font-light text-white mb-6 max-w-4xl leading-tight"
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.8, delay: 0.2 }}
               >
-                Create. Sell. <span className="text-gradient-accent">Stay Anonymous.</span>
+                The #1 Platform for <span className="text-gradient-accent">Faceless Creators</span>
               </motion.h1>
 
               <motion.p
-                className="text-lg md:text-2xl font-light text-white/70 mb-8 md:mb-12 max-w-3xl"
+                className="text-lg md:text-2xl font-light text-white/70 mb-8 md:mb-12 max-w-2xl"
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.8, delay: 0.4 }}
               >
-                MassClip gives you a sleek storefront to sell viral clips, templates, and content without ever showing
-                your face.
+                Your time matters. Let&apos;s act like it.
               </motion.p>
 
-              {/* CTA Buttons */}
-              <motion.div
-                className="flex flex-col sm:flex-row gap-4 w-full max-w-lg mb-12"
+              {/* Search Bar */}
+              <motion.form
+                onSubmit={handleSearch}
+                className="w-full max-w-2xl mb-12"
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.8, delay: 0.6 }}
               >
-                <Button
-                  onClick={handleStartSelling}
-                  className="flex-1 py-3 sm:py-6 bg-crimson hover:bg-crimson-dark text-white text-sm sm:text-lg premium-button"
-                >
-                  START SELLING
-                </Button>
-                <Button
-                  onClick={handleExploreFreeClips}
-                  className="flex-1 py-3 sm:py-6 bg-white/5 hover:bg-white/10 text-white text-sm sm:text-lg border border-white/10 premium-button"
-                >
-                  EXPLORE FREE CLIPS
-                </Button>
-              </motion.div>
+                <div className="relative">
+                  <Search className="absolute left-5 top-1/2 transform -translate-y-1/2 text-white/30" size={20} />
+                  <input
+                    type="text"
+                    placeholder="Find your next viral post..."
+                    className="w-full py-4 pl-14 pr-4 bg-white/5 border border-white/10 text-white placeholder-white/30 focus:outline-none focus:border-crimson focus:ring-1 focus:ring-crimson transition-all"
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                  />
+                </div>
+              </motion.form>
 
-              {/* Benefits Icons */}
+              {/* CTA Buttons */}
               <motion.div
-                className="flex flex-wrap justify-center gap-8 text-white/60 text-xs uppercase tracking-widest"
+                className="flex flex-col sm:flex-row gap-4 w-full max-w-md"
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.8, delay: 0.8 }}
               >
-                <div className="flex items-center gap-2">
-                  <EyeOff className="h-4 w-4" />
-                  <span>Faceless Uploads</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Storefront className="h-4 w-4" />
-                  <span>Built-in Storefront</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Download className="h-4 w-4" />
-                  <span>Direct Downloads</span>
-                </div>
+                <Button
+                  onClick={handleExploreClips}
+                  className="flex-1 py-3 sm:py-6 bg-white/5 hover:bg-white/10 text-white text-sm sm:text-lg border border-white/10 premium-button"
+                >
+                  EXPLORE CLIPS
+                </Button>
+                <Button
+                  onClick={handleStartFree}
+                  className="flex-1 py-3 sm:py-6 bg-crimson hover:bg-crimson-dark text-white text-sm sm:text-lg premium-button"
+                >
+                  START FREE
+                </Button>
               </motion.div>
             </div>
           </div>
@@ -129,84 +131,68 @@ export default function LandingPage() {
             animate={{ opacity: 1 }}
             transition={{ duration: 0.8, delay: 1.2 }}
           >
-            <span className="text-xs uppercase tracking-widest text-white/50">How it works</span>
+            <span className="text-xs uppercase tracking-widest text-white/50">Scroll</span>
             <div className="scroll-indicator-line"></div>
           </motion.div>
         </section>
 
-        {/* How It Works Section */}
+        {/* Content Section */}
         <section id="content-section" className="py-20 md:py-32">
           <div className="container mx-auto max-w-6xl px-4">
-            {/* How It Works */}
-            <div className="mb-32">
+            {/* Value Propositions */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-32">
               <motion.div
-                className="text-center mb-16"
-                initial={{ opacity: 0, y: 20 }}
+                className="premium-card p-8"
+                initial={{ opacity: 0, y: 30 }}
                 whileInView={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.6 }}
                 viewport={{ once: true, margin: "-100px" }}
               >
-                <h2 className="text-3xl md:text-4xl font-light text-white mb-4">Three Steps to Digital Income</h2>
-                <p className="text-white/70 max-w-2xl mx-auto">
-                  Build your anonymous creator business in minutes, not months.
+                <div className="mb-6 p-3 bg-white/5 inline-block rounded-sm">
+                  <Clock className="h-6 w-6 text-crimson" />
+                </div>
+                <h3 className="text-2xl font-light text-white mb-4">Save Hours Daily</h3>
+                <p className="text-white/70">
+                  Reclaim your time with our platform. Access ready-made clips you can brand your way without the
+                  endless search.
                 </p>
               </motion.div>
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-16">
-                <motion.div
-                  className="premium-card p-8 text-center"
-                  initial={{ opacity: 0, y: 30 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.6 }}
-                  viewport={{ once: true, margin: "-100px" }}
-                >
-                  <div className="mb-6 p-4 bg-crimson/10 inline-block rounded-full">
-                    <Upload className="h-8 w-8 text-crimson" />
-                  </div>
-                  <h3 className="text-xl font-light text-white mb-4">1. Upload Your Content</h3>
-                  <p className="text-white/70 text-sm">
-                    Upload free clips to build your audience, or premium content to start earning immediately. No face
-                    required.
-                  </p>
-                </motion.div>
+              <motion.div
+                className="premium-card p-8"
+                initial={{ opacity: 0, y: 30 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.6, delay: 0.2 }}
+                viewport={{ once: true, margin: "-100px" }}
+              >
+                <div className="mb-6 p-3 bg-white/5 inline-block rounded-sm">
+                  <TrendingUp className="h-6 w-6 text-crimson" />
+                </div>
+                <h3 className="text-2xl font-light text-white mb-4">Fresh Content Library</h3>
+                <p className="text-white/70">
+                  Our platform continuously updates with new content, ensuring you always have fresh clips to choose
+                  from.
+                </p>
+              </motion.div>
 
-                <motion.div
-                  className="premium-card p-8 text-center"
-                  initial={{ opacity: 0, y: 30 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.6, delay: 0.2 }}
-                  viewport={{ once: true, margin: "-100px" }}
-                >
-                  <div className="mb-6 p-4 bg-crimson/10 inline-block rounded-full">
-                    <Share2 className="h-8 w-8 text-crimson" />
-                  </div>
-                  <h3 className="text-xl font-light text-white mb-4">2. Share Your Vault Link</h3>
-                  <p className="text-white/70 text-sm">
-                    Get your personalized storefront link. Share it anywhere — bio links, Discord, Twitter, wherever
-                    your audience is.
-                  </p>
-                </motion.div>
-
-                <motion.div
-                  className="premium-card p-8 text-center"
-                  initial={{ opacity: 0, y: 30 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.6, delay: 0.4 }}
-                  viewport={{ once: true, margin: "-100px" }}
-                >
-                  <div className="mb-6 p-4 bg-crimson/10 inline-block rounded-full">
-                    <DollarSign className="h-8 w-8 text-crimson" />
-                  </div>
-                  <h3 className="text-xl font-light text-white mb-4">3. Get Downloads, Get Paid</h3>
-                  <p className="text-white/70 text-sm">
-                    Every download of your premium content puts money in your pocket. Build passive income while you
-                    sleep.
-                  </p>
-                </motion.div>
-              </div>
+              <motion.div
+                className="premium-card p-8"
+                initial={{ opacity: 0, y: 30 }}
+                whileInView={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.6, delay: 0.4 }}
+                viewport={{ once: true, margin: "-100px" }}
+              >
+                <div className="mb-6 p-3 bg-white/5 inline-block rounded-sm">
+                  <Download className="h-6 w-6 text-crimson" />
+                </div>
+                <h3 className="text-2xl font-light text-white mb-4">Instant Downloads</h3>
+                <p className="text-white/70">
+                  Browse and download any clip you want with a single click. Less work, more content for your channels.
+                </p>
+              </motion.div>
             </div>
 
-            {/* Mock Storefront Preview */}
+            {/* Categories Section */}
             <div className="mb-32">
               <motion.div
                 className="text-center mb-16"
@@ -215,142 +201,91 @@ export default function LandingPage() {
                 transition={{ duration: 0.6 }}
                 viewport={{ once: true, margin: "-100px" }}
               >
-                <h2 className="text-3xl md:text-4xl font-light text-white mb-4">Your Storefront, Your Rules</h2>
+                <h2 className="text-3xl md:text-4xl font-light text-white mb-4">FEATURED CATEGORIES</h2>
                 <p className="text-white/70 max-w-2xl mx-auto">
-                  Clean, professional storefronts that let your content do the talking.
+                  Curated collections of high-performing content across niches.
                 </p>
               </motion.div>
 
-              {/* Mock Storefront Cards */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 md:gap-6">
+                {/* Money & Wealth Category */}
                 <motion.div
-                  className="premium-card p-6"
+                  className="relative overflow-hidden group cursor-pointer bg-black/20 border border-white/5 aspect-video flex items-center justify-center"
+                  onClick={() => handleCategoryClick("money-and-wealth")}
                   initial={{ opacity: 0, y: 20 }}
                   whileInView={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.6 }}
                   viewport={{ once: true, margin: "-100px" }}
                 >
-                  <div className="aspect-video bg-gradient-to-br from-purple-900/20 to-blue-900/20 rounded-lg mb-4 flex items-center justify-center">
-                    <div className="text-white/40 text-sm">Motivational Clips</div>
-                  </div>
-                  <h3 className="text-white font-medium mb-2">@MotivationVault</h3>
-                  <p className="text-white/60 text-sm mb-3">Premium mindset content for entrepreneurs</p>
-                  <div className="flex justify-between items-center">
-                    <span className="text-crimson text-sm font-medium">$4.99</span>
-                    <span className="text-white/40 text-xs">1.2k downloads</span>
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/30 to-transparent opacity-70 group-hover:opacity-40 transition-opacity duration-300"></div>
+                  <div className="relative z-10 text-center px-4">
+                    <h3 className="text-lg md:text-xl lg:text-2xl font-light text-white mb-2 group-hover:text-crimson transition-colors duration-300">
+                      Money & Wealth
+                    </h3>
+                    <div className="flex items-center justify-center text-white/50 text-xs md:text-sm">
+                      <Play className="h-3 w-3 md:h-4 md:w-4 mr-1 md:mr-2" />
+                      <span>Explore</span>
+                    </div>
                   </div>
                 </motion.div>
 
+                {/* Hustle Mentality Category */}
                 <motion.div
-                  className="premium-card p-6"
+                  className="relative overflow-hidden group cursor-pointer bg-black/20 border border-white/5 aspect-video flex items-center justify-center"
+                  onClick={() => handleCategoryClick("hustle-mentality")}
                   initial={{ opacity: 0, y: 20 }}
                   whileInView={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.6, delay: 0.2 }}
                   viewport={{ once: true, margin: "-100px" }}
                 >
-                  <div className="aspect-video bg-gradient-to-br from-green-900/20 to-emerald-900/20 rounded-lg mb-4 flex items-center justify-center">
-                    <div className="text-white/40 text-sm">Trading Templates</div>
-                  </div>
-                  <h3 className="text-white font-medium mb-2">@CryptoEdits</h3>
-                  <p className="text-white/60 text-sm mb-3">Viral crypto content & templates</p>
-                  <div className="flex justify-between items-center">
-                    <span className="text-crimson text-sm font-medium">$9.99</span>
-                    <span className="text-white/40 text-xs">856 downloads</span>
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/30 to-transparent opacity-70 group-hover:opacity-40 transition-opacity duration-300"></div>
+                  <div className="relative z-10 text-center px-4">
+                    <h3 className="text-lg md:text-xl lg:text-2xl font-light text-white mb-2 group-hover:text-crimson transition-colors duration-300">
+                      Hustle Mentality
+                    </h3>
+                    <div className="flex items-center justify-center text-white/50 text-xs md:text-sm">
+                      <Play className="h-3 w-3 md:h-4 md:w-4 mr-1 md:mr-2" />
+                      <span>Explore</span>
+                    </div>
                   </div>
                 </motion.div>
 
+                {/* Mindset Category (previously Introspection) */}
                 <motion.div
-                  className="premium-card p-6"
+                  className="relative overflow-hidden group cursor-pointer bg-black/20 border border-white/5 aspect-video flex items-center justify-center"
+                  onClick={() => handleCategoryClick("mindset")}
                   initial={{ opacity: 0, y: 20 }}
                   whileInView={{ opacity: 1, y: 0 }}
                   transition={{ duration: 0.6, delay: 0.4 }}
                   viewport={{ once: true, margin: "-100px" }}
                 >
-                  <div className="aspect-video bg-gradient-to-br from-red-900/20 to-orange-900/20 rounded-lg mb-4 flex items-center justify-center">
-                    <div className="text-white/40 text-sm">Meme Templates</div>
-                  </div>
-                  <h3 className="text-white font-medium mb-2">@MemeFactory</h3>
-                  <p className="text-white/60 text-sm mb-3">Trending meme formats & templates</p>
-                  <div className="flex justify-between items-center">
-                    <span className="text-crimson text-sm font-medium">$2.99</span>
-                    <span className="text-white/40 text-xs">3.1k downloads</span>
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/30 to-transparent opacity-70 group-hover:opacity-40 transition-opacity duration-300"></div>
+                  <div className="relative z-10 text-center px-4">
+                    <h3 className="text-lg md:text-xl lg:text-2xl font-light text-white mb-2 group-hover:text-crimson transition-colors duration-300">
+                      Mindset
+                    </h3>
+                    <div className="flex items-center justify-center text-white/50 text-xs md:text-sm">
+                      <Play className="h-3 w-3 md:h-4 md:w-4 mr-1 md:mr-2" />
+                      <span>Explore</span>
+                    </div>
                   </div>
                 </motion.div>
               </div>
-            </div>
 
-            {/* Why Choose MassClip */}
-            <div className="mb-32">
               <motion.div
-                className="text-center mb-16"
+                className="text-center mt-12"
                 initial={{ opacity: 0, y: 20 }}
                 whileInView={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.6 }}
+                transition={{ duration: 0.6, delay: 0.6 }}
                 viewport={{ once: true, margin: "-100px" }}
               >
-                <h2 className="text-3xl md:text-4xl font-light text-white mb-4">Built for Anonymous Hustlers</h2>
-                <p className="text-white/70 max-w-2xl mx-auto">
-                  Everything you need to monetize your creativity without compromising your privacy.
-                </p>
+                <Button
+                  onClick={handleExploreClips}
+                  className="bg-transparent hover:bg-white/5 text-white border border-white/10 px-6 sm:px-8 py-3 sm:py-6 text-sm sm:text-base premium-button"
+                >
+                  VIEW ALL CATEGORIES <ArrowRight className="ml-2 h-4 w-4" />
+                </Button>
               </motion.div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                <motion.div
-                  className="premium-card p-6 text-center"
-                  initial={{ opacity: 0, y: 30 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.6 }}
-                  viewport={{ once: true, margin: "-100px" }}
-                >
-                  <Shield className="h-8 w-8 text-crimson mx-auto mb-4" />
-                  <h3 className="text-white font-medium mb-2">Complete Anonymity</h3>
-                  <p className="text-white/60 text-sm">
-                    Build your brand without showing your face or revealing personal info.
-                  </p>
-                </motion.div>
-
-                <motion.div
-                  className="premium-card p-6 text-center"
-                  initial={{ opacity: 0, y: 30 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.6, delay: 0.1 }}
-                  viewport={{ once: true, margin: "-100px" }}
-                >
-                  <Zap className="h-8 w-8 text-crimson mx-auto mb-4" />
-                  <h3 className="text-white font-medium mb-2">Instant Setup</h3>
-                  <p className="text-white/60 text-sm">
-                    Go from signup to selling in under 5 minutes. No complex setup required.
-                  </p>
-                </motion.div>
-
-                <motion.div
-                  className="premium-card p-6 text-center"
-                  initial={{ opacity: 0, y: 30 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.6, delay: 0.2 }}
-                  viewport={{ once: true, margin: "-100px" }}
-                >
-                  <DollarSign className="h-8 w-8 text-crimson mx-auto mb-4" />
-                  <h3 className="text-white font-medium mb-2">Keep More Money</h3>
-                  <p className="text-white/60 text-sm">
-                    Low fees, fast payouts. More of your earnings stay in your pocket.
-                  </p>
-                </motion.div>
-
-                <motion.div
-                  className="premium-card p-6 text-center"
-                  initial={{ opacity: 0, y: 30 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.6, delay: 0.3 }}
-                  viewport={{ once: true, margin: "-100px" }}
-                >
-                  <Storefront className="h-8 w-8 text-crimson mx-auto mb-4" />
-                  <h3 className="text-white font-medium mb-2">Professional Storefront</h3>
-                  <p className="text-white/60 text-sm">
-                    Clean, mobile-optimized storefronts that convert browsers into buyers.
-                  </p>
-                </motion.div>
-              </div>
             </div>
 
             {/* Final CTA */}
@@ -361,24 +296,16 @@ export default function LandingPage() {
               transition={{ duration: 0.6 }}
               viewport={{ once: true, margin: "-100px" }}
             >
-              <h2 className="text-3xl md:text-5xl font-light text-white mb-6">Ready to Build Your Digital Empire?</h2>
+              <h2 className="text-3xl md:text-5xl font-light text-white mb-6">Ready to Simplify Your Workflow?</h2>
               <p className="text-white/70 text-xl mb-10 max-w-2xl mx-auto">
-                Join the creators who are building quiet wealth with MassClip. No face, no followers required.
+                Join the community of creators today who are building their pages and community with MassClip.
               </p>
-              <div className="flex flex-col sm:flex-row gap-4 justify-center max-w-md mx-auto">
-                <Button
-                  onClick={handleStartSelling}
-                  className="bg-crimson hover:bg-crimson-dark text-white text-sm sm:text-lg px-8 sm:px-12 py-3 sm:py-6 premium-button"
-                >
-                  START SELLING TODAY
-                </Button>
-                <Button
-                  onClick={handleExploreFreeClips}
-                  className="bg-transparent hover:bg-white/5 text-white border border-white/10 px-6 sm:px-8 py-3 sm:py-6 text-sm sm:text-base premium-button"
-                >
-                  EXPLORE FREE CONTENT
-                </Button>
-              </div>
+              <Button
+                onClick={handleStartFree}
+                className="bg-crimson hover:bg-crimson-dark text-white text-sm sm:text-lg px-8 sm:px-12 py-3 sm:py-6 premium-button"
+              >
+                START FREE TODAY
+              </Button>
             </motion.div>
           </div>
         </section>

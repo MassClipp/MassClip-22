@@ -4,8 +4,10 @@ import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import {
   Film,
+  Lock,
   Upload,
   DollarSign,
+  TrendingUp,
   Clock,
   AlertCircle,
   Plus,
@@ -13,17 +15,15 @@ import {
   Zap,
   RefreshCw,
   Play,
-  Crown,
-  Eye,
-  Download,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card"
 import { useAuth } from "@/contexts/auth-context"
-import { doc, getDoc, collection, query, where, getDocs } from "firebase/firestore"
+import { doc, getDoc, collection, query, where, getDocs, limit } from "firebase/firestore"
 import { db } from "@/lib/firebase"
 import { format } from "date-fns"
 import { motion } from "framer-motion"
+import { useRecentVideos } from "@/hooks/use-recent-videos"
 import { useToast } from "@/components/ui/use-toast"
 
 // Animation variants
@@ -73,35 +73,24 @@ const quotes = [
   },
 ]
 
-interface DashboardStats {
-  totalDownloads: number
-  totalEarnings: number
-  recentSales: number
-}
-
-interface ContentItem {
-  id: string
-  title: string
-  thumbnailUrl?: string
-  fileUrl?: string
-  views: number
-  downloads: number
-  createdAt: Date
-  contentType: string
-}
-
 export default function DashboardPage() {
   const router = useRouter()
   const { user } = useAuth()
   const { toast } = useToast()
   const [userData, setUserData] = useState<any>(null)
-  const [stats, setStats] = useState<DashboardStats>({
-    totalDownloads: 0,
+  const [stats, setStats] = useState({
+    freeVideos: 0,
+    premiumVideos: 0,
+    totalViews: 0,
     totalEarnings: 0,
     recentSales: 0,
   })
-  const [bestPerformingContent, setBestPerformingContent] = useState<ContentItem[]>([])
-  const [loadingContent, setLoadingContent] = useState(true)
+  const {
+    videos: recentVideos,
+    loading: loadingVideos,
+    error: videosError,
+    refetch: refetchVideos,
+  } = useRecentVideos(5)
   const [loading, setLoading] = useState(true)
   const [stripeConnected, setStripeConnected] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
@@ -109,160 +98,13 @@ export default function DashboardPage() {
   // Random quote
   const randomQuote = quotes[Math.floor(Math.random() * quotes.length)]
 
-  // Function to calculate dashboard stats
-  const calculateStats = async (): Promise<DashboardStats> => {
-    if (!user) {
-      return {
-        totalDownloads: 0,
-        totalEarnings: 0,
-        recentSales: 0,
-      }
-    }
-
-    try {
-      console.log("🔍 Calculating dashboard stats for user:", user.uid)
-
-      // Calculate total downloads from all uploads
-      const allUploadsQuery = query(collection(db, "uploads"), where("uid", "==", user.uid))
-      const allUploadsSnapshot = await getDocs(allUploadsQuery)
-
-      let totalDownloads = 0
-      allUploadsSnapshot.docs.forEach((doc) => {
-        const data = doc.data()
-        totalDownloads += data.downloads || 0
-      })
-
-      // Calculate earnings from purchases collection
-      const purchasesQuery = query(collection(db, "purchases"), where("creatorId", "==", user.uid))
-      const purchasesSnapshot = await getDocs(purchasesQuery)
-
-      let totalEarnings = 0
-      let recentSales = 0
-      const thirtyDaysAgo = new Date()
-      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
-
-      purchasesSnapshot.docs.forEach((doc) => {
-        const data = doc.data()
-        const amount = data.amount || 0
-        totalEarnings += amount
-
-        // Count recent sales (last 30 days)
-        const purchaseDate = data.createdAt?.toDate() || new Date(0)
-        if (purchaseDate >= thirtyDaysAgo) {
-          recentSales++
-        }
-      })
-
-      // Convert earnings from cents to dollars
-      totalEarnings = totalEarnings / 100
-
-      console.log("📊 Stats calculated:", {
-        totalDownloads,
-        totalEarnings,
-        recentSales,
-      })
-
-      return {
-        totalDownloads,
-        totalEarnings,
-        recentSales,
-      }
-    } catch (error) {
-      console.error("❌ Error calculating stats:", error)
-      return {
-        totalDownloads: 0,
-        totalEarnings: 0,
-        recentSales: 0,
-      }
-    }
-  }
-
-  // Function to fetch best performing content based on downloads
-  const fetchBestPerformingContent = async (): Promise<ContentItem[]> => {
-    if (!user) return []
-
-    try {
-      console.log("🔍 Fetching best performing content by downloads for user:", user.uid)
-
-      // First, let's check what's in free_content for this user
-      const freeContentQuery = query(collection(db, "free_content"), where("creatorId", "==", user.uid))
-      const freeContentSnapshot = await getDocs(freeContentQuery)
-
-      console.log(`📊 Found ${freeContentSnapshot.size} items in free_content collection`)
-
-      const freeContentUploadIds = new Set<string>()
-      freeContentSnapshot.docs.forEach((doc) => {
-        const data = doc.data()
-        if (data.uploadId) {
-          freeContentUploadIds.add(data.uploadId)
-          console.log(`📋 Free content item: ${data.title || "Untitled"} (uploadId: ${data.uploadId})`)
-        }
-      })
-
-      console.log(`📊 Found ${freeContentUploadIds.size} unique upload IDs in free_content`)
-
-      // Now get all uploads for this user
-      const uploadsQuery = query(collection(db, "uploads"), where("uid", "==", user.uid))
-      const uploadsSnapshot = await getDocs(uploadsQuery)
-
-      console.log(`📊 Found ${uploadsSnapshot.size} total uploads for user`)
-
-      const allContent: ContentItem[] = []
-
-      // Process uploads and filter only those that are in free_content
-      uploadsSnapshot.docs.forEach((uploadDoc) => {
-        const uploadData = uploadDoc.data()
-        const uploadId = uploadDoc.id
-
-        console.log(`📋 Checking upload: ${uploadData.title || uploadData.filename || "Untitled"} (ID: ${uploadId})`)
-        console.log(`   - Downloads: ${uploadData.downloads || 0}`)
-        console.log(`   - Views: ${uploadData.views || 0}`)
-        console.log(`   - In free_content: ${freeContentUploadIds.has(uploadId)}`)
-
-        // Only include if it's in free_content (visible on profile/explore)
-        if (freeContentUploadIds.has(uploadId)) {
-          const downloads = uploadData.downloads || 0
-          const views = uploadData.views || 0
-
-          allContent.push({
-            id: uploadId,
-            title: uploadData.title || uploadData.filename || "Untitled",
-            thumbnailUrl: uploadData.thumbnailUrl,
-            fileUrl: uploadData.fileUrl,
-            views,
-            downloads,
-            createdAt: uploadData.createdAt?.toDate() || new Date(),
-            contentType: uploadData.type || "video",
-          })
-
-          console.log(`✅ Added to best performing: ${uploadData.title || "Untitled"} (${downloads} downloads)`)
-        }
-      })
-
-      // Sort by downloads (descending) in JavaScript and return top 5
-      const sortedContent = allContent.sort((a, b) => b.downloads - a.downloads).slice(0, 5)
-
-      console.log(`✅ Found ${sortedContent.length} best performing content items (by downloads)`)
-      sortedContent.forEach((item, index) => {
-        console.log(`   ${index + 1}. ${item.title}: ${item.downloads} downloads`)
-      })
-
-      return sortedContent
-    } catch (error) {
-      console.error("❌ Error fetching best performing content:", error)
-      return []
-    }
-  }
-
-  // Function to refresh all data
+  // Function to refresh data
   const refreshData = async () => {
     if (!user) return
 
     try {
       setLoading(true)
       setRefreshing(true)
-
-      console.log("🔄 Refreshing dashboard data...")
 
       // Fetch user data
       const userDoc = await getDoc(doc(db, "users", user.uid))
@@ -272,11 +114,53 @@ export default function DashboardPage() {
         setStripeConnected(!!data.stripeAccountId && data.stripeOnboardingComplete)
       }
 
-      // Calculate stats and fetch content in parallel
-      const [newStats, newContent] = await Promise.all([calculateStats(), fetchBestPerformingContent()])
+      // Fetch video counts using simple queries
+      const freeVideosQuery = query(collection(db, "videos"), where("uid", "==", user.uid), where("type", "==", "free"))
 
-      setStats(newStats)
-      setBestPerformingContent(newContent)
+      const premiumVideosQuery = query(
+        collection(db, "videos"),
+        where("uid", "==", user.uid),
+        where("type", "==", "premium"),
+      )
+
+      const [freeVideosSnapshot, premiumVideosSnapshot] = await Promise.all([
+        getDocs(freeVideosQuery),
+        getDocs(premiumVideosQuery),
+      ])
+
+      // Also refresh the recent videos
+      refetchVideos()
+
+      // Calculate total views
+      let totalViews = 0
+      freeVideosSnapshot.docs.concat(premiumVideosSnapshot.docs).forEach((doc) => {
+        totalViews += doc.data().views || 0
+      })
+
+      // Fetch earnings data
+      const salesQuery = query(collection(db, "users", user.uid, "sales"), limit(50))
+
+      const salesSnapshot = await getDocs(salesQuery)
+      const salesData = salesSnapshot.docs.map((doc) => doc.data())
+
+      // Calculate total earnings
+      const totalEarnings = salesData.reduce((sum, sale) => sum + (sale.netAmount || 0), 0)
+
+      // Calculate recent sales (last 30 days)
+      const thirtyDaysAgo = new Date()
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
+      const recentSales = salesData.filter((sale) => {
+        const purchasedAt = sale.purchasedAt ? new Date(sale.purchasedAt) : new Date()
+        return purchasedAt >= thirtyDaysAgo
+      }).length
+
+      setStats({
+        freeVideos: freeVideosSnapshot.size,
+        premiumVideos: premiumVideosSnapshot.size,
+        totalViews,
+        totalEarnings,
+        recentSales,
+      })
 
       if (refreshing) {
         toast({
@@ -284,10 +168,8 @@ export default function DashboardPage() {
           description: "Your dashboard data has been updated.",
         })
       }
-
-      console.log("✅ Dashboard data refreshed successfully")
     } catch (error) {
-      console.error("❌ Error refreshing dashboard data:", error)
+      console.error("Error fetching dashboard data:", error)
       if (refreshing) {
         toast({
           title: "Refresh failed",
@@ -298,18 +180,27 @@ export default function DashboardPage() {
     } finally {
       setLoading(false)
       setRefreshing(false)
-      setLoadingContent(false)
     }
   }
 
   // Initial data fetch
   useEffect(() => {
-    if (user) {
-      refreshData()
-    }
+    refreshData()
   }, [user])
 
-  if (loading && bestPerformingContent.length === 0) {
+  // Handle video error
+  useEffect(() => {
+    if (videosError) {
+      console.error("Error loading recent videos:", videosError)
+      toast({
+        title: "Error loading videos",
+        description: "There was a problem loading your recent videos. Please try refreshing.",
+        variant: "destructive",
+      })
+    }
+  }, [videosError, toast])
+
+  if (loading && recentVideos.length === 0 && !loadingVideos) {
     return (
       <div className="flex items-center justify-center h-[calc(100vh-4rem)]">
         <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-red-500"></div>
@@ -388,16 +279,45 @@ export default function DashboardPage() {
         </motion.div>
       )}
 
-      {/* Simplified stats - removed Free Videos and Premium Videos */}
-      <motion.div variants={itemVariants} className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <motion.div variants={itemVariants} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        <Card className="bg-gradient-to-br from-zinc-900/80 to-zinc-800/30 border-zinc-800/50 backdrop-blur-sm overflow-hidden relative group">
+          <div className="absolute inset-0 bg-[url('/noise.png')] opacity-[0.03] mix-blend-soft-light"></div>
+          <div className="absolute inset-0 bg-gradient-to-r from-blue-600/0 via-blue-600/0 to-blue-600/0 group-hover:from-blue-600/5 group-hover:via-blue-600/10 group-hover:to-blue-600/5 transition-all duration-700"></div>
+          <CardHeader className="pb-2 relative">
+            <CardDescription>Free Videos</CardDescription>
+            <CardTitle className="text-2xl flex items-center">
+              <Film className="h-5 w-5 text-blue-500 mr-2" />
+              {stats.freeVideos}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="relative">
+            <p className="text-sm text-zinc-500">Public content</p>
+          </CardContent>
+        </Card>
+
+        <Card className="bg-gradient-to-br from-zinc-900/80 to-zinc-800/30 border-zinc-800/50 backdrop-blur-sm overflow-hidden relative group">
+          <div className="absolute inset-0 bg-[url('/noise.png')] opacity-[0.03] mix-blend-soft-light"></div>
+          <div className="absolute inset-0 bg-gradient-to-r from-amber-600/0 via-amber-600/0 to-amber-600/0 group-hover:from-amber-600/5 group-hover:via-amber-600/10 group-hover:to-amber-600/5 transition-all duration-700"></div>
+          <CardHeader className="pb-2 relative">
+            <CardDescription>Premium Videos</CardDescription>
+            <CardTitle className="text-2xl flex items-center">
+              <Lock className="h-5 w-5 text-amber-500 mr-2" />
+              {stats.premiumVideos}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="relative">
+            <p className="text-sm text-zinc-500">Paid content</p>
+          </CardContent>
+        </Card>
+
         <Card className="bg-gradient-to-br from-zinc-900/80 to-zinc-800/30 border-zinc-800/50 backdrop-blur-sm overflow-hidden relative group">
           <div className="absolute inset-0 bg-[url('/noise.png')] opacity-[0.03] mix-blend-soft-light"></div>
           <div className="absolute inset-0 bg-gradient-to-r from-green-600/0 via-green-600/0 to-green-600/0 group-hover:from-green-600/5 group-hover:via-green-600/10 group-hover:to-green-600/5 transition-all duration-700"></div>
           <CardHeader className="pb-2 relative">
-            <CardDescription>Total Downloads</CardDescription>
+            <CardDescription>Total Views</CardDescription>
             <CardTitle className="text-2xl flex items-center">
-              <Download className="h-5 w-5 text-green-500 mr-2" />
-              {stats.totalDownloads.toLocaleString()}
+              <TrendingUp className="h-5 w-5 text-green-500 mr-2" />
+              {stats.totalViews.toLocaleString()}
             </CardTitle>
           </CardHeader>
           <CardContent className="relative">
@@ -428,33 +348,27 @@ export default function DashboardPage() {
           <CardHeader className="relative">
             <div className="flex justify-between items-center">
               <div>
-                <CardTitle className="flex items-center gap-2">
-                  <Crown className="h-5 w-5 text-amber-500" />
-                  Best Performing Content
-                </CardTitle>
-                <CardDescription>Your top free content ranked by download count</CardDescription>
+                <CardTitle>Recent Content</CardTitle>
+                <CardDescription>Your most recently uploaded videos</CardDescription>
               </div>
-              {loadingContent && (
+              {loadingVideos && (
                 <div className="animate-spin rounded-full h-5 w-5 border-t-2 border-b-2 border-red-500"></div>
               )}
             </div>
           </CardHeader>
           <CardContent className="relative">
-            {bestPerformingContent.length > 0 ? (
+            {recentVideos.length > 0 ? (
               <div className="space-y-4">
-                {bestPerformingContent.map((content, index) => (
+                {recentVideos.map((video) => (
                   <div
-                    key={content.id}
+                    key={video.id}
                     className="flex items-start gap-4 p-3 rounded-lg hover:bg-zinc-800/30 transition-colors"
                   >
-                    <div className="flex items-center justify-center w-8 h-8 rounded-full bg-gradient-to-r from-amber-500 to-amber-600 text-black text-sm font-bold">
-                      {index + 1}
-                    </div>
                     <div className="aspect-[9/16] w-16 bg-zinc-800 rounded-md overflow-hidden relative">
-                      {content.thumbnailUrl ? (
+                      {video.thumbnailUrl ? (
                         <img
-                          src={content.thumbnailUrl || "/placeholder.svg"}
-                          alt={content.title}
+                          src={video.thumbnailUrl || "/placeholder.svg"}
+                          alt={video.title}
                           className="w-full h-full object-cover"
                         />
                       ) : (
@@ -462,60 +376,62 @@ export default function DashboardPage() {
                           <Film className="h-6 w-6 text-zinc-600" />
                         </div>
                       )}
-                      <div className="absolute top-1 right-1 bg-gradient-to-r from-blue-500 to-blue-600 text-white text-[10px] px-1 rounded-sm font-medium">
-                        FREE
-                      </div>
+                      {video.type === "premium" ? (
+                        <div className="absolute top-1 right-1 bg-gradient-to-r from-amber-500 to-amber-600 text-black text-[10px] px-1 rounded-sm font-medium">
+                          PREMIUM
+                        </div>
+                      ) : (
+                        <div className="absolute top-1 right-1 bg-gradient-to-r from-blue-500 to-blue-600 text-white text-[10px] px-1 rounded-sm font-medium">
+                          FREE
+                        </div>
+                      )}
                       <div className="absolute inset-0 flex items-center justify-center bg-black bg-opacity-40 opacity-0 hover:opacity-100 transition-opacity">
                         <Play className="h-8 w-8 text-white" />
                       </div>
                     </div>
                     <div className="flex-1 min-w-0">
-                      <h4 className="font-medium text-white truncate">{content.title}</h4>
-                      <div className="flex items-center gap-4 mt-1 text-xs text-zinc-400">
-                        <span className="flex items-center">
-                          <Download className="h-3 w-3 mr-1" />
-                          {content.downloads.toLocaleString()} downloads
-                        </span>
-                        <span className="flex items-center">
-                          <Eye className="h-3 w-3 mr-1" />
-                          {content.views.toLocaleString()} views
-                        </span>
+                      <h4 className="font-medium text-white truncate">{video.title}</h4>
+                      <div className="flex items-center gap-3 mt-1 text-xs text-zinc-400">
                         <span className="flex items-center">
                           <Clock className="h-3 w-3 mr-1" />
-                          {content.createdAt ? format(content.createdAt, "MMM d, yyyy") : "Unknown date"}
+                          {video.createdAt ? format(video.createdAt, "MMM d, yyyy") : "Unknown date"}
+                        </span>
+                        <span className="flex items-center">
+                          <TrendingUp className="h-3 w-3 mr-1" />
+                          {video.views || 0} views
                         </span>
                       </div>
                     </div>
                   </div>
                 ))}
               </div>
-            ) : loadingContent ? (
+            ) : loadingVideos ? (
               <div className="flex items-center justify-center py-12">
                 <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-red-500"></div>
               </div>
             ) : (
               <div className="text-center py-8">
-                <Crown className="h-10 w-10 text-zinc-700 mx-auto mb-3" />
-                <h3 className="text-lg font-medium text-white mb-1">No content yet</h3>
-                <p className="text-zinc-500 mb-4">Upload your first content to see performance metrics</p>
+                <Film className="h-10 w-10 text-zinc-700 mx-auto mb-3" />
+                <h3 className="text-lg font-medium text-white mb-1">No videos yet</h3>
+                <p className="text-zinc-500 mb-4">Upload your first video to get started</p>
                 <Button
                   onClick={() => router.push("/dashboard/upload")}
                   className="bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 border-none shadow-lg shadow-red-900/20"
                 >
                   <Upload className="h-4 w-4 mr-2" />
-                  Upload Content
+                  Upload Video
                 </Button>
               </div>
             )}
           </CardContent>
-          {bestPerformingContent.length > 0 && (
+          {recentVideos.length > 0 && (
             <CardFooter className="border-t border-zinc-800/50 px-6 py-4 relative">
               <Button
                 variant="ghost"
                 className="w-full justify-center text-zinc-400 hover:text-white hover:bg-zinc-800"
                 onClick={() => userData?.username && window.open(`/creator/${userData.username}`, "_blank")}
               >
-                View All Content
+                View All Videos
               </Button>
             </CardFooter>
           )}

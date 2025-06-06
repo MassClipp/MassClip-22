@@ -6,43 +6,6 @@ import { getAuth } from "firebase-admin/auth"
 // Session duration: 2 weeks in seconds
 const SESSION_EXPIRATION = 60 * 60 * 24 * 14
 
-export async function GET(request: NextRequest) {
-  try {
-    // Get the session cookie
-    const sessionCookie = cookies().get("session")?.value
-
-    if (!sessionCookie) {
-      return NextResponse.json({ user: null }, { status: 200 })
-    }
-
-    // Initialize Firebase Admin
-    initializeFirebaseAdmin()
-    const auth = getAuth()
-
-    try {
-      // Verify the session cookie
-      const decodedToken = await auth.verifySessionCookie(sessionCookie, true)
-
-      return NextResponse.json(
-        {
-          user: {
-            uid: decodedToken.uid,
-            email: decodedToken.email,
-            displayName: decodedToken.name,
-          },
-        },
-        { status: 200 },
-      )
-    } catch (error) {
-      console.error("Invalid session cookie:", error)
-      return NextResponse.json({ user: null }, { status: 200 })
-    }
-  } catch (error) {
-    console.error("Error verifying session:", error)
-    return NextResponse.json({ user: null }, { status: 200 })
-  }
-}
-
 export async function POST(request: NextRequest) {
   try {
     // Get the ID token from the request body

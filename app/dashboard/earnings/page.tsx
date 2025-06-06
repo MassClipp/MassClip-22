@@ -10,7 +10,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { format } from "date-fns"
 import StripeStatus from "@/components/stripe-status"
-import SSNCompletionPrompt from "@/components/ssn-completion-prompt"
 import { useToast } from "@/components/ui/use-toast"
 
 export default function EarningsPage() {
@@ -106,17 +105,6 @@ export default function EarningsPage() {
         lastMonthEarnings,
         pendingPayout,
       })
-
-      // Check for verification completion from URL params
-      const urlParams = new URLSearchParams(window.location.search)
-      if (urlParams.get("verification") === "complete") {
-        toast({
-          title: "Verification Complete",
-          description: "Your account verification has been submitted. It may take 1-2 business days to process.",
-        })
-        // Clean up URL
-        window.history.replaceState({}, document.title, window.location.pathname)
-      }
     } catch (error) {
       console.error("Error fetching sales:", error)
       toast({
@@ -350,13 +338,6 @@ export default function EarningsPage() {
 
         <div>
           <StripeStatus />
-
-          {/* Show SSN completion prompt if Stripe is connected but not fully verified */}
-          {stripeStatus.isConnected && stripeStatus.accountId && !stripeStatus.onboardingComplete && (
-            <div className="mt-6">
-              <SSNCompletionPrompt accountId={stripeStatus.accountId} />
-            </div>
-          )}
 
           <Card className="bg-zinc-900/60 border-zinc-800/50 backdrop-blur-sm mt-6">
             <CardHeader>
