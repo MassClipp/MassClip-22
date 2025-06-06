@@ -141,9 +141,9 @@ export default function SignupPage() {
       const result = await signUp(email, password, username, displayName)
 
       if (result.success) {
-        console.log("Signup successful, redirecting to:", `/creator/${username}`)
-        // Redirect to their public profile
-        router.push(`/creator/${username}`)
+        console.log("Signup successful, redirecting to dashboard")
+        // Redirect to dashboard instead of creator profile
+        window.location.href = "/dashboard"
       } else {
         setErrorMessage(result.error || "Failed to create account")
       }
@@ -185,8 +185,9 @@ export default function SignupPage() {
       const result = await signInWithGoogle(username, displayName)
 
       if (result.success) {
-        console.log("Google signup successful, redirecting to:", `/creator/${username}`)
-        router.push(`/creator/${username}`)
+        console.log("Google signup successful, redirecting to dashboard")
+        // Redirect to dashboard instead of creator profile
+        window.location.href = "/dashboard"
       } else {
         setErrorMessage(result.error || "Failed to sign up with Google")
       }

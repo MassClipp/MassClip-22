@@ -32,9 +32,22 @@ export default function LoginPage() {
       // Get redirect URL from query params
       const params = new URLSearchParams(window.location.search)
       const redirectTo = params.get("redirect") || "/dashboard"
-      router.push(redirectTo)
+
+      console.log("User authenticated, redirecting to:", redirectTo)
+
+      // Force redirect using window.location for more reliable navigation
+      window.location.href = redirectTo
     }
-  }, [user, authLoading, router])
+  }, [user, authLoading])
+
+  // Show loading if auth is still loading
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-black flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-white" />
+      </div>
+    )
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -45,7 +58,8 @@ export default function LoginPage() {
       const result = await signIn(email, password)
 
       if (result.success) {
-        // Just return success, let the auth context handle redirect
+        console.log("Email login successful, waiting for auth context to update...")
+        // Let the useEffect handle the redirect
         return
       } else {
         setErrorMessage(result.error || "Failed to sign in")
@@ -66,7 +80,8 @@ export default function LoginPage() {
       const result = await signInWithGoogle()
 
       if (result.success) {
-        // The function should just handle the sign-in and let the useEffect handle the redirect.
+        console.log("Google login successful, waiting for auth context to update...")
+        // Let the useEffect handle the redirect
         return
       } else {
         setErrorMessage(result.error || "Failed to sign in with Google")
