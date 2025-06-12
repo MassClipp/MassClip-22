@@ -1,8 +1,10 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import type React from "react"
+
+import { useState, useEffect, useRef } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { ChevronDown, ChevronUp, Play, Download, File, Music, Loader2 } from "lucide-react"
+import { ChevronDown, ChevronUp, Play, Download, File, Music, Loader2, Pause } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { useToast } from "@/hooks/use-toast"
@@ -26,6 +28,201 @@ interface ProductBoxContentDisplayProps {
   productBoxId: string
   contentCount: number
   className?: string
+}
+
+// Format file size
+const formatFileSize = (bytes: number): string => {
+  if (bytes === 0) return "0 Bytes"
+  const k = 1024
+  const sizes = ["Bytes", "KB", "MB", "GB"]
+  const i = Math.floor(Math.log(bytes) / Math.log(k))
+  return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + " " + sizes[i]
+}
+
+// Handle preview/play
+const handlePreview = (item: ContentItem) => {
+  if (item.contentType === "video" || item.contentType === "audio") {
+    // Open in new tab for preview
+    window.open(item.fileUrl, "_blank")
+  } else if (item.contentType === "image") {
+    // Open image in new tab
+    window.open(item.fileUrl, "_blank")
+  } else {
+    // Download document
+    const link = document.createElement("a")
+    link.href = item.fileUrl
+    link.download = item.filename
+    link.click()
+  }
+}
+
+// Interactive Video Card Component
+const VideoCard = ({ item }: { item: ContentItem }) => {
+  const videoRef = useRef<HTMLVideoElement>(null)
+  const [isPlaying, setIsPlaying] = useState(false)
+  const [isHovered, setIsHovered] = useState(false)
+
+  const togglePlay = (e: React.MouseEvent) => {
+    e.preventDefault()
+
+    if (!videoRef.current) return
+
+    if (isPlaying) {
+      videoRef.current.pause()
+      videoRef.current.currentTime = 0
+      setIsPlaying(false)
+    } else {
+      // Pause all other videos first
+      document.querySelectorAll("video").forEach((v) => {
+        if (v !== videoRef.current) {
+          v.pause()
+          v.currentTime = 0
+        }
+      })
+
+      videoRef.current.muted = false
+      videoRef.current
+        .play()
+        .then(() => {
+          setIsPlaying(true)
+        })
+        .catch((error) => {
+          console.error("Error playing video:", error)
+        })
+    }
+  }
+
+  const handleVideoEnd = () => {
+    setIsPlaying(false)
+    if (videoRef.current) {
+      videoRef.current.currentTime = 0
+    }
+  }
+
+  if (item.contentType === "video") {
+    return (
+      <div
+        className="group relative transition-all duration-300"
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
+      >
+        {/* Video container with 9:16 aspect ratio */}
+        <div className="relative aspect-[9/16] overflow-hidden rounded-lg bg-zinc-900 shadow-md border border-transparent hover:border-white/20 transition-all duration-300">
+          {/* Raw video element */}
+          <video
+            ref={videoRef}
+            className="w-full h-full object-cover cursor-pointer"
+            preload="metadata"
+            muted={false}
+            playsInline
+            onEnded={handleVideoEnd}
+            onClick={togglePlay}
+            controls={false}
+          >
+            <source src={item.fileUrl} type="video/mp4" />
+            Your browser does not support the video tag.
+          </video>
+
+          {/* Play/Pause button - only show on hover */}
+          <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-20">
+            <button
+              onClick={togglePlay}
+              className="w-12 h-12 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center text-white transition-all duration-200 hover:bg-black/70"
+              aria-label={isPlaying ? "Pause video" : "Play video"}
+            >
+              {isPlaying ? <Pause className="h-5 w-5" /> : <Play className="h-5 w-5 ml-0.5" />}
+            </button>
+          </div>
+
+          {/* Overlay gradient for better visibility - only on hover */}
+          <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"></div>
+
+          {/* Content Type Badge */}
+          <div className="absolute top-2 left-2">
+            <Badge variant="secondary" className="text-xs border-0 bg-red-600/80 text-white">
+              VIDEO
+            </Badge>
+          </div>
+
+          {/* File Size */}
+          {item.fileSize > 0 && (
+            <div className="absolute bottom-2 right-2">
+              <Badge variant="outline" className="text-xs border-zinc-600 bg-black/50 text-white">
+                {formatFileSize(item.fileSize)}
+              </Badge>
+            </div>
+          )}
+        </div>
+
+        {/* Video title */}
+        <div className="mt-2">
+          <h3 className="text-sm text-white font-light line-clamp-2">{item.title}</h3>
+        </div>
+      </div>
+    )
+  }
+
+  // For non-video content, use the existing display logic
+  return (
+    <div
+      className="aspect-[9/16] bg-zinc-800 rounded-lg overflow-hidden relative group cursor-pointer"
+      onClick={() => handlePreview(item)}
+    >
+      {item.contentType === "audio" ? (
+        <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-purple-900/20 to-pink-900/20 p-4">
+          <Music className="h-12 w-12 text-purple-400 mb-2" />
+          <h4 className="text-sm font-medium text-white text-center line-clamp-2">{item.title}</h4>
+          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+            <Play className="h-12 w-12 text-white" />
+          </div>
+        </div>
+      ) : item.contentType === "image" ? (
+        <div className="w-full h-full">
+          <img
+            src={item.fileUrl || item.thumbnailUrl || "/placeholder.svg"}
+            alt={item.title}
+            className="w-full h-full object-cover"
+          />
+          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+            <Download className="h-12 w-12 text-white" />
+          </div>
+        </div>
+      ) : (
+        <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-zinc-800 to-zinc-900 p-4">
+          <File className="h-12 w-12 text-zinc-400 mb-2" />
+          <h4 className="text-sm font-medium text-white text-center line-clamp-2">{item.title}</h4>
+          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+            <Download className="h-12 w-12 text-white" />
+          </div>
+        </div>
+      )}
+
+      {/* Content Type Badge */}
+      <div className="absolute top-2 left-2">
+        <Badge
+          variant="secondary"
+          className={`text-xs border-0 ${
+            item.contentType === "audio"
+              ? "bg-purple-600/80 text-white"
+              : item.contentType === "image"
+                ? "bg-blue-600/80 text-white"
+                : "bg-zinc-600/80 text-white"
+          }`}
+        >
+          {item.contentType.toUpperCase()}
+        </Badge>
+      </div>
+
+      {/* File Size */}
+      {item.fileSize > 0 && (
+        <div className="absolute bottom-2 right-2">
+          <Badge variant="outline" className="text-xs border-zinc-600 bg-black/50 text-white">
+            {formatFileSize(item.fileSize)}
+          </Badge>
+        </div>
+      )}
+    </div>
+  )
 }
 
 export default function ProductBoxContentDisplay({
@@ -162,37 +359,11 @@ export default function ProductBoxContentDisplay({
     return "document"
   }
 
-  // Format file size
-  const formatFileSize = (bytes: number): string => {
-    if (bytes === 0) return "0 Bytes"
-    const k = 1024
-    const sizes = ["Bytes", "KB", "MB", "GB"]
-    const i = Math.floor(Math.log(bytes) / Math.log(k))
-    return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + " " + sizes[i]
-  }
-
   // Format duration
   const formatDuration = (seconds: number): string => {
     const minutes = Math.floor(seconds / 60)
     const remainingSeconds = seconds % 60
     return `${minutes}:${remainingSeconds.toString().padStart(2, "0")}`
-  }
-
-  // Handle preview/play
-  const handlePreview = (item: ContentItem) => {
-    if (item.contentType === "video" || item.contentType === "audio") {
-      // Open in new tab for preview
-      window.open(item.fileUrl, "_blank")
-    } else if (item.contentType === "image") {
-      // Open image in new tab
-      window.open(item.fileUrl, "_blank")
-    } else {
-      // Download document
-      const link = document.createElement("a")
-      link.href = item.fileUrl
-      link.download = item.filename
-      link.click()
-    }
   }
 
   return (
@@ -245,87 +416,7 @@ export default function ProductBoxContentDisplay({
               {!loading && !error && contentItems.length > 0 && (
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
                   {contentItems.map((item) => (
-                    <div
-                      key={item.id}
-                      className="aspect-[9/16] bg-zinc-800 rounded-lg overflow-hidden relative group cursor-pointer"
-                      onClick={() => handlePreview(item)}
-                    >
-                      {/* Thumbnail or Preview */}
-                      {item.contentType === "video" ? (
-                        <div className="w-full h-full">
-                          <video
-                            src={item.fileUrl}
-                            poster={item.thumbnailUrl}
-                            className="w-full h-full object-cover"
-                            muted
-                            playsInline
-                            preload="metadata"
-                            onMouseOver={(e) => e.currentTarget.play()}
-                            onMouseOut={(e) => {
-                              e.currentTarget.pause()
-                              e.currentTarget.currentTime = 0
-                            }}
-                          />
-                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-                            <Play className="h-12 w-12 text-white" />
-                          </div>
-                        </div>
-                      ) : item.contentType === "audio" ? (
-                        <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-purple-900/20 to-pink-900/20 p-4">
-                          <Music className="h-12 w-12 text-purple-400 mb-2" />
-                          <h4 className="text-sm font-medium text-white text-center line-clamp-2">{item.title}</h4>
-                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-                            <Play className="h-12 w-12 text-white" />
-                          </div>
-                        </div>
-                      ) : item.contentType === "image" ? (
-                        <div className="w-full h-full">
-                          <img
-                            src={item.fileUrl || item.thumbnailUrl || "/placeholder.svg"}
-                            alt={item.title}
-                            className="w-full h-full object-cover"
-                          />
-                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-                            <Download className="h-12 w-12 text-white" />
-                          </div>
-                        </div>
-                      ) : (
-                        <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-zinc-800 to-zinc-900 p-4">
-                          <File className="h-12 w-12 text-zinc-400 mb-2" />
-                          <h4 className="text-sm font-medium text-white text-center line-clamp-2">{item.title}</h4>
-                          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-                            <Download className="h-12 w-12 text-white" />
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Content Type Badge */}
-                      <div className="absolute top-2 left-2">
-                        <Badge
-                          variant="secondary"
-                          className={`text-xs border-0 ${
-                            item.contentType === "video"
-                              ? "bg-red-600/80 text-white"
-                              : item.contentType === "audio"
-                                ? "bg-purple-600/80 text-white"
-                                : item.contentType === "image"
-                                  ? "bg-blue-600/80 text-white"
-                                  : "bg-zinc-600/80 text-white"
-                          }`}
-                        >
-                          {item.contentType.toUpperCase()}
-                        </Badge>
-                      </div>
-
-                      {/* File Size */}
-                      {item.fileSize > 0 && (
-                        <div className="absolute bottom-2 right-2">
-                          <Badge variant="outline" className="text-xs border-zinc-600 bg-black/50 text-white">
-                            {formatFileSize(item.fileSize)}
-                          </Badge>
-                        </div>
-                      )}
-                    </div>
+                    <VideoCard key={item.id} item={item} />
                   ))}
                 </div>
               )}
