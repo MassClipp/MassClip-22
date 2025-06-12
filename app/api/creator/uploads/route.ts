@@ -1,8 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { headers } from "next/headers"
-import { db } from "@/lib/db"
-import { collection, getDocs, limit, orderBy, query, where } from "firebase/firestore"
 import { getAuth } from "firebase-admin/auth"
+import { getFirestore } from "firebase-admin/firestore"
 import { initializeApp, getApps, cert } from "firebase-admin/app"
 
 // Initialize Firebase Admin if not already initialized
@@ -19,6 +18,8 @@ if (!getApps().length) {
     console.error("❌ [Creator Uploads] Firebase Admin initialization error:", error)
   }
 }
+
+const db = getFirestore()
 
 export async function GET(request: NextRequest) {
   console.log("🚀 [Creator Uploads] API route called")
@@ -49,17 +50,10 @@ export async function GET(request: NextRequest) {
 
     const userId = decodedToken.uid
 
-    // Check if db is properly initialized
-    if (!db) {
-      console.error("❌ [Creator Uploads] Firestore db not initialized")
-      return NextResponse.json({ error: "Database connection error" }, { status: 500 })
-    }
-
     console.log("🔍 [Creator Uploads] Querying uploads for user:", userId)
 
     // Try different collection names and user field variations
     const searchConfigs = [
-      // Most likely collections and field names based on the codebase
       { collection: "uploads", userField: "uid" },
       { collection: "uploads", userField: "userId" },
       { collection: "uploads", userField: "creatorId" },
@@ -82,14 +76,10 @@ export async function GET(request: NextRequest) {
       try {
         console.log(`🔍 [Creator Uploads] Trying collection: ${config.collection} with field: ${config.userField}`)
 
-        const uploadsQuery = query(
-          collection(db, config.collection),
-          where(config.userField, "==", userId),
-          orderBy("createdAt", "desc"),
-          limit(50),
-        )
+        const uploadsRef = db.collection(config.collection)
+        const uploadsQuery = uploadsRef.where(config.userField, "==", userId).orderBy("createdAt", "desc").limit(50)
 
-        const uploadsSnapshot = await getDocs(uploadsQuery)
+        const uploadsSnapshot = await uploadsQuery.get()
 
         if (!uploadsSnapshot.empty) {
           console.log(
@@ -97,7 +87,7 @@ export async function GET(request: NextRequest) {
           )
           successfulConfig = config
 
-          uploadsSnapshot.forEach((doc) => {
+          uploadsSnapshot.docs.forEach((doc) => {
             const data = doc.data()
             console.log(`📄 [Creator Uploads] Document ${doc.id}:`, {
               title: data.title,
@@ -144,8 +134,8 @@ export async function GET(request: NextRequest) {
       for (const collectionName of broadSearchCollections) {
         try {
           // Try without ordering first to see if there are any documents at all
-          const allDocsQuery = query(collection(db, collectionName), limit(10))
-          const allDocsSnapshot = await getDocs(allDocsQuery)
+          const allDocsRef = db.collection(collectionName)
+          const allDocsSnapshot = await allDocsRef.limit(10).get()
 
           console.log(`📊 [Creator Uploads] Total documents in ${collectionName} collection: ${allDocsSnapshot.size}`)
 
@@ -173,8 +163,8 @@ export async function GET(request: NextRequest) {
 
               for (const field of ["uid", "userId", "creatorId", "email"]) {
                 try {
-                  const userQuery = query(collection(db, collectionName), where(field, "==", userVar), limit(5))
-                  const userSnapshot = await getDocs(userQuery)
+                  const userQuery = db.collection(collectionName).where(field, "==", userVar).limit(5)
+                  const userSnapshot = await userQuery.get()
 
                   if (!userSnapshot.empty) {
                     console.log(
