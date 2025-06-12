@@ -18,12 +18,13 @@ export default function CategoriesPage() {
   const specificCategories = useMemo(
     () => [
       "Browse All",
-      "Introspection",
+      "Mindset",
       "Hustle Mentality",
       "High Energy Motivation",
       "Faith",
       "Money & Wealth",
       "Motivational Speeches",
+      "Cinema",
     ],
     [],
   )

@@ -76,9 +76,11 @@ export default function ShowcasePage() {
           return true
         })
 
-        // Combine and shuffle videos instead of sorting
+        // Combine videos
         const combinedVideos = [...prev, ...newVideos]
-        return shuffleArray(combinedVideos)
+
+        // Randomize for all users to ensure fair content discovery
+        return shuffleArray(combinedVideos, Math.random())
       })
 
       // Check if there are more videos to load
@@ -109,7 +111,9 @@ export default function ShowcasePage() {
           video.description?.toLowerCase().includes(query) ||
           video.tags?.some((tag: any) => tag.name.toLowerCase().includes(query)),
       )
-      setFilteredVideos(filtered)
+
+      // Keep search results randomly ordered
+      setFilteredVideos(shuffleArray(filtered, Math.random()))
     }
   }, [searchQuery, videos])
 
@@ -273,6 +277,7 @@ export default function ShowcasePage() {
                       Found {filteredVideos.length} results for "{searchQuery}"
                     </div>
                   )}
+
                   <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-6">
                     {filteredVideos.map((video, index) => (
                       <motion.div

@@ -11,6 +11,7 @@ import { DownloadLimitProvider } from "@/contexts/download-limit-context"
 import { TikTokBrowserBanner } from "@/components/tiktok-browser-banner"
 import { FullscreenBlocker } from "@/components/fullscreen-blocker"
 import { ZoomPrevention } from "@/components/zoom-prevention"
+import { Providers } from "@/components/providers"
 
 const inter = Inter({ subsets: ["latin"] })
 
@@ -18,7 +19,7 @@ export const metadata: Metadata = {
   title: "MassClip - Premium Content Vault",
   description: "The #1 clip vault for faceless creators",
   viewport: "width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, shrink-to-fit=no",
-    generator: 'v0.dev'
+  generator: "v0.dev",
 }
 
 export default function RootLayout({
@@ -61,23 +62,18 @@ export default function RootLayout({
         />
       </head>
       <body className={`${inter.className} prevent-zoom`}>
-        <AuthProvider>
-          <DownloadLimitProvider>
-            <ZoomPrevention />
-            <FullscreenBlocker />
-            <TikTokBrowserBanner />
-            {children}
-          </DownloadLimitProvider>
-        </AuthProvider>
+        <Providers>
+          <AuthProvider>
+            <DownloadLimitProvider>
+              <ZoomPrevention />
+              <FullscreenBlocker />
+              <TikTokBrowserBanner />
+              {children}
+            </DownloadLimitProvider>
+          </AuthProvider>
+        </Providers>
         <Toaster />
       </body>
     </html>
   )
 }
-
-// Triggering preview deployment
-// Triggering preview deployment 2
-// Triggering preview deployment 3
-//triggering preview deployment 4
-// Triggering preview deployment 5
-// Triggering preview deployment 6 

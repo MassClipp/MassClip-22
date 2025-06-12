@@ -1,65 +1,76 @@
 /**
- * Utility functions for handling dates and filtering videos by date
+ * Safely converts a Firestore timestamp or any date-like value to a JavaScript Date
  */
+export function safelyConvertToDate(dateValue: any): Date {
+  if (!dateValue) return new Date()
 
-/**
- * Filter videos to only include those added in the last 30 days
- * @param videos Array of videos with dateAdded property
- * @returns Array of videos added in the last 30 days
- */
-export function getRecentlyAddedVideos(videos: any[]): any[] {
-  const thirtyDaysAgo = new Date()
-  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
+  // If it's already a Date object
+  if (dateValue instanceof Date) return dateValue
 
-  return videos.filter((video) => {
-    // If the video has a dateAdded property and it's a valid date
-    if (video.dateAdded && video.dateAdded instanceof Date) {
-      return video.dateAdded >= thirtyDaysAgo
+  // If it's a Firestore timestamp with toDate() method
+  if (dateValue && typeof dateValue.toDate === "function") {
+    try {
+      return dateValue.toDate()
+    } catch (e) {
+      console.error("Error converting Firestore timestamp:", e)
+      return new Date()
     }
+  }
 
-    // If the video has a dateAdded property as a string
-    if (video.dateAdded && typeof video.dateAdded === "string") {
-      const date = new Date(video.dateAdded)
-      if (!isNaN(date.getTime())) {
-        return date >= thirtyDaysAgo
-      }
+  // If it's a timestamp number
+  if (typeof dateValue === "number") {
+    return new Date(dateValue)
+  }
+
+  // If it's an ISO string
+  if (typeof dateValue === "string") {
+    try {
+      return new Date(dateValue)
+    } catch (e) {
+      console.error("Error parsing date string:", e)
+      return new Date()
     }
+  }
 
-    // Default to false if no valid date is found
-    return false
-  })
+  // Default fallback
+  return new Date()
 }
 
 /**
- * Format a date to a readable string
- * @param date Date to format
- * @returns Formatted date string
+ * Safely formats a date value to a localized string
  */
-export function formatDate(date: Date): string {
-  return new Intl.DateTimeFormat("en-US", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-  }).format(date)
+export function safelyFormatDate(dateValue: any, options?: Intl.DateTimeFormatOptions): string {
+  try {
+    const date = safelyConvertToDate(dateValue)
+    return date.toLocaleDateString(undefined, options)
+  } catch (e) {
+    console.error("Error formatting date:", e)
+    return "Invalid date"
+  }
 }
 
 /**
- * Get a relative time string (e.g., "2 days ago")
- * @param date Date to get relative time for
- * @returns Relative time string
+ * Safely formats a date value to a localized time string
  */
-export function getRelativeTimeString(date: Date): string {
-  const now = new Date()
-  const diffInMs = now.getTime() - date.getTime()
-  const diffInDays = Math.floor(diffInMs / (1000 * 60 * 60 * 24))
+export function safelyFormatTime(dateValue: any, options?: Intl.DateTimeFormatOptions): string {
+  try {
+    const date = safelyConvertToDate(dateValue)
+    return date.toLocaleTimeString(undefined, options)
+  } catch (e) {
+    console.error("Error formatting time:", e)
+    return "Invalid time"
+  }
+}
 
-  if (diffInDays === 0) {
-    return "Today"
-  } else if (diffInDays === 1) {
-    return "Yesterday"
-  } else if (diffInDays < 30) {
-    return `${diffInDays} days ago`
-  } else {
-    return formatDate(date)
+/**
+ * Safely formats a date value to a localized date and time string
+ */
+export function safelyFormatDateTime(dateValue: any, options?: Intl.DateTimeFormatOptions): string {
+  try {
+    const date = safelyConvertToDate(dateValue)
+    return date.toLocaleString(undefined, options)
+  } catch (e) {
+    console.error("Error formatting date and time:", e)
+    return "Invalid date/time"
   }
 }

@@ -1,73 +1,81 @@
 "use client"
 
-import { initializeApp, getApps } from "firebase/app"
-import { getAuth } from "firebase/auth"
-import { getFirestore } from "firebase/firestore"
-import { getStorage } from "firebase/storage"
+import { initializeApp, getApps, type FirebaseApp } from "firebase/app"
+import { getAuth, type Auth, connectAuthEmulator } from "firebase/auth"
+import { getFirestore, type Firestore, connectFirestoreEmulator } from "firebase/firestore"
+import { getStorage, type FirebaseStorage, connectStorageEmulator } from "firebase/storage"
+import { getFirebaseConfig } from "./firebase-config"
 
-// Check if Firebase environment variables are available
-const hasValidConfig =
-  process.env.NEXT_PUBLIC_FIREBASE_API_KEY &&
-  process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN &&
-  process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID
+// Singleton pattern for Firebase initialization
+let firebaseApp: FirebaseApp | null = null
+let firebaseAuth: Auth | null = null
+let firebaseDb: Firestore | null = null
+let firebaseStorage: FirebaseStorage | null = null
 
-// Your Firebase configuration
-const firebaseConfig = {
-  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY || "demo-api-key",
-  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN || "demo-app.firebaseapp.com",
-  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID || "demo-project-id",
-  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET || "",
-  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID || "",
-  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID || "",
-  measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID || "",
-}
-
-// Initialize Firebase
-let app, auth, db, storage
-
-export function initializeFirebaseApp() {
+export const initializeFirebase = () => {
   try {
-    if (!getApps().length) {
-      app = initializeApp(firebaseConfig)
-    } else {
-      app = getApps()[0]
+    if (!firebaseApp) {
+      // Get Firebase configuration
+      const firebaseConfig = getFirebaseConfig()
+
+      // Initialize Firebase only if it hasn't been initialized yet
+      if (!getApps().length) {
+        console.log("Initializing Firebase app...")
+        firebaseApp = initializeApp(firebaseConfig)
+      } else {
+        console.log("Firebase already initialized, getting existing app")
+        firebaseApp = getApps()[0]
+      }
+
+      // Initialize Firebase services
+      firebaseAuth = getAuth(firebaseApp)
+      firebaseDb = getFirestore(firebaseApp)
+      firebaseStorage = getStorage(firebaseApp)
+
+      // Connect to emulators in development if needed
+      if (process.env.NODE_ENV === "development" && process.env.NEXT_PUBLIC_USE_FIREBASE_EMULATORS === "true") {
+        if (firebaseAuth) connectAuthEmulator(firebaseAuth, "http://localhost:9099")
+        if (firebaseDb) connectFirestoreEmulator(firebaseDb, "localhost", 8080)
+        if (firebaseStorage) connectStorageEmulator(firebaseStorage, "localhost", 9199)
+      }
+
+      console.log("Firebase initialized successfully")
     }
 
-    // Initialize Firebase services
-    auth = getAuth(app)
-    db = getFirestore(app)
-    storage = getStorage(app)
+    return {
+      app: firebaseApp,
+      auth: firebaseAuth,
+      db: firebaseDb,
+      storage: firebaseStorage,
+    }
   } catch (error) {
-    console.error("Firebase initialization error:", error)
-
-    // Create dummy implementations for development/preview
-    auth = {} as any
-    db = {} as any
-    storage = {} as any
+    console.error("Error initializing Firebase:", error)
+    return {
+      app: null,
+      auth: null,
+      db: null,
+      storage: null,
+      error,
+    }
   }
 }
 
-try {
-  if (!getApps().length) {
-    app = initializeApp(firebaseConfig)
-  } else {
-    app = getApps()[0]
-  }
+// Initialize Firebase on module import
+const firebase = initializeFirebase()
 
-  // Initialize Firebase services
-  auth = getAuth(app)
-  db = getFirestore(app)
-  storage = getStorage(app)
-} catch (error) {
-  console.error("Firebase initialization error:", error)
+// Export Firebase instances - REQUIRED EXPORTS
+export const app = firebase.app
+export const auth = firebase.auth
+export const db = firebase.db
+export const storage = firebase.storage
 
-  // Create dummy implementations for development/preview
-  auth = {} as any
-  db = {} as any
-  storage = {} as any
+// Helper function to check if Firebase is configured
+export const isFirebaseConfigured = () => {
+  return !!firebase.app && !!firebase.auth && !!firebase.db && !!firebase.storage
 }
 
-// Flag to check if Firebase is properly configured
-export const isFirebaseConfigured = hasValidConfig
+// Export the initialization function for compatibility
+export const initializeFirebaseApp = initializeFirebase
 
-export { app, auth, db, storage }
+// Default export
+export default firebase.app

@@ -1,60 +1,264 @@
 "use client"
 
 import type React from "react"
-import { useState } from "react"
-import { useRouter } from "next/navigation"
+
+import { useState, useEffect, useCallback } from "react"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import { motion } from "framer-motion"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Checkbox } from "@/components/ui/checkbox"
-import { useFirebaseAuth } from "@/hooks/use-firebase-auth"
+import { useFirebaseAuthStable } from "@/hooks/use-firebase-auth-stable"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import Logo from "@/components/logo"
-import { Loader2, ArrowRight } from "lucide-react"
+import { Loader2, ArrowRight, Check, X, AlertTriangle, RefreshCw } from "lucide-react"
+import { GoogleAuthButton } from "@/components/google-auth-button"
 
 export default function SignupPage() {
-  const [name, setName] = useState("")
-  const [email, setEmail] = useState("")
-  const [password, setPassword] = useState("")
+  // State management
+  const [formData, setFormData] = useState({
+    displayName: "",
+    username: "",
+    email: "",
+    password: "",
+    confirmPassword: "",
+  })
   const [termsAccepted, setTermsAccepted] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
-  const { signUp } = useFirebaseAuth()
-  const router = useRouter()
+  const [isGoogleLoading, setIsGoogleLoading] = useState(false)
+  const [isCheckingUsername, setIsCheckingUsername] = useState(false)
+  const [usernameAvailable, setUsernameAvailable] = useState<boolean | null>(null)
+  const [usernameError, setUsernameError] = useState<string | null>(null)
+  const [usernameCheckFailed, setUsernameCheckFailed] = useState(false)
 
+  const router = useRouter()
+  const { signUp, signInWithGoogle, authChecked, user, loading, isInitialized } = useFirebaseAuthStable()
+
+  // Redirect if user is already authenticated
+  useEffect(() => {
+    if (isInitialized && authChecked && user) {
+      console.log("🔄 User already authenticated, redirecting to login-success")
+      router.push("/login-success")
+    }
+  }, [isInitialized, authChecked, user, router])
+
+  // Username validation
+  const validateUsername = useCallback((username: string): { valid: boolean; error?: string } => {
+    if (!username) return { valid: false, error: "Username is required" }
+
+    if (username.length < 3 || username.length > 20) {
+      return { valid: false, error: "Username must be between 3 and 20 characters" }
+    }
+
+    const usernameRegex = /^[a-z0-9_]+$/
+    if (!usernameRegex.test(username)) {
+      return { valid: false, error: "Username can only contain lowercase letters, numbers, and underscores" }
+    }
+
+    return { valid: true }
+  }, [])
+
+  // Check username availability
+  const checkUsernameAvailability = useCallback(
+    async (username: string, isRetry = false) => {
+      if (!username) {
+        setUsernameAvailable(null)
+        setUsernameError(null)
+        setUsernameCheckFailed(false)
+        return
+      }
+
+      const validation = validateUsername(username)
+      if (!validation.valid) {
+        setUsernameError(validation.error)
+        setUsernameAvailable(false)
+        setUsernameCheckFailed(false)
+        return
+      }
+
+      setIsCheckingUsername(true)
+      setUsernameError(null)
+      setUsernameCheckFailed(false)
+
+      try {
+        console.log(`🔍 Checking availability for username: ${username}${isRetry ? " (retry)" : ""}`)
+
+        const response = await fetch("/api/check-username", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ username }),
+        })
+
+        console.log(`📋 Username check response status: ${response.status}`)
+
+        if (response.ok) {
+          const data = await response.json()
+          console.log(`📋 Username check result:`, data)
+
+          if (data.error) {
+            setUsernameError(`Check failed: ${data.error}`)
+            setUsernameAvailable(null)
+            setUsernameCheckFailed(true)
+          } else {
+            setUsernameAvailable(data.available)
+            setUsernameCheckFailed(false)
+
+            if (!data.available) {
+              setUsernameError(data.reason || "Username is already taken")
+            } else {
+              setUsernameError(null)
+            }
+          }
+        } else {
+          const errorData = await response.json().catch(() => ({ error: "Unknown error" }))
+          console.error("❌ Username check failed:", response.status, errorData)
+          setUsernameError(`Server error (${response.status}): ${errorData.error || "Unknown error"}`)
+          setUsernameAvailable(null)
+          setUsernameCheckFailed(true)
+        }
+      } catch (error) {
+        console.error("❌ Username check error:", error)
+        setUsernameError("Network error - please check your connection")
+        setUsernameAvailable(null)
+        setUsernameCheckFailed(true)
+      } finally {
+        setIsCheckingUsername(false)
+      }
+    },
+    [validateUsername],
+  )
+
+  // Retry username check
+  const retryUsernameCheck = () => {
+    if (formData.username) {
+      checkUsernameAvailability(formData.username, true)
+    }
+  }
+
+  // Debounced username check
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (formData.username) {
+        checkUsernameAvailability(formData.username)
+      } else {
+        setUsernameAvailable(null)
+        setUsernameError(null)
+        setUsernameCheckFailed(false)
+      }
+    }, 500)
+
+    return () => clearTimeout(timer)
+  }, [formData.username, checkUsernameAvailability])
+
+  // Handle form input changes
+  const handleInputChange = (field: string, value: string) => {
+    setFormData((prev) => ({
+      ...prev,
+      [field]: field === "username" ? value.toLowerCase().replace(/[^a-z0-9_]/g, "") : value,
+    }))
+  }
+
+  // Handle form submission
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setErrorMessage(null)
 
+    // Validation
     if (!termsAccepted) {
       setErrorMessage("You must accept the terms and conditions")
       return
     }
 
-    if (password.length < 8) {
-      setErrorMessage("Password must be at least 8 characters")
+    if (formData.password.length < 6) {
+      setErrorMessage("Password must be at least 6 characters")
       return
+    }
+
+    if (formData.password !== formData.confirmPassword) {
+      setErrorMessage("Passwords do not match")
+      return
+    }
+
+    if (!formData.username) {
+      setErrorMessage("Username is required")
+      return
+    }
+
+    const usernameValidation = validateUsername(formData.username)
+    if (!usernameValidation.valid) {
+      setErrorMessage(usernameValidation.error)
+      return
+    }
+
+    // Don't allow signup if username is taken
+    if (usernameAvailable === false) {
+      setErrorMessage("Username is already taken")
+      return
+    }
+
+    // Allow signup if username check failed (graceful degradation)
+    if (usernameCheckFailed) {
+      console.log("⚠️ Proceeding with signup despite username check failure")
     }
 
     setIsLoading(true)
 
     try {
-      const result = await signUp(email, password)
+      console.log("📝 Starting signup process...")
+      const result = await signUp(formData.email, formData.password)
 
       if (result.success) {
-        // In a real app, you would store the user's name in Firestore or another database
-        router.push("/dashboard")
+        console.log("📝 Signup successful, redirecting...")
+        router.push("/login-success")
       } else {
         setErrorMessage(result.error || "Failed to create account")
+        setIsLoading(false)
       }
     } catch (error) {
+      console.error("Signup error:", error)
       setErrorMessage("An unexpected error occurred")
-      console.error(error)
-    } finally {
       setIsLoading(false)
     }
+  }
+
+  // Handle Google signup
+  const handleGoogleSignUp = async () => {
+    if (!termsAccepted) {
+      setErrorMessage("You must accept the terms and conditions")
+      return
+    }
+
+    setErrorMessage(null)
+    setIsGoogleLoading(true)
+
+    try {
+      console.log("📝 Starting Google signup...")
+      const result = await signInWithGoogle()
+
+      if (result.success) {
+        console.log("📝 Google signup successful, redirecting...")
+        router.push("/login-success")
+      } else {
+        setErrorMessage(result.error || "Failed to sign up with Google")
+        setIsGoogleLoading(false)
+      }
+    } catch (error) {
+      console.error("Google signup error:", error)
+      setErrorMessage("An unexpected error occurred")
+      setIsGoogleLoading(false)
+    }
+  }
+
+  // Show loading while checking auth state
+  if (loading || !isInitialized) {
+    return (
+      <div className="min-h-screen bg-black flex items-center justify-center">
+        <Loader2 className="h-8 w-8 animate-spin text-white" />
+      </div>
+    )
   }
 
   return (
@@ -108,18 +312,53 @@ export default function SignupPage() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.4, duration: 0.5 }}
           >
-            <Label htmlFor="name" className="text-white">
-              Full Name
+            <Label htmlFor="username" className="text-white flex items-center justify-between">
+              Username
+              {isCheckingUsername && <span className="text-xs text-gray-400">Checking...</span>}
+              {!isCheckingUsername && usernameAvailable === true && (
+                <span className="text-xs text-green-500 flex items-center">
+                  <Check className="h-3 w-3 mr-1" /> Available
+                </span>
+              )}
+              {!isCheckingUsername && usernameAvailable === false && (
+                <span className="text-xs text-red-500 flex items-center">
+                  <X className="h-3 w-3 mr-1" /> Taken
+                </span>
+              )}
+              {!isCheckingUsername && usernameCheckFailed && (
+                <button
+                  type="button"
+                  onClick={retryUsernameCheck}
+                  className="text-xs text-yellow-500 flex items-center hover:text-yellow-400"
+                >
+                  <RefreshCw className="h-3 w-3 mr-1" /> Retry
+                </button>
+              )}
             </Label>
             <Input
-              id="name"
+              id="username"
               type="text"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder="Enter your name"
-              className="bg-gray-900/80 border-gray-800 text-white placeholder:text-gray-500 focus:border-red-500 focus:ring-red-500"
+              value={formData.username}
+              onChange={(e) => handleInputChange("username", e.target.value)}
+              placeholder="Choose a unique username"
+              className={`bg-gray-900/80 border-gray-800 text-white placeholder:text-gray-500 focus:border-red-500 focus:ring-red-500 ${
+                usernameAvailable === false ? "border-red-500" : ""
+              } ${usernameCheckFailed ? "border-yellow-500" : ""}`}
               required
             />
+            <p className="text-xs text-gray-400">
+              This will be your public URL: massclip.pro/creator/
+              <span className="text-gray-300">{formData.username || "username"}</span>
+            </p>
+            {usernameError && (
+              <p className="text-xs text-red-500 flex items-center">
+                <AlertTriangle className="h-3 w-3 mr-1" />
+                {usernameError}
+              </p>
+            )}
+            {usernameCheckFailed && (
+              <p className="text-xs text-yellow-500">Username check failed. You can still proceed with signup.</p>
+            )}
           </motion.div>
 
           <motion.div
@@ -128,15 +367,15 @@ export default function SignupPage() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.5, duration: 0.5 }}
           >
-            <Label htmlFor="email" className="text-white">
-              Email
+            <Label htmlFor="displayName" className="text-white">
+              Display Name
             </Label>
             <Input
-              id="email"
-              type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              placeholder="Enter your email"
+              id="displayName"
+              type="text"
+              value={formData.displayName}
+              onChange={(e) => handleInputChange("displayName", e.target.value)}
+              placeholder="How you'll appear to others"
               className="bg-gray-900/80 border-gray-800 text-white placeholder:text-gray-500 focus:border-red-500 focus:ring-red-500"
               required
             />
@@ -148,26 +387,65 @@ export default function SignupPage() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.6, duration: 0.5 }}
           >
+            <Label htmlFor="email" className="text-white">
+              Email
+            </Label>
+            <Input
+              id="email"
+              type="email"
+              value={formData.email}
+              onChange={(e) => handleInputChange("email", e.target.value)}
+              placeholder="Enter your email"
+              className="bg-gray-900/80 border-gray-800 text-white placeholder:text-gray-500 focus:border-red-500 focus:ring-red-500"
+              required
+            />
+          </motion.div>
+
+          <motion.div
+            className="space-y-2"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.7, duration: 0.5 }}
+          >
             <Label htmlFor="password" className="text-white">
               Password
             </Label>
             <Input
               id="password"
               type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="Create a password"
+              value={formData.password}
+              onChange={(e) => handleInputChange("password", e.target.value)}
+              placeholder="Create a password (min 6 characters)"
               className="bg-gray-900/80 border-gray-800 text-white placeholder:text-gray-500 focus:border-red-500 focus:ring-red-500"
               required
             />
-            <p className="text-xs text-gray-400">Must be at least 8 characters</p>
+          </motion.div>
+
+          <motion.div
+            className="space-y-2"
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: 0.8, duration: 0.5 }}
+          >
+            <Label htmlFor="confirmPassword" className="text-white">
+              Confirm Password
+            </Label>
+            <Input
+              id="confirmPassword"
+              type="password"
+              value={formData.confirmPassword}
+              onChange={(e) => handleInputChange("confirmPassword", e.target.value)}
+              placeholder="Confirm your password"
+              className="bg-gray-900/80 border-gray-800 text-white placeholder:text-gray-500 focus:border-red-500 focus:ring-red-500"
+              required
+            />
           </motion.div>
 
           <motion.div
             className="flex items-start space-x-2"
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.7, duration: 0.5 }}
+            transition={{ delay: 0.9, duration: 0.5 }}
           >
             <Checkbox
               id="terms"
@@ -190,12 +468,12 @@ export default function SignupPage() {
           <motion.div
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.8, duration: 0.5 }}
+            transition={{ delay: 1.0, duration: 0.5 }}
           >
             <Button
               type="submit"
               className="w-full bg-red-600 hover:bg-red-700 text-white transition-all duration-300 flex items-center justify-center gap-2 group"
-              disabled={isLoading}
+              disabled={isLoading || usernameAvailable === false}
             >
               {isLoading ? (
                 <>
@@ -215,7 +493,32 @@ export default function SignupPage() {
         <motion.div
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
-          transition={{ delay: 0.9, duration: 0.5 }}
+          transition={{ delay: 1.1, duration: 0.5 }}
+          className="relative flex items-center justify-center"
+        >
+          <div className="absolute inset-0 flex items-center">
+            <div className="w-full border-t border-gray-700"></div>
+          </div>
+          <div className="relative px-4 bg-black text-xs text-gray-500">or</div>
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 1.2, duration: 0.5 }}
+        >
+          <GoogleAuthButton
+            onClick={handleGoogleSignUp}
+            isLoading={isGoogleLoading}
+            text="Sign up with Google"
+            disabled={isGoogleLoading}
+          />
+        </motion.div>
+
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 1.3, duration: 0.5 }}
           className="text-center text-sm text-gray-400"
         >
           Already have an account?{" "}

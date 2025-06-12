@@ -42,9 +42,8 @@ export default function LandingHeader() {
 
   const navigationItems = [
     { name: "Home", href: "/" },
-    { name: "Explore", href: "/dashboard" },
-    { name: "Pricing", href: "/membership-plans" },
-    { name: "Categories", href: "/dashboard/categories" },
+    { name: "Explore", href: "/dashboard/explore" },
+    { name: "Pricing", href: "/dashboard/membership" },
   ]
 
   return (
@@ -69,16 +68,6 @@ export default function LandingHeader() {
               </Link>
             ))}
           </nav>
-        </div>
-
-        {/* BETA Tag - Centered (hidden on mobile) */}
-        <div className="absolute left-1/2 transform -translate-x-1/2 hidden md:flex items-center">
-          <Link
-            href="/beta-notice"
-            className="text-amber-400 text-xs font-extralight tracking-widest hover:text-amber-300 transition-colors"
-          >
-            READ BETA NOTICE
-          </Link>
         </div>
 
         {/* Desktop CTA */}
@@ -149,16 +138,6 @@ export default function LandingHeader() {
                   <ChevronRight className="h-4 w-4 text-zinc-500 group-hover:text-white/70 transition-colors" />
                 </Link>
               ))}
-
-              {/* Beta Notice Link in Mobile Menu */}
-              <Link
-                href="/beta-notice"
-                className="flex items-center justify-between py-3 px-4 text-amber-400 hover:text-amber-300 hover:bg-white/5 rounded-lg transition-colors group"
-                onClick={() => setIsMenuOpen(false)}
-              >
-                <span className="text-sm font-light tracking-wide">Beta Notice</span>
-                <ChevronRight className="h-4 w-4 text-zinc-500 group-hover:text-amber-300 transition-colors" />
-              </Link>
             </div>
 
             {/* Social Links */}

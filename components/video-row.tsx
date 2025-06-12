@@ -5,10 +5,13 @@ import Link from "next/link"
 import { motion } from "framer-motion"
 import { ChevronRight, ChevronLeft, ArrowRight } from "lucide-react"
 import type { VimeoVideo } from "@/lib/types"
-import VimeoCard from "@/components/vimeo-card"
+// Remove these imports:
+// import VimeoCard from "@/components/vimeo-card"
+// import CreatorUploadCard from "@/components/creator-upload-card"
 import VideoSkeleton from "@/components/video-skeleton"
 import { shuffleArray } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
+import { useUserPlan } from "@/hooks/use-user-plan"
 
 interface VideoRowProps {
   title: string
@@ -16,9 +19,17 @@ interface VideoRowProps {
   limit?: number
   isShowcase?: boolean
   showcaseId?: string
+  isCreatorUploads?: boolean
 }
 
-export default function VideoRow({ title, videos, limit = 10, isShowcase = false, showcaseId }: VideoRowProps) {
+export function VideoRow({
+  title,
+  videos,
+  limit = 10,
+  isShowcase = false,
+  showcaseId,
+  isCreatorUploads = false,
+}: VideoRowProps) {
   const [visibleVideos, setVisibleVideos] = useState<VimeoVideo[]>([])
   const [isIntersecting, setIsIntersecting] = useState(false)
   const [scrollPosition, setScrollPosition] = useState(0)
@@ -26,6 +37,11 @@ export default function VideoRow({ title, videos, limit = 10, isShowcase = false
   const [isHovered, setIsHovered] = useState(false)
   const rowRef = useRef<HTMLDivElement>(null)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
+  const { isProUser } = useUserPlan()
+
+  // Add these state variables after the other useState declarations:
+  const [VimeoCard, setVimeoCard] = useState<any>(null)
+  const [CreatorUploadCard, setCreatorUploadCard] = useState<any>(null)
 
   // Create a URL-friendly name
   const slug = encodeURIComponent(title.toLowerCase().replace(/\s+/g, "-"))
@@ -60,11 +76,30 @@ export default function VideoRow({ title, videos, limit = 10, isShowcase = false
   // Load videos when row becomes visible
   useEffect(() => {
     if (isIntersecting && videos) {
-      // Shuffle videos instead of sorting alphabetically
-      const shuffledVideos = shuffleArray([...videos]).slice(0, limit)
+      // All users get shuffled videos for dynamic experience
+      const shuffledVideos = shuffleArray([...videos], Math.random()).slice(0, limit)
       setVisibleVideos(shuffledVideos)
     }
   }, [isIntersecting, videos, limit])
+
+  // Add this useEffect after the existing useEffects:
+  useEffect(() => {
+    const loadComponents = async () => {
+      try {
+        const [vimeoCardModule, creatorUploadCardModule] = await Promise.all([
+          import("@/components/vimeo-card"),
+          import("@/components/creator-upload-card"),
+        ])
+
+        setVimeoCard(() => vimeoCardModule.default)
+        setCreatorUploadCard(() => creatorUploadCardModule.default)
+      } catch (error) {
+        console.error("Error loading video card components:", error)
+      }
+    }
+
+    loadComponents()
+  }, [])
 
   // Calculate max scroll position
   useEffect(() => {
@@ -128,7 +163,7 @@ export default function VideoRow({ title, videos, limit = 10, isShowcase = false
         <h2 className="text-2xl font-extralight tracking-wider text-white category-title group-hover:text-crimson transition-colors duration-300">
           {title}
         </h2>
-        {hasMore && (
+        {hasMore && !isCreatorUploads && (
           <Link
             href={linkPath}
             className="text-zinc-400 hover:text-white flex items-center group bg-zinc-900/30 hover:bg-zinc-900/50 px-3 py-1 rounded-full transition-all duration-300"
@@ -169,24 +204,53 @@ export default function VideoRow({ title, videos, limit = 10, isShowcase = false
 
         <div
           ref={scrollContainerRef}
-          className="flex overflow-x-auto scrollbar-hide gap-4 px-6 pb-4"
+          className="flex overflow-x-auto scrollbar-hide gap-4 px-6 py-4" // Changed pb-4 to py-4 to add padding at the top
           onScroll={handleManualScroll}
         >
           {isIntersecting
-            ? visibleVideos.map((video) => (
-                <motion.div
-                  key={video.uri}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ duration: 0.5 }}
-                >
-                  <VimeoCard video={video} />
-                </motion.div>
-              ))
+            ? visibleVideos.map((video, index) => {
+                return (
+                  <motion.div
+                    key={video.uri}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.5 }}
+                    className="pt-1"
+                  >
+                    {isCreatorUploads ? (
+                      CreatorUploadCard ? (
+                        <CreatorUploadCard
+                          video={{
+                            id: video.uri.split("/").pop() || "",
+                            title: video.name || "Untitled",
+                            fileUrl: video.link || "",
+                            thumbnailUrl: video.pictures?.sizes?.[0]?.link,
+                            creatorName: video.user?.name,
+                            uid: video.user?.uri?.split("/").pop(),
+                            views: video.stats?.plays,
+                          }}
+                        />
+                      ) : (
+                        <div className="aspect-[9/16] rounded-xl bg-zinc-900/50 animate-pulse"></div>
+                      )
+                    ) : VimeoCard ? (
+                      <VimeoCard video={video} />
+                    ) : (
+                      <div className="aspect-[9/16] rounded-xl bg-zinc-900/50 animate-pulse"></div>
+                    )}
+                  </motion.div>
+                )
+              })
             : // Show skeleton loaders while waiting for intersection
-              Array.from({ length: Math.min(limit, 10) }).map((_, index) => <VideoSkeleton key={index} />)}
+              Array.from({ length: Math.min(limit, 10) }).map((_, index) => (
+                <div key={index} className="pt-1">
+                  <VideoSkeleton />
+                </div>
+              ))}
         </div>
       </div>
     </section>
   )
 }
+
+export default VideoRow
