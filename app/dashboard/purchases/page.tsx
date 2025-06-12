@@ -110,12 +110,13 @@ export default function MyPurchasesPage() {
 
     try {
       setLoading(true)
-      console.log("🔍 [My Purchases] Fetching unified purchases for user:", user.uid)
+      console.log("🔍 [My Purchases] Fetching purchases for user:", user.uid)
 
       // Get the Firebase auth token
       const token = await user.getIdToken()
 
-      const response = await fetch(`/api/user/unified-purchases?userId=${user.uid}`, {
+      // Try the main purchases API first (which checks all locations)
+      const response = await fetch(`/api/user/purchases?userId=${user.uid}`, {
         headers: {
           Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
@@ -135,10 +136,17 @@ export default function MyPurchasesPage() {
 
       const rawPurchases = data.purchases || []
 
-      // Convert timestamps
+      // Convert timestamps and ensure proper format
       const processedPurchases = rawPurchases.map((purchase: any) => ({
         ...purchase,
         purchasedAt: purchase.purchasedAt?.toDate ? purchase.purchasedAt.toDate() : new Date(purchase.purchasedAt),
+        // Ensure we have the required fields for the UI
+        productBoxId: purchase.itemId || purchase.productBoxId,
+        productBoxTitle: purchase.itemTitle || purchase.productBoxTitle || "Unknown Product",
+        productBoxDescription: purchase.itemDescription || purchase.productBoxDescription || "",
+        productBoxThumbnail: purchase.thumbnailUrl || purchase.customPreviewThumbnail || "",
+        items: purchase.items || [],
+        totalItems: purchase.totalItems || (purchase.items ? purchase.items.length : 0),
       }))
 
       setPurchases(processedPurchases)
@@ -149,6 +157,8 @@ export default function MyPurchasesPage() {
           description: `Found ${processedPurchases.length} purchases`,
         })
       }
+
+      console.log("✅ [My Purchases] Successfully loaded", processedPurchases.length, "purchases")
     } catch (error) {
       console.error("❌ [My Purchases] Error fetching purchases:", error)
       toast({

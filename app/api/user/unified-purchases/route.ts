@@ -1,6 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { auth } from "@/lib/firebase-admin"
-import { UnifiedPurchaseService } from "@/lib/unified-purchase-service"
+import { auth, db } from "@/lib/firebase-admin"
 
 export async function GET(request: NextRequest) {
   try {
@@ -33,18 +32,30 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "User ID is required" }, { status: 400 })
     }
 
-    console.log("🔍 [Unified Purchases API] Fetching purchases for user:", finalUserId)
+    console.log("🔍 [Unified Purchases API] Fetching unified purchases for user:", finalUserId)
 
-    // Fetch unified purchases
-    const purchases = await UnifiedPurchaseService.getUserPurchases(finalUserId)
+    // Get unified purchases
+    const unifiedPurchasesRef = db.collection("userPurchases").doc(finalUserId).collection("purchases")
+    const unifiedSnapshot = await unifiedPurchasesRef.orderBy("purchasedAt", "desc").get()
 
-    console.log(`✅ [Unified Purchases API] Returning ${purchases.length} purchases`)
+    console.log(`📊 [Unified Purchases API] Found ${unifiedSnapshot.size} unified purchases`)
+
+    const purchases = unifiedSnapshot.docs.map((doc) => {
+      const data = doc.data()
+      return {
+        id: doc.id,
+        ...data,
+        purchasedAt: data.purchasedAt?.toDate?.() || new Date(data.purchasedAt || Date.now()),
+      }
+    })
+
+    console.log("✅ [Unified Purchases API] Returning", purchases.length, "purchases")
     return NextResponse.json({ purchases })
   } catch (error) {
-    console.error("❌ [Unified Purchases API] Error fetching user purchases:", error)
+    console.error("❌ [Unified Purchases API] Error:", error)
     return NextResponse.json(
       {
-        error: "Failed to fetch purchases",
+        error: "Failed to fetch unified purchases",
         details: error instanceof Error ? error.message : "Unknown error",
       },
       { status: 500 },
