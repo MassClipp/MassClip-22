@@ -50,7 +50,7 @@ export default function UploadSelector({ excludeIds = [], onSelect, onCancel, lo
 
     try {
       const token = await user.getIdToken()
-      const response = await fetch("/api/debug/uploads-diagnostic", {
+      const response = await fetch("/api/debug/find-user-uploads", {
         headers: {
           Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
@@ -60,7 +60,33 @@ export default function UploadSelector({ excludeIds = [], onSelect, onCancel, lo
       if (response.ok) {
         const data = await response.json()
         setDiagnosticData(data)
-        console.log("🔍 [Upload Selector] Diagnostic data:", data)
+        console.log("🔍 [Upload Selector] Comprehensive diagnostic data:", data)
+
+        // If we found user documents, let's try to use them
+        if (data.results?.userDocuments?.length > 0) {
+          console.log("🎯 [Upload Selector] Found user documents, attempting to use them as uploads")
+
+          const foundUploads = data.results.userDocuments
+            .map((doc: any) => ({
+              id: doc.id,
+              title: doc.data.title || doc.data.filename || doc.data.name || "Untitled",
+              filename: doc.data.filename || doc.data.name || `${doc.id}.file`,
+              fileUrl: doc.data.fileUrl || doc.data.url || doc.data.downloadUrl || "",
+              thumbnailUrl: doc.data.thumbnailUrl || doc.data.thumbnail || "",
+              mimeType: doc.data.mimeType || doc.data.fileType || "application/octet-stream",
+              fileSize: doc.data.fileSize || doc.data.size || 0,
+              duration: doc.data.duration || undefined,
+              createdAt: doc.data.createdAt || doc.data.uploadedAt,
+              contentType: getContentType(doc.data.mimeType || doc.data.fileType || ""),
+            }))
+            .filter((upload: any) => upload.fileUrl && upload.fileUrl.startsWith("http"))
+
+          if (foundUploads.length > 0) {
+            setUploads(foundUploads)
+            setFilteredUploads(foundUploads)
+            console.log(`✅ [Upload Selector] Loaded ${foundUploads.length} uploads from diagnostic`)
+          }
+        }
       }
     } catch (err) {
       console.error("❌ [Upload Selector] Diagnostic fetch failed:", err)
@@ -314,12 +340,29 @@ export default function UploadSelector({ excludeIds = [], onSelect, onCancel, lo
       {/* Debug Info */}
       {showDiagnostic && diagnosticData && (
         <div className="p-4 bg-zinc-800 rounded-lg text-sm">
-          <h4 className="font-semibold mb-2">Database Diagnostic:</h4>
+          <h4 className="font-semibold mb-2">Upload Search Results:</h4>
           <div className="space-y-2">
             <p>Total Collections: {diagnosticData.summary?.totalCollections || 0}</p>
             <p>Collections with Data: {diagnosticData.summary?.collectionsWithData || 0}</p>
-            <p>Total Documents: {diagnosticData.summary?.totalDocuments || 0}</p>
-            <p>User Documents: {diagnosticData.summary?.userDocuments || 0}</p>
+            <p>User Documents Found: {diagnosticData.summary?.userDocuments || 0}</p>
+            <p>Potential Matches: {diagnosticData.summary?.potentialMatches || 0}</p>
+
+            {diagnosticData.results?.collectionsFound?.length > 0 && (
+              <div>
+                <p className="font-medium">Collections Found:</p>
+                <p className="text-xs text-zinc-400">{diagnosticData.results.collectionsFound.join(", ")}</p>
+              </div>
+            )}
+
+            {diagnosticData.results?.userDocuments?.length > 0 && (
+              <div>
+                <p className="font-medium text-green-400">✅ Found Your Uploads!</p>
+                <p className="text-xs text-zinc-400">
+                  Found in:{" "}
+                  {diagnosticData.results.userDocuments.map((doc: any) => `${doc.collection}.${doc.field}`).join(", ")}
+                </p>
+              </div>
+            )}
           </div>
           <details className="mt-2">
             <summary className="cursor-pointer">Full Diagnostic Data</summary>
