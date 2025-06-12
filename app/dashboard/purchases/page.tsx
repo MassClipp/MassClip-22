@@ -43,6 +43,11 @@ interface UnifiedPurchaseItem {
   contentType: "video" | "audio" | "image" | "document"
   duration?: number
   filename: string
+  displayTitle?: string
+  displaySize?: string
+  displayDuration?: string
+  displayResolution?: string
+  quality?: string
 }
 
 interface UnifiedPurchase {
@@ -232,7 +237,7 @@ export default function MyPurchasesPage() {
     }
   }
 
-  // Content card component matching favorites page layout
+  // Content card component with comprehensive metadata display
   const ContentCard = ({ content }: { content: UnifiedPurchaseItem }) => {
     const [isPlaying, setIsPlaying] = useState(false)
     const [isHovered, setIsHovered] = useState(false)
@@ -363,27 +368,40 @@ export default function MyPurchasesPage() {
           onMouseLeave={() => setIsHovered(false)}
         >
           <div className="relative aspect-[9/16] overflow-hidden rounded-lg bg-zinc-900 shadow-md">
+            {/* Video content with exact same styling as bundle view */}
             {loadError ? (
               <div className="w-full h-full flex flex-col items-center justify-center bg-zinc-800/50 text-center p-4">
                 <AlertCircle className="h-8 w-8 text-red-500 mb-2" />
                 <p className="text-xs text-zinc-400">Content unavailable</p>
-                <p className="text-xs text-zinc-500 mt-1">Media could not be loaded</p>
               </div>
             ) : content.contentType === "video" && content.fileUrl ? (
-              <video
-                ref={videoRef}
-                className="w-full h-full object-cover cursor-pointer"
-                preload="metadata"
-                muted={false}
-                playsInline
-                onEnded={handleVideoEnd}
-                onError={handleVideoError}
-                onClick={togglePlay}
-                controls={false}
-              >
-                <source src={content.fileUrl} type={content.mimeType} />
-                Your browser does not support the video tag.
-              </video>
+              <>
+                {/* VIDEO badge exactly like bundle view */}
+                <div className="absolute top-2 left-2 z-30">
+                  <Badge className="bg-red-600 text-white text-xs font-medium px-2 py-1">VIDEO</Badge>
+                </div>
+
+                <video
+                  ref={videoRef}
+                  className="w-full h-full object-cover cursor-pointer"
+                  preload="metadata"
+                  muted={false}
+                  playsInline
+                  onEnded={handleVideoEnd}
+                  onError={handleVideoError}
+                  onClick={togglePlay}
+                  controls={false}
+                >
+                  <source src={content.fileUrl} type={content.mimeType} />
+                </video>
+
+                {/* File size overlay exactly like bundle view */}
+                <div className="absolute bottom-2 left-2 z-30">
+                  <div className="bg-black/70 text-white text-xs px-2 py-1 rounded font-medium">
+                    {content.displaySize}
+                  </div>
+                </div>
+              </>
             ) : (
               <div className="w-full h-full flex items-center justify-center bg-zinc-800">
                 {content.thumbnailUrl ? (
@@ -399,47 +417,42 @@ export default function MyPurchasesPage() {
               </div>
             )}
 
-            {/* Play/Pause button - only show on hover for videos */}
+            {/* Play/Pause controls */}
             {content.contentType === "video" && !loadError && (
               <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-20">
                 <button
                   onClick={togglePlay}
                   className="w-12 h-12 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center text-white transition-all duration-200 hover:bg-black/70"
-                  aria-label={isPlaying ? "Pause video" : "Play video"}
                 >
                   {isPlaying ? <Pause className="h-5 w-5" /> : <Play className="h-5 w-5 ml-0.5" />}
                 </button>
               </div>
             )}
 
-            {/* Overlay gradient for better visibility - only on hover */}
-            <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"></div>
-
-            {/* Action buttons overlay */}
-            <div className="absolute bottom-2 left-2 right-2 z-30 flex items-center justify-between opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+            {/* Download button */}
+            <div className="absolute bottom-2 right-2 z-30 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
               <button
                 className="bg-black/70 hover:bg-black/90 p-1.5 rounded-full transition-all duration-300"
                 onClick={handleDownload}
-                aria-label="Download content"
                 disabled={isDownloading || loadError}
                 title="Download content"
               >
                 <Download className="h-3.5 w-3.5 text-white" />
               </button>
-
-              <div className="text-xs text-white bg-black/70 px-2 py-1 rounded">{formatFileSize(content.fileSize)}</div>
             </div>
           </div>
         </div>
 
-        {/* Title and metadata */}
+        {/* Title and metadata exactly like bundle view */}
         <div className="mt-2 space-y-1">
-          <div className="text-xs text-zinc-300 min-h-[2.5rem] line-clamp-2 font-light" title={content.title}>
-            {content.title}
+          <div className="text-xs text-zinc-300 min-h-[2.5rem] line-clamp-2 font-light" title={content.displayTitle}>
+            {content.displayTitle}
+            {content.displayResolution && <span className="text-zinc-500 ml-1">({content.displayResolution})</span>}
           </div>
           <div className="flex items-center gap-2 text-xs text-zinc-500">
-            {content.duration && <span>{formatDuration(content.duration)}</span>}
+            {content.displayDuration && <span>{content.displayDuration}</span>}
             <span>{content.contentType}</span>
+            {content.quality && <span>{content.quality}</span>}
           </div>
         </div>
       </div>

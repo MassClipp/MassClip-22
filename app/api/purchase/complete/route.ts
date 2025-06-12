@@ -19,7 +19,7 @@ export async function POST(request: NextRequest) {
 
     console.log("📦 [Purchase Complete] Product box content items:", contentItems)
 
-    // Fetch full metadata for each content item
+    // Fetch comprehensive metadata for each content item
     const contentMetadata = []
     for (const itemId of contentItems) {
       try {
@@ -27,19 +27,56 @@ export async function POST(request: NextRequest) {
         if (uploadDoc.exists()) {
           const uploadData = uploadDoc.data()!
 
-          // Ensure we have complete metadata
+          // Extract comprehensive metadata matching the UI display
           const itemMetadata = {
             id: itemId,
-            title: uploadData.title || uploadData.filename || "Untitled",
+            title: uploadData.title || uploadData.filename || uploadData.originalFileName || "Untitled",
             fileUrl: uploadData.fileUrl || uploadData.publicUrl || uploadData.downloadUrl,
-            thumbnailUrl: uploadData.thumbnailUrl || null,
-            mimeType: uploadData.mimeType || "application/octet-stream",
-            fileSize: uploadData.fileSize || 0,
+            thumbnailUrl: uploadData.thumbnailUrl || uploadData.previewUrl || null,
+
+            // File information
+            mimeType: uploadData.mimeType || uploadData.fileType || "video/mp4",
+            fileSize: uploadData.fileSize || uploadData.size || 0,
+            filename: uploadData.filename || uploadData.originalFileName || `${itemId}.mp4`,
+
+            // Video-specific metadata
             contentType: uploadData.contentType || uploadData.type || uploadData.category || "video",
-            filename: uploadData.filename || `${itemId}.mp4`,
+            duration: uploadData.duration || uploadData.videoDuration || null,
+            resolution: uploadData.resolution || uploadData.videoResolution || null,
+            width: uploadData.width || uploadData.videoWidth || null,
+            height: uploadData.height || uploadData.videoHeight || null,
+            aspectRatio: uploadData.aspectRatio || null,
+
+            // Quality and format info
+            quality: uploadData.quality || null,
+            format: uploadData.format || uploadData.videoFormat || null,
+            codec: uploadData.codec || uploadData.videoCodec || null,
+            bitrate: uploadData.bitrate || uploadData.videoBitrate || null,
+
+            // Upload metadata
+            uploadedAt: uploadData.uploadedAt || uploadData.createdAt || new Date(),
+            creatorId: uploadData.creatorId || uploadData.userId || productBox.creatorId,
+
+            // Additional metadata
+            description: uploadData.description || null,
+            tags: uploadData.tags || [],
+            category: uploadData.category || null,
+            isPublic: uploadData.isPublic || false,
+
+            // Technical metadata
+            encoding: uploadData.encoding || null,
+            frameRate: uploadData.frameRate || uploadData.fps || null,
+            audioCodec: uploadData.audioCodec || null,
+            audioSampleRate: uploadData.audioSampleRate || null,
+
+            // Display metadata (exactly as shown in UI)
+            displayTitle: uploadData.title || uploadData.filename || "Untitled",
+            displaySize: formatFileSize(uploadData.fileSize || 0),
+            displayResolution: uploadData.resolution || (uploadData.height ? `${uploadData.height}p` : null),
+            displayDuration: uploadData.duration ? formatDuration(uploadData.duration) : null,
           }
 
-          console.log("📄 [Purchase Complete] Item metadata:", itemMetadata)
+          console.log("📄 [Purchase Complete] Comprehensive item metadata:", itemMetadata)
           contentMetadata.push(itemMetadata)
         } else {
           console.warn(`⚠️ [Purchase Complete] Upload ${itemId} not found`)
@@ -47,6 +84,21 @@ export async function POST(request: NextRequest) {
       } catch (error) {
         console.error(`❌ [Purchase Complete] Error fetching upload ${itemId}:`, error)
       }
+    }
+
+    // Helper functions for display formatting
+    function formatFileSize(bytes: number): string {
+      if (bytes === 0) return "0 Bytes"
+      const k = 1024
+      const sizes = ["Bytes", "KB", "MB", "GB"]
+      const i = Math.floor(Math.log(bytes) / Math.log(k))
+      return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + " " + sizes[i]
+    }
+
+    function formatDuration(seconds: number): string {
+      const minutes = Math.floor(seconds / 60)
+      const remainingSeconds = seconds % 60
+      return `${minutes}:${remainingSeconds.toString().padStart(2, "0")}`
     }
 
     // Create comprehensive purchase record

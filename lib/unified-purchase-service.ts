@@ -21,6 +21,34 @@ export interface UnifiedPurchaseItem {
   contentType: "video" | "audio" | "image" | "document"
   duration?: number
   filename: string
+
+  // Enhanced metadata matching UI display
+  resolution?: string
+  width?: number
+  height?: number
+  aspectRatio?: string
+  quality?: string
+  format?: string
+  codec?: string
+  bitrate?: number
+  frameRate?: number
+  audioCodec?: string
+  audioSampleRate?: number
+
+  // Display formatting (exactly as shown in UI)
+  displayTitle: string
+  displaySize: string
+  displayResolution?: string
+  displayDuration?: string
+
+  // Additional metadata
+  description?: string
+  tags?: string[]
+  category?: string
+  uploadedAt?: Date
+  creatorId?: string
+  encoding?: string
+  isPublic?: boolean
 }
 
 export interface UnifiedPurchase {
@@ -185,7 +213,7 @@ export class UnifiedPurchaseService {
   }
 
   /**
-   * Normalize content item data from various sources into unified format
+   * Normalize content item data with comprehensive metadata
    */
   private static normalizeContentItem(id: string, data: any): UnifiedPurchaseItem | null {
     try {
@@ -206,23 +234,61 @@ export class UnifiedPurchaseService {
       else if (mimeType.startsWith("audio/")) contentType = "audio"
       else if (mimeType.startsWith("image/")) contentType = "image"
 
+      // Format display values exactly as shown in UI
+      const fileSize = data.fileSize || data.size || 0
+      const displaySize = this.formatFileSize(fileSize)
+      const displayTitle = data.title || data.filename || data.originalFileName || "Untitled"
+      const displayResolution = data.resolution || (data.height ? `${data.height}p` : undefined)
+      const displayDuration = data.duration ? this.formatDuration(data.duration) : undefined
+
       const item: UnifiedPurchaseItem = {
+        // Basic metadata
         id,
-        title: data.title || data.filename || data.originalFileName || "Untitled",
+        title: displayTitle,
         fileUrl,
         mimeType,
-        fileSize: data.fileSize || data.size || 0,
-        thumbnailUrl: data.thumbnailUrl || "",
+        fileSize,
+        thumbnailUrl: data.thumbnailUrl || data.previewUrl || "",
         contentType,
-        duration: data.duration || undefined,
+        duration: data.duration || data.videoDuration || undefined,
         filename: data.filename || data.originalFileName || `${id}.${this.getFileExtension(mimeType)}`,
+
+        // Enhanced video metadata
+        resolution: data.resolution || data.videoResolution || undefined,
+        width: data.width || data.videoWidth || undefined,
+        height: data.height || data.videoHeight || undefined,
+        aspectRatio: data.aspectRatio || undefined,
+        quality: data.quality || undefined,
+        format: data.format || data.videoFormat || undefined,
+        codec: data.codec || data.videoCodec || undefined,
+        bitrate: data.bitrate || data.videoBitrate || undefined,
+        frameRate: data.frameRate || data.fps || undefined,
+        audioCodec: data.audioCodec || undefined,
+        audioSampleRate: data.audioSampleRate || undefined,
+
+        // Display formatting (matching UI exactly)
+        displayTitle,
+        displaySize,
+        displayResolution,
+        displayDuration,
+
+        // Additional metadata
+        description: data.description || undefined,
+        tags: data.tags || [],
+        category: data.category || undefined,
+        uploadedAt: data.uploadedAt || data.createdAt || new Date(),
+        creatorId: data.creatorId || data.userId || undefined,
+        encoding: data.encoding || undefined,
+        isPublic: data.isPublic || false,
       }
 
-      console.log(`✅ [Content Normalize] Normalized item ${id}:`, {
-        title: item.title,
+      console.log(`✅ [Content Normalize] Comprehensive metadata for ${id}:`, {
+        title: item.displayTitle,
+        size: item.displaySize,
+        resolution: item.displayResolution,
+        duration: item.displayDuration,
         fileUrl: item.fileUrl,
         contentType: item.contentType,
-        fileSize: item.fileSize,
       })
 
       return item
@@ -230,6 +296,26 @@ export class UnifiedPurchaseService {
       console.error(`❌ [Content Normalize] Error normalizing item ${id}:`, error)
       return null
     }
+  }
+
+  /**
+   * Format file size exactly as shown in UI
+   */
+  private static formatFileSize(bytes: number): string {
+    if (bytes === 0) return "0 Bytes"
+    const k = 1024
+    const sizes = ["Bytes", "KB", "MB", "GB"]
+    const i = Math.floor(Math.log(bytes) / Math.log(k))
+    return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + " " + sizes[i]
+  }
+
+  /**
+   * Format duration exactly as shown in UI
+   */
+  private static formatDuration(seconds: number): string {
+    const minutes = Math.floor(seconds / 60)
+    const remainingSeconds = seconds % 60
+    return `${minutes}:${remainingSeconds.toString().padStart(2, "0")}`
   }
 
   /**
