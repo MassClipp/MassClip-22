@@ -50,10 +50,9 @@ export async function GET(request: NextRequest) {
 
     const userId = decodedToken.uid
 
-    console.log("🔍 [Creator Uploads] Querying uploads for user:", userId)
-
-    // Try different collection names and user field variations
+    // Define all possible collection and field combinations to try
     const searchConfigs = [
+      // Standard collections
       { collection: "uploads", userField: "uid" },
       { collection: "uploads", userField: "userId" },
       { collection: "uploads", userField: "creatorId" },
@@ -61,154 +60,142 @@ export async function GET(request: NextRequest) {
       { collection: "userUploads", userField: "userId" },
       { collection: "creatorUploads", userField: "uid" },
       { collection: "creatorUploads", userField: "userId" },
-      { collection: "creatorUploads", userField: "creatorId" },
+
+      // User subcollections
+      { collection: `users/${userId}/uploads`, userField: null },
+      { collection: `users/${userId}/files`, userField: null },
+      { collection: `users/${userId}/content`, userField: null },
+
+      // Other possible collections
       { collection: "files", userField: "uid" },
       { collection: "files", userField: "userId" },
       { collection: "content", userField: "uid" },
       { collection: "content", userField: "userId" },
-      { collection: "content", userField: "creatorId" },
+      { collection: "media", userField: "uid" },
+      { collection: "media", userField: "userId" },
     ]
 
-    const uploads: any[] = []
+    const uploads = []
     let successfulConfig = null
 
+    // Try each collection and field combination
     for (const config of searchConfigs) {
       try {
-        console.log(`🔍 [Creator Uploads] Trying collection: ${config.collection} with field: ${config.userField}`)
+        console.log(`🔍 [Creator Uploads] Trying collection: ${config.collection}`)
 
-        const uploadsRef = db.collection(config.collection)
-        const uploadsQuery = uploadsRef.where(config.userField, "==", userId).orderBy("createdAt", "desc").limit(50)
+        let querySnapshot
 
-        const uploadsSnapshot = await uploadsQuery.get()
+        if (config.userField) {
+          // Query with user field filter
+          const collectionRef = db.collection(config.collection)
+          querySnapshot = await collectionRef.where(config.userField, "==", userId).get()
+        } else {
+          // Direct subcollection query (no filter needed)
+          const collectionRef = db.collection(config.collection)
+          querySnapshot = await collectionRef.get()
+        }
 
-        if (!uploadsSnapshot.empty) {
-          console.log(
-            `✅ [Creator Uploads] Found ${uploadsSnapshot.size} documents in ${config.collection} using ${config.userField}`,
-          )
+        if (!querySnapshot.empty) {
+          console.log(`✅ [Creator Uploads] Found ${querySnapshot.size} documents in ${config.collection}`)
           successfulConfig = config
 
-          uploadsSnapshot.docs.forEach((doc) => {
+          // Process each document
+          querySnapshot.forEach((doc) => {
             const data = doc.data()
-            console.log(`📄 [Creator Uploads] Document ${doc.id}:`, {
-              title: data.title,
-              filename: data.filename,
-              fileUrl: data.fileUrl,
-              mimeType: data.mimeType,
-              [config.userField]: data[config.userField],
-            })
+
+            // Only include published uploads if that's a requirement
+            // if (data.status !== 'published') continue;
 
             uploads.push({
               id: doc.id,
-              title: data.title || data.filename || data.originalFileName || data.name || "Untitled",
-              filename: data.filename || data.originalFileName || data.name || `${doc.id}.file`,
-              fileUrl: data.fileUrl || data.publicUrl || data.downloadUrl || data.url || "",
+              title: data.title || data.filename || data.name || "Untitled",
+              filename: data.filename || data.name || `${doc.id}.file`,
+              fileUrl: data.fileUrl || data.url || data.downloadUrl || "",
               thumbnailUrl: data.thumbnailUrl || data.thumbnail || "",
               mimeType: data.mimeType || data.fileType || data.contentType || "application/octet-stream",
               fileSize: data.fileSize || data.size || 0,
-              duration: data.duration || undefined,
-              createdAt: data.createdAt || data.uploadedAt || data.timestamp,
+              duration: data.duration,
               contentType: getContentType(data.mimeType || data.fileType || data.contentType || ""),
-              // Include all original data for debugging
-              _originalData: data,
+              createdAt: data.createdAt || data.uploadedAt || data.timestamp || new Date().toISOString(),
             })
           })
-          break
-        } else {
-          console.log(`📭 [Creator Uploads] No documents found in ${config.collection} with ${config.userField}`)
+
+          // If we found uploads, no need to check other collections
+          if (uploads.length > 0) {
+            break
+          }
         }
-      } catch (collectionError) {
-        console.log(
-          `⚠️ [Creator Uploads] Error querying ${config.collection} with ${config.userField}:`,
-          collectionError.message,
-        )
-        continue
+      } catch (error) {
+        console.error(`❌ [Creator Uploads] Error with ${config.collection}:`, error.message)
+        // Continue to next collection
       }
     }
 
-    // If no uploads found, try to find ANY documents for this user in any collection
-    if (uploads.length === 0) {
-      console.log("🔍 [Creator Uploads] No uploads found, trying broader search...")
+    // If we still haven't found uploads, try one more approach with user email
+    if (uploads.length === 0 && decodedToken.email) {
+      try {
+        console.log(`🔍 [Creator Uploads] Trying to find uploads by email: ${decodedToken.email}`)
 
-      const broadSearchCollections = ["uploads", "userUploads", "creatorUploads", "files", "content"]
+        const collections = ["uploads", "userUploads", "creatorUploads", "files", "content"]
 
-      for (const collectionName of broadSearchCollections) {
-        try {
-          // Try without ordering first to see if there are any documents at all
-          const allDocsRef = db.collection(collectionName)
-          const allDocsSnapshot = await allDocsRef.limit(10).get()
+        for (const collectionName of collections) {
+          try {
+            const collectionRef = db.collection(collectionName)
+            const emailQuery = await collectionRef.where("email", "==", decodedToken.email).get()
 
-          console.log(`📊 [Creator Uploads] Total documents in ${collectionName} collection: ${allDocsSnapshot.size}`)
+            if (!emailQuery.empty) {
+              console.log(`✅ [Creator Uploads] Found ${emailQuery.size} documents by email in ${collectionName}`)
 
-          if (!allDocsSnapshot.empty) {
-            console.log(`📄 [Creator Uploads] Sample documents from ${collectionName}:`)
-            allDocsSnapshot.docs.slice(0, 3).forEach((doc, index) => {
-              const data = doc.data()
-              console.log(`  Document ${index + 1}:`, {
-                id: doc.id,
-                uid: data.uid,
-                userId: data.userId,
-                creatorId: data.creatorId,
-                title: data.title,
-                filename: data.filename,
-                fileUrl: data.fileUrl,
-                hasCreatedAt: !!data.createdAt,
+              emailQuery.forEach((doc) => {
+                const data = doc.data()
+                uploads.push({
+                  id: doc.id,
+                  title: data.title || data.filename || data.name || "Untitled",
+                  filename: data.filename || data.name || `${doc.id}.file`,
+                  fileUrl: data.fileUrl || data.url || data.downloadUrl || "",
+                  thumbnailUrl: data.thumbnailUrl || data.thumbnail || "",
+                  mimeType: data.mimeType || data.fileType || data.contentType || "application/octet-stream",
+                  fileSize: data.fileSize || data.size || 0,
+                  duration: data.duration,
+                  contentType: getContentType(data.mimeType || data.fileType || data.contentType || ""),
+                  createdAt: data.createdAt || data.uploadedAt || data.timestamp || new Date().toISOString(),
+                })
               })
-            })
 
-            // Try to find documents that might belong to this user with different field names
-            const userVariations = [userId, decodedToken.email, decodedToken.firebase?.identities?.email?.[0]]
-
-            for (const userVar of userVariations) {
-              if (!userVar) continue
-
-              for (const field of ["uid", "userId", "creatorId", "email"]) {
-                try {
-                  const userQuery = db.collection(collectionName).where(field, "==", userVar).limit(5)
-                  const userSnapshot = await userQuery.get()
-
-                  if (!userSnapshot.empty) {
-                    console.log(
-                      `🎯 [Creator Uploads] Found ${userSnapshot.size} documents for user ${userVar} in ${collectionName}.${field}`,
-                    )
-                  }
-                } catch (queryError) {
-                  // Ignore query errors for non-indexed fields
-                }
+              if (uploads.length > 0) {
+                successfulConfig = { collection: collectionName, userField: "email" }
+                break
               }
             }
+          } catch (error) {
+            console.error(`❌ [Creator Uploads] Error with email query in ${collectionName}:`, error.message)
           }
-        } catch (broadSearchError) {
-          console.error(`❌ [Creator Uploads] Broad search error for ${collectionName}:`, broadSearchError)
         }
+      } catch (error) {
+        console.error("❌ [Creator Uploads] Error with email search:", error.message)
       }
     }
 
-    console.log(
-      `✅ [Creator Uploads] Returning ${uploads.length} uploads from config: ${JSON.stringify(successfulConfig)}`,
-    )
+    // Filter out uploads without valid URLs
+    const validUploads = uploads.filter((upload) => upload.fileUrl && upload.fileUrl.startsWith("http"))
+
+    console.log(`✅ [Creator Uploads] Returning ${validUploads.length} uploads`)
 
     return NextResponse.json({
       success: true,
-      uploads,
-      count: uploads.length,
+      uploads: validUploads,
+      count: validUploads.length,
       configUsed: successfulConfig,
       userId: userId,
-      userEmail: decodedToken.email,
-      debug: {
-        searchConfigsChecked: searchConfigs.length,
-        successfulConfig,
-        totalFound: uploads.length,
-      },
     })
   } catch (error) {
     console.error("❌ [Creator Uploads] Unexpected error:", error)
-    console.error("❌ [Creator Uploads] Error stack:", error instanceof Error ? error.stack : "No stack trace")
 
     return NextResponse.json(
       {
-        error: "Internal server error",
+        success: false,
+        error: "Failed to fetch uploads",
         details: error instanceof Error ? error.message : "Unknown error",
-        timestamp: new Date().toISOString(),
       },
       { status: 500 },
     )

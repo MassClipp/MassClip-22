@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox"
 import { Badge } from "@/components/ui/badge"
 import { useToast } from "@/hooks/use-toast"
-import { Loader2, Search, Video, Music, ImageIcon, File, AlertCircle, RefreshCw, Bug } from "lucide-react"
+import { Loader2, Search, Video, Music, ImageIcon, File, AlertCircle, RefreshCw, Bug, Database } from "lucide-react"
 import { motion } from "framer-motion"
 
 interface Upload {
@@ -43,14 +43,16 @@ export default function UploadSelector({ excludeIds = [], onSelect, onCancel, lo
   const [error, setError] = useState<string | null>(null)
   const [diagnosticData, setDiagnosticData] = useState<any>(null)
   const [showDiagnostic, setShowDiagnostic] = useState(false)
+  const [runningDiagnostic, setRunningDiagnostic] = useState(false)
 
   // Fetch diagnostic data
   const fetchDiagnostic = async () => {
     if (!user) return
 
     try {
+      setRunningDiagnostic(true)
       const token = await user.getIdToken()
-      const response = await fetch("/api/debug/find-user-uploads", {
+      const response = await fetch("/api/debug/firestore-structure", {
         headers: {
           Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
@@ -60,36 +62,12 @@ export default function UploadSelector({ excludeIds = [], onSelect, onCancel, lo
       if (response.ok) {
         const data = await response.json()
         setDiagnosticData(data)
-        console.log("🔍 [Upload Selector] Comprehensive diagnostic data:", data)
-
-        // If we found user documents, let's try to use them
-        if (data.results?.userDocuments?.length > 0) {
-          console.log("🎯 [Upload Selector] Found user documents, attempting to use them as uploads")
-
-          const foundUploads = data.results.userDocuments
-            .map((doc: any) => ({
-              id: doc.id,
-              title: doc.data.title || doc.data.filename || doc.data.name || "Untitled",
-              filename: doc.data.filename || doc.data.name || `${doc.id}.file`,
-              fileUrl: doc.data.fileUrl || doc.data.url || doc.data.downloadUrl || "",
-              thumbnailUrl: doc.data.thumbnailUrl || doc.data.thumbnail || "",
-              mimeType: doc.data.mimeType || doc.data.fileType || "application/octet-stream",
-              fileSize: doc.data.fileSize || doc.data.size || 0,
-              duration: doc.data.duration || undefined,
-              createdAt: doc.data.createdAt || doc.data.uploadedAt,
-              contentType: getContentType(doc.data.mimeType || doc.data.fileType || ""),
-            }))
-            .filter((upload: any) => upload.fileUrl && upload.fileUrl.startsWith("http"))
-
-          if (foundUploads.length > 0) {
-            setUploads(foundUploads)
-            setFilteredUploads(foundUploads)
-            console.log(`✅ [Upload Selector] Loaded ${foundUploads.length} uploads from diagnostic`)
-          }
-        }
+        console.log("🔍 [Upload Selector] Database structure diagnostic:", data)
       }
     } catch (err) {
       console.error("❌ [Upload Selector] Diagnostic fetch failed:", err)
+    } finally {
+      setRunningDiagnostic(false)
     }
   }
 
@@ -121,22 +99,8 @@ export default function UploadSelector({ excludeIds = [], onSelect, onCancel, lo
 
       const uploadsData = Array.isArray(data.uploads) ? data.uploads : []
 
-      // Transform uploads and determine content type
-      const transformedUploads: Upload[] = uploadsData.map((upload: any) => ({
-        id: upload.id,
-        title: upload.title || upload.filename || upload.originalFileName || "Untitled",
-        filename: upload.filename || upload.originalFileName || `${upload.id}.file`,
-        fileUrl: upload.fileUrl || upload.publicUrl || upload.downloadUrl || "",
-        thumbnailUrl: upload.thumbnailUrl || "",
-        mimeType: upload.mimeType || upload.fileType || "application/octet-stream",
-        fileSize: upload.fileSize || upload.size || 0,
-        duration: upload.duration || undefined,
-        createdAt: upload.createdAt || upload.uploadedAt,
-        contentType: getContentType(upload.mimeType || upload.fileType || ""),
-      }))
-
       // Filter out excluded uploads and uploads without valid URLs
-      const availableUploads = transformedUploads.filter(
+      const availableUploads = uploadsData.filter(
         (upload) => !excludeIds.includes(upload.id) && upload.fileUrl && upload.fileUrl.startsWith("http"),
       )
 
@@ -275,16 +239,41 @@ export default function UploadSelector({ excludeIds = [], onSelect, onCancel, lo
             <RefreshCw className="h-4 w-4 mr-2" />
             Retry
           </Button>
-          <Button variant="outline" onClick={() => setShowDiagnostic(!showDiagnostic)}>
-            <Bug className="h-4 w-4 mr-2" />
-            Debug Info
+          <Button variant="outline" onClick={fetchDiagnostic} disabled={runningDiagnostic}>
+            {runningDiagnostic ? (
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            ) : (
+              <Database className="h-4 w-4 mr-2" />
+            )}
+            Database Diagnostic
           </Button>
         </div>
 
-        {showDiagnostic && diagnosticData && (
+        {diagnosticData && (
           <div className="mt-4 p-4 bg-zinc-800 rounded-lg text-left text-sm">
             <h4 className="font-semibold mb-2">Database Diagnostic:</h4>
-            <pre className="text-xs overflow-auto max-h-40">{JSON.stringify(diagnosticData, null, 2)}</pre>
+            <div className="space-y-1">
+              <p>Collections: {diagnosticData.collections?.length || 0}</p>
+              <p>Collections with your data: {diagnosticData.summary?.collectionsWithUserData || 0}</p>
+
+              {diagnosticData.collections?.length > 0 && (
+                <div>
+                  <p className="font-medium mt-2">Available Collections:</p>
+                  <p className="text-xs text-zinc-400">{diagnosticData.collections.join(", ")}</p>
+                </div>
+              )}
+
+              {Object.entries(diagnosticData.collectionData || {})
+                .filter(([_, data]) => data.userDocuments > 0)
+                .map(([collection, data]) => (
+                  <div key={collection} className="mt-2 p-2 bg-zinc-700/30 rounded">
+                    <p className="text-green-400">
+                      ✅ Found your data in: <span className="font-mono">{collection}</span>
+                    </p>
+                    <p className="text-xs text-zinc-400">Documents: {data.userDocuments}</p>
+                  </div>
+                ))}
+            </div>
           </div>
         )}
       </div>
@@ -330,8 +319,14 @@ export default function UploadSelector({ excludeIds = [], onSelect, onCancel, lo
           <Button variant="outline" size="sm" onClick={handleDeselectAll} className="border-zinc-700">
             Deselect All
           </Button>
-          <Button variant="outline" size="sm" onClick={() => setShowDiagnostic(!showDiagnostic)}>
-            <Bug className="h-4 w-4 mr-2" />
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={fetchDiagnostic}
+            disabled={runningDiagnostic}
+            className="border-zinc-700"
+          >
+            {runningDiagnostic ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Bug className="h-4 w-4 mr-2" />}
             Debug
           </Button>
         </div>
@@ -340,36 +335,25 @@ export default function UploadSelector({ excludeIds = [], onSelect, onCancel, lo
       {/* Debug Info */}
       {showDiagnostic && diagnosticData && (
         <div className="p-4 bg-zinc-800 rounded-lg text-sm">
-          <h4 className="font-semibold mb-2">Upload Search Results:</h4>
+          <h4 className="font-semibold mb-2">Database Structure:</h4>
           <div className="space-y-2">
-            <p>Total Collections: {diagnosticData.summary?.totalCollections || 0}</p>
-            <p>Collections with Data: {diagnosticData.summary?.collectionsWithData || 0}</p>
-            <p>User Documents Found: {diagnosticData.summary?.userDocuments || 0}</p>
-            <p>Potential Matches: {diagnosticData.summary?.potentialMatches || 0}</p>
+            <p>Total Collections: {diagnosticData.collections?.length || 0}</p>
+            <p>Collections with Your Data: {diagnosticData.summary?.collectionsWithUserData || 0}</p>
 
-            {diagnosticData.results?.collectionsFound?.length > 0 && (
-              <div>
-                <p className="font-medium">Collections Found:</p>
-                <p className="text-xs text-zinc-400">{diagnosticData.results.collectionsFound.join(", ")}</p>
-              </div>
-            )}
-
-            {diagnosticData.results?.userDocuments?.length > 0 && (
-              <div>
-                <p className="font-medium text-green-400">✅ Found Your Uploads!</p>
-                <p className="text-xs text-zinc-400">
-                  Found in:{" "}
-                  {diagnosticData.results.userDocuments.map((doc: any) => `${doc.collection}.${doc.field}`).join(", ")}
-                </p>
-              </div>
-            )}
+            {Object.entries(diagnosticData.collectionData || {})
+              .filter(([_, data]) => data.userDocuments > 0)
+              .map(([collection, data]) => (
+                <div key={collection} className="mt-2 p-2 bg-zinc-700/30 rounded">
+                  <p className="text-green-400">
+                    ✅ Found your data in: <span className="font-mono">{collection}</span>
+                  </p>
+                  <p className="text-xs text-zinc-400">Documents: {data.userDocuments}</p>
+                </div>
+              ))}
           </div>
-          <details className="mt-2">
-            <summary className="cursor-pointer">Full Diagnostic Data</summary>
-            <pre className="text-xs overflow-auto max-h-40 mt-2 p-2 bg-zinc-900 rounded">
-              {JSON.stringify(diagnosticData, null, 2)}
-            </pre>
-          </details>
+          <Button variant="link" size="sm" onClick={() => setShowDiagnostic(false)} className="mt-2 text-zinc-400">
+            Hide Details
+          </Button>
         </div>
       )}
 
@@ -385,6 +369,23 @@ export default function UploadSelector({ excludeIds = [], onSelect, onCancel, lo
             <div className="space-y-2 text-sm text-zinc-500">
               <p>To add content to this bundle, you need to upload files first.</p>
               <p>Go to Dashboard → Uploads to add your content.</p>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setShowDiagnostic(true)
+                  fetchDiagnostic()
+                }}
+                className="mt-2"
+                disabled={runningDiagnostic}
+              >
+                {runningDiagnostic ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <Database className="h-4 w-4 mr-2" />
+                )}
+                Run Database Diagnostic
+              </Button>
             </div>
           )}
         </div>
