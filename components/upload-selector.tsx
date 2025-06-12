@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox"
 import { Badge } from "@/components/ui/badge"
 import { useToast } from "@/hooks/use-toast"
-import { Loader2, Search, Video, Music, ImageIcon, File, AlertCircle } from "lucide-react"
+import { Loader2, Search, Video, Music, ImageIcon, File, AlertCircle, RefreshCw, Bug } from "lucide-react"
 import { motion } from "framer-motion"
 
 interface Upload {
@@ -41,95 +41,112 @@ export default function UploadSelector({ excludeIds = [], onSelect, onCancel, lo
   const [typeFilter, setTypeFilter] = useState("all")
   const [fetchLoading, setFetchLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [diagnosticData, setDiagnosticData] = useState<any>(null)
+  const [showDiagnostic, setShowDiagnostic] = useState(false)
+
+  // Fetch diagnostic data
+  const fetchDiagnostic = async () => {
+    if (!user) return
+
+    try {
+      const token = await user.getIdToken()
+      const response = await fetch("/api/debug/uploads-diagnostic", {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        setDiagnosticData(data)
+        console.log("🔍 [Upload Selector] Diagnostic data:", data)
+      }
+    } catch (err) {
+      console.error("❌ [Upload Selector] Diagnostic fetch failed:", err)
+    }
+  }
 
   // Fetch uploads
-  useEffect(() => {
-    const fetchUploads = async () => {
-      if (!user) return
+  const fetchUploads = async () => {
+    if (!user) return
 
-      try {
-        setFetchLoading(true)
-        setError(null)
+    try {
+      setFetchLoading(true)
+      setError(null)
 
-        console.log("🔍 [Upload Selector] Fetching uploads for user:", user.uid)
+      console.log("🔍 [Upload Selector] Fetching uploads for user:", user.uid)
 
-        const token = await user.getIdToken()
-        // Use the correct API endpoint
-        const response = await fetch("/api/creator/uploads", {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "Content-Type": "application/json",
-          },
-        })
+      const token = await user.getIdToken()
+      const response = await fetch("/api/creator/uploads", {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      })
 
-        if (!response.ok) {
-          const errorData = await response.json().catch(() => ({}))
-          throw new Error(errorData.error || `HTTP ${response.status}: Failed to fetch uploads`)
-        }
-
-        const data = await response.json()
-        console.log("✅ [Upload Selector] Fetched uploads:", data)
-
-        const uploadsData = Array.isArray(data.uploads) ? data.uploads : []
-
-        // Transform uploads and determine content type
-        const transformedUploads: Upload[] = uploadsData.map((upload: any) => ({
-          id: upload.id,
-          title: upload.title || upload.filename || upload.originalFileName || "Untitled",
-          filename: upload.filename || upload.originalFileName || `${upload.id}.file`,
-          fileUrl: upload.fileUrl || upload.publicUrl || upload.downloadUrl || "",
-          thumbnailUrl: upload.thumbnailUrl || "",
-          mimeType: upload.mimeType || upload.fileType || "application/octet-stream",
-          fileSize: upload.fileSize || upload.size || 0,
-          duration: upload.duration || undefined,
-          createdAt: upload.createdAt || upload.uploadedAt,
-          contentType: getContentType(upload.mimeType || upload.fileType || ""),
-        }))
-
-        // Filter out excluded uploads and uploads without valid URLs
-        const availableUploads = transformedUploads.filter(
-          (upload) => !excludeIds.includes(upload.id) && upload.fileUrl && upload.fileUrl.startsWith("http"),
-        )
-
-        setUploads(availableUploads)
-        setFilteredUploads(availableUploads)
-        console.log(`✅ [Upload Selector] Loaded ${availableUploads.length} available uploads`)
-      } catch (err) {
-        console.error("❌ [Upload Selector] Error fetching uploads:", err)
-
-        // Try to get more detailed error information
-        let errorMessage = "Failed to load uploads"
-        if (err instanceof Error) {
-          errorMessage = err.message
-        }
-
-        // If it's a 500 error, suggest checking the diagnostic endpoint
-        if (errorMessage.includes("500") || errorMessage.includes("Internal Server Error")) {
-          errorMessage = "Server error while loading uploads. Please check the console for details."
-
-          // Optionally call the diagnostic endpoint for more info
-          try {
-            const diagnosticResponse = await fetch("/api/debug/uploads-diagnostic")
-            const diagnosticData = await diagnosticResponse.json()
-            console.log("🔍 [Upload Selector] Diagnostic data:", diagnosticData)
-          } catch (diagnosticError) {
-            console.log("⚠️ [Upload Selector] Could not fetch diagnostic data:", diagnosticError)
-          }
-        }
-
-        setError(errorMessage)
-        toast({
-          title: "Error",
-          description: errorMessage,
-          variant: "destructive",
-        })
-      } finally {
-        setFetchLoading(false)
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.error || `HTTP ${response.status}: Failed to fetch uploads`)
       }
-    }
 
+      const data = await response.json()
+      console.log("✅ [Upload Selector] API Response:", data)
+
+      const uploadsData = Array.isArray(data.uploads) ? data.uploads : []
+
+      // Transform uploads and determine content type
+      const transformedUploads: Upload[] = uploadsData.map((upload: any) => ({
+        id: upload.id,
+        title: upload.title || upload.filename || upload.originalFileName || "Untitled",
+        filename: upload.filename || upload.originalFileName || `${upload.id}.file`,
+        fileUrl: upload.fileUrl || upload.publicUrl || upload.downloadUrl || "",
+        thumbnailUrl: upload.thumbnailUrl || "",
+        mimeType: upload.mimeType || upload.fileType || "application/octet-stream",
+        fileSize: upload.fileSize || upload.size || 0,
+        duration: upload.duration || undefined,
+        createdAt: upload.createdAt || upload.uploadedAt,
+        contentType: getContentType(upload.mimeType || upload.fileType || ""),
+      }))
+
+      // Filter out excluded uploads and uploads without valid URLs
+      const availableUploads = transformedUploads.filter(
+        (upload) => !excludeIds.includes(upload.id) && upload.fileUrl && upload.fileUrl.startsWith("http"),
+      )
+
+      setUploads(availableUploads)
+      setFilteredUploads(availableUploads)
+      console.log(`✅ [Upload Selector] Loaded ${availableUploads.length} available uploads`)
+
+      // If no uploads found, fetch diagnostic data
+      if (availableUploads.length === 0) {
+        await fetchDiagnostic()
+      }
+    } catch (err) {
+      console.error("❌ [Upload Selector] Error fetching uploads:", err)
+
+      let errorMessage = "Failed to load uploads"
+      if (err instanceof Error) {
+        errorMessage = err.message
+      }
+
+      setError(errorMessage)
+      toast({
+        title: "Error",
+        description: errorMessage,
+        variant: "destructive",
+      })
+
+      // Fetch diagnostic data on error
+      await fetchDiagnostic()
+    } finally {
+      setFetchLoading(false)
+    }
+  }
+
+  useEffect(() => {
     fetchUploads()
-  }, [user, excludeIds, toast])
+  }, [user, excludeIds])
 
   // Determine content type from MIME type
   const getContentType = (mimeType: string): "video" | "audio" | "image" | "document" => {
@@ -227,9 +244,23 @@ export default function UploadSelector({ excludeIds = [], onSelect, onCancel, lo
       <div className="text-center py-12">
         <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
         <p className="text-red-400 mb-4">{error}</p>
-        <Button variant="outline" onClick={() => window.location.reload()}>
-          Retry
-        </Button>
+        <div className="flex gap-2 justify-center">
+          <Button variant="outline" onClick={fetchUploads}>
+            <RefreshCw className="h-4 w-4 mr-2" />
+            Retry
+          </Button>
+          <Button variant="outline" onClick={() => setShowDiagnostic(!showDiagnostic)}>
+            <Bug className="h-4 w-4 mr-2" />
+            Debug Info
+          </Button>
+        </div>
+
+        {showDiagnostic && diagnosticData && (
+          <div className="mt-4 p-4 bg-zinc-800 rounded-lg text-left text-sm">
+            <h4 className="font-semibold mb-2">Database Diagnostic:</h4>
+            <pre className="text-xs overflow-auto max-h-40">{JSON.stringify(diagnosticData, null, 2)}</pre>
+          </div>
+        )}
       </div>
     )
   }
@@ -273,15 +304,46 @@ export default function UploadSelector({ excludeIds = [], onSelect, onCancel, lo
           <Button variant="outline" size="sm" onClick={handleDeselectAll} className="border-zinc-700">
             Deselect All
           </Button>
+          <Button variant="outline" size="sm" onClick={() => setShowDiagnostic(!showDiagnostic)}>
+            <Bug className="h-4 w-4 mr-2" />
+            Debug
+          </Button>
         </div>
       </div>
+
+      {/* Debug Info */}
+      {showDiagnostic && diagnosticData && (
+        <div className="p-4 bg-zinc-800 rounded-lg text-sm">
+          <h4 className="font-semibold mb-2">Database Diagnostic:</h4>
+          <div className="space-y-2">
+            <p>Total Collections: {diagnosticData.summary?.totalCollections || 0}</p>
+            <p>Collections with Data: {diagnosticData.summary?.collectionsWithData || 0}</p>
+            <p>Total Documents: {diagnosticData.summary?.totalDocuments || 0}</p>
+            <p>User Documents: {diagnosticData.summary?.userDocuments || 0}</p>
+          </div>
+          <details className="mt-2">
+            <summary className="cursor-pointer">Full Diagnostic Data</summary>
+            <pre className="text-xs overflow-auto max-h-40 mt-2 p-2 bg-zinc-900 rounded">
+              {JSON.stringify(diagnosticData, null, 2)}
+            </pre>
+          </details>
+        </div>
+      )}
 
       {/* Upload Grid */}
       {filteredUploads.length === 0 ? (
         <div className="text-center py-12">
-          <p className="text-zinc-400">
-            {uploads.length === 0 ? "No uploads found" : "No uploads match your search criteria"}
+          <p className="text-zinc-400 mb-4">
+            {uploads.length === 0
+              ? "No uploads found in your content library"
+              : "No uploads match your search criteria"}
           </p>
+          {uploads.length === 0 && (
+            <div className="space-y-2 text-sm text-zinc-500">
+              <p>To add content to this bundle, you need to upload files first.</p>
+              <p>Go to Dashboard → Uploads to add your content.</p>
+            </div>
+          )}
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 max-h-96 overflow-y-auto">
