@@ -533,7 +533,7 @@ export default function ProductBoxContentPage({ params }: { params: { id: string
             >
               <CardContent className="p-0">
                 {/* Media Preview */}
-                <div className="relative aspect-video bg-gradient-to-br from-zinc-800 to-zinc-900 overflow-hidden">
+                <div className="relative aspect-[9/16] bg-gradient-to-br from-zinc-800 to-zinc-900 overflow-hidden">
                   {item.contentType === "video" && item.fileUrl ? (
                     <div className="relative w-full h-full">
                       <video

@@ -134,7 +134,7 @@ export default function ProductBoxContentViewer({
         )
       case "image":
         return (
-          <div className="relative aspect-video flex items-center justify-center bg-black/10 rounded-lg overflow-hidden">
+          <div className="relative aspect-[9/16] flex items-center justify-center bg-black/10 rounded-lg overflow-hidden">
             <img
               src={currentItem.fileUrl || "/placeholder.svg"}
               alt={currentItem.title}
@@ -145,7 +145,7 @@ export default function ProductBoxContentViewer({
       case "document":
       default:
         return (
-          <div className="aspect-video flex flex-col items-center justify-center bg-zinc-100 dark:bg-zinc-800 rounded-lg p-8 text-center">
+          <div className="aspect-[9/16] flex flex-col items-center justify-center bg-zinc-100 dark:bg-zinc-800 rounded-lg p-8 text-center">
             <FileText className="h-16 w-16 text-zinc-400 mb-4" />
             <h3 className="text-lg font-medium mb-2">{currentItem.title}</h3>
             <p className="text-sm text-zinc-500 mb-4">{currentItem.description || "Document file"}</p>

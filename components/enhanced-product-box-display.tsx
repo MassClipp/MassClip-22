@@ -207,7 +207,7 @@ export default function EnhancedProductBoxDisplay({
         {/* Featured Video Content */}
         {firstVideoItem && (
           <div className="relative">
-            <div className="aspect-video bg-black">
+            <div className="aspect-[9/16] bg-black">
               <video
                 src={firstVideoItem.fileUrl}
                 className="w-full h-full object-cover"
@@ -300,7 +300,7 @@ export default function EnhancedProductBoxDisplay({
               {contentItems.slice(0, 6).map((item) => (
                 <div
                   key={item.id}
-                  className="relative aspect-video bg-zinc-800 rounded overflow-hidden group cursor-pointer"
+                  className="relative aspect-[9/16] bg-zinc-800 rounded overflow-hidden group cursor-pointer"
                   onClick={() => window.open(item.fileUrl, "_blank")}
                 >
                   {item.contentType === "video" ? (
@@ -346,7 +346,7 @@ export default function EnhancedProductBoxDisplay({
               ))}
 
               {contentItems.length > 6 && (
-                <div className="aspect-video bg-zinc-800/50 rounded flex items-center justify-center border-2 border-dashed border-zinc-700">
+                <div className="aspect-[9/16] bg-zinc-800/50 rounded flex items-center justify-center border-2 border-dashed border-zinc-700">
                   <div className="text-center">
                     <p className="text-xs text-zinc-500">+{contentItems.length - 6} more</p>
                   </div>
