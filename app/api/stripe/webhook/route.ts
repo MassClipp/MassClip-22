@@ -82,6 +82,36 @@ async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session) 
       creatorId: creatorId || "",
     })
 
+    // Also ensure purchase is written to main purchases collection for API compatibility
+    const mainPurchaseData = {
+      userId: buyerUid,
+      buyerUid,
+      productBoxId,
+      itemId: productBoxId,
+      sessionId: session.id,
+      paymentIntentId: session.payment_intent,
+      amount: session.amount_total ? session.amount_total / 100 : 0,
+      currency: session.currency || "usd",
+      timestamp: new Date(),
+      createdAt: new Date(),
+      purchasedAt: new Date(),
+      status: "completed",
+      type: "product_box",
+      itemTitle: productBoxData.title || "Untitled Product Box",
+      itemDescription: productBoxData.description || "",
+      thumbnailUrl: productBoxData.thumbnailUrl || "",
+      customPreviewThumbnail: productBoxData.customPreviewThumbnail || "",
+      creatorId: creatorId,
+      creatorName: creatorData?.displayName || creatorData?.name || "",
+      creatorUsername: creatorData?.username || "",
+      accessUrl: `/product-box/${productBoxId}/content`,
+    }
+
+    // Write to main purchases collection with document ID as sessionId for easy lookup
+    await db.collection("purchases").doc(session.id).set(mainPurchaseData)
+
+    console.log("✅ [Webhook] Purchase written to main collection with ID:", session.id)
+
     // Also record in legacy purchases collection for backward compatibility
     const legacyPurchaseData = {
       productBoxId,

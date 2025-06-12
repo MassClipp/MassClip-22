@@ -99,6 +99,7 @@ export default function MyPurchasesPage() {
   const [searchTerm, setSearchTerm] = useState("")
   const [sortBy, setSortBy] = useState<string>("newest")
   const router = useRouter()
+  const [debugInfo, setDebugInfo] = useState<any>(null)
 
   // Fetch user purchases from unified collection
   const fetchPurchases = async () => {
@@ -181,6 +182,24 @@ export default function MyPurchasesPage() {
   const handleRefresh = async () => {
     setRefreshing(true)
     await fetchPurchases()
+  }
+
+  const handleDebug = async () => {
+    if (!user) return
+
+    try {
+      const response = await fetch(`/api/debug-purchases?userId=${user.uid}`)
+      const data = await response.json()
+      setDebugInfo(data)
+      console.log("🔍 [Debug] Purchase data:", data)
+
+      toast({
+        title: "Debug Info",
+        description: `Main: ${data.mainPurchases?.length || 0}, User: ${data.userPurchases?.length || 0}, Unified: ${data.unifiedPurchases?.length || 0}`,
+      })
+    } catch (error) {
+      console.error("Debug failed:", error)
+    }
   }
 
   // Filter and sort purchases
@@ -593,15 +612,25 @@ export default function MyPurchasesPage() {
             <p className="text-zinc-400 mt-1">Access your purchased content and download history</p>
           </div>
 
-          <Button
-            onClick={handleRefresh}
-            variant="outline"
-            disabled={refreshing}
-            className="border-zinc-700 text-zinc-300 hover:bg-zinc-800 hover:text-white"
-          >
-            <RefreshCw className={`h-4 w-4 mr-2 ${refreshing ? "animate-spin" : ""}`} />
-            Refresh
-          </Button>
+          <div className="flex gap-2">
+            <Button
+              onClick={handleRefresh}
+              variant="outline"
+              disabled={refreshing}
+              className="border-zinc-700 text-zinc-300 hover:bg-zinc-800 hover:text-white"
+            >
+              <RefreshCw className={`h-4 w-4 mr-2 ${refreshing ? "animate-spin" : ""}`} />
+              Refresh
+            </Button>
+
+            <Button
+              onClick={handleDebug}
+              variant="outline"
+              className="border-zinc-700 text-zinc-300 hover:bg-zinc-800 hover:text-white"
+            >
+              Debug
+            </Button>
+          </div>
         </motion.div>
 
         {/* Clean Filters */}

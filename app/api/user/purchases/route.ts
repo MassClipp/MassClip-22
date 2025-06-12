@@ -35,90 +35,21 @@ export async function GET(request: NextRequest) {
 
     console.log("🔍 [Purchases API] Fetching purchases for user:", finalUserId)
 
-    // Check ALL possible locations for purchases
+    // Check ALL possible locations for purchases with more thorough queries
     const allPurchases = []
 
-    // Location 1: userPurchases/{userId}/purchases (unified collection)
-    try {
-      console.log("🔍 [Purchases API] Checking userPurchases collection...")
-      const unifiedPurchasesSnapshot = await db
-        .collection("userPurchases")
-        .doc(finalUserId)
-        .collection("purchases")
-        .get()
-
-      console.log(`📊 [Purchases API] userPurchases found ${unifiedPurchasesSnapshot.size} items`)
-
-      unifiedPurchasesSnapshot.forEach((doc) => {
-        const data = doc.data()
-        allPurchases.push({
-          id: doc.id,
-          source: "unified",
-          ...data,
-          purchasedAt: data.purchasedAt?.toDate?.() || new Date(data.purchasedAt || Date.now()),
-        })
-      })
-    } catch (error) {
-      console.warn("⚠️ [Purchases API] Error checking userPurchases:", error)
-    }
-
-    // Location 2: users/{userId}/purchases subcollection
-    try {
-      console.log("🔍 [Purchases API] Checking users subcollection...")
-      const userPurchasesSnapshot = await db.collection("users").doc(finalUserId).collection("purchases").get()
-
-      console.log(`📊 [Purchases API] users subcollection found ${userPurchasesSnapshot.size} items`)
-
-      userPurchasesSnapshot.forEach((doc) => {
-        const data = doc.data()
-        // Avoid duplicates by checking if we already have this purchase
-        const existingPurchase = allPurchases.find(
-          (p) =>
-            p.sessionId === data.sessionId ||
-            p.id === doc.id ||
-            (p.productBoxId === data.productBoxId &&
-              Math.abs(
-                new Date(p.purchasedAt).getTime() -
-                  (data.timestamp?.toDate?.() || new Date(data.createdAt || Date.now())).getTime(),
-              ) < 60000),
-        )
-
-        if (!existingPurchase) {
-          allPurchases.push({
-            id: doc.id,
-            source: "legacy_user",
-            ...data,
-            purchasedAt:
-              data.timestamp?.toDate?.() || data.createdAt?.toDate?.() || new Date(data.purchasedAt || Date.now()),
-          })
-        }
-      })
-    } catch (error) {
-      console.warn("⚠️ [Purchases API] Error checking users subcollection:", error)
-    }
-
-    // Location 3: purchases collection with userId field
+    // Location 1: Main purchases collection by document ID (sessionId)
     try {
       console.log("🔍 [Purchases API] Checking main purchases collection...")
-      const mainPurchasesSnapshot = await db.collection("purchases").where("userId", "==", finalUserId).get()
+      const mainPurchasesSnapshot = await db.collection("purchases").get()
 
-      console.log(`📊 [Purchases API] main purchases found ${mainPurchasesSnapshot.size} items`)
+      console.log(`📊 [Purchases API] Total documents in purchases collection: ${mainPurchasesSnapshot.size}`)
 
       mainPurchasesSnapshot.forEach((doc) => {
         const data = doc.data()
-        // Avoid duplicates
-        const existingPurchase = allPurchases.find(
-          (p) =>
-            p.sessionId === data.sessionId ||
-            p.id === doc.id ||
-            (p.productBoxId === data.productBoxId &&
-              Math.abs(
-                new Date(p.purchasedAt).getTime() -
-                  (data.createdAt?.toDate?.() || new Date(data.purchasedAt || Date.now())).getTime(),
-              ) < 60000),
-        )
-
-        if (!existingPurchase) {
+        // Check if this purchase belongs to our user
+        if (data.userId === finalUserId || data.buyerUid === finalUserId) {
+          console.log(`✅ [Purchases API] Found purchase in main collection:`, doc.id, data)
           allPurchases.push({
             id: doc.id,
             source: "main_collection",
@@ -132,45 +63,78 @@ export async function GET(request: NextRequest) {
       console.warn("⚠️ [Purchases API] Error checking main purchases collection:", error)
     }
 
-    // Location 4: purchases collection with buyerUid field
+    // Location 2: userPurchases/{userId}/purchases (unified collection)
     try {
-      console.log("🔍 [Purchases API] Checking purchases with buyerUid...")
-      const buyerPurchasesSnapshot = await db.collection("purchases").where("buyerUid", "==", finalUserId).get()
+      console.log("🔍 [Purchases API] Checking userPurchases collection...")
+      const unifiedPurchasesSnapshot = await db
+        .collection("userPurchases")
+        .doc(finalUserId)
+        .collection("purchases")
+        .get()
 
-      console.log(`📊 [Purchases API] buyerUid purchases found ${buyerPurchasesSnapshot.size} items`)
+      console.log(`📊 [Purchases API] userPurchases found ${unifiedPurchasesSnapshot.size} items`)
 
-      buyerPurchasesSnapshot.forEach((doc) => {
+      unifiedPurchasesSnapshot.forEach((doc) => {
         const data = doc.data()
         // Avoid duplicates
-        const existingPurchase = allPurchases.find(
-          (p) =>
-            p.sessionId === data.sessionId ||
-            p.id === doc.id ||
-            (p.productBoxId === data.productBoxId &&
-              Math.abs(
-                new Date(p.purchasedAt).getTime() -
-                  (data.createdAt?.toDate?.() || new Date(data.purchasedAt || Date.now())).getTime(),
-              ) < 60000),
-        )
-
+        const existingPurchase = allPurchases.find((p) => p.sessionId === data.sessionId || p.id === doc.id)
         if (!existingPurchase) {
+          console.log(`✅ [Purchases API] Found purchase in unified collection:`, doc.id, data)
           allPurchases.push({
             id: doc.id,
-            source: "buyer_uid",
+            source: "unified",
             ...data,
-            purchasedAt:
-              data.createdAt?.toDate?.() || data.timestamp?.toDate?.() || new Date(data.purchasedAt || Date.now()),
+            purchasedAt: data.purchasedAt?.toDate?.() || new Date(data.purchasedAt || Date.now()),
           })
         }
       })
     } catch (error) {
-      console.warn("⚠️ [Purchases API] Error checking buyerUid purchases:", error)
+      console.warn("⚠️ [Purchases API] Error checking userPurchases:", error)
+    }
+
+    // Location 3: users/{userId}/purchases subcollection
+    try {
+      console.log("🔍 [Purchases API] Checking users subcollection...")
+      const userPurchasesSnapshot = await db.collection("users").doc(finalUserId).collection("purchases").get()
+
+      console.log(`📊 [Purchases API] users subcollection found ${userPurchasesSnapshot.size} items`)
+
+      userPurchasesSnapshot.forEach((doc) => {
+        const data = doc.data()
+        // Avoid duplicates
+        const existingPurchase = allPurchases.find((p) => p.sessionId === data.sessionId || p.id === doc.id)
+        if (!existingPurchase) {
+          console.log(`✅ [Purchases API] Found purchase in users subcollection:`, doc.id, data)
+          allPurchases.push({
+            id: doc.id,
+            source: "legacy_user",
+            ...data,
+            purchasedAt:
+              data.timestamp?.toDate?.() || data.createdAt?.toDate?.() || new Date(data.purchasedAt || Date.now()),
+          })
+        }
+      })
+    } catch (error) {
+      console.warn("⚠️ [Purchases API] Error checking users subcollection:", error)
     }
 
     console.log(`📊 [Purchases API] Total unique purchases found: ${allPurchases.length}`)
 
     if (allPurchases.length === 0) {
       console.log("📭 [Purchases API] No purchases found in any location")
+
+      // Additional debugging - check if user exists and has any data
+      try {
+        const userDoc = await db.collection("users").doc(finalUserId).get()
+        if (userDoc.exists) {
+          console.log("👤 [Purchases API] User document exists:", userDoc.data())
+        } else {
+          console.log("❌ [Purchases API] User document does not exist")
+        }
+      } catch (error) {
+        console.warn("⚠️ [Purchases API] Error checking user document:", error)
+      }
+
       return NextResponse.json({ purchases: [] })
     }
 
