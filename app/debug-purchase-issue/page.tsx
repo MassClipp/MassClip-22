@@ -14,8 +14,8 @@ export default function DebugPurchaseIssuePage() {
   const { user } = useAuth()
   const { toast } = useToast()
   const [loading, setLoading] = useState(false)
-  const [diagnosticData, setDiagnosticData] = useState(null)
-  const [webhookData, setWebhookData] = useState(null)
+  const [diagnosticData, setDiagnosticData] = useState<any>(null)
+  const [webhookData, setWebhookData] = useState<any>(null)
 
   // Manual completion form
   const [sessionId, setSessionId] = useState("")
@@ -41,8 +41,8 @@ export default function DebugPurchaseIssuePage() {
 
       // Get webhook diagnostic
       const webhookResponse = await fetch("/api/debug/webhook-diagnostic")
-      const webhookData = await webhookResponse.json()
-      setWebhookData(webhookData)
+      const webhookDataResponse = await webhookResponse.json()
+      setWebhookData(webhookDataResponse)
 
       toast({
         title: "Diagnostic Complete",
@@ -232,7 +232,7 @@ export default function DebugPurchaseIssuePage() {
                 ) : (
                   <div className="space-y-2">
                     {diagnosticData.collections?.unifiedPurchases?.documents?.length > 0 ? (
-                      diagnosticData.collections.unifiedPurchases.documents.map((doc, index) => (
+                      diagnosticData.collections.unifiedPurchases.documents.map((doc: any, index: number) => (
                         <div key={index} className="p-3 bg-zinc-800 rounded text-sm">
                           <div className="font-mono text-zinc-400">ID: {doc.id}</div>
                           <div className="text-white">Product: {doc.data?.productBoxTitle || "Unknown"}</div>
@@ -270,7 +270,7 @@ export default function DebugPurchaseIssuePage() {
                 ) : (
                   <div className="space-y-2">
                     {diagnosticData.collections?.legacyPurchases?.documents?.length > 0 ? (
-                      diagnosticData.collections.legacyPurchases.documents.map((doc, index) => (
+                      diagnosticData.collections.legacyPurchases.documents.map((doc: any, index: number) => (
                         <div key={index} className="p-3 bg-zinc-800 rounded text-sm">
                           <div className="font-mono text-zinc-400">ID: {doc.id}</div>
                           <div className="text-white">Product: {doc.data?.itemTitle || "Unknown"}</div>
@@ -322,7 +322,7 @@ export default function DebugPurchaseIssuePage() {
 
               {webhookData.recentWebhooks?.length > 0 ? (
                 <div className="space-y-2 max-h-60 overflow-y-auto">
-                  {webhookData.recentWebhooks.map((webhook, index) => (
+                  {webhookData.recentWebhooks.map((webhook: any, index: number) => (
                     <div key={index} className="p-3 bg-zinc-800 rounded text-sm">
                       <div className="flex items-center justify-between mb-2">
                         <span className="font-mono text-zinc-400">{webhook.eventType}</span>
