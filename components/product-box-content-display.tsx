@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { ChevronDown, ChevronUp, Play, Download, File, ImageIcon, Music, Video, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -33,11 +33,16 @@ export default function ProductBoxContentDisplay({
   contentCount,
   className = "",
 }: ProductBoxContentDisplayProps) {
-  const [isExpanded, setIsExpanded] = useState(false)
+  const [isExpanded, setIsExpanded] = useState(true) // Changed from false to true
   const [contentItems, setContentItems] = useState<ContentItem[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const { toast } = useToast()
+
+  // Add useEffect to fetch content immediately
+  useEffect(() => {
+    fetchContentItems()
+  }, [productBoxId])
 
   // Fetch content items when expanded
   const fetchContentItems = async () => {
@@ -189,9 +194,6 @@ export default function ProductBoxContentDisplay({
 
   // Handle expand/collapse
   const handleToggle = () => {
-    if (!isExpanded) {
-      fetchContentItems()
-    }
     setIsExpanded(!isExpanded)
   }
 
@@ -271,21 +273,28 @@ export default function ProductBoxContentDisplay({
                     >
                       {/* Thumbnail or Icon */}
                       <div className="w-12 h-12 bg-zinc-700 rounded overflow-hidden flex-shrink-0 flex items-center justify-center">
-                        {item.thumbnailUrl ? (
-                          <img
-                            src={item.thumbnailUrl || "/placeholder.svg"}
-                            alt={item.title}
+                        {item.contentType === "video" && item.fileUrl ? (
+                          <video
+                            src={item.fileUrl}
                             className="w-full h-full object-cover"
+                            autoPlay
+                            muted
+                            loop
+                            playsInline
+                            preload="auto"
                             onError={(e) => {
-                              const target = e.target as HTMLImageElement
+                              console.error("Video error:", e)
+                              // Fallback to icon if video fails
+                              const target = e.target as HTMLVideoElement
                               target.style.display = "none"
                               target.nextElementSibling?.classList.remove("hidden")
                             }}
                           />
-                        ) : null}
-                        <div className={`${item.thumbnailUrl ? "hidden" : ""} text-zinc-400`}>
-                          {getContentIcon(item.contentType)}
-                        </div>
+                        ) : (
+                          <div className={`${item.contentType === "video" ? "hidden" : ""} text-zinc-400`}>
+                            {getContentIcon(item.contentType)}
+                          </div>
+                        )}
                       </div>
 
                       {/* Content Info */}
