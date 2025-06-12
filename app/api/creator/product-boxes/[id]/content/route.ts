@@ -1,16 +1,51 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { getServerSession } from "@/lib/server-session"
+import { headers } from "next/headers"
+import { getAuth } from "firebase-admin/auth"
+import { initializeApp, getApps, cert } from "firebase-admin/app"
 import { db } from "@/lib/firebase-admin"
+
+// Initialize Firebase Admin if not already initialized
+if (!getApps().length) {
+  try {
+    initializeApp({
+      credential: cert({
+        projectId: process.env.FIREBASE_PROJECT_ID,
+        clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+        privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n"),
+      }),
+    })
+  } catch (error) {
+    console.error("❌ [Product Box Content API] Firebase Admin initialization error:", error)
+  }
+}
 
 export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
   try {
     console.log(`🔍 [Product Box Content API] Adding content to product box: ${params.id}`)
 
-    const session = await getServerSession()
-    if (!session?.uid) {
-      console.log("❌ [Product Box Content API] Unauthorized - no session")
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    // Get authorization header
+    const headersList = headers()
+    const authorization = headersList.get("authorization")
+
+    if (!authorization || !authorization.startsWith("Bearer ")) {
+      console.log("❌ [Product Box Content API] No valid authorization header")
+      return NextResponse.json({ error: "Missing or invalid authorization header" }, { status: 401 })
     }
+
+    const token = authorization.split("Bearer ")[1]
+
+    // Verify the Firebase token
+    let decodedToken
+    try {
+      const auth = getAuth()
+      decodedToken = await auth.verifyIdToken(token)
+      console.log("✅ [Product Box Content API] Token verified for user:", decodedToken.uid)
+    } catch (tokenError) {
+      console.error("❌ [Product Box Content API] Token verification failed:", tokenError)
+      return NextResponse.json({ error: "Invalid or expired token" }, { status: 401 })
+    }
+
+    const userId = decodedToken.uid
 
     const body = await request.json()
     const { uploadIds } = body
@@ -36,8 +71,8 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     const existingData = productBoxDoc.data()
 
     // Check if user owns this product box
-    if (existingData?.creatorId !== session.uid) {
-      console.log(`❌ [Product Box Content API] Access denied for user ${session.uid} to product box ${params.id}`)
+    if (existingData?.creatorId !== userId) {
+      console.log(`❌ [Product Box Content API] Access denied for user ${userId} to product box ${params.id}`)
       return NextResponse.json({ error: "Access denied" }, { status: 403 })
     }
 
@@ -52,8 +87,8 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
         }
 
         const uploadData = uploadDoc.data()
-        if (uploadData?.uid !== session.uid) {
-          console.log(`❌ [Product Box Content API] Upload ${uploadId} does not belong to user ${session.uid}`)
+        if (uploadData?.uid !== userId) {
+          console.log(`❌ [Product Box Content API] Upload ${uploadId} does not belong to user ${userId}`)
           return NextResponse.json({ error: `Access denied to upload ${uploadId}` }, { status: 403 })
         }
       } catch (uploadError) {
@@ -82,7 +117,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
             fileSize: uploadData.fileSize || uploadData.size || 0,
             duration: uploadData.duration || null,
             createdAt: new Date(),
-            creatorId: session.uid,
+            creatorId: userId,
           })
           console.log(`✅ [Product Box Content API] Created productBoxContent entry for upload: ${uploadId}`)
         }
@@ -139,11 +174,29 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
   try {
     console.log(`🔍 [Product Box Content API] Removing content from product box: ${params.id}`)
 
-    const session = await getServerSession()
-    if (!session?.uid) {
-      console.log("❌ [Product Box Content API] Unauthorized - no session")
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    // Get authorization header
+    const headersList = headers()
+    const authorization = headersList.get("authorization")
+
+    if (!authorization || !authorization.startsWith("Bearer ")) {
+      console.log("❌ [Product Box Content API] No valid authorization header")
+      return NextResponse.json({ error: "Missing or invalid authorization header" }, { status: 401 })
     }
+
+    const token = authorization.split("Bearer ")[1]
+
+    // Verify the Firebase token
+    let decodedToken
+    try {
+      const auth = getAuth()
+      decodedToken = await auth.verifyIdToken(token)
+      console.log("✅ [Product Box Content API] Token verified for user:", decodedToken.uid)
+    } catch (tokenError) {
+      console.error("❌ [Product Box Content API] Token verification failed:", tokenError)
+      return NextResponse.json({ error: "Invalid or expired token" }, { status: 401 })
+    }
+
+    const userId = decodedToken.uid
 
     const body = await request.json()
     const { uploadId } = body
@@ -167,8 +220,8 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
     const existingData = productBoxDoc.data()
 
     // Check if user owns this product box
-    if (existingData?.creatorId !== session.uid) {
-      console.log(`❌ [Product Box Content API] Access denied for user ${session.uid} to product box ${params.id}`)
+    if (existingData?.creatorId !== userId) {
+      console.log(`❌ [Product Box Content API] Access denied for user ${userId} to product box ${params.id}`)
       return NextResponse.json({ error: "Access denied" }, { status: 403 })
     }
 

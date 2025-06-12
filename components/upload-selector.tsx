@@ -83,6 +83,7 @@ export default function UploadSelector({ excludeIds = [], onSelect, onCancel, lo
 
       const token = await user.getIdToken()
       const response = await fetch("/api/creator/uploads", {
+        method: "GET",
         headers: {
           Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
