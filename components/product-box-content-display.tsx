@@ -7,8 +7,7 @@ import { ChevronDown, ChevronUp, Play, Download, File, Music, Loader2, Pause } f
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { useToast } from "@/hooks/use-toast"
-import { collection, query, where, getDocs } from "firebase/firestore"
-import { db } from "@/lib/firebase"
+import { useAuth } from "@/contexts/auth-context"
 
 interface ContentItem {
   id: string
@@ -48,6 +47,7 @@ export default function ProductBoxContentDisplay({
   const [error, setError] = useState<string | null>(null)
   const [showAll, setShowAll] = useState(false)
   const { toast } = useToast()
+  const { user } = useAuth()
 
   // Fetch content
   useEffect(() => {
@@ -56,61 +56,63 @@ export default function ProductBoxContentDisplay({
         setLoading(true)
         setError(null)
 
-        // Query Firestore for content items
-        const contentRef = collection(db, "productBoxContent")
-        const q = query(contentRef, where("productBoxId", "==", productBoxId))
-        const querySnapshot = await getDocs(q)
-
-        if (querySnapshot.empty) {
-          setContent([])
-          setError("No content available for this product")
+        // Get authenticated user
+        if (!user) {
+          setError("Authentication required")
           return
         }
 
-        // Map content items
-        const contentItems = querySnapshot.docs.map((doc) => {
-          const data = doc.data()
-          return {
-            id: doc.id,
-            title: data.title || data.originalFileName || "Untitled",
-            fileUrl: data.fileUrl || data.downloadUrl || "",
-            thumbnailUrl: data.thumbnailUrl || "",
-            mimeType: data.fileType || data.mimeType || "application/octet-stream",
-            fileSize: data.fileSize || 0,
-            contentType: data.fileType?.startsWith("video/")
-              ? ("video" as const)
-              : data.fileType?.startsWith("audio/")
-                ? ("audio" as const)
-                : data.fileType?.startsWith("image/")
-                  ? ("image" as const)
-                  : ("document" as const),
-            duration: data.duration,
-            filename: data.originalFileName || `file-${doc.id}`,
-            createdAt: data.createdAt,
-          }
+        const token = await user.getIdToken()
+
+        // Use the API endpoint instead of direct Firestore query
+        const response = await fetch(`/api/creator/product-boxes/${productBoxId}/content`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
         })
 
-        // Sort by creation date if available
-        contentItems.sort((a, b) => {
-          if (a.createdAt && b.createdAt) {
-            return b.createdAt.seconds - a.createdAt.seconds
-          }
-          return 0
-        })
+        if (!response.ok) {
+          const errorData = await response.json()
+          throw new Error(errorData.error || `HTTP ${response.status}: Failed to fetch content`)
+        }
 
-        setContent(contentItems)
+        const data = await response.json()
+        const contentItems = data.content || []
+
+        // Map content items with proper type detection
+        const mappedItems = contentItems.map((item: any) => ({
+          id: item.id,
+          title: item.title || item.filename || "Untitled",
+          fileUrl: item.fileUrl || item.downloadUrl || "",
+          thumbnailUrl: item.thumbnailUrl || "",
+          mimeType: item.mimeType || "application/octet-stream",
+          fileSize: item.fileSize || 0,
+          contentType: item.mimeType?.startsWith("video/")
+            ? ("video" as const)
+            : item.mimeType?.startsWith("audio/")
+              ? ("audio" as const)
+              : item.mimeType?.startsWith("image/")
+                ? ("image" as const)
+                : ("document" as const),
+          duration: item.duration,
+          filename: item.filename || `file-${item.id}`,
+          createdAt: item.createdAt,
+        }))
+
+        setContent(mappedItems)
       } catch (err) {
         console.error("Error fetching content:", err)
-        setError("Failed to load content")
+        setError(err instanceof Error ? err.message : "Failed to load content")
       } finally {
         setLoading(false)
       }
     }
 
-    if (productBoxId) {
+    if (productBoxId && user) {
       fetchContent()
     }
-  }, [productBoxId])
+  }, [productBoxId, user])
 
   // Handle download
   const handleDownload = (item: ContentItem) => {
