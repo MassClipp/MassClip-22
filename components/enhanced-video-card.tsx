@@ -8,7 +8,6 @@ import { useAuth } from "@/contexts/auth-context"
 import { db } from "@/lib/firebase"
 import { doc, setDoc, deleteDoc, getDoc } from "firebase/firestore"
 import { useToast } from "@/hooks/use-toast"
-import { motion } from "framer-motion"
 
 interface VideoCardProps {
   video: {
@@ -39,8 +38,6 @@ export default function EnhancedVideoCard({
   const { user } = useAuth()
   const { toast } = useToast()
   const videoRef = useRef<HTMLVideoElement>(null)
-  const [isPlaying, setIsPlaying] = useState(false)
-  const [isMuted, setIsMuted] = useState(true)
   const [isHovered, setIsHovered] = useState(false)
   const [isFavorited, setIsFavorited] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
@@ -79,11 +76,6 @@ export default function EnhancedVideoCard({
   // Handle mouse leave
   const handleMouseLeave = () => {
     setIsHovered(false)
-    if (videoRef.current) {
-      videoRef.current.pause()
-      videoRef.current.currentTime = 0
-      setIsPlaying(false)
-    }
   }
 
   // Handle favorite toggle
@@ -208,13 +200,7 @@ export default function EnhancedVideoCard({
   }
 
   return (
-    <motion.div
-      className="relative cursor-pointer"
-      onMouseEnter={handleMouseEnter}
-      onMouseLeave={handleMouseLeave}
-      whileHover={{ scale: 1.02 }}
-      transition={{ duration: 0.2 }}
-    >
+    <div className="relative cursor-pointer" onMouseEnter={handleMouseEnter} onMouseLeave={handleMouseLeave}>
       <div className="relative aspect-[9/16] overflow-hidden rounded-lg bg-zinc-900">
         {/* Video/Thumbnail */}
         <img
@@ -227,7 +213,7 @@ export default function EnhancedVideoCard({
           }}
         />
 
-        {/* Action buttons container */}
+        {/* Action buttons container - only show on hover */}
         {isHovered && (
           <>
             {/* Download button */}
@@ -261,6 +247,6 @@ export default function EnhancedVideoCard({
           </>
         )}
       </div>
-    </motion.div>
+    </div>
   )
 }
