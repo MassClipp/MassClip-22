@@ -10,52 +10,53 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    console.log("🔍 [Creator Uploads] Fetching uploads for user:", session.uid)
+    console.log("🔍 [Creator Uploads] Fetching free content for user:", session.uid)
 
-    // Query uploads collection for this user with better error handling
-    const uploadsQuery = query(
-      collection(db, "uploads"),
+    // Query freeContent collection for this user instead of uploads
+    const freeContentQuery = query(
+      collection(db, "freeContent"),
       where("uid", "==", session.uid),
-      orderBy("createdAt", "desc"),
+      orderBy("addedAt", "desc"),
       limit(50),
     )
 
-    const uploadsSnapshot = await getDocs(uploadsQuery)
-    const uploads: any[] = []
+    const freeContentSnapshot = await getDocs(freeContentQuery)
+    const freeContent: any[] = []
 
-    uploadsSnapshot.forEach((doc) => {
+    freeContentSnapshot.forEach((doc) => {
       const data = doc.data()
-      uploads.push({
+      freeContent.push({
         id: doc.id,
         ...data,
-        // Ensure we have the required fields with better fallbacks
-        title: data.title || data.filename || data.originalFileName || data.name || "Untitled",
-        filename: data.filename || data.originalFileName || data.name || `${doc.id}.file`,
-        fileUrl: data.fileUrl || data.publicUrl || data.downloadUrl || data.url || "",
-        thumbnailUrl: data.thumbnailUrl || data.thumbnail || "",
-        mimeType: data.mimeType || data.fileType || data.contentType || "application/octet-stream",
+        // Ensure we have the required fields
+        title: data.title || data.filename || data.originalFileName || "Untitled",
+        filename: data.filename || data.originalFileName || `${doc.id}.file`,
+        fileUrl: data.fileUrl || data.publicUrl || data.downloadUrl || "",
+        thumbnailUrl: data.thumbnailUrl || "",
+        mimeType: data.mimeType || data.fileType || "application/octet-stream",
         fileSize: data.fileSize || data.size || 0,
-        createdAt: data.createdAt || data.uploadedAt || new Date(),
+        createdAt: data.addedAt || data.createdAt || new Date(),
         // Add video-specific fields
         duration: data.duration || 0,
         aspectRatio: data.aspectRatio || "16:9",
-        isVideo: data.mimeType?.startsWith("video/") || data.fileType?.startsWith("video/") || false,
+        isVideo: data.type === "video" || data.mimeType?.startsWith("video/") || false,
+        type: data.type || "unknown",
       })
     })
 
-    console.log(`✅ [Creator Uploads] Found ${uploads.length} uploads`)
+    console.log(`✅ [Creator Uploads] Found ${freeContent.length} free content items`)
 
     return NextResponse.json({
       success: true,
-      uploads,
-      videos: uploads, // Also return as 'videos' for backward compatibility
-      count: uploads.length,
+      uploads: freeContent,
+      videos: freeContent.filter((item) => item.isVideo), // Filter only videos for backward compatibility
+      count: freeContent.length,
     })
   } catch (error) {
     console.error("❌ [Creator Uploads] Error:", error)
     return NextResponse.json(
       {
-        error: "Failed to fetch uploads",
+        error: "Failed to fetch free content",
         details: error instanceof Error ? error.message : "Unknown error",
       },
       { status: 500 },
