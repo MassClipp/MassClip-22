@@ -1,137 +1,125 @@
 "use client"
 
-import { Play, Download, Music, File, ImageIcon, Clock } from "lucide-react"
-import { Badge } from "@/components/ui/badge"
+// Update the video-thumbnail-916.tsx component to use our new direct video player approach
+
+import type React from "react"
+import { useState, useRef } from "react"
+import { Play, Pause, Download } from "lucide-react"
+import { formatFileSize } from "@/lib/utils"
 
 interface VideoThumbnail916Props {
+  id: string
   title: string
-  videoUrl: string
+  fileUrl: string
   thumbnailUrl?: string
   fileSize?: number
-  duration?: number
-  contentType: "video" | "audio" | "image" | "document" | string
   onClick?: () => void
   className?: string
 }
 
-export function VideoThumbnail916({
+export default function VideoThumbnail916({
+  id,
   title,
-  videoUrl,
+  fileUrl,
   thumbnailUrl,
-  fileSize,
-  duration,
-  contentType,
+  fileSize = 0,
   onClick,
   className = "",
 }: VideoThumbnail916Props) {
-  // Format file size
-  const formatFileSize = (bytes?: number): string => {
-    if (!bytes) return ""
-    if (bytes === 0) return "0 Bytes"
-    const k = 1024
-    const sizes = ["Bytes", "KB", "MB", "GB"]
-    const i = Math.floor(Math.log(bytes) / Math.log(k))
-    return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + " " + sizes[i]
+  const [isHovered, setIsHovered] = useState(false)
+  const videoRef = useRef<HTMLVideoElement>(null)
+  const [isPlaying, setIsPlaying] = useState(false)
+
+  // Handle play/pause
+  const togglePlay = (e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+
+    if (!videoRef.current) return
+
+    if (isPlaying) {
+      videoRef.current.pause()
+      setIsPlaying(false)
+    } else {
+      // Pause all other videos first
+      document.querySelectorAll("video").forEach((v) => {
+        if (v !== videoRef.current) {
+          v.pause()
+        }
+      })
+
+      videoRef.current
+        .play()
+        .then(() => {
+          setIsPlaying(true)
+        })
+        .catch((error) => {
+          console.error("Error playing video:", error)
+        })
+    }
   }
 
-  // Format duration
-  const formatDuration = (seconds?: number): string => {
-    if (!seconds) return ""
-    const minutes = Math.floor(seconds / 60)
-    const remainingSeconds = seconds % 60
-    return `${minutes}:${remainingSeconds.toString().padStart(2, "0")}`
+  // Handle download
+  const handleDownload = (e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+
+    if (!fileUrl) return
+
+    const link = document.createElement("a")
+    link.href = fileUrl
+    link.download = `${title || "video"}.mp4`
+    link.click()
   }
 
   return (
-    <div
-      className={`aspect-[9/16] bg-zinc-800 rounded-lg overflow-hidden relative group cursor-pointer ${className}`}
-      onClick={onClick}
-    >
-      {/* Thumbnail or Preview */}
-      {contentType === "video" ? (
-        <div className="w-full h-full">
-          <video
-            src={videoUrl}
-            poster={thumbnailUrl}
-            className="w-full h-full object-cover"
-            muted
-            playsInline
-            preload="metadata"
-            onMouseOver={(e) => e.currentTarget.play()}
-            onMouseOut={(e) => {
-              e.currentTarget.pause()
-              e.currentTarget.currentTime = 0
-            }}
-          />
-          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-            <Play className="h-12 w-12 text-white" />
-          </div>
-        </div>
-      ) : contentType === "audio" ? (
-        <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-purple-900/20 to-pink-900/20 p-4">
-          <Music className="h-12 w-12 text-purple-400 mb-2" />
-          <h4 className="text-sm font-medium text-white text-center line-clamp-2">{title}</h4>
-          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-            <Play className="h-12 w-12 text-white" />
-          </div>
-        </div>
-      ) : contentType === "image" ? (
-        <div className="w-full h-full">
-          <img
-            src={videoUrl || thumbnailUrl || "/placeholder.svg"}
-            alt={title}
-            className="w-full h-full object-cover"
-          />
-          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-            <ImageIcon className="h-12 w-12 text-white" />
-          </div>
-        </div>
-      ) : (
-        <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-zinc-800 to-zinc-900 p-4">
-          <File className="h-12 w-12 text-zinc-400 mb-2" />
-          <h4 className="text-sm font-medium text-white text-center line-clamp-2">{title}</h4>
-          <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-            <Download className="h-12 w-12 text-white" />
-          </div>
-        </div>
-      )}
-
-      {/* Content Type Badge */}
-      <div className="absolute top-2 left-2">
-        <Badge
-          variant="secondary"
-          className={`text-xs border-0 ${
-            contentType === "video"
-              ? "bg-red-600/80 text-white"
-              : contentType === "audio"
-                ? "bg-purple-600/80 text-white"
-                : contentType === "image"
-                  ? "bg-blue-600/80 text-white"
-                  : "bg-zinc-600/80 text-white"
-          }`}
+    <div className={`flex-shrink-0 w-full ${className}`}>
+      <div
+        className="relative aspect-[9/16] overflow-hidden rounded-lg bg-zinc-900 group"
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
+        onClick={onClick}
+      >
+        {/* Direct Video Player */}
+        <video
+          ref={videoRef}
+          className="w-full h-full object-cover"
+          preload="metadata"
+          onClick={togglePlay}
+          onEnded={() => setIsPlaying(false)}
+          poster={thumbnailUrl}
         >
-          {typeof contentType === "string" ? contentType.toUpperCase() : "FILE"}
-        </Badge>
+          <source src={fileUrl} type="video/mp4" />
+        </video>
+
+        {/* Border that appears on hover */}
+        <div className="absolute inset-0 border border-white/0 group-hover:border-white/40 rounded-lg transition-all duration-200"></div>
+
+        {/* Play/Pause Button Overlay - Only visible on hover */}
+        <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+          <button onClick={togglePlay} className="w-10 h-10 rounded-full bg-black/50 flex items-center justify-center">
+            {isPlaying ? <Pause className="h-4 w-4 text-white" /> : <Play className="h-4 w-4 text-white" />}
+          </button>
+        </div>
+
+        {/* Download button - only visible on hover */}
+        <div className="absolute bottom-2 right-2 z-20 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+          <button
+            className="bg-black/70 hover:bg-black/90 p-1.5 rounded-full transition-all duration-300"
+            onClick={handleDownload}
+            aria-label="Download"
+            title="Download"
+          >
+            <Download className="h-3.5 w-3.5 text-white" />
+          </button>
+        </div>
       </div>
 
-      {/* Duration Badge */}
-      {duration && (
-        <div className="absolute top-2 right-2">
-          <Badge variant="outline" className="text-xs border-zinc-600 bg-black/50 text-white">
-            <Clock className="h-3 w-3 mr-1" />
-            {formatDuration(duration)}
-          </Badge>
-        </div>
-      )}
-
-      {/* File Size */}
-      {fileSize && fileSize > 0 && (
-        <div className="absolute bottom-2 right-2">
-          <Badge variant="outline" className="text-xs border-zinc-600 bg-black/50 text-white">
-            {formatFileSize(fileSize)}
-          </Badge>
-        </div>
-      )}
+      {/* File info below video */}
+      <div className="mt-1 flex justify-between items-center">
+        <span className="text-xs text-zinc-400 truncate max-w-[70%]">{title}</span>
+        {fileSize > 0 && <span className="text-xs text-zinc-400">{formatFileSize(fileSize)}</span>}
+      </div>
     </div>
   )
 }

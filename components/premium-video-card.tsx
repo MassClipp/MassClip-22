@@ -1,100 +1,148 @@
 "use client"
 
-import { useState } from "react"
-import { useRouter } from "next/navigation"
-import { Lock, Play } from "lucide-react"
-import { useAuth } from "@/contexts/auth-context"
-import { doc, getDoc } from "firebase/firestore"
-import { db } from "@/lib/firebase"
+import type React from "react"
+import { useState, useRef } from "react"
+import { Play, Pause, Download, Lock } from "lucide-react"
+import { formatFileSize } from "@/lib/utils"
 
 interface PremiumVideoCardProps {
-  video: {
-    id: string
-    title: string
-    thumbnailUrl: string
-    url: string
-    type: string
-    uid: string
-    username: string
-    price?: number
-  }
+  id: string
+  title: string
+  fileUrl?: string
+  thumbnailUrl?: string
+  fileSize?: number
+  isPremium?: boolean
+  isLocked?: boolean
   onClick?: () => void
   className?: string
 }
 
-export default function PremiumVideoCard({ video, onClick, className = "" }: PremiumVideoCardProps) {
-  const { user } = useAuth()
-  const [hasAccess, setHasAccess] = useState<boolean | null>(null)
-  const [isChecking, setIsChecking] = useState(false)
-  const router = useRouter()
+export default function PremiumVideoCard({
+  id,
+  title,
+  fileUrl,
+  thumbnailUrl,
+  fileSize = 0,
+  isPremium = false,
+  isLocked = false,
+  onClick,
+  className = "",
+}: PremiumVideoCardProps) {
+  const [isHovered, setIsHovered] = useState(false)
+  const videoRef = useRef<HTMLVideoElement>(null)
+  const [isPlaying, setIsPlaying] = useState(false)
 
-  const handleClick = async () => {
-    if (onClick) {
-      onClick()
-      return
-    }
+  // Handle play/pause
+  const togglePlay = (e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
 
-    // If we haven't checked access yet, check it now
-    if (hasAccess === null && user) {
-      setIsChecking(true)
-      try {
-        const accessRef = doc(db, "userAccess", user.uid, "videos", video.id)
-        const accessDoc = await getDoc(accessRef)
-        const hasAccess = accessDoc.exists()
-        setHasAccess(hasAccess)
+    if (isLocked || !fileUrl || !videoRef.current) return
 
-        if (hasAccess) {
-          // User has access, navigate to video page
-          router.push(`/video/${video.id}`)
-        } else {
-          // User doesn't have access, navigate to purchase page
-          router.push(`/video/${video.id}/purchase`)
-        }
-      } catch (error) {
-        console.error("Error checking video access:", error)
-        // Default to purchase page on error
-        router.push(`/video/${video.id}/purchase`)
-      } finally {
-        setIsChecking(false)
-      }
-    } else if (!user) {
-      // Not logged in, redirect to login
-      router.push(`/login?redirect=/video/${video.id}`)
-    } else if (hasAccess) {
-      // Already know user has access
-      router.push(`/video/${video.id}`)
+    if (isPlaying) {
+      videoRef.current.pause()
+      setIsPlaying(false)
     } else {
-      // Already know user doesn't have access
-      router.push(`/video/${video.id}/purchase`)
+      // Pause all other videos first
+      document.querySelectorAll("video").forEach((v) => {
+        if (v !== videoRef.current) {
+          v.pause()
+        }
+      })
+
+      videoRef.current
+        .play()
+        .then(() => {
+          setIsPlaying(true)
+        })
+        .catch((error) => {
+          console.error("Error playing video:", error)
+        })
     }
   }
 
+  // Handle download
+  const handleDownload = (e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+
+    if (isLocked || !fileUrl) return
+
+    const link = document.createElement("a")
+    link.href = fileUrl
+    link.download = `${title || "video"}.mp4`
+    link.click()
+  }
+
   return (
-    <div className={`relative group overflow-hidden rounded-lg cursor-pointer ${className}`} onClick={handleClick}>
-      <div className="aspect-[9/16] bg-black relative overflow-hidden rounded-lg ring-0 group-hover:ring-1 ring-white/30 transition-all duration-300">
-        <img
-          src={video.thumbnailUrl || "/placeholder.svg?height=480&width=270&query=video"}
-          alt={video.title}
-          className="w-full h-full object-cover opacity-70 group-hover:opacity-50 transition-opacity duration-300"
-        />
+    <div className={`flex-shrink-0 w-full ${className}`}>
+      <div
+        className="relative aspect-[9/16] overflow-hidden rounded-lg bg-zinc-900 group"
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
+        onClick={onClick}
+      >
+        {/* Direct Video Player or Thumbnail */}
+        {!isLocked && fileUrl ? (
+          <video
+            ref={videoRef}
+            className="w-full h-full object-cover"
+            preload="metadata"
+            onClick={togglePlay}
+            onEnded={() => setIsPlaying(false)}
+            poster={thumbnailUrl}
+          >
+            <source src={fileUrl} type="video/mp4" />
+          </video>
+        ) : (
+          <img
+            src={thumbnailUrl || "/placeholder.svg?height=400&width=225&query=video thumbnail"}
+            alt={title}
+            className="w-full h-full object-cover"
+          />
+        )}
 
-        {/* Premium overlay */}
-        <div className="absolute inset-0 flex flex-col items-center justify-center p-4 text-center">
-          <div className="bg-black/40 p-3 rounded-full mb-3">
-            <Lock className="h-6 w-6 text-amber-500" />
-          </div>
-          <h3 className="text-white font-medium text-center px-4 mb-2">{video.title}</h3>
-          <div className="bg-amber-500/10 text-amber-400 px-3 py-1 rounded-full text-sm border border-amber-500/20">
-            Premium Content
-          </div>
-        </div>
+        {/* Border that appears on hover */}
+        <div className="absolute inset-0 border border-white/0 group-hover:border-white/40 rounded-lg transition-all duration-200"></div>
 
-        {/* Play button overlay on hover */}
-        <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-          <div className="w-16 h-16 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center">
-            <Play className="h-8 w-8 text-white ml-1" />
+        {/* Locked overlay */}
+        {isLocked && (
+          <div className="absolute inset-0 bg-black/60 flex items-center justify-center">
+            <Lock className="h-6 w-6 text-white" />
           </div>
-        </div>
+        )}
+
+        {/* Play/Pause Button Overlay - Only visible on hover and not locked */}
+        {!isLocked && fileUrl && (
+          <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+            <button
+              onClick={togglePlay}
+              className="w-10 h-10 rounded-full bg-black/50 flex items-center justify-center"
+            >
+              {isPlaying ? <Pause className="h-4 w-4 text-white" /> : <Play className="h-4 w-4 text-white" />}
+            </button>
+          </div>
+        )}
+
+        {/* Download button - only visible on hover and not locked */}
+        {!isLocked && fileUrl && (
+          <div className="absolute bottom-2 right-2 z-20 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+            <button
+              className="bg-black/70 hover:bg-black/90 p-1.5 rounded-full transition-all duration-300"
+              onClick={handleDownload}
+              aria-label="Download"
+              title="Download"
+            >
+              <Download className="h-3.5 w-3.5 text-white" />
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* File info below video */}
+      <div className="mt-1 flex justify-between items-center">
+        <span className="text-xs text-zinc-400 truncate max-w-[70%]">{title}</span>
+        {fileSize > 0 && <span className="text-xs text-zinc-400">{formatFileSize(fileSize)}</span>}
       </div>
     </div>
   )
