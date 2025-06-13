@@ -1,22 +1,10 @@
 "use client"
 
 import type React from "react"
-
 import { useState, useRef } from "react"
 import { Play, Pause, Download } from "lucide-react"
-import { formatFileSize } from "@/lib/utils"
 
-interface VideoThumbnail916Props {
-  id: string
-  title: string
-  fileUrl: string
-  thumbnailUrl?: string
-  fileSize?: number
-  onClick?: () => void
-  className?: string
-}
-
-// Changed from default export to named export to match import expectations
+// Make sure we're exporting this function properly as a named export
 export function VideoThumbnail916({
   id,
   title,
@@ -25,10 +13,29 @@ export function VideoThumbnail916({
   fileSize = 0,
   onClick,
   className = "",
-}: VideoThumbnail916Props) {
-  const [isHovered, setIsHovered] = useState(false)
+}: {
+  id: string
+  title: string
+  fileUrl: string
+  thumbnailUrl?: string
+  fileSize?: number
+  onClick?: () => void
+  className?: string
+}) {
   const videoRef = useRef<HTMLVideoElement>(null)
   const [isPlaying, setIsPlaying] = useState(false)
+
+  // Format file size helper function
+  const formatSize = (bytes?: number): string => {
+    if (bytes === undefined || bytes === null) return ""
+    if (bytes === 0) return "0 Bytes"
+
+    const k = 1024
+    const sizes = ["Bytes", "KB", "MB", "GB", "TB"]
+    const i = Math.floor(Math.log(bytes) / Math.log(k))
+
+    return Number.parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i]
+  }
 
   // Handle play/pause
   const togglePlay = (e: React.MouseEvent) => {
@@ -74,12 +81,7 @@ export function VideoThumbnail916({
 
   return (
     <div className={`flex-shrink-0 w-full ${className}`}>
-      <div
-        className="relative aspect-[9/16] overflow-hidden rounded-lg bg-zinc-900 group"
-        onMouseEnter={() => setIsHovered(true)}
-        onMouseLeave={() => setIsHovered(false)}
-        onClick={onClick}
-      >
+      <div className="relative aspect-[9/16] overflow-hidden rounded-lg bg-zinc-900 group" onClick={onClick}>
         {/* Direct Video Player */}
         <video
           ref={videoRef}
@@ -118,7 +120,7 @@ export function VideoThumbnail916({
       {/* File info below video */}
       <div className="mt-1 flex justify-between items-center">
         <span className="text-xs text-zinc-400 truncate max-w-[70%]">{title}</span>
-        {fileSize > 0 && <span className="text-xs text-zinc-400">{formatFileSize(fileSize)}</span>}
+        {fileSize > 0 && <span className="text-xs text-zinc-400">{formatSize(fileSize)}</span>}
       </div>
     </div>
   )
