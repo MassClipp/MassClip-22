@@ -12,7 +12,7 @@ export async function GET(request: NextRequest) {
 
     console.log("🔍 [Creator Uploads] Fetching free content for user:", session.uid)
 
-    // Query freeContent collection for this user instead of uploads
+    // Use the exact same query structure as the free-content API
     const freeContentQuery = query(
       collection(db, "freeContent"),
       where("uid", "==", session.uid),
@@ -23,33 +23,37 @@ export async function GET(request: NextRequest) {
     const freeContentSnapshot = await getDocs(freeContentQuery)
     const freeContent: any[] = []
 
+    console.log("📊 [Creator Uploads] Query results:", {
+      totalDocs: freeContentSnapshot.size,
+      uid: session.uid,
+    })
+
     freeContentSnapshot.forEach((doc) => {
       const data = doc.data()
+      console.log("📄 [Creator Uploads] Processing doc:", doc.id, data)
+
       freeContent.push({
         id: doc.id,
-        ...data,
-        // Ensure we have the required fields
-        title: data.title || data.filename || data.originalFileName || "Untitled",
-        filename: data.filename || data.originalFileName || `${doc.id}.file`,
-        fileUrl: data.fileUrl || data.publicUrl || data.downloadUrl || "",
+        title: data.title || "Untitled",
+        fileUrl: data.fileUrl || "",
+        type: data.type || "unknown",
+        size: data.size || 0,
+        addedAt: data.addedAt || new Date().toISOString(),
         thumbnailUrl: data.thumbnailUrl || "",
-        mimeType: data.mimeType || data.fileType || "application/octet-stream",
-        fileSize: data.fileSize || data.size || 0,
-        createdAt: data.addedAt || data.createdAt || new Date(),
-        // Add video-specific fields
+        mimeType: data.mimeType || "",
         duration: data.duration || 0,
         aspectRatio: data.aspectRatio || "16:9",
-        isVideo: data.type === "video" || data.mimeType?.startsWith("video/") || false,
-        type: data.type || "unknown",
+        ...data, // Include all original data
       })
     })
 
-    console.log(`✅ [Creator Uploads] Found ${freeContent.length} free content items`)
+    console.log(`✅ [Creator Uploads] Processed ${freeContent.length} free content items`)
 
     return NextResponse.json({
       success: true,
-      uploads: freeContent,
-      videos: freeContent.filter((item) => item.isVideo), // Filter only videos for backward compatibility
+      freeContent,
+      uploads: freeContent, // For compatibility
+      videos: freeContent.filter((item) => item.type === "video"),
       count: freeContent.length,
     })
   } catch (error) {
@@ -58,6 +62,7 @@ export async function GET(request: NextRequest) {
       {
         error: "Failed to fetch free content",
         details: error instanceof Error ? error.message : "Unknown error",
+        stack: error instanceof Error ? error.stack : undefined,
       },
       { status: 500 },
     )
