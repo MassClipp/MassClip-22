@@ -1,8 +1,7 @@
 "use client"
 
-// Update the video-thumbnail-916.tsx component to use our new direct video player approach
-
 import type React from "react"
+
 import { useState, useRef } from "react"
 import { Play, Pause, Download } from "lucide-react"
 import { formatFileSize } from "@/lib/utils"
@@ -17,7 +16,8 @@ interface VideoThumbnail916Props {
   className?: string
 }
 
-export default function VideoThumbnail916({
+// Changed from default export to named export to match import expectations
+export function VideoThumbnail916({
   id,
   title,
   fileUrl,
