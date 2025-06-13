@@ -5,7 +5,7 @@ import type React from "react"
 import { useState, useEffect, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/contexts/auth-context"
-import { ArrowLeft, RefreshCw, Download, AlertCircle, Bug, Play, Pause, Heart } from "lucide-react"
+import { ArrowLeft, RefreshCw, Download, AlertCircle, Heart } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { useToast } from "@/hooks/use-toast"
@@ -39,6 +39,7 @@ export default function ProductBoxContentPage({ params }: { params: { id: string
   const [error, setError] = useState<string | null>(null)
   const [debugInfo, setDebugInfo] = useState<any>(null)
   const [showDebug, setShowDebug] = useState(false)
+  const [favorites, setFavorites] = useState<Record<string, boolean>>({})
 
   const fetchContent = async () => {
     if (!user) {
@@ -234,32 +235,6 @@ export default function ProductBoxContentPage({ params }: { params: { id: string
     }
   }
 
-  const checkPurchase = async () => {
-    try {
-      setLoading(true)
-      const token = await user?.getIdToken(true)
-      const response = await fetch(`/api/debug/check-product-box-purchase?productBoxId=${params.id}`, {
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-      })
-
-      const result = await response.json()
-      setDebugInfo(result)
-      setShowDebug(true)
-      setLoading(false)
-    } catch (error) {
-      console.error("❌ [Debug] Error:", error)
-      toast({
-        title: "Debug Failed",
-        description: "Failed to check purchase status",
-        variant: "destructive",
-      })
-      setLoading(false)
-    }
-  }
-
   useEffect(() => {
     fetchContent()
   }, [user, params.id])
@@ -277,30 +252,24 @@ export default function ProductBoxContentPage({ params }: { params: { id: string
   const VideoCard = ({ item }: { item: UnifiedPurchaseItem }) => {
     const [isPlaying, setIsPlaying] = useState(false)
     const [isHovered, setIsHovered] = useState(false)
-    const [isFavorite, setIsFavorite] = useState(false)
     const videoRef = useRef<HTMLVideoElement>(null)
+    const isFavorite = favorites[item.id] || false
 
     // Toggle play/pause
-    const togglePlay = (e: React.MouseEvent) => {
-      e.preventDefault()
-      e.stopPropagation()
-
+    const togglePlay = () => {
       if (!videoRef.current) return
 
       if (isPlaying) {
         videoRef.current.pause()
-        videoRef.current.currentTime = 0
         setIsPlaying(false)
       } else {
         // Pause all other videos first
         document.querySelectorAll("video").forEach((v) => {
           if (v !== videoRef.current) {
             v.pause()
-            v.currentTime = 0
           }
         })
 
-        videoRef.current.muted = false
         videoRef.current
           .play()
           .then(() => {
@@ -309,13 +278,6 @@ export default function ProductBoxContentPage({ params }: { params: { id: string
           .catch((error) => {
             console.error("Error playing video:", error)
           })
-      }
-    }
-
-    const handleVideoEnd = () => {
-      setIsPlaying(false)
-      if (videoRef.current) {
-        videoRef.current.currentTime = 0
       }
     }
 
@@ -336,106 +298,96 @@ export default function ProductBoxContentPage({ params }: { params: { id: string
     const toggleFavorite = (e: React.MouseEvent) => {
       e.preventDefault()
       e.stopPropagation()
-      setIsFavorite(!isFavorite)
+      setFavorites((prev) => ({
+        ...prev,
+        [item.id]: !prev[item.id],
+      }))
     }
 
     return (
       <div className="flex flex-col">
         <div
-          className="group relative border border-transparent hover:border-white/20 transition-all duration-300 rounded-lg"
+          className="relative aspect-[9/16] overflow-hidden rounded-lg bg-zinc-900"
           onMouseEnter={() => setIsHovered(true)}
           onMouseLeave={() => setIsHovered(false)}
+          onClick={togglePlay}
         >
-          <div className="relative aspect-[9/16] overflow-hidden rounded-lg bg-zinc-900 shadow-md">
-            {item.contentType === "video" ? (
-              <>
-                {/* Video element */}
-                <video
-                  ref={videoRef}
-                  className="w-full h-full object-cover cursor-pointer"
-                  preload="metadata"
-                  muted={!isPlaying}
-                  playsInline
-                  onEnded={handleVideoEnd}
-                  onClick={togglePlay}
-                  poster={item.thumbnailUrl}
-                >
-                  <source src={item.fileUrl} type="video/mp4" />
-                  Your browser does not support the video tag.
-                </video>
+          {item.contentType === "video" ? (
+            <>
+              <video
+                ref={videoRef}
+                className="w-full h-full object-cover cursor-pointer"
+                preload="metadata"
+                poster={item.thumbnailUrl}
+                onClick={togglePlay}
+              >
+                <source src={item.fileUrl} type="video/mp4" />
+                Your browser does not support the video tag.
+              </video>
 
-                {/* Play/Pause button overlay */}
-                <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-20">
-                  <button
-                    onClick={togglePlay}
-                    className="w-12 h-12 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center text-white transition-all duration-200 hover:bg-black/70"
-                    aria-label={isPlaying ? "Pause video" : "Play video"}
-                  >
-                    {isPlaying ? <Pause className="h-5 w-5" /> : <Play className="h-5 w-5 ml-0.5" />}
-                  </button>
+              {/* Video controls */}
+              {isPlaying && (
+                <div className="absolute bottom-0 left-0 right-0 h-1 bg-zinc-800">
+                  <div
+                    className="h-full bg-white w-0"
+                    style={{
+                      width:
+                        videoRef.current?.currentTime && videoRef.current?.duration
+                          ? `${(videoRef.current.currentTime / videoRef.current.duration) * 100}%`
+                          : "0%",
+                    }}
+                  ></div>
                 </div>
+              )}
 
-                {/* Action buttons container */}
-                <div
-                  className="absolute bottom-2 left-2 right-2 z-20 flex items-center justify-between transition-opacity duration-300"
-                  style={{ opacity: isHovered ? 1 : 0 }}
+              {/* Action buttons container */}
+              <div
+                className="absolute bottom-2 right-2 z-20 transition-opacity duration-300"
+                style={{ opacity: isHovered ? 1 : 0 }}
+              >
+                {/* Download button */}
+                <button
+                  className="bg-black/70 hover:bg-black/90 p-1.5 rounded-full transition-all duration-300"
+                  onClick={handleDownload}
+                  aria-label="Download video"
+                  title="Download video"
                 >
-                  {/* Download button */}
-                  <button
-                    className="bg-black/70 hover:bg-black/90 p-1.5 rounded-full transition-all duration-300"
-                    onClick={handleDownload}
-                    aria-label="Download video"
-                    title="Download video"
-                  >
-                    <Download className="h-3.5 w-3.5 text-white" />
-                  </button>
+                  <Download className="h-3.5 w-3.5 text-white" />
+                </button>
+              </div>
 
-                  {/* Favorite button */}
-                  <button
-                    className={`bg-black/70 hover:bg-black/90 p-1.5 rounded-full transition-all duration-300 ${
-                      isFavorite ? "text-red-500" : "text-white"
-                    }`}
-                    onClick={toggleFavorite}
-                    aria-label={isFavorite ? "Remove from favorites" : "Add to favorites"}
-                    title={isFavorite ? "Remove from favorites" : "Add to favorites"}
-                  >
-                    <Heart className="h-3.5 w-3.5" fill={isFavorite ? "currentColor" : "none"} />
-                  </button>
-                </div>
-              </>
-            ) : item.contentType === "audio" ? (
-              <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-purple-900/20 to-pink-900/20 p-4">
-                <audio src={item.fileUrl} controls className="w-4/5" />
-                <h4 className="text-sm font-medium text-white text-center line-clamp-2 mt-2">{item.title}</h4>
-              </div>
-            ) : item.contentType === "image" ? (
-              <img
-                src={item.fileUrl || item.thumbnailUrl || "/placeholder.svg?height=480&width=270&text=Image"}
-                alt={item.title}
-                className="w-full h-full object-cover"
-              />
-            ) : (
-              <div className="w-full h-full flex items-center justify-center">
-                <a
-                  href={item.fileUrl}
-                  download={item.filename}
-                  className="bg-zinc-800 hover:bg-zinc-700 text-white py-2 px-4 rounded flex items-center"
+              {/* Favorite button */}
+              <div
+                className="absolute bottom-2 left-2 z-20 transition-opacity duration-300"
+                style={{ opacity: isHovered ? 1 : 0 }}
+              >
+                <button
+                  className={`bg-black/70 hover:bg-black/90 p-1.5 rounded-full transition-all duration-300 ${
+                    isFavorite ? "text-red-500" : "text-white"
+                  }`}
+                  onClick={toggleFavorite}
+                  aria-label={isFavorite ? "Remove from favorites" : "Add to favorites"}
+                  title={isFavorite ? "Remove from favorites" : "Add to favorites"}
                 >
-                  <Download className="mr-2 h-4 w-4" />
-                  Download
-                </a>
+                  <Heart className="h-3.5 w-3.5" fill={isFavorite ? "currentColor" : "none"} />
+                </button>
               </div>
-            )}
+            </>
+          ) : (
+            <img
+              src={item.thumbnailUrl || "/placeholder.svg?height=480&width=270&text=Media"}
+              alt={item.title}
+              className="w-full h-full object-cover"
+            />
+          )}
+        </div>
+
+        {/* File info below video */}
+        <div className="mt-1">
+          <div className="flex justify-between items-center text-xs text-zinc-400">
+            <span>video</span>
+            <span>{formatFileSize(item.fileSize)}</span>
           </div>
-        </div>
-
-        {/* Title below video */}
-        <div className="mt-2 text-xs text-zinc-300 min-h-[2.5rem] line-clamp-2 font-light" title={item.title}>
-          {item.title || "Untitled video"}
-        </div>
-        <div className="flex justify-between items-center mt-1">
-          <span className="text-xs text-zinc-500">video</span>
-          <span className="text-xs text-zinc-500">{formatFileSize(item.fileSize)}</span>
         </div>
       </div>
     )
@@ -447,88 +399,6 @@ export default function ProductBoxContentPage({ params }: { params: { id: string
         <div className="text-center">
           <div className="w-8 h-8 border-4 border-white/20 border-t-white rounded-full animate-spin mx-auto mb-4"></div>
           <p className="text-white/60">Loading your premium content...</p>
-        </div>
-      </div>
-    )
-  }
-
-  if (showDebug && debugInfo) {
-    return (
-      <div className="min-h-screen bg-black text-white p-6">
-        <Button variant="outline" onClick={() => setShowDebug(false)} className="mb-4">
-          Back to Content
-        </Button>
-        <h1 className="text-2xl font-bold mb-4">Debug Information</h1>
-        <div className="bg-zinc-900 p-4 rounded-lg mb-4">
-          <h2 className="text-xl font-semibold mb-2">Purchase Status</h2>
-          <div className="grid grid-cols-2 gap-4">
-            <div className="bg-zinc-800 p-3 rounded">
-              <span className="text-zinc-400">Product Box ID:</span>
-              <div className="font-mono text-sm mt-1">{debugInfo.productBoxId}</div>
-            </div>
-            <div className="bg-zinc-800 p-3 rounded">
-              <span className="text-zinc-400">Product Box Exists:</span>
-              <div className="font-mono text-sm mt-1">{debugInfo.productBoxExists ? "Yes ✅" : "No ❌"}</div>
-            </div>
-            <div className="bg-zinc-800 p-3 rounded">
-              <span className="text-zinc-400">Has Unified Purchase:</span>
-              <div className="font-mono text-sm mt-1">{debugInfo.hasUnifiedPurchase ? "Yes ✅" : "No ❌"}</div>
-            </div>
-            <div className="bg-zinc-800 p-3 rounded">
-              <span className="text-zinc-400">Has Legacy Purchase:</span>
-              <div className="font-mono text-sm mt-1">{debugInfo.hasLegacyPurchase ? "Yes ✅" : "No ❌"}</div>
-            </div>
-            <div className="bg-zinc-800 p-3 rounded">
-              <span className="text-zinc-400">Content Items Count:</span>
-              <div className="font-mono text-sm mt-1">{debugInfo.contentItemsCount}</div>
-            </div>
-          </div>
-        </div>
-
-        {debugInfo.hasLegacyPurchase && !debugInfo.hasUnifiedPurchase && (
-          <div className="mb-6">
-            <Button onClick={migrateThisProductBox} className="bg-green-600 hover:bg-green-700">
-              Migrate This Purchase
-            </Button>
-          </div>
-        )}
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {debugInfo.unifiedPurchases.length > 0 && (
-            <div className="bg-zinc-900 p-4 rounded-lg">
-              <h2 className="text-xl font-semibold mb-2">Unified Purchases</h2>
-              <pre className="bg-black p-3 rounded overflow-auto text-xs max-h-96">
-                {JSON.stringify(debugInfo.unifiedPurchases, null, 2)}
-              </pre>
-            </div>
-          )}
-
-          {debugInfo.legacyPurchases.length > 0 && (
-            <div className="bg-zinc-900 p-4 rounded-lg">
-              <h2 className="text-xl font-semibold mb-2">Legacy Purchases</h2>
-              <pre className="bg-black p-3 rounded overflow-auto text-xs max-h-96">
-                {JSON.stringify(debugInfo.legacyPurchases, null, 2)}
-              </pre>
-            </div>
-          )}
-
-          {debugInfo.productBox && (
-            <div className="bg-zinc-900 p-4 rounded-lg">
-              <h2 className="text-xl font-semibold mb-2">Product Box</h2>
-              <pre className="bg-black p-3 rounded overflow-auto text-xs max-h-96">
-                {JSON.stringify(debugInfo.productBox, null, 2)}
-              </pre>
-            </div>
-          )}
-
-          {debugInfo.contentItems && debugInfo.contentItems.length > 0 && (
-            <div className="bg-zinc-900 p-4 rounded-lg">
-              <h2 className="text-xl font-semibold mb-2">Content Items (First 5)</h2>
-              <pre className="bg-black p-3 rounded overflow-auto text-xs max-h-96">
-                {JSON.stringify(debugInfo.contentItems, null, 2)}
-              </pre>
-            </div>
-          )}
         </div>
       </div>
     )
@@ -559,10 +429,6 @@ export default function ProductBoxContentPage({ params }: { params: { id: string
               <Button onClick={runMigration} variant="outline" className="w-full border-zinc-700 text-zinc-300">
                 Migrate All Purchases
               </Button>
-              <Button onClick={checkPurchase} variant="outline" className="w-full border-zinc-700 text-zinc-300">
-                <Bug className="mr-2 h-4 w-4" />
-                Debug Purchase
-              </Button>
             </div>
           </CardContent>
         </Card>
@@ -585,10 +451,6 @@ export default function ProductBoxContentPage({ params }: { params: { id: string
               >
                 Return to Purchases
               </Button>
-              <Button onClick={checkPurchase} variant="outline" className="w-full border-zinc-700 text-zinc-300">
-                <Bug className="mr-2 h-4 w-4" />
-                Debug Purchase
-              </Button>
             </div>
           </CardContent>
         </Card>
@@ -600,36 +462,29 @@ export default function ProductBoxContentPage({ params }: { params: { id: string
     <div className="min-h-screen bg-black text-white">
       {/* Header */}
       <header className="border-b border-zinc-800 bg-zinc-950/50 backdrop-blur-sm sticky top-0 z-10">
-        <div className="max-w-7xl mx-auto p-6">
-          <Button
-            variant="ghost"
-            onClick={() => router.push("/dashboard/purchases")}
-            className="text-white hover:bg-zinc-800 mb-4"
-          >
-            <ArrowLeft className="mr-2 h-4 w-4" />
-            Back to Purchases
-          </Button>
+        <div className="max-w-7xl mx-auto px-4 py-4">
+          <div className="flex items-center mb-4">
+            <button
+              onClick={() => router.push("/dashboard/purchases")}
+              className="text-white hover:text-zinc-300 flex items-center gap-1 text-sm"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              Back to Purchases
+            </button>
+          </div>
 
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-3xl font-bold">{purchase.productBoxTitle}</h1>
-              <p className="text-zinc-400 mt-1">{purchase.items.length} premium files unlocked</p>
+              <h1 className="text-2xl font-bold">{purchase.productBoxTitle}</h1>
+              <p className="text-zinc-400 text-sm">{purchase.items.length} premium files unlocked</p>
             </div>
-            <div className="flex gap-2">
-              <Button
-                variant="outline"
-                onClick={checkPurchase}
-                className="border-zinc-700 text-zinc-300 hover:bg-zinc-800"
-              >
-                <Bug className="mr-2 h-4 w-4" />
-                Debug
-              </Button>
+            <div>
               <Button
                 variant="outline"
                 onClick={fetchContent}
-                className="border-zinc-700 text-zinc-300 hover:bg-zinc-800"
+                className="border-zinc-700 text-zinc-300 hover:bg-zinc-800 h-9 px-3"
               >
-                <RefreshCw className="mr-2 h-4 w-4" />
+                <RefreshCw className="h-4 w-4 mr-2" />
                 Refresh
               </Button>
             </div>
@@ -638,7 +493,7 @@ export default function ProductBoxContentPage({ params }: { params: { id: string
       </header>
 
       {/* Content Grid */}
-      <main className="max-w-7xl mx-auto p-6">
+      <main className="max-w-7xl mx-auto px-4 py-6">
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
           {purchase.items.map((item) => (
             <VideoCard key={item.id} item={item} />

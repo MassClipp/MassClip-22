@@ -3,8 +3,7 @@
 import type React from "react"
 
 import { useState, useRef, useEffect } from "react"
-import { Button } from "@/components/ui/button"
-import { Heart, Download, Play, Pause, Volume2, VolumeX } from "lucide-react"
+import { Heart, Download } from "lucide-react"
 import { useAuth } from "@/contexts/auth-context"
 import { db } from "@/lib/firebase"
 import { doc, setDoc, deleteDoc, getDoc } from "firebase/firestore"
@@ -72,35 +71,9 @@ export default function EnhancedVideoCard({
     checkFavoriteStatus()
   }, [user, videoData.id])
 
-  // Handle video play/pause
-  const togglePlayback = () => {
-    if (!videoRef.current) return
-
-    if (isPlaying) {
-      videoRef.current.pause()
-      setIsPlaying(false)
-    } else {
-      videoRef.current.play()
-      setIsPlaying(true)
-    }
-  }
-
-  // Handle mute/unmute
-  const toggleMute = () => {
-    if (!videoRef.current) return
-
-    videoRef.current.muted = !isMuted
-    setIsMuted(!isMuted)
-  }
-
   // Handle mouse enter
   const handleMouseEnter = () => {
     setIsHovered(true)
-    if (videoRef.current && videoData.playbackUrl) {
-      videoRef.current.currentTime = 0
-      videoRef.current.play()
-      setIsPlaying(true)
-    }
   }
 
   // Handle mouse leave
@@ -236,142 +209,57 @@ export default function EnhancedVideoCard({
 
   return (
     <motion.div
-      className="relative group cursor-pointer"
+      className="relative cursor-pointer"
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
       whileHover={{ scale: 1.02 }}
       transition={{ duration: 0.2 }}
     >
-      <div className="relative aspect-[9/16] overflow-hidden rounded-lg bg-zinc-900 shadow-lg ring-0 ring-white/20 transition-all duration-300 group-hover:ring-1 group-hover:shadow-xl">
+      <div className="relative aspect-[9/16] overflow-hidden rounded-lg bg-zinc-900">
         {/* Video/Thumbnail */}
-        {videoData.playbackUrl && isHovered ? (
-          <video
-            ref={videoRef}
-            className="w-full h-full object-cover"
-            muted={isMuted}
-            loop
-            playsInline
-            preload="metadata"
-            onError={() => {
-              console.error("Video playback error")
-            }}
-          >
-            <source src={videoData.playbackUrl} type="video/mp4" />
-          </video>
-        ) : (
-          <img
-            src={videoData.thumbnail || "/placeholder.svg"}
-            alt={videoData.title}
-            className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
-            onError={(e) => {
-              const target = e.target as HTMLImageElement
-              target.src = "/placeholder.svg?height=1920&width=1080"
-            }}
-          />
-        )}
+        <img
+          src={videoData.thumbnail || "/placeholder.svg"}
+          alt={videoData.title}
+          className="w-full h-full object-cover"
+          onError={(e) => {
+            const target = e.target as HTMLImageElement
+            target.src = "/placeholder.svg?height=1920&width=1080"
+          }}
+        />
 
-        {/* Gradient overlay */}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
-
-        {/* Top controls */}
-        <div className="absolute top-3 left-3 right-3 flex justify-between items-start z-20">
-          {/* Type indicator */}
-          <span
-            className={`px-2 py-1 text-xs rounded-full font-medium backdrop-blur-sm ${
-              type === "creator-upload" ? "bg-blue-600/80 text-white" : "bg-purple-600/80 text-white"
-            }`}
-          >
-            {type === "creator-upload" ? "Upload" : "Vimeo"}
-          </span>
-
-          {/* Favorite button */}
-          {showFavoriteButton && (
-            <Button
-              size="icon"
-              variant="ghost"
-              className={`h-8 w-8 backdrop-blur-sm transition-all duration-200 ${
-                isFavorited
-                  ? "bg-red-600/80 text-white hover:bg-red-700/80"
-                  : "bg-black/40 text-white hover:bg-black/60"
-              }`}
-              onClick={toggleFavorite}
-              disabled={isLoading}
-            >
-              <Heart className={`h-4 w-4 ${isFavorited ? "fill-current" : ""}`} />
-            </Button>
-          )}
-        </div>
-
-        {/* Center play button (when not hovered) */}
-        {!isHovered && (
-          <div className="absolute inset-0 flex items-center justify-center">
-            <div className="bg-black/50 backdrop-blur-sm rounded-full p-3 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-              <Play className="h-6 w-6 text-white" />
-            </div>
-          </div>
-        )}
-
-        {/* Video controls (when hovered and playing) */}
-        {isHovered && videoData.playbackUrl && (
-          <div className="absolute bottom-3 left-3 right-3 flex justify-between items-center z-20">
-            <Button
-              size="icon"
-              variant="ghost"
-              className="h-8 w-8 bg-black/40 text-white hover:bg-black/60 backdrop-blur-sm"
-              onClick={(e) => {
-                e.stopPropagation()
-                togglePlayback()
-              }}
-            >
-              {isPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
-            </Button>
-
-            <div className="flex gap-2">
-              <Button
-                size="icon"
-                variant="ghost"
-                className="h-8 w-8 bg-black/40 text-white hover:bg-black/60 backdrop-blur-sm"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  toggleMute()
-                }}
-              >
-                {isMuted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
-              </Button>
-
-              <Button
-                size="icon"
-                variant="ghost"
-                className="h-8 w-8 bg-black/40 text-white hover:bg-black/60 backdrop-blur-sm"
+        {/* Action buttons container */}
+        {isHovered && (
+          <>
+            {/* Download button */}
+            <div className="absolute bottom-2 right-2 z-20">
+              <button
+                className="bg-black/70 hover:bg-black/90 p-1.5 rounded-full transition-all duration-300"
                 onClick={handleDownload}
+                aria-label="Download video"
+                title="Download video"
               >
-                <Download className="h-4 w-4" />
-              </Button>
+                <Download className="h-3.5 w-3.5 text-white" />
+              </button>
             </div>
-          </div>
-        )}
 
-        {/* Download button (when not hovered) */}
-        {!isHovered && (
-          <div className="absolute bottom-3 right-3 z-20">
-            <Button
-              size="icon"
-              variant="ghost"
-              className="h-8 w-8 bg-black/40 text-white hover:bg-black/60 backdrop-blur-sm opacity-0 group-hover:opacity-100 transition-opacity duration-300"
-              onClick={handleDownload}
-            >
-              <Download className="h-4 w-4" />
-            </Button>
-          </div>
+            {/* Favorite button */}
+            {showFavoriteButton && (
+              <div className="absolute bottom-2 left-2 z-20">
+                <button
+                  className={`bg-black/70 hover:bg-black/90 p-1.5 rounded-full transition-all duration-300 ${
+                    isFavorited ? "text-red-500" : "text-white"
+                  }`}
+                  onClick={toggleFavorite}
+                  aria-label={isFavorited ? "Remove from favorites" : "Add to favorites"}
+                  title={isFavorited ? "Remove from favorites" : "Add to favorites"}
+                  disabled={isLoading}
+                >
+                  <Heart className="h-3.5 w-3.5" fill={isFavorited ? "currentColor" : "none"} />
+                </button>
+              </div>
+            )}
+          </>
         )}
-      </div>
-
-      {/* Video info */}
-      <div className="mt-3 space-y-1">
-        <h3 className="text-sm text-white font-medium line-clamp-2 leading-tight" title={videoData.title}>
-          {videoData.title}
-        </h3>
-        <p className="text-xs text-zinc-400 line-clamp-1">{videoData.creator}</p>
       </div>
     </motion.div>
   )
