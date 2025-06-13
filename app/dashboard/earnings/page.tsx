@@ -38,6 +38,9 @@ export default function EarningsPage() {
   const [syncing, setSyncing] = useState(false)
   const router = useRouter()
 
+  // Add this after the useState declarations
+  console.log("Stripe connection status:", { isConnected, loading, hasData: !!data })
+
   const handleSync = async () => {
     try {
       setSyncing(true)
@@ -84,7 +87,8 @@ export default function EarningsPage() {
     )
   }
 
-  if (!isConnected && !loading && !data) {
+  // If user doesn't have a connected Stripe account or data is empty with no error (indicating no connection)
+  if (!isConnected || (data && Object.keys(data).length === 0) || (!data && !loading)) {
     return (
       <div className="space-y-8">
         {/* Header */}
