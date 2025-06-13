@@ -2,13 +2,14 @@
 
 import type React from "react"
 
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/contexts/auth-context"
-import { ArrowLeft, RefreshCw, Download, AlertCircle, Bug, Heart, Play, Music, File, Pause } from "lucide-react"
+import { ArrowLeft, RefreshCw, Download, AlertCircle, Heart, Video, Music, ImageIcon, File } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { useToast } from "@/hooks/use-toast"
+import { Badge } from "@/components/ui/badge"
 
 interface UnifiedPurchaseItem {
   id: string
@@ -153,45 +154,6 @@ export default function ProductBoxContentPage({ params }: { params: { id: string
     }
   }
 
-  const runMigration = async () => {
-    try {
-      setLoading(true)
-      const token = await user?.getIdToken(true)
-      const response = await fetch("/api/migrate-to-unified-purchases", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-      })
-
-      const result = await response.json()
-      if (result.success) {
-        toast({
-          title: "Migration Complete",
-          description: `Migrated ${result.results.migrated} purchases`,
-        })
-        // Refresh content after migration
-        fetchContent()
-      } else {
-        toast({
-          title: "Migration Failed",
-          description: result.error || "Failed to migrate purchases",
-          variant: "destructive",
-        })
-        setLoading(false)
-      }
-    } catch (error) {
-      console.error("❌ [Migration] Error:", error)
-      toast({
-        title: "Migration Failed",
-        description: "Failed to migrate purchases",
-        variant: "destructive",
-      })
-      setLoading(false)
-    }
-  }
-
   const migrateThisProductBox = async () => {
     try {
       setLoading(true)
@@ -234,32 +196,6 @@ export default function ProductBoxContentPage({ params }: { params: { id: string
     }
   }
 
-  const checkPurchase = async () => {
-    try {
-      setLoading(true)
-      const token = await user?.getIdToken(true)
-      const response = await fetch(`/api/debug/check-product-box-purchase?productBoxId=${params.id}`, {
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-      })
-
-      const result = await response.json()
-      setDebugInfo(result)
-      setShowDebug(true)
-      setLoading(false)
-    } catch (error) {
-      console.error("❌ [Debug] Error:", error)
-      toast({
-        title: "Debug Failed",
-        description: "Failed to check purchase status",
-        variant: "destructive",
-      })
-      setLoading(false)
-    }
-  }
-
   useEffect(() => {
     fetchContent()
   }, [user, params.id])
@@ -273,53 +209,47 @@ export default function ProductBoxContentPage({ params }: { params: { id: string
     return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + " " + sizes[i]
   }
 
-  // Video Card Component - Direct Video Player
+  // Video Card Component
   const VideoCard = ({ item }: { item: UnifiedPurchaseItem }) => {
     const [isHovered, setIsHovered] = useState(false)
     const [isFavorite, setIsFavorite] = useState(false)
-    const videoRef = useRef<HTMLVideoElement>(null)
-    const [isPlaying, setIsPlaying] = useState(false)
-
-    // Handle play/pause
-    const togglePlay = (e: React.MouseEvent) => {
-      e.preventDefault()
-      e.stopPropagation()
-
-      if (!videoRef.current) return
-
-      if (isPlaying) {
-        videoRef.current.pause()
-        setIsPlaying(false)
-      } else {
-        // Pause all other videos first
-        document.querySelectorAll("video").forEach((v) => {
-          if (v !== videoRef.current) {
-            v.pause()
-          }
-        })
-
-        videoRef.current
-          .play()
-          .then(() => {
-            setIsPlaying(true)
-          })
-          .catch((error) => {
-            console.error("Error playing video:", error)
-          })
-      }
-    }
+    const [imageError, setImageError] = useState(false)
 
     // Handle download
     const handleDownload = (e: React.MouseEvent) => {
       e.preventDefault()
       e.stopPropagation()
 
-      if (!item.fileUrl) return
+      if (!item.fileUrl) {
+        toast({
+          title: "Download Error",
+          description: "No download URL available",
+          variant: "destructive",
+        })
+        return
+      }
 
       const link = document.createElement("a")
       link.href = item.fileUrl
-      link.download = item.filename || `${item.title}.mp4`
+      link.download = item.filename || `${item.title}.${getFileExtension(item.mimeType)}`
+      document.body.appendChild(link)
       link.click()
+      document.body.removeChild(link)
+    }
+
+    // Get file extension from MIME type
+    const getFileExtension = (mimeType: string): string => {
+      const extensions: { [key: string]: string } = {
+        "video/mp4": "mp4",
+        "video/webm": "webm",
+        "video/quicktime": "mov",
+        "audio/mpeg": "mp3",
+        "audio/wav": "wav",
+        "image/jpeg": "jpg",
+        "image/png": "png",
+        "application/pdf": "pdf",
+      }
+      return extensions[mimeType] || "file"
     }
 
     // Toggle favorite
@@ -329,81 +259,101 @@ export default function ProductBoxContentPage({ params }: { params: { id: string
       setIsFavorite(!isFavorite)
     }
 
+    // Get content icon based on type
+    const ContentIcon = () => {
+      if (imageError) {
+        if (item.contentType === "video") return <Video className="h-12 w-12 text-zinc-400" />
+        if (item.contentType === "audio") return <Music className="h-12 w-12 text-zinc-400" />
+        if (item.contentType === "image") return <ImageIcon className="h-12 w-12 text-zinc-400" />
+        return <File className="h-12 w-12 text-zinc-400" />
+      }
+      return null
+    }
+
     return (
       <div className="flex flex-col">
         <div
-          className="relative aspect-[9/16] overflow-hidden rounded-lg bg-zinc-900 group"
+          className="relative aspect-[9/16] overflow-hidden rounded-lg bg-zinc-900 cursor-pointer"
           onMouseEnter={() => setIsHovered(true)}
           onMouseLeave={() => setIsHovered(false)}
         >
-          {/* Direct Video Player - No Thumbnails */}
-          {item.contentType === "video" ? (
-            <>
-              <video
-                ref={videoRef}
-                className="w-full h-full object-cover"
-                preload="metadata"
-                onClick={togglePlay}
-                onEnded={() => setIsPlaying(false)}
-                poster={item.thumbnailUrl}
-              >
-                <source src={item.fileUrl} type="video/mp4" />
-              </video>
-
-              {/* Border that appears on hover */}
-              <div className="absolute inset-0 border border-white/0 group-hover:border-white/40 rounded-lg transition-all duration-200"></div>
-
-              {/* Play/Pause Button Overlay - Only visible on hover */}
-              <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-                <button
-                  onClick={togglePlay}
-                  className="w-10 h-10 rounded-full bg-black/50 flex items-center justify-center"
-                >
-                  {isPlaying ? <Pause className="h-4 w-4 text-white" /> : <Play className="h-4 w-4 text-white" />}
-                </button>
-              </div>
-            </>
-          ) : item.contentType === "audio" ? (
-            <div className="w-full h-full flex items-center justify-center bg-purple-900/20">
-              <Music className="h-8 w-8 text-purple-400" />
-            </div>
-          ) : item.contentType === "image" ? (
-            <img src={item.fileUrl || item.thumbnailUrl} alt={item.title} className="w-full h-full object-cover" />
+          {/* Thumbnail or placeholder */}
+          {!imageError ? (
+            <img
+              src={item.thumbnailUrl || `/placeholder.svg?height=480&width=270&text=${item.contentType}`}
+              alt={item.title}
+              className="w-full h-full object-cover"
+              onError={() => setImageError(true)}
+            />
           ) : (
-            <div className="w-full h-full flex items-center justify-center bg-zinc-800">
-              <File className="h-8 w-8 text-zinc-400" />
+            <div className="w-full h-full flex flex-col items-center justify-center">
+              <ContentIcon />
+              <p className="text-xs text-zinc-500 mt-2">{item.contentType}</p>
             </div>
           )}
 
-          {/* Action buttons - only visible on hover */}
-          <div className="absolute bottom-2 right-2 z-20 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-            <button
-              className="bg-black/70 hover:bg-black/90 p-1.5 rounded-full transition-all duration-300"
-              onClick={handleDownload}
-              aria-label="Download"
-              title="Download"
+          {/* Content Type Badge */}
+          <div className="absolute top-2 left-2">
+            <Badge
+              variant="secondary"
+              className={`text-xs border-0 ${
+                item.contentType === "video"
+                  ? "bg-red-600/80 text-white"
+                  : item.contentType === "audio"
+                    ? "bg-purple-600/80 text-white"
+                    : item.contentType === "image"
+                      ? "bg-blue-600/80 text-white"
+                      : "bg-zinc-600/80 text-white"
+              }`}
             >
-              <Download className="h-3.5 w-3.5 text-white" />
-            </button>
+              {item.contentType.toUpperCase()}
+            </Badge>
           </div>
 
-          <div className="absolute bottom-2 left-2 z-20 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-            <button
-              className={`bg-black/70 hover:bg-black/90 p-1.5 rounded-full transition-all duration-300 ${
-                isFavorite ? "text-red-500" : "text-white"
-              }`}
-              onClick={toggleFavorite}
-              aria-label={isFavorite ? "Remove from favorites" : "Add to favorites"}
-              title={isFavorite ? "Remove from favorites" : "Add to favorites"}
-            >
-              <Heart className="h-3.5 w-3.5" fill={isFavorite ? "currentColor" : "none"} />
-            </button>
-          </div>
+          {/* File Size */}
+          {item.fileSize > 0 && (
+            <div className="absolute bottom-2 right-2">
+              <Badge variant="outline" className="text-xs border-zinc-600 bg-black/50 text-white">
+                {formatFileSize(item.fileSize)}
+              </Badge>
+            </div>
+          )}
+
+          {/* Action buttons - only show on hover */}
+          {isHovered && (
+            <>
+              {/* Download button */}
+              <div className="absolute bottom-2 left-2 z-20">
+                <button
+                  className="bg-black/70 hover:bg-black/90 p-1.5 rounded-full transition-all duration-300"
+                  onClick={handleDownload}
+                  aria-label="Download file"
+                  title="Download file"
+                >
+                  <Download className="h-3.5 w-3.5 text-white" />
+                </button>
+              </div>
+
+              {/* Favorite button */}
+              <div className="absolute top-2 right-2 z-20">
+                <button
+                  className={`bg-black/70 hover:bg-black/90 p-1.5 rounded-full transition-all duration-300 ${
+                    isFavorite ? "text-red-500" : "text-white"
+                  }`}
+                  onClick={toggleFavorite}
+                  aria-label={isFavorite ? "Remove from favorites" : "Add to favorites"}
+                  title={isFavorite ? "Remove from favorites" : "Add to favorites"}
+                >
+                  <Heart className="h-3.5 w-3.5" fill={isFavorite ? "currentColor" : "none"} />
+                </button>
+              </div>
+            </>
+          )}
         </div>
 
         {/* File info below video */}
         <div className="mt-1 flex justify-between items-center">
-          <span className="text-xs text-zinc-400">video</span>
+          <span className="text-xs text-zinc-400">{item.contentType}</span>
           <span className="text-xs text-zinc-400">{formatFileSize(item.fileSize)}</span>
         </div>
       </div>
@@ -416,88 +366,6 @@ export default function ProductBoxContentPage({ params }: { params: { id: string
         <div className="text-center">
           <div className="w-8 h-8 border-4 border-white/20 border-t-white rounded-full animate-spin mx-auto mb-4"></div>
           <p className="text-white/60">Loading your premium content...</p>
-        </div>
-      </div>
-    )
-  }
-
-  if (showDebug && debugInfo) {
-    return (
-      <div className="min-h-screen bg-black text-white p-6">
-        <Button variant="outline" onClick={() => setShowDebug(false)} className="mb-4">
-          Back to Content
-        </Button>
-        <h1 className="text-2xl font-bold mb-4">Debug Information</h1>
-        <div className="bg-zinc-900 p-4 rounded-lg mb-4">
-          <h2 className="text-xl font-semibold mb-2">Purchase Status</h2>
-          <div className="grid grid-cols-2 gap-4">
-            <div className="bg-zinc-800 p-3 rounded">
-              <span className="text-zinc-400">Product Box ID:</span>
-              <div className="font-mono text-sm mt-1">{debugInfo.productBoxId}</div>
-            </div>
-            <div className="bg-zinc-800 p-3 rounded">
-              <span className="text-zinc-400">Product Box Exists:</span>
-              <div className="font-mono text-sm mt-1">{debugInfo.productBoxExists ? "Yes ✅" : "No ❌"}</div>
-            </div>
-            <div className="bg-zinc-800 p-3 rounded">
-              <span className="text-zinc-400">Has Unified Purchase:</span>
-              <div className="font-mono text-sm mt-1">{debugInfo.hasUnifiedPurchase ? "Yes ✅" : "No ❌"}</div>
-            </div>
-            <div className="bg-zinc-800 p-3 rounded">
-              <span className="text-zinc-400">Has Legacy Purchase:</span>
-              <div className="font-mono text-sm mt-1">{debugInfo.hasLegacyPurchase ? "Yes ✅" : "No ❌"}</div>
-            </div>
-            <div className="bg-zinc-800 p-3 rounded">
-              <span className="text-zinc-400">Content Items Count:</span>
-              <div className="font-mono text-sm mt-1">{debugInfo.contentItemsCount}</div>
-            </div>
-          </div>
-        </div>
-
-        {debugInfo.hasLegacyPurchase && !debugInfo.hasUnifiedPurchase && (
-          <div className="mb-6">
-            <Button onClick={migrateThisProductBox} className="bg-green-600 hover:bg-green-700">
-              Migrate This Purchase
-            </Button>
-          </div>
-        )}
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          {debugInfo.unifiedPurchases.length > 0 && (
-            <div className="bg-zinc-900 p-4 rounded-lg">
-              <h2 className="text-xl font-semibold mb-2">Unified Purchases</h2>
-              <pre className="bg-black p-3 rounded overflow-auto text-xs max-h-96">
-                {JSON.stringify(debugInfo.unifiedPurchases, null, 2)}
-              </pre>
-            </div>
-          )}
-
-          {debugInfo.legacyPurchases.length > 0 && (
-            <div className="bg-zinc-900 p-4 rounded-lg">
-              <h2 className="text-xl font-semibold mb-2">Legacy Purchases</h2>
-              <pre className="bg-black p-3 rounded overflow-auto text-xs max-h-96">
-                {JSON.stringify(debugInfo.legacyPurchases, null, 2)}
-              </pre>
-            </div>
-          )}
-
-          {debugInfo.productBox && (
-            <div className="bg-zinc-900 p-4 rounded-lg">
-              <h2 className="text-xl font-semibold mb-2">Product Box</h2>
-              <pre className="bg-black p-3 rounded overflow-auto text-xs max-h-96">
-                {JSON.stringify(debugInfo.productBox, null, 2)}
-              </pre>
-            </div>
-          )}
-
-          {debugInfo.contentItems && debugInfo.contentItems.length > 0 && (
-            <div className="bg-zinc-900 p-4 rounded-lg">
-              <h2 className="text-xl font-semibold mb-2">Content Items (First 5)</h2>
-              <pre className="bg-black p-3 rounded overflow-auto text-xs max-h-96">
-                {JSON.stringify(debugInfo.contentItems, null, 2)}
-              </pre>
-            </div>
-          )}
         </div>
       </div>
     )
@@ -525,13 +393,6 @@ export default function ProductBoxContentPage({ params }: { params: { id: string
               >
                 Migrate This Purchase
               </Button>
-              <Button onClick={runMigration} variant="outline" className="w-full border-zinc-700 text-zinc-300">
-                Migrate All Purchases
-              </Button>
-              <Button onClick={checkPurchase} variant="outline" className="w-full border-zinc-700 text-zinc-300">
-                <Bug className="mr-2 h-4 w-4" />
-                Debug Purchase
-              </Button>
             </div>
           </CardContent>
         </Card>
@@ -553,10 +414,6 @@ export default function ProductBoxContentPage({ params }: { params: { id: string
                 className="w-full bg-white text-black hover:bg-zinc-200"
               >
                 Return to Purchases
-              </Button>
-              <Button onClick={checkPurchase} variant="outline" className="w-full border-zinc-700 text-zinc-300">
-                <Bug className="mr-2 h-4 w-4" />
-                Debug Purchase
               </Button>
             </div>
           </CardContent>
@@ -599,7 +456,7 @@ export default function ProductBoxContentPage({ params }: { params: { id: string
 
       {/* Content Grid */}
       <main className="max-w-7xl mx-auto px-4 py-6">
-        <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
           {purchase.items.map((item) => (
             <VideoCard key={item.id} item={item} />
           ))}

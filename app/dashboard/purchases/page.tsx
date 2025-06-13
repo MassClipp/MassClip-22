@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect } from "react"
 import { useAuth } from "@/contexts/auth-context"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -22,9 +22,6 @@ import {
   ChevronUp,
   Download,
   Heart,
-  File,
-  Music,
-  Pause,
 } from "lucide-react"
 import { motion } from "framer-motion"
 import { format } from "date-fns"
@@ -250,41 +247,12 @@ export default function MyPurchasesPage() {
     return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + " " + sizes[i]
   }
 
-  // Update the ContentCard component to show video player directly
+  // Update the ContentCard component to match the reference design
+  // and improve the visual density
+
   const ContentCard = ({ content }: { content: UnifiedPurchaseItem }) => {
     const [isHovered, setIsHovered] = useState(false)
     const [isFavorite, setIsFavorite] = useState(false)
-    const videoRef = useRef<HTMLVideoElement>(null)
-    const [isPlaying, setIsPlaying] = useState(false)
-
-    // Handle play/pause
-    const togglePlay = (e: React.MouseEvent) => {
-      e.preventDefault()
-      e.stopPropagation()
-
-      if (!videoRef.current) return
-
-      if (isPlaying) {
-        videoRef.current.pause()
-        setIsPlaying(false)
-      } else {
-        // Pause all other videos first
-        document.querySelectorAll("video").forEach((v) => {
-          if (v !== videoRef.current) {
-            v.pause()
-          }
-        })
-
-        videoRef.current
-          .play()
-          .then(() => {
-            setIsPlaying(true)
-          })
-          .catch((error) => {
-            console.error("Error playing video:", error)
-          })
-      }
-    }
 
     // Handle download
     const handleDownload = (e: React.MouseEvent) => {
@@ -306,83 +274,47 @@ export default function MyPurchasesPage() {
       setIsFavorite(!isFavorite)
     }
 
-    // Update the ContentCard component to only show controls on hover
-    // Find the ContentCard component and replace its return statement
-
-    // Replace the ContentCard return statement with:
     return (
       <div className="flex-shrink-0 w-full">
-        <div
-          className="relative aspect-[9/16] overflow-hidden rounded-lg bg-zinc-900 group"
-          onMouseEnter={() => setIsHovered(true)}
-          onMouseLeave={() => setIsHovered(false)}
-        >
-          {/* Direct Video Player - No Thumbnails */}
-          {content.contentType === "video" ? (
-            <>
-              <video
-                ref={videoRef}
-                className="w-full h-full object-cover"
-                preload="metadata"
-                onClick={togglePlay}
-                onEnded={() => setIsPlaying(false)}
-                poster={content.thumbnailUrl}
-              >
-                <source src={content.fileUrl} type="video/mp4" />
-              </video>
-
-              {/* Border that appears on hover */}
-              <div className="absolute inset-0 border border-white/0 group-hover:border-white/40 rounded-lg transition-all duration-200"></div>
-
-              {/* Play/Pause Button Overlay - Only visible on hover */}
-              <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-                <button
-                  onClick={togglePlay}
-                  className="w-10 h-10 rounded-full bg-black/50 flex items-center justify-center"
-                >
-                  {isPlaying ? <Pause className="h-4 w-4 text-white" /> : <Play className="h-4 w-4 text-white" />}
-                </button>
-              </div>
-            </>
-          ) : content.contentType === "audio" ? (
-            <div className="w-full h-full flex items-center justify-center bg-purple-900/20">
-              <Music className="h-8 w-8 text-purple-400" />
-            </div>
-          ) : content.contentType === "image" ? (
+        <div className="relative" onMouseEnter={() => setIsHovered(true)} onMouseLeave={() => setIsHovered(false)}>
+          <div className="relative aspect-[9/16] overflow-hidden rounded-lg bg-zinc-900">
+            {/* Thumbnail */}
             <img
-              src={content.fileUrl || content.thumbnailUrl}
+              src={content.thumbnailUrl || "/placeholder.svg?height=480&width=270&text=Media"}
               alt={content.title}
               className="w-full h-full object-cover"
             />
-          ) : (
-            <div className="w-full h-full flex items-center justify-center bg-zinc-800">
-              <File className="h-8 w-8 text-zinc-400" />
-            </div>
-          )}
 
-          {/* Action buttons - only visible on hover */}
-          <div className="absolute bottom-2 right-2 z-20 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-            <button
-              className="bg-black/70 hover:bg-black/90 p-1.5 rounded-full transition-all duration-300"
-              onClick={handleDownload}
-              aria-label="Download"
-              title="Download"
-            >
-              <Download className="h-3.5 w-3.5 text-white" />
-            </button>
-          </div>
+            {/* Action buttons - only show on hover */}
+            {isHovered && (
+              <>
+                {/* Download button */}
+                <div className="absolute bottom-2 right-2 z-20">
+                  <button
+                    className="bg-black/70 hover:bg-black/90 p-1.5 rounded-full transition-all duration-300"
+                    onClick={handleDownload}
+                    aria-label="Download video"
+                    title="Download video"
+                  >
+                    <Download className="h-3.5 w-3.5 text-white" />
+                  </button>
+                </div>
 
-          <div className="absolute bottom-2 left-2 z-20 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-            <button
-              className={`bg-black/70 hover:bg-black/90 p-1.5 rounded-full transition-all duration-300 ${
-                isFavorite ? "text-red-500" : "text-white"
-              }`}
-              onClick={toggleFavorite}
-              aria-label={isFavorite ? "Remove from favorites" : "Add to favorites"}
-              title={isFavorite ? "Remove from favorites" : "Add to favorites"}
-            >
-              <Heart className="h-3.5 w-3.5" fill={isFavorite ? "currentColor" : "none"} />
-            </button>
+                {/* Favorite button */}
+                <div className="absolute bottom-2 left-2 z-20">
+                  <button
+                    className={`bg-black/70 hover:bg-black/90 p-1.5 rounded-full transition-all duration-300 ${
+                      isFavorite ? "text-red-500" : "text-white"
+                    }`}
+                    onClick={toggleFavorite}
+                    aria-label={isFavorite ? "Remove from favorites" : "Add to favorites"}
+                    title={isFavorite ? "Remove from favorites" : "Add to favorites"}
+                  >
+                    <Heart className="h-3.5 w-3.5" fill={isFavorite ? "currentColor" : "none"} />
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
 

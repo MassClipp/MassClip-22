@@ -2,14 +2,15 @@
 
 import type React from "react"
 
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { ChevronDown, ChevronUp, Play, Download, File, Music, Loader2, Pause } from "lucide-react"
+import { ChevronDown, ChevronUp, Download, File, Music, Loader2, Video, ImageIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { useToast } from "@/hooks/use-toast"
 import { collection, query, where, getDocs } from "firebase/firestore"
 import { db } from "@/lib/firebase"
+import { useAuth } from "@/contexts/auth-context"
 
 interface ContentItem {
   id: string
@@ -39,293 +40,375 @@ const formatFileSize = (bytes: number): string => {
   return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + " " + sizes[i]
 }
 
-// Handle preview/play
-const handlePreview = (item: ContentItem) => {
-  if (item.contentType === "video" || item.contentType === "audio") {
-    window.open(item.fileUrl, "_blank")
-  } else if (item.contentType === "image") {
-    window.open(item.fileUrl, "_blank")
-  } else {
-    window.open(item.fileUrl, "_blank")
-  }
-}
-
 export default function ProductBoxContentDisplay({
   productBoxId,
   contentCount,
   className = "",
 }: ProductBoxContentDisplayProps) {
-  const [content, setContent] = useState<ContentItem[]>([])
-  const [loading, setLoading] = useState(true)
+  const [isExpanded, setIsExpanded] = useState(true)
+  const [contentItems, setContentItems] = useState<ContentItem[]>([])
+  const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [showAll, setShowAll] = useState(false)
   const { toast } = useToast()
+  const { user } = useAuth()
 
-  // Fetch content
+  // Add useEffect to fetch content immediately
   useEffect(() => {
-    const fetchContent = async () => {
-      try {
-        setLoading(true)
-        setError(null)
-
-        // Query Firestore for content items
-        const contentRef = collection(db, "productBoxContent")
-        const q = query(contentRef, where("productBoxId", "==", productBoxId))
-        const querySnapshot = await getDocs(q)
-
-        if (querySnapshot.empty) {
-          setContent([])
-          setError("No content available for this product")
-          return
-        }
-
-        // Map content items
-        const contentItems = querySnapshot.docs.map((doc) => {
-          const data = doc.data()
-          return {
-            id: doc.id,
-            title: data.title || data.originalFileName || "Untitled",
-            fileUrl: data.fileUrl || data.downloadUrl || "",
-            thumbnailUrl: data.thumbnailUrl || "",
-            mimeType: data.fileType || data.mimeType || "application/octet-stream",
-            fileSize: data.fileSize || 0,
-            contentType: data.fileType?.startsWith("video/")
-              ? ("video" as const)
-              : data.fileType?.startsWith("audio/")
-                ? ("audio" as const)
-                : data.fileType?.startsWith("image/")
-                  ? ("image" as const)
-                  : ("document" as const),
-            duration: data.duration,
-            filename: data.originalFileName || `file-${doc.id}`,
-            createdAt: data.createdAt,
-          }
-        })
-
-        // Sort by creation date if available
-        contentItems.sort((a, b) => {
-          if (a.createdAt && b.createdAt) {
-            return b.createdAt.seconds - a.createdAt.seconds
-          }
-          return 0
-        })
-
-        setContent(contentItems)
-      } catch (err) {
-        console.error("Error fetching content:", err)
-        setError("Failed to load content")
-      } finally {
-        setLoading(false)
-      }
-    }
-
-    if (productBoxId) {
-      fetchContent()
-    }
+    fetchContentItems()
   }, [productBoxId])
 
-  // Handle download
-  const handleDownload = (item: ContentItem) => {
-    if (!item.fileUrl) {
-      toast({
-        title: "Download Error",
-        description: "No download link available for this file.",
-        variant: "destructive",
-      })
-      return
-    }
+  // Fetch content items when expanded
+  const fetchContentItems = async () => {
+    if (contentItems.length > 0) return // Already fetched
 
     try {
-      const link = document.createElement("a")
-      link.href = item.fileUrl
-      link.download = item.filename || `${item.title}.${item.mimeType.split("/")[1] || "file"}`
-      link.click()
+      setLoading(true)
+      setError(null)
 
-      toast({
-        title: "Download Started",
-        description: "Your file is downloading",
+      console.log(`🔍 [Content Display] Fetching content for product box: ${productBoxId}`)
+
+      // Get auth token for authenticated requests
+      let authToken = null
+      if (user) {
+        try {
+          authToken = await user.getIdToken(true)
+        } catch (tokenError) {
+          console.error("Error getting auth token:", tokenError)
+        }
+      }
+
+      // Method 1: Try to fetch from productBoxContent collection first
+      const contentQuery = query(collection(db, "productBoxContent"), where("productBoxId", "==", productBoxId))
+      const contentSnapshot = await getDocs(contentQuery)
+
+      const items: ContentItem[] = []
+
+      if (!contentSnapshot.empty) {
+        // Found productBoxContent entries
+        contentSnapshot.forEach((doc) => {
+          const data = doc.data()
+          const item: ContentItem = {
+            id: doc.id,
+            title: data.title || data.filename || "Untitled",
+            fileUrl: data.fileUrl || "",
+            thumbnailUrl: data.thumbnailUrl || "",
+            mimeType: data.mimeType || "application/octet-stream",
+            fileSize: data.fileSize || 0,
+            contentType: getContentType(data.mimeType || ""),
+            duration: data.duration || undefined,
+            filename: data.filename || `${doc.id}.file`,
+            createdAt: data.createdAt,
+          }
+
+          if (item.fileUrl && item.fileUrl.startsWith("http")) {
+            items.push(item)
+          }
+        })
+      } else {
+        // Method 2: Fallback to fetching from uploads via contentItems array
+        console.log("🔄 [Content Display] No productBoxContent found, trying contentItems fallback")
+
+        // Get the product box to access contentItems
+        const productBoxDoc = await getDocs(
+          query(collection(db, "productBoxes"), where("__name__", "==", productBoxId)),
+        )
+
+        if (!productBoxDoc.empty) {
+          const productBoxData = productBoxDoc.docs[0].data()
+          const contentItemIds = productBoxData.contentItems || []
+
+          if (contentItemIds.length > 0) {
+            // Fetch each upload
+            for (const uploadId of contentItemIds) {
+              try {
+                const uploadDoc = await getDocs(query(collection(db, "uploads"), where("__name__", "==", uploadId)))
+
+                if (!uploadDoc.empty) {
+                  const uploadData = uploadDoc.docs[0].data()
+                  const item: ContentItem = {
+                    id: uploadId,
+                    title: uploadData.title || uploadData.filename || uploadData.originalFileName || "Untitled",
+                    fileUrl: uploadData.fileUrl || uploadData.publicUrl || uploadData.downloadUrl || "",
+                    thumbnailUrl: uploadData.thumbnailUrl || "",
+                    mimeType: uploadData.mimeType || uploadData.fileType || "application/octet-stream",
+                    fileSize: uploadData.fileSize || uploadData.size || 0,
+                    contentType: getContentType(uploadData.mimeType || uploadData.fileType || ""),
+                    duration: uploadData.duration || undefined,
+                    filename: uploadData.filename || uploadData.originalFileName || `${uploadId}.file`,
+                    createdAt: uploadData.createdAt || uploadData.uploadedAt,
+                  }
+
+                  if (item.fileUrl && item.fileUrl.startsWith("http")) {
+                    items.push(item)
+                  }
+                }
+              } catch (uploadError) {
+                console.error(`❌ [Content Display] Error fetching upload ${uploadId}:`, uploadError)
+              }
+            }
+          }
+        }
+      }
+
+      // If we still don't have items, try the API endpoint
+      if (items.length === 0 && authToken) {
+        try {
+          const apiResponse = await fetch(`/api/product-box/${productBoxId}/content`, {
+            headers: {
+              Authorization: `Bearer ${authToken}`,
+            },
+          })
+
+          if (apiResponse.ok) {
+            const apiData = await apiResponse.json()
+            if (apiData.success && apiData.content && Array.isArray(apiData.content)) {
+              apiData.content.forEach((item: any) => {
+                items.push({
+                  id: item.id || `item-${Math.random().toString(36).substring(2, 9)}`,
+                  title: item.title || item.filename || "Untitled",
+                  fileUrl: item.fileUrl || item.publicUrl || item.downloadUrl || "",
+                  thumbnailUrl: item.thumbnailUrl || "",
+                  mimeType: item.mimeType || item.fileType || "application/octet-stream",
+                  fileSize: item.fileSize || item.size || 0,
+                  contentType: getContentType(item.mimeType || item.fileType || ""),
+                  duration: item.duration || undefined,
+                  filename:
+                    item.filename || item.originalFileName || `file-${Math.random().toString(36).substring(2, 9)}`,
+                  createdAt: item.createdAt || item.uploadedAt || new Date(),
+                })
+              })
+            }
+          }
+        } catch (apiError) {
+          console.error("Error fetching content from API:", apiError)
+        }
+      }
+
+      // Sort by creation date (newest first)
+      items.sort((a, b) => {
+        if (!a.createdAt || !b.createdAt) return 0
+        const aTime = a.createdAt.seconds || a.createdAt.getTime?.() / 1000 || 0
+        const bTime = b.createdAt.seconds || b.createdAt.getTime?.() / 1000 || 0
+        return bTime - aTime
       })
-    } catch (error) {
-      console.error("Download failed:", error)
+
+      setContentItems(items)
+      console.log(`✅ [Content Display] Loaded ${items.length} content items`)
+
+      if (items.length === 0) {
+        setError("No content items found")
+      }
+    } catch (err) {
+      console.error("❌ [Content Display] Error fetching content:", err)
+      setError("Failed to load content items")
       toast({
-        title: "Download Error",
-        description: "There was an issue starting your download.",
+        title: "Error",
+        description: "Failed to load content items",
         variant: "destructive",
       })
+    } finally {
+      setLoading(false)
     }
   }
 
-  // Video Card Component - Direct Video Player
-  const VideoCard = ({ item }: { item: ContentItem }) => {
-    const videoRef = useRef<HTMLVideoElement>(null)
-    const [isPlaying, setIsPlaying] = useState(false)
+  // Determine content type from MIME type
+  const getContentType = (mimeType: string): "video" | "audio" | "image" | "document" => {
+    if (mimeType.startsWith("video/")) return "video"
+    if (mimeType.startsWith("audio/")) return "audio"
+    if (mimeType.startsWith("image/")) return "image"
+    return "document"
+  }
 
-    // Handle play/pause
-    const togglePlay = (e: React.MouseEvent) => {
+  // Video Card Component
+  const VideoCard = ({ item }: { item: ContentItem }) => {
+    const [isHovered, setIsHovered] = useState(false)
+    const [isFavorite, setIsFavorite] = useState(false)
+    const [imageError, setImageError] = useState(false)
+
+    // Handle download
+    const handleDownload = (e: React.MouseEvent) => {
       e.preventDefault()
       e.stopPropagation()
 
-      if (!videoRef.current) return
-
-      if (isPlaying) {
-        videoRef.current.pause()
-        setIsPlaying(false)
-      } else {
-        // Pause all other videos first
-        document.querySelectorAll("video").forEach((v) => {
-          if (v !== videoRef.current) {
-            v.pause()
-          }
+      if (!item.fileUrl) {
+        toast({
+          title: "Download Error",
+          description: "No download URL available",
+          variant: "destructive",
         })
-
-        videoRef.current
-          .play()
-          .then(() => {
-            setIsPlaying(true)
-          })
-          .catch((error) => {
-            console.error("Error playing video:", error)
-          })
+        return
       }
+
+      const link = document.createElement("a")
+      link.href = item.fileUrl
+      link.download = item.filename || `${item.title}.${getFileExtension(item.mimeType)}`
+      document.body.appendChild(link)
+      link.click()
+      document.body.removeChild(link)
+    }
+
+    // Get file extension from MIME type
+    const getFileExtension = (mimeType: string): string => {
+      const extensions: { [key: string]: string } = {
+        "video/mp4": "mp4",
+        "video/webm": "webm",
+        "video/quicktime": "mov",
+        "audio/mpeg": "mp3",
+        "audio/wav": "wav",
+        "image/jpeg": "jpg",
+        "image/png": "png",
+        "application/pdf": "pdf",
+      }
+      return extensions[mimeType] || "file"
+    }
+
+    // Get content icon based on type
+    const ContentIcon = () => {
+      if (imageError) {
+        if (item.contentType === "video") return <Video className="h-12 w-12 text-zinc-400" />
+        if (item.contentType === "audio") return <Music className="h-12 w-12 text-zinc-400" />
+        if (item.contentType === "image") return <ImageIcon className="h-12 w-12 text-zinc-400" />
+        return <File className="h-12 w-12 text-zinc-400" />
+      }
+      return null
     }
 
     return (
-      <div className="flex-shrink-0 w-full">
-        <div className="relative aspect-[9/16] overflow-hidden rounded-lg bg-zinc-900 group">
-          {/* Direct Video Player - No Thumbnails */}
-          {item.contentType === "video" ? (
-            <>
-              <video
-                ref={videoRef}
-                className="w-full h-full object-cover"
-                preload="metadata"
-                onClick={togglePlay}
-                onEnded={() => setIsPlaying(false)}
-              >
-                <source src={item.fileUrl} type="video/mp4" />
-              </video>
-
-              {/* Border that appears on hover */}
-              <div className="absolute inset-0 border border-white/0 group-hover:border-white/40 rounded-lg transition-all duration-200"></div>
-
-              {/* Play/Pause Button Overlay - Only visible on hover */}
-              <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-                <button
-                  onClick={togglePlay}
-                  className="w-10 h-10 rounded-full bg-black/50 flex items-center justify-center"
-                >
-                  {isPlaying ? <Pause className="h-4 w-4 text-white" /> : <Play className="h-4 w-4 text-white" />}
-                </button>
-              </div>
-            </>
-          ) : item.contentType === "audio" ? (
-            <div className="w-full h-full flex items-center justify-center bg-purple-900/20">
-              <Music className="h-8 w-8 text-purple-400" />
-            </div>
-          ) : item.contentType === "image" ? (
-            <img src={item.fileUrl || "/placeholder.svg"} alt={item.title} className="w-full h-full object-cover" />
+      <div className="flex flex-col">
+        <div
+          className="relative aspect-[9/16] overflow-hidden rounded-lg bg-zinc-900 cursor-pointer"
+          onMouseEnter={() => setIsHovered(true)}
+          onMouseLeave={() => setIsHovered(false)}
+        >
+          {/* Thumbnail or placeholder */}
+          {!imageError ? (
+            <img
+              src={item.thumbnailUrl || `/placeholder.svg?height=480&width=270&text=${item.contentType}`}
+              alt={item.title}
+              className="w-full h-full object-cover"
+              onError={() => setImageError(true)}
+            />
           ) : (
-            <div className="w-full h-full flex items-center justify-center bg-zinc-800">
-              <File className="h-8 w-8 text-zinc-400" />
+            <div className="w-full h-full flex flex-col items-center justify-center">
+              <ContentIcon />
+              <p className="text-xs text-zinc-500 mt-2">{item.contentType}</p>
             </div>
           )}
 
-          {/* Download button - only visible on hover */}
-          <div className="absolute bottom-2 right-2 z-20 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-            <button
-              className="bg-black/70 hover:bg-black/90 p-1.5 rounded-full transition-all duration-300"
-              onClick={() => handleDownload(item)}
-              aria-label="Download"
-              title="Download"
+          {/* Content Type Badge */}
+          <div className="absolute top-2 left-2">
+            <Badge
+              variant="secondary"
+              className={`text-xs border-0 ${
+                item.contentType === "video"
+                  ? "bg-red-600/80 text-white"
+                  : item.contentType === "audio"
+                    ? "bg-purple-600/80 text-white"
+                    : item.contentType === "image"
+                      ? "bg-blue-600/80 text-white"
+                      : "bg-zinc-600/80 text-white"
+              }`}
             >
-              <Download className="h-3.5 w-3.5 text-white" />
-            </button>
+              {item.contentType.toUpperCase()}
+            </Badge>
           </div>
+
+          {/* File Size */}
+          {item.fileSize > 0 && (
+            <div className="absolute bottom-2 right-2">
+              <Badge variant="outline" className="text-xs border-zinc-600 bg-black/50 text-white">
+                {formatFileSize(item.fileSize)}
+              </Badge>
+            </div>
+          )}
+
+          {/* Download button - only show on hover */}
+          {isHovered && (
+            <div className="absolute bottom-2 left-2 z-20">
+              <button
+                className="bg-black/70 hover:bg-black/90 p-1.5 rounded-full transition-all duration-300"
+                onClick={handleDownload}
+                aria-label="Download file"
+                title="Download file"
+              >
+                <Download className="h-3.5 w-3.5 text-white" />
+              </button>
+            </div>
+          )}
         </div>
 
-        {/* File info below video */}
-        <div className="mt-1 flex justify-between items-center">
-          <span className="text-xs text-zinc-400">{item.contentType}</span>
-          <span className="text-xs text-zinc-400">{formatFileSize(item.fileSize)}</span>
+        {/* Title below thumbnail */}
+        <div className="mt-1 text-xs text-zinc-400 line-clamp-1" title={item.title}>
+          {item.title || "Untitled"}
         </div>
-      </div>
-    )
-  }
-
-  // Display content
-  const displayContent = showAll ? content : content.slice(0, 6)
-
-  if (loading) {
-    return (
-      <div className={`flex items-center justify-center py-12 ${className}`}>
-        <Loader2 className="h-8 w-8 animate-spin text-zinc-400" />
-      </div>
-    )
-  }
-
-  if (error) {
-    return (
-      <div className={`text-center py-8 ${className}`}>
-        <p className="text-zinc-400">{error}</p>
-      </div>
-    )
-  }
-
-  if (content.length === 0) {
-    return (
-      <div className={`text-center py-8 ${className}`}>
-        <p className="text-zinc-400">No content available for preview</p>
       </div>
     )
   }
 
   return (
-    <div className={className}>
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-2">
-          <h3 className="text-lg font-medium">Content Preview</h3>
-          <Badge variant="outline" className="text-xs">
-            {contentCount} items
-          </Badge>
-        </div>
+    <div className={`space-y-2 ${className}`}>
+      {/* Content Header with Toggle */}
+      <div className="flex items-center justify-between">
+        <span className="text-sm text-zinc-400">Content ({contentCount})</span>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => setIsExpanded(!isExpanded)}
+          className="text-xs text-zinc-400 hover:text-white hover:bg-zinc-800 p-1 h-auto"
+        >
+          {isExpanded ? (
+            <>
+              Hide <ChevronUp className="h-3 w-3 ml-1" />
+            </>
+          ) : (
+            <>
+              Show Content <ChevronDown className="h-3 w-3 ml-1" />
+            </>
+          )}
+        </Button>
       </div>
 
-      <div className="grid grid-cols-3 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-3">
-        <AnimatePresence>
-          {displayContent.map((item) => (
-            <motion.div
-              key={item.id}
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -10 }}
-              transition={{ duration: 0.2 }}
-            >
-              <VideoCard item={item} />
-            </motion.div>
-          ))}
-        </AnimatePresence>
-      </div>
-
-      {content.length > 6 && (
-        <div className="mt-4 text-center">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setShowAll(!showAll)}
-            className="text-xs text-zinc-400 hover:text-white"
+      {/* Expandable Content */}
+      <AnimatePresence>
+        {isExpanded && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.3, ease: "easeInOut" }}
+            className="overflow-hidden"
           >
-            {showAll ? (
-              <>
-                Show Less <ChevronUp className="ml-1 h-3 w-3" />
-              </>
-            ) : (
-              <>
-                Show All {content.length} Items <ChevronDown className="ml-1 h-3 w-3" />
-              </>
-            )}
-          </Button>
-        </div>
-      )}
+            <div className="pt-2">
+              {loading && (
+                <div className="flex items-center justify-center py-4">
+                  <Loader2 className="h-4 w-4 animate-spin text-zinc-500" />
+                  <span className="ml-2 text-sm text-zinc-400">Loading content...</span>
+                </div>
+              )}
+
+              {error && !loading && contentItems.length === 0 && (
+                <div className="text-center py-4">
+                  <p className="text-sm text-red-400">{error}</p>
+                </div>
+              )}
+
+              {!loading && contentItems.length > 0 && (
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                  {contentItems.map((item) => (
+                    <VideoCard key={item.id} item={item} />
+                  ))}
+                </div>
+              )}
+
+              {!loading && !error && contentItems.length === 0 && (
+                <div className="text-center py-4">
+                  <p className="text-sm text-zinc-500">No content items found</p>
+                </div>
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   )
 }
