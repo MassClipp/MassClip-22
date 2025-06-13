@@ -306,10 +306,14 @@ export default function MyPurchasesPage() {
       setIsFavorite(!isFavorite)
     }
 
+    // Update the ContentCard component to only show controls on hover
+    // Find the ContentCard component and replace its return statement
+
+    // Replace the ContentCard return statement with:
     return (
       <div className="flex-shrink-0 w-full">
         <div
-          className="relative aspect-[9/16] overflow-hidden rounded-lg bg-zinc-900"
+          className="relative aspect-[9/16] overflow-hidden rounded-lg bg-zinc-900 group"
           onMouseEnter={() => setIsHovered(true)}
           onMouseLeave={() => setIsHovered(false)}
         >
@@ -327,8 +331,11 @@ export default function MyPurchasesPage() {
                 <source src={content.fileUrl} type="video/mp4" />
               </video>
 
-              {/* Play/Pause Button Overlay */}
-              <div className="absolute inset-0 flex items-center justify-center bg-black/30">
+              {/* Border that appears on hover */}
+              <div className="absolute inset-0 border border-white/0 group-hover:border-white/40 rounded-lg transition-all duration-200"></div>
+
+              {/* Play/Pause Button Overlay - Only visible on hover */}
+              <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200">
                 <button
                   onClick={togglePlay}
                   className="w-10 h-10 rounded-full bg-black/50 flex items-center justify-center"
@@ -353,8 +360,8 @@ export default function MyPurchasesPage() {
             </div>
           )}
 
-          {/* Action buttons - always visible */}
-          <div className="absolute bottom-2 right-2 z-20">
+          {/* Action buttons - only visible on hover */}
+          <div className="absolute bottom-2 right-2 z-20 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
             <button
               className="bg-black/70 hover:bg-black/90 p-1.5 rounded-full transition-all duration-300"
               onClick={handleDownload}
@@ -365,7 +372,7 @@ export default function MyPurchasesPage() {
             </button>
           </div>
 
-          <div className="absolute bottom-2 left-2 z-20">
+          <div className="absolute bottom-2 left-2 z-20 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
             <button
               className={`bg-black/70 hover:bg-black/90 p-1.5 rounded-full transition-all duration-300 ${
                 isFavorite ? "text-red-500" : "text-white"

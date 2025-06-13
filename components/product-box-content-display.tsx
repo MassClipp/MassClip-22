@@ -191,7 +191,7 @@ export default function ProductBoxContentDisplay({
 
     return (
       <div className="flex-shrink-0 w-full">
-        <div className="relative aspect-[9/16] overflow-hidden rounded-lg bg-zinc-900">
+        <div className="relative aspect-[9/16] overflow-hidden rounded-lg bg-zinc-900 group">
           {/* Direct Video Player - No Thumbnails */}
           {item.contentType === "video" ? (
             <>
@@ -205,8 +205,11 @@ export default function ProductBoxContentDisplay({
                 <source src={item.fileUrl} type="video/mp4" />
               </video>
 
-              {/* Play/Pause Button Overlay - Always Visible */}
-              <div className="absolute inset-0 flex items-center justify-center bg-black/30">
+              {/* Border that appears on hover */}
+              <div className="absolute inset-0 border border-white/0 group-hover:border-white/40 rounded-lg transition-all duration-200"></div>
+
+              {/* Play/Pause Button Overlay - Only visible on hover */}
+              <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200">
                 <button
                   onClick={togglePlay}
                   className="w-10 h-10 rounded-full bg-black/50 flex items-center justify-center"
@@ -227,8 +230,8 @@ export default function ProductBoxContentDisplay({
             </div>
           )}
 
-          {/* Download button */}
-          <div className="absolute bottom-2 right-2 z-20">
+          {/* Download button - only visible on hover */}
+          <div className="absolute bottom-2 right-2 z-20 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
             <button
               className="bg-black/70 hover:bg-black/90 p-1.5 rounded-full transition-all duration-300"
               onClick={() => handleDownload(item)}
