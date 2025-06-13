@@ -5,7 +5,7 @@ import type React from "react"
 import { useState, useEffect, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/contexts/auth-context"
-import { ArrowLeft, RefreshCw, Download, AlertCircle, Bug, Heart, Play, Music, File } from "lucide-react"
+import { ArrowLeft, RefreshCw, Download, AlertCircle, Bug, Heart, Play, Music, File, Pause } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { useToast } from "@/hooks/use-toast"
@@ -73,11 +73,7 @@ export default function ProductBoxContentPage({ params }: { params: { id: string
 
         if (foundPurchase && foundPurchase.items.length > 0) {
           console.log("✅ [Content Page] Found unified purchase with", foundPurchase.items.length, "items")
-          const processedPurchase = {
-            ...foundPurchase,
-            items: ensureValidThumbnails(foundPurchase.items),
-          }
-          setPurchase(processedPurchase)
+          setPurchase(foundPurchase)
           return
         }
       }
@@ -139,7 +135,7 @@ export default function ProductBoxContentPage({ params }: { params: { id: string
                 productBoxId: params.id,
                 productBoxTitle: contentData.productBox?.title || legacyPurchase.itemTitle || "Premium Content",
                 productBoxDescription: contentData.productBox?.description || "",
-                items: ensureValidThumbnails(mappedContent),
+                items: mappedContent,
               })
               return
             }
@@ -277,18 +273,7 @@ export default function ProductBoxContentPage({ params }: { params: { id: string
     return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + " " + sizes[i]
   }
 
-  // Ensure all items have valid thumbnails
-  const ensureValidThumbnails = (items: UnifiedPurchaseItem[]): UnifiedPurchaseItem[] => {
-    return items.map((item) => {
-      // If no thumbnailUrl is provided, log it but don't use a placeholder
-      if (!item.thumbnailUrl) {
-        console.log(`Missing thumbnail for item: ${item.id}`)
-      }
-      return item
-    })
-  }
-
-  // Video Card Component
+  // Video Card Component - Direct Video Player
   const VideoCard = ({ item }: { item: UnifiedPurchaseItem }) => {
     const [isHovered, setIsHovered] = useState(false)
     const [isFavorite, setIsFavorite] = useState(false)
@@ -351,35 +336,29 @@ export default function ProductBoxContentPage({ params }: { params: { id: string
           onMouseEnter={() => setIsHovered(true)}
           onMouseLeave={() => setIsHovered(false)}
         >
-          {/* Video/Thumbnail */}
+          {/* Direct Video Player - No Thumbnails */}
           {item.contentType === "video" ? (
             <>
-              <img
-                src={item.thumbnailUrl || "/placeholder.svg"}
-                alt={item.title}
-                className={`w-full h-full object-cover ${isPlaying ? "hidden" : "block"}`}
-              />
               <video
                 ref={videoRef}
-                className={`w-full h-full object-cover ${isPlaying ? "block" : "hidden"}`}
+                className="w-full h-full object-cover"
                 preload="metadata"
                 onClick={togglePlay}
                 onEnded={() => setIsPlaying(false)}
+                poster={item.thumbnailUrl}
               >
                 <source src={item.fileUrl} type="video/mp4" />
               </video>
 
-              {/* Play button overlay - only show when not playing */}
-              {!isPlaying && isHovered && (
-                <div className="absolute inset-0 flex items-center justify-center bg-black/30">
-                  <button
-                    onClick={togglePlay}
-                    className="w-10 h-10 rounded-full bg-black/50 flex items-center justify-center"
-                  >
-                    <Play className="h-4 w-4 text-white" />
-                  </button>
-                </div>
-              )}
+              {/* Play/Pause Button Overlay - Always Visible */}
+              <div className="absolute inset-0 flex items-center justify-center bg-black/30">
+                <button
+                  onClick={togglePlay}
+                  className="w-10 h-10 rounded-full bg-black/50 flex items-center justify-center"
+                >
+                  {isPlaying ? <Pause className="h-4 w-4 text-white" /> : <Play className="h-4 w-4 text-white" />}
+                </button>
+              </div>
             </>
           ) : item.contentType === "audio" ? (
             <div className="w-full h-full flex items-center justify-center bg-purple-900/20">
@@ -393,36 +372,30 @@ export default function ProductBoxContentPage({ params }: { params: { id: string
             </div>
           )}
 
-          {/* Action buttons - only show on hover */}
-          {isHovered && (
-            <>
-              {/* Download button */}
-              <div className="absolute bottom-2 right-2 z-20">
-                <button
-                  className="bg-black/70 hover:bg-black/90 p-1.5 rounded-full transition-all duration-300"
-                  onClick={handleDownload}
-                  aria-label="Download"
-                  title="Download"
-                >
-                  <Download className="h-3.5 w-3.5 text-white" />
-                </button>
-              </div>
+          {/* Action buttons - always visible */}
+          <div className="absolute bottom-2 right-2 z-20">
+            <button
+              className="bg-black/70 hover:bg-black/90 p-1.5 rounded-full transition-all duration-300"
+              onClick={handleDownload}
+              aria-label="Download"
+              title="Download"
+            >
+              <Download className="h-3.5 w-3.5 text-white" />
+            </button>
+          </div>
 
-              {/* Favorite button */}
-              <div className="absolute bottom-2 left-2 z-20">
-                <button
-                  className={`bg-black/70 hover:bg-black/90 p-1.5 rounded-full transition-all duration-300 ${
-                    isFavorite ? "text-red-500" : "text-white"
-                  }`}
-                  onClick={toggleFavorite}
-                  aria-label={isFavorite ? "Remove from favorites" : "Add to favorites"}
-                  title={isFavorite ? "Remove from favorites" : "Add to favorites"}
-                >
-                  <Heart className="h-3.5 w-3.5" fill={isFavorite ? "currentColor" : "none"} />
-                </button>
-              </div>
-            </>
-          )}
+          <div className="absolute bottom-2 left-2 z-20">
+            <button
+              className={`bg-black/70 hover:bg-black/90 p-1.5 rounded-full transition-all duration-300 ${
+                isFavorite ? "text-red-500" : "text-white"
+              }`}
+              onClick={toggleFavorite}
+              aria-label={isFavorite ? "Remove from favorites" : "Add to favorites"}
+              title={isFavorite ? "Remove from favorites" : "Add to favorites"}
+            >
+              <Heart className="h-3.5 w-3.5" fill={isFavorite ? "currentColor" : "none"} />
+            </button>
+          </div>
         </div>
 
         {/* File info below video */}

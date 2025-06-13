@@ -24,6 +24,7 @@ import {
   Heart,
   File,
   Music,
+  Pause,
 } from "lucide-react"
 import { motion } from "framer-motion"
 import { format } from "date-fns"
@@ -107,24 +108,6 @@ export default function MyPurchasesPage() {
     }))
   }
 
-  // Process purchases to ensure all items have valid thumbnails
-  const ensureValidThumbnails = (purchases: UnifiedPurchase[]): UnifiedPurchase[] => {
-    return purchases.map((purchase) => {
-      const processedItems = purchase.items.map((item) => {
-        // If no thumbnailUrl is provided, use a dark background color instead of a white placeholder
-        if (!item.thumbnailUrl) {
-          console.log(`Missing thumbnail for item: ${item.id}`)
-        }
-        return item
-      })
-
-      return {
-        ...purchase,
-        items: processedItems,
-      }
-    })
-  }
-
   // Fetch user purchases from unified collection
   const fetchPurchases = async () => {
     if (!user) {
@@ -174,7 +157,7 @@ export default function MyPurchasesPage() {
         totalItems: purchase.totalItems || (purchase.items ? purchase.items.length : 0),
       }))
 
-      setPurchases(ensureValidThumbnails(processedPurchases))
+      setPurchases(processedPurchases)
 
       if (refreshing) {
         toast({
@@ -267,9 +250,7 @@ export default function MyPurchasesPage() {
     return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + " " + sizes[i]
   }
 
-  // Update the ContentCard component to match the reference design
-  // and improve the visual density
-
+  // Update the ContentCard component to show video player directly
   const ContentCard = ({ content }: { content: UnifiedPurchaseItem }) => {
     const [isHovered, setIsHovered] = useState(false)
     const [isFavorite, setIsFavorite] = useState(false)
@@ -332,35 +313,29 @@ export default function MyPurchasesPage() {
           onMouseEnter={() => setIsHovered(true)}
           onMouseLeave={() => setIsHovered(false)}
         >
-          {/* Video/Thumbnail */}
+          {/* Direct Video Player - No Thumbnails */}
           {content.contentType === "video" ? (
             <>
-              <img
-                src={content.thumbnailUrl || "/placeholder.svg"}
-                alt={content.title}
-                className={`w-full h-full object-cover ${isPlaying ? "hidden" : "block"}`}
-              />
               <video
                 ref={videoRef}
-                className={`w-full h-full object-cover ${isPlaying ? "block" : "hidden"}`}
+                className="w-full h-full object-cover"
                 preload="metadata"
                 onClick={togglePlay}
                 onEnded={() => setIsPlaying(false)}
+                poster={content.thumbnailUrl}
               >
                 <source src={content.fileUrl} type="video/mp4" />
               </video>
 
-              {/* Play button overlay - only show when not playing */}
-              {!isPlaying && isHovered && (
-                <div className="absolute inset-0 flex items-center justify-center bg-black/30">
-                  <button
-                    onClick={togglePlay}
-                    className="w-10 h-10 rounded-full bg-black/50 flex items-center justify-center"
-                  >
-                    <Play className="h-4 w-4 text-white" />
-                  </button>
-                </div>
-              )}
+              {/* Play/Pause Button Overlay */}
+              <div className="absolute inset-0 flex items-center justify-center bg-black/30">
+                <button
+                  onClick={togglePlay}
+                  className="w-10 h-10 rounded-full bg-black/50 flex items-center justify-center"
+                >
+                  {isPlaying ? <Pause className="h-4 w-4 text-white" /> : <Play className="h-4 w-4 text-white" />}
+                </button>
+              </div>
             </>
           ) : content.contentType === "audio" ? (
             <div className="w-full h-full flex items-center justify-center bg-purple-900/20">
@@ -378,36 +353,30 @@ export default function MyPurchasesPage() {
             </div>
           )}
 
-          {/* Action buttons - only show on hover */}
-          {isHovered && (
-            <>
-              {/* Download button */}
-              <div className="absolute bottom-2 right-2 z-20">
-                <button
-                  className="bg-black/70 hover:bg-black/90 p-1.5 rounded-full transition-all duration-300"
-                  onClick={handleDownload}
-                  aria-label="Download"
-                  title="Download"
-                >
-                  <Download className="h-3.5 w-3.5 text-white" />
-                </button>
-              </div>
+          {/* Action buttons - always visible */}
+          <div className="absolute bottom-2 right-2 z-20">
+            <button
+              className="bg-black/70 hover:bg-black/90 p-1.5 rounded-full transition-all duration-300"
+              onClick={handleDownload}
+              aria-label="Download"
+              title="Download"
+            >
+              <Download className="h-3.5 w-3.5 text-white" />
+            </button>
+          </div>
 
-              {/* Favorite button */}
-              <div className="absolute bottom-2 left-2 z-20">
-                <button
-                  className={`bg-black/70 hover:bg-black/90 p-1.5 rounded-full transition-all duration-300 ${
-                    isFavorite ? "text-red-500" : "text-white"
-                  }`}
-                  onClick={toggleFavorite}
-                  aria-label={isFavorite ? "Remove from favorites" : "Add to favorites"}
-                  title={isFavorite ? "Remove from favorites" : "Add to favorites"}
-                >
-                  <Heart className="h-3.5 w-3.5" fill={isFavorite ? "currentColor" : "none"} />
-                </button>
-              </div>
-            </>
-          )}
+          <div className="absolute bottom-2 left-2 z-20">
+            <button
+              className={`bg-black/70 hover:bg-black/90 p-1.5 rounded-full transition-all duration-300 ${
+                isFavorite ? "text-red-500" : "text-white"
+              }`}
+              onClick={toggleFavorite}
+              aria-label={isFavorite ? "Remove from favorites" : "Add to favorites"}
+              title={isFavorite ? "Remove from favorites" : "Add to favorites"}
+            >
+              <Heart className="h-3.5 w-3.5" fill={isFavorite ? "currentColor" : "none"} />
+            </button>
+          </div>
         </div>
 
         {/* File info below video */}
