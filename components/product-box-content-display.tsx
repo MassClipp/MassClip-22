@@ -73,11 +73,24 @@ export default function ProductBoxContentDisplay({
         })
 
         if (!response.ok) {
-          const errorData = await response.json()
-          throw new Error(errorData.error || `HTTP ${response.status}: Failed to fetch content`)
+          let errorMessage = `HTTP ${response.status}: Failed to fetch content`
+          try {
+            const errorData = await response.json()
+            errorMessage = errorData.error || errorMessage
+          } catch (jsonError) {
+            console.error("Failed to parse error response:", jsonError)
+          }
+          throw new Error(errorMessage)
         }
 
-        const data = await response.json()
+        let data
+        try {
+          data = await response.json()
+        } catch (jsonError) {
+          console.error("Failed to parse response JSON:", jsonError)
+          throw new Error("Invalid response format from server")
+        }
+
         const contentItems = data.content || []
 
         // Map content items with proper type detection
