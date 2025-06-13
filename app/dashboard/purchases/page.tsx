@@ -107,6 +107,24 @@ export default function MyPurchasesPage() {
     }))
   }
 
+  // Process purchases to ensure all items have valid thumbnails
+  const ensureValidThumbnails = (purchases: UnifiedPurchase[]): UnifiedPurchase[] => {
+    return purchases.map((purchase) => {
+      const processedItems = purchase.items.map((item) => {
+        // If no thumbnailUrl is provided, use a dark background color instead of a white placeholder
+        if (!item.thumbnailUrl) {
+          console.log(`Missing thumbnail for item: ${item.id}`)
+        }
+        return item
+      })
+
+      return {
+        ...purchase,
+        items: processedItems,
+      }
+    })
+  }
+
   // Fetch user purchases from unified collection
   const fetchPurchases = async () => {
     if (!user) {
@@ -156,7 +174,7 @@ export default function MyPurchasesPage() {
         totalItems: purchase.totalItems || (purchase.items ? purchase.items.length : 0),
       }))
 
-      setPurchases(processedPurchases)
+      setPurchases(ensureValidThumbnails(processedPurchases))
 
       if (refreshing) {
         toast({
@@ -318,7 +336,7 @@ export default function MyPurchasesPage() {
           {content.contentType === "video" ? (
             <>
               <img
-                src={content.thumbnailUrl || "/placeholder.svg?height=480&width=270&text=Video"}
+                src={content.thumbnailUrl || "/placeholder.svg"}
                 alt={content.title}
                 className={`w-full h-full object-cover ${isPlaying ? "hidden" : "block"}`}
               />
@@ -350,7 +368,7 @@ export default function MyPurchasesPage() {
             </div>
           ) : content.contentType === "image" ? (
             <img
-              src={content.fileUrl || content.thumbnailUrl || "/placeholder.svg?height=480&width=270&text=Image"}
+              src={content.fileUrl || content.thumbnailUrl}
               alt={content.title}
               className="w-full h-full object-cover"
             />

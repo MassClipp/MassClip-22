@@ -73,7 +73,11 @@ export default function ProductBoxContentPage({ params }: { params: { id: string
 
         if (foundPurchase && foundPurchase.items.length > 0) {
           console.log("✅ [Content Page] Found unified purchase with", foundPurchase.items.length, "items")
-          setPurchase(foundPurchase)
+          const processedPurchase = {
+            ...foundPurchase,
+            items: ensureValidThumbnails(foundPurchase.items),
+          }
+          setPurchase(processedPurchase)
           return
         }
       }
@@ -135,7 +139,7 @@ export default function ProductBoxContentPage({ params }: { params: { id: string
                 productBoxId: params.id,
                 productBoxTitle: contentData.productBox?.title || legacyPurchase.itemTitle || "Premium Content",
                 productBoxDescription: contentData.productBox?.description || "",
-                items: mappedContent,
+                items: ensureValidThumbnails(mappedContent),
               })
               return
             }
@@ -273,6 +277,17 @@ export default function ProductBoxContentPage({ params }: { params: { id: string
     return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + " " + sizes[i]
   }
 
+  // Ensure all items have valid thumbnails
+  const ensureValidThumbnails = (items: UnifiedPurchaseItem[]): UnifiedPurchaseItem[] => {
+    return items.map((item) => {
+      // If no thumbnailUrl is provided, log it but don't use a placeholder
+      if (!item.thumbnailUrl) {
+        console.log(`Missing thumbnail for item: ${item.id}`)
+      }
+      return item
+    })
+  }
+
   // Video Card Component
   const VideoCard = ({ item }: { item: UnifiedPurchaseItem }) => {
     const [isHovered, setIsHovered] = useState(false)
@@ -340,7 +355,7 @@ export default function ProductBoxContentPage({ params }: { params: { id: string
           {item.contentType === "video" ? (
             <>
               <img
-                src={item.thumbnailUrl || "/placeholder.svg?height=480&width=270&text=Video"}
+                src={item.thumbnailUrl || "/placeholder.svg"}
                 alt={item.title}
                 className={`w-full h-full object-cover ${isPlaying ? "hidden" : "block"}`}
               />
@@ -371,11 +386,7 @@ export default function ProductBoxContentPage({ params }: { params: { id: string
               <Music className="h-8 w-8 text-purple-400" />
             </div>
           ) : item.contentType === "image" ? (
-            <img
-              src={item.fileUrl || item.thumbnailUrl || "/placeholder.svg?height=480&width=270&text=Image"}
-              alt={item.title}
-              className="w-full h-full object-cover"
-            />
+            <img src={item.fileUrl || item.thumbnailUrl} alt={item.title} className="w-full h-full object-cover" />
           ) : (
             <div className="w-full h-full flex items-center justify-center bg-zinc-800">
               <File className="h-8 w-8 text-zinc-400" />

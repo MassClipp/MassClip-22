@@ -107,7 +107,7 @@ const VideoCard = ({ item }: { item: ContentItem }) => {
         <div className="relative aspect-[9/16] overflow-hidden rounded-lg bg-zinc-900">
           {/* Thumbnail image (shown when not playing) */}
           <img
-            src={item.thumbnailUrl || "/placeholder.svg?height=480&width=270&text=Video"}
+            src={item.thumbnailUrl || "/placeholder.svg"}
             alt={item.title}
             className={`w-full h-full object-cover ${isPlaying ? "hidden" : "block"}`}
           />

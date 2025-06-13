@@ -204,12 +204,14 @@ export default function EnhancedVideoCard({
       <div className="relative aspect-[9/16] overflow-hidden rounded-lg bg-zinc-900">
         {/* Video/Thumbnail */}
         <img
-          src={videoData.thumbnail || "/placeholder.svg?height=480&width=270&text=Video"}
+          src={videoData.thumbnail || "/placeholder.svg"}
           alt={videoData.title}
           className="w-full h-full object-cover"
           onError={(e) => {
+            console.error("Failed to load thumbnail:", videoData.thumbnail)
+            // Only use a fallback if absolutely necessary
             const target = e.target as HTMLImageElement
-            target.src = "/placeholder.svg?height=480&width=270&text=Video"
+            target.style.backgroundColor = "#18181b" // dark background instead of white
           }}
         />
 
