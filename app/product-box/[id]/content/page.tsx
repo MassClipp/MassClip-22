@@ -1,12 +1,14 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import type React from "react"
+
+import { useState, useEffect, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/contexts/auth-context"
-import { ArrowLeft, RefreshCw, Download, AlertCircle, Bug } from "lucide-react"
+import { ArrowLeft, RefreshCw, Download, AlertCircle, Bug, Play, Pause, Heart } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
-import { useToast } from "@/components/ui/use-toast"
+import { useToast } from "@/hooks/use-toast"
 
 interface UnifiedPurchaseItem {
   id: string
@@ -271,12 +273,172 @@ export default function ProductBoxContentPage({ params }: { params: { id: string
     return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + " " + sizes[i]
   }
 
-  // Format duration
-  const formatDuration = (seconds?: number) => {
-    if (!seconds) return null
-    const minutes = Math.floor(seconds / 60)
-    const remainingSeconds = seconds % 60
-    return `${minutes}:${remainingSeconds.toString().padStart(2, "0")}`
+  // Video Card Component
+  const VideoCard = ({ item }: { item: UnifiedPurchaseItem }) => {
+    const [isPlaying, setIsPlaying] = useState(false)
+    const [isHovered, setIsHovered] = useState(false)
+    const [isFavorite, setIsFavorite] = useState(false)
+    const videoRef = useRef<HTMLVideoElement>(null)
+
+    // Toggle play/pause
+    const togglePlay = (e: React.MouseEvent) => {
+      e.preventDefault()
+      e.stopPropagation()
+
+      if (!videoRef.current) return
+
+      if (isPlaying) {
+        videoRef.current.pause()
+        videoRef.current.currentTime = 0
+        setIsPlaying(false)
+      } else {
+        // Pause all other videos first
+        document.querySelectorAll("video").forEach((v) => {
+          if (v !== videoRef.current) {
+            v.pause()
+            v.currentTime = 0
+          }
+        })
+
+        videoRef.current.muted = false
+        videoRef.current
+          .play()
+          .then(() => {
+            setIsPlaying(true)
+          })
+          .catch((error) => {
+            console.error("Error playing video:", error)
+          })
+      }
+    }
+
+    const handleVideoEnd = () => {
+      setIsPlaying(false)
+      if (videoRef.current) {
+        videoRef.current.currentTime = 0
+      }
+    }
+
+    // Handle download
+    const handleDownload = (e: React.MouseEvent) => {
+      e.preventDefault()
+      e.stopPropagation()
+
+      if (!item.fileUrl) return
+
+      const link = document.createElement("a")
+      link.href = item.fileUrl
+      link.download = item.filename || `${item.title}.mp4`
+      link.click()
+    }
+
+    // Toggle favorite
+    const toggleFavorite = (e: React.MouseEvent) => {
+      e.preventDefault()
+      e.stopPropagation()
+      setIsFavorite(!isFavorite)
+    }
+
+    return (
+      <div className="flex flex-col">
+        <div
+          className="group relative border border-transparent hover:border-white/20 transition-all duration-300 rounded-lg"
+          onMouseEnter={() => setIsHovered(true)}
+          onMouseLeave={() => setIsHovered(false)}
+        >
+          <div className="relative aspect-[9/16] overflow-hidden rounded-lg bg-zinc-900 shadow-md">
+            {item.contentType === "video" ? (
+              <>
+                {/* Video element */}
+                <video
+                  ref={videoRef}
+                  className="w-full h-full object-cover cursor-pointer"
+                  preload="metadata"
+                  muted={!isPlaying}
+                  playsInline
+                  onEnded={handleVideoEnd}
+                  onClick={togglePlay}
+                  poster={item.thumbnailUrl}
+                >
+                  <source src={item.fileUrl} type="video/mp4" />
+                  Your browser does not support the video tag.
+                </video>
+
+                {/* Play/Pause button overlay */}
+                <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-20">
+                  <button
+                    onClick={togglePlay}
+                    className="w-12 h-12 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center text-white transition-all duration-200 hover:bg-black/70"
+                    aria-label={isPlaying ? "Pause video" : "Play video"}
+                  >
+                    {isPlaying ? <Pause className="h-5 w-5" /> : <Play className="h-5 w-5 ml-0.5" />}
+                  </button>
+                </div>
+
+                {/* Action buttons container */}
+                <div
+                  className="absolute bottom-2 left-2 right-2 z-20 flex items-center justify-between transition-opacity duration-300"
+                  style={{ opacity: isHovered ? 1 : 0 }}
+                >
+                  {/* Download button */}
+                  <button
+                    className="bg-black/70 hover:bg-black/90 p-1.5 rounded-full transition-all duration-300"
+                    onClick={handleDownload}
+                    aria-label="Download video"
+                    title="Download video"
+                  >
+                    <Download className="h-3.5 w-3.5 text-white" />
+                  </button>
+
+                  {/* Favorite button */}
+                  <button
+                    className={`bg-black/70 hover:bg-black/90 p-1.5 rounded-full transition-all duration-300 ${
+                      isFavorite ? "text-red-500" : "text-white"
+                    }`}
+                    onClick={toggleFavorite}
+                    aria-label={isFavorite ? "Remove from favorites" : "Add to favorites"}
+                    title={isFavorite ? "Remove from favorites" : "Add to favorites"}
+                  >
+                    <Heart className="h-3.5 w-3.5" fill={isFavorite ? "currentColor" : "none"} />
+                  </button>
+                </div>
+              </>
+            ) : item.contentType === "audio" ? (
+              <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-purple-900/20 to-pink-900/20 p-4">
+                <audio src={item.fileUrl} controls className="w-4/5" />
+                <h4 className="text-sm font-medium text-white text-center line-clamp-2 mt-2">{item.title}</h4>
+              </div>
+            ) : item.contentType === "image" ? (
+              <img
+                src={item.fileUrl || item.thumbnailUrl || "/placeholder.svg?height=480&width=270&text=Image"}
+                alt={item.title}
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center">
+                <a
+                  href={item.fileUrl}
+                  download={item.filename}
+                  className="bg-zinc-800 hover:bg-zinc-700 text-white py-2 px-4 rounded flex items-center"
+                >
+                  <Download className="mr-2 h-4 w-4" />
+                  Download
+                </a>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Title below video */}
+        <div className="mt-2 text-xs text-zinc-300 min-h-[2.5rem] line-clamp-2 font-light" title={item.title}>
+          {item.title || "Untitled video"}
+        </div>
+        <div className="flex justify-between items-center mt-1">
+          <span className="text-xs text-zinc-500">video</span>
+          <span className="text-xs text-zinc-500">{formatFileSize(item.fileSize)}</span>
+        </div>
+      </div>
+    )
   }
 
   if (loading) {
@@ -477,52 +639,9 @@ export default function ProductBoxContentPage({ params }: { params: { id: string
 
       {/* Content Grid */}
       <main className="max-w-7xl mx-auto p-6">
-        <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
           {purchase.items.map((item) => (
-            <div key={item.id} className="flex flex-col">
-              {/* Video Card with 9:16 aspect ratio */}
-              <div className="relative aspect-[9/16] bg-zinc-900 overflow-hidden rounded-lg">
-                {item.contentType === "video" && item.fileUrl ? (
-                  <video
-                    src={item.fileUrl}
-                    poster={item.thumbnailUrl || "/placeholder.svg?height=480&width=270&text=Video"}
-                    className="w-full h-full object-cover"
-                    controls
-                    preload="metadata"
-                  />
-                ) : item.contentType === "audio" ? (
-                  <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-purple-900/20 to-pink-900/20">
-                    <audio src={item.fileUrl} controls className="w-4/5" />
-                  </div>
-                ) : item.contentType === "image" ? (
-                  <img
-                    src={item.fileUrl || item.thumbnailUrl || "/placeholder.svg?height=480&width=270&text=Image"}
-                    alt={item.title}
-                    className="w-full h-full object-cover"
-                  />
-                ) : (
-                  <div className="w-full h-full flex items-center justify-center">
-                    <a
-                      href={item.fileUrl}
-                      download={item.filename}
-                      className="bg-zinc-800 hover:bg-zinc-700 text-white py-2 px-4 rounded flex items-center"
-                    >
-                      <Download className="mr-2 h-4 w-4" />
-                      Download
-                    </a>
-                  </div>
-                )}
-              </div>
-
-              {/* Title below video */}
-              <div className="mt-2">
-                <p className="text-sm text-white truncate">{item.title}</p>
-                <div className="flex justify-between items-center mt-1">
-                  <span className="text-xs text-zinc-500">video</span>
-                  <span className="text-xs text-zinc-500">{formatFileSize(item.fileSize)}</span>
-                </div>
-              </div>
-            </div>
+            <VideoCard key={item.id} item={item} />
           ))}
         </div>
 

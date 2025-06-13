@@ -1,11 +1,13 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import type React from "react"
+
+import { useState, useEffect, useRef } from "react"
 import { useAuth } from "@/contexts/auth-context"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { useToast } from "@/components/ui/use-toast"
+import { useToast } from "@/hooks/use-toast"
 import {
   Play,
   Calendar,
@@ -20,9 +22,11 @@ import {
   ArrowUpRight,
   FileText,
   Music,
-  ImageIcon,
   ChevronDown,
   ChevronUp,
+  Download,
+  Heart,
+  Pause,
 } from "lucide-react"
 import { motion } from "framer-motion"
 import { format } from "date-fns"
@@ -248,47 +252,159 @@ export default function MyPurchasesPage() {
     return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + " " + sizes[i]
   }
 
-  // Content card component with 9:16 aspect ratio
+  // Content card component with 9:16 aspect ratio and video playback
   const ContentCard = ({ content }: { content: UnifiedPurchaseItem }) => {
-    return (
-      <div className="flex flex-col">
-        {/* Video Card with 9:16 aspect ratio */}
-        <div className="relative aspect-[9/16] bg-zinc-900 overflow-hidden rounded-lg">
-          {content.thumbnailUrl ? (
-            <img
-              src={content.thumbnailUrl || "/placeholder.svg?height=480&width=270&text=Video"}
-              alt={content.title}
-              className="w-full h-full object-cover"
-            />
-          ) : (
-            <div className="w-full h-full flex items-center justify-center bg-zinc-800">
-              {content.contentType === "video" ? (
-                <Video className="h-8 w-8 text-zinc-600" />
-              ) : content.contentType === "audio" ? (
-                <Music className="h-8 w-8 text-zinc-600" />
-              ) : content.contentType === "image" ? (
-                <ImageIcon className="h-8 w-8 text-zinc-600" />
-              ) : (
-                <FileText className="h-8 w-8 text-zinc-600" />
-              )}
-            </div>
-          )}
+    const [isPlaying, setIsPlaying] = useState(false)
+    const [isHovered, setIsHovered] = useState(false)
+    const [isFavorite, setIsFavorite] = useState(false)
+    const videoRef = useRef<HTMLVideoElement>(null)
 
-          {/* Play button overlay */}
-          <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-            <div className="bg-black/50 backdrop-blur-sm rounded-full p-3">
-              <Play className="h-5 w-5 text-white" />
-            </div>
+    // Toggle play/pause
+    const togglePlay = (e: React.MouseEvent) => {
+      e.preventDefault()
+      e.stopPropagation()
+
+      if (!videoRef.current) return
+
+      if (isPlaying) {
+        videoRef.current.pause()
+        videoRef.current.currentTime = 0
+        setIsPlaying(false)
+      } else {
+        // Pause all other videos first
+        document.querySelectorAll("video").forEach((v) => {
+          if (v !== videoRef.current) {
+            v.pause()
+            v.currentTime = 0
+          }
+        })
+
+        videoRef.current.muted = false
+        videoRef.current
+          .play()
+          .then(() => {
+            setIsPlaying(true)
+          })
+          .catch((error) => {
+            console.error("Error playing video:", error)
+          })
+      }
+    }
+
+    const handleVideoEnd = () => {
+      setIsPlaying(false)
+      if (videoRef.current) {
+        videoRef.current.currentTime = 0
+      }
+    }
+
+    // Handle download
+    const handleDownload = (e: React.MouseEvent) => {
+      e.preventDefault()
+      e.stopPropagation()
+
+      if (!content.fileUrl) return
+
+      const link = document.createElement("a")
+      link.href = content.fileUrl
+      link.download = content.filename || `${content.title}.mp4`
+      link.click()
+    }
+
+    // Toggle favorite
+    const toggleFavorite = (e: React.MouseEvent) => {
+      e.preventDefault()
+      e.stopPropagation()
+      setIsFavorite(!isFavorite)
+    }
+
+    return (
+      <div className="flex-shrink-0 w-full">
+        <div
+          className="group relative border border-transparent hover:border-white/20 transition-all duration-300 rounded-lg"
+          onMouseEnter={() => setIsHovered(true)}
+          onMouseLeave={() => setIsHovered(false)}
+        >
+          <div className="relative aspect-[9/16] overflow-hidden rounded-lg bg-zinc-900 shadow-md">
+            {content.contentType === "video" ? (
+              <>
+                {/* Video element */}
+                <video
+                  ref={videoRef}
+                  className="w-full h-full object-cover cursor-pointer"
+                  preload="metadata"
+                  muted={!isPlaying}
+                  playsInline
+                  onEnded={handleVideoEnd}
+                  onClick={togglePlay}
+                  poster={content.thumbnailUrl}
+                >
+                  <source src={content.fileUrl} type="video/mp4" />
+                  Your browser does not support the video tag.
+                </video>
+
+                {/* Play/Pause button overlay */}
+                <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-20">
+                  <button
+                    onClick={togglePlay}
+                    className="w-12 h-12 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center text-white transition-all duration-200 hover:bg-black/70"
+                    aria-label={isPlaying ? "Pause video" : "Play video"}
+                  >
+                    {isPlaying ? <Pause className="h-5 w-5" /> : <Play className="h-5 w-5 ml-0.5" />}
+                  </button>
+                </div>
+
+                {/* Action buttons container */}
+                <div
+                  className="absolute bottom-2 left-2 right-2 z-20 flex items-center justify-between transition-opacity duration-300"
+                  style={{ opacity: isHovered ? 1 : 0 }}
+                >
+                  {/* Download button */}
+                  <button
+                    className="bg-black/70 hover:bg-black/90 p-1.5 rounded-full transition-all duration-300"
+                    onClick={handleDownload}
+                    aria-label="Download video"
+                    title="Download video"
+                  >
+                    <Download className="h-3.5 w-3.5 text-white" />
+                  </button>
+
+                  {/* Favorite button */}
+                  <button
+                    className={`bg-black/70 hover:bg-black/90 p-1.5 rounded-full transition-all duration-300 ${
+                      isFavorite ? "text-red-500" : "text-white"
+                    }`}
+                    onClick={toggleFavorite}
+                    aria-label={isFavorite ? "Remove from favorites" : "Add to favorites"}
+                    title={isFavorite ? "Remove from favorites" : "Add to favorites"}
+                  >
+                    <Heart className="h-3.5 w-3.5" fill={isFavorite ? "currentColor" : "none"} />
+                  </button>
+                </div>
+              </>
+            ) : content.contentType === "audio" ? (
+              <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-purple-900/20 to-pink-900/20 p-4">
+                <Music className="h-12 w-12 text-purple-400 mb-2" />
+                <h4 className="text-sm font-medium text-white text-center line-clamp-2">{content.title}</h4>
+              </div>
+            ) : content.contentType === "image" ? (
+              <img
+                src={content.fileUrl || content.thumbnailUrl || "/placeholder.svg?height=480&width=270&text=Image"}
+                alt={content.title}
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              <div className="w-full h-full flex flex-col items-center justify-center bg-gradient-to-br from-zinc-800 to-zinc-900 p-4">
+                <FileText className="h-12 w-12 text-zinc-400 mb-2" />
+                <h4 className="text-sm font-medium text-white text-center line-clamp-2">{content.title}</h4>
+              </div>
+            )}
           </div>
         </div>
 
         {/* Title below video */}
-        <div className="mt-2">
-          <p className="text-sm text-white truncate">{content.title}</p>
-          <div className="flex justify-between items-center mt-1">
-            <span className="text-xs text-zinc-500">video</span>
-            <span className="text-xs text-zinc-500">{formatFileSize(content.fileSize)}</span>
-          </div>
+        <div className="mt-2 text-xs text-zinc-300 min-h-[2.5rem] line-clamp-2 font-light" title={content.title}>
+          {content.title || "Untitled video"}
         </div>
       </div>
     )
