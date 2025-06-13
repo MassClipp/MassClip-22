@@ -18,7 +18,6 @@ import {
   ShoppingBag,
   Eye,
   ArrowUpRight,
-  AlertCircle,
   FileText,
   Music,
   ImageIcon,
@@ -240,93 +239,55 @@ export default function MyPurchasesPage() {
     router.push(`/product-box/${purchase.productBoxId}/content`)
   }
 
-  // Get content type icon
-  const getContentTypeIcon = (contentType: string) => {
-    switch (contentType.toLowerCase()) {
-      case "video":
-        return <Video className="h-8 w-8 text-zinc-600" />
-      case "audio":
-        return <Music className="h-8 w-8 text-zinc-600" />
-      case "image":
-        return <ImageIcon className="h-8 w-8 text-zinc-600" />
-      default:
-        return <FileText className="h-8 w-8 text-zinc-600" />
-    }
+  // Format file size
+  const formatFileSize = (bytes: number) => {
+    if (bytes === 0) return "0 Bytes"
+    const k = 1024
+    const sizes = ["Bytes", "KB", "MB", "GB"]
+    const i = Math.floor(Math.log(bytes) / Math.log(k))
+    return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + " " + sizes[i]
   }
 
-  // Content card component with comprehensive metadata display
+  // Content card component with 9:16 aspect ratio
   const ContentCard = ({ content }: { content: UnifiedPurchaseItem }) => {
-    const [isHovered, setIsHovered] = useState(false)
-    const [loadError, setLoadError] = useState(false)
-
-    const formatFileSize = (bytes: number) => {
-      if (bytes === 0) return "0 Bytes"
-      const k = 1024
-      const sizes = ["Bytes", "KB", "MB", "GB"]
-      const i = Math.floor(Math.log(bytes) / Math.log(k))
-      return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + " " + sizes[i]
-    }
-
-    const formatDuration = (seconds?: number) => {
-      if (!seconds) return ""
-      const minutes = Math.floor(seconds / 60)
-      const remainingSeconds = seconds % 60
-      return `${minutes}:${remainingSeconds.toString().padStart(2, "0")}`
-    }
-
     return (
-      <div className="flex-shrink-0 w-full">
-        <div
-          className="relative group border border-transparent hover:border-white/20 transition-all duration-300 rounded-lg"
-          onMouseEnter={() => setIsHovered(true)}
-          onMouseLeave={() => setIsHovered(false)}
-        >
-          <div className="relative aspect-video overflow-hidden rounded-lg bg-zinc-900 shadow-md">
-            {/* Video content */}
-            {loadError ? (
-              <div className="w-full h-full flex flex-col items-center justify-center bg-zinc-800/50 text-center p-4">
-                <AlertCircle className="h-8 w-8 text-red-500 mb-2" />
-                <p className="text-xs text-zinc-400">Content unavailable</p>
-              </div>
-            ) : content.contentType === "video" && content.thumbnailUrl ? (
-              <img
-                src={content.thumbnailUrl || "/placeholder.svg?height=180&width=320&text=Video"}
-                alt={content.title}
-                className="w-full h-full object-cover"
-                onError={() => setLoadError(true)}
-              />
-            ) : (
-              <div className="w-full h-full flex items-center justify-center bg-zinc-800">
-                {getContentTypeIcon(content.contentType)}
-              </div>
-            )}
-
-            {/* Play button overlay */}
-            <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-20">
-              <div className="bg-black/50 backdrop-blur-sm rounded-full p-3">
-                <Play className="h-5 w-5 text-white" />
-              </div>
+      <div className="flex flex-col">
+        {/* Video Card with 9:16 aspect ratio */}
+        <div className="relative aspect-[9/16] bg-zinc-900 overflow-hidden rounded-lg">
+          {content.thumbnailUrl ? (
+            <img
+              src={content.thumbnailUrl || "/placeholder.svg?height=480&width=270&text=Video"}
+              alt={content.title}
+              className="w-full h-full object-cover"
+            />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center bg-zinc-800">
+              {content.contentType === "video" ? (
+                <Video className="h-8 w-8 text-zinc-600" />
+              ) : content.contentType === "audio" ? (
+                <Music className="h-8 w-8 text-zinc-600" />
+              ) : content.contentType === "image" ? (
+                <ImageIcon className="h-8 w-8 text-zinc-600" />
+              ) : (
+                <FileText className="h-8 w-8 text-zinc-600" />
+              )}
             </div>
+          )}
 
-            {/* Duration Badge */}
-            {content.duration && (
-              <div className="absolute bottom-2 right-2 z-30">
-                <div className="bg-black/70 text-white text-xs px-2 py-1 rounded font-medium">
-                  {formatDuration(content.duration)}
-                </div>
-              </div>
-            )}
+          {/* Play button overlay */}
+          <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+            <div className="bg-black/50 backdrop-blur-sm rounded-full p-3">
+              <Play className="h-5 w-5 text-white" />
+            </div>
           </div>
         </div>
 
-        {/* Title and metadata */}
-        <div className="mt-2 space-y-1">
-          <div className="text-xs text-zinc-300 line-clamp-1 font-light" title={content.title}>
-            {content.title}
-          </div>
-          <div className="flex items-center gap-2 text-xs text-zinc-500">
-            <span>{content.contentType}</span>
-            <span>{formatFileSize(content.fileSize)}</span>
+        {/* Title below video */}
+        <div className="mt-2">
+          <p className="text-sm text-white truncate">{content.title}</p>
+          <div className="flex justify-between items-center mt-1">
+            <span className="text-xs text-zinc-500">video</span>
+            <span className="text-xs text-zinc-500">{formatFileSize(content.fileSize)}</span>
           </div>
         </div>
       </div>

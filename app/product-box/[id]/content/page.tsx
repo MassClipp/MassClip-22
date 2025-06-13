@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/contexts/auth-context"
-import { ArrowLeft, RefreshCw, Download, AlertCircle, Clock, Bug } from "lucide-react"
+import { ArrowLeft, RefreshCw, Download, AlertCircle, Bug } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { useToast } from "@/components/ui/use-toast"
@@ -477,69 +477,52 @@ export default function ProductBoxContentPage({ params }: { params: { id: string
 
       {/* Content Grid */}
       <main className="max-w-7xl mx-auto p-6">
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+        <div className="grid grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
           {purchase.items.map((item) => (
-            <Card
-              key={item.id}
-              className="bg-zinc-900/80 border-zinc-800 overflow-hidden group hover:border-zinc-700 transition-all duration-300"
-            >
-              <CardContent className="p-0">
-                {/* Media Preview */}
-                <div className="relative aspect-video bg-gradient-to-br from-zinc-800 to-zinc-900 overflow-hidden">
-                  {item.contentType === "video" && item.fileUrl ? (
-                    <div className="relative w-full h-full">
-                      <video
-                        src={item.fileUrl}
-                        poster={item.thumbnailUrl || "/placeholder.svg?height=240&width=320&text=Video"}
-                        className="w-full h-full object-cover"
-                        controls
-                        preload="metadata"
-                      />
-                    </div>
-                  ) : item.contentType === "audio" ? (
-                    <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-purple-900/20 to-pink-900/20">
-                      <audio src={item.fileUrl} controls className="w-4/5" />
-                    </div>
-                  ) : item.contentType === "image" ? (
-                    <img
-                      src={item.fileUrl || item.thumbnailUrl || "/placeholder.svg?height=240&width=320&text=Image"}
-                      alt={item.title}
-                      className="w-full h-full object-cover"
-                    />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center">
-                      <a
-                        href={item.fileUrl}
-                        download={item.filename}
-                        className="bg-zinc-800 hover:bg-zinc-700 text-white py-2 px-4 rounded flex items-center"
-                      >
-                        <Download className="mr-2 h-4 w-4" />
-                        Download {item.contentType}
-                      </a>
-                    </div>
-                  )}
-
-                  {/* Duration Badge */}
-                  {item.duration && (
-                    <div className="absolute bottom-2 right-2">
-                      <div className="bg-black/60 text-white text-xs px-2 py-1 rounded-sm">
-                        <Clock className="inline-block w-3 h-3 mr-1" />
-                        {formatDuration(item.duration)}
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {/* Content Info */}
-                <div className="p-4">
-                  <h3 className="font-medium text-white text-sm mb-1 line-clamp-1">{item.title}</h3>
-                  <div className="flex items-center justify-between text-xs text-zinc-400">
-                    <span>{item.contentType}</span>
-                    <span>{formatFileSize(item.fileSize)}</span>
+            <div key={item.id} className="flex flex-col">
+              {/* Video Card with 9:16 aspect ratio */}
+              <div className="relative aspect-[9/16] bg-zinc-900 overflow-hidden rounded-lg">
+                {item.contentType === "video" && item.fileUrl ? (
+                  <video
+                    src={item.fileUrl}
+                    poster={item.thumbnailUrl || "/placeholder.svg?height=480&width=270&text=Video"}
+                    className="w-full h-full object-cover"
+                    controls
+                    preload="metadata"
+                  />
+                ) : item.contentType === "audio" ? (
+                  <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-purple-900/20 to-pink-900/20">
+                    <audio src={item.fileUrl} controls className="w-4/5" />
                   </div>
+                ) : item.contentType === "image" ? (
+                  <img
+                    src={item.fileUrl || item.thumbnailUrl || "/placeholder.svg?height=480&width=270&text=Image"}
+                    alt={item.title}
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center">
+                    <a
+                      href={item.fileUrl}
+                      download={item.filename}
+                      className="bg-zinc-800 hover:bg-zinc-700 text-white py-2 px-4 rounded flex items-center"
+                    >
+                      <Download className="mr-2 h-4 w-4" />
+                      Download
+                    </a>
+                  </div>
+                )}
+              </div>
+
+              {/* Title below video */}
+              <div className="mt-2">
+                <p className="text-sm text-white truncate">{item.title}</p>
+                <div className="flex justify-between items-center mt-1">
+                  <span className="text-xs text-zinc-500">video</span>
+                  <span className="text-xs text-zinc-500">{formatFileSize(item.fileSize)}</span>
                 </div>
-              </CardContent>
-            </Card>
+              </div>
+            </div>
           ))}
         </div>
 
