@@ -1,8 +1,6 @@
 "use client"
 
-import type React from "react"
-
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect } from "react"
 import { useAuth } from "@/contexts/auth-context"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -10,7 +8,6 @@ import { Badge } from "@/components/ui/badge"
 import { useToast } from "@/components/ui/use-toast"
 import {
   Play,
-  Download,
   Calendar,
   DollarSign,
   User,
@@ -21,11 +18,12 @@ import {
   ShoppingBag,
   Eye,
   ArrowUpRight,
-  Pause,
   AlertCircle,
   FileText,
   Music,
   ImageIcon,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react"
 import { motion } from "framer-motion"
 import { format } from "date-fns"
@@ -99,7 +97,15 @@ export default function MyPurchasesPage() {
   const [searchTerm, setSearchTerm] = useState("")
   const [sortBy, setSortBy] = useState<string>("newest")
   const router = useRouter()
-  const [debugInfo, setDebugInfo] = useState<any>(null)
+  const [expandedPurchases, setExpandedPurchases] = useState<Record<string, boolean>>({})
+
+  // Toggle expanded state for a purchase
+  const toggleExpanded = (purchaseId: string) => {
+    setExpandedPurchases((prev) => ({
+      ...prev,
+      [purchaseId]: !prev[purchaseId],
+    }))
+  }
 
   // Fetch user purchases from unified collection
   const fetchPurchases = async () => {
@@ -184,24 +190,6 @@ export default function MyPurchasesPage() {
     await fetchPurchases()
   }
 
-  const handleDebug = async () => {
-    if (!user) return
-
-    try {
-      const response = await fetch(`/api/debug-purchases?userId=${user.uid}`)
-      const data = await response.json()
-      setDebugInfo(data)
-      console.log("🔍 [Debug] Purchase data:", data)
-
-      toast({
-        title: "Debug Info",
-        description: `Main: ${data.mainPurchases?.length || 0}, User: ${data.userPurchases?.length || 0}, Unified: ${data.unifiedPurchases?.length || 0}`,
-      })
-    } catch (error) {
-      console.error("Debug failed:", error)
-    }
-  }
-
   // Filter and sort purchases
   const filteredPurchases = purchases
     .filter((purchase) => {
@@ -256,24 +244,20 @@ export default function MyPurchasesPage() {
   const getContentTypeIcon = (contentType: string) => {
     switch (contentType.toLowerCase()) {
       case "video":
-        return <Video className="h-12 w-12 text-zinc-600" />
+        return <Video className="h-8 w-8 text-zinc-600" />
       case "audio":
-        return <Music className="h-12 w-12 text-zinc-600" />
+        return <Music className="h-8 w-8 text-zinc-600" />
       case "image":
-        return <ImageIcon className="h-12 w-12 text-zinc-600" />
+        return <ImageIcon className="h-8 w-8 text-zinc-600" />
       default:
-        return <FileText className="h-12 w-12 text-zinc-600" />
+        return <FileText className="h-8 w-8 text-zinc-600" />
     }
   }
 
   // Content card component with comprehensive metadata display
   const ContentCard = ({ content }: { content: UnifiedPurchaseItem }) => {
-    const [isPlaying, setIsPlaying] = useState(false)
     const [isHovered, setIsHovered] = useState(false)
-    const [isDownloading, setIsDownloading] = useState(false)
     const [loadError, setLoadError] = useState(false)
-    const videoRef = useRef<HTMLVideoElement>(null)
-    const { toast } = useToast()
 
     const formatFileSize = (bytes: number) => {
       if (bytes === 0) return "0 Bytes"
@@ -290,105 +274,6 @@ export default function MyPurchasesPage() {
       return `${minutes}:${remainingSeconds.toString().padStart(2, "0")}`
     }
 
-    const togglePlay = (e: React.MouseEvent) => {
-      e.preventDefault()
-      e.stopPropagation()
-
-      if (!videoRef.current) return
-
-      if (isPlaying) {
-        videoRef.current.pause()
-        videoRef.current.currentTime = 0
-        setIsPlaying(false)
-      } else {
-        document.querySelectorAll("video").forEach((v) => {
-          if (v !== videoRef.current) {
-            v.pause()
-            v.currentTime = 0
-          }
-        })
-
-        videoRef.current.muted = false
-        videoRef.current
-          .play()
-          .then(() => {
-            setIsPlaying(true)
-          })
-          .catch((error) => {
-            console.error("Error playing video:", error)
-            setLoadError(true)
-            toast({
-              title: "Playback Error",
-              description: "Unable to play this content. The file might be missing or corrupted.",
-              variant: "destructive",
-            })
-          })
-      }
-    }
-
-    const handleVideoEnd = () => {
-      setIsPlaying(false)
-      if (videoRef.current) {
-        videoRef.current.currentTime = 0
-      }
-    }
-
-    const handleVideoError = () => {
-      console.error(`Video error for content: ${content.id}`, content)
-      setLoadError(true)
-    }
-
-    const handleDownload = async (e: React.MouseEvent) => {
-      e.preventDefault()
-      e.stopPropagation()
-
-      if (isDownloading) return
-      setIsDownloading(true)
-
-      try {
-        if (!content.fileUrl) {
-          toast({
-            title: "Download Error",
-            description: "No download link available for this content.",
-            variant: "destructive",
-          })
-          return
-        }
-
-        const response = await fetch(content.fileUrl)
-        if (!response.ok) {
-          throw new Error(`HTTP error! status: ${response.status}`)
-        }
-
-        const blob = await response.blob()
-        const url = window.URL.createObjectURL(blob)
-
-        const downloadLink = document.createElement("a")
-        downloadLink.href = url
-        downloadLink.download = content.filename
-        downloadLink.style.display = "none"
-        document.body.appendChild(downloadLink)
-        downloadLink.click()
-        document.body.removeChild(downloadLink)
-
-        window.URL.revokeObjectURL(url)
-
-        toast({
-          title: "Download Started",
-          description: "Your content is downloading",
-        })
-      } catch (error) {
-        console.error("Download failed:", error)
-        toast({
-          title: "Download Error",
-          description: "There was an issue starting your download. Please try again.",
-          variant: "destructive",
-        })
-      } finally {
-        setIsDownloading(false)
-      }
-    }
-
     return (
       <div className="flex-shrink-0 w-full">
         <div
@@ -396,92 +281,52 @@ export default function MyPurchasesPage() {
           onMouseEnter={() => setIsHovered(true)}
           onMouseLeave={() => setIsHovered(false)}
         >
-          <div className="relative aspect-[9/16] overflow-hidden rounded-lg bg-zinc-900 shadow-md">
-            {/* Video content with exact same styling as bundle view */}
+          <div className="relative aspect-video overflow-hidden rounded-lg bg-zinc-900 shadow-md">
+            {/* Video content */}
             {loadError ? (
               <div className="w-full h-full flex flex-col items-center justify-center bg-zinc-800/50 text-center p-4">
                 <AlertCircle className="h-8 w-8 text-red-500 mb-2" />
                 <p className="text-xs text-zinc-400">Content unavailable</p>
               </div>
-            ) : content.contentType === "video" && content.fileUrl ? (
-              <>
-                {/* VIDEO badge exactly like bundle view */}
-                <div className="absolute top-2 left-2 z-30">
-                  <Badge className="bg-red-600 text-white text-xs font-medium px-2 py-1">VIDEO</Badge>
-                </div>
-
-                <video
-                  ref={videoRef}
-                  className="w-full h-full object-cover cursor-pointer"
-                  preload="metadata"
-                  muted={false}
-                  playsInline
-                  onEnded={handleVideoEnd}
-                  onError={handleVideoError}
-                  onClick={togglePlay}
-                  controls={false}
-                >
-                  <source src={content.fileUrl} type={content.mimeType} />
-                </video>
-
-                {/* File size overlay exactly like bundle view */}
-                <div className="absolute bottom-2 left-2 z-30">
-                  <div className="bg-black/70 text-white text-xs px-2 py-1 rounded font-medium">
-                    {content.displaySize}
-                  </div>
-                </div>
-              </>
+            ) : content.contentType === "video" && content.thumbnailUrl ? (
+              <img
+                src={content.thumbnailUrl || "/placeholder.svg?height=180&width=320&text=Video"}
+                alt={content.title}
+                className="w-full h-full object-cover"
+                onError={() => setLoadError(true)}
+              />
             ) : (
               <div className="w-full h-full flex items-center justify-center bg-zinc-800">
-                {content.thumbnailUrl ? (
-                  <img
-                    src={content.thumbnailUrl || "/placeholder.svg"}
-                    alt={content.title}
-                    className="w-full h-full object-cover"
-                    onError={() => setLoadError(true)}
-                  />
-                ) : (
-                  getContentTypeIcon(content.contentType)
-                )}
+                {getContentTypeIcon(content.contentType)}
               </div>
             )}
 
-            {/* Play/Pause controls */}
-            {content.contentType === "video" && !loadError && (
-              <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-20">
-                <button
-                  onClick={togglePlay}
-                  className="w-12 h-12 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center text-white transition-all duration-200 hover:bg-black/70"
-                >
-                  {isPlaying ? <Pause className="h-5 w-5" /> : <Play className="h-5 w-5 ml-0.5" />}
-                </button>
+            {/* Play button overlay */}
+            <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-20">
+              <div className="bg-black/50 backdrop-blur-sm rounded-full p-3">
+                <Play className="h-5 w-5 text-white" />
               </div>
-            )}
-
-            {/* Download button */}
-            <div className="absolute bottom-2 right-2 z-30 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-              <button
-                className="bg-black/70 hover:bg-black/90 p-1.5 rounded-full transition-all duration-300"
-                onClick={handleDownload}
-                disabled={isDownloading || loadError}
-                title="Download content"
-              >
-                <Download className="h-3.5 w-3.5 text-white" />
-              </button>
             </div>
+
+            {/* Duration Badge */}
+            {content.duration && (
+              <div className="absolute bottom-2 right-2 z-30">
+                <div className="bg-black/70 text-white text-xs px-2 py-1 rounded font-medium">
+                  {formatDuration(content.duration)}
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
-        {/* Title and metadata exactly like bundle view */}
+        {/* Title and metadata */}
         <div className="mt-2 space-y-1">
-          <div className="text-xs text-zinc-300 min-h-[2.5rem] line-clamp-2 font-light" title={content.displayTitle}>
-            {content.displayTitle}
-            {content.displayResolution && <span className="text-zinc-500 ml-1">({content.displayResolution})</span>}
+          <div className="text-xs text-zinc-300 line-clamp-1 font-light" title={content.title}>
+            {content.title}
           </div>
           <div className="flex items-center gap-2 text-xs text-zinc-500">
-            {content.displayDuration && <span>{content.displayDuration}</span>}
             <span>{content.contentType}</span>
-            {content.quality && <span>{content.quality}</span>}
+            <span>{formatFileSize(content.fileSize)}</span>
           </div>
         </div>
       </div>
@@ -489,102 +334,140 @@ export default function MyPurchasesPage() {
   }
 
   // Purchase card component
-  const PurchaseCard = ({ purchase }: { purchase: UnifiedPurchase }) => (
-    <motion.div variants={itemVariants}>
-      <Card className="group border border-zinc-800/50 bg-zinc-900/40 backdrop-blur-sm transition-all duration-200 hover:border-zinc-700/50 hover:bg-zinc-900/60">
-        <CardContent className="p-6">
-          <div className="space-y-6">
-            {/* Purchase Header */}
-            <div className="flex items-center gap-6">
-              {/* Minimal Thumbnail */}
-              <div className="relative flex-shrink-0">
-                <div className="aspect-square w-20 overflow-hidden rounded-lg bg-zinc-800/50 border border-zinc-700/30">
-                  {purchase.productBoxThumbnail ? (
-                    <img
-                      src={purchase.productBoxThumbnail || "/placeholder.svg?height=80&width=80"}
-                      alt={purchase.productBoxTitle}
-                      className="h-full w-full object-cover"
-                    />
-                  ) : (
-                    <div className="flex h-full w-full items-center justify-center">
-                      <Package className="h-6 w-6 text-zinc-500" />
-                    </div>
-                  )}
-                </div>
+  const PurchaseCard = ({ purchase }: { purchase: UnifiedPurchase }) => {
+    const isExpanded = expandedPurchases[purchase.id] || false
+    const displayItems = isExpanded ? purchase.items : purchase.items.slice(0, 5)
+    const hasMoreItems = purchase.items.length > 5
 
-                {/* Status Badge */}
-                <div className="absolute -top-1 -right-1">
-                  <div className="h-3 w-3 rounded-full border-2 border-zinc-900 bg-green-500" />
-                </div>
-              </div>
-
-              {/* Content */}
-              <div className="flex flex-1 items-center justify-between">
-                <div className="space-y-1">
-                  <div className="flex items-center gap-3">
-                    <h3 className="text-lg font-semibold text-white">{purchase.productBoxTitle || "Untitled"}</h3>
-                    <Badge variant="outline" className="border-zinc-700 text-xs text-zinc-400">
-                      Bundle
-                    </Badge>
+    return (
+      <motion.div variants={itemVariants}>
+        <Card className="group border border-zinc-800/50 bg-zinc-900/40 backdrop-blur-sm transition-all duration-200 hover:border-zinc-700/50 hover:bg-zinc-900/60">
+          <CardContent className="p-6">
+            <div className="space-y-6">
+              {/* Purchase Header */}
+              <div className="flex items-center gap-6">
+                {/* Minimal Thumbnail */}
+                <div className="relative flex-shrink-0">
+                  <div className="aspect-square w-20 overflow-hidden rounded-lg bg-zinc-800/50 border border-zinc-700/30">
+                    {purchase.productBoxThumbnail ? (
+                      <img
+                        src={purchase.productBoxThumbnail || "/placeholder.svg?height=80&width=80"}
+                        alt={purchase.productBoxTitle}
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <div className="flex h-full w-full items-center justify-center">
+                        <Package className="h-6 w-6 text-zinc-500" />
+                      </div>
+                    )}
                   </div>
 
-                  <div className="flex items-center gap-6 text-sm text-zinc-400">
-                    <div className="flex items-center gap-1">
-                      <User className="h-3 w-3" />
-                      <span>{purchase.creatorName || purchase.creatorUsername || "Unknown Creator"}</span>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <Calendar className="h-3 w-3" />
-                      <span>{format(new Date(purchase.purchasedAt), "MMM d, yyyy")}</span>
-                    </div>
-                    <div className="flex items-center gap-1">
-                      <DollarSign className="h-3 w-3" />
-                      <span className="font-medium text-white">
-                        {formatPrice(purchase.amount || 0, purchase.currency || "usd")}
-                      </span>
-                    </div>
+                  {/* Status Badge */}
+                  <div className="absolute -top-1 -right-1">
+                    <div className="h-3 w-3 rounded-full border-2 border-zinc-900 bg-green-500" />
                   </div>
                 </div>
 
-                {/* Actions */}
-                <div className="flex gap-2">
-                  <Button
-                    onClick={() => handleAccess(purchase)}
-                    className="bg-white text-black hover:bg-zinc-200 font-medium transition-colors duration-200"
-                  >
-                    <Play className="mr-2 h-4 w-4" />
-                    Access Bundle
-                  </Button>
+                {/* Content */}
+                <div className="flex flex-1 items-center justify-between">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-3">
+                      <h3 className="text-lg font-semibold text-white">{purchase.productBoxTitle || "Untitled"}</h3>
+                      <Badge variant="outline" className="border-zinc-700 text-xs text-zinc-400">
+                        Bundle
+                      </Badge>
+                    </div>
 
-                  <Button
-                    variant="outline"
-                    onClick={() => window.open(`/creator/${purchase.creatorUsername}`, "_blank")}
-                    className="border-zinc-700 text-zinc-300 hover:bg-zinc-800 hover:text-white"
-                  >
-                    <ArrowUpRight className="h-4 w-4" />
-                  </Button>
+                    <div className="flex items-center gap-6 text-sm text-zinc-400">
+                      <div className="flex items-center gap-1">
+                        <User className="h-3 w-3" />
+                        <span>{purchase.creatorName || purchase.creatorUsername || "Unknown Creator"}</span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <Calendar className="h-3 w-3" />
+                        <span>{format(new Date(purchase.purchasedAt), "MMM d, yyyy")}</span>
+                      </div>
+                      <div className="flex items-center gap-1">
+                        <DollarSign className="h-3 w-3" />
+                        <span className="font-medium text-white">
+                          {formatPrice(purchase.amount || 0, purchase.currency || "usd")}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Actions */}
+                  <div className="flex gap-2">
+                    <Button
+                      onClick={() => handleAccess(purchase)}
+                      className="bg-white text-black hover:bg-zinc-200 font-medium transition-colors duration-200"
+                    >
+                      <Play className="mr-2 h-4 w-4" />
+                      Access Bundle
+                    </Button>
+
+                    <Button
+                      variant="outline"
+                      onClick={() => window.open(`/creator/${purchase.creatorUsername}`, "_blank")}
+                      className="border-zinc-700 text-zinc-300 hover:bg-zinc-800 hover:text-white"
+                    >
+                      <ArrowUpRight className="h-4 w-4" />
+                    </Button>
+                  </div>
                 </div>
               </div>
+
+              {/* Content Items Grid */}
+              {purchase.items && purchase.items.length > 0 && (
+                <div className="space-y-4">
+                  <div className="border-t border-zinc-800/50 pt-4">
+                    <div className="flex justify-between items-center mb-3">
+                      <h4 className="text-sm font-medium text-white">Bundle Content ({purchase.totalItems} items)</h4>
+                      {hasMoreItems && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => toggleExpanded(purchase.id)}
+                          className="text-xs text-zinc-400 hover:text-white"
+                        >
+                          {isExpanded ? (
+                            <>
+                              Show Less <ChevronUp className="ml-1 h-3 w-3" />
+                            </>
+                          ) : (
+                            <>
+                              Show All <ChevronDown className="ml-1 h-3 w-3" />
+                            </>
+                          )}
+                        </Button>
+                      )}
+                    </div>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
+                      {displayItems.map((content) => (
+                        <ContentCard key={content.id} content={content} />
+                      ))}
+                    </div>
+                    {!isExpanded && hasMoreItems && (
+                      <div className="mt-3 text-center">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => toggleExpanded(purchase.id)}
+                          className="text-xs text-zinc-400 hover:text-white"
+                        >
+                          Show {purchase.items.length - 5} More <ChevronDown className="ml-1 h-3 w-3" />
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
-
-            {/* Content Items Grid */}
-            {purchase.items && purchase.items.length > 0 && (
-              <div className="space-y-4">
-                <div className="border-t border-zinc-800/50 pt-4">
-                  <h4 className="text-sm font-medium text-white mb-3">Bundle Content ({purchase.totalItems} items)</h4>
-                  <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
-                    {purchase.items.map((content) => (
-                      <ContentCard key={content.id} content={content} />
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )}
-          </div>
-        </CardContent>
-      </Card>
-    </motion.div>
-  )
+          </CardContent>
+        </Card>
+      </motion.div>
+    )
+  }
 
   if (loading && purchases.length === 0) {
     return (
@@ -612,25 +495,15 @@ export default function MyPurchasesPage() {
             <p className="text-zinc-400 mt-1">Access your purchased content and download history</p>
           </div>
 
-          <div className="flex gap-2">
-            <Button
-              onClick={handleRefresh}
-              variant="outline"
-              disabled={refreshing}
-              className="border-zinc-700 text-zinc-300 hover:bg-zinc-800 hover:text-white"
-            >
-              <RefreshCw className={`h-4 w-4 mr-2 ${refreshing ? "animate-spin" : ""}`} />
-              Refresh
-            </Button>
-
-            <Button
-              onClick={handleDebug}
-              variant="outline"
-              className="border-zinc-700 text-zinc-300 hover:bg-zinc-800 hover:text-white"
-            >
-              Debug
-            </Button>
-          </div>
+          <Button
+            onClick={handleRefresh}
+            variant="outline"
+            disabled={refreshing}
+            className="border-zinc-700 text-zinc-300 hover:bg-zinc-800 hover:text-white"
+          >
+            <RefreshCw className={`h-4 w-4 mr-2 ${refreshing ? "animate-spin" : ""}`} />
+            Refresh
+          </Button>
         </motion.div>
 
         {/* Clean Filters */}

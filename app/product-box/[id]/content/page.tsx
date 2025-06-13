@@ -3,10 +3,9 @@
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/contexts/auth-context"
-import { ArrowLeft, RefreshCw, Download, Play, AlertCircle, FileVideo, Clock, Music, FileText, Bug } from "lucide-react"
+import { ArrowLeft, RefreshCw, Download, AlertCircle, Clock, Bug } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
 import { useToast } from "@/components/ui/use-toast"
 
 interface UnifiedPurchaseItem {
@@ -263,68 +262,21 @@ export default function ProductBoxContentPage({ params }: { params: { id: string
     fetchContent()
   }, [user, params.id])
 
-  const handlePlay = (item: UnifiedPurchaseItem) => {
-    window.open(item.fileUrl, "_blank")
-  }
-
-  const handleDownload = async (item: UnifiedPurchaseItem) => {
-    try {
-      const link = document.createElement("a")
-      link.href = item.fileUrl
-      link.download = item.filename
-      link.target = "_blank"
-      document.body.appendChild(link)
-      link.click()
-      document.body.removeChild(link)
-
-      toast({
-        title: "Download started",
-        description: `Downloading ${item.title}`,
-      })
-    } catch (error) {
-      toast({
-        title: "Download failed",
-        description: "Failed to download file",
-        variant: "destructive",
-      })
-    }
-  }
-
+  // Format file size
   const formatFileSize = (bytes: number) => {
     if (bytes === 0) return "0 Bytes"
     const k = 1024
     const sizes = ["Bytes", "KB", "MB", "GB"]
     const i = Math.floor(Math.log(bytes) / Math.log(k))
-    return Number.parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + " " + sizes[i]
+    return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + " " + sizes[i]
   }
 
+  // Format duration
   const formatDuration = (seconds?: number) => {
     if (!seconds) return null
     const minutes = Math.floor(seconds / 60)
     const remainingSeconds = seconds % 60
     return `${minutes}:${remainingSeconds.toString().padStart(2, "0")}`
-  }
-
-  const getFileTypeDisplay = (contentType: string) => {
-    return contentType.toUpperCase()
-  }
-
-  const getFileIcon = (contentType: string) => {
-    switch (contentType) {
-      case "video":
-        return <FileVideo className="w-12 h-12 text-zinc-500" />
-      case "audio":
-        return <Music className="w-12 h-12 text-zinc-500" />
-      default:
-        return <FileText className="w-12 h-12 text-zinc-500" />
-    }
-  }
-
-  const generateThumbnail = (item: UnifiedPurchaseItem) => {
-    if (item.thumbnailUrl) {
-      return item.thumbnailUrl
-    }
-    return `/placeholder.svg?height=200&width=320&text=${encodeURIComponent(item.contentType.toUpperCase())}`
   }
 
   if (loading) {
@@ -525,114 +477,65 @@ export default function ProductBoxContentPage({ params }: { params: { id: string
 
       {/* Content Grid */}
       <main className="max-w-7xl mx-auto p-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-8">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
           {purchase.items.map((item) => (
             <Card
               key={item.id}
-              className="bg-zinc-900/80 border-zinc-800 overflow-hidden group hover:border-zinc-700 transition-all duration-300 hover:shadow-2xl hover:shadow-red-500/10"
+              className="bg-zinc-900/80 border-zinc-800 overflow-hidden group hover:border-zinc-700 transition-all duration-300"
             >
               <CardContent className="p-0">
                 {/* Media Preview */}
-                <div className="relative aspect-[9/16] bg-gradient-to-br from-zinc-800 to-zinc-900 overflow-hidden">
+                <div className="relative aspect-video bg-gradient-to-br from-zinc-800 to-zinc-900 overflow-hidden">
                   {item.contentType === "video" && item.fileUrl ? (
                     <div className="relative w-full h-full">
                       <video
                         src={item.fileUrl}
-                        poster={generateThumbnail(item)}
-                        className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+                        poster={item.thumbnailUrl || "/placeholder.svg?height=240&width=320&text=Video"}
+                        className="w-full h-full object-cover"
+                        controls
                         preload="metadata"
-                        muted
                       />
-                      {/* Play Overlay */}
-                      <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                        <div className="bg-white/20 backdrop-blur-sm rounded-full p-4">
-                          <Play className="w-8 h-8 text-white fill-white" />
-                        </div>
-                      </div>
                     </div>
                   ) : item.contentType === "audio" ? (
-                    <div className="relative w-full h-full bg-gradient-to-br from-purple-900/20 to-pink-900/20">
-                      <div className="absolute inset-0 flex items-center justify-center">
-                        <div className="text-center">
-                          <Music className="w-16 h-16 text-purple-400 mx-auto mb-2" />
-                          <p className="text-purple-300 text-sm font-medium">Audio File</p>
-                        </div>
-                      </div>
-                      <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                        <div className="bg-white/20 backdrop-blur-sm rounded-full p-4">
-                          <Play className="w-8 h-8 text-white fill-white" />
-                        </div>
-                      </div>
+                    <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-purple-900/20 to-pink-900/20">
+                      <audio src={item.fileUrl} controls className="w-4/5" />
                     </div>
+                  ) : item.contentType === "image" ? (
+                    <img
+                      src={item.fileUrl || item.thumbnailUrl || "/placeholder.svg?height=240&width=320&text=Image"}
+                      alt={item.title}
+                      className="w-full h-full object-cover"
+                    />
                   ) : (
-                    <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-zinc-800 to-zinc-900">
-                      <div className="text-center">
-                        {getFileIcon(item.contentType)}
-                        <p className="text-zinc-500 text-sm mt-2">{getFileTypeDisplay(item.contentType)}</p>
-                      </div>
+                    <div className="w-full h-full flex items-center justify-center">
+                      <a
+                        href={item.fileUrl}
+                        download={item.filename}
+                        className="bg-zinc-800 hover:bg-zinc-700 text-white py-2 px-4 rounded flex items-center"
+                      >
+                        <Download className="mr-2 h-4 w-4" />
+                        Download {item.contentType}
+                      </a>
                     </div>
                   )}
 
-                  {/* File Type Badge */}
-                  <div className="absolute top-3 left-3">
-                    <Badge
-                      variant="secondary"
-                      className={`border-0 backdrop-blur-sm ${
-                        item.contentType === "video"
-                          ? "bg-red-600/80 text-white"
-                          : item.contentType === "audio"
-                            ? "bg-purple-600/80 text-white"
-                            : "bg-black/60 text-white"
-                      }`}
-                    >
-                      {getFileTypeDisplay(item.contentType)}
-                    </Badge>
-                  </div>
-
                   {/* Duration Badge */}
                   {item.duration && (
-                    <div className="absolute top-3 right-3">
-                      <Badge variant="secondary" className="bg-black/60 text-white border-0 backdrop-blur-sm">
-                        <Clock className="w-3 h-3 mr-1" />
+                    <div className="absolute bottom-2 right-2">
+                      <div className="bg-black/60 text-white text-xs px-2 py-1 rounded-sm">
+                        <Clock className="inline-block w-3 h-3 mr-1" />
                         {formatDuration(item.duration)}
-                      </Badge>
+                      </div>
                     </div>
                   )}
                 </div>
 
                 {/* Content Info */}
-                <div className="p-6">
-                  {/* Title */}
-                  <h3 className="font-bold text-white text-lg mb-3 line-clamp-2 leading-tight">{item.title}</h3>
-
-                  {/* Metadata Row */}
-                  <div className="flex items-center justify-between text-sm text-zinc-400 mb-6">
-                    <span className="font-medium">{getFileTypeDisplay(item.contentType)}</span>
+                <div className="p-4">
+                  <h3 className="font-medium text-white text-sm mb-1 line-clamp-1">{item.title}</h3>
+                  <div className="flex items-center justify-between text-xs text-zinc-400">
+                    <span>{item.contentType}</span>
                     <span>{formatFileSize(item.fileSize)}</span>
-                  </div>
-
-                  {/* Action Buttons */}
-                  <div className="flex gap-3">
-                    <Button
-                      onClick={() => handlePlay(item)}
-                      className={`flex-1 font-medium transition-all duration-200 ${
-                        item.contentType === "video"
-                          ? "bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800"
-                          : item.contentType === "audio"
-                            ? "bg-gradient-to-r from-purple-600 to-purple-700 hover:from-purple-700 hover:to-purple-800"
-                            : "bg-gradient-to-r from-zinc-600 to-zinc-700 hover:from-zinc-700 hover:to-zinc-800"
-                      } text-white`}
-                    >
-                      <Play className="mr-2 h-4 w-4 fill-current" />
-                      {item.contentType === "audio" ? "Play" : "Open"}
-                    </Button>
-                    <Button
-                      variant="outline"
-                      onClick={() => handleDownload(item)}
-                      className="border-zinc-700 text-zinc-300 hover:bg-zinc-800 hover:text-white transition-all duration-200"
-                    >
-                      <Download className="h-4 w-4" />
-                    </Button>
                   </div>
                 </div>
               </CardContent>
