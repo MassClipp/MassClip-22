@@ -204,12 +204,12 @@ export default function EnhancedVideoCard({
       <div className="relative aspect-[9/16] overflow-hidden rounded-lg bg-zinc-900">
         {/* Video/Thumbnail */}
         <img
-          src={videoData.thumbnail || "/placeholder.svg"}
+          src={videoData.thumbnail || "/placeholder.svg?height=480&width=270&text=Video"}
           alt={videoData.title}
           className="w-full h-full object-cover"
           onError={(e) => {
             const target = e.target as HTMLImageElement
-            target.src = "/placeholder.svg?height=1920&width=1080"
+            target.src = "/placeholder.svg?height=480&width=270&text=Video"
           }}
         />
 

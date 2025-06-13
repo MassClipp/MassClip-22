@@ -4,7 +4,7 @@ import type React from "react"
 
 import { useState, useEffect, useRef } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { ChevronDown, ChevronUp, Play, Download, File, Music, Loader2, Pause } from "lucide-react"
+import { ChevronDown, ChevronUp, Play, Download, File, Music, Loader2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { useToast } from "@/hooks/use-toast"
@@ -69,18 +69,15 @@ const VideoCard = ({ item }: { item: ContentItem }) => {
 
     if (isPlaying) {
       videoRef.current.pause()
-      videoRef.current.currentTime = 0
       setIsPlaying(false)
     } else {
       // Pause all other videos first
       document.querySelectorAll("video").forEach((v) => {
         if (v !== videoRef.current) {
           v.pause()
-          v.currentTime = 0
         }
       })
 
-      videoRef.current.muted = false
       videoRef.current
         .play()
         .then(() => {
@@ -107,35 +104,36 @@ const VideoCard = ({ item }: { item: ContentItem }) => {
         onMouseLeave={() => setIsHovered(false)}
       >
         {/* Video container with 9:16 aspect ratio */}
-        <div className="relative aspect-[9/16] overflow-hidden rounded-lg bg-zinc-900 shadow-md border border-transparent hover:border-white/20 transition-all duration-300">
-          {/* Raw video element */}
+        <div className="relative aspect-[9/16] overflow-hidden rounded-lg bg-zinc-900">
+          {/* Thumbnail image (shown when not playing) */}
+          <img
+            src={item.thumbnailUrl || "/placeholder.svg?height=480&width=270&text=Video"}
+            alt={item.title}
+            className={`w-full h-full object-cover ${isPlaying ? "hidden" : "block"}`}
+          />
+
+          {/* Video element (hidden until playing) */}
           <video
             ref={videoRef}
-            className="w-full h-full object-cover cursor-pointer"
+            className={`w-full h-full object-cover ${isPlaying ? "block" : "hidden"}`}
             preload="metadata"
-            muted={false}
-            playsInline
             onEnded={handleVideoEnd}
             onClick={togglePlay}
-            controls={false}
           >
             <source src={item.fileUrl} type="video/mp4" />
-            Your browser does not support the video tag.
           </video>
 
-          {/* Play/Pause button - only show on hover */}
-          <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-20">
-            <button
-              onClick={togglePlay}
-              className="w-12 h-12 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center text-white transition-all duration-200 hover:bg-black/70"
-              aria-label={isPlaying ? "Pause video" : "Play video"}
-            >
-              {isPlaying ? <Pause className="h-5 w-5" /> : <Play className="h-5 w-5 ml-0.5" />}
-            </button>
-          </div>
-
-          {/* Overlay gradient for better visibility - only on hover */}
-          <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"></div>
+          {/* Play button overlay - only show when not playing */}
+          {!isPlaying && isHovered && (
+            <div className="absolute inset-0 flex items-center justify-center bg-black/30">
+              <button
+                onClick={togglePlay}
+                className="w-10 h-10 rounded-full bg-black/50 flex items-center justify-center"
+              >
+                <Play className="h-4 w-4 text-white" />
+              </button>
+            </div>
+          )}
 
           {/* Content Type Badge */}
           <div className="absolute top-2 left-2">
@@ -155,8 +153,9 @@ const VideoCard = ({ item }: { item: ContentItem }) => {
         </div>
 
         {/* Video title */}
-        <div className="mt-2">
-          <h3 className="text-sm text-white font-light line-clamp-2">{item.title}</h3>
+        <div className="mt-1 flex justify-between items-center">
+          <span className="text-xs text-zinc-400">video</span>
+          <span className="text-xs text-zinc-400">{formatFileSize(item.fileSize)}</span>
         </div>
       </div>
     )
@@ -179,7 +178,7 @@ const VideoCard = ({ item }: { item: ContentItem }) => {
       ) : item.contentType === "image" ? (
         <div className="w-full h-full">
           <img
-            src={item.fileUrl || item.thumbnailUrl || "/placeholder.svg"}
+            src={item.fileUrl || item.thumbnailUrl || "/placeholder.svg?height=480&width=270&text=Image"}
             alt={item.title}
             className="w-full h-full object-cover"
           />
@@ -414,7 +413,7 @@ export default function ProductBoxContentDisplay({
               )}
 
               {!loading && !error && contentItems.length > 0 && (
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-3">
                   {contentItems.map((item) => (
                     <VideoCard key={item.id} item={item} />
                   ))}
