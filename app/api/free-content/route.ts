@@ -1,5 +1,5 @@
-import { db } from "@/lib/firebase/firebase"
-import { collection, getDocs, limit, orderBy, query, startAfter } from "firebase/firestore"
+import { db } from "@/lib/db"
+import { collection, getDocs, limit, orderBy, query, startAfter, where } from "firebase/firestore"
 import { NextResponse } from "next/server"
 
 export async function GET(request: Request) {
@@ -7,20 +7,29 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url)
     const cursor = searchParams.get("cursor") || undefined
     const pageSize = Number.parseInt(searchParams.get("pageSize") || "10")
+    const uid = searchParams.get("uid")
 
     let freeContentQuery
 
-    if (cursor) {
-      const cursorDoc = await db.collection("free-content").doc(cursor).get()
-
+    if (uid) {
       freeContentQuery = query(
-        collection(db, "free-content"),
-        orderBy("date", "desc"),
-        startAfter(cursorDoc),
+        collection(db, "free_content"),
+        where("uid", "==", uid),
+        orderBy("addedAt", "desc"),
         limit(pageSize),
       )
     } else {
-      freeContentQuery = query(collection(db, "free-content"), orderBy("date", "desc"), limit(pageSize))
+      if (cursor) {
+        const cursorDoc = await db.collection("free_content").doc(cursor).get()
+        freeContentQuery = query(
+          collection(db, "free_content"),
+          orderBy("addedAt", "desc"),
+          startAfter(cursorDoc),
+          limit(pageSize),
+        )
+      } else {
+        freeContentQuery = query(collection(db, "free_content"), orderBy("addedAt", "desc"), limit(pageSize))
+      }
     }
 
     const freeContentSnapshot = await getDocs(freeContentQuery)

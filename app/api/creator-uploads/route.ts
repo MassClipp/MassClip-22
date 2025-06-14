@@ -14,7 +14,7 @@ export async function GET(request: NextRequest) {
 
     // Use the exact same query structure as the free-content API
     const freeContentQuery = query(
-      collection(db, "freeContent"),
+      collection(db, "free_content"),
       where("uid", "==", session.uid),
       orderBy("addedAt", "desc"),
       limit(50),
