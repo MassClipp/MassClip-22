@@ -74,21 +74,91 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
 
     console.log("💳 [Checkout] Creator Stripe account:", creatorData.stripeAccountId)
 
-    // Create or get Stripe product and price
+    const isSubscription = productBoxData.type === "subscription"
+
+    // Handle product and price creation differently for subscriptions vs one-time
     let stripeProductId = productBoxData.stripeProductId
     let stripePriceId = productBoxData.stripePriceId
 
-    if (!stripeProductId || !stripePriceId) {
-      console.log("🔧 [Checkout] Creating Stripe product and price...")
+    if (isSubscription) {
+      // For subscriptions, create product/price on connected account
+      if (!stripeProductId || !stripePriceId) {
+        console.log("🔧 [Checkout] Creating Stripe subscription product and price...")
 
-      // Create Stripe product on connected account
-      const stripeProduct = await stripe.products.create(
+        const stripeProduct = await stripe.products.create(
+          {
+            name: productBoxData.title,
+            description: productBoxData.description || undefined,
+            metadata: {
+              productBoxId,
+              creatorId: productBoxData.creatorId,
+            },
+          },
+          {
+            stripeAccount: creatorData.stripeAccountId,
+          },
+        )
+
+        stripeProductId = stripeProduct.id
+
+        const stripePrice = await stripe.prices.create(
+          {
+            product: stripeProductId,
+            unit_amount: Math.round(productBoxData.price * 100),
+            currency: productBoxData.currency || "usd",
+            recurring: {
+              interval: "month",
+              interval_count: 1,
+            },
+            metadata: {
+              productBoxId,
+              creatorId: productBoxData.creatorId,
+            },
+          },
+          {
+            stripeAccount: creatorData.stripeAccountId,
+          },
+        )
+
+        stripePriceId = stripePrice.id
+
+        await db.collection("productBoxes").doc(productBoxId).update({
+          stripeProductId,
+          stripePriceId,
+          updatedAt: new Date(),
+        })
+
+        console.log("✅ [Checkout] Created subscription product and price")
+      }
+
+      // Create subscription checkout session on connected account
+      const session = await stripe.checkout.sessions.create(
         {
-          name: productBoxData.title,
-          description: productBoxData.description || undefined,
+          payment_method_types: ["card"],
+          line_items: [
+            {
+              price: stripePriceId,
+              quantity: 1,
+            },
+          ],
+          mode: "subscription",
+          success_url: successUrl,
+          cancel_url: cancelUrl,
           metadata: {
             productBoxId,
+            buyerUid,
             creatorId: productBoxData.creatorId,
+            type: "product_box_purchase",
+          },
+          customer_email: decodedToken.email || undefined,
+          subscription_data: {
+            application_fee_percent: 10, // 10% platform fee
+            metadata: {
+              productBoxId,
+              buyerUid,
+              creatorId: productBoxData.creatorId,
+              type: "product_box_purchase",
+            },
           },
         },
         {
@@ -96,97 +166,60 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
         },
       )
 
-      stripeProductId = stripeProduct.id
-      console.log("✅ [Checkout] Created Stripe product:", stripeProductId)
+      console.log("✅ [Checkout] Subscription session created:", session.id)
 
-      // Create Stripe price based on product type
-      const priceData: Stripe.PriceCreateParams = {
-        product: stripeProductId,
-        unit_amount: Math.round(productBoxData.price * 100), // Convert to cents
-        currency: productBoxData.currency || "usd",
-        metadata: {
-          productBoxId,
-          creatorId: productBoxData.creatorId,
-        },
-      }
-
-      if (productBoxData.type === "subscription") {
-        priceData.recurring = {
-          interval: "month",
-          interval_count: 1,
-        }
-      }
-
-      const stripePrice = await stripe.prices.create(priceData, {
-        stripeAccount: creatorData.stripeAccountId,
+      return NextResponse.json({
+        url: session.url,
+        sessionId: session.id,
       })
-
-      stripePriceId = stripePrice.id
-      console.log("✅ [Checkout] Created Stripe price:", stripePriceId)
-
-      // Update product box with Stripe IDs
-      await db.collection("productBoxes").doc(productBoxId).update({
-        stripeProductId,
-        stripePriceId,
-        updatedAt: new Date(),
-      })
-    }
-
-    // Create checkout session configuration
-    const sessionConfig: Stripe.Checkout.SessionCreateParams = {
-      payment_method_types: ["card"],
-      line_items: [
-        {
-          price: stripePriceId,
-          quantity: 1,
-        },
-      ],
-      mode: productBoxData.type === "subscription" ? "subscription" : "payment",
-      success_url: successUrl,
-      cancel_url: cancelUrl,
-      metadata: {
-        productBoxId,
-        buyerUid,
-        creatorId: productBoxData.creatorId,
-        type: "product_box_purchase",
-      },
-      customer_email: decodedToken.email || undefined,
-    }
-
-    // Handle fees differently for subscriptions vs one-time payments
-    if (productBoxData.type === "subscription") {
-      // For subscriptions, use application_fee_percent
-      // The connected account receives funds directly, platform takes fee
-      sessionConfig.subscription_data = {
-        application_fee_percent: 10, // 10% platform fee
+    } else {
+      // For one-time payments, create session on platform account with transfer
+      const session = await stripe.checkout.sessions.create({
+        payment_method_types: ["card"],
+        line_items: [
+          {
+            price_data: {
+              currency: productBoxData.currency || "usd",
+              product_data: {
+                name: productBoxData.title,
+                description: productBoxData.description || undefined,
+              },
+              unit_amount: Math.round(productBoxData.price * 100),
+            },
+            quantity: 1,
+          },
+        ],
+        mode: "payment",
+        success_url: successUrl,
+        cancel_url: cancelUrl,
         metadata: {
           productBoxId,
           buyerUid,
           creatorId: productBoxData.creatorId,
           type: "product_box_purchase",
         },
-      }
-    } else {
-      // For one-time payments, use application fee with transfer
-      sessionConfig.payment_intent_data = {
-        application_fee_amount: Math.round(productBoxData.price * 100 * 0.1), // 10% platform fee
-        transfer_data: {
-          destination: creatorData.stripeAccountId,
+        customer_email: decodedToken.email || undefined,
+        payment_intent_data: {
+          application_fee_amount: Math.round(productBoxData.price * 100 * 0.1), // 10% platform fee
+          transfer_data: {
+            destination: creatorData.stripeAccountId,
+          },
+          metadata: {
+            productBoxId,
+            buyerUid,
+            creatorId: productBoxData.creatorId,
+            type: "product_box_purchase",
+          },
         },
-      }
+      })
+
+      console.log("✅ [Checkout] One-time payment session created:", session.id)
+
+      return NextResponse.json({
+        url: session.url,
+        sessionId: session.id,
+      })
     }
-
-    // Create checkout session on the connected account
-    const session = await stripe.checkout.sessions.create(sessionConfig, {
-      stripeAccount: creatorData.stripeAccountId,
-    })
-
-    console.log("✅ [Checkout] Stripe session created:", session.id)
-
-    return NextResponse.json({
-      url: session.url,
-      sessionId: session.id,
-    })
   } catch (error: any) {
     console.error("🔥 [Checkout] Error during checkout:", error)
     return NextResponse.json({ error: error.message || "Internal Server Error" }, { status: 500 })
