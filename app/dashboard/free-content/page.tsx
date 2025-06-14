@@ -24,8 +24,8 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import { Badge } from "@/components/ui/badge"
 import { VideoPreviewPlayer } from "@/components/video-preview-player"
-import { formatDistanceToNow } from "date-fns"
 import { motion, AnimatePresence } from "framer-motion"
+import { safelyConvertToDate, safelyFormatRelativeTime } from "@/lib/date-utils"
 
 interface FreeContentItem {
   id: string
@@ -33,7 +33,7 @@ interface FreeContentItem {
   fileUrl: string
   type: string
   size?: number
-  addedAt: string
+  addedAt: any // Can be various date formats
 }
 
 const FILE_TYPE_ICONS = {
@@ -79,7 +79,14 @@ export default function FreeContentPage() {
       }
 
       const data = await response.json()
-      setFreeContent(data.freeContent || [])
+
+      // Safely process the data with proper date handling
+      const processedContent = (data.freeContent || []).map((item: any) => ({
+        ...item,
+        addedAt: safelyConvertToDate(item.addedAt), // Convert to safe Date object
+      }))
+
+      setFreeContent(processedContent)
     } catch (error) {
       console.error("Error fetching free content:", error)
       toast({
@@ -409,7 +416,7 @@ export default function FreeContentPage() {
 
                         <div className="text-xs text-zinc-400 space-y-1">
                           <div>{formatFileSize(item.size)}</div>
-                          <div>{formatDistanceToNow(new Date(item.addedAt), { addSuffix: true })}</div>
+                          <div>{safelyFormatRelativeTime(item.addedAt)}</div>
                         </div>
 
                         {/* Action buttons for videos - show below the video */}

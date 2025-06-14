@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge"
 import { useToast } from "@/hooks/use-toast"
 import { Loader2, Search, Video, Music, ImageIcon, File, AlertCircle, RefreshCw, Bug, Database } from "lucide-react"
 import { motion } from "framer-motion"
+import { safelyConvertToDate } from "@/lib/date-utils"
 
 interface Upload {
   id: string
@@ -100,10 +101,13 @@ export default function UploadSelector({ excludeIds = [], onSelect, onCancel, lo
 
       const uploadsData = Array.isArray(data.uploads) ? data.uploads : []
 
-      // Filter out excluded uploads and uploads without valid URLs
-      const availableUploads = uploadsData.filter(
-        (upload) => !excludeIds.includes(upload.id) && upload.fileUrl && upload.fileUrl.startsWith("http"),
-      )
+      // Filter out excluded uploads and uploads without valid URLs, and safely convert dates
+      const availableUploads = uploadsData
+        .filter((upload) => !excludeIds.includes(upload.id) && upload.fileUrl && upload.fileUrl.startsWith("http"))
+        .map((upload) => ({
+          ...upload,
+          createdAt: safelyConvertToDate(upload.createdAt), // Safe date conversion
+        }))
 
       setUploads(availableUploads)
       setFilteredUploads(availableUploads)
