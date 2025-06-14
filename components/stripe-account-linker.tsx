@@ -24,18 +24,21 @@ export function StripeAccountLinker({ onSuccess }: StripeAccountLinkerProps) {
 
     setLoading(true)
     try {
-      const token = await user.getIdToken()
+      const idToken = await user.getIdToken()
+
       const response = await fetch("/api/stripe/connect/link-account", {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${token}`,
-          "x-user-id": user.uid,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ stripeAccountId: accountId.trim() }),
+        body: JSON.stringify({
+          idToken,
+          stripeAccountId: accountId.trim(),
+        }),
       })
 
       const data = await response.json()
+
       if (data.success) {
         setLinked(true)
         toast({
@@ -46,6 +49,9 @@ export function StripeAccountLinker({ onSuccess }: StripeAccountLinkerProps) {
         // Call onSuccess callback if provided
         if (onSuccess) {
           setTimeout(() => onSuccess(), 1500)
+        } else {
+          // Refresh the page after a short delay
+          setTimeout(() => window.location.reload(), 2000)
         }
       } else {
         toast({
@@ -55,6 +61,7 @@ export function StripeAccountLinker({ onSuccess }: StripeAccountLinkerProps) {
         })
       }
     } catch (error) {
+      console.error("Error linking account:", error)
       toast({
         title: "Error",
         description: "Failed to link Stripe account",

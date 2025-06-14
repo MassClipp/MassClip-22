@@ -1,36 +1,50 @@
-import { type NextRequest, NextResponse } from "next/server"
-import { auth, db } from "@/lib/firebase-admin"
-import Stripe from "stripe"
+export const runtime = "nodejs"
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: "2023-10-16",
-})
+import { type NextRequest, NextResponse } from "next/server"
+import { db } from "@/lib/firebase-admin"
+import { stripe } from "@/lib/stripe"
 
 export async function POST(request: NextRequest) {
   try {
-    const { idToken } = await request.json()
+    const body = await request.json()
+    const { idToken } = body
 
     if (!idToken) {
       return NextResponse.json(
         {
+          success: false,
+          error: "ID token is required",
           isConnected: false,
-          error: "No authentication token provided",
+        },
+        { status: 400 },
+      )
+    }
+
+    // Verify the ID token
+    const { auth } = await import("@/lib/firebase-admin")
+    let decodedToken
+    try {
+      decodedToken = await auth.verifyIdToken(idToken)
+    } catch (tokenError) {
+      console.error("Token verification failed:", tokenError)
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Invalid authentication token",
+          isConnected: false,
         },
         { status: 401 },
       )
     }
 
-    // Verify the ID token
-    const decodedToken = await auth.verifyIdToken(idToken)
-    const uid = decodedToken.uid
-
     // Get user document from Firestore
-    const userDoc = await db.collection("users").doc(uid).get()
+    const userDoc = await db.collection("users").doc(decodedToken.uid).get()
 
     if (!userDoc.exists) {
       return NextResponse.json({
+        success: true,
         isConnected: false,
-        error: "User profile not found",
+        message: "User profile not found",
       })
     }
 
@@ -39,47 +53,60 @@ export async function POST(request: NextRequest) {
 
     if (!stripeAccountId) {
       return NextResponse.json({
+        success: true,
         isConnected: false,
-        needsOnboarding: true,
-        message: "No Stripe account connected",
+        message: "No Stripe account linked",
       })
     }
 
-    // Check if the Stripe account is valid and active
+    // Verify the Stripe account is still valid
     try {
       const account = await stripe.accounts.retrieve(stripeAccountId)
 
-      const isFullyOnboarded = account.charges_enabled && account.payouts_enabled && account.details_submitted
+      const isConnected = account.charges_enabled && account.details_submitted
+      const needsOnboarding =
+        !account.details_submitted ||
+        (account.requirements?.currently_due?.length || 0) > 0 ||
+        (account.requirements?.past_due?.length || 0) > 0
 
       return NextResponse.json({
-        isConnected: true,
+        success: true,
+        isConnected,
         accountId: stripeAccountId,
-        needsOnboarding: !isFullyOnboarded,
-        chargesEnabled: account.charges_enabled,
-        payoutsEnabled: account.payouts_enabled,
-        detailsSubmitted: account.details_submitted,
+        needsOnboarding,
+        accountStatus: {
+          chargesEnabled: account.charges_enabled,
+          payoutsEnabled: account.payouts_enabled,
+          detailsSubmitted: account.details_submitted,
+          requirementsCount:
+            (account.requirements?.currently_due?.length || 0) + (account.requirements?.past_due?.length || 0),
+        },
       })
-    } catch (stripeError) {
-      console.error("Stripe account error:", stripeError)
+    } catch (stripeError: any) {
+      console.error("Stripe account verification failed:", stripeError)
 
-      // Account might be invalid, remove from user profile
-      await db.collection("users").doc(uid).update({
-        stripeAccountId: null,
-        stripeOnboardingComplete: false,
-      })
+      // If account doesn't exist, remove it from user profile
+      if (stripeError.code === "resource_missing") {
+        await db.collection("users").doc(decodedToken.uid).update({
+          stripeAccountId: null,
+          stripeAccountStatus: null,
+        })
+      }
 
       return NextResponse.json({
+        success: true,
         isConnected: false,
-        needsOnboarding: true,
         error: "Stripe account is invalid or inaccessible",
       })
     }
-  } catch (error) {
+  } catch (error: any) {
     console.error("Error checking Stripe connection:", error)
     return NextResponse.json(
       {
+        success: false,
+        error: "Failed to check Stripe connection",
+        details: error.message,
         isConnected: false,
-        error: "Failed to check connection status",
       },
       { status: 500 },
     )
