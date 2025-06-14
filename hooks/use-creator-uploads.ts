@@ -1,54 +1,76 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect } from "react"
+import { useAuthContext } from "@/contexts/auth-context"
 
-export function useCreatorUploads() {
-  const [videos, setVideos] = useState<any[]>([])
+interface Video {
+  id: string
+  title: string
+  fileUrl: string
+  thumbnailUrl: string
+  type: string
+  duration: number
+  size: number
+  addedAt: Date
+  uid: string
+}
+
+interface UseCreatorUploadsReturn {
+  videos: Video[]
+  loading: boolean
+  error: string | null
+  refetch: () => void
+}
+
+export function useCreatorUploads(): UseCreatorUploadsReturn {
+  const [videos, setVideos] = useState<Video[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const { user } = useAuthContext()
 
-  const fetchCreatorUploads = useCallback(async () => {
+  const fetchCreatorUploads = async () => {
+    if (!user?.uid) {
+      setVideos([])
+      setLoading(false)
+      return
+    }
+
     try {
       setLoading(true)
       setError(null)
 
-      console.log("🔄 [useCreatorUploads] Fetching fresh creator uploads...")
+      console.log("🔍 [useCreatorUploads] Fetching for user:", user.uid)
 
-      // Add cache-busting timestamp to ensure fresh data
-      const timestamp = new Date().getTime()
-      const response = await fetch(`/api/creator-uploads?t=${timestamp}`, {
-        cache: "no-store", // Disable caching
+      const response = await fetch(`/api/creator-uploads?userId=${user.uid}`, {
+        method: "GET",
         headers: {
-          "Cache-Control": "no-cache, no-store, must-revalidate",
-          Pragma: "no-cache",
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${user.uid}`,
         },
       })
 
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`)
-      }
-
       const data = await response.json()
-      console.log("✅ [useCreatorUploads] Fresh data received:", {
-        videosCount: data.videos?.length || 0,
-        timestamp: data.timestamp,
-      })
 
-      setVideos(data.videos || [])
+      if (data.success) {
+        setVideos(data.videos || [])
+        console.log(`✅ [useCreatorUploads] Loaded ${data.videos?.length || 0} videos`)
+      } else {
+        setError(data.error || "Failed to fetch creator uploads")
+        setVideos([])
+      }
     } catch (err) {
       console.error("❌ [useCreatorUploads] Error:", err)
-      setError(err instanceof Error ? err.message : "Failed to fetch creator uploads")
+      setError(err instanceof Error ? err.message : "Unknown error")
       setVideos([])
     } finally {
       setLoading(false)
     }
-  }, [])
+  }
 
   useEffect(() => {
     fetchCreatorUploads()
-  }, [fetchCreatorUploads])
+  }, [user?.uid])
 
-  // Return refetch function for manual refresh
   return {
     videos,
     loading,
