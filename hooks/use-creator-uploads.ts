@@ -13,58 +13,49 @@ interface Video {
   size: number
   addedAt: Date
   uid: string
+  creatorName?: string
+  creatorUsername?: string
 }
 
-interface UseCreatorUploadsReturn {
+interface UseDiscoverContentReturn {
   videos: Video[]
   loading: boolean
   error: string | null
   refetch: () => void
 }
 
-export function useCreatorUploads(): UseCreatorUploadsReturn {
+export function useDiscoverContent(): UseDiscoverContentReturn {
   const [videos, setVideos] = useState<Video[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const { user } = useAuthContext()
 
-  const fetchCreatorUploads = async () => {
-    if (!user?.uid) {
-      setVideos([])
-      setLoading(false)
-      return
-    }
-
+  const fetchDiscoverContent = async () => {
     try {
       setLoading(true)
       setError(null)
 
-      console.log("🔍 [useCreatorUploads] Fetching uploads for current user:", user.uid)
+      console.log("🔍 [useDiscoverContent] Fetching all creators' free content")
 
-      // Get the Firebase Auth token for proper authentication
-      const token = await user.getIdToken()
-
-      const response = await fetch(`/api/creator/uploads`, {
+      const response = await fetch(`/api/discover/free-content`, {
         method: "GET",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
+          ...(user?.uid && { Authorization: `Bearer ${user.uid}` }),
         },
       })
 
       const data = await response.json()
 
       if (data.success) {
-        // Only show uploads from the current user
-        const userUploads = (data.uploads || []).filter((upload: any) => upload.uid === user.uid)
-        setVideos(userUploads)
-        console.log(`✅ [useCreatorUploads] Loaded ${userUploads.length} uploads for user ${user.uid}`)
+        setVideos(data.videos || [])
+        console.log(`✅ [useDiscoverContent] Loaded ${data.videos?.length || 0} videos from all creators`)
       } else {
-        setError(data.error || "Failed to fetch creator uploads")
+        setError(data.error || "Failed to fetch discover content")
         setVideos([])
       }
     } catch (err) {
-      console.error("❌ [useCreatorUploads] Error:", err)
+      console.error("❌ [useDiscoverContent] Error:", err)
       setError(err instanceof Error ? err.message : "Unknown error")
       setVideos([])
     } finally {
@@ -73,13 +64,13 @@ export function useCreatorUploads(): UseCreatorUploadsReturn {
   }
 
   useEffect(() => {
-    fetchCreatorUploads()
-  }, [user?.uid])
+    fetchDiscoverContent()
+  }, [])
 
   return {
     videos,
     loading,
     error,
-    refetch: fetchCreatorUploads,
+    refetch: fetchDiscoverContent,
   }
 }
