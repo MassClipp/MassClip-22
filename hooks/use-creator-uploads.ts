@@ -74,3 +74,6 @@ export function useDiscoverContent(): UseDiscoverContentReturn {
     refetch: fetchDiscoverContent,
   }
 }
+
+// Export both the new name and old name for compatibility
+export { useDiscoverContent as useCreatorUploads }
