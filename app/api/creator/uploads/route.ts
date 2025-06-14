@@ -25,14 +25,15 @@ export async function GET(request: NextRequest) {
 
       console.log("✅ [Creator Uploads] Authenticated user:", userId)
 
-      // Query multiple collections for uploads
+      // Query multiple collections for uploads - ONLY for the authenticated user
       const collections = ["uploads", "free_content", "videos", "content"]
       let allUploads: any[] = []
 
       for (const collectionName of collections) {
         try {
-          console.log(`🔍 [Creator Uploads] Checking collection: ${collectionName}`)
+          console.log(`🔍 [Creator Uploads] Checking collection: ${collectionName} for user: ${userId}`)
 
+          // CRITICAL: Only get uploads where uid matches the authenticated user
           const snapshot = await db.collection(collectionName).where("uid", "==", userId).limit(50).get()
 
           if (!snapshot.empty) {
@@ -50,41 +51,33 @@ export async function GET(request: NextRequest) {
                 createdAt: data.createdAt || data.addedAt || new Date(),
                 contentType: determineContentType(data.mimeType || data.type || ""),
                 collection: collectionName,
+                uid: userId, // Ensure UID is set to the authenticated user
                 ...data,
               }
             })
 
             allUploads = [...allUploads, ...uploads]
-            console.log(`✅ [Creator Uploads] Found ${uploads.length} uploads in ${collectionName}`)
+            console.log(`✅ [Creator Uploads] Found ${uploads.length} uploads in ${collectionName} for user ${userId}`)
           }
         } catch (collectionError) {
           console.log(`⚠️ [Creator Uploads] Error querying ${collectionName}:`, collectionError)
         }
       }
 
-      // Remove duplicates based on fileUrl
-      const uniqueUploads = allUploads.filter(
-        (upload, index, self) => index === self.findIndex((u) => u.fileUrl === upload.fileUrl && upload.fileUrl !== ""),
-      )
+      // Double-check: Filter to ensure only user's uploads are returned
+      const userOnlyUploads = allUploads.filter((upload) => upload.uid === userId)
 
-      // Sort by creation date (newest first)
-      uniqueUploads.sort((a, b) => {
-        const dateA = new Date(a.createdAt).getTime()
-        const dateB = new Date(b.createdAt).getTime()
-        return dateB - dateA
-      })
-
-      console.log(`✅ [Creator Uploads] Returning ${uniqueUploads.length} unique uploads`)
+      console.log(`🔒 [Creator Uploads] Filtered to ${userOnlyUploads.length} uploads for user ${userId}`)
 
       return NextResponse.json({
         success: true,
-        uploads: uniqueUploads,
-        count: uniqueUploads.length,
+        uploads: userOnlyUploads,
+        count: userOnlyUploads.length,
         debug: {
           userId,
           collectionsChecked: collections,
           totalFound: allUploads.length,
-          uniqueCount: uniqueUploads.length,
+          userFiltered: userOnlyUploads.length,
         },
       })
     } catch (authError) {

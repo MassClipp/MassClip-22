@@ -39,21 +39,26 @@ export function useCreatorUploads(): UseCreatorUploadsReturn {
       setLoading(true)
       setError(null)
 
-      console.log("🔍 [useCreatorUploads] Fetching for user:", user.uid)
+      console.log("🔍 [useCreatorUploads] Fetching uploads for current user:", user.uid)
 
-      const response = await fetch(`/api/creator-uploads?userId=${user.uid}`, {
+      // Get the Firebase Auth token for proper authentication
+      const token = await user.getIdToken()
+
+      const response = await fetch(`/api/creator/uploads`, {
         method: "GET",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${user.uid}`,
+          Authorization: `Bearer ${token}`,
         },
       })
 
       const data = await response.json()
 
       if (data.success) {
-        setVideos(data.videos || [])
-        console.log(`✅ [useCreatorUploads] Loaded ${data.videos?.length || 0} videos`)
+        // Only show uploads from the current user
+        const userUploads = (data.uploads || []).filter((upload: any) => upload.uid === user.uid)
+        setVideos(userUploads)
+        console.log(`✅ [useCreatorUploads] Loaded ${userUploads.length} uploads for user ${user.uid}`)
       } else {
         setError(data.error || "Failed to fetch creator uploads")
         setVideos([])
