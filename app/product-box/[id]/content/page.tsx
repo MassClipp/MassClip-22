@@ -81,6 +81,7 @@ export default function ProductBoxContentPage({ params }: { params: { id: string
       // Fallback: Check legacy purchases and try to access content directly
       console.log("🔄 [Content Page] Unified purchase not found, checking legacy purchases...")
 
+      // If we found a legacy purchase, automatically migrate it
       const legacyResponse = await fetch(`/api/user/purchases`, {
         headers: {
           "Content-Type": "application/json",
@@ -93,6 +94,58 @@ export default function ProductBoxContentPage({ params }: { params: { id: string
         const legacyPurchases = legacyData.purchases || []
 
         const legacyPurchase = legacyPurchases.find((p: any) => p.productBoxId === params.id)
+
+        // If we found a legacy purchase, automatically migrate it
+        if (legacyPurchase) {
+          console.log("✅ [Content Page] Found legacy purchase, attempting automatic migration...")
+
+          try {
+            // Attempt automatic migration
+            const migrationResponse = await fetch("/api/migrate-product-box-purchase", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${token}`,
+              },
+              body: JSON.stringify({
+                productBoxId: params.id,
+              }),
+            })
+
+            if (migrationResponse.ok) {
+              const migrationResult = await migrationResponse.json()
+              if (migrationResult.success) {
+                console.log("✅ [Content Page] Automatic migration successful, retrying content fetch...")
+
+                // Retry fetching unified purchases after successful migration
+                const retryUnifiedResponse = await fetch(`/api/user/unified-purchases?userId=${user.uid}`, {
+                  headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${token}`,
+                  },
+                })
+
+                if (retryUnifiedResponse.ok) {
+                  const retryUnifiedData = await retryUnifiedResponse.json()
+                  const retryPurchases = retryUnifiedData.purchases || []
+                  const retryFoundPurchase = retryPurchases.find((p: UnifiedPurchase) => p.productBoxId === params.id)
+
+                  if (retryFoundPurchase && retryFoundPurchase.items.length > 0) {
+                    console.log(
+                      "✅ [Content Page] Successfully loaded migrated purchase with",
+                      retryFoundPurchase.items.length,
+                      "items",
+                    )
+                    setPurchase(retryFoundPurchase)
+                    return
+                  }
+                }
+              }
+            }
+          } catch (migrationError) {
+            console.warn("⚠️ [Content Page] Automatic migration failed, falling back to legacy content:", migrationError)
+          }
+        }
 
         if (legacyPurchase) {
           console.log("✅ [Content Page] Found legacy purchase, trying to fetch content directly...")
@@ -518,15 +571,9 @@ export default function ProductBoxContentPage({ params }: { params: { id: string
               >
                 Return to Purchases
               </Button>
-              <Button
-                onClick={migrateThisProductBox}
-                variant="outline"
-                className="w-full border-zinc-700 text-zinc-300"
-              >
-                Migrate This Purchase
-              </Button>
-              <Button onClick={runMigration} variant="outline" className="w-full border-zinc-700 text-zinc-300">
-                Migrate All Purchases
+              <Button onClick={fetchContent} variant="outline" className="w-full border-zinc-700 text-zinc-300">
+                <RefreshCw className="mr-2 h-4 w-4" />
+                Retry Access
               </Button>
               <Button onClick={checkPurchase} variant="outline" className="w-full border-zinc-700 text-zinc-300">
                 <Bug className="mr-2 h-4 w-4" />
