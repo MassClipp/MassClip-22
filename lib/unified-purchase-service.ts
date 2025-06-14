@@ -54,6 +54,7 @@ export interface UnifiedPurchaseItem {
 export interface UnifiedPurchase {
   id: string
   productBoxId: string
+  itemId?: string // Add compatibility field
   productBoxTitle: string
   productBoxDescription?: string
   productBoxThumbnail?: string
@@ -105,7 +106,8 @@ export class UnifiedPurchaseService {
       // Create unified purchase document
       const unifiedPurchase: UnifiedPurchase = {
         id: purchaseData.sessionId,
-        productBoxId: purchaseData.productBoxId,
+        productBoxId: purchaseData.productBoxId, // Primary field
+        itemId: purchaseData.productBoxId, // Compatibility field
         productBoxTitle: productBoxData.title || "Untitled Product Box",
         productBoxDescription: productBoxData.description || "",
         productBoxThumbnail: productBoxData.thumbnailUrl || productBoxData.customPreviewThumbnail || "",

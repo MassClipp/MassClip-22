@@ -51,8 +51,9 @@ export default function ProductBoxContentPage({ params }: { params: { id: string
       setError(null)
 
       const token = await user.getIdToken(true)
+      const productBoxId = params.id.trim().toLowerCase()
 
-      console.log("🔍 [Content Page] Fetching content for product box:", params.id)
+      console.log("🔍 [Content Page] Fetching content for product box:", productBoxId)
 
       // First, try to get the unified purchase data
       const unifiedResponse = await fetch(`/api/user/unified-purchases?userId=${user.uid}`, {
@@ -67,21 +68,46 @@ export default function ProductBoxContentPage({ params }: { params: { id: string
         const purchases = unifiedData.purchases || []
 
         console.log("📦 [Content Page] Found unified purchases:", purchases.length)
+        console.log(
+          "📦 [Content Page] Purchase data sample:",
+          purchases.map((p) => ({
+            id: p.id,
+            productBoxId: p.productBoxId,
+            itemId: p.itemId,
+            sessionId: p.sessionId,
+          })),
+        )
 
-        // Find the purchase for this product box
-        const foundPurchase = purchases.find((p: UnifiedPurchase) => p.productBoxId === params.id)
+        // Find the purchase using multiple possible field names
+        const foundPurchase = purchases.find((p: any) => {
+          const purchaseProductBoxId = (p.productBoxId || "").trim().toLowerCase()
+          const purchaseItemId = (p.itemId || "").trim().toLowerCase()
+          const purchaseId = (p.id || "").trim().toLowerCase()
 
-        if (foundPurchase && foundPurchase.items.length > 0) {
+          return purchaseProductBoxId === productBoxId || purchaseItemId === productBoxId || purchaseId === productBoxId
+        })
+
+        if (foundPurchase && foundPurchase.items && foundPurchase.items.length > 0) {
           console.log("✅ [Content Page] Found unified purchase with", foundPurchase.items.length, "items")
           setPurchase(foundPurchase)
           return
+        } else if (foundPurchase) {
+          console.log("⚠️ [Content Page] Found unified purchase but no content items:", foundPurchase)
+        } else {
+          console.warn("❌ [Content Page] No matching purchase found in unified purchases", {
+            productBoxId,
+            availablePurchases: purchases.map((p) => ({
+              productBoxId: p.productBoxId,
+              itemId: p.itemId,
+              id: p.id,
+            })),
+          })
         }
       }
 
       // Fallback: Check legacy purchases and try to access content directly
       console.log("🔄 [Content Page] Unified purchase not found, checking legacy purchases...")
 
-      // If we found a legacy purchase, automatically migrate it
       const legacyResponse = await fetch(`/api/user/purchases`, {
         headers: {
           "Content-Type": "application/json",
@@ -93,7 +119,25 @@ export default function ProductBoxContentPage({ params }: { params: { id: string
         const legacyData = await legacyResponse.json()
         const legacyPurchases = legacyData.purchases || []
 
-        const legacyPurchase = legacyPurchases.find((p: any) => p.productBoxId === params.id)
+        console.log("📦 [Content Page] Found legacy purchases:", legacyPurchases.length)
+        console.log(
+          "📦 [Content Page] Legacy purchase data sample:",
+          legacyPurchases.map((p) => ({
+            id: p.id,
+            productBoxId: p.productBoxId,
+            itemId: p.itemId,
+            sessionId: p.sessionId,
+          })),
+        )
+
+        // Find legacy purchase using multiple possible field names
+        const legacyPurchase = legacyPurchases.find((p: any) => {
+          const purchaseProductBoxId = (p.productBoxId || "").trim().toLowerCase()
+          const purchaseItemId = (p.itemId || "").trim().toLowerCase()
+          const purchaseId = (p.id || "").trim().toLowerCase()
+
+          return purchaseProductBoxId === productBoxId || purchaseItemId === productBoxId || purchaseId === productBoxId
+        })
 
         // If we found a legacy purchase, automatically migrate it
         if (legacyPurchase) {
@@ -108,7 +152,7 @@ export default function ProductBoxContentPage({ params }: { params: { id: string
                 Authorization: `Bearer ${token}`,
               },
               body: JSON.stringify({
-                productBoxId: params.id,
+                productBoxId: params.id, // Use original ID, not normalized
               }),
             })
 
@@ -128,9 +172,19 @@ export default function ProductBoxContentPage({ params }: { params: { id: string
                 if (retryUnifiedResponse.ok) {
                   const retryUnifiedData = await retryUnifiedResponse.json()
                   const retryPurchases = retryUnifiedData.purchases || []
-                  const retryFoundPurchase = retryPurchases.find((p: UnifiedPurchase) => p.productBoxId === params.id)
+                  const retryFoundPurchase = retryPurchases.find((p: any) => {
+                    const purchaseProductBoxId = (p.productBoxId || "").trim().toLowerCase()
+                    const purchaseItemId = (p.itemId || "").trim().toLowerCase()
+                    const purchaseId = (p.id || "").trim().toLowerCase()
 
-                  if (retryFoundPurchase && retryFoundPurchase.items.length > 0) {
+                    return (
+                      purchaseProductBoxId === productBoxId ||
+                      purchaseItemId === productBoxId ||
+                      purchaseId === productBoxId
+                    )
+                  })
+
+                  if (retryFoundPurchase && retryFoundPurchase.items && retryFoundPurchase.items.length > 0) {
                     console.log(
                       "✅ [Content Page] Successfully loaded migrated purchase with",
                       retryFoundPurchase.items.length,
@@ -145,6 +199,15 @@ export default function ProductBoxContentPage({ params }: { params: { id: string
           } catch (migrationError) {
             console.warn("⚠️ [Content Page] Automatic migration failed, falling back to legacy content:", migrationError)
           }
+        } else {
+          console.warn("❌ [Content Page] No matching purchase found in legacy purchases", {
+            productBoxId,
+            availablePurchases: legacyPurchases.map((p) => ({
+              productBoxId: p.productBoxId,
+              itemId: p.itemId,
+              id: p.id,
+            })),
+          })
         }
 
         if (legacyPurchase) {
@@ -197,6 +260,7 @@ export default function ProductBoxContentPage({ params }: { params: { id: string
       }
 
       // If we get here, no purchase was found
+      console.error("❌ [Content Page] ACCESS DENIED - No valid purchase found for product box:", productBoxId)
       setError("You don't have access to this content. Please purchase it first.")
     } catch (error) {
       console.error("❌ [Content Page] Error fetching content:", error)
