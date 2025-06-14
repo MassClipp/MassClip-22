@@ -81,7 +81,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     if (!stripeProductId || !stripePriceId) {
       console.log("🔧 [Checkout] Creating Stripe product and price...")
 
-      // Create Stripe product
+      // Create Stripe product on connected account
       const stripeProduct = await stripe.products.create(
         {
           name: productBoxData.title,
@@ -148,34 +148,35 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
         productBoxId,
         buyerUid,
         creatorId: productBoxData.creatorId,
+        type: "product_box_purchase",
       },
       customer_email: decodedToken.email || undefined,
     }
 
-    // Add application fee and transfer for one-time payments
-    if (productBoxData.type !== "subscription") {
+    // Handle fees differently for subscriptions vs one-time payments
+    if (productBoxData.type === "subscription") {
+      // For subscriptions, use application_fee_percent
+      // The connected account receives funds directly, platform takes fee
+      sessionConfig.subscription_data = {
+        application_fee_percent: 10, // 10% platform fee
+        metadata: {
+          productBoxId,
+          buyerUid,
+          creatorId: productBoxData.creatorId,
+          type: "product_box_purchase",
+        },
+      }
+    } else {
+      // For one-time payments, use application fee with transfer
       sessionConfig.payment_intent_data = {
         application_fee_amount: Math.round(productBoxData.price * 100 * 0.1), // 10% platform fee
         transfer_data: {
           destination: creatorData.stripeAccountId,
         },
       }
-    } else {
-      // For subscriptions, we'll handle fees via subscription application fees
-      sessionConfig.subscription_data = {
-        application_fee_percent: 10, // 10% platform fee
-        transfer_data: {
-          destination: creatorData.stripeAccountId,
-        },
-        metadata: {
-          productBoxId,
-          buyerUid,
-          creatorId: productBoxData.creatorId,
-        },
-      }
     }
 
-    // Create Stripe checkout session
+    // Create checkout session on the connected account
     const session = await stripe.checkout.sessions.create(sessionConfig, {
       stripeAccount: creatorData.stripeAccountId,
     })
