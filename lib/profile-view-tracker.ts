@@ -125,3 +125,10 @@ export class ProfileViewTracker {
     }
   }
 }
+
+// Export the function as a named export for easier importing
+export const trackProfileView = ProfileViewTracker.trackProfileView
+export const getProfileViewStats = ProfileViewTracker.getProfileViewStats
+
+// Default export for backward compatibility
+export default ProfileViewTracker
