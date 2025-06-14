@@ -75,5 +75,5 @@ export function useDiscoverContent(): UseDiscoverContentReturn {
   }
 }
 
-// Export both the new name and old name for compatibility
-export { useDiscoverContent as useCreatorUploads }
+// Export both names for compatibility
+export const useCreatorUploads = useDiscoverContent
