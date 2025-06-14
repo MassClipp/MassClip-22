@@ -59,6 +59,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     console.log("📦 [Checkout] Product box data:", {
       title: productBoxData.title,
       price: productBoxData.price,
+      type: productBoxData.type,
       creatorId: productBoxData.creatorId,
     })
 
@@ -73,19 +74,70 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
 
     console.log("💳 [Checkout] Creator Stripe account:", creatorData.stripeAccountId)
 
-    // Create Stripe checkout session
-    const session = await stripe.checkout.sessions.create({
+    // Create or get Stripe product and price
+    let stripeProductId = productBoxData.stripeProductId
+    let stripePriceId = productBoxData.stripePriceId
+
+    if (!stripeProductId || !stripePriceId) {
+      console.log("🔧 [Checkout] Creating Stripe product and price...")
+
+      // Create Stripe product
+      const stripeProduct = await stripe.products.create(
+        {
+          name: productBoxData.title,
+          description: productBoxData.description || undefined,
+          metadata: {
+            productBoxId,
+            creatorId: productBoxData.creatorId,
+          },
+        },
+        {
+          stripeAccount: creatorData.stripeAccountId,
+        },
+      )
+
+      stripeProductId = stripeProduct.id
+      console.log("✅ [Checkout] Created Stripe product:", stripeProductId)
+
+      // Create Stripe price based on product type
+      const priceData: Stripe.PriceCreateParams = {
+        product: stripeProductId,
+        unit_amount: Math.round(productBoxData.price * 100), // Convert to cents
+        currency: productBoxData.currency || "usd",
+        metadata: {
+          productBoxId,
+          creatorId: productBoxData.creatorId,
+        },
+      }
+
+      if (productBoxData.type === "subscription") {
+        priceData.recurring = {
+          interval: "month",
+          interval_count: 1,
+        }
+      }
+
+      const stripePrice = await stripe.prices.create(priceData, {
+        stripeAccount: creatorData.stripeAccountId,
+      })
+
+      stripePriceId = stripePrice.id
+      console.log("✅ [Checkout] Created Stripe price:", stripePriceId)
+
+      // Update product box with Stripe IDs
+      await db.collection("productBoxes").doc(productBoxId).update({
+        stripeProductId,
+        stripePriceId,
+        updatedAt: new Date(),
+      })
+    }
+
+    // Create checkout session configuration
+    const sessionConfig: Stripe.Checkout.SessionCreateParams = {
       payment_method_types: ["card"],
       line_items: [
         {
-          price_data: {
-            currency: productBoxData.currency || "usd",
-            product_data: {
-              name: productBoxData.title,
-              description: productBoxData.description || undefined,
-            },
-            unit_amount: Math.round(productBoxData.price * 100), // Convert to cents
-          },
+          price: stripePriceId,
           quantity: 1,
         },
       ],
@@ -97,12 +149,35 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
         buyerUid,
         creatorId: productBoxData.creatorId,
       },
-      payment_intent_data: {
+      customer_email: decodedToken.email || undefined,
+    }
+
+    // Add application fee and transfer for one-time payments
+    if (productBoxData.type !== "subscription") {
+      sessionConfig.payment_intent_data = {
         application_fee_amount: Math.round(productBoxData.price * 100 * 0.1), // 10% platform fee
         transfer_data: {
           destination: creatorData.stripeAccountId,
         },
-      },
+      }
+    } else {
+      // For subscriptions, we'll handle fees via subscription application fees
+      sessionConfig.subscription_data = {
+        application_fee_percent: 10, // 10% platform fee
+        transfer_data: {
+          destination: creatorData.stripeAccountId,
+        },
+        metadata: {
+          productBoxId,
+          buyerUid,
+          creatorId: productBoxData.creatorId,
+        },
+      }
+    }
+
+    // Create Stripe checkout session
+    const session = await stripe.checkout.sessions.create(sessionConfig, {
+      stripeAccount: creatorData.stripeAccountId,
     })
 
     console.log("✅ [Checkout] Stripe session created:", session.id)
