@@ -140,7 +140,17 @@ export async function POST(request: NextRequest) {
     // Check for existing free content to avoid duplicates
     const existingSnapshot = await db.collection("free_content").where("uid", "==", userId).get()
 
-    const existingUrls = new Set(existingSnapshot.docs.map((doc) => doc.data().fileUrl))
+    const existingOriginalIds = new Set()
+    const existingUrls = new Set()
+
+    existingSnapshot.docs.forEach((doc) => {
+      const data = doc.data()
+      if (data.originalId) existingOriginalIds.add(data.originalId)
+      if (data.fileUrl) existingUrls.add(data.fileUrl)
+    })
+
+    console.log(`🔍 [Free Content] Found ${existingSnapshot.docs.length} existing free content items`)
+    console.log(`🔍 [Free Content] Existing original IDs:`, Array.from(existingOriginalIds))
 
     // Add to free_content collection
     const batch = db.batch()
@@ -150,9 +160,9 @@ export async function POST(request: NextRequest) {
       try {
         const fileUrl = upload.fileUrl || upload.url || upload.downloadUrl || ""
 
-        // Skip if already exists
-        if (existingUrls.has(fileUrl)) {
-          console.log(`⚠️ [Free Content] Skipping duplicate: ${upload.title}`)
+        // Skip if already exists (check both originalId and fileUrl)
+        if (existingOriginalIds.has(upload.id) || existingUrls.has(fileUrl)) {
+          console.log(`⚠️ [Free Content] Skipping duplicate: ${upload.title} (ID: ${upload.id})`)
           continue
         }
 
@@ -161,7 +171,7 @@ export async function POST(request: NextRequest) {
           uid: userId,
           title: upload.title || upload.filename || upload.name || "Untitled",
           fileUrl: fileUrl,
-          type: this.getContentType(upload.mimeType || upload.type || ""),
+          type: getContentType(upload.mimeType || upload.type || ""),
           size: upload.size || upload.fileSize || 0,
           thumbnailUrl: upload.thumbnailUrl || upload.thumbnail || "",
           mimeType: upload.mimeType || upload.type || "",
