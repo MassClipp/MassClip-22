@@ -1,42 +1,55 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { doc, getDoc } from "firebase/firestore"
-import { db } from "@/lib/firebase"
+import { getServerSession } from "next-auth"
+import { authOptions } from "@/auth"
+
+// Import server-side Firebase admin
+async function getFirebaseAdmin() {
+  const { db: adminDb } = await import("@/lib/firebase-server")
+  return adminDb
+}
 
 export async function GET(request: NextRequest) {
   try {
-    const { searchParams } = new URL(request.url)
-    const userId = searchParams.get("userId")
+    console.log("🔍 [Profile Views API] Fetching profile views...")
 
-    if (!userId) {
-      return NextResponse.json({ error: "User ID is required" }, { status: 400 })
+    // Get user session
+    const session = await getServerSession(authOptions)
+    if (!session?.user?.id) {
+      console.error("❌ [Profile Views API] No authenticated user")
+      return NextResponse.json({ success: false, error: "Authentication required" }, { status: 401 })
     }
 
-    console.log(`📊 [Dashboard Profile Views API] Fetching for user: ${userId}`)
+    const userId = session.user.id
+    console.log("👤 [Profile Views API] User ID:", userId)
 
-    // Get user document directly from Firestore
-    const userDocRef = doc(db, "users", userId)
-    const userDoc = await getDoc(userDocRef)
+    // Get Firebase Admin instance
+    const adminDb = await getFirebaseAdmin()
 
-    if (!userDoc.exists()) {
-      return NextResponse.json({ error: "User not found" }, { status: 404 })
+    // Fetch user document
+    const userDoc = await adminDb.collection("users").doc(userId).get()
+
+    if (!userDoc.exists) {
+      console.error("❌ [Profile Views API] User document not found")
+      return NextResponse.json({ success: false, error: "User not found" }, { status: 404 })
     }
 
     const userData = userDoc.data()
-    const profileViews = userData.profileViews || 0
+    const profileViews = userData?.profileViews || 0
 
-    console.log(`✅ [Dashboard Profile Views API] Found ${profileViews} views for user ${userId}`)
+    console.log("📊 [Profile Views API] Profile views found:", profileViews)
 
     return NextResponse.json({
       success: true,
       profileViews,
-      lastUpdated: userData.updatedAt || null,
+      userId,
     })
   } catch (error) {
-    console.error("❌ [Dashboard Profile Views API] Error:", error)
+    console.error("❌ [Profile Views API] Error:", error)
     return NextResponse.json(
       {
         success: false,
         error: "Failed to fetch profile views",
+        details: error instanceof Error ? error.message : "Unknown error",
       },
       { status: 500 },
     )
