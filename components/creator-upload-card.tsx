@@ -439,18 +439,18 @@ export default function CreatorUploadCard({ video }: CreatorUploadCardProps) {
       >
         {/* Video container with 9:16 aspect ratio and curved borders */}
         <div className="relative aspect-[9/16] overflow-hidden rounded-lg bg-zinc-900 shadow-md">
-          {/* Creator Profile Badge - Top Right */}
+          {/* Creator Profile Badge - Top Right - Small and Blended */}
           <div className="absolute top-2 right-2 z-30">
             <button
               onClick={handleCreatorClick}
-              className="flex items-center bg-black/70 backdrop-blur-sm hover:bg-black/90 text-white text-xs px-2 py-1 rounded-full transition-all duration-200 border border-white/10 hover:border-white/20"
+              className="flex items-center bg-black/50 backdrop-blur-sm hover:bg-black/70 text-white text-xs px-2 py-1 rounded-full transition-all duration-200 border border-white/10 hover:border-white/20 opacity-80 hover:opacity-100"
               aria-label={`View ${creatorDisplayName || "creator"}'s profile`}
               title={`View ${creatorDisplayName || "creator"}'s profile`}
               disabled={isLoadingCreatorData}
             >
-              <User className="w-3 h-3 mr-1" />
-              <span className="font-medium truncate max-w-[60px] sm:max-w-[80px]">
-                {isLoadingCreatorData ? "Loading..." : creatorDisplayName || "Creator"}
+              <User className="w-2.5 h-2.5 mr-1" />
+              <span className="font-medium truncate max-w-[50px] sm:max-w-[60px] text-[10px]">
+                {isLoadingCreatorData ? "..." : creatorDisplayName || "Creator"}
               </span>
             </button>
           </div>

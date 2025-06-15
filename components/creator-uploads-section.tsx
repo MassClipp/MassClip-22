@@ -3,9 +3,12 @@
 import { useDiscoverContent } from "@/hooks/use-creator-uploads"
 import { VideoCard } from "@/components/video-card"
 import { Skeleton } from "@/components/ui/skeleton"
+import { useRouter } from "next/navigation"
+import { User } from "lucide-react"
 
 export function CreatorUploadsSection() {
   const { videos, loading, error } = useDiscoverContent()
+  const router = useRouter()
 
   if (loading) {
     return (
@@ -42,9 +45,19 @@ export function CreatorUploadsSection() {
                 duration={video.duration}
                 type={video.type}
               />
-              <p className="text-xs text-muted-foreground">
-                by {video.creatorName} (@{video.creatorUsername})
-              </p>
+              {/* Small creator attribution */}
+              <div className="flex items-center justify-between text-xs text-muted-foreground">
+                <button
+                  onClick={() => router.push(`/creator/${video.creatorUsername || "unknown"}`)}
+                  className="flex items-center hover:text-white transition-colors duration-200 truncate"
+                  title={`View ${video.creatorName}'s profile`}
+                >
+                  <User className="w-3 h-3 mr-1 flex-shrink-0" />
+                  <span className="truncate">
+                    {video.creatorName} (@{video.creatorUsername})
+                  </span>
+                </button>
+              </div>
             </div>
           ))}
         </div>
