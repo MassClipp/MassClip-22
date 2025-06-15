@@ -28,4 +28,3 @@ export function useAuth() {
 }
 
 // Add this export at the end of the file
-export const useAuthContext = useAuth
