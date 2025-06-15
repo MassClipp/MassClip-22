@@ -49,7 +49,7 @@ export default function MembershipPage() {
               <li className="flex items-start">
                 <CheckCircle2 className="mr-3 mt-0.5 h-5 w-5 flex-shrink-0 text-green-500" />
                 <span className="text-white">
-                  <strong>25 downloads</strong> per month
+                  <strong>15 downloads</strong> per month
                 </span>
               </li>
               <li className="flex items-start">

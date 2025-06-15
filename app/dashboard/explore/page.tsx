@@ -1331,6 +1331,8 @@ export default function ExplorePage() {
     }
   }, [])
 
+  const { remainingDownloads, isProUser: isPro, hasReachedLimit } = useDownloadLimit()
+
   return (
     <div className="space-y-8">
       {/* Page Header */}
@@ -1340,29 +1342,45 @@ export default function ExplorePage() {
           <p className="text-zinc-400 mt-1">Discover amazing content from creators</p>
         </div>
 
-        {/* Search Bar */}
-        <form
-          onSubmit={(e) => {
-            e.preventDefault()
-            const formData = new FormData(e.currentTarget)
-            const query = formData.get("search") as string
-            if (query && query.trim()) {
-              router.push(`/dashboard/explore?search=${encodeURIComponent(query.trim())}`)
-            }
-          }}
-          className="w-full md:w-96"
-        >
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-zinc-400" size={20} />
-            <input
-              type="text"
-              name="search"
-              placeholder="Search videos..."
-              defaultValue={searchQuery}
-              className="w-full py-2.5 pl-10 pr-4 bg-zinc-900/60 border border-zinc-800 rounded-lg text-white placeholder-zinc-500 focus:outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500 transition-all"
-            />
-          </div>
-        </form>
+        <div className="flex items-center gap-4">
+          {/* Minimal Download Counter */}
+          {!isPro && (
+            <div
+              className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${
+                hasReachedLimit
+                  ? "bg-amber-500/20 text-amber-400 border border-amber-500/30"
+                  : "bg-zinc-800/50 text-zinc-300 border border-zinc-700/50"
+              }`}
+            >
+              <Download className="h-3 w-3" />
+              <span>{remainingDownloads}/15</span>
+            </div>
+          )}
+
+          {/* Search Bar */}
+          <form
+            onSubmit={(e) => {
+              e.preventDefault()
+              const formData = new FormData(e.currentTarget)
+              const query = formData.get("search") as string
+              if (query && query.trim()) {
+                router.push(`/dashboard/explore?search=${encodeURIComponent(query.trim())}`)
+              }
+            }}
+            className="w-full md:w-96"
+          >
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-zinc-400" size={20} />
+              <input
+                type="text"
+                name="search"
+                placeholder="Search videos..."
+                defaultValue={searchQuery}
+                className="w-full py-2.5 pl-10 pr-4 bg-zinc-900/60 border border-zinc-800 rounded-lg text-white placeholder-zinc-500 focus:outline-none focus:border-red-500 focus:ring-1 focus:ring-red-500 transition-all"
+              />
+            </div>
+          </form>
+        </div>
       </div>
 
       {/* Search Results Header (if searching) */}
