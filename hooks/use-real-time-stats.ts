@@ -52,20 +52,17 @@ export function useRealTimeStats() {
       (doc) => {
         if (doc.exists()) {
           const userData = doc.data()
-          console.log("📊 Real user stats from database:", userData)
+          console.log("📊 User stats updated:", userData)
 
           setStats((prev) => ({
             ...prev,
             totalDownloads: userData.totalDownloads || 0,
             totalEarnings: userData.totalEarnings || 0,
             totalVideos: userData.totalVideos || 0,
-            profileViews: userData.profileViews || 0, // Use actual database value
+            profileViews: userData.profileViews || 0,
             totalSales: userData.totalSales || 0,
             loading: false,
           }))
-        } else {
-          console.log("❌ User document does not exist")
-          setStats((prev) => ({ ...prev, loading: false }))
         }
       },
       (error) => {

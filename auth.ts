@@ -1,8 +1,6 @@
 import { initializeApp, getApps } from "firebase/app"
 import { getAuth, connectAuthEmulator } from "firebase/auth"
 import { getFirestore, connectFirestoreEmulator } from "firebase/firestore"
-import type { NextAuthOptions } from "next-auth"
-import GoogleProvider from "next-auth/providers/google"
 
 // Firebase configuration
 const firebaseConfig = {
@@ -28,37 +26,6 @@ export const auth = getAuth(app)
 
 // Initialize Firestore
 export const db = getFirestore(app)
-
-// NextAuth configuration
-export const authOptions: NextAuthOptions = {
-  providers: [
-    GoogleProvider({
-      clientId: process.env.GOOGLE_CLIENT_ID!,
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
-    }),
-  ],
-  callbacks: {
-    async jwt({ token, user }) {
-      if (user) {
-        token.uid = user.id
-      }
-      return token
-    },
-    async session({ session, token }) {
-      if (session.user) {
-        ;(session.user as any).uid = token.uid
-      }
-      return session
-    },
-  },
-  pages: {
-    signIn: "/login",
-    error: "/auth/error",
-  },
-  session: {
-    strategy: "jwt",
-  },
-}
 
 // Connect to emulators in development
 if (typeof window !== "undefined" && process.env.NODE_ENV === "development") {

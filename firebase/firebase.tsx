@@ -22,5 +22,3 @@ export const auth = getAuth(app)
 export const storage = getStorage(app)
 
 export default app
-
-// Add this export at the end of the file

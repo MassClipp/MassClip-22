@@ -3,8 +3,6 @@
 import { useState, useEffect } from "react"
 import { useAuthContext } from "@/contexts/auth-context"
 import { checkSubscription, type SubscriptionStatus } from "@/lib/subscription"
-import { doc, getDoc, onSnapshot } from "firebase/firestore"
-import { db } from "@/firebase"
 
 interface DashboardStats {
   totalSales: number
@@ -58,21 +56,20 @@ export function useDashboard(): DashboardData {
         // Fetch subscription status
         const subscription = await checkSubscription(user.uid)
 
-        // Fetch real profile views from user document
-        const userDocRef = doc(db, "users", user.uid)
-        const userDoc = await getDoc(userDocRef)
-        const userData = userDoc.exists() ? userDoc.data() : {}
-
-        const stats = {
-          totalSales: 0,
-          totalRevenue: 0,
-          thisMonthSales: 0,
-          thisMonthRevenue: 0,
-          totalUploads: 0,
-          freeVideos: 0,
-          premiumVideos: 0,
-          profileViews: userData.profileViews || 0, // Get real profile views from database
-        }
+        // Fetch dashboard stats (you can implement these API calls)
+        const statsResponse = await fetch(`/api/dashboard/stats?userId=${user.uid}`)
+        const stats = statsResponse.ok
+          ? await statsResponse.json()
+          : {
+              totalSales: 0,
+              totalRevenue: 0,
+              thisMonthSales: 0,
+              thisMonthRevenue: 0,
+              totalUploads: 0,
+              freeVideos: 0,
+              premiumVideos: 0,
+              profileViews: 0,
+            }
 
         setData({
           stats,
@@ -80,23 +77,6 @@ export function useDashboard(): DashboardData {
           isLoading: false,
           error: null,
         })
-
-        // Also add real-time listener for profile views
-        const unsubscribe = onSnapshot(userDocRef, (doc) => {
-          if (doc.exists()) {
-            const data = doc.data()
-            setData((prev) => ({
-              ...prev,
-              stats: {
-                ...prev.stats,
-                profileViews: data.profileViews || 0,
-              },
-            }))
-          }
-        })
-
-        // Return cleanup function
-        return () => unsubscribe()
       } catch (error) {
         console.error("Error fetching dashboard data:", error)
         setData((prev) => ({
@@ -107,13 +87,7 @@ export function useDashboard(): DashboardData {
       }
     }
 
-    const unsubscribe = fetchDashboardData()
-
-    return () => {
-      if (unsubscribe && typeof unsubscribe === "function") {
-        unsubscribe()
-      }
-    }
+    fetchDashboardData()
   }, [user?.uid])
 
   return data
