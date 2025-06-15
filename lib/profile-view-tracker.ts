@@ -1,5 +1,5 @@
 import { db } from "@/lib/firebase"
-import { doc, setDoc, increment, serverTimestamp, collection, addDoc } from "firebase/firestore"
+import { doc, setDoc, increment, serverTimestamp, collection, addDoc, getDoc } from "firebase/firestore"
 
 export class ProfileViewTracker {
   /**
@@ -23,6 +23,13 @@ export class ProfileViewTracker {
       const timestamp = new Date()
       const dateKey = timestamp.toISOString().split("T")[0] // YYYY-MM-DD
 
+      // Check current profile views before incrementing
+      const userRef = doc(db, "users", profileUserId)
+      const userDoc = await getDoc(userRef)
+      const currentViews = userDoc.exists() ? userDoc.data()?.profileViews || 0 : 0
+
+      console.log(`📊 [ProfileViewTracker] Current views before increment: ${currentViews}`)
+
       // Prepare view data
       const viewData = {
         profileUserId,
@@ -37,7 +44,6 @@ export class ProfileViewTracker {
       const promises: Promise<any>[] = []
 
       // 1. Update user's total profile views
-      const userRef = doc(db, "users", profileUserId)
       promises.push(
         setDoc(
           userRef,
@@ -83,7 +89,14 @@ export class ProfileViewTracker {
       )
 
       // Execute all updates
-      await Promise.allSettled(promises)
+      const results = await Promise.allSettled(promises)
+
+      // Log any failures
+      results.forEach((result, index) => {
+        if (result.status === "rejected") {
+          console.error(`❌ [ProfileViewTracker] Promise ${index} failed:`, result.reason)
+        }
+      })
 
       console.log(`✅ [ProfileViewTracker] Successfully tracked view for profile: ${profileUserId}`)
     } catch (error) {

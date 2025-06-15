@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Eye } from "lucide-react"
+import { Eye, RefreshCw } from "lucide-react"
+import { Button } from "@/components/ui/button"
 
 interface ProfileViewStatsProps {
   userId: string
@@ -13,6 +14,7 @@ interface ViewStats {
   todayViews: number
   lastView: string | null
   totalAnalytics: number
+  actualRecordCount?: number
 }
 
 export default function ProfileViewStats({ userId }: ProfileViewStatsProps) {
@@ -20,26 +22,32 @@ export default function ProfileViewStats({ userId }: ProfileViewStatsProps) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  useEffect(() => {
-    const fetchStats = async () => {
-      try {
-        setLoading(true)
-        const response = await fetch(`/api/profile-view-stats?userId=${userId}`)
-        const data = await response.json()
+  const fetchStats = async () => {
+    try {
+      setLoading(true)
+      setError(null)
 
-        if (data.success) {
-          setStats(data.stats)
-        } else {
-          setError(data.error || "Failed to fetch stats")
-        }
-      } catch (err) {
-        setError("Network error while fetching stats")
-        console.error("Error fetching profile view stats:", err)
-      } finally {
-        setLoading(false)
+      console.log(`🔍 [ProfileViewStats] Fetching stats for userId: ${userId}`)
+
+      const response = await fetch(`/api/profile-view-stats?userId=${userId}`)
+      const data = await response.json()
+
+      console.log(`📊 [ProfileViewStats] API response:`, data)
+
+      if (data.success) {
+        setStats(data.stats)
+      } else {
+        setError(data.error || "Failed to fetch stats")
       }
+    } catch (err) {
+      setError("Network error while fetching stats")
+      console.error("❌ [ProfileViewStats] Error fetching profile view stats:", err)
+    } finally {
+      setLoading(false)
     }
+  }
 
+  useEffect(() => {
     if (userId) {
       fetchStats()
     }
@@ -72,6 +80,10 @@ export default function ProfileViewStats({ userId }: ProfileViewStatsProps) {
         </CardHeader>
         <CardContent>
           <div className="text-sm text-red-500">Error: {error}</div>
+          <Button onClick={fetchStats} variant="outline" size="sm" className="mt-2">
+            <RefreshCw className="h-4 w-4 mr-2" />
+            Retry
+          </Button>
         </CardContent>
       </Card>
     )
@@ -87,6 +99,9 @@ export default function ProfileViewStats({ userId }: ProfileViewStatsProps) {
         <CardTitle className="flex items-center gap-2">
           <Eye className="h-5 w-5" />
           Profile Views
+          <Button onClick={fetchStats} variant="ghost" size="sm" className="ml-auto">
+            <RefreshCw className="h-4 w-4" />
+          </Button>
         </CardTitle>
       </CardHeader>
       <CardContent>
@@ -102,6 +117,12 @@ export default function ProfileViewStats({ userId }: ProfileViewStatsProps) {
         </div>
         {stats.lastView && (
           <div className="mt-4 text-sm text-gray-500">Last view: {new Date(stats.lastView).toLocaleDateString()}</div>
+        )}
+        {/* Debug info - remove in production */}
+        {process.env.NODE_ENV === "development" && stats.actualRecordCount !== undefined && (
+          <div className="mt-2 text-xs text-gray-400 border-t pt-2">
+            Debug: {stats.actualRecordCount} actual records
+          </div>
         )}
       </CardContent>
     </Card>
