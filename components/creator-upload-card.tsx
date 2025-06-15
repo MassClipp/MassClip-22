@@ -40,10 +40,10 @@ interface CreatorUploadCardProps {
   }
 }
 
-export default function CreatorUploadCard({ video }: CreatorUploadCardProps) {
+function CreatorUploadCard({ video }: CreatorUploadCardProps) {
   const [downloadError, setDownloadError] = useState(false)
   const [hasTrackedView, setHasTrackedView] = useState(false)
-  const [isDownloading, setIsDownloading] = useState(isDownloading)
+  const [isDownloading, setIsDownloading] = useState(false)
   const [isFavorite, setIsFavorite] = useState(false)
   const [isCheckingFavorite, setIsCheckingFavorite] = useState(true)
   const [isPlaying, setIsPlaying] = useState(false)
@@ -443,13 +443,13 @@ export default function CreatorUploadCard({ video }: CreatorUploadCardProps) {
           <div className="absolute top-2 right-2 z-30">
             <button
               onClick={handleCreatorClick}
-              className="flex items-center bg-black/50 backdrop-blur-sm hover:bg-black/70 text-white text-xs px-2 py-1 rounded-full transition-all duration-200 border border-white/10 hover:border-white/20 opacity-80 hover:opacity-100"
+              className="flex items-center bg-red-500/70 backdrop-blur-sm hover:bg-red-600/90 text-white text-xs px-2 py-1 rounded-full transition-all duration-200 border border-white/20 hover:border-white/40"
               aria-label={`View ${creatorDisplayName || "creator"}'s profile`}
               title={`View ${creatorDisplayName || "creator"}'s profile`}
               disabled={isLoadingCreatorData}
             >
-              <User className="w-2.5 h-2.5 mr-1" />
-              <span className="font-medium truncate max-w-[50px] sm:max-w-[60px] text-[10px]">
+              <User className="w-3 h-3 mr-1" />
+              <span className="font-medium truncate max-w-[60px] sm:max-w-[70px] text-[11px]">
                 {isLoadingCreatorData ? "..." : creatorDisplayName || "Creator"}
               </span>
             </button>
@@ -528,3 +528,7 @@ export default function CreatorUploadCard({ video }: CreatorUploadCardProps) {
     </div>
   )
 }
+
+// Export both as default and named export
+export default CreatorUploadCard
+export { CreatorUploadCard }
