@@ -20,11 +20,31 @@ export async function POST(request: NextRequest) {
   try {
     console.log("🔍 [Product Box Thumbnail] Starting thumbnail upload process")
 
-    const session = await getServerSession()
+    // Get session using multiple methods
+    let session = await getServerSession()
+
+    // If no session from server session, try to get from headers
     if (!session?.uid) {
-      console.log("❌ [Product Box Thumbnail] Unauthorized - no session")
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+      const authHeader = request.headers.get("authorization")
+      if (authHeader?.startsWith("Bearer ")) {
+        try {
+          const token = authHeader.substring(7)
+          const { verifyIdToken } = await import("@/lib/firebase-admin")
+          const decodedToken = await verifyIdToken(token)
+          session = { uid: decodedToken.uid, email: decodedToken.email }
+          console.log("✅ [Product Box Thumbnail] Authenticated via token")
+        } catch (tokenError) {
+          console.error("❌ [Product Box Thumbnail] Token verification failed:", tokenError)
+        }
+      }
     }
+
+    if (!session?.uid) {
+      console.log("❌ [Product Box Thumbnail] No valid session found")
+      return NextResponse.json({ error: "Unauthorized - Please log in" }, { status: 401 })
+    }
+
+    console.log("✅ [Product Box Thumbnail] User authenticated:", session.uid)
 
     // Parse form data
     const formData = await request.formData()
@@ -121,8 +141,16 @@ export async function POST(request: NextRequest) {
 
     console.log(`📁 [Product Box Thumbnail] Generated file path: ${filePath}`)
 
-    // Convert file to buffer
-    const buffer = Buffer.from(await file.arrayBuffer())
+    // Convert file to buffer with error handling
+    let buffer: Buffer
+    try {
+      const arrayBuffer = await file.arrayBuffer()
+      buffer = Buffer.from(arrayBuffer)
+      console.log(`📦 [Product Box Thumbnail] File converted to buffer: ${buffer.length} bytes`)
+    } catch (bufferError) {
+      console.error("❌ [Product Box Thumbnail] Failed to convert file to buffer:", bufferError)
+      return NextResponse.json({ error: "Failed to process file" }, { status: 400 })
+    }
 
     // Upload to R2
     const putObjectCommand = new PutObjectCommand({

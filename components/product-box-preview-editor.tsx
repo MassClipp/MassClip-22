@@ -49,7 +49,14 @@ const ProductBoxPreviewEditor: React.FC<ProductBoxPreviewEditorProps> = ({ produ
   })
 
   const handleImageUpload = async (file: File) => {
-    if (!user) return
+    if (!user) {
+      toast({
+        title: "Error",
+        description: "Please log in to upload thumbnails",
+        variant: "destructive",
+      })
+      return
+    }
 
     try {
       setUploading(true)
@@ -59,7 +66,10 @@ const ProductBoxPreviewEditor: React.FC<ProductBoxPreviewEditorProps> = ({ produ
       uploadFormData.append("file", file)
       uploadFormData.append("productBoxId", productBox.id)
 
-      const token = await user.getIdToken()
+      // Get fresh token
+      const token = await user.getIdToken(true) // Force refresh
+      console.log("🔑 [Thumbnail Upload] Got fresh token")
+
       const response = await fetch("/api/upload/product-box-thumbnail", {
         method: "POST",
         headers: {
@@ -68,12 +78,17 @@ const ProductBoxPreviewEditor: React.FC<ProductBoxPreviewEditorProps> = ({ produ
         body: uploadFormData,
       })
 
+      console.log("📤 [Thumbnail Upload] Response status:", response.status)
+
       if (!response.ok) {
         const error = await response.json()
-        throw new Error(error.error || "Failed to upload thumbnail")
+        console.error("❌ [Thumbnail Upload] Server error:", error)
+        throw new Error(error.error || `Upload failed with status ${response.status}`)
       }
 
       const data = await response.json()
+      console.log("✅ [Thumbnail Upload] Success:", data)
+
       setFormData((prev) => ({
         ...prev,
         customPreviewThumbnail: data.url,
@@ -84,7 +99,7 @@ const ProductBoxPreviewEditor: React.FC<ProductBoxPreviewEditorProps> = ({ produ
         description: "Thumbnail uploaded successfully",
       })
     } catch (error) {
-      console.error("Error uploading thumbnail:", error)
+      console.error("❌ [Thumbnail Upload] Client error:", error)
       toast({
         title: "Error",
         description: error instanceof Error ? error.message : "Failed to upload thumbnail",
@@ -123,12 +138,22 @@ const ProductBoxPreviewEditor: React.FC<ProductBoxPreviewEditorProps> = ({ produ
   }
 
   const handleSave = async () => {
-    if (!user) return
+    if (!user) {
+      toast({
+        title: "Error",
+        description: "Please log in to save changes",
+        variant: "destructive",
+      })
+      return
+    }
 
     try {
       setSaving(true)
 
-      const token = await user.getIdToken()
+      // Get fresh token
+      const token = await user.getIdToken(true) // Force refresh
+      console.log("🔑 [Save Preview] Got fresh token")
+
       const response = await fetch(`/api/creator/product-boxes/${productBox.id}`, {
         method: "PATCH",
         headers: {
@@ -141,9 +166,12 @@ const ProductBoxPreviewEditor: React.FC<ProductBoxPreviewEditorProps> = ({ produ
         }),
       })
 
+      console.log("📤 [Save Preview] Response status:", response.status)
+
       if (!response.ok) {
         const error = await response.json()
-        throw new Error(error.error || "Failed to update preview settings")
+        console.error("❌ [Save Preview] Server error:", error)
+        throw new Error(error.error || `Save failed with status ${response.status}`)
       }
 
       // Update the product box with new data
@@ -162,7 +190,7 @@ const ProductBoxPreviewEditor: React.FC<ProductBoxPreviewEditorProps> = ({ produ
 
       onClose()
     } catch (error) {
-      console.error("Error saving preview settings:", error)
+      console.error("❌ [Save Preview] Client error:", error)
       toast({
         title: "Error",
         description: error instanceof Error ? error.message : "Failed to save preview settings",
