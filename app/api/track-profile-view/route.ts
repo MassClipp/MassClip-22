@@ -12,15 +12,11 @@ export async function POST(request: NextRequest) {
 
     // Don't track self-views
     if (viewerId && viewerId === profileUserId) {
+      console.log("Skipping self-view")
       return NextResponse.json({ success: true, message: "Self-view skipped" })
     }
 
-    console.log(`🔍 [API] Tracking profile view for: ${profileUserId}`)
-
-    // Get request metadata
-    const ipAddress = request.headers.get("x-forwarded-for") || request.headers.get("x-real-ip") || "unknown"
-    const userAgent = request.headers.get("user-agent") || "unknown"
-    const referrer = request.headers.get("referer") || "direct"
+    console.log(`🔍 [Track Profile View] Tracking view for profile: ${profileUserId}`)
 
     const timestamp = new Date()
     const dateKey = timestamp.toISOString().split("T")[0] // YYYY-MM-DD
@@ -31,12 +27,11 @@ export async function POST(request: NextRequest) {
       viewerId: viewerId || "anonymous",
       timestamp,
       dateKey,
-      ipAddress,
-      userAgent,
-      referrer,
+      userAgent: request.headers.get("user-agent") || "unknown",
+      ip: request.headers.get("x-forwarded-for") || request.headers.get("x-real-ip") || "unknown",
     }
 
-    // Use a batch for atomic operations
+    // Use batch operations for consistency
     const batch = db.batch()
 
     // 1. Update user's total profile views
@@ -49,7 +44,7 @@ export async function POST(request: NextRequest) {
 
     // 2. Log individual profile view
     const profileViewRef = db.collection("profile_views").doc()
-    batch.create(profileViewRef, viewData)
+    batch.set(profileViewRef, viewData)
 
     // 3. Update daily stats
     const dailyStatsRef = db.collection("users").doc(profileUserId).collection("daily_stats").doc(dateKey)
@@ -75,17 +70,14 @@ export async function POST(request: NextRequest) {
       { merge: true },
     )
 
-    // Execute batch
+    // Execute all updates atomically
     await batch.commit()
 
-    console.log(`✅ [API] Successfully tracked profile view for: ${profileUserId}`)
+    console.log(`✅ [Track Profile View] Successfully tracked view for profile: ${profileUserId}`)
 
-    return NextResponse.json({
-      success: true,
-      message: "Profile view tracked successfully",
-    })
+    return NextResponse.json({ success: true, message: "Profile view tracked successfully" })
   } catch (error) {
-    console.error("❌ [API] Error tracking profile view:", error)
+    console.error("❌ [Track Profile View] Error tracking profile view:", error)
     return NextResponse.json(
       {
         error: "Failed to track profile view",

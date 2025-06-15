@@ -42,7 +42,6 @@ export async function GET(request: NextRequest) {
 
     // Count actual profile view records for verification
     const profileViewsSnapshot = await db.collection("profile_views").where("profileUserId", "==", userId).get()
-
     const actualViewCount = profileViewsSnapshot.size
     console.log(`🔢 [Profile View Stats] Actual profile view records: ${actualViewCount}`)
 

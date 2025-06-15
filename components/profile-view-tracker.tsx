@@ -1,49 +1,55 @@
 "use client"
 
 import { useEffect } from "react"
-import { useAuthContext } from "@/contexts/auth-context"
-import { trackProfileView } from "@/lib/profile-view-tracker"
+import { useFirebaseAuth } from "@/hooks/use-firebase-auth"
 
 interface ProfileViewTrackerProps {
   profileUserId: string
-  /** Delay before tracking the view (in milliseconds) */
-  delay?: number
 }
 
-export default function ProfileViewTracker({ profileUserId, delay = 1500 }: ProfileViewTrackerProps) {
-  const { user } = useAuthContext()
+export default function ProfileViewTracker({ profileUserId }: ProfileViewTrackerProps) {
+  const { user } = useFirebaseAuth()
 
   useEffect(() => {
-    if (!profileUserId) return
-
-    // Set a delay to ensure the page has loaded and it's a genuine view
-    const timer = setTimeout(async () => {
+    const trackView = async () => {
       try {
-        // Track using client-side method first
-        await trackProfileView(profileUserId, user?.uid)
+        // Don't track self-views
+        if (user?.uid === profileUserId) {
+          console.log("Skipping self-view tracking")
+          return
+        }
 
-        // Also track via API for server-side logging (fallback)
-        try {
-          await fetch("/api/track-profile-view", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              profileUserId,
-              viewerId: user?.uid,
-            }),
-          })
-        } catch (apiError) {
-          console.warn("API tracking failed, but client tracking succeeded:", apiError)
+        console.log(`🔍 [ProfileViewTracker] Tracking view for profile: ${profileUserId}`)
+
+        const response = await fetch("/api/track-profile-view", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            profileUserId,
+            viewerId: user?.uid || null,
+          }),
+        })
+
+        const data = await response.json()
+
+        if (data.success) {
+          console.log(`✅ [ProfileViewTracker] Successfully tracked view`)
+        } else {
+          console.error(`❌ [ProfileViewTracker] Failed to track view:`, data.error)
         }
       } catch (error) {
-        console.error("Failed to track profile view:", error)
+        console.error("❌ [ProfileViewTracker] Error tracking profile view:", error)
       }
-    }, delay)
+    }
 
-    return () => clearTimeout(timer)
-  }, [profileUserId, user?.uid, delay])
+    if (profileUserId) {
+      // Add a small delay to ensure the page has loaded
+      const timer = setTimeout(trackView, 1000)
+      return () => clearTimeout(timer)
+    }
+  }, [profileUserId, user?.uid])
 
   // This component doesn't render anything
   return null
