@@ -1,10 +1,9 @@
 "use client"
 
 import { useDiscoverContent } from "@/hooks/use-creator-uploads"
-import { VideoCard } from "@/components/video-card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useRouter } from "next/navigation"
-import { User } from "lucide-react"
+import CreatorUploadCard from "@/components/creator-upload-card"
 
 export function CreatorUploadsSection() {
   const { videos, loading, error } = useDiscoverContent()
@@ -37,27 +36,20 @@ export function CreatorUploadsSection() {
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {videos.map((video) => (
             <div key={video.id} className="space-y-2">
-              <VideoCard
-                id={video.id}
-                title={video.title}
-                thumbnailUrl={video.thumbnailUrl}
-                fileUrl={video.fileUrl}
-                duration={video.duration}
-                type={video.type}
+              <CreatorUploadCard
+                video={{
+                  id: video.id,
+                  title: video.title,
+                  fileUrl: video.fileUrl,
+                  thumbnailUrl: video.thumbnailUrl,
+                  creatorName: video.creatorName,
+                  uid: video.uid,
+                  views: video.views,
+                  downloads: video.downloads,
+                  username: video.creatorUsername,
+                  userDisplayName: video.creatorName,
+                }}
               />
-              {/* Small creator attribution */}
-              <div className="flex items-center justify-between text-xs text-muted-foreground">
-                <button
-                  onClick={() => router.push(`/creator/${video.creatorUsername || "unknown"}`)}
-                  className="flex items-center hover:text-white transition-colors duration-200 truncate"
-                  title={`View ${video.creatorName}'s profile`}
-                >
-                  <User className="w-3 h-3 mr-1 flex-shrink-0" />
-                  <span className="truncate">
-                    {video.creatorName} (@{video.creatorUsername})
-                  </span>
-                </button>
-              </div>
             </div>
           ))}
         </div>
