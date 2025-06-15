@@ -27,7 +27,4 @@ export function useAuth() {
   return context
 }
 
-// Export useAuthContext as an alias for useAuth
-export const useAuthContext = useAuth
-
 // Export useAuth as named export
