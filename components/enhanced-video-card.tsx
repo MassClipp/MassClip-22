@@ -88,6 +88,12 @@ export default function EnhancedVideoCard({
   const aspectRatioClass =
     aspectRatio === "square" ? "aspect-square" : aspectRatio === "wide" ? "aspect-video" : "aspect-[9/16]"
 
+  // Add fallback thumbnail handling
+  const handleThumbnailError = (e: React.SyntheticEvent<HTMLVideoElement>) => {
+    console.log("🖼️ [VideoCard] Thumbnail fallback for:", title)
+    // The video element will handle this automatically by showing the first frame
+  }
+
   return (
     <div className={`flex-shrink-0 w-full ${className}`}>
       <div
@@ -103,7 +109,8 @@ export default function EnhancedVideoCard({
           preload="metadata"
           onClick={togglePlay}
           onEnded={() => setIsPlaying(false)}
-          poster={thumbnailUrl}
+          onError={handleThumbnailError}
+          poster={thumbnailUrl || `/placeholder.svg?height=720&width=1280&query=${encodeURIComponent(title)}`}
         >
           <source src={fileUrl} type={mimeType} />
         </video>

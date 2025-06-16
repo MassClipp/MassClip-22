@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { initializeFirebaseAdmin, db } from "@/lib/firebase/firebaseAdmin"
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3"
+import { getFallbackThumbnailUrl } from "@/lib/thumbnail-generator"
 
 // Initialize Firebase Admin
 initializeFirebaseAdmin()
@@ -88,6 +89,27 @@ export async function POST(request: NextRequest) {
       const fileUrl = generatePublicURL(key)
       console.log(`🔗 [URL] Generated public URL: ${fileUrl}`)
 
+      // Generate thumbnail for video files
+      let thumbnailUrl = null
+      const thumbnailWidth = null
+      const thumbnailHeight = null
+      const thumbnailSize = null
+
+      if (file.type.startsWith("video/")) {
+        try {
+          console.log("🖼️ [Thumbnail] Generating thumbnail for video...")
+
+          // For server-side, we'll use a fallback approach since we can't use canvas
+          // In a production environment, you'd use FFmpeg or similar
+          thumbnailUrl = getFallbackThumbnailUrl(title || file.name)
+
+          console.log(`✅ [Thumbnail] Using fallback thumbnail: ${thumbnailUrl}`)
+        } catch (error) {
+          console.error("❌ [Thumbnail] Generation failed:", error)
+          thumbnailUrl = getFallbackThumbnailUrl(title || file.name)
+        }
+      }
+
       // Create comprehensive metadata
       const metadata = {
         // Core file information
@@ -97,6 +119,14 @@ export async function POST(request: NextRequest) {
         fileUrl: fileUrl, // ✅ CRITICAL: Save the public URL
         fileSize: file.size,
         mimeType: file.type,
+
+        // Thumbnail information
+        ...(thumbnailUrl && {
+          thumbnailUrl,
+          ...(thumbnailWidth && { thumbnailWidth }),
+          ...(thumbnailHeight && { thumbnailHeight }),
+          ...(thumbnailSize && { thumbnailSize }),
+        }),
 
         // Storage information
         r2Key: key,

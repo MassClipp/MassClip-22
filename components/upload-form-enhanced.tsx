@@ -24,6 +24,7 @@ import { cn } from "@/lib/utils"
 import { doc, getDoc, addDoc, collection, serverTimestamp } from "firebase/firestore"
 import { db } from "@/lib/firebase"
 import { useToast } from "@/components/ui/use-toast"
+import { generateThumbnailFromFile, getFallbackThumbnailUrl, type ThumbnailResult } from "@/lib/thumbnail-generator"
 
 interface Classification {
   niche: string
@@ -75,6 +76,11 @@ export default function UploadFormEnhanced() {
   const [isClassifying, setIsClassifying] = useState(false)
   const [classification, setClassification] = useState<Classification | null>(null)
   const [classificationError, setClassificationError] = useState<string | null>(null)
+
+  // Thumbnail state
+  const [thumbnailResult, setThumbnailResult] = useState<ThumbnailResult | null>(null)
+  const [isGeneratingThumbnail, setIsGeneratingThumbnail] = useState(false)
+  const [thumbnailError, setThumbnailError] = useState<string | null>(null)
 
   // Fetch user profile data
   useEffect(() => {
@@ -157,7 +163,7 @@ export default function UploadFormEnhanced() {
   }, [title, description, transcript])
 
   // Handle video file selection
-  const handleFileChange = (e: ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
     if (!file) return
 
@@ -169,6 +175,7 @@ export default function UploadFormEnhanced() {
 
     setSelectedFile(file)
     setUploadError(null)
+    setThumbnailError(null)
 
     // Create preview for video
     const fileURL = URL.createObjectURL(file)
@@ -182,6 +189,37 @@ export default function UploadFormEnhanced() {
       video.remove()
     }
     video.src = fileURL
+
+    // Generate thumbnail automatically
+    setIsGeneratingThumbnail(true)
+    try {
+      console.log("🖼️ [Upload] Generating thumbnail...")
+      const result = await generateThumbnailFromFile(file, {
+        captureTime: 5, // Capture at 5 seconds
+        quality: 0.85,
+        maxWidth: 1280,
+        maxHeight: 720,
+      })
+
+      setThumbnailResult(result)
+      console.log("✅ [Upload] Thumbnail generated:", result.thumbnailUrl)
+
+      toast({
+        title: "Thumbnail generated",
+        description: `Thumbnail created (${result.width}x${result.height})`,
+      })
+    } catch (error) {
+      console.error("❌ [Upload] Thumbnail generation failed:", error)
+      setThumbnailError(error instanceof Error ? error.message : "Failed to generate thumbnail")
+
+      toast({
+        title: "Thumbnail generation failed",
+        description: "Will use fallback thumbnail instead",
+        variant: "destructive",
+      })
+    } finally {
+      setIsGeneratingThumbnail(false)
+    }
   }
 
   // Handle transcript file selection
@@ -270,9 +308,9 @@ export default function UploadFormEnhanced() {
       const videoUrl = filePreview || ""
 
       // Generate a placeholder thumbnail URL (in a real app, you'd generate this from the video)
-      const thumbnailUrl = `/placeholder.svg?height=720&width=1280&query=${encodeURIComponent(title)}`
+      // const thumbnailUrl = `/placeholder.svg?height=720&width=1280&query=${encodeURIComponent(title)}`
 
-      // Create a video document in Firestore with classification
+      // Create a video document in Firestore with classification and thumbnail
       const videoData = {
         title,
         description,
@@ -282,9 +320,16 @@ export default function UploadFormEnhanced() {
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
         views: 0,
-        thumbnailUrl,
+        // Use generated thumbnail or fallback
+        thumbnailUrl: thumbnailResult?.thumbnailUrl || getFallbackThumbnailUrl(title),
         url: videoUrl,
         duration,
+        // Add thumbnail metadata
+        ...(thumbnailResult && {
+          thumbnailWidth: thumbnailResult.width,
+          thumbnailHeight: thumbnailResult.height,
+          thumbnailSize: thumbnailResult.size,
+        }),
         // Add transcript if available
         ...(transcript && { transcript }),
         // Add classification data
@@ -332,6 +377,8 @@ export default function UploadFormEnhanced() {
     setClassificationError(null)
     setTranscript("")
     setTranscriptFile(null)
+    setThumbnailResult(null)
+    setThumbnailError(null)
     if (fileInputRef.current) {
       fileInputRef.current.value = ""
     }
@@ -485,6 +532,38 @@ export default function UploadFormEnhanced() {
                     </div>
                   )}
                 </div>
+
+                {/* Thumbnail Preview */}
+                {(thumbnailResult || isGeneratingThumbnail) && (
+                  <div className="mt-3 p-3 bg-zinc-800/30 border border-zinc-700 rounded-lg">
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="text-sm font-medium text-white">Generated Thumbnail</span>
+                      {isGeneratingThumbnail && <Loader2 className="h-3 w-3 animate-spin text-blue-500" />}
+                    </div>
+
+                    {isGeneratingThumbnail && (
+                      <div className="text-xs text-zinc-400">Generating thumbnail from video...</div>
+                    )}
+
+                    {thumbnailResult && (
+                      <div className="flex gap-3">
+                        <img
+                          src={thumbnailResult.thumbnailUrl || "/placeholder.svg"}
+                          alt="Generated thumbnail"
+                          className="w-20 h-12 object-cover rounded border border-zinc-600"
+                        />
+                        <div className="text-xs text-zinc-400 space-y-1">
+                          <div>
+                            {thumbnailResult.width}x{thumbnailResult.height}
+                          </div>
+                          <div>{(thumbnailResult.size / 1024).toFixed(1)} KB</div>
+                        </div>
+                      </div>
+                    )}
+
+                    {thumbnailError && <div className="text-xs text-red-400 mt-1">{thumbnailError}</div>}
+                  </div>
+                )}
 
                 {/* Title */}
                 <div>
