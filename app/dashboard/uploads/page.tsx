@@ -120,6 +120,20 @@ const UploadsPage = () => {
   const [selectedUploads, setSelectedUploads] = useState<string[]>([])
   const [showAddToFreeContentDialog, setShowAddToFreeContentDialog] = useState(false)
 
+  // Function to trigger creator uploads refresh
+  const triggerCreatorUploadsRefresh = useCallback(() => {
+    console.log("🔄 [Uploads] Triggering creator uploads refresh...")
+
+    // Invalidate React Query cache for creator uploads
+    queryClient.invalidateQueries({ queryKey: ["creator-uploads"] })
+    queryClient.invalidateQueries({ queryKey: ["discover-content"] })
+
+    // Dispatch custom event for other components to listen to
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("creatorUploadsUpdated"))
+    }
+  }, [queryClient])
+
   // Check if user has a profile
   const checkUserProfile = useCallback(async () => {
     if (!user) return
@@ -345,8 +359,9 @@ const UploadsPage = () => {
           prev.map((item) => (item.id === uploadItem.id ? { ...item, progress: 100, status: "completed" } : item)),
         )
 
-        // Refresh uploads
+        // Refresh uploads and trigger creator uploads refresh
         queryClient.invalidateQueries({ queryKey: ["uploads"] })
+        triggerCreatorUploadsRefresh()
 
         toast({
           title: "Upload Complete",
@@ -417,6 +432,10 @@ const UploadsPage = () => {
 
       setUploads((prev) => prev.filter((upload) => upload.id !== id))
       setSelectedUpload(null)
+
+      // Trigger creator uploads refresh after deletion
+      triggerCreatorUploadsRefresh()
+
       toast({
         title: "Upload Deleted",
         description: "Upload deleted successfully",
@@ -457,6 +476,11 @@ const UploadsPage = () => {
       )
       setSelectedUpload((prev) => (prev ? { ...prev, title: newTitle } : null))
       setIsRenameDialogOpen(false)
+
+      // IMPORTANT: Trigger creator uploads refresh after rename
+      console.log("🔄 [Uploads] Video renamed, triggering creator uploads refresh...")
+      triggerCreatorUploadsRefresh()
+
       toast({
         title: "Upload Renamed",
         description: "Upload renamed successfully",
@@ -505,6 +529,10 @@ const UploadsPage = () => {
 
       setShowAddToFreeContentDialog(false)
       setSelectedUploads([])
+
+      // Trigger creator uploads refresh after adding to free content
+      triggerCreatorUploadsRefresh()
+
       toast({
         title: "Added to Free Content",
         description: "Selected uploads added to free content successfully",
@@ -683,7 +711,11 @@ const UploadsPage = () => {
                   ) : upload.type === "audio" ? (
                     <AudioCard fileUrl={upload.fileUrl} />
                   ) : upload.type === "image" ? (
-                    <img src={upload.fileUrl} alt={upload.title} className="w-full h-32 object-cover rounded-md" />
+                    <img
+                      src={upload.fileUrl || "/placeholder.svg"}
+                      alt={upload.title}
+                      className="w-full h-32 object-cover rounded-md"
+                    />
                   ) : (
                     <div className="w-full h-32 flex items-center justify-center bg-gray-100 rounded-md">
                       <File className="h-12 w-12 text-gray-500" />
