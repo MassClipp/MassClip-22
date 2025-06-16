@@ -1,191 +1,266 @@
 /**
- * Generate a thumbnail from a video file or URL
+ * Client-side video thumbnail generation utility
  */
+
+export interface ThumbnailGenerationOptions {
+  timeInSeconds?: number
+  width?: number
+  height?: number
+  quality?: number
+  format?: "jpeg" | "png" | "webp"
+}
+
+export interface ThumbnailResult {
+  success: boolean
+  thumbnailBlob?: Blob
+  thumbnailDataUrl?: string
+  error?: string
+  width?: number
+  height?: number
+}
+
 export class VideoThumbnailGenerator {
   /**
-   * Generate thumbnail from video file (for upload process)
+   * Generate thumbnail from video file or URL
    */
-  static async generateThumbnailFromFile(file: File, timeInSeconds = 1): Promise<string> {
-    return new Promise((resolve, reject) => {
+  static async generateThumbnail(
+    videoSource: File | string,
+    options: ThumbnailGenerationOptions = {},
+  ): Promise<ThumbnailResult> {
+    const { timeInSeconds = 5, width = 480, height = 270, quality = 0.8, format = "jpeg" } = options
+
+    console.log(
+      `🎬 [Thumbnail] Generating thumbnail at ${timeInSeconds}s for:`,
+      videoSource instanceof File ? videoSource.name : videoSource,
+    )
+
+    try {
+      // Create video element
       const video = document.createElement("video")
-      const canvas = document.createElement("canvas")
-      const ctx = canvas.getContext("2d")
-
-      if (!ctx) {
-        reject(new Error("Could not get canvas context"))
-        return
-      }
-
-      video.addEventListener("loadedmetadata", () => {
-        // Set canvas dimensions to video dimensions
-        canvas.width = video.videoWidth
-        canvas.height = video.videoHeight
-
-        // Seek to the specified time
-        video.currentTime = Math.min(timeInSeconds, video.duration)
-      })
-
-      video.addEventListener("seeked", () => {
-        try {
-          // Draw the current frame to canvas
-          ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
-
-          // Convert canvas to blob and then to data URL
-          canvas.toBlob(
-            (blob) => {
-              if (blob) {
-                const reader = new FileReader()
-                reader.onload = () => resolve(reader.result as string)
-                reader.onerror = () => reject(new Error("Failed to read thumbnail blob"))
-                reader.readAsDataURL(blob)
-              } else {
-                reject(new Error("Failed to create thumbnail blob"))
-              }
-            },
-            "image/jpeg",
-            0.8,
-          )
-        } catch (error) {
-          reject(error)
-        }
-      })
-
-      video.addEventListener("error", () => {
-        reject(new Error("Failed to load video for thumbnail generation"))
-      })
-
-      // Create object URL from file and set as video source
-      const videoUrl = URL.createObjectURL(file)
-      video.src = videoUrl
-      video.load()
-
-      // Clean up object URL after processing
-      video.addEventListener("loadeddata", () => {
-        URL.revokeObjectURL(videoUrl)
-      })
-    })
-  }
-
-  /**
-   * Generate thumbnail from video URL (for display components)
-   */
-  static async generateThumbnailFromUrl(videoUrl: string, timeInSeconds = 1): Promise<string> {
-    return new Promise((resolve, reject) => {
-      const video = document.createElement("video")
-      const canvas = document.createElement("canvas")
-      const ctx = canvas.getContext("2d")
-
-      if (!ctx) {
-        reject(new Error("Could not get canvas context"))
-        return
-      }
-
-      // Set CORS attributes for cross-origin videos
       video.crossOrigin = "anonymous"
-      video.preload = "metadata"
+      video.muted = true
+      video.playsInline = true
 
-      video.addEventListener("loadedmetadata", () => {
-        // Set canvas dimensions (limit max size for performance)
-        const maxWidth = 480
-        const maxHeight = 720
+      // Set video source
+      if (videoSource instanceof File) {
+        video.src = URL.createObjectURL(videoSource)
+      } else {
+        video.src = videoSource
+      }
 
-        let { videoWidth, videoHeight } = video
+      return new Promise((resolve) => {
+        const cleanup = () => {
+          if (videoSource instanceof File) {
+            URL.revokeObjectURL(video.src)
+          }
+          video.remove()
+        }
 
-        // Scale down if too large
-        if (videoWidth > maxWidth || videoHeight > maxHeight) {
-          const aspectRatio = videoWidth / videoHeight
-          if (videoWidth > videoHeight) {
-            videoWidth = maxWidth
-            videoHeight = maxWidth / aspectRatio
-          } else {
-            videoHeight = maxHeight
-            videoWidth = maxHeight * aspectRatio
+        video.onerror = (error) => {
+          console.error("❌ [Thumbnail] Video load error:", error)
+          cleanup()
+          resolve({
+            success: false,
+            error: "Failed to load video for thumbnail generation",
+          })
+        }
+
+        video.onloadedmetadata = () => {
+          console.log(
+            `📹 [Thumbnail] Video loaded - Duration: ${video.duration}s, Size: ${video.videoWidth}x${video.videoHeight}`,
+          )
+
+          // Ensure we don't seek beyond video duration
+          const seekTime = Math.min(timeInSeconds, video.duration - 0.1)
+          video.currentTime = seekTime
+        }
+
+        video.onseeked = () => {
+          try {
+            console.log(`🎯 [Thumbnail] Capturing frame at ${video.currentTime}s`)
+
+            // Create canvas
+            const canvas = document.createElement("canvas")
+            const ctx = canvas.getContext("2d")
+
+            if (!ctx) {
+              cleanup()
+              resolve({
+                success: false,
+                error: "Failed to get canvas context",
+              })
+              return
+            }
+
+            // Calculate dimensions maintaining aspect ratio
+            const videoAspectRatio = video.videoWidth / video.videoHeight
+            const targetAspectRatio = width / height
+
+            let drawWidth = width
+            let drawHeight = height
+            let offsetX = 0
+            let offsetY = 0
+
+            if (videoAspectRatio > targetAspectRatio) {
+              // Video is wider - fit height and crop width
+              drawHeight = height
+              drawWidth = height * videoAspectRatio
+              offsetX = (width - drawWidth) / 2
+            } else {
+              // Video is taller - fit width and crop height
+              drawWidth = width
+              drawHeight = width / videoAspectRatio
+              offsetY = (height - drawHeight) / 2
+            }
+
+            canvas.width = width
+            canvas.height = height
+
+            // Fill background with black
+            ctx.fillStyle = "#000000"
+            ctx.fillRect(0, 0, width, height)
+
+            // Draw video frame
+            ctx.drawImage(video, offsetX, offsetY, drawWidth, drawHeight)
+
+            // Convert to blob
+            canvas.toBlob(
+              (blob) => {
+                if (!blob) {
+                  cleanup()
+                  resolve({
+                    success: false,
+                    error: "Failed to create thumbnail blob",
+                  })
+                  return
+                }
+
+                const dataUrl = canvas.toDataURL(`image/${format}`, quality)
+
+                console.log(`✅ [Thumbnail] Generated thumbnail: ${blob.size} bytes, ${width}x${height}`)
+
+                cleanup()
+                resolve({
+                  success: true,
+                  thumbnailBlob: blob,
+                  thumbnailDataUrl: dataUrl,
+                  width,
+                  height,
+                })
+              },
+              `image/${format}`,
+              quality,
+            )
+          } catch (error) {
+            console.error("❌ [Thumbnail] Canvas error:", error)
+            cleanup()
+            resolve({
+              success: false,
+              error: error instanceof Error ? error.message : "Canvas processing failed",
+            })
           }
         }
 
-        canvas.width = videoWidth
-        canvas.height = videoHeight
-
-        // Seek to the specified time
-        video.currentTime = Math.min(timeInSeconds, video.duration)
+        // Start loading the video
+        video.load()
       })
-
-      video.addEventListener("seeked", () => {
-        try {
-          // Draw the current frame to canvas
-          ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
-
-          // Convert canvas to data URL
-          const dataUrl = canvas.toDataURL("image/jpeg", 0.8)
-          resolve(dataUrl)
-        } catch (error) {
-          reject(error)
-        }
-      })
-
-      video.addEventListener("error", (e) => {
-        console.error("Video thumbnail generation error:", e)
-        reject(new Error("Failed to load video for thumbnail generation"))
-      })
-
-      // Set video source
-      video.src = videoUrl
-      video.load()
-    })
+    } catch (error) {
+      console.error("❌ [Thumbnail] Generation error:", error)
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : "Thumbnail generation failed",
+      }
+    }
   }
 
   /**
-   * Upload thumbnail to storage and return URL
+   * Upload thumbnail blob to storage and return URL
    */
-  static async uploadThumbnail(thumbnailDataUrl: string, filename: string, authToken: string): Promise<string> {
+  static async uploadThumbnail(
+    thumbnailBlob: Blob,
+    filename: string,
+    authToken: string,
+  ): Promise<{ success: boolean; url?: string; error?: string }> {
     try {
-      // Convert data URL to blob
-      const response = await fetch(thumbnailDataUrl)
-      const blob = await response.blob()
+      console.log(`📤 [Thumbnail] Uploading thumbnail for: ${filename}`)
 
-      // Generate unique thumbnail filename
-      const timestamp = Date.now()
-      const thumbnailFilename = `thumbnails/${timestamp}-${filename.replace(/\.[^/.]+$/, "")}.jpg`
+      // Create form data
+      const formData = new FormData()
+      const thumbnailFilename = `${filename.split(".")[0]}_thumbnail.jpg`
+      formData.append("file", thumbnailBlob, thumbnailFilename)
+      formData.append("filename", thumbnailFilename)
+      formData.append("type", "thumbnail")
 
-      console.log(`🔍 [Thumbnail] Uploading thumbnail: ${thumbnailFilename}`)
-
-      // Get upload URL for thumbnail
-      const uploadResponse = await fetch("/api/get-upload-url", {
+      // Upload to your storage endpoint
+      const response = await fetch("/api/upload-thumbnail", {
         method: "POST",
         headers: {
-          "Content-Type": "application/json",
           Authorization: `Bearer ${authToken}`,
         },
-        body: JSON.stringify({
-          fileName: thumbnailFilename,
-          fileType: "image/jpeg",
-        }),
+        body: formData,
       })
 
-      if (!uploadResponse.ok) {
-        throw new Error("Failed to get thumbnail upload URL")
+      if (!response.ok) {
+        throw new Error(`Upload failed: ${response.status}`)
       }
 
-      const { uploadUrl, publicUrl } = await uploadResponse.json()
+      const result = await response.json()
 
-      // Upload thumbnail to storage
-      const putResponse = await fetch(uploadUrl, {
-        method: "PUT",
-        body: blob,
-        headers: {
-          "Content-Type": "image/jpeg",
-        },
-      })
+      console.log(`✅ [Thumbnail] Uploaded successfully: ${result.url}`)
 
-      if (!putResponse.ok) {
-        throw new Error("Failed to upload thumbnail to storage")
+      return {
+        success: true,
+        url: result.url,
       }
-
-      console.log(`✅ [Thumbnail] Thumbnail uploaded successfully: ${publicUrl}`)
-      return publicUrl
     } catch (error) {
-      console.error("❌ [Thumbnail] Upload failed:", error)
-      throw error
+      console.error("❌ [Thumbnail] Upload error:", error)
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : "Upload failed",
+      }
+    }
+  }
+
+  /**
+   * Generate and upload thumbnail in one step
+   */
+  static async generateAndUploadThumbnail(
+    videoSource: File | string,
+    filename: string,
+    authToken: string,
+    options: ThumbnailGenerationOptions = {},
+  ): Promise<{ success: boolean; thumbnailUrl?: string; error?: string }> {
+    try {
+      // Generate thumbnail
+      const thumbnailResult = await this.generateThumbnail(videoSource, options)
+
+      if (!thumbnailResult.success || !thumbnailResult.thumbnailBlob) {
+        return {
+          success: false,
+          error: thumbnailResult.error || "Failed to generate thumbnail",
+        }
+      }
+
+      // Upload thumbnail
+      const uploadResult = await this.uploadThumbnail(thumbnailResult.thumbnailBlob, filename, authToken)
+
+      if (!uploadResult.success) {
+        return {
+          success: false,
+          error: uploadResult.error || "Failed to upload thumbnail",
+        }
+      }
+
+      return {
+        success: true,
+        thumbnailUrl: uploadResult.url,
+      }
+    } catch (error) {
+      console.error("❌ [Thumbnail] Generate and upload error:", error)
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : "Process failed",
+      }
     }
   }
 }

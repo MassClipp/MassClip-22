@@ -1,6 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { initializeFirebaseAdmin, db } from "@/lib/firebase/firebaseAdmin"
-import { ThumbnailService } from "@/lib/thumbnail-service"
 
 // Initialize Firebase Admin
 initializeFirebaseAdmin()
@@ -186,25 +185,18 @@ export async function POST(request: NextRequest) {
     let finalThumbnailUrl = thumbnailUrl
 
     if (contentType === "video") {
-      console.log("🖼️ [Uploads API] Generating thumbnail for video:", publicURL)
+      console.log("🖼️ [Uploads API] Video detected, ensuring thumbnail exists")
 
-      try {
-        const thumbnailResult = await ThumbnailService.generateThumbnail(publicURL, filename, {
-          width: 480,
-          height: 270,
-          timeInSeconds: 1,
-        })
+      // If no thumbnail provided, use default
+      if (!finalThumbnailUrl) {
+        finalThumbnailUrl = "/default-thumbnail.png"
+        console.log("📷 [Uploads API] Using default thumbnail for video")
+      }
 
-        if (thumbnailResult.success && thumbnailResult.thumbnailUrl) {
-          finalThumbnailUrl = thumbnailResult.thumbnailUrl
-          console.log(`✅ [Uploads API] Generated thumbnail (${thumbnailResult.source}): ${finalThumbnailUrl}`)
-        } else {
-          console.warn(`⚠️ [Uploads API] Thumbnail generation failed, using fallback: ${thumbnailResult.error}`)
-          finalThumbnailUrl = ThumbnailService.getFallbackThumbnail()
-        }
-      } catch (thumbnailError) {
-        console.error("❌ [Uploads API] Thumbnail generation error:", thumbnailError)
-        finalThumbnailUrl = ThumbnailService.getFallbackThumbnail()
+      // Validate provided thumbnail URL
+      else if (finalThumbnailUrl.includes("/placeholder.svg")) {
+        finalThumbnailUrl = "/default-thumbnail.png"
+        console.log("📷 [Uploads API] Replaced invalid placeholder with default thumbnail")
       }
     }
 
