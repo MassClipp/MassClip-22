@@ -332,13 +332,52 @@ const UploadsPage = () => {
         if (uploadItem.file.type.startsWith("video/")) {
           try {
             console.log(`🔍 [File Upload] Generating thumbnail for video...`)
-            const thumbnailDataUrl = await VideoThumbnailGenerator.generateThumbnailFromFile(uploadItem.file, 1)
-            thumbnailUrl = await VideoThumbnailGenerator.uploadThumbnail(thumbnailDataUrl, uploadItem.file.name, token)
-            console.log(`✅ [File Upload] Thumbnail generated and uploaded: ${thumbnailUrl}`)
+
+            // Try client-side thumbnail generation first
+            try {
+              const thumbnailDataUrl = await VideoThumbnailGenerator.generateThumbnailFromFile(uploadItem.file, 1)
+              thumbnailUrl = await VideoThumbnailGenerator.uploadThumbnail(
+                thumbnailDataUrl,
+                uploadItem.file.name,
+                token,
+              )
+              console.log(`✅ [File Upload] Client-side thumbnail generated and uploaded: ${thumbnailUrl}`)
+            } catch (clientError) {
+              console.error("⚠️ [File Upload] Client-side thumbnail generation failed:", clientError)
+
+              // Fallback to server-side placeholder
+              try {
+                const thumbnailResponse = await fetch("/api/generate-thumbnail", {
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${token}`,
+                  },
+                  body: JSON.stringify({
+                    videoUrl: publicUrl,
+                    filename: uploadItem.file.name,
+                  }),
+                })
+
+                if (thumbnailResponse.ok) {
+                  const thumbnailData = await thumbnailResponse.json()
+                  thumbnailUrl = thumbnailData.thumbnailUrl
+                  console.log(`✅ [File Upload] Server-side thumbnail generated: ${thumbnailUrl}`)
+                }
+              } catch (serverError) {
+                console.error("⚠️ [File Upload] Server-side thumbnail generation also failed:", serverError)
+              }
+            }
           } catch (thumbnailError) {
-            console.error("⚠️ [File Upload] Thumbnail generation failed:", thumbnailError)
+            console.error("⚠️ [File Upload] All thumbnail generation methods failed:", thumbnailError)
             // Continue without thumbnail - we'll generate it dynamically later
           }
+        }
+
+        // Ensure we always have some kind of thumbnail for videos
+        if (uploadItem.file.type.startsWith("video/") && !thumbnailUrl) {
+          thumbnailUrl = `/placeholder.svg?height=720&width=1280&query=${encodeURIComponent(uploadItem.file.name)}`
+          console.log(`🔍 [File Upload] Using fallback placeholder thumbnail: ${thumbnailUrl}`)
         }
 
         // Update progress

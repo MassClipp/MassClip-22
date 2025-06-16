@@ -158,6 +158,11 @@ export async function POST(request: NextRequest) {
     }
 
     const { fileUrl, filename, title, size, mimeType, r2Key, thumbnailUrl } = body
+
+    // If no thumbnailUrl provided and it's a video, we should have generated one during upload
+    // For now, let's ensure we always store the thumbnailUrl field, even if null
+    const finalThumbnailUrl = thumbnailUrl || null
+
     console.log("🔍 [Uploads API] Upload data:", { fileUrl, filename, title, size, mimeType, r2Key, thumbnailUrl })
 
     if (!filename) {
@@ -188,8 +193,8 @@ export async function POST(request: NextRequest) {
       mimeType: mimeType || "application/octet-stream",
       contentType,
 
-      // Optional fields
-      thumbnailUrl: thumbnailUrl || null,
+      // Always include thumbnailUrl field
+      thumbnailUrl: finalThumbnailUrl,
       r2Key: r2Key || filename,
 
       // Legacy compatibility
