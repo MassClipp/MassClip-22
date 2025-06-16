@@ -2,7 +2,7 @@
 
 import type React from "react"
 import { useState, useEffect, useRef } from "react"
-import { Download, Lock, Heart, Play, Pause, User } from "lucide-react"
+import { Download, Lock, Heart, Play, Pause, User, AlertTriangle } from "lucide-react"
 import { useAuth } from "@/contexts/auth-context"
 import { db } from "@/lib/firebase"
 import { trackFirestoreWrite } from "@/lib/firestore-optimizer"
@@ -24,7 +24,6 @@ import { useUserPlan } from "@/hooks/use-user-plan"
 import { useDownloadLimit } from "@/contexts/download-limit-context"
 import { useRouter } from "next/navigation"
 import { TrackingService } from "@/lib/tracking-service"
-import { DynamicVideoThumbnail } from "@/components/dynamic-video-thumbnail"
 
 interface CreatorUploadCardProps {
   video: {
@@ -52,6 +51,8 @@ function CreatorUploadCard({ video }: CreatorUploadCardProps) {
   const [creatorUsername, setCreatorUsername] = useState<string | null>(null)
   const [creatorDisplayName, setCreatorDisplayName] = useState<string | null>(null)
   const [isLoadingCreatorData, setIsLoadingCreatorData] = useState(true)
+  const [thumbnailError, setThumbnailError] = useState(false)
+  const [validThumbnailUrl, setValidThumbnailUrl] = useState<string | null>(null)
 
   const videoRef = useRef<HTMLVideoElement>(null)
   const { user } = useAuth()
@@ -60,6 +61,50 @@ function CreatorUploadCard({ video }: CreatorUploadCardProps) {
   const { hasReachedLimit, isProUser, forceRefresh } = useDownloadLimit()
   const router = useRouter()
 
+  // ✅ BONUS: Log warning if thumbnailUrl is missing or invalid
+  useEffect(() => {
+    if (!video.thumbnailUrl) {
+      console.warn(`⚠️ [CreatorUploadCard] Video ${video.id} (${video.title}) is missing thumbnailUrl`)
+    } else if (video.thumbnailUrl.includes("/placeholder.svg")) {
+      console.warn(
+        `⚠️ [CreatorUploadCard] Video ${video.id} (${video.title}) has invalid placeholder thumbnailUrl: ${video.thumbnailUrl}`,
+      )
+    }
+  }, [video.id, video.title, video.thumbnailUrl])
+
+  // Validate and set thumbnail URL
+  useEffect(() => {
+    const validateThumbnail = async () => {
+      if (!video.thumbnailUrl || video.thumbnailUrl.includes("/placeholder.svg")) {
+        // Use fallback thumbnail for invalid URLs
+        setValidThumbnailUrl(
+          "https://images.unsplash.com/photo-1611162617474-5b21e879e113?w=480&h=270&fit=crop&crop=center",
+        )
+        setThumbnailError(true)
+        return
+      }
+
+      try {
+        // Test if the thumbnail URL is accessible
+        const response = await fetch(video.thumbnailUrl, { method: "HEAD" })
+        if (response.ok) {
+          setValidThumbnailUrl(video.thumbnailUrl)
+          setThumbnailError(false)
+        } else {
+          throw new Error("Thumbnail not accessible")
+        }
+      } catch (error) {
+        console.warn(`⚠️ [CreatorUploadCard] Thumbnail validation failed for ${video.id}:`, error)
+        setValidThumbnailUrl(
+          "https://images.unsplash.com/photo-1611162617474-5b21e879e113?w=480&h=270&fit=crop&crop=center",
+        )
+        setThumbnailError(true)
+      }
+    }
+
+    validateThumbnail()
+  }, [video.thumbnailUrl, video.id])
+
   // Fetch current creator data from Firestore users collection
   useEffect(() => {
     const fetchCreatorData = async () => {
@@ -67,7 +112,6 @@ function CreatorUploadCard({ video }: CreatorUploadCardProps) {
 
       if (!video.uid) {
         console.log("No UID provided for video:", video.id)
-        // Fallback to existing data if no UID
         setCreatorUsername(video.username || video.creatorName?.toLowerCase().replace(/\s+/g, "") || "unknown")
         setCreatorDisplayName(video.userDisplayName || video.creatorName || "Creator")
         setIsLoadingCreatorData(false)
@@ -77,7 +121,6 @@ function CreatorUploadCard({ video }: CreatorUploadCardProps) {
       try {
         console.log("Fetching creator data for UID:", video.uid)
 
-        // Get the user document directly by UID for most current data
         const userDocRef = doc(db, "users", video.uid)
         const userDoc = await getDoc(userDocRef)
 
@@ -91,7 +134,6 @@ function CreatorUploadCard({ video }: CreatorUploadCardProps) {
             email: userData.email,
           })
 
-          // Use the current data from Firestore - prioritize username, fallback to displayName
           const currentUsername =
             userData.username || userData.displayName?.toLowerCase().replace(/\s+/g, "") || "unknown"
           const currentDisplayName = userData.displayName || userData.username || "Creator"
@@ -105,13 +147,11 @@ function CreatorUploadCard({ video }: CreatorUploadCardProps) {
           })
         } else {
           console.log("User document not found for UID:", video.uid)
-          // Fallback to existing data
           setCreatorUsername(video.username || video.creatorName?.toLowerCase().replace(/\s+/g, "") || "unknown")
           setCreatorDisplayName(video.userDisplayName || video.creatorName || "Creator")
         }
       } catch (error) {
         console.error("Error fetching creator data:", error)
-        // Fallback to existing data
         setCreatorUsername(video.username || video.creatorName?.toLowerCase().replace(/\s+/g, "") || "unknown")
         setCreatorDisplayName(video.userDisplayName || video.creatorName || "Creator")
       } finally {
@@ -169,7 +209,6 @@ function CreatorUploadCard({ video }: CreatorUploadCardProps) {
     e.preventDefault()
     e.stopPropagation()
 
-    // Use the fetched current username from Firestore
     const username = creatorUsername || "unknown"
     console.log("Navigating to creator profile:", username, "for UID:", video.uid)
     router.push(`/creator/${username}`)
@@ -187,7 +226,6 @@ function CreatorUploadCard({ video }: CreatorUploadCardProps) {
       videoRef.current.currentTime = 0
       setIsPlaying(false)
     } else {
-      // Pause all other videos first
       document.querySelectorAll("video").forEach((v) => {
         if (v !== videoRef.current) {
           v.pause()
@@ -243,25 +281,18 @@ function CreatorUploadCard({ video }: CreatorUploadCardProps) {
           description: "Video removed from your favorites",
         })
       } else {
-        // Create a sanitized version of the video object with all required fields
         const safeVideo = {
           id: video.id || "",
           title: video.title || "Untitled",
           fileUrl: video.fileUrl || "",
-          thumbnailUrl: video.thumbnailUrl || "",
+          thumbnailUrl: validThumbnailUrl || "",
           creatorName: video.creatorName || "Unknown Creator",
           uid: video.uid || "",
           views: typeof video.views === "number" ? video.views : 0,
           downloads: typeof video.downloads === "number" ? video.downloads : 0,
         }
 
-        // Debug log to see what we're trying to save
-        console.log("Saving creator upload to favorites:", safeVideo)
-
-        // Remove any undefined values just to be extra safe
         const cleanVideo = Object.fromEntries(Object.entries(safeVideo).filter(([_, value]) => value !== undefined))
-
-        console.log("Clean video object:", cleanVideo)
 
         await addDoc(collection(db, `users/${user.uid}/favorites`), {
           videoId: video.id,
@@ -338,7 +369,6 @@ function CreatorUploadCard({ video }: CreatorUploadCardProps) {
         return
       }
 
-      // CRITICAL: Check if user has reached download limit BEFORE downloading
       if (hasReachedLimit && !isProUser) {
         toast({
           title: "Download Limit Reached",
@@ -349,7 +379,6 @@ function CreatorUploadCard({ video }: CreatorUploadCardProps) {
         return
       }
 
-      // Record the download
       const result = await recordDownload()
       if (!result.success && !isProUser) {
         toast({
@@ -360,7 +389,6 @@ function CreatorUploadCard({ video }: CreatorUploadCardProps) {
         return
       }
 
-      // Direct download using fetch and blob
       try {
         const response = await fetch(video.fileUrl)
         if (!response.ok) {
@@ -379,7 +407,6 @@ function CreatorUploadCard({ video }: CreatorUploadCardProps) {
         downloadLink.click()
         document.body.removeChild(downloadLink)
 
-        // Clean up the blob URL
         window.URL.revokeObjectURL(url)
 
         toast({
@@ -387,25 +414,20 @@ function CreatorUploadCard({ video }: CreatorUploadCardProps) {
           description: "Your video is downloading",
         })
 
-        // After successful download, add this tracking call:
         try {
-          // Track the download
           await TrackingService.trackDownload(video.id, video.uid || "", user.uid)
-
           console.log("✅ Download tracked successfully")
         } catch (trackingError) {
           console.error("Error tracking download:", trackingError)
-          // Don't fail the download if tracking fails
         }
       } catch (fetchError) {
         console.error("Fetch download failed, falling back to direct link:", fetchError)
 
-        // Fallback to direct link method if fetch fails
         const filename = `${video.title?.replace(/[^\w\s]/gi, "") || "video"}.mp4`
         const downloadLink = document.createElement("a")
         downloadLink.href = video.fileUrl
         downloadLink.download = filename
-        downloadLink.target = "_self" // Ensure it doesn't open in new tab
+        downloadLink.target = "_self"
         downloadLink.style.display = "none"
         document.body.appendChild(downloadLink)
         downloadLink.click()
@@ -440,7 +462,7 @@ function CreatorUploadCard({ video }: CreatorUploadCardProps) {
       >
         {/* Video container with 9:16 aspect ratio and curved borders */}
         <div className="relative aspect-[9/16] overflow-hidden rounded-lg bg-zinc-900 shadow-md">
-          {/* Creator Profile Badge - Top Right - Small and Blended */}
+          {/* Creator Profile Badge - Top Right */}
           <div className="absolute top-2 right-2 z-30">
             <button
               onClick={handleCreatorClick}
@@ -456,31 +478,30 @@ function CreatorUploadCard({ video }: CreatorUploadCardProps) {
             </button>
           </div>
 
-          {/* Dynamic thumbnail with fallback to video snapshot */}
-          {video.thumbnailUrl ? (
-            <img
-              src={video.thumbnailUrl || "/placeholder.svg"}
-              alt={video.title}
-              className="w-full h-full object-cover cursor-pointer"
-              onError={(e) => {
-                const target = e.target as HTMLImageElement
-                target.style.display = "none"
-                // Show dynamic thumbnail as fallback
-                const dynamicThumbnail = target.nextElementSibling as HTMLElement
-                if (dynamicThumbnail) {
-                  dynamicThumbnail.style.display = "block"
-                }
-              }}
-            />
-          ) : null}
+          {/* Thumbnail error indicator */}
+          {thumbnailError && (
+            <div className="absolute top-2 left-2 z-30">
+              <div className="bg-yellow-500/80 backdrop-blur-sm text-black text-xs px-1.5 py-0.5 rounded-full flex items-center">
+                <AlertTriangle className="w-3 h-3 mr-1" />
+                <span className="text-[10px]">No thumb</span>
+              </div>
+            </div>
+          )}
 
-          {/* Dynamic video thumbnail as fallback */}
-          <DynamicVideoThumbnail
-            videoUrl={video.fileUrl}
-            title={video.title}
-            className={`w-full h-full cursor-pointer ${video.thumbnailUrl ? "hidden" : ""}`}
-            fallbackSrc="/placeholder.svg"
-            timeInSeconds={1}
+          {/* ✅ Use validated thumbnail URL with proper fallback */}
+          <img
+            src={
+              validThumbnailUrl ||
+              "https://images.unsplash.com/photo-1611162617474-5b21e879e113?w=480&h=270&fit=crop&crop=center"
+            }
+            alt={video.title}
+            className="w-full h-full object-cover cursor-pointer"
+            onError={(e) => {
+              const target = e.target as HTMLImageElement
+              target.src =
+                "https://images.unsplash.com/photo-1611162617474-5b21e879e113?w=480&h=270&fit=crop&crop=center"
+              setThumbnailError(true)
+            }}
           />
 
           {/* Play/Pause button - only show on hover */}
@@ -499,7 +520,7 @@ function CreatorUploadCard({ video }: CreatorUploadCardProps) {
 
           {/* Action buttons overlay */}
           <div className="absolute bottom-2 left-2 right-2 z-30 flex items-center justify-between opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-            {/* Download button - show lock when limit reached */}
+            {/* Download button */}
             <button
               className={`${
                 hasReachedLimit && !isProUser ? "bg-zinc-800/90 cursor-not-allowed" : "bg-black/70 hover:bg-black/90"
@@ -542,6 +563,5 @@ function CreatorUploadCard({ video }: CreatorUploadCardProps) {
   )
 }
 
-// Export both as default and named export
 export default CreatorUploadCard
 export { CreatorUploadCard }
