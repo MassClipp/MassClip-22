@@ -55,6 +55,7 @@ interface UploadType {
   mimeType?: string
   createdAt: Date
   updatedAt: Date
+  thumbnailUrl?: string // Add thumbnailUrl to the type
 }
 
 interface UploadProgress {
@@ -298,6 +299,9 @@ const UploadsPage = () => {
         const { uploadUrl, publicUrl } = await uploadResponse.json()
         console.log(`✅ [File Upload] Got upload URL and public URL: ${publicUrl}`)
 
+        // Generate thumbnail URL
+        const thumbnailUrl = `/placeholder.svg?height=720&width=1280&query=${encodeURIComponent(uploadItem.file.name)}`
+
         // Update progress
         setUploadProgress((prev) => prev.map((item) => (item.id === uploadItem.id ? { ...item, progress: 30 } : item)))
 
@@ -340,6 +344,7 @@ const UploadsPage = () => {
             title: uploadItem.file.name.split(".")[0], // Remove extension for title
             size: uploadItem.file.size,
             mimeType: uploadItem.file.type,
+            thumbnailUrl: thumbnailUrl, // Include thumbnail URL
           }),
         })
 
@@ -432,10 +437,6 @@ const UploadsPage = () => {
 
       setUploads((prev) => prev.filter((upload) => upload.id !== id))
       setSelectedUpload(null)
-
-      // Trigger creator uploads refresh after deletion
-      triggerCreatorUploadsRefresh()
-
       toast({
         title: "Upload Deleted",
         description: "Upload deleted successfully",
@@ -476,11 +477,6 @@ const UploadsPage = () => {
       )
       setSelectedUpload((prev) => (prev ? { ...prev, title: newTitle } : null))
       setIsRenameDialogOpen(false)
-
-      // IMPORTANT: Trigger creator uploads refresh after rename
-      console.log("🔄 [Uploads] Video renamed, triggering creator uploads refresh...")
-      triggerCreatorUploadsRefresh()
-
       toast({
         title: "Upload Renamed",
         description: "Upload renamed successfully",
@@ -529,10 +525,6 @@ const UploadsPage = () => {
 
       setShowAddToFreeContentDialog(false)
       setSelectedUploads([])
-
-      // Trigger creator uploads refresh after adding to free content
-      triggerCreatorUploadsRefresh()
-
       toast({
         title: "Added to Free Content",
         description: "Selected uploads added to free content successfully",

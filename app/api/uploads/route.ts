@@ -158,7 +158,7 @@ export async function POST(request: NextRequest) {
     }
 
     const { fileUrl, filename, title, size, mimeType, r2Key, thumbnailUrl } = body
-    console.log("🔍 [Uploads API] Upload data:", { fileUrl, filename, title, size, mimeType, r2Key })
+    console.log("🔍 [Uploads API] Upload data:", { fileUrl, filename, title, size, mimeType, r2Key, thumbnailUrl })
 
     if (!filename) {
       return NextResponse.json({ error: "Missing required field: filename" }, { status: 400 })

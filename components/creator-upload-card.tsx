@@ -429,6 +429,8 @@ function CreatorUploadCard({ video }: CreatorUploadCardProps) {
     }
   }
 
+  const thumbnail = video.thumbnailUrl || "/placeholder.svg"
+
   return (
     <div className="flex-shrink-0 w-[160px]">
       <div
@@ -456,19 +458,15 @@ function CreatorUploadCard({ video }: CreatorUploadCardProps) {
           </div>
 
           {/* Raw video element - this will show the first frame as thumbnail */}
-          <video
-            ref={videoRef}
+          <img
+            src={thumbnail || "/placeholder.svg"}
+            alt={video.title}
             className="w-full h-full object-cover cursor-pointer"
-            preload="metadata"
-            muted={false}
-            playsInline
-            onEnded={handleVideoEnd}
-            onClick={togglePlay}
-            controls={false}
-          >
-            <source src={video.fileUrl} type="video/mp4" />
-            Your browser does not support the video tag.
-          </video>
+            onError={(e) => {
+              const target = e.target as HTMLImageElement
+              target.src = "/placeholder.svg" // Fallback image
+            }}
+          />
 
           {/* Play/Pause button - only show on hover */}
           <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-20">

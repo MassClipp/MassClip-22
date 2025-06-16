@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from "react"
 import { useAuthContext } from "@/contexts/auth-context"
-import { useQueryClient } from "@tanstack/react-query"
 
 interface Video {
   id: string
@@ -30,7 +29,6 @@ export function useDiscoverContent(): UseDiscoverContentReturn {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const { user } = useAuthContext()
-  const queryClient = useQueryClient()
 
   const fetchDiscoverContent = async () => {
     try {
@@ -44,8 +42,6 @@ export function useDiscoverContent(): UseDiscoverContentReturn {
         headers: {
           "Content-Type": "application/json",
           ...(user?.uid && { Authorization: `Bearer ${user.uid}` }),
-          // Add cache-busting header to ensure fresh data
-          "Cache-Control": "no-cache",
         },
       })
 
@@ -69,22 +65,6 @@ export function useDiscoverContent(): UseDiscoverContentReturn {
 
   useEffect(() => {
     fetchDiscoverContent()
-  }, [])
-
-  // Listen for creator uploads updates
-  useEffect(() => {
-    const handleCreatorUploadsUpdate = () => {
-      console.log("🔄 [useDiscoverContent] Received creator uploads update event, refetching...")
-      fetchDiscoverContent()
-    }
-
-    if (typeof window !== "undefined") {
-      window.addEventListener("creatorUploadsUpdated", handleCreatorUploadsUpdate)
-
-      return () => {
-        window.removeEventListener("creatorUploadsUpdated", handleCreatorUploadsUpdate)
-      }
-    }
   }, [])
 
   return {
