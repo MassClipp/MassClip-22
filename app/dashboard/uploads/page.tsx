@@ -43,7 +43,6 @@ import AudioCard from "@/components/audio-card"
 import { useSession } from "next-auth/react"
 import { useRouter } from "next/navigation"
 import { useQueryClient } from "@tanstack/react-query"
-import { VideoThumbnailGenerator } from "@/lib/video-thumbnail-generator"
 
 interface UploadType {
   id: string
@@ -56,7 +55,6 @@ interface UploadType {
   mimeType?: string
   createdAt: Date
   updatedAt: Date
-  thumbnailUrl?: string
 }
 
 interface UploadProgress {
@@ -121,20 +119,6 @@ const UploadsPage = () => {
   const [username, setUsername] = useState<string | null>(null)
   const [selectedUploads, setSelectedUploads] = useState<string[]>([])
   const [showAddToFreeContentDialog, setShowAddToFreeContentDialog] = useState(false)
-
-  // Function to trigger creator uploads refresh
-  const triggerCreatorUploadsRefresh = useCallback(() => {
-    console.log("🔄 [Uploads] Triggering creator uploads refresh...")
-
-    // Invalidate React Query cache for creator uploads
-    queryClient.invalidateQueries({ queryKey: ["creator-uploads"] })
-    queryClient.invalidateQueries({ queryKey: ["discover-content"] })
-
-    // Dispatch custom event for other components to listen to
-    if (typeof window !== "undefined") {
-      window.dispatchEvent(new CustomEvent("creatorUploadsUpdated"))
-    }
-  }, [queryClient])
 
   // Check if user has a profile
   const checkUserProfile = useCallback(async () => {
@@ -324,64 +308,8 @@ const UploadsPage = () => {
 
         // Update progress
         setUploadProgress((prev) =>
-          prev.map((item) => (item.id === uploadItem.id ? { ...item, progress: 50, status: "processing" } : item)),
+          prev.map((item) => (item.id === uploadItem.id ? { ...item, progress: 70, status: "processing" } : item)),
         )
-
-        // Generate thumbnail for video files
-        let thumbnailUrl = null
-        if (uploadItem.file.type.startsWith("video/")) {
-          try {
-            console.log(`🔍 [File Upload] Generating thumbnail for video...`)
-
-            // Try client-side thumbnail generation first
-            try {
-              const thumbnailDataUrl = await VideoThumbnailGenerator.generateThumbnailFromFile(uploadItem.file, 1)
-              thumbnailUrl = await VideoThumbnailGenerator.uploadThumbnail(
-                thumbnailDataUrl,
-                uploadItem.file.name,
-                token,
-              )
-              console.log(`✅ [File Upload] Client-side thumbnail generated and uploaded: ${thumbnailUrl}`)
-            } catch (clientError) {
-              console.error("⚠️ [File Upload] Client-side thumbnail generation failed:", clientError)
-
-              // Fallback to server-side placeholder
-              try {
-                const thumbnailResponse = await fetch("/api/generate-thumbnail", {
-                  method: "POST",
-                  headers: {
-                    "Content-Type": "application/json",
-                    Authorization: `Bearer ${token}`,
-                  },
-                  body: JSON.stringify({
-                    videoUrl: publicUrl,
-                    filename: uploadItem.file.name,
-                  }),
-                })
-
-                if (thumbnailResponse.ok) {
-                  const thumbnailData = await thumbnailResponse.json()
-                  thumbnailUrl = thumbnailData.thumbnailUrl
-                  console.log(`✅ [File Upload] Server-side thumbnail generated: ${thumbnailUrl}`)
-                }
-              } catch (serverError) {
-                console.error("⚠️ [File Upload] Server-side thumbnail generation also failed:", serverError)
-              }
-            }
-          } catch (thumbnailError) {
-            console.error("⚠️ [File Upload] All thumbnail generation methods failed:", thumbnailError)
-            // Continue without thumbnail - we'll generate it dynamically later
-          }
-        }
-
-        // Ensure we always have some kind of thumbnail for videos
-        if (uploadItem.file.type.startsWith("video/") && !thumbnailUrl) {
-          thumbnailUrl = `/placeholder.svg?height=720&width=1280&query=${encodeURIComponent(uploadItem.file.name)}`
-          console.log(`🔍 [File Upload] Using fallback placeholder thumbnail: ${thumbnailUrl}`)
-        }
-
-        // Update progress
-        setUploadProgress((prev) => prev.map((item) => (item.id === uploadItem.id ? { ...item, progress: 70 } : item)))
 
         // Create upload record in database
         console.log(`🔍 [File Upload] Creating database record...`)
@@ -398,7 +326,6 @@ const UploadsPage = () => {
             title: uploadItem.file.name.split(".")[0], // Remove extension for title
             size: uploadItem.file.size,
             mimeType: uploadItem.file.type,
-            thumbnailUrl: thumbnailUrl, // Include generated thumbnail URL
           }),
         })
 
@@ -418,9 +345,8 @@ const UploadsPage = () => {
           prev.map((item) => (item.id === uploadItem.id ? { ...item, progress: 100, status: "completed" } : item)),
         )
 
-        // Refresh uploads and trigger creator uploads refresh
+        // Refresh uploads
         queryClient.invalidateQueries({ queryKey: ["uploads"] })
-        triggerCreatorUploadsRefresh()
 
         toast({
           title: "Upload Complete",
@@ -757,11 +683,7 @@ const UploadsPage = () => {
                   ) : upload.type === "audio" ? (
                     <AudioCard fileUrl={upload.fileUrl} />
                   ) : upload.type === "image" ? (
-                    <img
-                      src={upload.fileUrl || "/placeholder.svg"}
-                      alt={upload.title}
-                      className="w-full h-32 object-cover rounded-md"
-                    />
+                    <img src={upload.fileUrl} alt={upload.title} className="w-full h-32 object-cover rounded-md" />
                   ) : (
                     <div className="w-full h-32 flex items-center justify-center bg-gray-100 rounded-md">
                       <File className="h-12 w-12 text-gray-500" />

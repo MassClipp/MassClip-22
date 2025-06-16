@@ -18,6 +18,7 @@ async function verifyAuthToken(request: NextRequest) {
       return null
     }
 
+    // Import auth here to avoid initialization issues
     const { getAuth } = await import("firebase-admin/auth")
     const decodedToken = await getAuth().verifyIdToken(token)
     console.log("✅ [Auth] Token verified for user:", decodedToken.uid)
@@ -37,11 +38,13 @@ function generatePublicURL(filename: string, r2Key?: string): string {
     return `${publicDomain}/${key}`
   }
 
+  // Fallback to a constructed URL
   const bucketName = process.env.R2_BUCKET_NAME || process.env.CLOUDFLARE_R2_BUCKET_NAME
   if (bucketName) {
     return `https://pub-${bucketName}.r2.dev/${filename}`
   }
 
+  // Last resort fallback
   return `https://pub-f0fde4a9c6fb4bc7a1f5f9677ef9a304.r2.dev/${filename}`
 }
 
@@ -69,6 +72,7 @@ export async function GET(request: NextRequest) {
     console.log(`🔍 [Uploads API] Fetching uploads for user: ${user.uid}`)
 
     try {
+      // Simple query by UID only to avoid index requirements
       const uploadsRef = db.collection("uploads")
       const query = uploadsRef.where("uid", "==", user.uid)
 
@@ -77,14 +81,6 @@ export async function GET(request: NextRequest) {
 
       let uploads = snapshot.docs.map((doc) => {
         const data = doc.data()
-
-        // ✅ BONUS: Log warning if thumbnailUrl is missing or invalid
-        if (!data.thumbnailUrl || data.thumbnailUrl.includes("/placeholder.svg")) {
-          console.warn(
-            `⚠️ [Uploads API] Video ${doc.id} (${data.filename}) has invalid thumbnailUrl: ${data.thumbnailUrl}`,
-          )
-        }
-
         return {
           id: doc.id,
           ...data,
@@ -136,7 +132,7 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// POST /api/uploads - Create new upload record with proper thumbnail generation
+// POST /api/uploads - Create new upload record with proper metadata
 export async function POST(request: NextRequest) {
   try {
     console.log("🔍 [Uploads API] POST request received")
@@ -162,8 +158,7 @@ export async function POST(request: NextRequest) {
     }
 
     const { fileUrl, filename, title, size, mimeType, r2Key, thumbnailUrl } = body
-
-    console.log("🔍 [Uploads API] Upload data:", { fileUrl, filename, title, size, mimeType, r2Key, thumbnailUrl })
+    console.log("🔍 [Uploads API] Upload data:", { fileUrl, filename, title, size, mimeType, r2Key })
 
     if (!filename) {
       return NextResponse.json({ error: "Missing required field: filename" }, { status: 400 })
@@ -181,25 +176,6 @@ export async function POST(request: NextRequest) {
       else if (mimeType.includes("pdf") || mimeType.includes("document")) contentType = "document"
     }
 
-    // 🔧 Generate proper thumbnail URL for videos
-    let finalThumbnailUrl = thumbnailUrl
-
-    if (contentType === "video") {
-      console.log("🖼️ [Uploads API] Video detected, ensuring thumbnail exists")
-
-      // If no thumbnail provided, use default
-      if (!finalThumbnailUrl) {
-        finalThumbnailUrl = "/default-thumbnail.png"
-        console.log("📷 [Uploads API] Using default thumbnail for video")
-      }
-
-      // Validate provided thumbnail URL
-      else if (finalThumbnailUrl.includes("/placeholder.svg")) {
-        finalThumbnailUrl = "/default-thumbnail.png"
-        console.log("📷 [Uploads API] Replaced invalid placeholder with default thumbnail")
-      }
-    }
-
     // Create comprehensive metadata object
     const metadata = {
       uid: user.uid,
@@ -212,8 +188,8 @@ export async function POST(request: NextRequest) {
       mimeType: mimeType || "application/octet-stream",
       contentType,
 
-      // ✅ Always include a valid thumbnailUrl for videos
-      thumbnailUrl: finalThumbnailUrl,
+      // Optional fields
+      thumbnailUrl: thumbnailUrl || null,
       r2Key: r2Key || filename,
 
       // Legacy compatibility
