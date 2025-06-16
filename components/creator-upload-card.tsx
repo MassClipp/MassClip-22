@@ -24,6 +24,7 @@ import { useUserPlan } from "@/hooks/use-user-plan"
 import { useDownloadLimit } from "@/contexts/download-limit-context"
 import { useRouter } from "next/navigation"
 import { TrackingService } from "@/lib/tracking-service"
+import { DynamicVideoThumbnail } from "@/components/dynamic-video-thumbnail"
 
 interface CreatorUploadCardProps {
   video: {
@@ -429,8 +430,6 @@ function CreatorUploadCard({ video }: CreatorUploadCardProps) {
     }
   }
 
-  const thumbnail = video.thumbnailUrl || "/placeholder.svg"
-
   return (
     <div className="flex-shrink-0 w-[160px]">
       <div
@@ -457,15 +456,31 @@ function CreatorUploadCard({ video }: CreatorUploadCardProps) {
             </button>
           </div>
 
-          {/* Raw video element - this will show the first frame as thumbnail */}
-          <img
-            src={thumbnail || "/placeholder.svg"}
-            alt={video.title}
-            className="w-full h-full object-cover cursor-pointer"
-            onError={(e) => {
-              const target = e.target as HTMLImageElement
-              target.src = "/placeholder.svg" // Fallback image
-            }}
+          {/* Dynamic thumbnail with fallback to video snapshot */}
+          {video.thumbnailUrl ? (
+            <img
+              src={video.thumbnailUrl || "/placeholder.svg"}
+              alt={video.title}
+              className="w-full h-full object-cover cursor-pointer"
+              onError={(e) => {
+                const target = e.target as HTMLImageElement
+                target.style.display = "none"
+                // Show dynamic thumbnail as fallback
+                const dynamicThumbnail = target.nextElementSibling as HTMLElement
+                if (dynamicThumbnail) {
+                  dynamicThumbnail.style.display = "block"
+                }
+              }}
+            />
+          ) : null}
+
+          {/* Dynamic video thumbnail as fallback */}
+          <DynamicVideoThumbnail
+            videoUrl={video.fileUrl}
+            title={video.title}
+            className={`w-full h-full cursor-pointer ${video.thumbnailUrl ? "hidden" : ""}`}
+            fallbackSrc="/placeholder.svg"
+            timeInSeconds={1}
           />
 
           {/* Play/Pause button - only show on hover */}

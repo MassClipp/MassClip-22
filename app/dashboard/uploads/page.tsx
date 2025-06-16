@@ -43,6 +43,7 @@ import AudioCard from "@/components/audio-card"
 import { useSession } from "next-auth/react"
 import { useRouter } from "next/navigation"
 import { useQueryClient } from "@tanstack/react-query"
+import { VideoThumbnailGenerator } from "@/lib/video-thumbnail-generator"
 
 interface UploadType {
   id: string
@@ -55,7 +56,7 @@ interface UploadType {
   mimeType?: string
   createdAt: Date
   updatedAt: Date
-  thumbnailUrl?: string // Add thumbnailUrl to the type
+  thumbnailUrl?: string
 }
 
 interface UploadProgress {
@@ -299,9 +300,6 @@ const UploadsPage = () => {
         const { uploadUrl, publicUrl } = await uploadResponse.json()
         console.log(`✅ [File Upload] Got upload URL and public URL: ${publicUrl}`)
 
-        // Generate thumbnail URL
-        const thumbnailUrl = `/placeholder.svg?height=720&width=1280&query=${encodeURIComponent(uploadItem.file.name)}`
-
         // Update progress
         setUploadProgress((prev) => prev.map((item) => (item.id === uploadItem.id ? { ...item, progress: 30 } : item)))
 
@@ -326,8 +324,25 @@ const UploadsPage = () => {
 
         // Update progress
         setUploadProgress((prev) =>
-          prev.map((item) => (item.id === uploadItem.id ? { ...item, progress: 70, status: "processing" } : item)),
+          prev.map((item) => (item.id === uploadItem.id ? { ...item, progress: 50, status: "processing" } : item)),
         )
+
+        // Generate thumbnail for video files
+        let thumbnailUrl = null
+        if (uploadItem.file.type.startsWith("video/")) {
+          try {
+            console.log(`🔍 [File Upload] Generating thumbnail for video...`)
+            const thumbnailDataUrl = await VideoThumbnailGenerator.generateThumbnailFromFile(uploadItem.file, 1)
+            thumbnailUrl = await VideoThumbnailGenerator.uploadThumbnail(thumbnailDataUrl, uploadItem.file.name, token)
+            console.log(`✅ [File Upload] Thumbnail generated and uploaded: ${thumbnailUrl}`)
+          } catch (thumbnailError) {
+            console.error("⚠️ [File Upload] Thumbnail generation failed:", thumbnailError)
+            // Continue without thumbnail - we'll generate it dynamically later
+          }
+        }
+
+        // Update progress
+        setUploadProgress((prev) => prev.map((item) => (item.id === uploadItem.id ? { ...item, progress: 70 } : item)))
 
         // Create upload record in database
         console.log(`🔍 [File Upload] Creating database record...`)
@@ -344,7 +359,7 @@ const UploadsPage = () => {
             title: uploadItem.file.name.split(".")[0], // Remove extension for title
             size: uploadItem.file.size,
             mimeType: uploadItem.file.type,
-            thumbnailUrl: thumbnailUrl, // Include thumbnail URL
+            thumbnailUrl: thumbnailUrl, // Include generated thumbnail URL
           }),
         })
 

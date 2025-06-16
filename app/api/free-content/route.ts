@@ -27,6 +27,7 @@ export async function GET(request: NextRequest) {
         id: doc.id,
         title: data.title || "Untitled",
         fileUrl: data.fileUrl || "",
+        thumbnailUrl: data.thumbnailUrl || null,
         type: data.type || "unknown",
         size: data.size || 0,
         addedAt: data.addedAt?.toDate?.() || new Date(),
@@ -173,7 +174,7 @@ export async function POST(request: NextRequest) {
           fileUrl: fileUrl,
           type: getContentType(upload.mimeType || upload.type || ""),
           size: upload.size || upload.fileSize || 0,
-          thumbnailUrl: upload.thumbnailUrl || upload.thumbnail || "",
+          thumbnailUrl: upload.thumbnailUrl || null, // Include thumbnailUrl from original upload
           mimeType: upload.mimeType || upload.type || "",
           duration: upload.duration || 0,
           addedAt: new Date(),
