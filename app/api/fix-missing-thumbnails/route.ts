@@ -1,86 +1,86 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { initializeFirebaseAdmin, db } from "@/lib/firebase/firebaseAdmin"
-import { getAuth } from "firebase-admin/auth"
+import {
+  generateThumbnailFromVideoUrl,
+  generateFallbackThumbnail,
+  isCloudflareStreamUrl,
+} from "@/lib/cloudflare-thumbnail-utils"
 
 // Initialize Firebase Admin
 initializeFirebaseAdmin()
 
 export async function POST(request: NextRequest) {
   try {
-    console.log("🔍 [Fix Thumbnails] POST request received")
+    console.log("🔧 [Fix Thumbnails] Starting thumbnail fix process")
 
-    const authHeader = request.headers.get("authorization")
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
+    const { collection: targetCollection = "uploads" } = await request.json().catch(() => ({}))
 
-    const token = authHeader.split("Bearer ")[1]
-    const decodedToken = await getAuth().verifyIdToken(token)
-    const userId = decodedToken.uid
+    // Get all documents from the specified collection
+    const snapshot = await db.collection(targetCollection).get()
+    console.log(`🔍 [Fix Thumbnails] Found ${snapshot.docs.length} documents in ${targetCollection}`)
 
-    console.log("✅ [Fix Thumbnails] User authenticated:", userId)
-
-    // Find all video uploads without thumbnailUrl
-    const uploadsSnapshot = await db.collection("uploads").where("uid", "==", userId).where("type", "==", "video").get()
-
-    const uploadsToFix: any[] = []
-
-    uploadsSnapshot.docs.forEach((doc) => {
-      const data = doc.data()
-      if (!data.thumbnailUrl || data.thumbnailUrl === null) {
-        uploadsToFix.push({
-          id: doc.id,
-          ...data,
-        })
-      }
-    })
-
-    console.log(`🔍 [Fix Thumbnails] Found ${uploadsToFix.length} uploads without thumbnails`)
-
-    if (uploadsToFix.length === 0) {
-      return NextResponse.json({
-        success: true,
-        message: "No uploads need thumbnail fixes",
-        fixed: 0,
-      })
-    }
-
-    // Update uploads with placeholder thumbnails
-    const batch = db.batch()
     let fixedCount = 0
+    let skippedCount = 0
+    const errors: string[] = []
 
-    for (const upload of uploadsToFix) {
+    for (const doc of snapshot.docs) {
       try {
-        const placeholderThumbnail = `/placeholder.svg?height=720&width=1280&query=${encodeURIComponent(upload.filename || upload.title || "video")}`
+        const data = doc.data()
 
-        const uploadRef = db.collection("uploads").doc(upload.id)
-        batch.update(uploadRef, {
-          thumbnailUrl: placeholderThumbnail,
-          updatedAt: new Date(),
+        // Skip if already has thumbnail or not a video
+        if (data.thumbnailUrl || data.contentType !== "video" || data.type !== "video") {
+          skippedCount++
+          continue
+        }
+
+        // Skip if no fileUrl
+        if (!data.fileUrl) {
+          skippedCount++
+          continue
+        }
+
+        console.log(`🖼️ [Fix Thumbnails] Processing ${doc.id}: ${data.title || data.filename}`)
+
+        // Generate thumbnail URL
+        let thumbnailUrl = generateThumbnailFromVideoUrl(data.fileUrl)
+
+        if (!thumbnailUrl) {
+          // Generate fallback thumbnail
+          thumbnailUrl = generateFallbackThumbnail(data.filename, data.title)
+        }
+
+        // Update the document
+        await doc.ref.update({
+          thumbnailUrl,
+          isCloudflareStream: isCloudflareStreamUrl(data.fileUrl),
+          thumbnailFixedAt: new Date(),
         })
 
+        console.log(`✅ [Fix Thumbnails] Fixed ${doc.id} with thumbnail: ${thumbnailUrl}`)
         fixedCount++
-        console.log(`✅ [Fix Thumbnails] Prepared fix for: ${upload.title}`)
       } catch (error) {
-        console.error(`❌ [Fix Thumbnails] Error preparing fix for ${upload.id}:`, error)
+        const errorMsg = `Failed to fix ${doc.id}: ${error instanceof Error ? error.message : "Unknown error"}`
+        console.error(`❌ [Fix Thumbnails] ${errorMsg}`)
+        errors.push(errorMsg)
       }
     }
 
-    if (fixedCount > 0) {
-      await batch.commit()
-      console.log(`✅ [Fix Thumbnails] Successfully fixed ${fixedCount} uploads`)
-    }
+    console.log(
+      `🎉 [Fix Thumbnails] Complete! Fixed: ${fixedCount}, Skipped: ${skippedCount}, Errors: ${errors.length}`,
+    )
 
     return NextResponse.json({
       success: true,
-      message: `Fixed ${fixedCount} uploads with missing thumbnails`,
       fixed: fixedCount,
-      total: uploadsToFix.length,
+      skipped: skippedCount,
+      errors,
+      message: `Fixed ${fixedCount} thumbnails in ${targetCollection} collection`,
     })
   } catch (error) {
-    console.error("❌ [Fix Thumbnails] Error:", error)
+    console.error("❌ [Fix Thumbnails] Process failed:", error)
     return NextResponse.json(
       {
+        success: false,
         error: "Failed to fix thumbnails",
         details: error instanceof Error ? error.message : "Unknown error",
       },

@@ -1,5 +1,10 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { initializeFirebaseAdmin, db } from "@/lib/firebase/firebaseAdmin"
+import {
+  generateThumbnailFromVideoUrl,
+  generateFallbackThumbnail,
+  isCloudflareStreamUrl,
+} from "@/lib/cloudflare-thumbnail-utils"
 
 // Initialize Firebase Admin
 initializeFirebaseAdmin()
@@ -132,7 +137,7 @@ export async function GET(request: NextRequest) {
   }
 }
 
-// POST /api/uploads - Create new upload record with proper metadata
+// POST /api/uploads - Create new upload record with automatic thumbnail generation
 export async function POST(request: NextRequest) {
   try {
     console.log("🔍 [Uploads API] POST request received")
@@ -159,10 +164,6 @@ export async function POST(request: NextRequest) {
 
     const { fileUrl, filename, title, size, mimeType, r2Key, thumbnailUrl } = body
 
-    // If no thumbnailUrl provided and it's a video, we should have generated one during upload
-    // For now, let's ensure we always store the thumbnailUrl field, even if null
-    const finalThumbnailUrl = thumbnailUrl || null
-
     console.log("🔍 [Uploads API] Upload data:", { fileUrl, filename, title, size, mimeType, r2Key, thumbnailUrl })
 
     if (!filename) {
@@ -181,6 +182,25 @@ export async function POST(request: NextRequest) {
       else if (mimeType.includes("pdf") || mimeType.includes("document")) contentType = "document"
     }
 
+    // Generate thumbnail URL automatically
+    let finalThumbnailUrl = thumbnailUrl
+
+    if (!finalThumbnailUrl && contentType === "video") {
+      console.log("🖼️ [Thumbnail] Generating thumbnail URL for video:", publicURL)
+
+      // Try to generate Cloudflare Stream thumbnail
+      const cloudflareThumb = generateThumbnailFromVideoUrl(publicURL)
+
+      if (cloudflareThumb) {
+        finalThumbnailUrl = cloudflareThumb
+        console.log("✅ [Thumbnail] Generated Cloudflare Stream thumbnail:", finalThumbnailUrl)
+      } else {
+        // Generate fallback thumbnail for non-Stream videos
+        finalThumbnailUrl = generateFallbackThumbnail(filename, title)
+        console.log("📷 [Thumbnail] Generated fallback thumbnail:", finalThumbnailUrl)
+      }
+    }
+
     // Create comprehensive metadata object
     const metadata = {
       uid: user.uid,
@@ -193,9 +213,12 @@ export async function POST(request: NextRequest) {
       mimeType: mimeType || "application/octet-stream",
       contentType,
 
-      // Always include thumbnailUrl field
+      // Thumbnail URL (always included for videos)
       thumbnailUrl: finalThumbnailUrl,
       r2Key: r2Key || filename,
+
+      // Additional metadata for Cloudflare Stream videos
+      isCloudflareStream: isCloudflareStreamUrl(publicURL),
 
       // Legacy compatibility
       type: contentType,
