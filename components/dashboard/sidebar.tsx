@@ -4,7 +4,21 @@ import { useState, useEffect } from "react"
 import { usePathname, useRouter } from "next/navigation"
 import { useAuth } from "@/contexts/auth-context"
 import { cn } from "@/lib/utils"
-import { Home, Film, Upload, DollarSign, Settings, User, LogOut, Menu, X, Search, Package } from "lucide-react"
+import {
+  Home,
+  Film,
+  Upload,
+  DollarSign,
+  Settings,
+  User,
+  LogOut,
+  Menu,
+  X,
+  Search,
+  Package,
+  ChevronRight,
+  ChevronDown,
+} from "lucide-react"
 import { Button } from "@/components/ui/button"
 import Logo from "@/components/logo"
 import { doc, getDoc } from "firebase/firestore"
@@ -17,6 +31,7 @@ export default function DashboardSidebar() {
   const [isMobileOpen, setIsMobileOpen] = useState(false)
   const [stripeConnected, setStripeConnected] = useState(false)
   const [username, setUsername] = useState<string | null>(null)
+  const [expandedSections, setExpandedSections] = useState<string[]>([])
 
   // Fetch user data
   useEffect(() => {
@@ -38,65 +53,90 @@ export default function DashboardSidebar() {
     fetchUserData()
   }, [user])
 
-  const navItems = [
+  const navSections = [
     {
-      name: "Explore",
-      href: "/dashboard/explore",
-      icon: <Search className="h-5 w-5" />,
-      description: "Discover content from other creators",
+      id: "main",
+      title: "Main",
+      items: [
+        {
+          name: "Dashboard",
+          href: "/dashboard",
+          icon: <Home className="h-4 w-4" />,
+          exact: true,
+        },
+        {
+          name: "Explore",
+          href: "/dashboard/explore",
+          icon: <Search className="h-4 w-4" />,
+        },
+      ],
     },
     {
-      name: "Dashboard",
-      href: "/dashboard",
-      icon: <Home className="h-5 w-5" />,
-      exact: true,
+      id: "content",
+      title: "Content Management",
+      items: [
+        {
+          name: "Free Content",
+          href: "/dashboard/free-content",
+          icon: <Film className="h-4 w-4" />,
+        },
+        {
+          name: "My Uploads",
+          href: "/dashboard/uploads",
+          icon: <Package className="h-4 w-4" />,
+        },
+        {
+          name: "Upload Video",
+          href: "/dashboard/upload",
+          icon: <Upload className="h-4 w-4" />,
+        },
+        {
+          name: "Create Bundle",
+          href: "/dashboard/bundles",
+          icon: <Package className="h-4 w-4" />,
+        },
+      ],
     },
     {
-      name: "Free Content",
-      href: "/dashboard/free-content",
-      icon: <Film className="h-5 w-5" />,
-      description: "Manage your public free content",
+      id: "business",
+      title: "Business",
+      items: [
+        {
+          name: "Earnings",
+          href: "/dashboard/earnings",
+          icon: <DollarSign className="h-4 w-4" />,
+          alert: !stripeConnected,
+        },
+        {
+          name: "My Purchases",
+          href: "/dashboard/purchases",
+          icon: <Package className="h-4 w-4" />,
+        },
+      ],
     },
     {
-      name: "My Uploads",
-      href: "/dashboard/uploads",
-      icon: <Package className="h-5 w-5" />,
-      description: "Manage your content library",
-    },
-    {
-      name: "Create a Bundle",
-      href: "/dashboard/bundles",
-      icon: <Package className="h-5 w-5" />,
-      description: "Create and manage content bundles",
-    },
-    {
-      name: "Upload Video",
-      href: "/dashboard/upload",
-      icon: <Upload className="h-5 w-5" />,
-      description: "Quick video upload",
-    },
-    {
-      name: "Earnings",
-      href: "/dashboard/earnings",
-      icon: <DollarSign className="h-5 w-5" />,
-      alert: !stripeConnected,
-    },
-    {
-      name: "My Purchases",
-      href: "/dashboard/purchases",
-      icon: <Package className="h-5 w-5" />,
-    },
-    {
-      name: "Profile Settings",
-      href: "/dashboard/profile",
-      icon: <User className="h-5 w-5" />,
-    },
-    {
-      name: "Account Settings",
-      href: "/dashboard/settings",
-      icon: <Settings className="h-5 w-5" />,
+      id: "settings",
+      title: "Settings",
+      items: [
+        {
+          name: "Profile",
+          href: "/dashboard/profile",
+          icon: <User className="h-4 w-4" />,
+        },
+        {
+          name: "Account",
+          href: "/dashboard/settings",
+          icon: <Settings className="h-4 w-4" />,
+        },
+      ],
     },
   ]
+
+  const toggleSection = (sectionId: string) => {
+    setExpandedSections((prev) =>
+      prev.includes(sectionId) ? prev.filter((id) => id !== sectionId) : [...prev, sectionId],
+    )
+  }
 
   const handleNavigation = (href: string) => {
     setIsMobileOpen(false)
@@ -139,47 +179,70 @@ export default function DashboardSidebar() {
       <aside
         className={cn(
           "w-full md:w-64 bg-zinc-900/95 backdrop-blur-sm border-r border-zinc-800/50 md:flex flex-col h-screen md:h-auto sticky top-0 z-40 transition-all duration-300 ease-in-out",
-          isMobileOpen ? "fixed inset-y-0 left-0 flex w-80 max-w-[85vw] shadow-2xl" : "hidden md:flex",
+          isMobileOpen ? "fixed inset-y-0 left-0 flex w-72 max-w-[90vw] shadow-2xl" : "hidden md:flex",
         )}
       >
-        <div className="p-4 border-b border-zinc-800/50 flex items-center justify-between">
+        <div className="p-3 md:p-4 border-b border-zinc-800/50 flex items-center justify-between">
           <Logo href="/dashboard" size="sm" />
-          <Button variant="ghost" size="icon" className="md:hidden" onClick={() => setIsMobileOpen(false)}>
-            <X className="h-5 w-5" />
+          <Button variant="ghost" size="icon" className="md:hidden h-8 w-8" onClick={() => setIsMobileOpen(false)}>
+            <X className="h-4 w-4" />
           </Button>
         </div>
 
-        <nav className="flex-1 overflow-y-auto py-2 md:py-4">
-          <ul className="space-y-0.5 md:space-y-1 px-2">
-            {navItems.map((item) => {
-              const isActive = item.exact ? pathname === item.href : pathname.startsWith(item.href)
+        <nav className="flex-1 overflow-y-auto py-2">
+          {navSections.map((section) => (
+            <div key={section.id} className="mb-2">
+              <button
+                onClick={() => toggleSection(section.id)}
+                className="w-full flex items-center justify-between px-3 py-2 text-xs font-semibold text-zinc-500 hover:text-zinc-300 transition-colors"
+              >
+                <span>{section.title}</span>
+                {expandedSections.includes(section.id) ? (
+                  <ChevronDown className="h-3 w-3" />
+                ) : (
+                  <ChevronRight className="h-3 w-3" />
+                )}
+              </button>
 
-              return (
-                <li key={item.name}>
-                  <button
-                    onClick={() => handleNavigation(item.href)}
-                    className={cn(
-                      "w-full flex items-center gap-2 md:gap-3 px-2 md:px-3 py-2 md:py-2.5 rounded-lg text-xs md:text-sm font-medium transition-colors",
-                      isActive ? "bg-red-600/10 text-red-500" : "text-zinc-400 hover:text-white hover:bg-zinc-800/50",
-                    )}
-                  >
-                    <div className="flex-shrink-0">{item.icon}</div>
-                    <span className="truncate text-left">{item.name}</span>
-                    {item.alert && <span className="ml-auto flex h-2 w-2 rounded-full bg-red-500 flex-shrink-0"></span>}
-                  </button>
-                </li>
-              )
-            })}
-          </ul>
+              {expandedSections.includes(section.id) && (
+                <ul className="space-y-0.5 px-2 pb-2">
+                  {section.items.map((item) => {
+                    const isActive = item.exact ? pathname === item.href : pathname.startsWith(item.href)
+
+                    return (
+                      <li key={item.name}>
+                        <button
+                          onClick={() => handleNavigation(item.href)}
+                          className={cn(
+                            "w-full flex items-center gap-2 px-3 py-2 rounded-md text-xs font-medium transition-colors",
+                            isActive
+                              ? "bg-red-600/10 text-red-500"
+                              : "text-zinc-400 hover:text-white hover:bg-zinc-800/50",
+                          )}
+                        >
+                          <div className="flex-shrink-0">{item.icon}</div>
+                          <span className="truncate text-left">{item.name}</span>
+                          {item.alert && (
+                            <span className="ml-auto flex h-1.5 w-1.5 rounded-full bg-red-500 flex-shrink-0"></span>
+                          )}
+                        </button>
+                      </li>
+                    )
+                  })}
+                </ul>
+              )}
+            </div>
+          ))}
         </nav>
 
-        <div className="p-4 border-t border-zinc-800/50">
+        <div className="p-3 md:p-4 border-t border-zinc-800/50">
           <Button
             variant="ghost"
-            className="w-full justify-start text-zinc-400 hover:text-white hover:bg-zinc-800/50"
+            size="sm"
+            className="w-full justify-start text-zinc-400 hover:text-white hover:bg-zinc-800/50 text-xs"
             onClick={handleSignOut}
           >
-            <LogOut className="h-5 w-5 mr-3" />
+            <LogOut className="h-4 w-4 mr-2" />
             Sign Out
           </Button>
         </div>
