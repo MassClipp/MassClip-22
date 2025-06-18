@@ -134,7 +134,7 @@ export default function DashboardSidebar() {
       <aside
         className={cn(
           "w-full md:w-64 bg-zinc-900/80 backdrop-blur-sm border-r border-zinc-800/50 md:flex flex-col h-screen md:h-auto sticky top-0 z-40 transition-all duration-300 ease-in-out",
-          isMobileOpen ? "fixed inset-0 flex" : "hidden md:flex",
+          isMobileOpen ? "fixed inset-0 flex w-full" : "hidden md:flex",
         )}
       >
         <div className="p-4 border-b border-zinc-800/50 flex items-center justify-between">
@@ -159,7 +159,7 @@ export default function DashboardSidebar() {
                     )}
                   >
                     {item.icon}
-                    <span>{item.name}</span>
+                    <span className="truncate">{item.name}</span>
                     {item.alert && <span className="ml-auto flex h-2 w-2 rounded-full bg-red-500"></span>}
                   </button>
                 </li>
