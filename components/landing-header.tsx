@@ -6,11 +6,13 @@ import { Button } from "@/components/ui/button"
 import { Menu, X, ChevronRight, Instagram } from "lucide-react"
 import Logo from "@/components/logo"
 import { useScrollLock } from "@/hooks/use-scroll-lock"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 
 export default function LandingHeader() {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const [scrolled, setScrolled] = useState(false)
   const mobileMenuRef = useRef<HTMLDivElement>(null)
+  const [showBetaModal, setShowBetaModal] = useState(false)
 
   // Lock scroll when menu is open
   useScrollLock(isMenuOpen)
@@ -55,6 +57,14 @@ export default function LandingHeader() {
       <div className="container mx-auto px-4 flex items-center justify-between">
         <div className="flex items-center">
           <Logo href="/" size="md" />
+
+          {/* Beta Tag */}
+          <button
+            onClick={() => setShowBetaModal(true)}
+            className="ml-3 px-2 py-1 text-xs font-medium bg-gradient-to-r from-yellow-400 to-yellow-600 text-black rounded-full hover:from-yellow-300 hover:to-yellow-500 transition-all duration-200 transform hover:scale-105"
+          >
+            BETA
+          </button>
 
           {/* Desktop Navigation */}
           <nav className="hidden md:flex items-center ml-10 space-x-8">
@@ -174,6 +184,28 @@ export default function LandingHeader() {
           </div>
         </div>
       </div>
+
+      {/* Beta Modal */}
+      <Dialog open={showBetaModal} onOpenChange={setShowBetaModal}>
+        <DialogContent className="sm:max-w-md bg-black border border-white/10">
+          <DialogHeader>
+            <DialogTitle className="text-white text-center">🚀 Welcome to MassClip Beta</DialogTitle>
+          </DialogHeader>
+          <div className="text-center py-4">
+            <p className="text-white/80 mb-4">
+              We're in beta! Thank you for your patience as this platform grows and evolves.
+            </p>
+            <p className="text-white/60 text-sm">
+              Your feedback helps us build something amazing.
+              <br />
+              Reach out to us at{" "}
+              <a href="mailto:john@massclip.pro" className="text-crimson hover:text-crimson-light transition-colors">
+                john@massclip.pro
+              </a>
+            </p>
+          </div>
+        </DialogContent>
+      </Dialog>
     </header>
   )
 }
