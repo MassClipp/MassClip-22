@@ -53,6 +53,31 @@ export default function DashboardSidebar() {
     fetchUserData()
   }, [user])
 
+  // Close sidebar when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (isMobileOpen && event.target instanceof Element) {
+        const sidebar = document.querySelector("[data-sidebar]")
+        if (sidebar && !sidebar.contains(event.target)) {
+          setIsMobileOpen(false)
+        }
+      }
+    }
+
+    if (isMobileOpen) {
+      document.addEventListener("mousedown", handleClickOutside)
+      // Prevent body scroll when sidebar is open
+      document.body.style.overflow = "hidden"
+    } else {
+      document.body.style.overflow = "unset"
+    }
+
+    return () => {
+      document.removeEventListener("mousedown", handleClickOutside)
+      document.body.style.overflow = "unset"
+    }
+  }, [isMobileOpen])
+
   const navSections = [
     {
       id: "main",
@@ -156,31 +181,6 @@ export default function DashboardSidebar() {
   const toggleMobileSidebar = () => {
     setIsMobileOpen(!isMobileOpen)
   }
-
-  // Close sidebar when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (isMobileOpen && event.target instanceof Element) {
-        const sidebar = document.querySelector("[data-sidebar]")
-        if (sidebar && !sidebar.contains(event.target)) {
-          setIsMobileOpen(false)
-        }
-      }
-    }
-
-    if (isMobileOpen) {
-      document.addEventListener("mousedown", handleClickOutside)
-      // Prevent body scroll when sidebar is open
-      document.body.style.overflow = "hidden"
-    } else {
-      document.body.style.overflow = "unset"
-    }
-
-    return () => {
-      document.removeEventListener("mousedown", handleClickOutside)
-      document.body.style.overflow = "unset"
-    }
-  }, [isMobileOpen])
 
   return (
     <>
