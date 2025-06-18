@@ -58,14 +58,6 @@ export default function LandingHeader() {
         <div className="flex items-center">
           <Logo href="/" size="md" />
 
-          {/* Beta Tag */}
-          <button
-            onClick={() => setShowBetaModal(true)}
-            className="ml-3 px-2 py-1 text-xs font-medium bg-gradient-to-r from-yellow-400 to-yellow-600 text-black rounded-full hover:from-yellow-300 hover:to-yellow-500 transition-all duration-200 transform hover:scale-105"
-          >
-            BETA
-          </button>
-
           {/* Desktop Navigation */}
           <nav className="hidden md:flex items-center ml-10 space-x-8">
             {navigationItems.map((item) => (
@@ -78,6 +70,16 @@ export default function LandingHeader() {
               </Link>
             ))}
           </nav>
+        </div>
+
+        {/* Beta Tag - Centered */}
+        <div className="hidden md:flex absolute left-1/2 transform -translate-x-1/2">
+          <button
+            onClick={() => setShowBetaModal(true)}
+            className="px-1.5 py-0.5 text-[10px] font-semibold bg-gradient-to-r from-yellow-400 to-yellow-600 text-black rounded-full hover:from-yellow-300 hover:to-yellow-500 transition-all duration-200 transform hover:scale-105"
+          >
+            BETA
+          </button>
         </div>
 
         {/* Desktop CTA */}
@@ -124,7 +126,16 @@ export default function LandingHeader() {
         <div className="flex flex-col h-full">
           {/* Menu Header */}
           <div className="flex items-center justify-between p-5 border-b border-zinc-800 bg-black">
-            <Logo href="/" size="sm" />
+            <div className="flex items-center gap-2">
+              <Logo href="/" size="sm" />
+              {/* Beta Tag for Mobile */}
+              <button
+                onClick={() => setShowBetaModal(true)}
+                className="px-1.5 py-0.5 text-[10px] font-semibold bg-gradient-to-r from-yellow-400 to-yellow-600 text-black rounded-full hover:from-yellow-300 hover:to-yellow-500 transition-all duration-200"
+              >
+                BETA
+              </button>
+            </div>
             <button
               className="flex items-center justify-center w-8 h-8 text-white/80 hover:text-white bg-zinc-800/50 rounded-full"
               onClick={() => setIsMenuOpen(false)}
