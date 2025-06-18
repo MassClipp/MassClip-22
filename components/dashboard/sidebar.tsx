@@ -130,11 +130,16 @@ export default function DashboardSidebar() {
         </Button>
       </div>
 
+      {/* Mobile backdrop */}
+      {isMobileOpen && (
+        <div className="fixed inset-0 bg-black/50 z-30 md:hidden" onClick={() => setIsMobileOpen(false)} />
+      )}
+
       {/* Sidebar */}
       <aside
         className={cn(
-          "w-full md:w-64 bg-zinc-900/80 backdrop-blur-sm border-r border-zinc-800/50 md:flex flex-col h-screen md:h-auto sticky top-0 z-40 transition-all duration-300 ease-in-out",
-          isMobileOpen ? "fixed inset-0 flex w-full" : "hidden md:flex",
+          "w-full md:w-64 bg-zinc-900/95 backdrop-blur-sm border-r border-zinc-800/50 md:flex flex-col h-screen md:h-auto sticky top-0 z-40 transition-all duration-300 ease-in-out",
+          isMobileOpen ? "fixed inset-y-0 left-0 flex w-80 max-w-[85vw] shadow-2xl" : "hidden md:flex",
         )}
       >
         <div className="p-4 border-b border-zinc-800/50 flex items-center justify-between">
@@ -144,8 +149,8 @@ export default function DashboardSidebar() {
           </Button>
         </div>
 
-        <nav className="flex-1 overflow-y-auto py-4">
-          <ul className="space-y-1 px-2">
+        <nav className="flex-1 overflow-y-auto py-2 md:py-4">
+          <ul className="space-y-0.5 md:space-y-1 px-2">
             {navItems.map((item) => {
               const isActive = item.exact ? pathname === item.href : pathname.startsWith(item.href)
 
@@ -154,13 +159,13 @@ export default function DashboardSidebar() {
                   <button
                     onClick={() => handleNavigation(item.href)}
                     className={cn(
-                      "w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors",
+                      "w-full flex items-center gap-2 md:gap-3 px-2 md:px-3 py-2 md:py-2.5 rounded-lg text-xs md:text-sm font-medium transition-colors",
                       isActive ? "bg-red-600/10 text-red-500" : "text-zinc-400 hover:text-white hover:bg-zinc-800/50",
                     )}
                   >
-                    {item.icon}
-                    <span className="truncate">{item.name}</span>
-                    {item.alert && <span className="ml-auto flex h-2 w-2 rounded-full bg-red-500"></span>}
+                    <div className="flex-shrink-0">{item.icon}</div>
+                    <span className="truncate text-left">{item.name}</span>
+                    {item.alert && <span className="ml-auto flex h-2 w-2 rounded-full bg-red-500 flex-shrink-0"></span>}
                   </button>
                 </li>
               )
