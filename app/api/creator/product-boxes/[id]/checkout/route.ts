@@ -1,227 +1,99 @@
-import { type NextRequest, NextResponse } from "next/server"
-import { auth } from "@/lib/firebase-admin"
-import { db } from "@/lib/firebase-admin"
-import Stripe from "stripe"
+import { auth } from "@clerk/nextjs"
+import { db } from "@/lib/db"
+import { stripe } from "@/lib/stripe"
+import { NextResponse } from "next/server"
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: "2024-06-20",
-})
-
-export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(req: Request, { params }: { params: { id: string } }) {
   try {
-    console.log("🛒 [Checkout] Starting checkout process for product box:", params.id)
+    const { userId } = auth()
+    const { id } = params
 
-    // Verify authentication
-    const authHeader = request.headers.get("authorization")
-    if (!authHeader?.startsWith("Bearer ")) {
-      console.log("❌ [Checkout] No auth header provided")
-      return NextResponse.json({ error: "Authentication required" }, { status: 401 })
+    if (!userId) {
+      return new NextResponse("Unauthorized", { status: 401 })
     }
 
-    const idToken = authHeader.split("Bearer ")[1]
-    let decodedToken
-
-    try {
-      decodedToken = await auth.verifyIdToken(idToken)
-    } catch (error) {
-      console.error("❌ [Checkout] Token verification failed:", error)
-      return NextResponse.json({ error: "Invalid authentication token" }, { status: 401 })
-    }
-
-    const buyerUid = decodedToken.uid
-    const productBoxId = params.id
-
-    console.log("✅ [Checkout] Authenticated user:", buyerUid)
-    console.log("🎯 [Checkout] Product box ID:", productBoxId)
-
-    const { successUrl, cancelUrl } = await request.json()
-
-    if (!successUrl || !cancelUrl) {
-      return NextResponse.json(
-        {
-          error: "Missing required URLs",
-        },
-        { status: 400 },
-      )
-    }
-
-    console.log("🔗 [Checkout] URLs validated")
-
-    // Get product box details from Firestore
-    const productBoxDoc = await db.collection("productBoxes").doc(productBoxId).get()
-
-    if (!productBoxDoc.exists) {
-      console.error("❌ [Checkout] Product box not found:", productBoxId)
-      return NextResponse.json({ error: "Product not found" }, { status: 404 })
-    }
-
-    const productBoxData = productBoxDoc.data()!
-    console.log("📦 [Checkout] Product box data:", {
-      title: productBoxData.title,
-      price: productBoxData.price,
-      type: productBoxData.type,
-      creatorId: productBoxData.creatorId,
+    const productBox = await db.productBox.findUnique({
+      where: {
+        id,
+        isPublished: true,
+      },
+      include: {
+        creator: true,
+      },
     })
 
-    // Get creator's Stripe account
-    const creatorDoc = await db.collection("users").doc(productBoxData.creatorId).get()
-    const creatorData = creatorDoc.data()
-
-    if (!creatorData?.stripeAccountId) {
-      console.error("❌ [Checkout] Creator has no Stripe account:", productBoxData.creatorId)
-      return NextResponse.json({ error: "Creator payment setup incomplete" }, { status: 400 })
+    if (!productBox) {
+      return new NextResponse("Not found", { status: 404 })
     }
 
-    console.log("💳 [Checkout] Creator Stripe account:", creatorData.stripeAccountId)
+    const user = await db.user.findUnique({
+      where: {
+        userId: userId,
+      },
+    })
 
-    const isSubscription = productBoxData.type === "subscription"
+    if (!user) {
+      return new NextResponse("User not found", { status: 404 })
+    }
 
-    // Handle product and price creation differently for subscriptions vs one-time
-    let stripeProductId = productBoxData.stripeProductId
-    let stripePriceId = productBoxData.stripePriceId
+    const creatorData = await db.creator.findUnique({
+      where: {
+        userId: productBox.creatorId,
+      },
+    })
 
-    if (isSubscription) {
-      // For subscriptions, create product/price on connected account
-      if (!stripeProductId || !stripePriceId) {
-        console.log("🔧 [Checkout] Creating Stripe subscription product and price...")
+    if (!creatorData || !creatorData.stripeAccountId) {
+      return new NextResponse("Creator has not connected Stripe account.", { status: 400 })
+    }
 
-        const stripeProduct = await stripe.products.create(
-          {
-            name: productBoxData.title,
-            description: productBoxData.description || undefined,
-            metadata: {
-              productBoxId,
-              creatorId: productBoxData.creatorId,
-            },
-          },
-          {
-            stripeAccount: creatorData.stripeAccountId,
-          },
-        )
+    // Calculate 25% platform fee
+    const applicationFee = Math.round(productBox.price * 0.25)
 
-        stripeProductId = stripeProduct.id
-
-        const stripePrice = await stripe.prices.create(
-          {
-            product: stripeProductId,
-            unit_amount: Math.round(productBoxData.price * 100),
-            currency: productBoxData.currency || "usd",
-            recurring: {
-              interval: "month",
-              interval_count: 1,
-            },
-            metadata: {
-              productBoxId,
-              creatorId: productBoxData.creatorId,
-            },
-          },
-          {
-            stripeAccount: creatorData.stripeAccountId,
-          },
-        )
-
-        stripePriceId = stripePrice.id
-
-        await db.collection("productBoxes").doc(productBoxId).update({
-          stripeProductId,
-          stripePriceId,
-          updatedAt: new Date(),
-        })
-
-        console.log("✅ [Checkout] Created subscription product and price")
-      }
-
-      // Create subscription checkout session on connected account
-      const session = await stripe.checkout.sessions.create(
+    const session = await stripe.checkout.sessions.create({
+      mode: "payment",
+      line_items: [
         {
-          payment_method_types: ["card"],
-          line_items: [
-            {
-              price: stripePriceId,
-              quantity: 1,
-            },
-          ],
-          mode: "subscription",
-          success_url: successUrl,
-          cancel_url: cancelUrl,
-          metadata: {
-            productBoxId,
-            buyerUid,
-            creatorId: productBoxData.creatorId,
-            type: "product_box_purchase",
-          },
-          customer_email: decodedToken.email || undefined,
-          subscription_data: {
-            application_fee_percent: 10, // 10% platform fee
-            metadata: {
-              productBoxId,
-              buyerUid,
-              creatorId: productBoxData.creatorId,
-              type: "product_box_purchase",
-            },
-          },
-        },
-        {
-          stripeAccount: creatorData.stripeAccountId,
-        },
-      )
-
-      console.log("✅ [Checkout] Subscription session created:", session.id)
-
-      return NextResponse.json({
-        url: session.url,
-        sessionId: session.id,
-      })
-    } else {
-      // For one-time payments, create session on platform account with transfer
-      const session = await stripe.checkout.sessions.create({
-        payment_method_types: ["card"],
-        line_items: [
-          {
-            price_data: {
-              currency: productBoxData.currency || "usd",
-              product_data: {
-                name: productBoxData.title,
-                description: productBoxData.description || undefined,
+          price_data: {
+            currency: "usd",
+            product_data: {
+              name: productBox.title,
+              description: productBox.description || `Product box by ${creatorData.username}`,
+              metadata: {
+                productBoxId: id,
+                creatorId: productBox.creatorId,
               },
-              unit_amount: Math.round(productBoxData.price * 100),
             },
-            quantity: 1,
+            unit_amount: productBox.price,
           },
-        ],
-        mode: "payment",
-        success_url: successUrl,
-        cancel_url: cancelUrl,
+          quantity: 1,
+        },
+      ],
+      success_url: `${process.env.NEXT_PUBLIC_SITE_URL}/purchase/success?session_id={CHECKOUT_SESSION_ID}&product_box_id=${id}`,
+      cancel_url: `${process.env.NEXT_PUBLIC_SITE_URL}/creator/${creatorData.username}`,
+      payment_intent_data: {
+        application_fee_amount: applicationFee, // 25% platform fee
+        transfer_data: {
+          destination: creatorData.stripeAccountId,
+        },
         metadata: {
-          productBoxId,
-          buyerUid,
-          creatorId: productBoxData.creatorId,
-          type: "product_box_purchase",
+          productBoxId: id,
+          buyerUid: user.uid,
+          creatorUid: productBox.creatorId,
+          platformFeeAmount: applicationFee.toString(),
+          creatorAmount: (productBox.price - applicationFee).toString(),
         },
-        customer_email: decodedToken.email || undefined,
-        payment_intent_data: {
-          application_fee_amount: Math.round(productBoxData.price * 100 * 0.1), // 10% platform fee
-          transfer_data: {
-            destination: creatorData.stripeAccountId,
-          },
-          metadata: {
-            productBoxId,
-            buyerUid,
-            creatorId: productBoxData.creatorId,
-            type: "product_box_purchase",
-          },
-        },
-      })
+      },
+      metadata: {
+        productBoxId: id,
+        buyerUid: user.uid,
+        creatorUid: productBox.creatorId,
+        type: "product_box_purchase",
+      },
+    })
 
-      console.log("✅ [Checkout] One-time payment session created:", session.id)
-
-      return NextResponse.json({
-        url: session.url,
-        sessionId: session.id,
-      })
-    }
-  } catch (error: any) {
-    console.error("🔥 [Checkout] Error during checkout:", error)
-    return NextResponse.json({ error: error.message || "Internal Server Error" }, { status: 500 })
+    return NextResponse.json({ url: session.url })
+  } catch (error) {
+    console.log("[PRODUCT_BOX_CHECKOUT]", error)
+    return new NextResponse("Internal Error", { status: 500 })
   }
 }

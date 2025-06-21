@@ -53,8 +53,8 @@ export async function POST(request: NextRequest) {
     // Get the price from the video document (stored in cents, e.g. 499 for $4.99)
     const price = videoData.price || 499 // Default to $4.99 if not set
 
-    // Calculate the application fee (5% of the price)
-    const applicationFee = Math.floor(price * 0.05)
+    // Calculate the application fee (25% of the price)
+    const applicationFee = Math.round(price * 0.25)
 
     // Create a product for the video if it doesn't exist
     let productId = videoData.stripeProductId
@@ -102,7 +102,7 @@ export async function POST(request: NextRequest) {
       success_url: `${process.env.NEXT_PUBLIC_SITE_URL}/purchase/success?session_id={CHECKOUT_SESSION_ID}&video_id=${videoId}`,
       cancel_url: `${process.env.NEXT_PUBLIC_SITE_URL}/creator/${videoData.username}`,
       payment_intent_data: {
-        application_fee_amount: applicationFee,
+        application_fee_amount: applicationFee, // 25% platform fee
         transfer_data: {
           destination: creatorData.stripeAccountId,
         },
@@ -110,6 +110,8 @@ export async function POST(request: NextRequest) {
           videoId,
           buyerUid,
           creatorUid: videoData.uid,
+          platformFeeAmount: applicationFee.toString(),
+          creatorAmount: (price - applicationFee).toString(),
         },
       },
       metadata: {

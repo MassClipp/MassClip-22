@@ -28,6 +28,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Creator's Stripe account not connected" }, { status: 400 })
     }
 
+    // Get the price from the Stripe price object
+    const priceObj = await stripe.prices.retrieve(priceId)
+    const amount = priceObj.unit_amount || 0
+
+    // Calculate 25% platform fee
+    const applicationFee = Math.round(amount * 0.25)
+
     // Create checkout session
     const session = await stripe.checkout.sessions.create(
       {
@@ -46,9 +53,11 @@ export async function POST(request: NextRequest) {
           price_id: priceId,
         },
         payment_intent_data: {
-          application_fee_amount: Math.round(0.1 * 100), // 10% platform fee (adjust as needed)
+          application_fee_amount: applicationFee, // 25% platform fee
           metadata: {
             creator_id: creatorId,
+            platformFeeAmount: applicationFee.toString(),
+            creatorAmount: (amount - applicationFee).toString(),
           },
         },
       },
