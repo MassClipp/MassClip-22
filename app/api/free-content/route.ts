@@ -137,20 +137,20 @@ export async function POST(request: NextRequest) {
 
     console.log(`✅ [Free Content] Found ${foundUploads.length} valid uploads`)
 
-    // Check for existing free content to avoid duplicates
+    // Check for existing free content more thoroughly
     const existingSnapshot = await db.collection("free_content").where("uid", "==", userId).get()
 
-    const existingOriginalIds = new Set()
-    const existingUrls = new Set()
-
+    const existingItems = new Map()
     existingSnapshot.docs.forEach((doc) => {
       const data = doc.data()
-      if (data.originalId) existingOriginalIds.add(data.originalId)
-      if (data.fileUrl) existingUrls.add(data.fileUrl)
+      // Create multiple keys to check for duplicates
+      if (data.originalId) existingItems.set(`id_${data.originalId}`, true)
+      if (data.fileUrl) existingItems.set(`url_${data.fileUrl}`, true)
+      if (data.title && data.size) existingItems.set(`title_size_${data.title}_${data.size}`, true)
     })
 
     console.log(`🔍 [Free Content] Found ${existingSnapshot.docs.length} existing free content items`)
-    console.log(`🔍 [Free Content] Existing original IDs:`, Array.from(existingOriginalIds))
+    console.log(`🔍 [Free Content] Existing original IDs:`, Array.from(existingItems.keys()))
 
     // Add to free_content collection
     const batch = db.batch()
@@ -159,9 +159,14 @@ export async function POST(request: NextRequest) {
     for (const upload of foundUploads) {
       try {
         const fileUrl = upload.fileUrl || upload.url || upload.downloadUrl || ""
+        const titleSizeKey = `title_size_${upload.title || "untitled"}_${upload.size || 0}`
 
-        // Skip if already exists (check both originalId and fileUrl)
-        if (existingOriginalIds.has(upload.id) || existingUrls.has(fileUrl)) {
+        // Skip if already exists (multiple checks)
+        if (
+          existingItems.has(`id_${upload.id}`) ||
+          existingItems.has(`url_${fileUrl}`) ||
+          existingItems.has(titleSizeKey)
+        ) {
           console.log(`⚠️ [Free Content] Skipping duplicate: ${upload.title} (ID: ${upload.id})`)
           continue
         }
