@@ -1,59 +1,117 @@
-import { db } from "@/lib/firebase/firebase"
-import { NextResponse } from "next/server"
+import { type NextRequest, NextResponse } from "next/server"
+import { initializeFirebaseAdmin, db } from "@/lib/firebase/firebaseAdmin"
 
-export async function GET(request: Request) {
+// Initialize Firebase Admin
+initializeFirebaseAdmin()
+
+export async function GET(request: NextRequest) {
   try {
-    console.log("⚡️[Discover Free Content] Request received")
+    console.log("🔍 [Discover Free Content] Starting request...")
 
-    // Query free_content collection with creator info
-    const freeContentSnapshot = await db.collection("free_content").limit(100).get()
+    if (!db) {
+      console.error("❌ [Discover Free Content] Database not initialized")
+      return NextResponse.json(
+        {
+          success: false,
+          videos: [],
+          count: 0,
+          error: "Database connection failed",
+        },
+        { status: 500 },
+      )
+    }
+
+    // Query all free content from all creators
+    console.log("🔍 [Discover Free Content] Querying free_content collection...")
+
+    const freeContentRef = db.collection("free_content")
+    const snapshot = await freeContentRef.orderBy("addedAt", "desc").limit(100).get()
+
+    console.log(`📊 [Discover Free Content] Found ${snapshot.size} documents`)
 
     const videos = []
-    for (const doc of freeContentSnapshot.docs) {
+    const userIds = new Set()
+
+    // Collect all unique user IDs
+    snapshot.forEach((doc) => {
       const data = doc.data()
-
-      // Get creator information
-      let creatorName = "Unknown Creator"
-      let creatorUsername = null
-
       if (data.uid) {
+        userIds.add(data.uid)
+      }
+    })
+
+    console.log(`👥 [Discover Free Content] Found ${userIds.size} unique creators`)
+
+    // Fetch user data for all creators
+    const userDataMap = new Map()
+    if (userIds.size > 0) {
+      const userPromises = Array.from(userIds).map(async (uid) => {
         try {
-          const userDoc = await db.collection("users").doc(data.uid).get()
+          const userDoc = await db
+            .collection("users")
+            .doc(uid as string)
+            .get()
           if (userDoc.exists()) {
             const userData = userDoc.data()
-            creatorName = userData.displayName || userData.name || userData.username || "Unknown Creator"
-            creatorUsername = userData.username
+            userDataMap.set(uid, {
+              name: userData?.displayName || userData?.name || "Unknown Creator",
+              username: userData?.username || null,
+            })
           }
         } catch (error) {
-          console.log("Error fetching creator info:", error)
+          console.error(`Error fetching user ${uid}:`, error)
+          userDataMap.set(uid, {
+            name: "Unknown Creator",
+            username: null,
+          })
         }
+      })
+
+      await Promise.all(userPromises)
+    }
+
+    // Process videos with creator information
+    snapshot.forEach((doc) => {
+      const data = doc.data()
+      const creatorData = userDataMap.get(data.uid) || {
+        name: "Unknown Creator",
+        username: null,
       }
 
       videos.push({
         id: doc.id,
         title: data.title || "Untitled",
         fileUrl: data.fileUrl || data.url || "",
-        thumbnailUrl: data.thumbnailUrl || data.thumbnail || "",
+        thumbnailUrl: data.thumbnailUrl || data.thumbnail || "/placeholder.svg?height=200&width=300&text=Video",
         type: data.type || "video",
         duration: data.duration || 0,
         size: data.size || 0,
         addedAt: data.addedAt?.toDate?.() || data.addedAt || new Date(),
         uid: data.uid,
-        creatorName,
-        creatorUsername,
-        views: data.views || 0,
-        downloads: data.downloads || 0,
+        creatorName: creatorData.name,
+        creatorUsername: creatorData.username,
         ...data,
       })
-    }
+    })
 
-    console.log(
-      `✅ [Discover Free Content] Returning ${videos.length} videos from ${freeContentSnapshot.size} documents`,
-    )
+    console.log(`✅ [Discover Free Content] Returning ${videos.length} videos`)
 
-    return NextResponse.json({ videos }, { status: 200 })
+    return NextResponse.json({
+      success: true,
+      videos: videos,
+      count: videos.length,
+    })
   } catch (error) {
-    console.error("🔥[Discover Free Content] Error:", error)
-    return NextResponse.json({ error: "Internal Server Error" }, { status: 500 })
+    console.error("❌ [Discover Free Content] Error:", error)
+
+    return NextResponse.json(
+      {
+        success: false,
+        videos: [],
+        count: 0,
+        error: error instanceof Error ? error.message : "Failed to fetch free content",
+      },
+      { status: 500 },
+    )
   }
 }

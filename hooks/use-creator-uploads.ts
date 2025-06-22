@@ -37,7 +37,8 @@ export function useDiscoverContent(): UseDiscoverContentReturn {
 
       console.log("🔍 [useDiscoverContent] Fetching all creators' free content")
 
-      const response = await fetch(`/api/creator-uploads`, {
+      // Use the correct API endpoint that exists
+      const response = await fetch(`/api/discover/free-content`, {
         method: "GET",
         headers: {
           "Content-Type": "application/json",
@@ -50,6 +51,7 @@ export function useDiscoverContent(): UseDiscoverContentReturn {
       }
 
       const data = await response.json()
+      console.log("🔍 [useDiscoverContent] API Response:", data)
 
       if (data.success) {
         setVideos(data.videos || [])
@@ -69,7 +71,7 @@ export function useDiscoverContent(): UseDiscoverContentReturn {
 
   useEffect(() => {
     fetchDiscoverContent()
-  }, [])
+  }, [user]) // Add user dependency to refetch when user changes
 
   return {
     videos,
