@@ -9,6 +9,19 @@ export async function GET(request: NextRequest) {
   try {
     console.log("🔍 [Creator Uploads] Starting request...")
 
+    if (!db) {
+      console.error("❌ [Creator Uploads] Database not initialized")
+      return NextResponse.json(
+        {
+          success: false,
+          videos: [],
+          count: 0,
+          error: "Database connection failed",
+        },
+        { status: 500 },
+      )
+    }
+
     // Try to get user ID from various sources
     let userId = null
 
@@ -90,12 +103,15 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     console.error("❌ [Creator Uploads] Error:", error)
 
-    // Return empty array instead of error for better UX
-    return NextResponse.json({
-      success: true,
-      videos: [],
-      count: 0,
-      error: error instanceof Error ? error.message : "Unknown error",
-    })
+    // Return a proper error response instead of empty array
+    return NextResponse.json(
+      {
+        success: false,
+        videos: [],
+        count: 0,
+        error: error instanceof Error ? error.message : "Failed to fetch creator uploads",
+      },
+      { status: 500 },
+    )
   }
 }

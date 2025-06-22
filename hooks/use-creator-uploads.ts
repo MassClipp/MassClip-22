@@ -37,13 +37,17 @@ export function useDiscoverContent(): UseDiscoverContentReturn {
 
       console.log("🔍 [useDiscoverContent] Fetching all creators' free content")
 
-      const response = await fetch(`/api/discover/free-content`, {
+      const response = await fetch(`/api/creator-uploads`, {
         method: "GET",
         headers: {
           "Content-Type": "application/json",
           ...(user?.uid && { Authorization: `Bearer ${user.uid}` }),
         },
       })
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`)
+      }
 
       const data = await response.json()
 
@@ -56,7 +60,7 @@ export function useDiscoverContent(): UseDiscoverContentReturn {
       }
     } catch (err) {
       console.error("❌ [useDiscoverContent] Error:", err)
-      setError(err instanceof Error ? err.message : "Unknown error")
+      setError(err instanceof Error ? err.message : "Failed to fetch content")
       setVideos([])
     } finally {
       setLoading(false)
