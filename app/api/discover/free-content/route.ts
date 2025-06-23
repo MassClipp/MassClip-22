@@ -7,6 +7,8 @@ initializeFirebaseAdmin()
 export async function GET(request: NextRequest) {
   try {
     console.log("🔍 [Discover Free Content] Starting fresh request...")
+    console.log("🔍 [Discover Free Content] Request URL:", request.url)
+    console.log("🔍 [Discover Free Content] Timestamp:", new Date().toISOString())
 
     if (!db) {
       console.error("❌ [Discover Free Content] Database not initialized")
@@ -21,15 +23,13 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    // Query the free_content collection directly - get ALL documents
-    console.log("🔍 [Discover Free Content] Querying free_content collection...")
+    // Query ONLY the free_content collection - no other sources
+    console.log("🔍 [Discover Free Content] Querying ONLY free_content collection...")
 
     const freeContentRef = db.collection("free_content")
-
-    // Get all documents from free_content collection
     const snapshot = await freeContentRef.get()
 
-    console.log(`📊 [Discover Free Content] Found ${snapshot.size} total documents in free_content`)
+    console.log(`📊 [Discover Free Content] Raw document count: ${snapshot.size}`)
 
     if (snapshot.empty) {
       console.log("⚠️ [Discover Free Content] No documents found in free_content collection")
@@ -38,21 +38,39 @@ export async function GET(request: NextRequest) {
         videos: [],
         count: 0,
         message: "No free content found",
+        timestamp: new Date().toISOString(),
       })
     }
 
+    // Log every single document ID for debugging
+    const documentIds = []
+    snapshot.forEach((doc) => {
+      documentIds.push(doc.id)
+    })
+    console.log("📋 [Discover Free Content] Document IDs found:", documentIds)
+
     const videos = []
     const userIds = new Set()
+    const processedIds = new Set() // Track processed IDs to prevent duplicates
 
-    // First pass: collect all user IDs and log document data
+    // First pass: collect all user IDs and check for duplicates
     snapshot.forEach((doc) => {
       const data = doc.data()
-      console.log(`📄 [Discover Free Content] Document ${doc.id}:`, {
+
+      // Check for duplicate processing
+      if (processedIds.has(doc.id)) {
+        console.log(`⚠️ [Discover Free Content] Duplicate document ID detected: ${doc.id}`)
+        return
+      }
+      processedIds.add(doc.id)
+
+      console.log(`📄 [Discover Free Content] Processing document ${doc.id}:`, {
         title: data.title,
         uid: data.uid,
         hasFileUrl: !!data.fileUrl,
         addedAt: data.addedAt,
         sourceCollection: data.sourceCollection,
+        originalId: data.originalId,
       })
 
       if (data.uid) {
@@ -61,6 +79,7 @@ export async function GET(request: NextRequest) {
     })
 
     console.log(`👥 [Discover Free Content] Found ${userIds.size} unique creators`)
+    console.log(`🔢 [Discover Free Content] Processed ${processedIds.size} unique documents`)
 
     // Fetch user data for all creators
     const userDataMap = new Map()
@@ -95,8 +114,15 @@ export async function GET(request: NextRequest) {
       await Promise.all(userPromises)
     }
 
-    // Second pass: process ALL videos with creator information
+    // Second pass: process videos (using the same processedIds to ensure no duplicates)
+    const videoIds = new Set() // Additional check for video ID duplicates
+
     snapshot.forEach((doc) => {
+      // Skip if we've already processed this document
+      if (!processedIds.has(doc.id)) {
+        return
+      }
+
       const data = doc.data()
       const creatorData = userDataMap.get(data.uid) || {
         name: "Unknown Creator",
@@ -109,6 +135,14 @@ export async function GET(request: NextRequest) {
         console.log(`⚠️ [Discover Free Content] Skipping ${doc.id} - no file URL`)
         return
       }
+
+      // Check for duplicate video IDs (in case originalId is the same)
+      const videoIdentifier = data.originalId || doc.id
+      if (videoIds.has(videoIdentifier)) {
+        console.log(`⚠️ [Discover Free Content] Duplicate video identifier detected: ${videoIdentifier}`)
+        return
+      }
+      videoIds.add(videoIdentifier)
 
       // Handle date properly
       let addedAtDate = new Date()
@@ -146,7 +180,7 @@ export async function GET(request: NextRequest) {
       }
 
       videos.push(video)
-      console.log(`✅ [Discover Free Content] Added video: ${video.title} by ${creatorData.name}`)
+      console.log(`✅ [Discover Free Content] Added video: ${video.title} by ${creatorData.name} (ID: ${doc.id})`)
     })
 
     // Sort by addedAt (newest first)
@@ -156,12 +190,19 @@ export async function GET(request: NextRequest) {
       return timeB - timeA
     })
 
-    console.log(`✅ [Discover Free Content] Returning ${videos.length} videos total`)
+    console.log(`✅ [Discover Free Content] Final result: ${videos.length} videos`)
+    console.log(
+      `📋 [Discover Free Content] Final video IDs:`,
+      videos.map((v) => v.id),
+    )
 
     return NextResponse.json({
       success: true,
       videos: videos,
       count: videos.length,
+      rawDocumentCount: snapshot.size,
+      processedDocumentCount: processedIds.size,
+      uniqueVideoCount: videoIds.size,
       timestamp: new Date().toISOString(),
     })
   } catch (error) {
