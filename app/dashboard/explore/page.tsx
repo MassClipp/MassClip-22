@@ -1536,13 +1536,7 @@ export default function ExplorePage() {
         <motion.div variants={containerVariants} initial="hidden" animate="visible">
           <motion.div variants={itemVariants}>
             {creatorUploads && creatorUploads.length > 0 ? (
-              <InlineVideoRow
-                title="Creator Uploads"
-                videos={creatorUploads}
-                limit={20}
-                isCreatorUploads={true}
-                onRefresh={refetchCreatorUploads}
-              />
+              <InlineVideoRow title="Creator Uploads" videos={creatorUploads} limit={20} isCreatorUploads={true} />
             ) : (
               <div className="px-6 py-4 bg-zinc-900/30 rounded-xl">
                 <h3 className="text-lg font-light text-white mb-2">Creator Uploads</h3>
