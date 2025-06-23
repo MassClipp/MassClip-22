@@ -20,6 +20,7 @@ import {
   Play,
   Pause,
   ArrowRight,
+  RefreshCw,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { useRouter } from "next/navigation"
@@ -927,6 +928,7 @@ function InlineVideoRow({
   isShowcase = false,
   showcaseId,
   isCreatorUploads = false,
+  onRefresh,
 }: {
   title: string
   videos: any[]
@@ -934,12 +936,14 @@ function InlineVideoRow({
   isShowcase?: boolean
   showcaseId?: string
   isCreatorUploads?: boolean
+  onRefresh?: () => void
 }) {
   const [visibleVideos, setVisibleVideos] = useState<any[]>([])
   const [isIntersecting, setIsIntersecting] = useState(false)
   const [scrollPosition, setScrollPosition] = useState(0)
   const [maxScroll, setMaxScroll] = useState(0)
   const [isHovered, setIsHovered] = useState(false)
+  const [isRefreshing, setIsRefreshing] = useState(false)
   const rowRef = useRef<HTMLDivElement>(null)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
   const { isProUser } = useUserPlan()
@@ -952,6 +956,18 @@ function InlineVideoRow({
 
   // Determine button text based on category name
   const buttonText = title.toLowerCase() === "browse all" ? "Browse all" : "See all"
+
+  // Handle manual refresh for creator uploads
+  const handleRefresh = async () => {
+    if (!onRefresh || isRefreshing) return
+
+    setIsRefreshing(true)
+    try {
+      await onRefresh()
+    } finally {
+      setIsRefreshing(false)
+    }
+  }
 
   // Use Intersection Observer to load videos only when row is visible
   useEffect(() => {
@@ -1045,15 +1061,30 @@ function InlineVideoRow({
         <h2 className="text-2xl font-extralight tracking-wider text-white category-title group-hover:text-crimson transition-colors duration-300">
           {title}
         </h2>
-        {hasMore && !isCreatorUploads && (
-          <Link
-            href={linkPath}
-            className="text-zinc-400 hover:text-white flex items-center group bg-zinc-900/30 hover:bg-zinc-900/50 px-3 py-1 rounded-full transition-all duration-300"
-          >
-            <span className="mr-1 text-sm">{buttonText}</span>
-            <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
-          </Link>
-        )}
+        <div className="flex items-center gap-2">
+          {/* Manual refresh button for creator uploads */}
+          {isCreatorUploads && onRefresh && (
+            <Button
+              onClick={handleRefresh}
+              variant="ghost"
+              size="sm"
+              disabled={isRefreshing}
+              className="text-zinc-400 hover:text-white hover:bg-zinc-900/50 rounded-full px-3 py-1 transition-all duration-300"
+            >
+              <RefreshCw className={`h-3.5 w-3.5 mr-1 ${isRefreshing ? "animate-spin" : ""}`} />
+              {isRefreshing ? "Refreshing..." : "Refresh"}
+            </Button>
+          )}
+          {hasMore && !isCreatorUploads && (
+            <Link
+              href={linkPath}
+              className="text-zinc-400 hover:text-white flex items-center group bg-zinc-900/30 hover:bg-zinc-900/50 px-3 py-1 rounded-full transition-all duration-300"
+            >
+              <span className="mr-1 text-sm">{buttonText}</span>
+              <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
+            </Link>
+          )}
+        </div>
       </div>
       <div className="relative">
         {/* Left scroll button */}
@@ -1086,7 +1117,7 @@ function InlineVideoRow({
 
         <div
           ref={scrollContainerRef}
-          className="flex overflow-x-auto scrollbar-hide gap-4 px-6 py-4" // Changed pb-4 to py-4 to add padding at the top
+          className="flex overflow-x-auto scrollbar-hide gap-4 px-6 py-4"
           onScroll={handleManualScroll}
         >
           {isIntersecting
@@ -1151,7 +1182,7 @@ export default function ExplorePage() {
   const { videos, videosByTag, loading: loadingVideos } = useVimeoVideos()
 
   // Fetch creator uploads
-  const { videos: creatorUploads, loading: creatorUploadsLoading } = useCreatorUploads()
+  const { videos: creatorUploads, loading: creatorUploadsLoading, refetch: refetchCreatorUploads } = useCreatorUploads()
 
   const router = useRouter()
 
@@ -1308,28 +1339,6 @@ export default function ExplorePage() {
       premium: true, // Mark this as premium
     },
   ]
-
-  // Listen for upload updates and refresh creator uploads
-  useEffect(() => {
-    const handleCreatorUploadsUpdate = () => {
-      console.log("🔄 [Explore] Creator uploads updated, refreshing...")
-      // Force refetch of creator uploads
-      if (typeof window !== "undefined") {
-        // Add a small delay to ensure database has been updated
-        setTimeout(() => {
-          window.location.reload() // Simple but effective refresh
-        }, 500)
-      }
-    }
-
-    if (typeof window !== "undefined") {
-      window.addEventListener("creatorUploadsUpdated", handleCreatorUploadsUpdate)
-
-      return () => {
-        window.removeEventListener("creatorUploadsUpdated", handleCreatorUploadsUpdate)
-      }
-    }
-  }, [])
 
   const { remainingDownloads, isProUser: isPro, hasReachedLimit } = useDownloadLimit()
 
@@ -1527,7 +1536,13 @@ export default function ExplorePage() {
         <motion.div variants={containerVariants} initial="hidden" animate="visible">
           <motion.div variants={itemVariants}>
             {creatorUploads && creatorUploads.length > 0 ? (
-              <InlineVideoRow title="Creator Uploads" videos={creatorUploads} limit={20} isCreatorUploads={true} />
+              <InlineVideoRow
+                title="Creator Uploads"
+                videos={creatorUploads}
+                limit={20}
+                isCreatorUploads={true}
+                onRefresh={refetchCreatorUploads}
+              />
             ) : (
               <div className="px-6 py-4 bg-zinc-900/30 rounded-xl">
                 <h3 className="text-lg font-light text-white mb-2">Creator Uploads</h3>

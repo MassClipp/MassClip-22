@@ -6,7 +6,7 @@ initializeFirebaseAdmin()
 
 export async function GET(request: NextRequest) {
   try {
-    console.log("🔍 [Discover Free Content] Starting request...")
+    console.log("🔍 [Discover Free Content] Starting fresh request...")
 
     if (!db) {
       console.error("❌ [Discover Free Content] Database not initialized")
@@ -21,58 +21,38 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    // Add cache-busting headers to ensure fresh data
-    const headers = {
-      "Cache-Control": "no-cache, no-store, must-revalidate",
-      Pragma: "no-cache",
-      Expires: "0",
-    }
-
-    // Query ALL free content from all creators with better error handling
+    // Query the free_content collection directly - get ALL documents
     console.log("🔍 [Discover Free Content] Querying free_content collection...")
 
     const freeContentRef = db.collection("free_content")
 
-    // Use multiple query strategies to ensure we get all content
-    let snapshot
-    try {
-      // First try with ordering by addedAt descending (newest first)
-      console.log("🔍 [Discover Free Content] Trying query with addedAt ordering...")
-      snapshot = await freeContentRef.orderBy("addedAt", "desc").limit(100).get()
-      console.log(`📊 [Discover Free Content] Found ${snapshot.size} documents with addedAt ordering`)
-    } catch (orderError) {
-      console.log("⚠️ [Discover Free Content] addedAt ordering failed, trying without ordering:", orderError)
-      try {
-        // If ordering fails, get all documents without ordering
-        snapshot = await freeContentRef.limit(100).get()
-        console.log(`📊 [Discover Free Content] Found ${snapshot.size} documents without ordering`)
-      } catch (fallbackError) {
-        console.error("❌ [Discover Free Content] All query methods failed:", fallbackError)
-        return NextResponse.json(
-          {
-            success: true,
-            videos: [],
-            count: 0,
-            error: "Database query failed",
-          },
-          { status: 200, headers },
-        )
-      }
+    // Get all documents from free_content collection
+    const snapshot = await freeContentRef.get()
+
+    console.log(`📊 [Discover Free Content] Found ${snapshot.size} total documents in free_content`)
+
+    if (snapshot.empty) {
+      console.log("⚠️ [Discover Free Content] No documents found in free_content collection")
+      return NextResponse.json({
+        success: true,
+        videos: [],
+        count: 0,
+        message: "No free content found",
+      })
     }
 
     const videos = []
     const userIds = new Set()
 
-    // First pass: collect all unique user IDs and log document data
+    // First pass: collect all user IDs and log document data
     snapshot.forEach((doc) => {
       const data = doc.data()
-      console.log(`📄 [Discover Free Content] Processing document ${doc.id}:`, {
+      console.log(`📄 [Discover Free Content] Document ${doc.id}:`, {
         title: data.title,
         uid: data.uid,
         hasFileUrl: !!data.fileUrl,
-        hasUrl: !!data.url,
         addedAt: data.addedAt,
-        addedAtType: typeof data.addedAt,
+        sourceCollection: data.sourceCollection,
       })
 
       if (data.uid) {
@@ -82,7 +62,7 @@ export async function GET(request: NextRequest) {
 
     console.log(`👥 [Discover Free Content] Found ${userIds.size} unique creators`)
 
-    // Fetch user data for all creators in parallel with better error handling
+    // Fetch user data for all creators
     const userDataMap = new Map()
     if (userIds.size > 0) {
       const userPromises = Array.from(userIds).map(async (uid) => {
@@ -97,9 +77,7 @@ export async function GET(request: NextRequest) {
               name: userData?.displayName || userData?.name || userData?.username || "Unknown Creator",
               username: userData?.username || null,
             })
-            console.log(`👤 [Discover Free Content] Loaded user data for ${uid}:`, userDataMap.get(uid))
           } else {
-            console.log(`⚠️ [Discover Free Content] User document not found for ${uid}`)
             userDataMap.set(uid, {
               name: "Unknown Creator",
               username: null,
@@ -117,7 +95,7 @@ export async function GET(request: NextRequest) {
       await Promise.all(userPromises)
     }
 
-    // Second pass: process ALL videos with creator information and better date handling
+    // Second pass: process ALL videos with creator information
     snapshot.forEach((doc) => {
       const data = doc.data()
       const creatorData = userDataMap.get(data.uid) || {
@@ -132,24 +110,21 @@ export async function GET(request: NextRequest) {
         return
       }
 
-      // Better date handling - handle various date formats
+      // Handle date properly
       let addedAtDate = new Date()
       try {
         if (data.addedAt) {
           if (data.addedAt.toDate && typeof data.addedAt.toDate === "function") {
-            // Firestore Timestamp
             addedAtDate = data.addedAt.toDate()
           } else if (data.addedAt instanceof Date) {
-            // Already a Date object
             addedAtDate = data.addedAt
-          } else if (typeof data.addedAt === "string" || typeof data.addedAt === "number") {
-            // String or number timestamp
+          } else {
             addedAtDate = new Date(data.addedAt)
           }
         }
       } catch (dateError) {
         console.log(`⚠️ [Discover Free Content] Date parsing error for ${doc.id}:`, dateError)
-        addedAtDate = new Date() // Fallback to current time
+        addedAtDate = new Date()
       }
 
       const video = {
@@ -166,69 +141,41 @@ export async function GET(request: NextRequest) {
         creatorUsername: creatorData.username,
         views: data.views || 0,
         downloads: data.downloads || 0,
-        // Include timestamp for debugging
-        _timestamp: Date.now(),
-        // Include all original data
-        ...data,
+        originalId: data.originalId,
+        sourceCollection: data.sourceCollection,
       }
 
       videos.push(video)
-      console.log(
-        `✅ [Discover Free Content] Added video ${doc.id}: ${video.title} by ${creatorData.name} (${addedAtDate.toISOString()})`,
-      )
+      console.log(`✅ [Discover Free Content] Added video: ${video.title} by ${creatorData.name}`)
     })
 
-    // Sort videos by addedAt (newest first) with better error handling
+    // Sort by addedAt (newest first)
     videos.sort((a, b) => {
-      try {
-        const dateA = new Date(a.addedAt).getTime()
-        const dateB = new Date(b.addedAt).getTime()
-
-        // If dates are invalid, use current timestamp
-        const timeA = isNaN(dateA) ? Date.now() : dateA
-        const timeB = isNaN(dateB) ? Date.now() : dateB
-
-        return timeB - timeA // Newest first
-      } catch (sortError) {
-        console.log("⚠️ [Discover Free Content] Sort error:", sortError)
-        return 0
-      }
+      const timeA = new Date(a.addedAt).getTime()
+      const timeB = new Date(b.addedAt).getTime()
+      return timeB - timeA
     })
 
     console.log(`✅ [Discover Free Content] Returning ${videos.length} videos total`)
-    console.log(
-      `📋 [Discover Free Content] Video titles and dates:`,
-      videos.map((v) => ({ title: v.title, addedAt: v.addedAt, id: v.id })),
-    )
 
-    return NextResponse.json(
-      {
-        success: true,
-        videos: videos,
-        count: videos.length,
-        _fetchTime: new Date().toISOString(),
-      },
-      { headers },
-    )
+    return NextResponse.json({
+      success: true,
+      videos: videos,
+      count: videos.length,
+      timestamp: new Date().toISOString(),
+    })
   } catch (error) {
     console.error("❌ [Discover Free Content] Error:", error)
 
     return NextResponse.json(
       {
-        success: true, // Return success: true to prevent UI errors
+        success: true,
         videos: [],
         count: 0,
         error: error instanceof Error ? error.message : "Failed to fetch free content",
-        _fetchTime: new Date().toISOString(),
+        timestamp: new Date().toISOString(),
       },
-      {
-        status: 200,
-        headers: {
-          "Cache-Control": "no-cache, no-store, must-revalidate",
-          Pragma: "no-cache",
-          Expires: "0",
-        },
-      },
+      { status: 200 },
     )
   }
 }

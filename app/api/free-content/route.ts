@@ -19,7 +19,7 @@ export async function GET(request: NextRequest) {
     console.log("🔍 [Free Content] Fetching free content for user:", userId)
 
     // Query free_content collection
-    const snapshot = await db.collection("free_content").where("uid", "==", userId).limit(100).get()
+    const snapshot = await db.collection("free_content").where("uid", "==", userId).get()
 
     const freeContent = snapshot.docs.map((doc) => {
       const data = doc.data()
@@ -137,36 +137,28 @@ export async function POST(request: NextRequest) {
 
     console.log(`✅ [Free Content] Found ${foundUploads.length} valid uploads`)
 
-    // Check for existing free content more thoroughly
+    // Check for existing free content
     const existingSnapshot = await db.collection("free_content").where("uid", "==", userId).get()
 
-    const existingItems = new Map()
+    const existingItems = new Set()
     existingSnapshot.docs.forEach((doc) => {
       const data = doc.data()
-      // Create multiple keys to check for duplicates
-      if (data.originalId) existingItems.set(`id_${data.originalId}`, true)
-      if (data.fileUrl) existingItems.set(`url_${data.fileUrl}`, true)
-      if (data.title && data.size) existingItems.set(`title_size_${data.title}_${data.size}`, true)
+      if (data.originalId) existingItems.add(data.originalId)
+      if (data.fileUrl) existingItems.add(data.fileUrl)
     })
 
     console.log(`🔍 [Free Content] Found ${existingSnapshot.docs.length} existing free content items`)
-    console.log(`🔍 [Free Content] Existing original IDs:`, Array.from(existingItems.keys()))
 
-    // Add to free_content collection
+    // Add to free_content collection using batch write for consistency
     const batch = db.batch()
     const addedItems: any[] = []
 
     for (const upload of foundUploads) {
       try {
         const fileUrl = upload.fileUrl || upload.url || upload.downloadUrl || ""
-        const titleSizeKey = `title_size_${upload.title || "untitled"}_${upload.size || 0}`
 
-        // Skip if already exists (multiple checks)
-        if (
-          existingItems.has(`id_${upload.id}`) ||
-          existingItems.has(`url_${fileUrl}`) ||
-          existingItems.has(titleSizeKey)
-        ) {
+        // Skip if already exists
+        if (existingItems.has(upload.id) || existingItems.has(fileUrl)) {
           console.log(`⚠️ [Free Content] Skipping duplicate: ${upload.title} (ID: ${upload.id})`)
           continue
         }
@@ -181,7 +173,7 @@ export async function POST(request: NextRequest) {
           thumbnailUrl: upload.thumbnailUrl || upload.thumbnail || "",
           mimeType: upload.mimeType || upload.type || "",
           duration: upload.duration || 0,
-          addedAt: new Date(),
+          addedAt: new Date(), // Use current server time
           originalId: upload.id,
           sourceCollection: upload.sourceCollection,
         }
@@ -203,6 +195,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "All selected items are already in your free content" }, { status: 400 })
     }
 
+    // Commit the batch
     await batch.commit()
 
     console.log(`✅ [Free Content] Successfully added ${addedItems.length} items to free content`)
@@ -248,7 +241,7 @@ export async function DELETE(request: NextRequest) {
 
     console.log("🗑️ [Free Content] Removing content IDs:", contentIds)
 
-    // Verify ownership and delete
+    // Use batch delete for consistency
     const batch = db.batch()
     const deletedItems: string[] = []
 
@@ -279,6 +272,7 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: "No valid content found to delete" }, { status: 400 })
     }
 
+    // Commit the batch delete
     await batch.commit()
 
     console.log(`✅ [Free Content] Successfully deleted ${deletedItems.length} items`)
