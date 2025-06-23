@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { useAuthContext } from "@/contexts/auth-context"
 
 interface Video {
@@ -30,7 +30,7 @@ export function useDiscoverContent(): UseDiscoverContentReturn {
   const [error, setError] = useState<string | null>(null)
   const { user } = useAuthContext()
 
-  const fetchDiscoverContent = async () => {
+  const fetchDiscoverContent = useCallback(async () => {
     try {
       setLoading(true)
       setError(null)
@@ -44,6 +44,8 @@ export function useDiscoverContent(): UseDiscoverContentReturn {
           "Content-Type": "application/json",
           ...(user?.uid && { Authorization: `Bearer ${user.uid}` }),
         },
+        // Add cache busting to ensure fresh data
+        cache: "no-cache",
       })
 
       if (!response.ok) {
@@ -67,11 +69,21 @@ export function useDiscoverContent(): UseDiscoverContentReturn {
     } finally {
       setLoading(false)
     }
-  }
+  }, [user])
 
   useEffect(() => {
     fetchDiscoverContent()
-  }, [user]) // Add user dependency to refetch when user changes
+  }, [fetchDiscoverContent])
+
+  // Set up periodic refresh to keep content in sync
+  useEffect(() => {
+    const interval = setInterval(() => {
+      console.log("🔄 [useDiscoverContent] Auto-refreshing content")
+      fetchDiscoverContent()
+    }, 30000) // Refresh every 30 seconds
+
+    return () => clearInterval(interval)
+  }, [fetchDiscoverContent])
 
   return {
     videos,

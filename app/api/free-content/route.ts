@@ -225,6 +225,82 @@ export async function POST(request: NextRequest) {
   }
 }
 
+// Add DELETE method to remove free content
+export async function DELETE(request: NextRequest) {
+  try {
+    console.log("🗑️ [Free Content] DELETE request received")
+
+    const authHeader = request.headers.get("authorization")
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
+    const token = authHeader.split("Bearer ")[1]
+    const decodedToken = await getAuth().verifyIdToken(token)
+    const userId = decodedToken.uid
+
+    const body = await request.json()
+    const { contentIds } = body
+
+    if (!contentIds || !Array.isArray(contentIds) || contentIds.length === 0) {
+      return NextResponse.json({ error: "No content IDs provided" }, { status: 400 })
+    }
+
+    console.log("🗑️ [Free Content] Removing content IDs:", contentIds)
+
+    // Verify ownership and delete
+    const batch = db.batch()
+    const deletedItems: string[] = []
+
+    for (const contentId of contentIds) {
+      try {
+        const doc = await db.collection("free_content").doc(contentId).get()
+
+        if (doc.exists) {
+          const data = doc.data()
+
+          // Verify ownership
+          if (data?.uid === userId) {
+            batch.delete(doc.ref)
+            deletedItems.push(contentId)
+            console.log(`✅ [Free Content] Prepared to delete: ${data.title}`)
+          } else {
+            console.log(`⚠️ [Free Content] Skipping ${contentId} - not owned by user`)
+          }
+        } else {
+          console.log(`⚠️ [Free Content] Document ${contentId} not found`)
+        }
+      } catch (error) {
+        console.error(`❌ [Free Content] Error processing ${contentId}:`, error)
+      }
+    }
+
+    if (deletedItems.length === 0) {
+      return NextResponse.json({ error: "No valid content found to delete" }, { status: 400 })
+    }
+
+    await batch.commit()
+
+    console.log(`✅ [Free Content] Successfully deleted ${deletedItems.length} items`)
+
+    return NextResponse.json({
+      success: true,
+      message: `Removed ${deletedItems.length} items from free content`,
+      deletedCount: deletedItems.length,
+      deletedItems,
+    })
+  } catch (error) {
+    console.error("❌ [Free Content] Error deleting content:", error)
+    return NextResponse.json(
+      {
+        error: "Failed to remove content from free section",
+        details: error instanceof Error ? error.message : "Unknown error",
+      },
+      { status: 500 },
+    )
+  }
+}
+
 // Helper function to determine content type
 function getContentType(mimeType: string): string {
   if (!mimeType) return "unknown"
