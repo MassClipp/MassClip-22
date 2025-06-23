@@ -30,66 +30,96 @@ export function useDiscoverContent(): UseDiscoverContentReturn {
   const [error, setError] = useState<string | null>(null)
   const { user } = useAuthContext()
 
-  const fetchDiscoverContent = useCallback(async () => {
-    try {
-      setLoading(true)
-      setError(null)
+  const fetchDiscoverContent = useCallback(
+    async (forceRefresh = false) => {
+      try {
+        setLoading(true)
+        setError(null)
 
-      console.log("🔍 [useDiscoverContent] Fetching all creators' free content")
+        console.log("🔍 [useDiscoverContent] Fetching all creators' free content", forceRefresh ? "(FORCED)" : "")
 
-      // Use the correct API endpoint that exists
-      const response = await fetch(`/api/discover/free-content`, {
-        method: "GET",
-        headers: {
-          "Content-Type": "application/json",
-          ...(user?.uid && { Authorization: `Bearer ${user.uid}` }),
-        },
-        // Add cache busting to ensure fresh data
-        cache: "no-cache",
-      })
+        // Add cache busting with timestamp
+        const cacheBuster = Date.now()
+        const url = `/api/discover/free-content?_t=${cacheBuster}`
 
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`)
-      }
+        const response = await fetch(url, {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+            "Cache-Control": "no-cache, no-store, must-revalidate",
+            Pragma: "no-cache",
+            ...(user?.uid && { Authorization: `Bearer ${user.uid}` }),
+          },
+          // Force no cache
+          cache: "no-store",
+        })
 
-      const data = await response.json()
-      console.log("🔍 [useDiscoverContent] API Response:", data)
+        if (!response.ok) {
+          throw new Error(`HTTP error! status: ${response.status}`)
+        }
 
-      if (data.success) {
-        setVideos(data.videos || [])
-        console.log(`✅ [useDiscoverContent] Loaded ${data.videos?.length || 0} videos from all creators`)
-      } else {
-        setError(data.error || "Failed to fetch discover content")
+        const data = await response.json()
+        console.log("🔍 [useDiscoverContent] API Response:", data)
+        console.log("🔍 [useDiscoverContent] Fetch time:", data._fetchTime)
+
+        if (data.success) {
+          // Process videos with proper date handling
+          const processedVideos = (data.videos || []).map((video: any) => ({
+            ...video,
+            addedAt: new Date(video.addedAt),
+          }))
+
+          setVideos(processedVideos)
+          console.log(`✅ [useDiscoverContent] Loaded ${processedVideos.length} videos from all creators`)
+          console.log(
+            `📋 [useDiscoverContent] Video IDs:`,
+            processedVideos.map((v) => v.id),
+          )
+        } else {
+          setError(data.error || "Failed to fetch discover content")
+          setVideos([])
+        }
+      } catch (err) {
+        console.error("❌ [useDiscoverContent] Error:", err)
+        setError(err instanceof Error ? err.message : "Failed to fetch content")
         setVideos([])
+      } finally {
+        setLoading(false)
       }
-    } catch (err) {
-      console.error("❌ [useDiscoverContent] Error:", err)
-      setError(err instanceof Error ? err.message : "Failed to fetch content")
-      setVideos([])
-    } finally {
-      setLoading(false)
-    }
-  }, [user])
+    },
+    [user],
+  )
 
   useEffect(() => {
     fetchDiscoverContent()
   }, [fetchDiscoverContent])
 
-  // Set up periodic refresh to keep content in sync
+  // Set up more aggressive periodic refresh to keep content in sync
   useEffect(() => {
     const interval = setInterval(() => {
       console.log("🔄 [useDiscoverContent] Auto-refreshing content")
-      fetchDiscoverContent()
-    }, 30000) // Refresh every 30 seconds
+      fetchDiscoverContent(true) // Force refresh
+    }, 15000) // Refresh every 15 seconds (more frequent)
 
     return () => clearInterval(interval)
+  }, [fetchDiscoverContent])
+
+  // Also refresh when the window gains focus
+  useEffect(() => {
+    const handleFocus = () => {
+      console.log("👁️ [useDiscoverContent] Window focused - refreshing content")
+      fetchDiscoverContent(true)
+    }
+
+    window.addEventListener("focus", handleFocus)
+    return () => window.removeEventListener("focus", handleFocus)
   }, [fetchDiscoverContent])
 
   return {
     videos,
     loading,
     error,
-    refetch: fetchDiscoverContent,
+    refetch: () => fetchDiscoverContent(true),
   }
 }
 
