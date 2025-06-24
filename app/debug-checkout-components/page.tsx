@@ -1,13 +1,36 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
 export default function DebugCheckoutComponents() {
   const [results, setResults] = useState<any>(null)
   const [loading, setLoading] = useState(false)
   const [testCheckoutLoading, setTestCheckoutLoading] = useState(false)
+  const [productBoxes, setProductBoxes] = useState<any[]>([])
+  const [selectedProductBox, setSelectedProductBox] = useState<string>("")
+
+  // Fetch available product boxes on component mount
+  useEffect(() => {
+    fetchProductBoxes()
+  }, [])
+
+  const fetchProductBoxes = async () => {
+    try {
+      const response = await fetch("/api/debug/checkout-components/product-boxes")
+      if (response.ok) {
+        const data = await response.json()
+        setProductBoxes(data.productBoxes || [])
+        if (data.productBoxes && data.productBoxes.length > 0) {
+          setSelectedProductBox(data.productBoxes[0].id)
+        }
+      }
+    } catch (error) {
+      console.error("Failed to fetch product boxes:", error)
+    }
+  }
 
   const runComponentTests = async () => {
     setLoading(true)
@@ -24,16 +47,20 @@ export default function DebugCheckoutComponents() {
   }
 
   const testCheckoutSession = async () => {
+    if (!selectedProductBox) {
+      alert("Please select a product box first")
+      return
+    }
+
     setTestCheckoutLoading(true)
     try {
-      // Use a known product box ID from your system
       const response = await fetch("/api/debug/checkout-components", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          productBoxId: "lkj", // Replace with actual product box ID
+          productBoxId: selectedProductBox,
         }),
       })
 
@@ -43,6 +70,7 @@ export default function DebugCheckoutComponents() {
         window.open(data.url, "_blank")
       } else {
         alert(`Checkout test failed: ${data.error}`)
+        console.error("Checkout test error:", data)
       }
     } catch (error) {
       console.error("Checkout test failed:", error)
@@ -61,9 +89,44 @@ export default function DebugCheckoutComponents() {
           {loading ? "Running Tests..." : "Run Component Tests"}
         </Button>
 
-        <Button onClick={testCheckoutSession} disabled={testCheckoutLoading}>
-          {testCheckoutLoading ? "Testing Checkout..." : "Test Checkout Session"}
-        </Button>
+        <div className="flex gap-4 items-center">
+          <Select value={selectedProductBox} onValueChange={setSelectedProductBox}>
+            <SelectTrigger className="w-64">
+              <SelectValue placeholder="Select a product box" />
+            </SelectTrigger>
+            <SelectContent>
+              {productBoxes.map((box) => (
+                <SelectItem key={box.id} value={box.id}>
+                  {box.title} - ${(box.price / 100).toFixed(2)}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          <Button onClick={testCheckoutSession} disabled={testCheckoutLoading || !selectedProductBox}>
+            {testCheckoutLoading ? "Testing Checkout..." : "Test Checkout Session"}
+          </Button>
+        </div>
+
+        {productBoxes.length > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Available Product Boxes</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2">
+                {productBoxes.map((box) => (
+                  <div key={box.id} className="p-2 border rounded">
+                    <div className="font-medium">{box.title}</div>
+                    <div className="text-sm text-gray-600">
+                      ID: {box.id} | Price: ${(box.price / 100).toFixed(2)} | Creator: {box.creatorId}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {results && (
           <Card>
