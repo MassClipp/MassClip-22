@@ -165,7 +165,7 @@ export default function LandingHeader() {
             <div className="mt-8 pt-6 border-t border-zinc-800/50 bg-black">
               <p className="text-xs text-zinc-500 font-light px-4 mb-4">Follow Us</p>
               <a
-                href="https://www.instagram.com/massclipp?igsh=MTZtY2w0bnQwaHI1OA%3D%3D&utm_source=qr"
+                href="https://www.instagram.com/massclip.official"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex items-center py-3 px-4 text-white/90 hover:text-white hover:bg-white/5 rounded-lg transition-colors"

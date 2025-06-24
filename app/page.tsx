@@ -238,7 +238,7 @@ export default function LandingPage() {
             </p>
             <div className="flex gap-4">
               <a
-                href="https://www.instagram.com/massclipp?igsh=MTZtY2w0bnQwaHI1OA%3D%3D&utm_source=qr"
+                href="https://www.instagram.com/massclip.official"
                 className="text-white/30 hover:text-white transition-colors"
                 target="_blank"
                 rel="noopener noreferrer"
