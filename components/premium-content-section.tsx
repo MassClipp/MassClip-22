@@ -23,6 +23,7 @@ interface ProductBox {
   customPreviewDescription?: string | null
   createdAt: any
   updatedAt: any
+  creatorId?: string
 }
 
 interface PremiumContentSectionProps {
@@ -53,10 +54,12 @@ const PremiumContentSection: React.FC<PremiumContentSectionProps> = ({
     const fetchToken = async () => {
       if (user) {
         try {
-          const idToken = await user.getIdToken()
+          // Get fresh token each time
+          const idToken = await user.getIdToken(true)
           setToken(idToken)
+          console.log(`🔑 [Auth] Token refreshed for user: ${user.uid}`)
         } catch (error) {
-          console.error("Error fetching token:", error)
+          console.error("❌ [Auth] Error fetching token:", error)
           setToken(null)
         }
       } else {
@@ -65,6 +68,11 @@ const PremiumContentSection: React.FC<PremiumContentSectionProps> = ({
     }
 
     fetchToken()
+
+    // Set up token refresh interval (every 50 minutes, tokens expire in 1 hour)
+    const tokenRefreshInterval = setInterval(fetchToken, 50 * 60 * 1000)
+
+    return () => clearInterval(tokenRefreshInterval)
   }, [user])
 
   // Fetch product boxes from API
@@ -158,68 +166,112 @@ const PremiumContentSection: React.FC<PremiumContentSectionProps> = ({
     }
   }
 
-  // Handle purchase action with Stripe checkout
+  // Handle purchase action with dynamic Stripe ID retrieval
   const handlePurchase = async (productBox: ProductBox) => {
     try {
       setCheckoutLoading((prev) => ({ ...prev, [productBox.id]: true }))
 
-      console.log(`🛒 [Checkout] Initiating purchase for product box: ${productBox.id}`)
+      console.log(`🛒 [Checkout] Starting purchase for: ${productBox.title}`)
 
-      // Get current user and auth token
+      // Step 1: Validate user authentication
       if (!user) {
         throw new Error("Please sign in to make a purchase")
       }
 
-      if (!token) {
-        throw new Error("Authentication token is missing. Please try again.")
+      // Step 2: Dynamically get fresh auth token
+      console.log(`🔑 [Checkout] Getting fresh auth token...`)
+      let authToken: string
+      try {
+        authToken = await user.getIdToken(true) // Force refresh
+        console.log(`✅ [Checkout] Fresh token obtained`)
+      } catch (error) {
+        console.error("❌ [Checkout] Failed to get auth token:", error)
+        throw new Error("Authentication failed. Please try signing in again.")
       }
 
-      console.log(`🔑 [Checkout] Got auth token for user: ${user.uid}`)
-
-      // Validate product box before attempting checkout
+      // Step 3: Validate product box
       if (!productBox.active) {
         throw new Error("This product is no longer available")
       }
 
-      // Create Stripe checkout session with proper authentication
-      const response = await fetch(`/api/creator/product-boxes/${productBox.id}/checkout`, {
+      // Step 4: Check creator's Stripe connection before proceeding
+      console.log(`🔍 [Checkout] Verifying creator's Stripe connection...`)
+      try {
+        const stripeCheckResponse = await fetch(`/api/stripe/connection-status`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${authToken}`,
+          },
+          body: JSON.stringify({
+            creatorId: productBox.creatorId || creatorId,
+          }),
+        })
+
+        if (!stripeCheckResponse.ok) {
+          const stripeError = await stripeCheckResponse.json().catch(() => ({}))
+          throw new Error(stripeError.error || "Creator's payment system is not set up")
+        }
+
+        const stripeStatus = await stripeCheckResponse.json()
+        console.log(`✅ [Checkout] Stripe connection verified:`, stripeStatus)
+      } catch (error) {
+        console.error("❌ [Checkout] Stripe verification failed:", error)
+        throw new Error("Payment system verification failed. Please try again later.")
+      }
+
+      // Step 5: Create checkout session with verified Stripe ID
+      console.log(`🛒 [Checkout] Creating checkout session...`)
+      const checkoutResponse = await fetch(`/api/creator/product-boxes/${productBox.id}/checkout`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
+          Authorization: `Bearer ${authToken}`,
         },
         body: JSON.stringify({
           successUrl: `${window.location.origin}/purchase/success?session_id={CHECKOUT_SESSION_ID}&product_box_id=${productBox.id}`,
           cancelUrl: window.location.href,
+          userId: user.uid,
+          productBoxId: productBox.id,
         }),
       })
 
-      console.log(`🛒 [Checkout] API response status:`, response.status)
+      console.log(`🛒 [Checkout] Checkout response status: ${checkoutResponse.status}`)
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({
-          error: `HTTP ${response.status}: ${response.statusText}`,
+      if (!checkoutResponse.ok) {
+        const errorData = await checkoutResponse.json().catch(() => ({
+          error: `HTTP ${checkoutResponse.status}: ${checkoutResponse.statusText}`,
         }))
 
-        console.error("❌ [Checkout] API error:", errorData)
+        console.error("❌ [Checkout] Checkout failed:", errorData)
 
-        throw new Error(
-          errorData.error || errorData.details || `Failed to create checkout session (${response.status})`,
-        )
+        // Provide specific error messages based on status
+        let errorMessage = "Checkout failed. Please try again."
+        if (checkoutResponse.status === 401) {
+          errorMessage = "Authentication expired. Please refresh the page and try again."
+        } else if (checkoutResponse.status === 404) {
+          errorMessage = "Product not found. It may have been removed."
+        } else if (checkoutResponse.status === 400) {
+          errorMessage = errorData.error || "Invalid request. Please check your selection."
+        } else if (checkoutResponse.status >= 500) {
+          errorMessage = "Server error. Please try again in a few moments."
+        }
+
+        throw new Error(errorMessage)
       }
 
-      const { url, sessionId } = await response.json()
+      const { url, sessionId } = await checkoutResponse.json()
 
       if (!url) {
-        throw new Error("No checkout URL received from server")
+        throw new Error("No checkout URL received. Please try again.")
       }
 
-      console.log(`✅ [Checkout] Created session ${sessionId}, redirecting to Stripe`)
+      console.log(`✅ [Checkout] Session created: ${sessionId}`)
 
-      // Show success message before redirect
+      // Step 6: Show success message and redirect
       toast({
         title: "Redirecting to checkout...",
-        description: "You'll be redirected to Stripe to complete your purchase.",
+        description: "You'll be redirected to complete your purchase securely.",
       })
 
       // Small delay to show the toast, then redirect
@@ -227,16 +279,34 @@ const PremiumContentSection: React.FC<PremiumContentSectionProps> = ({
         window.location.href = url
       }, 1000)
     } catch (error) {
-      console.error("❌ [Checkout] Error:", error)
+      console.error("❌ [Checkout] Purchase failed:", error)
       setCheckoutLoading((prev) => ({ ...prev, [productBox.id]: false }))
 
       const errorMessage = error instanceof Error ? error.message : "Unable to process checkout. Please try again."
 
       toast({
-        title: "Checkout Failed",
+        title: "Purchase Failed",
         description: errorMessage,
         variant: "destructive",
       })
+
+      // Optional: Show retry button for certain errors
+      if (errorMessage.includes("Authentication") || errorMessage.includes("refresh")) {
+        setTimeout(() => {
+          toast({
+            title: "Try Again",
+            description: "Please refresh the page and try again.",
+            action: (
+              <button
+                onClick={() => window.location.reload()}
+                className="bg-white text-black px-3 py-1 rounded text-sm"
+              >
+                Refresh
+              </button>
+            ),
+          })
+        }, 2000)
+      }
     }
   }
 
