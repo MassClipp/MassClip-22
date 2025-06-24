@@ -1,53 +1,64 @@
-import { auth } from "@clerk/nextjs/server"
-import { db } from "@/lib/db"
+import { type NextRequest, NextResponse } from "next/server"
+import { initializeFirebaseAdmin, db } from "@/lib/firebase-admin"
 import { stripe } from "@/lib/stripe"
-import { NextResponse } from "next/server"
 
-export async function POST(req: Request, { params }: { params: { id: string } }) {
+export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
   try {
-    const { userId } = auth()
-    const { id } = params
+    // Initialize Firebase Admin
+    initializeFirebaseAdmin()
+
+    // Get the authorization header
+    const authHeader = req.headers.get("authorization")
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return new NextResponse("Unauthorized - No token provided", { status: 401 })
+    }
+
+    const token = authHeader.split("Bearer ")[1]
+
+    // Verify the Firebase ID token
+    const admin = await import("firebase-admin")
+    const decodedToken = await admin.auth().verifyIdToken(token)
+    const userId = decodedToken.uid
 
     if (!userId) {
-      return new NextResponse("Unauthorized", { status: 401 })
+      return new NextResponse("Unauthorized - Invalid token", { status: 401 })
     }
 
-    const productBox = await db.productBox.findUnique({
-      where: {
-        id,
-        isPublished: true,
-      },
-      include: {
-        creator: true,
-      },
-    })
+    const { id } = params
+    const body = await req.json()
+    const { successUrl, cancelUrl } = body
 
-    if (!productBox) {
-      return new NextResponse("Not found", { status: 404 })
+    console.log(`🛒 [Checkout] Processing request for product box: ${id} by user: ${userId}`)
+
+    // Get product box from Firestore
+    const productBoxDoc = await db.collection("productBoxes").doc(id).get()
+
+    if (!productBoxDoc.exists) {
+      return new NextResponse("Product box not found", { status: 404 })
     }
 
-    const user = await db.user.findUnique({
-      where: {
-        userId: userId,
-      },
-    })
-
-    if (!user) {
-      return new NextResponse("User not found", { status: 404 })
+    const productBox = productBoxDoc.data()
+    if (!productBox?.active) {
+      return new NextResponse("Product box is not active", { status: 400 })
     }
 
-    const creatorData = await db.creator.findUnique({
-      where: {
-        userId: productBox.creatorId,
-      },
-    })
+    // Get creator data
+    const creatorDoc = await db.collection("users").doc(productBox.creatorId).get()
+    if (!creatorDoc.exists) {
+      return new NextResponse("Creator not found", { status: 404 })
+    }
 
-    if (!creatorData || !creatorData.stripeAccountId) {
-      return new NextResponse("Creator has not connected Stripe account.", { status: 400 })
+    const creatorData = creatorDoc.data()
+    if (!creatorData?.stripeAccountId) {
+      return new NextResponse("Creator has not connected Stripe account", { status: 400 })
     }
 
     // Calculate 25% platform fee
     const applicationFee = Math.round(productBox.price * 0.25)
+
+    console.log(
+      `💰 [Checkout] Price: $${productBox.price / 100}, Platform fee: $${applicationFee / 100}, Creator gets: $${(productBox.price - applicationFee) / 100}`,
+    )
 
     const session = await stripe.checkout.sessions.create({
       mode: "payment",
@@ -57,19 +68,18 @@ export async function POST(req: Request, { params }: { params: { id: string } })
             currency: "usd",
             product_data: {
               name: productBox.title,
-              description: productBox.description || `Product box by ${creatorData.username}`,
-              metadata: {
-                productBoxId: id,
-                creatorId: productBox.creatorId,
-              },
+              description:
+                productBox.description || `Product box by ${creatorData.username || creatorData.displayName}`,
             },
             unit_amount: productBox.price,
           },
           quantity: 1,
         },
       ],
-      success_url: `${process.env.NEXT_PUBLIC_SITE_URL}/purchase/success?session_id={CHECKOUT_SESSION_ID}&product_box_id=${id}`,
-      cancel_url: `${process.env.NEXT_PUBLIC_SITE_URL}/creator/${creatorData.username}`,
+      success_url:
+        successUrl ||
+        `${process.env.NEXT_PUBLIC_SITE_URL}/purchase/success?session_id={CHECKOUT_SESSION_ID}&product_box_id=${id}`,
+      cancel_url: cancelUrl || `${process.env.NEXT_PUBLIC_SITE_URL}/creator/${creatorData.username}`,
       payment_intent_data: {
         application_fee_amount: applicationFee, // 25% platform fee
         transfer_data: {
@@ -77,7 +87,7 @@ export async function POST(req: Request, { params }: { params: { id: string } })
         },
         metadata: {
           productBoxId: id,
-          buyerUid: user.uid,
+          buyerUid: userId,
           creatorUid: productBox.creatorId,
           platformFeeAmount: applicationFee.toString(),
           creatorAmount: (productBox.price - applicationFee).toString(),
@@ -85,15 +95,22 @@ export async function POST(req: Request, { params }: { params: { id: string } })
       },
       metadata: {
         productBoxId: id,
-        buyerUid: user.uid,
+        buyerUid: userId,
         creatorUid: productBox.creatorId,
         type: "product_box_purchase",
       },
     })
 
-    return NextResponse.json({ url: session.url })
+    console.log(`✅ [Checkout] Created session: ${session.id}`)
+
+    return NextResponse.json({
+      url: session.url,
+      sessionId: session.id,
+    })
   } catch (error) {
-    console.log("[PRODUCT_BOX_CHECKOUT]", error)
-    return new NextResponse("Internal Error", { status: 500 })
+    console.error("[PRODUCT_BOX_CHECKOUT] Error:", error)
+    return new NextResponse(`Internal Error: ${error instanceof Error ? error.message : "Unknown error"}`, {
+      status: 500,
+    })
   }
 }

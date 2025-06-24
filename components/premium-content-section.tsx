@@ -203,9 +203,6 @@ const PremiumContentSection: React.FC<PremiumContentSectionProps> = ({
 
         console.error("❌ [Checkout] API error:", errorData)
 
-        // Run diagnostic on failure
-        await runCheckoutDiagnostic(productBox.id)
-
         throw new Error(
           errorData.error || errorData.details || `Failed to create checkout session (${response.status})`,
         )
