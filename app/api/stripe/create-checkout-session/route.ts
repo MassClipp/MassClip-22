@@ -52,8 +52,8 @@ export async function POST(request: NextRequest) {
     // Get the price from the product box or use the provided price
     const priceInCents = Math.round((price || productBoxData.price || 9.99) * 100)
 
-    // Calculate platform fee (5%)
-    const platformFee = Math.round(priceInCents * 0.05)
+    // Calculate platform fee (25%)
+    const platformFee = Math.round(priceInCents * 0.25)
 
     console.log("💰 [Checkout] Price details:", { priceInCents, platformFee })
 
