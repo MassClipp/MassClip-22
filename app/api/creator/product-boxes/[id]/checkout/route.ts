@@ -133,15 +133,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       return new NextResponse("Creator has not connected Stripe account", { status: 400 })
     }
 
-    // Step 7: Calculate fees
-    console.log(`💰 [Checkout] Step 7: Calculating fees...`)
-    const applicationFee = Math.round(productBox.price * 0.25)
-    console.log(
-      `💰 [Checkout] Price: $${productBox.price / 100}, Platform fee: $${applicationFee / 100}, Creator gets: $${(productBox.price - applicationFee) / 100}`,
-    )
-
-    // Step 8: Validate environment variables
-    console.log(`🔧 [Checkout] Step 8: Validating environment...`)
+    // Step 7: Validate environment variables
+    console.log(`🔧 [Checkout] Step 7: Validating environment...`)
     if (!process.env.STRIPE_SECRET_KEY) {
       console.error("❌ [Checkout] STRIPE_SECRET_KEY not configured")
       return new NextResponse("Payment system not configured", { status: 500 })
@@ -154,10 +147,11 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
     console.log(`✅ [Checkout] Environment validated`)
 
-    // Step 9: Create Stripe checkout session
-    console.log(`🔄 [Checkout] Step 9: Creating Stripe session...`)
+    // Step 8: Create SIMPLE Stripe checkout session (without application fee first)
+    console.log(`🔄 [Checkout] Step 8: Creating SIMPLE Stripe session...`)
     let session
     try {
+      // First, try a simple session without application fees to test basic functionality
       session = await stripe.checkout.sessions.create({
         mode: "payment",
         line_items: [
@@ -178,38 +172,34 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
           successUrl ||
           `${process.env.NEXT_PUBLIC_SITE_URL}/purchase/success?session_id={CHECKOUT_SESSION_ID}&product_box_id=${id}`,
         cancel_url: cancelUrl || `${process.env.NEXT_PUBLIC_SITE_URL}/creator/${creatorData.username}`,
-        payment_intent_data: {
-          application_fee_amount: applicationFee,
-          transfer_data: {
-            destination: creatorData.stripeAccountId,
-          },
-          metadata: {
-            productBoxId: id,
-            buyerUid: userId,
-            creatorUid: productBox.creatorId,
-            platformFeeAmount: applicationFee.toString(),
-            creatorAmount: (productBox.price - applicationFee).toString(),
-          },
-        },
         metadata: {
           productBoxId: id,
           buyerUid: userId,
           creatorUid: productBox.creatorId,
           type: "product_box_purchase",
+          // Note: This is a simplified version without application fees
+          simplified: "true",
         },
       })
 
-      console.log(`✅ [Checkout] Stripe session created: ${session.id}`)
+      console.log(`✅ [Checkout] SIMPLE Stripe session created: ${session.id}`)
     } catch (stripeError) {
       console.error("❌ [Checkout] Stripe session creation failed:", stripeError)
+      console.error("❌ [Checkout] Stripe error details:", {
+        type: stripeError.type,
+        code: stripeError.code,
+        message: stripeError.message,
+        param: stripeError.param,
+      })
       return new NextResponse(`Payment processing error: ${stripeError.message}`, { status: 500 })
     }
 
-    // Step 10: Return success response
-    console.log(`🎉 [Checkout] Step 10: Returning success response`)
+    // Step 9: Return success response
+    console.log(`🎉 [Checkout] Step 9: Returning success response`)
     return NextResponse.json({
       url: session.url,
       sessionId: session.id,
+      note: "Simplified checkout without application fees for testing",
     })
   } catch (error) {
     console.error("❌ [CHECKOUT] CRITICAL ERROR:", error)
