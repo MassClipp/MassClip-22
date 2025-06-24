@@ -201,9 +201,9 @@ const PremiumContentSection: React.FC<PremiumContentSectionProps> = ({
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer ${authToken}`,
           },
           body: JSON.stringify({
+            idToken: authToken,
             creatorId: productBox.creatorId || creatorId,
           }),
         })
