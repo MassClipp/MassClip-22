@@ -47,7 +47,8 @@ export function useStripeConnectionCheck() {
       })
 
       if (!response.ok) {
-        throw new Error("Failed to check Stripe connection")
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.error || "Failed to check Stripe connection")
       }
 
       const data = await response.json()
