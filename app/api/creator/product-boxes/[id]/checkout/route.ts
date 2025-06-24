@@ -1,6 +1,21 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { db, verifyIdToken } from "@/lib/firebase-admin"
+import { db } from "@/lib/firebase-admin"
 import { stripe } from "@/lib/stripe"
+
+// Import Firebase Admin directly
+import { getAuth } from "firebase-admin/auth"
+import { initializeApp, getApps, cert } from "firebase-admin/app"
+
+// Initialize Firebase Admin if not already initialized
+if (!getApps().length) {
+  initializeApp({
+    credential: cert({
+      projectId: process.env.FIREBASE_PROJECT_ID,
+      clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+      privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n"),
+    }),
+  })
+}
 
 export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
   try {
@@ -15,19 +30,21 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
     const token = authHeader.split("Bearer ")[1]
 
-    // Verify the Firebase ID token
+    // Verify the Firebase ID token using Firebase Admin
     let decodedToken
     try {
-      decodedToken = await verifyIdToken(token)
+      const auth = getAuth()
+      decodedToken = await auth.verifyIdToken(token)
+      console.log(`🔑 [Checkout] Token verified for user: ${decodedToken.uid}`)
     } catch (error) {
       console.error("❌ [Checkout] Token verification failed:", error)
       return new NextResponse("Unauthorized - Invalid token", { status: 401 })
     }
 
     const userId = decodedToken.uid
-    console.log(`🔑 [Checkout] Authenticated user: ${userId}`)
-
     const { id } = params
+
+    // Parse request body
     let body
     try {
       body = await req.json()
@@ -87,6 +104,12 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     console.log(
       `💰 [Checkout] Price: $${productBox.price / 100}, Platform fee: $${applicationFee / 100}, Creator gets: $${(productBox.price - applicationFee) / 100}`,
     )
+
+    // Validate Stripe configuration
+    if (!process.env.STRIPE_SECRET_KEY) {
+      console.error("❌ [Checkout] Stripe secret key not configured")
+      return new NextResponse("Payment system not configured", { status: 500 })
+    }
 
     // Create Stripe checkout session
     console.log(`🔄 [Checkout] Creating Stripe session...`)
