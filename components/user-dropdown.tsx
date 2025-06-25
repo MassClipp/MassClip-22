@@ -16,7 +16,7 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { doc, getDoc } from "firebase/firestore"
 import { db } from "@/lib/firebase"
-import { User, Globe, Settings, LogOut } from "lucide-react"
+import { User, Globe, Settings, LogOut, Heart } from "lucide-react"
 
 export default function UserDropdown() {
   const { user, logOut } = useFirebaseAuth()
@@ -78,6 +78,13 @@ export default function UserDropdown() {
             </Link>
           </DropdownMenuItem>
         )}
+
+        <DropdownMenuItem asChild>
+          <Link href="/dashboard/favorites" className="cursor-pointer flex items-center">
+            <Heart className="mr-2 h-4 w-4" />
+            <span>Favorites</span>
+          </Link>
+        </DropdownMenuItem>
 
         <DropdownMenuItem asChild>
           <Link href="/dashboard/user" className="cursor-pointer flex items-center">

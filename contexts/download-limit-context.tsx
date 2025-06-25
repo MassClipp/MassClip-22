@@ -15,7 +15,7 @@ interface DownloadLimitContextType {
 
 const DownloadLimitContext = createContext<DownloadLimitContextType>({
   hasReachedLimit: false,
-  remainingDownloads: 10,
+  remainingDownloads: 15,
   isProUser: false,
   forceRefresh: () => {},
   loading: true,
@@ -24,7 +24,7 @@ const DownloadLimitContext = createContext<DownloadLimitContextType>({
 export function DownloadLimitProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth()
   const [hasReachedLimit, setHasReachedLimit] = useState(false)
-  const [remainingDownloads, setRemainingDownloads] = useState(10)
+  const [remainingDownloads, setRemainingDownloads] = useState(15)
   const [isProUser, setIsProUser] = useState(false)
   const [refreshCounter, setRefreshCounter] = useState(0)
   const [loading, setLoading] = useState(true)
@@ -38,7 +38,7 @@ export function DownloadLimitProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     if (!user) {
       setHasReachedLimit(false)
-      setRemainingDownloads(10)
+      setRemainingDownloads(15)
       setIsProUser(false)
       setLoading(false)
       return
@@ -54,7 +54,7 @@ export function DownloadLimitProvider({ children }: { children: ReactNode }) {
           const userData = doc.data()
           const isPro = userData?.plan === "creator_pro"
           const downloads = userData.downloads || 0
-          const limit = isPro ? Number.POSITIVE_INFINITY : 10
+          const limit = isPro ? Number.POSITIVE_INFINITY : 15
 
           setIsProUser(isPro)
           setRemainingDownloads(Math.max(0, limit - downloads))
@@ -75,7 +75,7 @@ export function DownloadLimitProvider({ children }: { children: ReactNode }) {
           const userData = doc.data()
           const isPro = userData?.plan === "creator_pro"
           const downloads = userData.downloads || 0
-          const limit = isPro ? Number.POSITIVE_INFINITY : 10
+          const limit = isPro ? Number.POSITIVE_INFINITY : 15
 
           setIsProUser(isPro)
           setRemainingDownloads(Math.max(0, limit - downloads))

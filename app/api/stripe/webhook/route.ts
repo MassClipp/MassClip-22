@@ -1,67 +1,32 @@
 import { type NextRequest, NextResponse } from "next/server"
 import Stripe from "stripe"
 import { db } from "@/lib/firebase-admin"
+import { UnifiedPurchaseService } from "@/lib/unified-purchase-service"
 
-// Initialize Stripe with the secret key
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: "2023-10-16",
 })
 
-// Get the webhook secret from environment variables
 const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET!
 
 export async function POST(request: NextRequest) {
   try {
-    // Get the raw request body
     const body = await request.text()
-
-    // Get the Stripe signature from the headers
     const signature = request.headers.get("stripe-signature")!
 
-    // Verify the webhook signature
     let event: Stripe.Event
 
     try {
       event = stripe.webhooks.constructEvent(body, signature, webhookSecret)
     } catch (err) {
-      console.error("Webhook signature verification failed:", err)
+      console.error("⚠️ Webhook signature verification failed:", err)
       return NextResponse.json({ error: "Invalid signature" }, { status: 400 })
     }
 
-    // Handle different event types
-    switch (event.type) {
-      case "account.updated": {
-        const account = event.data.object as Stripe.Account
-        await handleAccountUpdated(account)
-        break
-      }
-
-      case "checkout.session.completed": {
-        const session = event.data.object as Stripe.Checkout.Session
-        await handleCheckoutSessionCompleted(session)
-        break
-      }
-
-      case "payment_intent.succeeded": {
-        const paymentIntent = event.data.object as Stripe.PaymentIntent
-        await handlePaymentIntentSucceeded(paymentIntent)
-        break
-      }
-
-      case "invoice.paid": {
-        const invoice = event.data.object as Stripe.Invoice
-        await handleInvoicePaid(invoice)
-        break
-      }
-
-      case "customer.subscription.deleted": {
-        const subscription = event.data.object as Stripe.Subscription
-        await handleSubscriptionDeleted(subscription)
-        break
-      }
-
-      default:
-        console.log(`Unhandled event type: ${event.type}`)
+    // Handle checkout.session.completed event
+    if (event.type === "checkout.session.completed") {
+      const session = event.data.object as Stripe.Checkout.Session
+      await handleCheckoutSessionCompleted(session)
     }
 
     return NextResponse.json({ received: true })
@@ -71,216 +36,154 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// Handle account.updated event - keeps Stripe status synced
-async function handleAccountUpdated(account: Stripe.Account) {
-  try {
-    // Get the Firebase UID from the account metadata
-    const firebaseUid = account.metadata?.firebaseUid
-
-    if (!firebaseUid) {
-      console.log("No Firebase UID in account metadata:", account.id)
-      return
-    }
-
-    // Check account status
-    const chargesEnabled = account.charges_enabled || false
-    const payoutsEnabled = account.payouts_enabled || false
-    const detailsSubmitted = account.details_submitted || false
-    const isFullyOnboarded = chargesEnabled && payoutsEnabled && detailsSubmitted
-
-    // Update the user's Stripe status in Firestore
-    await db
-      .collection("users")
-      .doc(firebaseUid)
-      .update({
-        stripeAccountId: account.id,
-        chargesEnabled,
-        payoutsEnabled,
-        stripeOnboardingComplete: isFullyOnboarded,
-        stripeStatusLastChecked: new Date(),
-        stripeRequirements: account.requirements?.currently_due || [],
-      })
-
-    console.log(`Updated Stripe status for user ${firebaseUid}:`, {
-      chargesEnabled,
-      payoutsEnabled,
-      isFullyOnboarded,
-    })
-  } catch (error) {
-    console.error("Error handling account.updated:", error)
-  }
-}
-
-// Handle checkout.session.completed event
 async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session) {
   try {
-    // Get the metadata from the session
-    const { videoId, buyerUid, creatorUid, pricingModel } = session.metadata!
+    console.log("🔍 [Webhook] Processing checkout session:", session.id)
 
-    if (!videoId || !buyerUid || !creatorUid) {
-      console.error("Missing metadata in checkout session:", session.id)
+    // Extract metadata
+    const { productBoxId, buyerUid, creatorUid } = session.metadata || {}
+
+    if (!productBoxId || !buyerUid) {
+      console.error("❌ [Webhook] Missing required metadata in session:", session.id)
       return
     }
 
-    const isSubscription = pricingModel === "subscription" || session.mode === "subscription"
+    console.log("✅ [Webhook] Session metadata:", { productBoxId, buyerUid, creatorUid })
 
-    // Grant access to the video for the buyer
+    // Check if this purchase has already been processed
+    const existingPurchase = await UnifiedPurchaseService.getUserPurchase(buyerUid, session.id)
+    if (existingPurchase) {
+      console.log("⚠️ [Webhook] Purchase already processed for session:", session.id)
+      return
+    }
+
+    // Get product box details
+    const productBoxDoc = await db.collection("productBoxes").doc(productBoxId).get()
+    if (!productBoxDoc.exists) {
+      console.error("❌ [Webhook] Product box not found:", productBoxId)
+      return
+    }
+    const productBoxData = productBoxDoc.data()!
+
+    // Get creator details
+    const creatorId = creatorUid || productBoxData.creatorId
+    let creatorData = null
+    if (creatorId) {
+      const creatorDoc = await db.collection("users").doc(creatorId).get()
+      creatorData = creatorDoc.exists ? creatorDoc.data() : null
+    }
+
+    // Create unified purchase record (this will fetch and normalize all content)
+    await UnifiedPurchaseService.createUnifiedPurchase(buyerUid, {
+      productBoxId,
+      sessionId: session.id,
+      amount: session.amount_total ? session.amount_total / 100 : 0,
+      currency: session.currency || "usd",
+      creatorId: creatorId || "",
+    })
+
+    // Also ensure purchase is written to main purchases collection for API compatibility
+    const mainPurchaseData = {
+      userId: buyerUid,
+      buyerUid,
+      productBoxId,
+      itemId: productBoxId,
+      sessionId: session.id,
+      paymentIntentId: session.payment_intent,
+      amount: session.amount_total ? session.amount_total / 100 : 0,
+      currency: session.currency || "usd",
+      timestamp: new Date(),
+      createdAt: new Date(),
+      purchasedAt: new Date(),
+      status: "completed",
+      type: "product_box",
+      itemTitle: productBoxData.title || "Untitled Product Box",
+      itemDescription: productBoxData.description || "",
+      thumbnailUrl: productBoxData.thumbnailUrl || "",
+      customPreviewThumbnail: productBoxData.customPreviewThumbnail || "",
+      creatorId: creatorId,
+      creatorName: creatorData?.displayName || creatorData?.name || "",
+      creatorUsername: creatorData?.username || "",
+      accessUrl: `/product-box/${productBoxId}/content`,
+    }
+
+    // Write to main purchases collection with document ID as sessionId for easy lookup
+    await db.collection("purchases").doc(session.id).set(mainPurchaseData)
+
+    console.log("✅ [Webhook] Purchase written to main collection with ID:", session.id)
+
+    // Also record in legacy purchases collection for backward compatibility
+    const legacyPurchaseData = {
+      productBoxId,
+      itemId: productBoxId,
+      sessionId: session.id,
+      paymentIntentId: session.payment_intent,
+      amount: session.amount_total ? session.amount_total / 100 : 0,
+      currency: session.currency || "usd",
+      timestamp: new Date(),
+      purchasedAt: new Date(),
+      status: "completed",
+      type: "product_box",
+      itemTitle: productBoxData.title || "Untitled Product Box",
+      itemDescription: productBoxData.description || "",
+      thumbnailUrl: productBoxData.thumbnailUrl || "",
+      customPreviewThumbnail: productBoxData.customPreviewThumbnail || "",
+      creatorId: creatorId,
+      creatorName: creatorData?.displayName || creatorData?.name || "",
+      creatorUsername: creatorData?.username || "",
+      accessUrl: `/product-box/${productBoxId}/content`,
+    }
+
+    await db.collection("users").doc(buyerUid).collection("purchases").add(legacyPurchaseData)
+    await db.collection("purchases").add({
+      ...legacyPurchaseData,
+      userId: buyerUid,
+      buyerUid,
+    })
+
+    // Update product box sales counter
     await db
-      .collection("userAccess")
-      .doc(buyerUid)
-      .collection("videos")
-      .doc(videoId)
-      .set({
-        purchasedAt: new Date(),
-        sessionId: session.id,
-        amount: session.amount_total! / 100, // Convert from cents to dollars
-        creatorUid,
-        pricingModel: isSubscription ? "subscription" : "flat",
-        subscriptionId: session.subscription || null,
-        expiresAt: isSubscription ? null : null, // No expiration for one-time purchases
+      .collection("productBoxes")
+      .doc(productBoxId)
+      .update({
+        totalSales: db.FieldValue.increment(1),
+        totalRevenue: db.FieldValue.increment(session.amount_total ? session.amount_total / 100 : 0),
+        lastPurchaseAt: new Date(),
       })
 
     // Record the sale for the creator
-    await db
-      .collection("users")
-      .doc(creatorUid)
-      .collection("sales")
-      .add({
-        videoId,
-        buyerUid,
-        sessionId: session.id,
-        amount: session.amount_total! / 100, // Convert from cents to dollars
-        platformFee: Math.round(session.amount_total! * 0.05) / 100, // 5% platform fee
-        netAmount: (session.amount_total! - Math.round(session.amount_total! * 0.05)) / 100, // Net amount after platform fee
-        purchasedAt: new Date(),
-        status: "completed",
-        pricingModel: isSubscription ? "subscription" : "flat",
-        subscriptionId: session.subscription || null,
-        isRecurring: isSubscription,
-      })
-
-    // Update video stats
-    await db
-      .collection("videos")
-      .doc(videoId)
-      .update({
-        purchaseCount: db.FieldValue.increment(1),
-        totalRevenue: db.FieldValue.increment(session.amount_total! / 100),
-      })
-
-    console.log(`Successfully processed payment for video ${videoId} by user ${buyerUid}`)
-  } catch (error) {
-    console.error("Error handling checkout.session.completed:", error)
-  }
-}
-
-// Handle payment_intent.succeeded event
-async function handlePaymentIntentSucceeded(paymentIntent: Stripe.PaymentIntent) {
-  try {
-    // Get the metadata from the payment intent
-    const { videoId, buyerUid, creatorUid } = paymentIntent.metadata
-
-    if (!videoId || !buyerUid || !creatorUid) {
-      console.log("No video metadata in payment intent:", paymentIntent.id)
-      return
-    }
-
-    // Update the payment status in Firestore
-    await db
-      .collection("users")
-      .doc(creatorUid)
-      .collection("sales")
-      .where("sessionId", "==", paymentIntent.metadata.sessionId)
-      .get()
-      .then((querySnapshot) => {
-        querySnapshot.forEach((doc) => {
-          doc.ref.update({
-            paymentIntentId: paymentIntent.id,
-            paymentStatus: "succeeded",
-          })
-        })
-      })
-
-    console.log(`Payment succeeded for video ${videoId}`)
-  } catch (error) {
-    console.error("Error handling payment_intent.succeeded:", error)
-  }
-}
-
-// Handle invoice.paid event (for subscriptions)
-async function handleInvoicePaid(invoice: Stripe.Invoice) {
-  try {
-    // Skip if this is not a subscription invoice
-    if (!invoice.subscription) return
-
-    // Get the subscription
-    const subscription = await stripe.subscriptions.retrieve(invoice.subscription as string)
-
-    // Get metadata from the subscription
-    const { videoId, buyerUid, creatorUid } = subscription.metadata
-
-    if (!videoId || !buyerUid || !creatorUid) {
-      console.log("Missing metadata in subscription:", subscription.id)
-      return
-    }
-
-    // For recurring payments (not the first one, which is handled by checkout.session.completed)
-    if (invoice.billing_reason === "subscription_cycle") {
-      // Record the recurring payment
+    if (creatorId) {
       await db
         .collection("users")
-        .doc(creatorUid)
+        .doc(creatorId)
         .collection("sales")
         .add({
-          videoId,
+          productBoxId,
           buyerUid,
-          invoiceId: invoice.id,
-          subscriptionId: subscription.id,
-          amount: invoice.amount_paid / 100,
-          platformFee: Math.round(invoice.amount_paid * 0.05) / 100, // 5% platform fee
-          netAmount: (invoice.amount_paid - Math.round(invoice.amount_paid * 0.05)) / 100,
+          sessionId: session.id,
+          amount: session.amount_total ? session.amount_total / 100 : 0,
+          platformFee: session.amount_total ? (session.amount_total * 0.25) / 100 : 0,
+          netAmount: session.amount_total ? (session.amount_total * 0.75) / 100 : 0,
           purchasedAt: new Date(),
           status: "completed",
-          pricingModel: "subscription",
-          isRecurring: true,
-          periodStart: new Date(subscription.current_period_start * 1000),
-          periodEnd: new Date(subscription.current_period_end * 1000),
+          productTitle: productBoxData.title || "Untitled Product Box",
+          buyerEmail: session.customer_email || "",
         })
 
-      // Update video stats
+      // Increment the creator's total sales
       await db
-        .collection("videos")
-        .doc(videoId)
+        .collection("users")
+        .doc(creatorId)
         .update({
-          totalRevenue: db.FieldValue.increment(invoice.amount_paid / 100),
+          totalSales: db.FieldValue.increment(1),
+          totalRevenue: db.FieldValue.increment(session.amount_total ? session.amount_total / 100 : 0),
+          lastSaleAt: new Date(),
         })
-
-      console.log(`Processed recurring payment for subscription ${subscription.id}`)
-    }
-  } catch (error) {
-    console.error("Error handling invoice.paid:", error)
-  }
-}
-
-// Handle customer.subscription.deleted event
-async function handleSubscriptionDeleted(subscription: Stripe.Subscription) {
-  try {
-    const { videoId, buyerUid, creatorUid } = subscription.metadata
-
-    if (!videoId || !buyerUid || !creatorUid) {
-      console.log("Missing metadata in deleted subscription:", subscription.id)
-      return
     }
 
-    // Update the user's access to mark it as expired
-    await db.collection("userAccess").doc(buyerUid).collection("videos").doc(videoId).update({
-      expiresAt: new Date(),
-      subscriptionStatus: "canceled",
-      canceledAt: new Date(),
-    })
-
-    console.log(`Subscription ${subscription.id} for video ${videoId} has been canceled`)
+    console.log("✅ [Webhook] Successfully processed webhook for session:", session.id)
   } catch (error) {
-    console.error("Error handling subscription.deleted:", error)
+    console.error("❌ [Webhook] Error handling checkout.session.completed:", error)
+    throw error
   }
 }

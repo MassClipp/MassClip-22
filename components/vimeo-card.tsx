@@ -2,7 +2,7 @@
 
 import type React from "react"
 import { useState, useRef, useEffect } from "react"
-import { Download, Lock, Heart, ExternalLink } from "lucide-react"
+import { Download, Heart, ExternalLink, Lock } from "lucide-react"
 import type { VimeoVideo } from "@/lib/types"
 import { useAuth } from "@/contexts/auth-context"
 import { db } from "@/lib/firebase"
@@ -241,7 +241,7 @@ export default function VimeoCard({ video }: VimeoCardProps) {
   const recordDownload = async () => {
     if (!user) return { success: false, message: "User not authenticated" }
 
-    // Creator Pro users don't need to track downloads
+    // Creator Pro users don't need to track downloads but we still record for analytics
     if (isProUser) return { success: true }
 
     try {
@@ -334,37 +334,33 @@ export default function VimeoCard({ video }: VimeoCardProps) {
         return
       }
 
-      // 3. Creator Pro users bypass limit checks
-      if (!isProUser) {
-        // 4. Strict limit check - this is the core permission enforcement
-        if (hasReachedLimit) {
-          toast({
-            title: "Download Limit Reached",
-            description: "You've reached your monthly download limit. Upgrade to Creator Pro for unlimited downloads.",
-            variant: "destructive",
-          })
-          return
-        }
-
-        // 5. CRITICAL: Record the download FIRST for free users
-        const result = await recordDownload()
-
-        // If recording failed, abort the download
-        if (!result.success) {
-          toast({
-            title: "Download Error",
-            description: result.message || "Failed to record download.",
-            variant: "destructive",
-          })
-          return
-        }
+      // 3. CRITICAL: Check if user has reached download limit BEFORE downloading
+      if (hasReachedLimit && !isProUser) {
+        toast({
+          title: "Download Limit Reached",
+          description:
+            "You've reached your monthly download limit of 25. Upgrade to Creator Pro for unlimited downloads.",
+          variant: "destructive",
+        })
+        return
       }
 
-      // 6. Only now, trigger the actual download
+      // 4. Record the download for tracking purposes
+      const result = await recordDownload()
+      if (!result.success && !isProUser) {
+        toast({
+          title: "Download Error",
+          description: result.message || "Failed to record download.",
+          variant: "destructive",
+        })
+        return
+      }
+
+      // 5. Trigger the actual download
       const filename = `${video?.name?.replace(/[^\w\s]/gi, "") || "video"}.mp4`
 
       if (isMobile) {
-        // Mobile download approach - keep using iframe for mobile
+        // Mobile download approach
         const iframe = document.createElement("iframe")
         iframe.style.display = "none"
         document.body.appendChild(iframe)
@@ -379,7 +375,7 @@ export default function VimeoCard({ video }: VimeoCardProps) {
           downloadFrameRef.current = null
         }, 5000)
       } else {
-        // Desktop download - use direct download approach
+        // Desktop download
         const success = await startDirectDownload(downloadLink, filename)
 
         if (!success) {
@@ -390,13 +386,6 @@ export default function VimeoCard({ video }: VimeoCardProps) {
             downloadLinkRef.current.click()
           }
         }
-      }
-
-      // 7. If pro user, record the download after (doesn't affect permissions)
-      if (isProUser) {
-        recordDownload().catch((error) => {
-          console.error("Error recording pro user download:", error)
-        })
       }
 
       // Show success toast
@@ -478,7 +467,7 @@ export default function VimeoCard({ video }: VimeoCardProps) {
   return (
     <div className="flex-shrink-0 w-[160px]">
       <div
-        className="group relative premium-hover-effect"
+        className="group relative premium-hover-effect border border-transparent hover:border-white/20 transition-all duration-300"
         style={{
           position: "relative",
           paddingBottom: "177.78%", // 9:16 aspect ratio
@@ -496,33 +485,36 @@ export default function VimeoCard({ video }: VimeoCardProps) {
         }}
         onClick={() => setIsActive(true)}
       >
-        {/* Border overlay that appears on hover/click */}
-        <div
-          className="absolute inset-0 z-10 pointer-events-none transition-opacity duration-300"
-          style={{
-            opacity: isActive ? 1 : 0,
-            border: "1px solid rgba(220, 20, 60, 0.5)",
-            borderRadius: "8px",
-            boxShadow: "0 0 20px rgba(220, 20, 60, 0.2)",
-          }}
-        ></div>
+        {/* TikTok-specific "Open in browser" button */}
+        {isTikTokBrowser && (
+          <div className="absolute top-2 right-2 z-30">
+            <button
+              onClick={handleOpenExternal}
+              className="bg-white/90 hover:bg-white text-black text-xs px-2 py-1 rounded-full flex items-center space-x-1"
+              aria-label="Open in browser"
+            >
+              <ExternalLink size={10} />
+              <span className="text-[10px]">Open</span>
+            </button>
+          </div>
+        )}
 
         {/* Action buttons container */}
         <div
           className="absolute bottom-2 left-2 right-2 z-20 flex items-center justify-between transition-opacity duration-300"
           style={{ opacity: isHovered ? 1 : 0 }}
         >
-          {/* Download button - visually disabled when limit reached */}
+          {/* Download button - show lock when limit reached */}
           <button
             className={`${
-              hasReachedLimit ? "bg-zinc-800/90 cursor-not-allowed" : "bg-black/70 hover:bg-black/90"
-            } p-1.5 rounded-full transition-all duration-300 ${downloadError ? "ring-1 ring-red-500" : ""}`}
+              hasReachedLimit && !isProUser ? "bg-zinc-800/90 cursor-not-allowed" : "bg-black/70 hover:bg-black/90"
+            } p-1.5 rounded-full transition-all duration-300`}
             onClick={handleDownload}
-            aria-label={hasReachedLimit ? "Download limit reached" : "Download video"}
-            disabled={isDownloading || hasReachedLimit}
-            title={hasReachedLimit ? "Upgrade to Creator Pro for unlimited downloads" : "Download video"}
+            aria-label={hasReachedLimit && !isProUser ? "Download limit reached" : "Download video"}
+            disabled={isDownloading || (hasReachedLimit && !isProUser)}
+            title={hasReachedLimit && !isProUser ? "Upgrade to Creator Pro for unlimited downloads" : "Download video"}
           >
-            {hasReachedLimit ? (
+            {hasReachedLimit && !isProUser ? (
               <Lock className="h-3.5 w-3.5 text-zinc-400" />
             ) : (
               <Download className={`h-3.5 w-3.5 ${downloadError ? "text-red-500" : "text-white"}`} />
@@ -542,20 +534,6 @@ export default function VimeoCard({ video }: VimeoCardProps) {
             <Heart className="h-3.5 w-3.5" fill={isFavorite ? "currentColor" : "none"} />
           </button>
         </div>
-
-        {/* TikTok-specific "Open in browser" button */}
-        {isTikTokBrowser && (
-          <div className="absolute top-2 right-2 z-30">
-            <button
-              onClick={handleOpenExternal}
-              className="bg-white/90 hover:bg-white text-black text-xs px-2 py-1 rounded-full flex items-center space-x-1"
-              aria-label="Open in browser"
-            >
-              <ExternalLink size={10} />
-              <span className="text-[10px]">Open</span>
-            </button>
-          </div>
-        )}
 
         {videoId ? (
           <div className="absolute inset-0 video-container" ref={videoContainerRef}>

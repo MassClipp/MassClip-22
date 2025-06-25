@@ -12,7 +12,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { updateProfile } from "firebase/auth"
-import { doc, getDoc, updateDoc } from "firebase/firestore"
+import { doc, getDoc, updateDoc, collection, query, where, getDocs, setDoc } from "firebase/firestore"
 import { db } from "@/lib/firebase"
 import { Loader2, User, AtSign, FileText, ArrowLeft, Save } from "lucide-react"
 
@@ -24,6 +24,9 @@ export default function EditProfilePage() {
   const [originalUsername, setOriginalUsername] = useState("")
   const [isUpdating, setIsUpdating] = useState(false)
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null)
+  const [xHandle, setXHandle] = useState("")
+  const [tiktokHandle, setTiktokHandle] = useState("")
+  const [instagramHandle, setInstagramHandle] = useState("")
   const router = useRouter()
 
   useEffect(() => {
@@ -43,6 +46,9 @@ export default function EditProfilePage() {
           setUsername(userData.username || "")
           setOriginalUsername(userData.username || "")
           setBio(userData.bio || "")
+          setXHandle(userData.xHandle || "")
+          setTiktokHandle(userData.tiktokHandle || "")
+          setInstagramHandle(userData.instagramHandle || "")
         } else {
           // If user doc doesn't exist, initialize with auth data
           setDisplayName(user.displayName || "")
@@ -71,9 +77,9 @@ export default function EditProfilePage() {
 
     try {
       // Query Firestore to check if username exists
-      const usersRef = db.collection("users")
-      const query = usersRef.where("username", "==", username.toLowerCase())
-      const snapshot = await query.get()
+      const usersRef = collection(db, "users")
+      const q = query(usersRef, where("username", "==", username.toLowerCase()))
+      const snapshot = await getDocs(q)
 
       return snapshot.empty
     } catch (error) {
@@ -117,14 +123,71 @@ export default function EditProfilePage() {
         displayName: displayName,
       })
 
-      // Update Firestore document
+      // Update Firestore document in users collection
       const userDocRef = doc(db, "users", user.uid)
       await updateDoc(userDocRef, {
         displayName: displayName,
         username: username.toLowerCase(),
         bio: bio,
+        instagramHandle: instagramHandle,
+        xHandle: xHandle,
+        tiktokHandle: tiktokHandle,
         updatedAt: new Date(),
       })
+
+      // Check if creator profile exists
+      const creatorsRef = collection(db, "creators")
+      const creatorQuery = query(creatorsRef, where("uid", "==", user.uid))
+      const creatorSnapshot = await getDocs(creatorQuery)
+
+      if (!creatorSnapshot.empty) {
+        // Update creator profile with new username
+        const creatorDoc = creatorSnapshot.docs[0]
+        await updateDoc(doc(db, "creators", creatorDoc.id), {
+          username: username.toLowerCase(),
+          displayName: displayName,
+          bio: bio,
+          updatedAt: new Date(),
+        })
+
+        console.log("Updated creator profile with new username")
+      }
+
+      // If username changed, update the username document in the usernames collection
+      if (username !== originalUsername) {
+        // Delete old username reservation
+        if (originalUsername) {
+          try {
+            await updateDoc(doc(db, "usernames", originalUsername.toLowerCase()), {
+              active: false,
+              updatedAt: new Date(),
+            })
+          } catch (error) {
+            console.error("Error updating old username reservation:", error)
+          }
+        }
+
+        // Create new username reservation
+        try {
+          await updateDoc(doc(db, "usernames", username.toLowerCase()), {
+            uid: user.uid,
+            active: true,
+            createdAt: new Date(),
+          })
+        } catch (error) {
+          // If document doesn't exist, create it
+          try {
+            const usernamesRef = collection(db, "usernames")
+            await setDoc(doc(usernamesRef, username.toLowerCase()), {
+              uid: user.uid,
+              active: true,
+              createdAt: new Date(),
+            })
+          } catch (innerError) {
+            console.error("Error creating new username reservation:", innerError)
+          }
+        }
+      }
 
       setMessage({
         type: "success",
@@ -133,6 +196,11 @@ export default function EditProfilePage() {
 
       // Update original username after successful update
       setOriginalUsername(username)
+
+      // Force refresh the page after a short delay to ensure all updates are reflected
+      setTimeout(() => {
+        router.refresh()
+      }, 1000)
     } catch (error) {
       console.error("Error updating profile:", error)
       setMessage({
@@ -234,6 +302,58 @@ export default function EditProfilePage() {
                   placeholder="Tell others about yourself..."
                 />
                 <p className="text-xs text-zinc-500">A short bio to introduce yourself to others.</p>
+              </div>
+
+              <div className="space-y-4">
+                <h3 className="text-lg font-medium text-white">Social Links</h3>
+
+                <div className="space-y-2">
+                  <Label htmlFor="instagramHandle" className="flex items-center gap-2 text-zinc-300">
+                    <svg className="h-4 w-4 text-zinc-400" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.205.012-3.584.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.354 0-3.745.013-5.032.078-3.666.208-6.146 2.705-6.354 6.354-.065 1.287-.078 1.677-.078 5.032 0 3.355.013 3.751.078 5.032.208 3.657 2.694 6.146 6.354 6.354 1.277.065 1.671.077 5.032.077 3.355 0 3.739-.013 5.032-.077 3.666-.208 6.146-2.704 6.354-6.354.065-1.287.077-1.671.077-5.032 0-3.355-.013-3.739-.077-5.032-.208-3.657-2.694-6.146-6.354-6.354-1.277-.065-1.671-.077-5.032-.077zm0 5.838a4.162 4.162 0 1 1 0 8.324 4.162 4.162 0 0 1 0-8.324zm0 1.136a3.026 3.026 0 1 0 0 6.052 3.026 3.026 0 0 0 0-6.052zm8.696-1.128a1.081 1.081 0 1 1 0 2.162 1.081 1.081 0 0 1 0-2.162z" />
+                    </svg>
+                    <span>Instagram</span>
+                  </Label>
+                  <Input
+                    id="instagramHandle"
+                    value={instagramHandle}
+                    onChange={(e) => setInstagramHandle(e.target.value)}
+                    className="border-zinc-700 bg-zinc-800/70 text-white focus-visible:ring-crimson"
+                    placeholder="@username"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="xHandle" className="flex items-center gap-2 text-zinc-300">
+                    <svg className="h-4 w-4 text-zinc-400" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+                    </svg>
+                    <span>X (Twitter)</span>
+                  </Label>
+                  <Input
+                    id="xHandle"
+                    value={xHandle}
+                    onChange={(e) => setXHandle(e.target.value)}
+                    className="border-zinc-700 bg-zinc-800/70 text-white focus-visible:ring-crimson"
+                    placeholder="@username"
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="tiktokHandle" className="flex items-center gap-2 text-zinc-300">
+                    <svg className="h-4 w-4 text-zinc-400" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M19.59 6.69a4.83 4.83 0 0 1-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 0 1-5.2 1.74 2.89 2.89 0 0 1 2.31-4.64 2.93 2.93 0 0 1 .88.13V9.4a6.84 6.84 0 0 0-1-.05A6.33 6.33 0 0 0 5 20.1a6.34 6.34 0 0 0 10.86-4.43v-7a8.16 8.16 0 0 0 4.77 1.52v-3.4a4.85 4.85 0 0 1-1-.1z" />
+                    </svg>
+                    <span>TikTok</span>
+                  </Label>
+                  <Input
+                    id="tiktokHandle"
+                    value={tiktokHandle}
+                    onChange={(e) => setTiktokHandle(e.target.value)}
+                    className="border-zinc-700 bg-zinc-800/70 text-white focus-visible:ring-crimson"
+                    placeholder="@username"
+                  />
+                </div>
               </div>
 
               <div className="flex justify-end">

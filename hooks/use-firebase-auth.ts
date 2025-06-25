@@ -1,325 +1,227 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import {
   type User,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
-  signOut,
+  signInWithPopup,
+  GoogleAuthProvider,
+  signOut as firebaseSignOut,
   onAuthStateChanged,
   sendPasswordResetEmail,
-  GoogleAuthProvider,
-  signInWithPopup,
 } from "firebase/auth"
-import { doc, getDoc, setDoc, serverTimestamp } from "firebase/firestore"
-import { auth, isFirebaseConfigured, db } from "@/lib/firebase"
+import { doc, setDoc, getDoc } from "firebase/firestore"
+import { auth, db, isFirebaseConfigured } from "@/lib/firebase"
 
-// Update the return type to include success and error
 interface AuthResult {
   success: boolean
   error?: string
-  demo?: boolean
-  username?: string
+  user?: User | null
 }
 
 export function useFirebaseAuth() {
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  const [authChecked, setAuthChecked] = useState(false)
+  const [firebaseReady, setFirebaseReady] = useState(isFirebaseConfigured())
 
-  // Listen for auth state changes
+  // Set up auth state listener
   useEffect(() => {
-    // Skip if Firebase is not configured
-    if (!isFirebaseConfigured) {
-      console.warn("Firebase is not properly configured. Auth functionality will be limited.")
+    if (!auth) {
+      console.error("Firebase auth not initialized")
       setLoading(false)
-      return () => {}
+      setAuthChecked(true)
+      return
     }
 
+    console.log("Setting up auth state listener")
     const unsubscribe = onAuthStateChanged(
       auth,
-      (authUser) => {
-        if (authUser) {
-          setUser(authUser)
-        } else {
-          setUser(null)
-        }
+      (user) => {
+        console.log("Auth state changed:", user ? "User logged in" : "No user")
+        setUser(user)
         setLoading(false)
+        setAuthChecked(true)
       },
       (error) => {
         console.error("Auth state change error:", error)
-        setError(error.message)
         setLoading(false)
+        setAuthChecked(true)
       },
     )
 
+    // Cleanup subscription
     return () => unsubscribe()
   }, [])
 
-  // Save creator profile to Firestore
-  const saveCreatorProfile = async (uid: string, username: string, displayName: string, photoURL?: string) => {
-    console.log(`Saving creator profile for ${username}...`)
+  // Check Firebase readiness periodically
+  useEffect(() => {
+    if (firebaseReady) return
 
-    try {
-      // Create creator profile
-      await setDoc(doc(db, "creators", username), {
-        uid: uid,
-        username: username,
-        displayName: displayName || username,
-        bio: "",
-        profilePic: photoURL || "",
-        freeClips: [],
-        paidClips: [],
-        createdAt: serverTimestamp(),
-      })
+    const checkInterval = setInterval(() => {
+      const ready = isFirebaseConfigured()
+      if (ready) {
+        console.log("Firebase is now configured")
+        setFirebaseReady(true)
+        clearInterval(checkInterval)
+      }
+    }, 1000)
 
-      // Create username document for uniqueness check
-      await setDoc(doc(db, "usernames", username), {
-        uid: uid,
-        createdAt: serverTimestamp(),
-      })
+    return () => clearInterval(checkInterval)
+  }, [firebaseReady])
 
-      console.log(`Creator profile saved successfully for ${username}`)
-      return true
-    } catch (error) {
-      console.error("Error saving creator profile:", error)
-      return false
-    }
-  }
-
-  // Sign in with email and password
-  const signIn = async (email: string, password: string): Promise<AuthResult> => {
-    if (!isFirebaseConfigured) {
-      console.warn("Firebase is not properly configured. Using demo mode.")
-      // Simulate successful login for demo/preview purposes
-      setLoading(false)
-      return { success: true, demo: true }
+  const signIn = useCallback(async (email: string, password: string): Promise<AuthResult> => {
+    if (!auth) {
+      return { success: false, error: "Firebase auth not initialized" }
     }
 
-    setError(null)
     try {
-      setLoading(true)
       const userCredential = await signInWithEmailAndPassword(auth, email, password)
-
-      // Get the user's username from Firestore
-      const userDoc = await getDoc(doc(db, "users", userCredential.user.uid))
-      const username = userDoc.exists() ? userDoc.data().username : null
-
-      // Redirect will be handled by the auth context in the component
-
-      return { success: true, username }
-    } catch (err) {
-      console.error("Error signing in:", err)
-      setError(err instanceof Error ? err.message : "Failed to sign in")
-      return { success: false, error: err instanceof Error ? err.message : "Failed to sign in" }
-    } finally {
-      setLoading(false)
+      return { success: true, user: userCredential.user }
+    } catch (error: any) {
+      console.error("Sign in error:", error)
+      return {
+        success: false,
+        error: error.message || "Failed to sign in",
+      }
     }
-  }
+  }, [])
 
-  // Sign in with Google
-  const signInWithGoogle = async (username?: string, displayName?: string): Promise<AuthResult> => {
-    if (!isFirebaseConfigured) {
-      console.warn("Firebase is not properly configured. Using demo mode.")
-      setLoading(false)
-      return { success: true, demo: true }
-    }
-
-    setError(null)
-    try {
-      setLoading(true)
-      const provider = new GoogleAuthProvider()
-      const result = await signInWithPopup(auth, provider)
-      const user = result.user
-
-      console.log("Google sign in successful, user:", user.uid)
-
-      // Check if username is already taken
-      if (username) {
-        console.log("Checking if username exists:", username)
-        const usernameDoc = await getDoc(doc(db, "usernames", username))
-        if (usernameDoc.exists()) {
-          console.log("Username already exists")
-          return { success: false, error: "Username is already taken" }
-        }
+  const signUp = useCallback(
+    async (email: string, password: string, username?: string, displayName?: string): Promise<AuthResult> => {
+      if (!auth || !db) {
+        return { success: false, error: "Firebase not fully initialized" }
       }
 
-      // Check if user document exists in Firestore
-      const userDoc = await getDoc(doc(db, "users", user.uid))
-      let existingUsername = null
+      try {
+        const userCredential = await createUserWithEmailAndPassword(auth, email, password)
+        const user = userCredential.user
 
-      // If user exists, get their username
-      if (userDoc.exists()) {
-        const userData = userDoc.data()
-        existingUsername = userData.username
+        // Create user profile in Firestore
+        if (username || displayName) {
+          await setDoc(doc(db, "users", user.uid), {
+            email: user.email,
+            username: username || "",
+            displayName: displayName || "",
+            createdAt: new Date(),
+            plan: "free",
+          })
 
-        // If user exists but doesn't have a username yet
-        if (!existingUsername && username) {
-          console.log("Updating existing user with username:", username)
-
-          // Update user document with username
-          await setDoc(
-            doc(db, "users", user.uid),
-            {
-              username: username,
-              displayName: displayName || user.displayName,
-            },
-            { merge: true },
-          )
-
-          // Create creator profile
-          await saveCreatorProfile(user.uid, username, displayName || user.displayName || username, user.photoURL || "")
-          existingUsername = username
+          if (username) {
+            await setDoc(doc(db, "usernames", username), {
+              uid: user.uid,
+              createdAt: new Date(),
+            })
+          }
         }
-      } else {
-        // Create new user document
-        console.log("Creating new user document for:", user.uid)
+
+        return { success: true, user }
+      } catch (error: any) {
+        console.error("Sign up error:", error)
+        return {
+          success: false,
+          error: error.message || "Failed to create account",
+        }
+      }
+    },
+    [],
+  )
+
+  const signInWithGoogle = useCallback(async (username?: string, displayName?: string): Promise<AuthResult> => {
+    if (!auth || !db) {
+      return { success: false, error: "Firebase not fully initialized" }
+    }
+
+    try {
+      const provider = new GoogleAuthProvider()
+      const userCredential = await signInWithPopup(auth, provider)
+      const user = userCredential.user
+
+      // Check if user profile exists, create if not
+      const userDoc = await getDoc(doc(db, "users", user.uid))
+
+      if (!userDoc.exists()) {
         await setDoc(doc(db, "users", user.uid), {
           email: user.email,
-          displayName: displayName || user.displayName,
-          username: username,
-          photoURL: user.photoURL,
-          createdAt: serverTimestamp(),
+          username: username || "",
+          displayName: displayName || user.displayName || "",
+          createdAt: new Date(),
           plan: "free",
-          permissions: { download: false, premium: false },
         })
 
-        // Create creator profile
         if (username) {
-          await saveCreatorProfile(user.uid, username, displayName || user.displayName || username, user.photoURL || "")
-          existingUsername = username
+          await setDoc(doc(db, "usernames", username), {
+            uid: user.uid,
+            createdAt: new Date(),
+          })
         }
       }
 
-      return { success: true, username: existingUsername }
-    } catch (err) {
-      console.error("Error signing in with Google:", err)
-      setError(err instanceof Error ? err.message : "Failed to sign in with Google")
-      return { success: false, error: err instanceof Error ? err.message : "Failed to sign in with Google" }
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  // Sign up with email and password
-  const signUp = async (
-    email: string,
-    password: string,
-    username?: string,
-    displayName?: string,
-  ): Promise<AuthResult> => {
-    if (!isFirebaseConfigured) {
-      console.warn("Firebase is not properly configured. Using demo mode.")
-      // Simulate successful signup for demo/preview purposes
-      setLoading(false)
-      return { success: true, demo: true, username }
-    }
-
-    setError(null)
-    try {
-      setLoading(true)
-
-      console.log("Starting signup process with:", { email, username, displayName })
-
-      // Check if username is already taken
-      if (username) {
-        console.log("Checking if username exists:", username)
-        const usernameDoc = await getDoc(doc(db, "usernames", username))
-        if (usernameDoc.exists()) {
-          console.log("Username already exists")
-          return { success: false, error: "Username is already taken" }
-        }
+      return { success: true, user }
+    } catch (error: any) {
+      console.error("Google sign in error:", error)
+      return {
+        success: false,
+        error: error.message || "Failed to sign in with Google",
       }
-
-      console.log("Creating user with email and password")
-      const { user } = await createUserWithEmailAndPassword(auth, email, password)
-      console.log("User created:", user.uid)
-
-      // Create user document in Firestore
-      console.log("Creating user document")
-      await setDoc(doc(db, "users", user.uid), {
-        email,
-        displayName: displayName || null,
-        username: username || null,
-        createdAt: serverTimestamp(),
-        plan: "free",
-        permissions: { download: false, premium: false },
-      })
-
-      // Create creator profile
-      if (username) {
-        await saveCreatorProfile(user.uid, username, displayName || username)
-      }
-
-      console.log("Signup process completed successfully")
-      return { success: true, username }
-    } catch (err) {
-      console.error("Error signing up:", err)
-      setError(err instanceof Error ? err.message : "Failed to sign up")
-      return { success: false, error: err instanceof Error ? err.message : "Failed to sign up" }
-    } finally {
-      setLoading(false)
     }
-  }
+  }, [])
 
-  // Sign out
-  const logOut = async () => {
-    if (!isFirebaseConfigured) {
-      console.warn("Firebase is not properly configured. Using demo mode.")
-      setUser(null)
-
-      // Force redirect to login page
-      if (typeof window !== "undefined") {
-        window.location.href = "/login"
-      }
-
-      return { success: true, demo: true }
+  const resetPassword = useCallback(async (email: string): Promise<AuthResult> => {
+    if (!auth) {
+      return { success: false, error: "Firebase auth not initialized" }
     }
 
-    setError(null)
-    try {
-      await signOut(auth)
-
-      // Force redirect to login page
-      if (typeof window !== "undefined") {
-        window.location.href = "/login"
-      }
-
-      return { success: true }
-    } catch (err) {
-      console.error("Error signing out:", err)
-      setError(err instanceof Error ? err.message : "Failed to sign out")
-      return { success: false, error: err instanceof Error ? err.message : "Failed to sign out" }
-    }
-  }
-
-  // Reset password
-  const resetPassword = async (email: string) => {
-    if (!isFirebaseConfigured) {
-      console.warn("Firebase is not properly configured. Using demo mode.")
-      return { success: true, demo: true }
-    }
-
-    setError(null)
     try {
       await sendPasswordResetEmail(auth, email)
       return { success: true }
-    } catch (err) {
-      console.error("Error resetting password:", err)
-      setError(err instanceof Error ? err.message : "Failed to reset password")
-      return { success: false, error: err instanceof Error ? err.message : "Failed to reset password" }
+    } catch (error: any) {
+      console.error("Password reset error:", error)
+      return {
+        success: false,
+        error: error.message || "Failed to send reset email",
+      }
     }
-  }
+  }, [])
+
+  const signOut = useCallback(async (): Promise<AuthResult> => {
+    if (!auth) {
+      return { success: false, error: "Firebase auth not initialized" }
+    }
+
+    try {
+      await firebaseSignOut(auth)
+
+      // Clear session cookie
+      try {
+        await fetch("/api/auth/logout", {
+          method: "POST",
+          credentials: "include",
+        })
+      } catch (error) {
+        console.error("Error clearing session:", error)
+      }
+
+      return { success: true }
+    } catch (error: any) {
+      console.error("Sign out error:", error)
+      return {
+        success: false,
+        error: error.message || "Failed to sign out",
+      }
+    }
+  }, [])
 
   return {
     user,
     loading,
-    error,
+    authChecked,
+    firebaseReady,
     signIn,
     signUp,
     signInWithGoogle,
-    logOut,
     resetPassword,
-    isFirebaseConfigured,
+    signOut,
   }
 }

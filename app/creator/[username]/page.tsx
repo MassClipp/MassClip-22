@@ -2,6 +2,7 @@ import { notFound } from "next/navigation"
 import type { Metadata } from "next"
 import { initializeFirebaseAdmin, db } from "@/lib/firebase-admin"
 import CreatorProfileWithSidebar from "@/components/creator-profile-with-sidebar"
+import ProfileViewTracker from "@/components/profile-view-tracker"
 
 // Helper function to convert Firestore data to plain objects
 function serializeData(data: any) {
@@ -49,8 +50,12 @@ export async function generateMetadata({ params }: { params: { username: string 
         displayName: userData.displayName,
         username: userData.username,
         hasPhotoURL: !!userData.photoURL,
+        hasProfilePic: !!userData.profilePic,
       }),
     )
+
+    // Prioritize profilePic over photoURL
+    const profileImage = userData.profilePic || userData.photoURL || "https://massclip.pro/og-image.jpg"
 
     return {
       title: `${userData?.displayName || username} | MassClip`,
@@ -62,7 +67,7 @@ export async function generateMetadata({ params }: { params: { username: string 
         siteName: "MassClip",
         images: [
           {
-            url: userData?.photoURL || "https://massclip.pro/og-image.jpg",
+            url: profileImage,
             width: 1200,
             height: 630,
             alt: userData?.displayName || username,
@@ -90,51 +95,56 @@ export default async function CreatorProfilePage({ params }: { params: { usernam
     // Initialize Firebase Admin
     initializeFirebaseAdmin()
 
-    // Query users collection to find the user with the given username (case insensitive)
+    // First try to find the user in the users collection
     const usersRef = db.collection("users")
-
-    // First try exact match
     let querySnapshot = await usersRef.where("username", "==", username.toLowerCase()).get()
 
     // If no results, try case-insensitive match
     if (querySnapshot.empty) {
-      console.log(`[Page] No exact match found, trying case-insensitive match`)
-      querySnapshot = await usersRef.get()
+      console.log(`[Page] No exact match found in users collection, trying case-insensitive match`)
 
-      // Filter results manually for case-insensitive match
-      const docs = querySnapshot.docs.filter((doc) => {
+      // Get all users and filter manually (not efficient but works for small datasets)
+      const allUsersSnapshot = await usersRef.get()
+      const matchingDocs = allUsersSnapshot.docs.filter((doc) => {
         const userData = doc.data()
         return userData.username && userData.username.toLowerCase() === username.toLowerCase()
       })
 
-      if (docs.length === 0) {
-        console.log(`[Page] Creator profile not found for username: ${username} (case-insensitive)`)
-
-        // Log all usernames for debugging
-        const allUsers = querySnapshot.docs.map((doc) => {
-          const data = doc.data()
-          return {
-            id: doc.id,
-            username: data.username,
-            displayName: data.displayName,
-          }
-        })
-        console.log(`[Page] Available users:`, JSON.stringify(allUsers))
-
-        notFound()
+      if (matchingDocs.length > 0) {
+        querySnapshot = {
+          empty: false,
+          docs: matchingDocs,
+          size: matchingDocs.length,
+        } as any
       }
-
-      // Use the first matching document
-      querySnapshot = {
-        empty: false,
-        docs: docs,
-        size: docs.length,
-      } as any
     }
 
-    console.log(`[Page] Query results: ${querySnapshot.size} documents found`)
-
+    // If still not found, try the creators collection directly
     if (querySnapshot.empty) {
+      console.log(`[Page] User not found in users collection, checking creators collection`)
+      const creatorsRef = db.collection("creators")
+
+      // Try exact match on username
+      querySnapshot = await creatorsRef.where("username", "==", username.toLowerCase()).get()
+
+      // If still not found, try by UID
+      if (querySnapshot.empty) {
+        console.log(`[Page] Creator not found by username, checking by document ID`)
+        const creatorDoc = await creatorsRef.doc(username.toLowerCase()).get()
+
+        if (creatorDoc.exists) {
+          querySnapshot = {
+            empty: false,
+            docs: [creatorDoc],
+            size: 1,
+          } as any
+        }
+      }
+    }
+
+    console.log(`[Page] Final query results: ${querySnapshot?.size || 0} documents found`)
+
+    if (!querySnapshot || querySnapshot.empty) {
       console.log(`[Page] Creator profile not found for username: ${username}`)
       notFound()
     }
@@ -142,7 +152,7 @@ export default async function CreatorProfilePage({ params }: { params: { usernam
     // Get the user document
     const userDoc = querySnapshot.docs[0]
     const userData = userDoc.data()
-    const uid = userDoc.id
+    const uid = userData.uid || userDoc.id
 
     console.log(`[Page] Creator profile found for username: ${username} with UID: ${uid}`)
     console.log(
@@ -151,7 +161,7 @@ export default async function CreatorProfilePage({ params }: { params: { usernam
         displayName: userData.displayName,
         username: userData.username,
         hasPhotoURL: !!userData.photoURL,
-        hasBio: !!userData.bio,
+        hasProfilePic: !!userData.profilePic,
       }),
     )
 
@@ -159,17 +169,25 @@ export default async function CreatorProfilePage({ params }: { params: { usernam
     const serializedData = serializeData(userData)
 
     // Format the creator data for the component
+    // Prioritize profilePic over photoURL for profile picture
+    const profilePicture = serializedData.profilePic || serializedData.photoURL || ""
+
     const creatorData = {
       uid: uid,
       username: serializedData.username || username,
       displayName: serializedData.displayName || username,
       bio: serializedData.bio || "",
-      profilePic: serializedData.photoURL || "",
+      profilePic: profilePicture,
       createdAt: serializedData.createdAt || new Date().toISOString(),
       socialLinks: serializedData.socialLinks || {},
     }
 
-    return <CreatorProfileWithSidebar creator={creatorData} />
+    return (
+      <>
+        <ProfileViewTracker profileUserId={uid} />
+        <CreatorProfileWithSidebar creator={creatorData} />
+      </>
+    )
   } catch (error) {
     console.error(`[Page] Error fetching creator profile for ${username}:`, error)
     notFound()

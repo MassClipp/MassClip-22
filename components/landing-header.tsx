@@ -6,11 +6,13 @@ import { Button } from "@/components/ui/button"
 import { Menu, X, ChevronRight, Instagram } from "lucide-react"
 import Logo from "@/components/logo"
 import { useScrollLock } from "@/hooks/use-scroll-lock"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 
 export default function LandingHeader() {
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const [scrolled, setScrolled] = useState(false)
   const mobileMenuRef = useRef<HTMLDivElement>(null)
+  const [showBetaModal, setShowBetaModal] = useState(false)
 
   // Lock scroll when menu is open
   useScrollLock(isMenuOpen)
@@ -42,9 +44,8 @@ export default function LandingHeader() {
 
   const navigationItems = [
     { name: "Home", href: "/" },
-    { name: "Explore", href: "/dashboard" },
-    { name: "Pricing", href: "/membership-plans" },
-    { name: "Categories", href: "/dashboard/categories" },
+    { name: "Explore", href: "/dashboard/explore" },
+    { name: "Pricing", href: "/dashboard/membership" },
   ]
 
   return (
@@ -71,14 +72,14 @@ export default function LandingHeader() {
           </nav>
         </div>
 
-        {/* BETA Tag - Centered (hidden on mobile) */}
-        <div className="absolute left-1/2 transform -translate-x-1/2 hidden md:flex items-center">
-          <Link
-            href="/beta-notice"
-            className="text-amber-400 text-xs font-extralight tracking-widest hover:text-amber-300 transition-colors"
+        {/* Beta Tag - Centered */}
+        <div className="hidden md:flex absolute left-1/2 transform -translate-x-1/2">
+          <button
+            onClick={() => setShowBetaModal(true)}
+            className="px-1.5 py-0.5 text-[10px] font-semibold bg-gradient-to-r from-yellow-400 to-yellow-600 text-black rounded-full hover:from-yellow-300 hover:to-yellow-500 transition-all duration-200 transform hover:scale-105"
           >
-            READ BETA NOTICE
-          </Link>
+            BETA
+          </button>
         </div>
 
         {/* Desktop CTA */}
@@ -125,7 +126,16 @@ export default function LandingHeader() {
         <div className="flex flex-col h-full">
           {/* Menu Header */}
           <div className="flex items-center justify-between p-5 border-b border-zinc-800 bg-black">
-            <Logo href="/" size="sm" />
+            <div className="flex items-center gap-2">
+              <Logo href="/" size="sm" />
+              {/* Beta Tag for Mobile */}
+              <button
+                onClick={() => setShowBetaModal(true)}
+                className="px-1.5 py-0.5 text-[10px] font-semibold bg-gradient-to-r from-yellow-400 to-yellow-600 text-black rounded-full hover:from-yellow-300 hover:to-yellow-500 transition-all duration-200"
+              >
+                BETA
+              </button>
+            </div>
             <button
               className="flex items-center justify-center w-8 h-8 text-white/80 hover:text-white bg-zinc-800/50 rounded-full"
               onClick={() => setIsMenuOpen(false)}
@@ -149,23 +159,13 @@ export default function LandingHeader() {
                   <ChevronRight className="h-4 w-4 text-zinc-500 group-hover:text-white/70 transition-colors" />
                 </Link>
               ))}
-
-              {/* Beta Notice Link in Mobile Menu */}
-              <Link
-                href="/beta-notice"
-                className="flex items-center justify-between py-3 px-4 text-amber-400 hover:text-amber-300 hover:bg-white/5 rounded-lg transition-colors group"
-                onClick={() => setIsMenuOpen(false)}
-              >
-                <span className="text-sm font-light tracking-wide">Beta Notice</span>
-                <ChevronRight className="h-4 w-4 text-zinc-500 group-hover:text-amber-300 transition-colors" />
-              </Link>
             </div>
 
             {/* Social Links */}
             <div className="mt-8 pt-6 border-t border-zinc-800/50 bg-black">
               <p className="text-xs text-zinc-500 font-light px-4 mb-4">Follow Us</p>
               <a
-                href="https://www.instagram.com/massclipp?igsh=MTZtY2w0bnQwaHI1OA%3D%3D&utm_source=qr"
+                href="https://www.instagram.com/massclip.official"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex items-center py-3 px-4 text-white/90 hover:text-white hover:bg-white/5 rounded-lg transition-colors"
@@ -195,6 +195,28 @@ export default function LandingHeader() {
           </div>
         </div>
       </div>
+
+      {/* Beta Modal */}
+      <Dialog open={showBetaModal} onOpenChange={setShowBetaModal}>
+        <DialogContent className="sm:max-w-md bg-black border border-white/10">
+          <DialogHeader>
+            <DialogTitle className="text-white text-center">🚀 Welcome to MassClip Beta</DialogTitle>
+          </DialogHeader>
+          <div className="text-center py-4">
+            <p className="text-white/80 mb-4">
+              We're in beta! Thank you for your patience as this platform grows and evolves.
+            </p>
+            <p className="text-white/60 text-sm">
+              Your feedback helps us build something amazing.
+              <br />
+              Reach out to us at{" "}
+              <a href="mailto:john@massclip.pro" className="text-crimson hover:text-crimson-light transition-colors">
+                john@massclip.pro
+              </a>
+            </p>
+          </div>
+        </DialogContent>
+      </Dialog>
     </header>
   )
 }

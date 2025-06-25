@@ -2,11 +2,11 @@
 import { useRouter } from "next/navigation"
 import { motion } from "framer-motion"
 import { CheckCircle2, Crown, Shield, Zap, Download } from "lucide-react"
-import DashboardHeader from "@/components/dashboard-header"
 import { SubscribeButton } from "@/components/subscribe-button"
 import { useAuth } from "@/contexts/auth-context"
 import { useUserPlan } from "@/hooks/use-user-plan"
 import { Button } from "@/components/ui/button"
+import { DashboardHeader } from "@/components/dashboard-header"
 
 export default function MembershipPlansPage() {
   const { user } = useAuth()
@@ -37,66 +37,53 @@ export default function MembershipPlansPage() {
   }
 
   return (
-    <div className="relative min-h-screen bg-black text-white">
-      {/* Premium Gradient Background */}
-      <div className="fixed inset-0 z-0 premium-gradient">
-        <div className="absolute inset-0 bg-[url('/noise.png')] opacity-[0.03] mix-blend-soft-light"></div>
-      </div>
+    <div className="min-h-screen bg-black">
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <DashboardHeader
+          title="Membership Plans"
+          description="Unlock premium features to accelerate your content creation workflow"
+        />
 
-      <DashboardHeader />
-
-      <main className="pt-20 pb-16 relative z-10">
-        <motion.div
-          variants={containerVariants}
-          initial="hidden"
-          animate="visible"
-          className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8"
-        >
-          <motion.div variants={itemVariants} className="text-center mb-12">
-            <h1 className="text-4xl font-extralight tracking-tight text-white mb-4">Membership Plans</h1>
-            <p className="text-xl text-zinc-400 max-w-3xl mx-auto font-light">
-              Unlock premium features to accelerate your content creation workflow
-            </p>
-          </motion.div>
-
+        <motion.div variants={containerVariants} initial="hidden" animate="visible" className="space-y-8 mt-8">
+          {/* Plans Grid */}
           <motion.div variants={itemVariants} className="grid md:grid-cols-2 gap-8 max-w-4xl mx-auto">
             {/* Free Plan */}
             <div
-              className={`bg-zinc-900/30 rounded-lg overflow-hidden border ${!isProUser ? "border-crimson" : "border-zinc-800/50"} backdrop-blur-sm relative`}
+              className={`bg-zinc-900/30 rounded-lg overflow-hidden border ${!isProUser ? "border-red-600" : "border-zinc-800/50"} backdrop-blur-sm relative`}
             >
               {!isProUser && !loading && (
-                <div className="absolute top-0 right-0 bg-crimson text-white text-xs font-bold px-3 py-1">
+                <div className="absolute top-0 right-0 bg-red-600 text-white text-xs font-bold px-3 py-1">
                   CURRENT PLAN
                 </div>
               )}
               <div className="p-8">
                 <div className="flex items-center mb-4">
                   <Shield className="h-6 w-6 text-zinc-400 mr-2" />
-                  <h2 className="text-2xl font-light text-white">Free</h2>
+                  <h2 className="text-2xl font-medium text-white">Free</h2>
                 </div>
-                <p className="text-zinc-400 mb-6 font-light">Get started with basic features</p>
-                <p className="text-4xl font-light text-white mb-6">
+                <p className="text-zinc-400 mb-6">Get started with basic features</p>
+                <p className="text-4xl font-semibold text-white mb-6">
                   $0<span className="text-xl text-zinc-400">/month</span>
                 </p>
 
                 <ul className="space-y-4 mb-8">
                   <li className="flex items-start">
                     <CheckCircle2 className="h-5 w-5 text-green-500 mr-2 flex-shrink-0 mt-0.5" />
-                    <span className="font-light">
-                      <strong>10 downloads per month</strong>
+                    <span>
+                      <strong>50 downloads per month</strong>
                     </span>
                   </li>
                   <li className="flex items-start">
                     <CheckCircle2 className="h-5 w-5 text-green-500 mr-2 flex-shrink-0 mt-0.5" />
-                    <span className="font-light">Access to free clips</span>
+                    <span>Access to all clips</span>
                   </li>
                   <li className="flex items-start">
                     <CheckCircle2 className="h-5 w-5 text-green-500 mr-2 flex-shrink-0 mt-0.5" />
-                    <span className="font-light">Standard video quality</span>
+                    <span>Standard video quality</span>
                   </li>
                   <li className="flex items-start">
                     <CheckCircle2 className="h-5 w-5 text-green-500 mr-2 flex-shrink-0 mt-0.5" />
-                    <span className="font-light">Limited organization features</span>
+                    <span>Dynamic content organization</span>
                   </li>
                 </ul>
 
@@ -112,7 +99,7 @@ export default function MembershipPlansPage() {
                   <Button
                     onClick={() => router.push("/dashboard")}
                     variant="outline"
-                    className="w-full border-crimson bg-black/30 text-white hover:bg-crimson/10"
+                    className="w-full border-red-600 bg-black/30 text-white hover:bg-red-600/10"
                   >
                     Current Plan
                   </Button>
@@ -122,45 +109,45 @@ export default function MembershipPlansPage() {
 
             {/* Creator Pro Plan */}
             <div
-              className={`bg-zinc-900/30 rounded-lg overflow-hidden border ${isProUser ? "border-crimson" : "border-zinc-800/50"} backdrop-blur-sm relative`}
+              className={`bg-zinc-900/30 rounded-lg overflow-hidden border ${isProUser ? "border-red-600" : "border-zinc-800/50"} backdrop-blur-sm relative`}
             >
               {!loading && (
-                <div className="absolute top-0 right-0 bg-crimson text-white text-xs font-bold px-3 py-1">
+                <div className="absolute top-0 right-0 bg-red-600 text-white text-xs font-bold px-3 py-1">
                   {isProUser ? "CURRENT PLAN" : "RECOMMENDED"}
                 </div>
               )}
               <div className="p-8">
                 <div className="flex items-center mb-4">
                   <Crown className="h-6 w-6 text-yellow-500 mr-2" />
-                  <h2 className="text-2xl font-light text-white">Creator Pro</h2>
+                  <h2 className="text-2xl font-medium text-white">Creator Pro</h2>
                 </div>
-                <p className="text-zinc-400 mb-6 font-light">Everything you need to create amazing content</p>
-                <p className="text-4xl font-light text-white mb-6">
+                <p className="text-zinc-400 mb-6">Everything you need to create amazing content</p>
+                <p className="text-4xl font-semibold text-white mb-6">
                   $19<span className="text-xl text-zinc-400">/month</span>
                 </p>
 
                 <ul className="space-y-4 mb-8">
                   <li className="flex items-start">
                     <CheckCircle2 className="h-5 w-5 text-green-500 mr-2 flex-shrink-0 mt-0.5" />
-                    <span className="font-light">
+                    <span>
                       <strong>Unlimited downloads</strong>
                     </span>
                   </li>
                   <li className="flex items-start">
                     <CheckCircle2 className="h-5 w-5 text-green-500 mr-2 flex-shrink-0 mt-0.5" />
-                    <span className="font-light">Access to all clips</span>
+                    <span>Access to all clips</span>
                   </li>
                   <li className="flex items-start">
                     <CheckCircle2 className="h-5 w-5 text-green-500 mr-2 flex-shrink-0 mt-0.5" />
-                    <span className="font-light">High video quality</span>
+                    <span>High video quality</span>
                   </li>
                   <li className="flex items-start">
                     <CheckCircle2 className="h-5 w-5 text-green-500 mr-2 flex-shrink-0 mt-0.5" />
-                    <span className="font-light">Priority support</span>
+                    <span>Priority support</span>
                   </li>
                   <li className="flex items-start">
                     <CheckCircle2 className="h-5 w-5 text-green-500 mr-2 flex-shrink-0 mt-0.5" />
-                    <span className="font-light">Advanced organization features</span>
+                    <span>Advanced organization features</span>
                   </li>
                 </ul>
 
@@ -168,12 +155,12 @@ export default function MembershipPlansPage() {
                   <Button
                     onClick={() => router.push("/dashboard/user")}
                     variant="outline"
-                    className="w-full border-crimson bg-black/30 text-white hover:bg-crimson/10"
+                    className="w-full border-red-600 bg-black/30 text-white hover:bg-red-600/10"
                   >
                     Manage Subscription
                   </Button>
                 ) : (
-                  <SubscribeButton className="w-full bg-crimson hover:bg-crimson-dark">
+                  <SubscribeButton className="w-full bg-red-600 hover:bg-red-700">
                     Upgrade to Creator Pro
                   </SubscribeButton>
                 )}
@@ -181,41 +168,39 @@ export default function MembershipPlansPage() {
             </div>
           </motion.div>
 
-          <motion.div variants={itemVariants} className="mt-16 text-center max-w-3xl mx-auto">
-            <h3 className="text-2xl font-light text-white mb-6">Why Choose MassClip Creator Pro?</h3>
+          {/* Features Section */}
+          <motion.div variants={itemVariants} className="max-w-3xl mx-auto">
+            <h3 className="text-xl font-medium text-white mb-6 text-center">Why Choose MassClip Creator Pro?</h3>
 
             <div className="grid md:grid-cols-3 gap-6 mb-12">
               <div className="bg-zinc-900/30 border border-zinc-800/50 rounded-lg p-6 backdrop-blur-sm">
-                <Download className="h-8 w-8 text-crimson mb-4" />
+                <Download className="h-8 w-8 text-red-600 mb-4" />
                 <h4 className="text-lg font-medium text-white mb-2">Unlimited Downloads</h4>
-                <p className="text-zinc-400 font-light">
-                  Download as many clips as you need without any monthly restrictions
-                </p>
+                <p className="text-zinc-400">Download as many clips as you need without any monthly restrictions</p>
               </div>
 
               <div className="bg-zinc-900/30 border border-zinc-800/50 rounded-lg p-6 backdrop-blur-sm">
-                <Zap className="h-8 w-8 text-crimson mb-4" />
+                <Zap className="h-8 w-8 text-red-600 mb-4" />
                 <h4 className="text-lg font-medium text-white mb-2">Premium Content</h4>
-                <p className="text-zinc-400 font-light">
-                  Access our entire library of high-quality, professionally curated clips
-                </p>
+                <p className="text-zinc-400">Access our entire library of high-quality, professionally curated clips</p>
               </div>
 
               <div className="bg-zinc-900/30 border border-zinc-800/50 rounded-lg p-6 backdrop-blur-sm">
-                <Shield className="h-8 w-8 text-crimson mb-4" />
+                <Shield className="h-8 w-8 text-red-600 mb-4" />
                 <h4 className="text-lg font-medium text-white mb-2">Advanced Organization</h4>
-                <p className="text-zinc-400 font-light">
+                <p className="text-zinc-400">
                   Enjoy dynamic content organization with shuffled videos for a fresh experience
                 </p>
               </div>
             </div>
 
-            <h3 className="text-2xl font-light text-white mb-6">Frequently Asked Questions</h3>
+            {/* FAQ Section */}
+            <h3 className="text-xl font-medium text-white mb-6 text-center">Frequently Asked Questions</h3>
 
-            <div className="space-y-8 text-left">
+            <div className="space-y-6">
               <div className="bg-zinc-900/30 border border-zinc-800/50 rounded-lg p-6 backdrop-blur-sm">
                 <h4 className="text-lg font-medium text-white mb-2">Can I cancel my subscription?</h4>
-                <p className="text-zinc-400 font-light">
+                <p className="text-zinc-400">
                   Yes, you can cancel your subscription anytime. You'll continue to have access until the end of your
                   billing period.
                 </p>
@@ -223,14 +208,14 @@ export default function MembershipPlansPage() {
 
               <div className="bg-zinc-900/30 border border-zinc-800/50 rounded-lg p-6 backdrop-blur-sm">
                 <h4 className="text-lg font-medium text-white mb-2">What payment methods do you accept?</h4>
-                <p className="text-zinc-400 font-light">
+                <p className="text-zinc-400">
                   We accept all major credit cards, including Visa, Mastercard, and American Express.
                 </p>
               </div>
 
               <div className="bg-zinc-900/30 border border-zinc-800/50 rounded-lg p-6 backdrop-blur-sm">
                 <h4 className="text-lg font-medium text-white mb-2">How do I get started?</h4>
-                <p className="text-zinc-400 font-light">
+                <p className="text-zinc-400">
                   Simply click the "Upgrade to Creator Pro" button, complete the checkout process, and you'll have
                   immediate access to all Creator Pro features.
                 </p>
@@ -238,7 +223,7 @@ export default function MembershipPlansPage() {
             </div>
           </motion.div>
         </motion.div>
-      </main>
+      </div>
     </div>
   )
 }

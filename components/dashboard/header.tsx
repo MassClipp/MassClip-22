@@ -93,6 +93,8 @@ export default function DashboardHeader() {
             Upload
           </Button>
 
+          {!userData && user && <div className="hidden md:flex h-8 w-24 bg-zinc-800 animate-pulse rounded"></div>}
+
           {userData?.username && (
             <Button
               variant="outline"
