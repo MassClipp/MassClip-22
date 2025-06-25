@@ -5,136 +5,83 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   console.log(`🛒 [Checkout] Product Box ID: ${params.id}`)
 
   try {
-    // Step 1: Import dependencies with error handling
-    console.log(`📦 [Checkout] Step 1: Loading dependencies...`)
-    let db, verifyIdToken, stripe
+    // Import dependencies
+    const { db, verifyIdToken } = await import("@/lib/firebase-admin")
+    const { stripe } = await import("@/lib/stripe")
 
-    try {
-      const firebaseAdmin = await import("@/lib/firebase-admin")
-      db = firebaseAdmin.db
-      verifyIdToken = firebaseAdmin.verifyIdToken
-      console.log(`✅ [Checkout] Firebase Admin loaded`)
-    } catch (firebaseError) {
-      console.error(`❌ [Checkout] Firebase Admin import failed:`, firebaseError)
-      return new NextResponse(`Firebase configuration error: ${firebaseError.message}`, { status: 500 })
-    }
-
-    try {
-      const stripeLib = await import("@/lib/stripe")
-      stripe = stripeLib.stripe
-      console.log(`✅ [Checkout] Stripe loaded`)
-    } catch (stripeError) {
-      console.error(`❌ [Checkout] Stripe import failed:`, stripeError)
-      return new NextResponse(`Stripe configuration error: ${stripeError.message}`, { status: 500 })
-    }
-
-    // Step 2: Validate request headers
-    console.log(`🔑 [Checkout] Step 2: Validating authentication...`)
+    // Validate auth
     const authHeader = req.headers.get("authorization")
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      console.error("❌ [Checkout] No authorization header provided")
-      return new NextResponse("Unauthorized - No token provided", { status: 401 })
+    if (!authHeader?.startsWith("Bearer ")) {
+      return new NextResponse("Unauthorized", { status: 401 })
     }
 
     const token = authHeader.split("Bearer ")[1]
-    console.log(`🔑 [Checkout] Token extracted, length: ${token.length}`)
-
-    // Step 3: Verify Firebase token
-    console.log(`🔑 [Checkout] Step 3: Verifying Firebase token...`)
-    let decodedToken
-    try {
-      decodedToken = await verifyIdToken(token)
-      console.log(`✅ [Checkout] Token verified for user: ${decodedToken.uid}`)
-    } catch (tokenError) {
-      console.error("❌ [Checkout] Token verification failed:", tokenError)
-      return new NextResponse(`Authentication failed: ${tokenError.message}`, { status: 401 })
-    }
-
+    const decodedToken = await verifyIdToken(token)
     const userId = decodedToken.uid
-    const { id } = params
 
-    // Step 4: Parse request body
-    console.log(`📝 [Checkout] Step 4: Parsing request body...`)
-    let body
-    try {
-      body = await req.json()
-      console.log(`✅ [Checkout] Request body parsed:`, Object.keys(body))
-    } catch (parseError) {
-      console.error("❌ [Checkout] Failed to parse request body:", parseError)
-      return new NextResponse(`Invalid request body: ${parseError.message}`, { status: 400 })
-    }
-
+    // Parse request body
+    const body = await req.json()
     const { successUrl, cancelUrl } = body
 
-    // Step 5: Get product box from Firestore
-    console.log(`📦 [Checkout] Step 5: Fetching product box: ${id}`)
-    let productBoxDoc
-    try {
-      productBoxDoc = await db.collection("productBoxes").doc(id).get()
-      console.log(`✅ [Checkout] Product box query completed, exists: ${productBoxDoc.exists}`)
-    } catch (firestoreError) {
-      console.error("❌ [Checkout] Firestore query failed:", firestoreError)
-      return new NextResponse(`Database error: ${firestoreError.message}`, { status: 500 })
-    }
-
+    // Get product box
+    const productBoxDoc = await db.collection("productBoxes").doc(params.id).get()
     if (!productBoxDoc.exists) {
-      console.error(`❌ [Checkout] Product box not found: ${id}`)
+      console.error(`❌ [Checkout] Product box not found: ${params.id}`)
       return new NextResponse("Product box not found", { status: 404 })
     }
 
     const productBox = productBoxDoc.data()
-    if (!productBox) {
-      console.error(`❌ [Checkout] Product box data is null: ${id}`)
-      return new NextResponse("Product box data is invalid", { status: 400 })
-    }
-
-    console.log(`✅ [Checkout] Product box loaded:`, {
-      title: productBox.title,
-      price: productBox.price,
-      active: productBox.active,
-      creatorId: productBox.creatorId,
+    console.log(`✅ [Checkout] Product box data:`, {
+      id: params.id,
+      title: productBox?.title,
+      price: productBox?.price,
+      active: productBox?.active,
+      creatorId: productBox?.creatorId,
+      hasDescription: !!productBox?.description,
     })
 
-    if (!productBox.active) {
-      console.error(`❌ [Checkout] Product box is not active: ${id}`)
+    // Validate required fields
+    if (!productBox?.title) {
+      console.error(`❌ [Checkout] Product box missing title: ${params.id}`)
+      return new NextResponse("Product box missing required data", { status: 400 })
+    }
+
+    if (!productBox?.price || typeof productBox.price !== "number") {
+      console.error(`❌ [Checkout] Product box invalid price: ${params.id}`, productBox?.price)
+      return new NextResponse("Product box has invalid price", { status: 400 })
+    }
+
+    if (!productBox?.creatorId) {
+      console.error(`❌ [Checkout] Product box missing creator: ${params.id}`)
+      return new NextResponse("Product box missing creator", { status: 400 })
+    }
+
+    if (productBox.active === false) {
+      console.error(`❌ [Checkout] Product box not active: ${params.id}`)
       return new NextResponse("Product box is not active", { status: 400 })
     }
 
-    // Step 6: Get creator data
-    console.log(`👤 [Checkout] Step 6: Fetching creator: ${productBox.creatorId}`)
-    let creatorDoc
-    try {
-      creatorDoc = await db.collection("users").doc(productBox.creatorId).get()
-      console.log(`✅ [Checkout] Creator query completed, exists: ${creatorDoc.exists}`)
-    } catch (creatorError) {
-      console.error("❌ [Checkout] Creator query failed:", creatorError)
-      return new NextResponse(`Creator lookup error: ${creatorError.message}`, { status: 500 })
-    }
-
+    // Get creator
+    const creatorDoc = await db.collection("users").doc(productBox.creatorId).get()
     if (!creatorDoc.exists) {
       console.error(`❌ [Checkout] Creator not found: ${productBox.creatorId}`)
       return new NextResponse("Creator not found", { status: 404 })
     }
 
     const creatorData = creatorDoc.data()
-    if (!creatorData) {
-      console.error(`❌ [Checkout] Creator data is null: ${productBox.creatorId}`)
-      return new NextResponse("Creator data is invalid", { status: 400 })
-    }
-
-    console.log(`✅ [Checkout] Creator loaded:`, {
-      username: creatorData.username,
-      displayName: creatorData.displayName,
-      hasStripeAccount: !!creatorData.stripeAccountId,
+    console.log(`✅ [Checkout] Creator data:`, {
+      id: productBox.creatorId,
+      username: creatorData?.username,
+      displayName: creatorData?.displayName,
+      hasStripeAccount: !!creatorData?.stripeAccountId,
     })
 
-    if (!creatorData.stripeAccountId) {
-      console.error(`❌ [Checkout] Creator has no Stripe account: ${productBox.creatorId}`)
+    if (!creatorData?.stripeAccountId) {
+      console.error(`❌ [Checkout] Creator missing Stripe account: ${productBox.creatorId}`)
       return new NextResponse("Creator has not connected Stripe account", { status: 400 })
     }
 
-    // Step 7: Validate environment variables
-    console.log(`🔧 [Checkout] Step 7: Validating environment...`)
+    // Validate environment
     if (!process.env.STRIPE_SECRET_KEY) {
       console.error("❌ [Checkout] STRIPE_SECRET_KEY not configured")
       return new NextResponse("Payment system not configured", { status: 500 })
@@ -145,72 +92,75 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       return new NextResponse("Site URL not configured", { status: 500 })
     }
 
-    console.log(`✅ [Checkout] Environment validated`)
+    // Create checkout session with proper error handling
+    console.log(`🔄 [Checkout] Creating Stripe session...`)
 
-    // Step 8: Create SIMPLE Stripe checkout session (without application fee first)
-    console.log(`🔄 [Checkout] Step 8: Creating SIMPLE Stripe session...`)
-    let session
-    try {
-      // First, try a simple session without application fees to test basic functionality
-      session = await stripe.checkout.sessions.create({
-        mode: "payment",
-        line_items: [
-          {
-            price_data: {
-              currency: "usd",
-              product_data: {
-                name: productBox.title,
-                description:
-                  productBox.description || `Product box by ${creatorData.username || creatorData.displayName}`,
-              },
-              unit_amount: productBox.price,
+    const sessionData = {
+      mode: "payment" as const,
+      line_items: [
+        {
+          price_data: {
+            currency: "usd",
+            product_data: {
+              name: productBox.title,
+              description:
+                productBox.description ||
+                `Product box by ${creatorData.username || creatorData.displayName || "Creator"}`,
             },
-            quantity: 1,
+            unit_amount: Math.round(productBox.price), // Ensure it's an integer
           },
-        ],
-        success_url:
-          successUrl ||
-          `${process.env.NEXT_PUBLIC_SITE_URL}/purchase/success?session_id={CHECKOUT_SESSION_ID}&product_box_id=${id}`,
-        cancel_url: cancelUrl || `${process.env.NEXT_PUBLIC_SITE_URL}/creator/${creatorData.username}`,
-        metadata: {
-          productBoxId: id,
-          buyerUid: userId,
-          creatorUid: productBox.creatorId,
-          type: "product_box_purchase",
-          // Note: This is a simplified version without application fees
-          simplified: "true",
+          quantity: 1,
         },
-      })
-
-      console.log(`✅ [Checkout] SIMPLE Stripe session created: ${session.id}`)
-    } catch (stripeError) {
-      console.error("❌ [Checkout] Stripe session creation failed:", stripeError)
-      console.error("❌ [Checkout] Stripe error details:", {
-        type: stripeError.type,
-        code: stripeError.code,
-        message: stripeError.message,
-        param: stripeError.param,
-      })
-      return new NextResponse(`Payment processing error: ${stripeError.message}`, { status: 500 })
+      ],
+      success_url:
+        successUrl ||
+        `${process.env.NEXT_PUBLIC_SITE_URL}/purchase/success?session_id={CHECKOUT_SESSION_ID}&product_box_id=${params.id}`,
+      cancel_url: cancelUrl || `${process.env.NEXT_PUBLIC_SITE_URL}/creator/${creatorData.username || "unknown"}`,
+      metadata: {
+        productBoxId: params.id,
+        buyerUid: userId,
+        creatorUid: productBox.creatorId,
+        type: "product_box_purchase",
+      },
     }
 
-    // Step 9: Return success response
-    console.log(`🎉 [Checkout] Step 9: Returning success response`)
+    console.log(`🔄 [Checkout] Session data prepared:`, {
+      amount: sessionData.line_items[0].price_data.unit_amount,
+      productName: sessionData.line_items[0].price_data.product_data.name,
+      hasDescription: !!sessionData.line_items[0].price_data.product_data.description,
+    })
+
+    const session = await stripe.checkout.sessions.create(sessionData)
+
+    console.log(`✅ [Checkout] Session created successfully: ${session.id}`)
+
     return NextResponse.json({
       url: session.url,
       sessionId: session.id,
-      note: "Simplified checkout without application fees for testing",
     })
   } catch (error) {
     console.error("❌ [CHECKOUT] CRITICAL ERROR:", error)
-    console.error("❌ [CHECKOUT] Error name:", error?.name)
-    console.error("❌ [CHECKOUT] Error message:", error?.message)
-    console.error("❌ [CHECKOUT] Error stack:", error?.stack)
 
-    // Return detailed error for debugging
+    // Log detailed error information
+    if (error instanceof Error) {
+      console.error("❌ [CHECKOUT] Error details:", {
+        name: error.name,
+        message: error.message,
+        stack: error.stack?.split("\n").slice(0, 5), // First 5 lines of stack
+      })
+    }
+
+    // Check if it's a Stripe error
+    if (error && typeof error === "object" && "type" in error) {
+      console.error("❌ [CHECKOUT] Stripe error details:", {
+        type: error.type,
+        code: error.code,
+        message: error.message,
+        param: error.param,
+      })
+    }
+
     const errorMessage = error instanceof Error ? error.message : "Unknown error occurred"
-    const errorName = error instanceof Error ? error.name : "UnknownError"
-
-    return new NextResponse(`Checkout failed [${errorName}]: ${errorMessage}`, { status: 500 })
+    return new NextResponse(`Checkout failed: ${errorMessage}`, { status: 500 })
   }
 }
