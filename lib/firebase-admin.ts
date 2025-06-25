@@ -1,208 +1,105 @@
 import { initializeApp, getApps, cert } from "firebase-admin/app"
 import { getFirestore, FieldValue } from "firebase-admin/firestore"
-import { getAuth } from "firebase-admin/auth"
+import { getAuth, type DecodedIdToken } from "firebase-admin/auth"
 
 /**
- * Initializes Firebase Admin SDK if it hasn't been initialized already
- * This prevents multiple initializations in serverless environments
+ * Initialize the Firebase Admin SDK once (prevents double-init in serverless).
  */
 export function initializeFirebaseAdmin() {
   if (getApps().length === 0) {
-    // Check for required environment variables
     const projectId = process.env.FIREBASE_PROJECT_ID
     const clientEmail = process.env.FIREBASE_CLIENT_EMAIL
-    const privateKey = process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n")
+    const privateKeyRaw = process.env.FIREBASE_PRIVATE_KEY
 
-    if (!projectId || !clientEmail || !privateKey) {
-      console.error("Missing Firebase Admin SDK credentials in environment variables")
-      console.error("Required: FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, FIREBASE_PRIVATE_KEY")
-      throw new Error("Firebase Admin SDK credentials are required")
+    if (!projectId || !clientEmail || !privateKeyRaw) {
+      throw new Error(
+        "Missing Firebase Admin credentials. " +
+          "Ensure FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, FIREBASE_PRIVATE_KEY env vars are set.",
+      )
     }
 
-    try {
-      const app = initializeApp({
-        credential: cert({
-          projectId,
-          clientEmail,
-          privateKey,
-        }),
-        projectId, // Explicitly set project ID
-      })
-      console.log("✅ Firebase Admin SDK initialized successfully")
-      return app
-    } catch (error) {
-      console.error("❌ Error initializing Firebase Admin SDK:", error)
-      throw error
-    }
-  } else {
-    console.log("✅ Firebase Admin SDK already initialized")
-    return getApps()[0]
+    const privateKey = privateKeyRaw.replace(/\\n/g, "\n")
+
+    initializeApp({
+      credential: cert({ projectId, clientEmail, privateKey }),
+      projectId,
+    })
+    console.log("✅ Firebase Admin SDK initialised")
   }
+  return getApps()[0]
 }
 
-// Initialize Firebase Admin if not already initialized
-let adminApp: any = null
-let adminDb: any = null
-let adminAuth: any = null
+/* -------------------------------------------------------------------------- */
+/*                               Lazy singletons                              */
+/* -------------------------------------------------------------------------- */
 
-try {
-  adminApp = initializeFirebaseAdmin()
-  adminDb = getFirestore(adminApp)
-  adminAuth = getAuth(adminApp)
+const adminApp = initializeFirebaseAdmin()
+export const db = getFirestore(adminApp)
+export const auth = getAuth(adminApp)
 
-  // Configure Firestore settings for better reliability
-  adminDb.settings({
-    ignoreUndefinedProperties: true,
-  })
-} catch (error) {
-  console.error("❌ Failed to initialize Firebase Admin:", error)
-}
+// Better reliability for Firestore
+db.settings({ ignoreUndefinedProperties: true })
 
-// Export the Firestore database using Admin SDK
-export const db = adminDb
-
-// Export the Auth service
-export const auth = adminAuth
-
-// Export FieldValue for serverTimestamp and other field operations
-export { FieldValue }
+/* -------------------------------------------------------------------------- */
+/*                          Utility / helper functions                        */
+/* -------------------------------------------------------------------------- */
 
 /**
- * Verifies a Firebase ID token and returns the decoded token
- * @param idToken - The Firebase ID token to verify
- * @returns Promise<DecodedIdToken> - The decoded token containing user information
+ * Generic retry helper with exponential back-off – useful for flaky Firestore ops.
  */
-export async function verifyIdToken(idToken: string) {
-  try {
-    const decodedToken = await auth.verifyIdToken(idToken)
-    return decodedToken
-  } catch (error) {
-    console.error("Error verifying ID token:", error)
-    throw new Error("Invalid or expired token")
-  }
-}
-
-/**
- * Helper function to get authenticated user from request headers
- * @param headers - Request headers containing authorization
- * @returns Promise<{uid: string, email?: string}> - User information
- */
-export async function getAuthenticatedUser(headers: Headers) {
-  const authHeader = headers.get("authorization")
-  const userIdHeader = headers.get("x-user-id")
-
-  if (!authHeader || !authHeader.startsWith("Bearer ")) {
-    throw new Error("Missing or invalid authorization header")
-  }
-
-  const token = authHeader.substring(7) // Remove 'Bearer ' prefix
-
-  try {
-    const decodedToken = await verifyIdToken(token)
-
-    // Verify the user ID matches if provided
-    if (userIdHeader && decodedToken.uid !== userIdHeader) {
-      throw new Error("User ID mismatch")
-    }
-
-    return {
-      uid: decodedToken.uid,
-      email: decodedToken.email,
-    }
-  } catch (error) {
-    console.error("Authentication error:", error)
-    throw new Error("Authentication failed")
-  }
-}
-
-// Helper function to retry Firestore operations
-export async function withRetry<T>(operation: () => Promise<T>, maxRetries = 3, delay = 1000): Promise<T> {
-  let lastError: Error | null = null
-
+export async function withRetry<T>(op: () => Promise<T>, maxRetries = 3, delay = 1000): Promise<T> {
+  let lastError: unknown
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
-      console.log(`🔄 [Firestore] Attempt ${attempt}/${maxRetries}`)
-      const result = await operation()
-      if (attempt > 1) {
-        console.log(`✅ [Firestore] Operation succeeded on attempt ${attempt}`)
-      }
-      return result
-    } catch (error) {
-      lastError = error as Error
-      console.error(`❌ [Firestore] Attempt ${attempt} failed:`, error)
-
+      return await op()
+    } catch (err) {
+      lastError = err
+      console.error(`❌ Firestore attempt ${attempt} failed`, err)
       if (attempt < maxRetries) {
-        console.log(`⏳ [Firestore] Retrying in ${delay}ms...`)
-        await new Promise((resolve) => setTimeout(resolve, delay))
-        delay *= 2 // Exponential backoff
+        await new Promise((r) => setTimeout(r, delay))
+        delay *= 2 // exponential back-off
       }
     }
   }
-
   throw lastError
 }
 
 /**
- * Create or update user profile in Firestore
+ * Verify a Firebase ID token and return decoded data.
  */
-export async function createOrUpdateUserProfile(userId: string, profileData: any) {
-  return withRetry(async () => {
-    const userRef = db.collection("users").doc(userId)
-
-    // Check if user exists
-    const userDoc = await userRef.get()
-
-    if (userDoc.exists) {
-      // Update existing user
-      await userRef.update({
-        ...profileData,
-        updatedAt: new Date(),
-      })
-      console.log(`✅ Updated user profile for ${userId}`)
-    } else {
-      // Create new user
-      await userRef.set({
-        ...profileData,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      })
-      console.log(`✅ Created new user profile for ${userId}`)
-    }
-
-    return userRef.id
-  })
+export async function verifyIdToken(idToken: string): Promise<DecodedIdToken> {
+  return auth.verifyIdToken(idToken)
 }
 
 /**
- * Create or update creator profile in Firestore
+ * Extract the authenticated user (uid/email) from request headers.
  */
-export async function createOrUpdateCreatorProfile(username: string, profileData: any) {
-  if (!username) return
+export async function getAuthenticatedUser(headers: Headers): Promise<{ uid: string; email?: string }> {
+  const authHeader = headers.get("authorization") ?? ""
+  if (!authHeader.startsWith("Bearer ")) {
+    throw new Error("Missing Bearer token")
+  }
+  const token = authHeader.slice(7)
+  const decoded = await verifyIdToken(token)
+  return { uid: decoded.uid, email: decoded.email }
+}
 
+/* -------------------------------------------------------------------------- */
+/*          Example helper that callers elsewhere in the codebase use         */
+/* -------------------------------------------------------------------------- */
+
+export async function createOrUpdateUserProfile(userId: string, profileData: Record<string, unknown>) {
   return withRetry(async () => {
-    const creatorRef = db.collection("creators").doc(username.toLowerCase())
+    const ref = db.collection("users").doc(userId)
+    const now = new Date()
 
-    // Check if creator exists
-    const creatorDoc = await creatorRef.get()
-
-    if (creatorDoc.exists) {
-      // Update existing creator
-      await creatorRef.update({
-        ...profileData,
-        updatedAt: new Date(),
-      })
-      console.log(`✅ Updated creator profile for ${username}`)
+    if ((await ref.get()).exists) {
+      await ref.update({ ...profileData, updatedAt: now })
     } else {
-      // Create new creator
-      await creatorRef.set({
-        ...profileData,
-        username: username.toLowerCase(),
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      })
-      console.log(`✅ Created new creator profile for ${username}`)
+      await ref.set({ ...profileData, createdAt: now, updatedAt: now })
     }
-
-    return creatorRef.id
+    return ref.id
   })
 }
+
+export { FieldValue }

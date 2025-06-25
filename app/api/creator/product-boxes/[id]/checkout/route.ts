@@ -5,49 +5,88 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
   console.log(`🛒 [Checkout] Product Box ID: ${params.id}`)
 
   try {
-    // Import dependencies
-    const { db, verifyIdToken } = await import("@/lib/firebase-admin")
-    const { stripe } = await import("@/lib/stripe")
+    // Import dependencies with error handling
+    let db, verifyIdToken, stripe
+
+    try {
+      const firebaseAdmin = await import("@/lib/firebase-admin")
+      db = firebaseAdmin.db
+      verifyIdToken = firebaseAdmin.verifyIdToken || firebaseAdmin.auth.verifyIdToken
+
+      const stripeModule = await import("@/lib/stripe")
+      stripe = stripeModule.stripe || stripeModule.default
+
+      console.log(`✅ [Checkout] Dependencies loaded successfully`)
+    } catch (importError) {
+      console.error(`❌ [Checkout] Failed to import dependencies:`, importError)
+      return new NextResponse("Server configuration error", { status: 500 })
+    }
 
     // Validate auth
     const authHeader = req.headers.get("authorization")
     if (!authHeader?.startsWith("Bearer ")) {
-      return new NextResponse("Unauthorized", { status: 401 })
+      console.error(`❌ [Checkout] Missing or invalid authorization header`)
+      return new NextResponse("Unauthorized - Missing auth token", { status: 401 })
     }
 
     const token = authHeader.split("Bearer ")[1]
-    const decodedToken = await verifyIdToken(token)
-    const userId = decodedToken.uid
+    let decodedToken, userId
 
-    // Parse request body
-    const body = await req.json()
-    const { successUrl, cancelUrl } = body
-
-    // Get product box
-    const productBoxDoc = await db.collection("productBoxes").doc(params.id).get()
-    if (!productBoxDoc.exists) {
-      console.error(`❌ [Checkout] Product box not found: ${params.id}`)
-      return new NextResponse("Product box not found", { status: 404 })
+    try {
+      decodedToken = await verifyIdToken(token)
+      userId = decodedToken.uid
+      console.log(`✅ [Checkout] User authenticated: ${userId}`)
+    } catch (authError) {
+      console.error(`❌ [Checkout] Auth verification failed:`, authError)
+      return new NextResponse("Unauthorized - Invalid token", { status: 401 })
     }
 
-    const productBox = productBoxDoc.data()
-    console.log(`✅ [Checkout] Product box data:`, {
-      id: params.id,
-      title: productBox?.title,
-      price: productBox?.price,
-      active: productBox?.active,
-      creatorId: productBox?.creatorId,
-      hasDescription: !!productBox?.description,
-    })
+    // Parse request body
+    let body
+    try {
+      body = await req.json()
+      console.log(`✅ [Checkout] Request body parsed:`, {
+        hasSuccessUrl: !!body.successUrl,
+        hasCancelUrl: !!body.cancelUrl,
+      })
+    } catch (parseError) {
+      console.error(`❌ [Checkout] Failed to parse request body:`, parseError)
+      return new NextResponse("Invalid request body", { status: 400 })
+    }
 
-    // Validate required fields
+    const { successUrl, cancelUrl } = body
+
+    // Get product box with error handling
+    let productBoxDoc, productBox
+    try {
+      productBoxDoc = await db.collection("productBoxes").doc(params.id).get()
+
+      if (!productBoxDoc.exists) {
+        console.error(`❌ [Checkout] Product box not found: ${params.id}`)
+        return new NextResponse("Product box not found", { status: 404 })
+      }
+
+      productBox = productBoxDoc.data()
+      console.log(`✅ [Checkout] Product box loaded:`, {
+        id: params.id,
+        title: productBox?.title,
+        price: productBox?.price,
+        active: productBox?.active,
+        creatorId: productBox?.creatorId,
+      })
+    } catch (dbError) {
+      console.error(`❌ [Checkout] Database error fetching product box:`, dbError)
+      return new NextResponse("Database error", { status: 500 })
+    }
+
+    // Validate product box data
     if (!productBox?.title) {
       console.error(`❌ [Checkout] Product box missing title: ${params.id}`)
       return new NextResponse("Product box missing required data", { status: 400 })
     }
 
-    if (!productBox?.price || typeof productBox.price !== "number") {
-      console.error(`❌ [Checkout] Product box invalid price: ${params.id}`, productBox?.price)
+    if (!productBox?.price || typeof productBox.price !== "number" || productBox.price <= 0) {
+      console.error(`❌ [Checkout] Product box invalid price:`, productBox?.price)
       return new NextResponse("Product box has invalid price", { status: 400 })
     }
 
@@ -61,27 +100,34 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       return new NextResponse("Product box is not active", { status: 400 })
     }
 
-    // Get creator
-    const creatorDoc = await db.collection("users").doc(productBox.creatorId).get()
-    if (!creatorDoc.exists) {
-      console.error(`❌ [Checkout] Creator not found: ${productBox.creatorId}`)
-      return new NextResponse("Creator not found", { status: 404 })
-    }
+    // Get creator with error handling
+    let creatorDoc, creatorData
+    try {
+      creatorDoc = await db.collection("users").doc(productBox.creatorId).get()
 
-    const creatorData = creatorDoc.data()
-    console.log(`✅ [Checkout] Creator data:`, {
-      id: productBox.creatorId,
-      username: creatorData?.username,
-      displayName: creatorData?.displayName,
-      hasStripeAccount: !!creatorData?.stripeAccountId,
-    })
+      if (!creatorDoc.exists) {
+        console.error(`❌ [Checkout] Creator not found: ${productBox.creatorId}`)
+        return new NextResponse("Creator not found", { status: 404 })
+      }
+
+      creatorData = creatorDoc.data()
+      console.log(`✅ [Checkout] Creator loaded:`, {
+        id: productBox.creatorId,
+        username: creatorData?.username,
+        hasStripeAccount: !!creatorData?.stripeAccountId,
+        stripeOnboardingComplete: creatorData?.stripeOnboardingComplete,
+      })
+    } catch (dbError) {
+      console.error(`❌ [Checkout] Database error fetching creator:`, dbError)
+      return new NextResponse("Database error", { status: 500 })
+    }
 
     if (!creatorData?.stripeAccountId) {
       console.error(`❌ [Checkout] Creator missing Stripe account: ${productBox.creatorId}`)
       return new NextResponse("Creator has not connected Stripe account", { status: 400 })
     }
 
-    // Validate environment
+    // Validate environment variables
     if (!process.env.STRIPE_SECRET_KEY) {
       console.error("❌ [Checkout] STRIPE_SECRET_KEY not configured")
       return new NextResponse("Payment system not configured", { status: 500 })
@@ -92,7 +138,44 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       return new NextResponse("Site URL not configured", { status: 500 })
     }
 
-    // Create checkout session with proper error handling
+    // Check if user already owns this product
+    try {
+      const existingPurchase = await db
+        .collection("users")
+        .doc(userId)
+        .collection("purchases")
+        .where("productBoxId", "==", params.id)
+        .limit(1)
+        .get()
+
+      if (!existingPurchase.empty) {
+        console.log(`⚠️ [Checkout] User already owns product: ${params.id}`)
+        return new NextResponse("You already own this product", { status: 400 })
+      }
+    } catch (dbError) {
+      console.warn(`⚠️ [Checkout] Could not check existing purchases:`, dbError)
+      // Continue anyway - this is not critical
+    }
+
+    // Convert price to cents and validate
+    const priceInCents = Math.round(productBox.price * 100)
+    if (priceInCents < 50) {
+      // Stripe minimum is $0.50
+      console.error(`❌ [Checkout] Price too low: $${productBox.price} (${priceInCents} cents)`)
+      return new NextResponse("Price must be at least $0.50", { status: 400 })
+    }
+
+    // Calculate platform fee (25%)
+    const platformFee = Math.round(priceInCents * 0.25)
+
+    console.log(`💰 [Checkout] Price calculation:`, {
+      originalPrice: productBox.price,
+      priceInCents,
+      platformFee,
+      creatorAmount: priceInCents - platformFee,
+    })
+
+    // Create checkout session with comprehensive error handling
     console.log(`🔄 [Checkout] Creating Stripe session...`)
 
     const sessionData = {
@@ -105,9 +188,10 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
               name: productBox.title,
               description:
                 productBox.description ||
-                `Product box by ${creatorData.username || creatorData.displayName || "Creator"}`,
+                `Premium content by ${creatorData.username || creatorData.displayName || "Creator"}`,
+              images: productBox.thumbnailUrl ? [productBox.thumbnailUrl] : undefined,
             },
-            unit_amount: Math.round(productBox.price), // Ensure it's an integer
+            unit_amount: priceInCents,
           },
           quantity: 1,
         },
@@ -116,51 +200,82 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         successUrl ||
         `${process.env.NEXT_PUBLIC_SITE_URL}/purchase/success?session_id={CHECKOUT_SESSION_ID}&product_box_id=${params.id}`,
       cancel_url: cancelUrl || `${process.env.NEXT_PUBLIC_SITE_URL}/creator/${creatorData.username || "unknown"}`,
+      client_reference_id: userId,
       metadata: {
         productBoxId: params.id,
         buyerUid: userId,
         creatorUid: productBox.creatorId,
         type: "product_box_purchase",
+        productTitle: productBox.title,
+      },
+      payment_intent_data: {
+        application_fee_amount: platformFee,
+        transfer_data: {
+          destination: creatorData.stripeAccountId,
+        },
+        metadata: {
+          productBoxId: params.id,
+          buyerUid: userId,
+          creatorUid: productBox.creatorId,
+        },
       },
     }
 
     console.log(`🔄 [Checkout] Session data prepared:`, {
       amount: sessionData.line_items[0].price_data.unit_amount,
       productName: sessionData.line_items[0].price_data.product_data.name,
-      hasDescription: !!sessionData.line_items[0].price_data.product_data.description,
+      platformFee,
+      stripeAccountId: creatorData.stripeAccountId,
     })
 
-    const session = await stripe.checkout.sessions.create(sessionData)
+    let session
+    try {
+      session = await stripe.checkout.sessions.create(sessionData)
+      console.log(`✅ [Checkout] Session created successfully: ${session.id}`)
+    } catch (stripeError) {
+      console.error("❌ [Checkout] Stripe session creation failed:", stripeError)
 
-    console.log(`✅ [Checkout] Session created successfully: ${session.id}`)
+      // Handle specific Stripe errors
+      if (stripeError.type === "StripeCardError") {
+        return new NextResponse("Card error: " + stripeError.message, { status: 400 })
+      } else if (stripeError.type === "StripeInvalidRequestError") {
+        return new NextResponse("Invalid request: " + stripeError.message, { status: 400 })
+      } else if (stripeError.type === "StripeAPIError") {
+        return new NextResponse("Stripe API error. Please try again.", { status: 500 })
+      } else if (stripeError.type === "StripeConnectionError") {
+        return new NextResponse("Network error. Please check your connection.", { status: 500 })
+      } else if (stripeError.type === "StripeAuthenticationError") {
+        return new NextResponse("Payment system authentication error", { status: 500 })
+      }
+
+      return new NextResponse("Payment processing error: " + (stripeError.message || "Unknown error"), { status: 500 })
+    }
+
+    if (!session.url) {
+      console.error(`❌ [Checkout] Session created but no URL returned`)
+      return new NextResponse("Checkout session created but no redirect URL", { status: 500 })
+    }
+
+    console.log(`✅ [Checkout] === CHECKOUT PROCESS COMPLETED SUCCESSFULLY ===`)
 
     return NextResponse.json({
       url: session.url,
       sessionId: session.id,
+      success: true,
     })
   } catch (error) {
-    console.error("❌ [CHECKOUT] CRITICAL ERROR:", error)
+    console.error("❌ [CHECKOUT] CRITICAL UNEXPECTED ERROR:", error)
 
-    // Log detailed error information
+    // Log detailed error information for debugging
     if (error instanceof Error) {
       console.error("❌ [CHECKOUT] Error details:", {
         name: error.name,
         message: error.message,
-        stack: error.stack?.split("\n").slice(0, 5), // First 5 lines of stack
+        stack: error.stack?.split("\n").slice(0, 10), // First 10 lines of stack
       })
     }
 
-    // Check if it's a Stripe error
-    if (error && typeof error === "object" && "type" in error) {
-      console.error("❌ [CHECKOUT] Stripe error details:", {
-        type: error.type,
-        code: error.code,
-        message: error.message,
-        param: error.param,
-      })
-    }
-
-    const errorMessage = error instanceof Error ? error.message : "Unknown error occurred"
-    return new NextResponse(`Checkout failed: ${errorMessage}`, { status: 500 })
+    // Return a generic error message to avoid exposing internal details
+    return new NextResponse("An unexpected error occurred during checkout. Please try again.", { status: 500 })
   }
 }
