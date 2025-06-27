@@ -1,8 +1,6 @@
 "use client"
 
 import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from "react"
-import { doc, getDoc, onSnapshot } from "firebase/firestore"
-import { db } from "@/lib/firebase"
 import { useAuth } from "@/contexts/auth-context"
 
 interface DownloadLimitContextType {
@@ -15,91 +13,42 @@ interface DownloadLimitContextType {
 
 const DownloadLimitContext = createContext<DownloadLimitContextType>({
   hasReachedLimit: false,
-  remainingDownloads: 15,
-  isProUser: false,
+  remainingDownloads: 999999, // Temporarily unlimited
+  isProUser: true, // Temporarily treat all users as pro
   forceRefresh: () => {},
-  loading: true,
+  loading: false,
 })
 
 export function DownloadLimitProvider({ children }: { children: ReactNode }) {
   const { user } = useAuth()
   const [hasReachedLimit, setHasReachedLimit] = useState(false)
-  const [remainingDownloads, setRemainingDownloads] = useState(15)
-  const [isProUser, setIsProUser] = useState(false)
+  const [remainingDownloads, setRemainingDownloads] = useState(999999) // Temporarily unlimited
+  const [isProUser, setIsProUser] = useState(true) // Temporarily treat all as pro
   const [refreshCounter, setRefreshCounter] = useState(0)
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(false) // Temporarily no loading
 
   // Force a refresh of the limit status
   const forceRefresh = useCallback(() => {
     setRefreshCounter((prev) => prev + 1)
   }, [])
 
-  // Set up a real-time listener for user plan data
+  // Temporarily disable download limits for all users
   useEffect(() => {
-    if (!user) {
-      setHasReachedLimit(false)
-      setRemainingDownloads(15)
-      setIsProUser(false)
-      setLoading(false)
-      return
-    }
-
-    setLoading(true)
-    const userDocRef = doc(db, "users", user.uid)
-
-    // Initial fetch
-    getDoc(userDocRef)
-      .then((doc) => {
-        if (doc.exists()) {
-          const userData = doc.data()
-          const isPro = userData?.plan === "creator_pro"
-          const downloads = userData.downloads || 0
-          const limit = isPro ? Number.POSITIVE_INFINITY : 15
-
-          setIsProUser(isPro)
-          setRemainingDownloads(Math.max(0, limit - downloads))
-          setHasReachedLimit(!isPro && downloads >= limit)
-        }
-        setLoading(false)
-      })
-      .catch((err) => {
-        console.error("Error fetching initial user plan:", err)
-        setLoading(false)
-      })
-
-    // Set up real-time listener
-    const unsubscribe = onSnapshot(
-      userDocRef,
-      (doc) => {
-        if (doc.exists()) {
-          const userData = doc.data()
-          const isPro = userData?.plan === "creator_pro"
-          const downloads = userData.downloads || 0
-          const limit = isPro ? Number.POSITIVE_INFINITY : 15
-
-          setIsProUser(isPro)
-          setRemainingDownloads(Math.max(0, limit - downloads))
-          setHasReachedLimit(!isPro && downloads >= limit)
-        }
-        setLoading(false)
-      },
-      (error) => {
-        console.error("Error in download limit listener:", error)
-        setLoading(false)
-      },
-    )
-
-    return () => unsubscribe()
+    // Set unlimited downloads for all users temporarily
+    setHasReachedLimit(false)
+    setRemainingDownloads(999999)
+    setIsProUser(true)
+    setLoading(false)
   }, [user, refreshCounter])
 
   return (
     <DownloadLimitContext.Provider
       value={{
-        hasReachedLimit,
-        remainingDownloads,
-        isProUser,
+        hasReachedLimit: false, // Temporarily no limits
+        remainingDownloads: 999999, // Temporarily unlimited
+        isProUser: true, // Temporarily treat all as pro
         forceRefresh,
-        loading,
+        loading: false,
       }}
     >
       {children}

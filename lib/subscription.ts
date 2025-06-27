@@ -1,6 +1,3 @@
-import { db } from "@/lib/firebase"
-import { doc, getDoc } from "firebase/firestore"
-
 export interface SubscriptionData {
   isActive: boolean
   plan: "free" | "pro" | "creator_pro"
@@ -17,6 +14,20 @@ export interface SubscriptionData {
 
 export async function checkSubscription(userId?: string): Promise<SubscriptionData> {
   try {
+    // Temporarily return creator_pro plan for all users
+    return {
+      isActive: true,
+      plan: "creator_pro",
+      features: {
+        unlimitedDownloads: true,
+        premiumContent: true,
+        noWatermark: true,
+        prioritySupport: true,
+      },
+    }
+
+    // Original logic commented out temporarily
+    /*
     if (!userId) {
       return {
         isActive: false,
@@ -64,22 +75,34 @@ export async function checkSubscription(userId?: string): Promise<SubscriptionDa
       currentPeriodEnd: userData.currentPeriodEnd?.toDate(),
       features,
     }
+    */
   } catch (error) {
     console.error("Error checking subscription:", error)
+    // Even on error, temporarily return creator_pro
     return {
-      isActive: false,
-      plan: "free",
+      isActive: true,
+      plan: "creator_pro",
       features: {
-        unlimitedDownloads: false,
-        premiumContent: false,
-        noWatermark: false,
-        prioritySupport: false,
+        unlimitedDownloads: true,
+        premiumContent: true,
+        noWatermark: true,
+        prioritySupport: true,
       },
     }
   }
 }
 
 export function getSubscriptionFeatures(plan: string) {
+  // Temporarily always return full features
+  return {
+    unlimitedDownloads: true,
+    premiumContent: true,
+    noWatermark: true,
+    prioritySupport: true,
+  }
+
+  // Original logic commented out
+  /*
   switch (plan) {
     case "pro":
     case "creator_pro":
@@ -97,4 +120,5 @@ export function getSubscriptionFeatures(plan: string) {
         prioritySupport: false,
       }
   }
+  */
 }
