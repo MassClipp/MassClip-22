@@ -5,12 +5,21 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { CalendarDays, Grid3X3, RefreshCw, Share, Instagram } from "lucide-react"
+import {
+  CalendarDays,
+  Grid3X3,
+  RefreshCw,
+  Share,
+  Instagram,
+  ChevronDown,
+  Play,
+  ImageIcon,
+  FileText,
+} from "lucide-react"
 import { doc, getDoc } from "firebase/firestore"
 import { db } from "@/firebase/firebase"
 import { toast } from "sonner"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { ChevronDown, Play, ImageIcon, FileText } from "lucide-react"
 import FilteredContentDisplay from "./filtered-content-display"
 
 interface CreatorProfileProps {
@@ -77,6 +86,35 @@ export default function CreatorProfile({ creator: initialCreator, onRefresh }: C
 
     loadProfilePic()
   }, [creator?.id])
+
+  // Load creator content
+  useEffect(() => {
+    const loadCreatorContent = async () => {
+      if (!creator?.id) return
+
+      try {
+        // Load free content
+        const freeResponse = await fetch(`/api/creator/${creator.id}/free-content`)
+        if (freeResponse.ok) {
+          const freeData = await freeResponse.json()
+          setFreeContent(freeData.content || [])
+        }
+
+        // Load premium content if available
+        if (creator.premiumContentCount && creator.premiumContentCount > 0) {
+          const premiumResponse = await fetch(`/api/creator/${creator.id}/product-boxes`)
+          if (premiumResponse.ok) {
+            const premiumData = await premiumResponse.json()
+            setPremiumContent(premiumData.productBoxes || [])
+          }
+        }
+      } catch (error) {
+        console.error("Error loading creator content:", error)
+      }
+    }
+
+    loadCreatorContent()
+  }, [creator?.id, creator.premiumContentCount])
 
   const handleRefresh = async () => {
     if (!creator?.id) return
@@ -154,54 +192,38 @@ export default function CreatorProfile({ creator: initialCreator, onRefresh }: C
     }
   }
 
-  const getContentTypes = (content: any[]) => {
-    const types = new Set<string>()
-    content?.forEach((item) => {
-      if (item.type === "video" || item.videoUrl || item.vimeoId) {
-        types.add("videos")
-      } else if (item.type === "image" || item.thumbnailUrl) {
-        types.add("images")
-      } else if (item.type === "file" || item.fileUrl) {
-        types.add("files")
-      }
-    })
-    return Array.from(types)
-  }
-
   const handleContentTypeDetection = (types: string[]) => {
     setContentTypes(types)
   }
 
-  useEffect(() => {
-    const loadCreatorContent = async () => {
-      if (!creator?.id) return
-
-      try {
-        // Load free content
-        const freeResponse = await fetch(`/api/creator/${creator.id}/free-content`)
-        if (freeResponse.ok) {
-          const freeData = await freeResponse.json()
-          setFreeContent(freeData.content || [])
-        }
-
-        // Load premium content if available
-        if (creator.premiumContentCount && creator.premiumContentCount > 0) {
-          const premiumResponse = await fetch(`/api/creator/${creator.id}/product-boxes`)
-          if (premiumResponse.ok) {
-            const premiumData = await premiumResponse.json()
-            setPremiumContent(premiumData.productBoxes || [])
-          }
-        }
-      } catch (error) {
-        console.error("Error loading creator content:", error)
-      }
+  const getDropdownIcon = () => {
+    switch (selectedContentType) {
+      case "videos":
+        return <Play className="w-4 h-4" />
+      case "images":
+        return <ImageIcon className="w-4 h-4" />
+      case "files":
+        return <FileText className="w-4 h-4" />
+      default:
+        return <Grid3X3 className="w-4 h-4" />
     }
+  }
 
-    loadCreatorContent()
-  }, [creator?.id, creator.premiumContentCount])
+  const getDropdownLabel = () => {
+    switch (selectedContentType) {
+      case "videos":
+        return "Videos"
+      case "images":
+        return "Images"
+      case "files":
+        return "Files"
+      default:
+        return "All"
+    }
+  }
 
   return (
-    <div className="w-full max-w-4xl mx-auto p-6">
+    <div className="w-full max-w-6xl mx-auto p-6">
       <div className="flex flex-col lg:flex-row gap-8">
         {/* Profile Section */}
         <div className="flex-shrink-0">
@@ -231,7 +253,7 @@ export default function CreatorProfile({ creator: initialCreator, onRefresh }: C
                 disabled={isRefreshing}
                 variant="outline"
                 size="sm"
-                className="flex items-center gap-2 bg-transparent"
+                className="flex items-center gap-2 bg-transparent border-gray-600 hover:bg-gray-800"
               >
                 <RefreshCw className={`w-4 h-4 ${isRefreshing ? "animate-spin" : ""}`} />
                 Refresh
@@ -240,7 +262,7 @@ export default function CreatorProfile({ creator: initialCreator, onRefresh }: C
                 onClick={handleShare}
                 variant="outline"
                 size="sm"
-                className="flex items-center gap-2 bg-transparent"
+                className="flex items-center gap-2 bg-transparent border-gray-600 hover:bg-gray-800"
               >
                 <Share className="w-4 h-4" />
                 Share
@@ -268,96 +290,6 @@ export default function CreatorProfile({ creator: initialCreator, onRefresh }: C
                 <p className="text-white font-semibold">{creator.freeContentCount || 0}</p>
               </CardContent>
             </Card>
-          </div>
-
-          {/* Content Type Filter and Tabs */}
-          <div className="flex items-center gap-4 mb-6">
-            {/* Content Type Dropdown - only show if multiple types exist */}
-            {contentTypes.length > 1 && (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="outline" size="sm" className="flex items-center gap-2 bg-transparent">
-                    {selectedContentType === "videos" && <Play className="w-4 h-4" />}
-                    {selectedContentType === "images" && <ImageIcon className="w-4 h-4" />}
-                    {selectedContentType === "files" && <FileText className="w-4 h-4" />}
-                    {selectedContentType === "all" && <Grid3X3 className="w-4 h-4" />}
-                    <span className="capitalize">
-                      {selectedContentType === "all" ? "All Content" : selectedContentType}
-                    </span>
-                    <ChevronDown className="w-4 h-4" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="start">
-                  <DropdownMenuItem onClick={() => setSelectedContentType("all")}>
-                    <Grid3X3 className="w-4 h-4 mr-2" />
-                    All Content
-                  </DropdownMenuItem>
-                  {contentTypes.includes("videos") && (
-                    <DropdownMenuItem onClick={() => setSelectedContentType("videos")}>
-                      <Play className="w-4 h-4 mr-2" />
-                      Videos
-                    </DropdownMenuItem>
-                  )}
-                  {contentTypes.includes("images") && (
-                    <DropdownMenuItem onClick={() => setSelectedContentType("images")}>
-                      <ImageIcon className="w-4 h-4 mr-2" />
-                      Images
-                    </DropdownMenuItem>
-                  )}
-                  {contentTypes.includes("files") && (
-                    <DropdownMenuItem onClick={() => setSelectedContentType("files")}>
-                      <FileText className="w-4 h-4 mr-2" />
-                      Files
-                    </DropdownMenuItem>
-                  )}
-                </DropdownMenuContent>
-              </DropdownMenu>
-            )}
-
-            {/* Existing Tabs */}
-            <div className="flex border-b border-gray-700">
-              <button
-                className={`px-6 py-3 font-medium transition-colors ${
-                  activeTab === "free"
-                    ? "text-orange-500 border-b-2 border-orange-500"
-                    : "text-gray-400 hover:text-white"
-                }`}
-                onClick={() => setActiveTab("free")}
-              >
-                Free Content
-              </button>
-              {(creator.premiumContentCount || 0) > 0 && (
-                <button
-                  className={`px-6 py-3 font-medium transition-colors ${
-                    activeTab === "premium"
-                      ? "text-orange-500 border-b-2 border-orange-500"
-                      : "text-gray-400 hover:text-white"
-                  }`}
-                  onClick={() => setActiveTab("premium")}
-                >
-                  Premium Content
-                </button>
-              )}
-            </div>
-          </div>
-
-          {/* Content Display */}
-          <div className="mt-8">
-            {activeTab === "free" && (
-              <FilteredContentDisplay
-                content={freeContent}
-                selectedType={selectedContentType}
-                onContentTypeDetection={handleContentTypeDetection}
-              />
-            )}
-
-            {activeTab === "premium" && (
-              <FilteredContentDisplay
-                content={premiumContent}
-                selectedType={selectedContentType}
-                onContentTypeDetection={handleContentTypeDetection}
-              />
-            )}
           </div>
 
           {/* Social Links */}
@@ -417,6 +349,105 @@ export default function CreatorProfile({ creator: initialCreator, onRefresh }: C
               </Badge>
             </div>
           )}
+
+          {/* Content Filter and Tabs */}
+          <div className="flex items-center gap-4 border-b border-gray-700">
+            {/* Content Type Dropdown - only show if multiple types exist */}
+            {contentTypes.length > 1 && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="flex items-center gap-2 text-gray-400 hover:text-white hover:bg-gray-800 px-3 py-2"
+                  >
+                    {getDropdownIcon()}
+                    <span className="text-sm">{getDropdownLabel()}</span>
+                    <ChevronDown className="w-4 h-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="start" className="bg-gray-800 border-gray-700">
+                  <DropdownMenuItem
+                    onClick={() => setSelectedContentType("all")}
+                    className="text-gray-300 hover:text-white hover:bg-gray-700"
+                  >
+                    <Grid3X3 className="w-4 h-4 mr-2" />
+                    All Content
+                  </DropdownMenuItem>
+                  {contentTypes.includes("videos") && (
+                    <DropdownMenuItem
+                      onClick={() => setSelectedContentType("videos")}
+                      className="text-gray-300 hover:text-white hover:bg-gray-700"
+                    >
+                      <Play className="w-4 h-4 mr-2" />
+                      Videos
+                    </DropdownMenuItem>
+                  )}
+                  {contentTypes.includes("images") && (
+                    <DropdownMenuItem
+                      onClick={() => setSelectedContentType("images")}
+                      className="text-gray-300 hover:text-white hover:bg-gray-700"
+                    >
+                      <ImageIcon className="w-4 h-4 mr-2" />
+                      Images
+                    </DropdownMenuItem>
+                  )}
+                  {contentTypes.includes("files") && (
+                    <DropdownMenuItem
+                      onClick={() => setSelectedContentType("files")}
+                      className="text-gray-300 hover:text-white hover:bg-gray-700"
+                    >
+                      <FileText className="w-4 h-4 mr-2" />
+                      Files
+                    </DropdownMenuItem>
+                  )}
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
+
+            {/* Content Tabs */}
+            <div className="flex">
+              <button
+                className={`px-6 py-3 font-medium transition-colors relative ${
+                  activeTab === "free" ? "text-orange-500" : "text-gray-400 hover:text-white"
+                }`}
+                onClick={() => setActiveTab("free")}
+              >
+                Free Content
+                {activeTab === "free" && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-orange-500" />}
+              </button>
+              {(creator.premiumContentCount || 0) > 0 && (
+                <button
+                  className={`px-6 py-3 font-medium transition-colors relative ${
+                    activeTab === "premium" ? "text-orange-500" : "text-gray-400 hover:text-white"
+                  }`}
+                  onClick={() => setActiveTab("premium")}
+                >
+                  Premium Content
+                  {activeTab === "premium" && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-orange-500" />}
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Content Display */}
+          <div className="mt-8">
+            {activeTab === "free" && (
+              <FilteredContentDisplay
+                content={freeContent}
+                selectedType={selectedContentType}
+                onContentTypeDetection={handleContentTypeDetection}
+              />
+            )}
+
+            {activeTab === "premium" && (
+              <FilteredContentDisplay
+                content={premiumContent}
+                selectedType={selectedContentType}
+                onContentTypeDetection={handleContentTypeDetection}
+              />
+            )}
+          </div>
         </div>
       </div>
     </div>
