@@ -1,114 +1,102 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { initializeFirebaseAdmin, db } from "@/lib/firebase-admin"
-import { getAuth } from "firebase-admin/auth"
+import { collection, getDocs, query, where, writeBatch } from "firebase/firestore"
+import { db } from "@/lib/firebase-server"
+import { getServerSession } from "next-auth"
+import { authOptions } from "@/auth"
 
 export async function POST(request: NextRequest) {
   try {
-    const authHeader = request.headers.get("authorization")
-    if (!authHeader?.startsWith("Bearer ")) {
+    const session = await getServerSession(authOptions)
+    if (!session?.user?.id) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const token = authHeader.split("Bearer ")[1]
-    initializeFirebaseAdmin()
+    console.log("🔄 [Title Sync] Starting title synchronization for user:", session.user.id)
 
-    const decodedToken = await getAuth().verifyIdToken(token)
-    const userId = decodedToken.uid
+    // Get all uploads for the user
+    const uploadsQuery = query(collection(db, "uploads"), where("uid", "==", session.user.id))
+    const uploadsSnapshot = await getDocs(uploadsQuery)
 
-    console.log(`[Title Sync] Starting title synchronization for user ${userId}`)
+    const uploads = uploadsSnapshot.docs.map((doc) => ({
+      id: doc.id,
+      ...doc.data(),
+    }))
 
-    // Get all uploads for this user
-    const uploadsQuery = await db.collection("uploads").where("userId", "==", userId).get()
+    console.log(`📁 Found ${uploads.length} uploads to sync`)
 
-    if (uploadsQuery.empty) {
-      return NextResponse.json({
-        success: true,
-        message: "No uploads found",
-        synced: 0,
+    const batch = writeBatch(db)
+    let updatesCount = 0
+
+    // For each upload, check and update related collections
+    for (const upload of uploads) {
+      const uploadId = upload.id
+      const correctTitle = upload.title
+
+      // Check free_content
+      const freeContentQuery = query(collection(db, "free_content"), where("uploadId", "==", uploadId))
+      const freeContentDocs = await getDocs(freeContentQuery)
+      freeContentDocs.forEach((doc) => {
+        const data = doc.data()
+        if (data.title !== correctTitle) {
+          batch.update(doc.ref, { title: correctTitle, updatedAt: new Date().toISOString() })
+          updatesCount++
+          console.log(`📝 Syncing free_content: "${data.title}" → "${correctTitle}"`)
+        }
+      })
+
+      // Check product_box_content
+      const productBoxContentQuery = query(collection(db, "product_box_content"), where("uploadId", "==", uploadId))
+      const productBoxContentDocs = await getDocs(productBoxContentQuery)
+      productBoxContentDocs.forEach((doc) => {
+        const data = doc.data()
+        if (data.title !== correctTitle) {
+          batch.update(doc.ref, { title: correctTitle, updatedAt: new Date().toISOString() })
+          updatesCount++
+          console.log(`📦 Syncing product_box_content: "${data.title}" → "${correctTitle}"`)
+        }
+      })
+
+      // Check bundle_content
+      const bundleContentQuery = query(collection(db, "bundle_content"), where("uploadId", "==", uploadId))
+      const bundleContentDocs = await getDocs(bundleContentQuery)
+      bundleContentDocs.forEach((doc) => {
+        const data = doc.data()
+        if (data.title !== correctTitle) {
+          batch.update(doc.ref, { title: correctTitle, updatedAt: new Date().toISOString() })
+          updatesCount++
+          console.log(`🎁 Syncing bundle_content: "${data.title}" → "${correctTitle}"`)
+        }
+      })
+
+      // Check creator_uploads
+      const creatorUploadsQuery = query(collection(db, "creator_uploads"), where("uploadId", "==", uploadId))
+      const creatorUploadsDocs = await getDocs(creatorUploadsQuery)
+      creatorUploadsDocs.forEach((doc) => {
+        const data = doc.data()
+        if (data.title !== correctTitle) {
+          batch.update(doc.ref, { title: correctTitle, updatedAt: new Date().toISOString() })
+          updatesCount++
+          console.log(`👤 Syncing creator_uploads: "${data.title}" → "${correctTitle}"`)
+        }
       })
     }
 
-    const batch = db.batch()
-    let syncedCount = 0
-    const syncResults = []
-
-    for (const uploadDoc of uploadsQuery.docs) {
-      const uploadData = uploadDoc.data()
-      const uploadId = uploadDoc.id
-      const correctTitle = uploadData.title
-
-      if (!correctTitle) continue
-
-      const uploadSyncResult = {
-        uploadId,
-        title: correctTitle,
-        collections: [],
-      }
-
-      // Check and sync free_content
-      const freeContentQuery = await db.collection("free_content").where("uploadId", "==", uploadId).get()
-
-      for (const doc of freeContentQuery.docs) {
-        const data = doc.data()
-        if (data.title !== correctTitle) {
-          batch.update(doc.ref, { title: correctTitle, updatedAt: new Date() })
-          uploadSyncResult.collections.push("free_content")
-        }
-      }
-
-      // Check and sync product_box_content
-      const productBoxContentQuery = await db.collection("product_box_content").where("uploadId", "==", uploadId).get()
-
-      for (const doc of productBoxContentQuery.docs) {
-        const data = doc.data()
-        if (data.title !== correctTitle) {
-          batch.update(doc.ref, { title: correctTitle, updatedAt: new Date() })
-          uploadSyncResult.collections.push("product_box_content")
-        }
-      }
-
-      // Check and sync bundle_content
-      const bundleContentQuery = await db.collection("bundle_content").where("uploadId", "==", uploadId).get()
-
-      for (const doc of bundleContentQuery.docs) {
-        const data = doc.data()
-        if (data.title !== correctTitle) {
-          batch.update(doc.ref, { title: correctTitle, updatedAt: new Date() })
-          uploadSyncResult.collections.push("bundle_content")
-        }
-      }
-
-      // Check and sync creator_uploads
-      const creatorUploadsQuery = await db.collection("creator_uploads").where("uploadId", "==", uploadId).get()
-
-      for (const doc of creatorUploadsQuery.docs) {
-        const data = doc.data()
-        if (data.title !== correctTitle) {
-          batch.update(doc.ref, { title: correctTitle, updatedAt: new Date() })
-          uploadSyncResult.collections.push("creator_uploads")
-        }
-      }
-
-      if (uploadSyncResult.collections.length > 0) {
-        syncResults.push(uploadSyncResult)
-        syncedCount++
-      }
-    }
-
     // Commit all updates
-    if (syncedCount > 0) {
+    if (updatesCount > 0) {
       await batch.commit()
-      console.log(`[Title Sync] Successfully synced ${syncedCount} uploads`)
+      console.log(`✅ [Title Sync] Successfully synced ${updatesCount} title mismatches`)
+    } else {
+      console.log("✅ [Title Sync] All titles are already in sync")
     }
 
     return NextResponse.json({
       success: true,
-      message: `Synchronized ${syncedCount} uploads`,
-      synced: syncedCount,
-      details: syncResults,
+      uploadsChecked: uploads.length,
+      updatesApplied: updatesCount,
+      message: updatesCount > 0 ? `Synced ${updatesCount} title mismatches` : "All titles are already in sync",
     })
   } catch (error) {
-    console.error("[Title Sync] Error:", error)
-    return NextResponse.json({ error: "Failed to sync titles" }, { status: 500 })
+    console.error("❌ [Title Sync] Error syncing titles:", error)
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }

@@ -1,22 +1,52 @@
 import { notFound } from "next/navigation"
 import type { Metadata } from "next"
-import { initializeFirebaseAdmin, db } from "@/lib/firebase-admin"
+import { collection, query, where, getDocs, limit } from "firebase/firestore"
+import { db } from "@/firebase/firebase"
 import CreatorProfileWithSidebar from "@/components/creator-profile-with-sidebar"
 import ProfileViewTracker from "@/components/profile-view-tracker"
 
-// Helper function to convert Firestore data to plain objects
-function serializeData(data: any) {
-  if (!data) return null
-
-  // Convert to plain object
-  const plainData = { ...data }
-
-  // Handle Firestore Timestamp objects
-  if (plainData.createdAt && typeof plainData.createdAt.toDate === "function") {
-    plainData.createdAt = plainData.createdAt.toDate().toISOString()
+interface CreatorPageProps {
+  params: {
+    username: string
   }
+}
 
-  return plainData
+async function getCreatorByUsername(username: string) {
+  try {
+    console.log("🔍 [CreatorPage] Fetching creator by username:", username)
+
+    // Query the creators collection by username
+    const creatorsRef = collection(db, "creators")
+    const q = query(creatorsRef, where("username", "==", username), limit(1))
+    const querySnapshot = await getDocs(q)
+
+    if (querySnapshot.empty) {
+      console.log("❌ [CreatorPage] Creator not found in creators collection")
+      return null
+    }
+
+    const creatorDoc = querySnapshot.docs[0]
+    const creatorData = creatorDoc.data()
+
+    console.log("✅ [CreatorPage] Creator found:", creatorData)
+
+    return {
+      id: creatorDoc.id,
+      username: creatorData.username,
+      displayName: creatorData.displayName || creatorData.username,
+      bio: creatorData.bio,
+      profilePic: creatorData.profilePic,
+      instagramHandle: creatorData.instagramHandle,
+      xHandle: creatorData.xHandle,
+      tiktokHandle: creatorData.tiktokHandle,
+      memberSince: creatorData.createdAt || creatorData.memberSince,
+      freeContentCount: creatorData.freeContentCount || 0,
+      premiumContentCount: creatorData.premiumContentCount || 0,
+    }
+  } catch (error) {
+    console.error("❌ [CreatorPage] Error fetching creator:", error)
+    return null
+  }
 }
 
 // Generate metadata for the page
@@ -24,14 +54,11 @@ export async function generateMetadata({ params }: { params: { username: string 
   const { username } = params
 
   try {
-    // Initialize Firebase Admin
-    initializeFirebaseAdmin()
-
     console.log(`[Metadata] Looking for user with username: ${username}`)
 
     // Query users collection to find the user with the given username (case insensitive)
-    const usersRef = db.collection("users")
-    const querySnapshot = await usersRef.where("username", "==", username.toLowerCase()).get()
+    const usersRef = collection(db, "users")
+    const querySnapshot = await getDocs(query(usersRef, where("username", "==", username.toLowerCase()), limit(1)))
 
     console.log(`[Metadata] Query results: ${querySnapshot.size} documents found`)
 
@@ -86,110 +113,17 @@ export async function generateMetadata({ params }: { params: { username: string 
   }
 }
 
-export default async function CreatorProfilePage({ params }: { params: { username: string } }) {
-  const { username } = params
+export default async function CreatorPage({ params }: CreatorPageProps) {
+  const creator = await getCreatorByUsername(params.username)
 
-  try {
-    console.log(`[Page] Fetching creator profile for username: ${username}`)
-
-    // Initialize Firebase Admin
-    initializeFirebaseAdmin()
-
-    // First try to find the user in the users collection
-    const usersRef = db.collection("users")
-    let querySnapshot = await usersRef.where("username", "==", username.toLowerCase()).get()
-
-    // If no results, try case-insensitive match
-    if (querySnapshot.empty) {
-      console.log(`[Page] No exact match found in users collection, trying case-insensitive match`)
-
-      // Get all users and filter manually (not efficient but works for small datasets)
-      const allUsersSnapshot = await usersRef.get()
-      const matchingDocs = allUsersSnapshot.docs.filter((doc) => {
-        const userData = doc.data()
-        return userData.username && userData.username.toLowerCase() === username.toLowerCase()
-      })
-
-      if (matchingDocs.length > 0) {
-        querySnapshot = {
-          empty: false,
-          docs: matchingDocs,
-          size: matchingDocs.length,
-        } as any
-      }
-    }
-
-    // If still not found, try the creators collection directly
-    if (querySnapshot.empty) {
-      console.log(`[Page] User not found in users collection, checking creators collection`)
-      const creatorsRef = db.collection("creators")
-
-      // Try exact match on username
-      querySnapshot = await creatorsRef.where("username", "==", username.toLowerCase()).get()
-
-      // If still not found, try by UID
-      if (querySnapshot.empty) {
-        console.log(`[Page] Creator not found by username, checking by document ID`)
-        const creatorDoc = await creatorsRef.doc(username.toLowerCase()).get()
-
-        if (creatorDoc.exists) {
-          querySnapshot = {
-            empty: false,
-            docs: [creatorDoc],
-            size: 1,
-          } as any
-        }
-      }
-    }
-
-    console.log(`[Page] Final query results: ${querySnapshot?.size || 0} documents found`)
-
-    if (!querySnapshot || querySnapshot.empty) {
-      console.log(`[Page] Creator profile not found for username: ${username}`)
-      notFound()
-    }
-
-    // Get the user document
-    const userDoc = querySnapshot.docs[0]
-    const userData = userDoc.data()
-    const uid = userData.uid || userDoc.id
-
-    console.log(`[Page] Creator profile found for username: ${username} with UID: ${uid}`)
-    console.log(
-      `[Page] User data:`,
-      JSON.stringify({
-        displayName: userData.displayName,
-        username: userData.username,
-        hasPhotoURL: !!userData.photoURL,
-        hasProfilePic: !!userData.profilePic,
-      }),
-    )
-
-    // Serialize the Firestore data to plain objects
-    const serializedData = serializeData(userData)
-
-    // Format the creator data for the component
-    // Prioritize profilePic over photoURL for profile picture
-    const profilePicture = serializedData.profilePic || serializedData.photoURL || ""
-
-    const creatorData = {
-      uid: uid,
-      username: serializedData.username || username,
-      displayName: serializedData.displayName || username,
-      bio: serializedData.bio || "",
-      profilePic: profilePicture,
-      createdAt: serializedData.createdAt || new Date().toISOString(),
-      socialLinks: serializedData.socialLinks || {},
-    }
-
-    return (
-      <>
-        <ProfileViewTracker profileUserId={uid} />
-        <CreatorProfileWithSidebar creator={creatorData} />
-      </>
-    )
-  } catch (error) {
-    console.error(`[Page] Error fetching creator profile for ${username}:`, error)
+  if (!creator) {
     notFound()
   }
+
+  return (
+    <>
+      <ProfileViewTracker profileUserId={creator.id} />
+      <CreatorProfileWithSidebar creator={creator} />
+    </>
+  )
 }
