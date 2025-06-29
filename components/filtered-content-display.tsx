@@ -1,178 +1,151 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { CreatorUploadCard } from "@/components/creator-upload-card"
-import { Loader2 } from "lucide-react"
+import { VideoCard } from "@/components/video-card"
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 
 interface ContentItem {
   id: string
   title: string
-  type?: string
-  videoUrl?: string
-  vimeoId?: string
   thumbnailUrl?: string
+  videoUrl?: string
   fileUrl?: string
-  fileName?: string
-  fileSize?: string
-  duration?: string
-  views?: number
-  downloads?: number
+  vimeoId?: string
+  type?: string
+  fileType?: string
+  mimeType?: string
+  duration?: number
+  fileSize?: number
   createdAt?: string
 }
 
 interface FilteredContentDisplayProps {
-  creatorId: string
-  contentType: "free" | "premium"
-  selectedType: string
-  onContentTypeDetection: (types: string[]) => void
+  content: ContentItem[]
+  onContentTypeDetection?: (types: string[]) => void
 }
 
-export default function FilteredContentDisplay({
-  creatorId,
-  contentType,
-  selectedType,
-  onContentTypeDetection,
-}: FilteredContentDisplayProps) {
-  const [content, setContent] = useState<ContentItem[]>([])
-  const [loading, setLoading] = useState(true)
-  const [filteredContent, setFilteredContent] = useState<ContentItem[]>([])
+export default function FilteredContentDisplay({ content, onContentTypeDetection }: FilteredContentDisplayProps) {
+  const [selectedType, setSelectedType] = useState<string>("all")
+  const [contentTypes, setContentTypes] = useState<string[]>([])
+  const [filteredContent, setFilteredContent] = useState<ContentItem[]>(content)
 
+  // Detect content types
   useEffect(() => {
-    const fetchContent = async () => {
-      try {
-        setLoading(true)
-        console.log(`🔍 [FilteredContentDisplay] Fetching ${contentType} content for creator:`, creatorId)
+    const types = new Set<string>()
 
-        const endpoint =
-          contentType === "free"
-            ? `/api/creator/${creatorId}/free-content`
-            : `/api/creator/${creatorId}/premium-content`
-
-        const response = await fetch(endpoint)
-
-        if (!response.ok) {
-          throw new Error(`Failed to fetch ${contentType} content`)
-        }
-
-        const data = await response.json()
-        console.log(`✅ [FilteredContentDisplay] Fetched ${contentType} content:`, data)
-
-        const contentItems = data.content || data.freeContent || data.premiumContent || []
-        setContent(contentItems)
-
-        // Detect content types
-        const detectedTypes = new Set<string>()
-
-        contentItems.forEach((item: ContentItem) => {
-          if (item.type) {
-            detectedTypes.add(item.type)
-          } else if (item.videoUrl || item.vimeoId) {
-            detectedTypes.add("video")
-          } else if (item.thumbnailUrl && !item.videoUrl && !item.vimeoId) {
-            detectedTypes.add("image")
-          } else if (item.fileUrl || item.fileName) {
-            detectedTypes.add("file")
-          } else {
-            detectedTypes.add("other")
-          }
-        })
-
-        const typesArray = Array.from(detectedTypes)
-        console.log(`🔍 [FilteredContentDisplay] Detected content types:`, typesArray)
-        onContentTypeDetection(typesArray)
-      } catch (error) {
-        console.error(`❌ [FilteredContentDisplay] Error fetching ${contentType} content:`, error)
-        setContent([])
-        onContentTypeDetection([])
-      } finally {
-        setLoading(false)
+    content.forEach((item) => {
+      // Detect content type based on various properties
+      if (item.type === "video" || item.videoUrl || item.vimeoId) {
+        types.add("video")
+      } else if (item.type === "image" || (item.fileType && item.fileType.startsWith("image/"))) {
+        types.add("image")
+      } else if (item.type === "audio" || (item.fileType && item.fileType.startsWith("audio/"))) {
+        types.add("audio")
+      } else if (item.type === "file" || item.fileUrl || item.fileType) {
+        types.add("file")
+      } else if (item.thumbnailUrl && !item.videoUrl && !item.vimeoId) {
+        types.add("image")
+      } else {
+        types.add("other")
       }
+    })
+
+    const detectedTypes = Array.from(types)
+    setContentTypes(detectedTypes)
+
+    // Notify parent component about detected types
+    if (onContentTypeDetection) {
+      onContentTypeDetection(detectedTypes)
     }
 
-    if (creatorId) {
-      fetchContent()
-    }
-  }, [creatorId, contentType, onContentTypeDetection])
+    console.log("Detected content types:", detectedTypes)
+  }, [content, onContentTypeDetection])
 
   // Filter content based on selected type
-  const filteredContentItems =
-    selectedType === "all"
-      ? content
-      : content.filter((item) => {
-          if (item.type) {
-            return item.type === selectedType
-          }
-          // Fallback type detection
-          if (selectedType === "video") {
-            return item.videoUrl || item.vimeoId
-          }
-          if (selectedType === "image") {
-            return item.thumbnailUrl && !item.videoUrl && !item.vimeoId
-          }
-          if (selectedType === "file") {
-            return item.fileUrl || item.fileName
-          }
-          return false
-        })
-
   useEffect(() => {
-    setFilteredContent(filteredContentItems)
-  }, [filteredContentItems])
+    if (selectedType === "all") {
+      setFilteredContent(content)
+    } else {
+      const filtered = content.filter((item) => {
+        switch (selectedType) {
+          case "video":
+            return item.type === "video" || item.videoUrl || item.vimeoId
+          case "image":
+            return (
+              item.type === "image" ||
+              (item.fileType && item.fileType.startsWith("image/")) ||
+              (item.thumbnailUrl && !item.videoUrl && !item.vimeoId)
+            )
+          case "audio":
+            return item.type === "audio" || (item.fileType && item.fileType.startsWith("audio/"))
+          case "file":
+            return (
+              item.type === "file" ||
+              item.fileUrl ||
+              (item.fileType &&
+                !item.fileType.startsWith("video/") &&
+                !item.fileType.startsWith("image/") &&
+                !item.fileType.startsWith("audio/"))
+            )
+          case "other":
+            return !item.type && !item.videoUrl && !item.vimeoId && !item.fileUrl && !item.thumbnailUrl
+          default:
+            return true
+        }
+      })
+      setFilteredContent(filtered)
+    }
+  }, [selectedType, content])
 
-  const formatFileSize = (bytes: string | number) => {
-    if (!bytes) return "Unknown size"
-    const size = typeof bytes === "string" ? Number.parseInt(bytes) : bytes
-    if (size < 1024) return `${size} B`
-    if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`
-    if (size < 1024 * 1024 * 1024) return `${(size / (1024 * 1024)).toFixed(1)} MB`
-    return `${(size / (1024 * 1024 * 1024)).toFixed(1)} GB`
-  }
-
-  const formatDuration = (duration: string) => {
-    if (!duration) return ""
-    // Assume duration is in seconds
-    const seconds = Number.parseInt(duration)
-    const minutes = Math.floor(seconds / 60)
-    const remainingSeconds = seconds % 60
-    return `${minutes}:${remainingSeconds.toString().padStart(2, "0")}`
-  }
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center py-12">
-        <Loader2 className="h-8 w-8 animate-spin text-zinc-500" />
-      </div>
-    )
-  }
-
-  if (filteredContentItems.length === 0) {
-    return (
-      <div className="text-center py-12">
-        <p className="text-zinc-400">
-          {selectedType === "all" ? `No ${contentType} content available` : `No ${selectedType} content available`}
-        </p>
-      </div>
-    )
-  }
+  // Show dropdown if there are multiple content types
+  const showDropdown = contentTypes.length > 1
 
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
-      {filteredContentItems.map((item) => (
-        <CreatorUploadCard
-          key={item.id}
-          video={{
-            id: item.id,
-            title: item.title,
-            fileUrl: item.fileUrl || item.videoUrl || "",
-            thumbnailUrl: item.thumbnailUrl,
-            // Add other required properties with defaults
-            creatorName: "Creator",
-            uid: creatorId,
-            views: item.views || 0,
-            downloads: item.downloads || 0,
-          }}
-        />
-      ))}
+    <div>
+      {/* Content Type Filter */}
+      {showDropdown && (
+        <div className="mb-4">
+          <Select value={selectedType} onValueChange={setSelectedType}>
+            <SelectTrigger className="w-40 bg-zinc-900 border-zinc-700">
+              <SelectValue placeholder="Filter by type" />
+            </SelectTrigger>
+            <SelectContent className="bg-zinc-900 border-zinc-700">
+              <SelectItem value="all">All Content</SelectItem>
+              {contentTypes.includes("video") && <SelectItem value="video">Videos</SelectItem>}
+              {contentTypes.includes("image") && <SelectItem value="image">Images</SelectItem>}
+              {contentTypes.includes("audio") && <SelectItem value="audio">Audio</SelectItem>}
+              {contentTypes.includes("file") && <SelectItem value="file">Files</SelectItem>}
+              {contentTypes.includes("other") && <SelectItem value="other">Other</SelectItem>}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
+
+      {/* Content Grid */}
+      {filteredContent.length > 0 ? (
+        <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-3">
+          {filteredContent.map((item) => (
+            <VideoCard
+              key={item.id}
+              id={item.id}
+              title={item.title}
+              thumbnailUrl={item.thumbnailUrl}
+              videoUrl={item.videoUrl}
+              vimeoId={item.vimeoId}
+              duration={item.duration}
+              fileSize={item.fileSize}
+              createdAt={item.createdAt}
+              showTitle={false}
+            />
+          ))}
+        </div>
+      ) : (
+        <div className="text-center py-8">
+          <p className="text-zinc-400">
+            {selectedType === "all" ? "No content available" : `No ${selectedType} content found`}
+          </p>
+        </div>
+      )}
     </div>
   )
 }
