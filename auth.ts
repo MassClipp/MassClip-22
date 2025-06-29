@@ -49,4 +49,4 @@ if (typeof window !== "undefined" && process.env.NODE_ENV === "development") {
 export default app
 
 // Re-export NextAuth options so `@/auth` exposes them too.
-export { authOptions } from "./lib/auth"
+export { authOptions } from "@/lib/auth"
