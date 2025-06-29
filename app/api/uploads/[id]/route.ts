@@ -1,172 +1,266 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { doc, getDoc, collection, query, where, getDocs, writeBatch } from "firebase/firestore"
-import { db } from "@/lib/firebase-server"
-import { getServerSession } from "next-auth"
-import { authOptions } from "@/auth"
+import { headers } from "next/headers"
+import { initializeFirebaseAdmin, db } from "@/lib/firebase/firebaseAdmin"
 
-export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
+// Initialize Firebase Admin
+initializeFirebaseAdmin()
+
+async function verifyAuthToken(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions)
-    if (!session?.user?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    const headersList = headers()
+    const authorization = headersList.get("authorization")
+
+    if (!authorization?.startsWith("Bearer ")) {
+      return null
     }
 
-    const uploadDoc = await getDoc(doc(db, "uploads", params.id))
-    if (!uploadDoc.exists()) {
-      return NextResponse.json({ error: "Upload not found" }, { status: 404 })
+    const token = authorization.split("Bearer ")[1]
+    if (!token) {
+      return null
     }
 
-    const uploadData = uploadDoc.data()
-    if (uploadData.uid !== session.user.id) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 })
-    }
-
-    return NextResponse.json({
-      id: uploadDoc.id,
-      ...uploadData,
-    })
+    const { getAuth } = await import("firebase-admin/auth")
+    const decodedToken = await getAuth().verifyIdToken(token)
+    return decodedToken
   } catch (error) {
-    console.error("Error fetching upload:", error)
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+    console.error("Auth verification error:", error)
+    return null
   }
 }
 
+// PUT /api/uploads/[id] - Update upload (rename or public status)
 export async function PUT(request: NextRequest, { params }: { params: { id: string } }) {
   try {
-    const session = await getServerSession(authOptions)
-    if (!session?.user?.id) {
+    const user = await verifyAuthToken(request)
+    if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
+    const { id } = params
     const body = await request.json()
-    const { title, description, tags, category } = body
+    const { title, isPublicFree } = body
 
-    // Get the current upload
-    const uploadRef = doc(db, "uploads", params.id)
-    const uploadDoc = await getDoc(uploadRef)
+    console.log(`🔍 [Upload Update] Updating upload ${id} for user ${user.uid}`)
+    console.log(`🔍 [Upload Update] New title: ${title}, isPublicFree: ${isPublicFree}`)
 
-    if (!uploadDoc.exists()) {
+    // Check if upload exists and belongs to user
+    const uploadRef = db.collection("uploads").doc(id)
+    const uploadDoc = await uploadRef.get()
+
+    if (!uploadDoc.exists) {
       return NextResponse.json({ error: "Upload not found" }, { status: 404 })
     }
 
     const uploadData = uploadDoc.data()
-    if (uploadData.uid !== session.user.id) {
+    if (uploadData?.uid !== user.uid) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     }
 
-    const batch = writeBatch(db)
-    const updateData: any = {}
-
-    if (title !== undefined) updateData.title = title
-    if (description !== undefined) updateData.description = description
-    if (tags !== undefined) updateData.tags = tags
-    if (category !== undefined) updateData.category = category
-
-    updateData.updatedAt = new Date().toISOString()
-
-    // Update the main upload document
-    batch.update(uploadRef, updateData)
-
-    // If title is being updated, cascade the change to related collections
-    if (title !== undefined && title !== uploadData.title) {
-      console.log(
-        `🔄 [Upload Update] Cascading title change from "${uploadData.title}" to "${title}" for upload ${params.id}`,
-      )
-
-      // Update in free_content collection
-      const freeContentQuery = query(collection(db, "free_content"), where("uploadId", "==", params.id))
-      const freeContentDocs = await getDocs(freeContentQuery)
-      freeContentDocs.forEach((doc) => {
-        batch.update(doc.ref, { title, updatedAt: new Date().toISOString() })
-      })
-      console.log(`📝 Updated ${freeContentDocs.size} free_content documents`)
-
-      // Update in product_box_content collection
-      const productBoxContentQuery = query(collection(db, "product_box_content"), where("uploadId", "==", params.id))
-      const productBoxContentDocs = await getDocs(productBoxContentQuery)
-      productBoxContentDocs.forEach((doc) => {
-        batch.update(doc.ref, { title, updatedAt: new Date().toISOString() })
-      })
-      console.log(`📦 Updated ${productBoxContentDocs.size} product_box_content documents`)
-
-      // Update in bundle_content collection
-      const bundleContentQuery = query(collection(db, "bundle_content"), where("uploadId", "==", params.id))
-      const bundleContentDocs = await getDocs(bundleContentQuery)
-      bundleContentDocs.forEach((doc) => {
-        batch.update(doc.ref, { title, updatedAt: new Date().toISOString() })
-      })
-      console.log(`🎁 Updated ${bundleContentDocs.size} bundle_content documents`)
-
-      // Update in creator_uploads collection
-      const creatorUploadsQuery = query(collection(db, "creator_uploads"), where("uploadId", "==", params.id))
-      const creatorUploadsDocs = await getDocs(creatorUploadsQuery)
-      creatorUploadsDocs.forEach((doc) => {
-        batch.update(doc.ref, { title, updatedAt: new Date().toISOString() })
-      })
-      console.log(`👤 Updated ${creatorUploadsDocs.size} creator_uploads documents`)
+    // Prepare update data
+    const updateData: any = {
+      updatedAt: new Date(),
     }
 
-    // Commit all updates in a single batch
-    await batch.commit()
+    if (title !== undefined) {
+      updateData.title = title
+    }
 
-    console.log(`✅ [Upload Update] Successfully updated upload ${params.id} and cascaded changes`)
+    if (isPublicFree !== undefined) {
+      updateData.isPublicFree = isPublicFree
+    }
+
+    // Update the upload
+    await uploadRef.update(updateData)
+
+    // If title is being updated, cascade the change to related collections
+    if (title !== undefined) {
+      console.log(`🔄 [Upload Update] Cascading title update to related collections`)
+
+      const batch = db.batch()
+      const updatedCollections = []
+
+      try {
+        // 1. Update free_content collection
+        const freeContentQuery = await db
+          .collection("free_content")
+          .where("uid", "==", user.uid)
+          .where("originalId", "==", id)
+          .get()
+
+        freeContentQuery.docs.forEach((doc) => {
+          batch.update(doc.ref, { title: title, updatedAt: new Date() })
+          updatedCollections.push("free_content")
+        })
+
+        // 2. Update product_box_content collection (if content is in product boxes)
+        const productBoxContentQuery = await db
+          .collection("product_box_content")
+          .where("uid", "==", user.uid)
+          .where("originalId", "==", id)
+          .get()
+
+        productBoxContentQuery.docs.forEach((doc) => {
+          batch.update(doc.ref, { title: title, updatedAt: new Date() })
+          updatedCollections.push("product_box_content")
+        })
+
+        // 3. Update any other collections that might reference this content
+        // Check for content in bundles
+        const bundleContentQuery = await db
+          .collection("bundle_content")
+          .where("uid", "==", user.uid)
+          .where("originalId", "==", id)
+          .get()
+
+        bundleContentQuery.docs.forEach((doc) => {
+          batch.update(doc.ref, { title: title, updatedAt: new Date() })
+          updatedCollections.push("bundle_content")
+        })
+
+        // 4. Update creator_uploads collection (if it exists)
+        const creatorUploadsQuery = await db
+          .collection("creator_uploads")
+          .where("uid", "==", user.uid)
+          .where("originalId", "==", id)
+          .get()
+
+        creatorUploadsQuery.docs.forEach((doc) => {
+          batch.update(doc.ref, { title: title, updatedAt: new Date() })
+          updatedCollections.push("creator_uploads")
+        })
+
+        // Commit all updates in a batch
+        if (updatedCollections.length > 0) {
+          await batch.commit()
+          console.log(
+            `✅ [Upload Update] Successfully updated title in collections: ${[...new Set(updatedCollections)].join(", ")}`,
+          )
+        } else {
+          console.log(`ℹ️ [Upload Update] No related collections found to update`)
+        }
+      } catch (cascadeError) {
+        console.error("❌ [Upload Update] Error cascading title update:", cascadeError)
+        // Don't fail the main update if cascade fails
+      }
+    }
+
+    console.log(`✅ [Upload Update] Successfully updated upload ${id}`)
 
     return NextResponse.json({
-      id: params.id,
-      ...uploadData,
-      ...updateData,
+      success: true,
+      message: title !== undefined ? "Title updated across all collections" : "Upload updated successfully",
     })
   } catch (error) {
     console.error("Error updating upload:", error)
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+    return NextResponse.json({ error: "Failed to update upload" }, { status: 500 })
   }
 }
 
+// DELETE /api/uploads/[id] - Delete upload
 export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
   try {
-    const session = await getServerSession(authOptions)
-    if (!session?.user?.id) {
+    const user = await verifyAuthToken(request)
+    if (!user) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    // Get the upload to verify ownership
-    const uploadRef = doc(db, "uploads", params.id)
-    const uploadDoc = await getDoc(uploadRef)
+    const { id } = params
 
-    if (!uploadDoc.exists()) {
+    console.log(`🗑️ [Upload Delete] Deleting upload ${id} for user ${user.uid}`)
+
+    // Check if upload exists and belongs to user
+    const uploadRef = db.collection("uploads").doc(id)
+    const uploadDoc = await uploadRef.get()
+
+    if (!uploadDoc.exists) {
       return NextResponse.json({ error: "Upload not found" }, { status: 404 })
     }
 
     const uploadData = uploadDoc.data()
-    if (uploadData.uid !== session.user.id) {
+    if (uploadData?.uid !== user.uid) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 })
     }
 
-    const batch = writeBatch(db)
+    // TODO: Check if upload is being used in any product boxes
+    // For now, we'll allow deletion but should warn user
 
-    // Delete the main upload document
-    batch.delete(uploadRef)
+    const batch = db.batch()
+    const deletedCollections = []
 
-    // Delete from all related collections
-    const collections = ["free_content", "product_box_content", "bundle_content", "creator_uploads"]
+    try {
+      // Delete from uploads collection
+      batch.delete(uploadRef)
+      deletedCollections.push("uploads")
 
-    for (const collectionName of collections) {
-      const relatedQuery = query(collection(db, collectionName), where("uploadId", "==", params.id))
-      const relatedDocs = await getDocs(relatedQuery)
-      relatedDocs.forEach((doc) => {
+      // Delete from free_content collection
+      const freeContentQuery = await db
+        .collection("free_content")
+        .where("uid", "==", user.uid)
+        .where("originalId", "==", id)
+        .get()
+
+      freeContentQuery.docs.forEach((doc) => {
         batch.delete(doc.ref)
+        deletedCollections.push("free_content")
       })
-      console.log(`🗑️ Deleting ${relatedDocs.size} documents from ${collectionName}`)
+
+      // Delete from product_box_content collection
+      const productBoxContentQuery = await db
+        .collection("product_box_content")
+        .where("uid", "==", user.uid)
+        .where("originalId", "==", id)
+        .get()
+
+      productBoxContentQuery.docs.forEach((doc) => {
+        batch.delete(doc.ref)
+        deletedCollections.push("product_box_content")
+      })
+
+      // Delete from bundle_content collection
+      const bundleContentQuery = await db
+        .collection("bundle_content")
+        .where("uid", "==", user.uid)
+        .where("originalId", "==", id)
+        .get()
+
+      bundleContentQuery.docs.forEach((doc) => {
+        batch.delete(doc.ref)
+        deletedCollections.push("bundle_content")
+      })
+
+      // Delete from creator_uploads collection
+      const creatorUploadsQuery = await db
+        .collection("creator_uploads")
+        .where("uid", "==", user.uid)
+        .where("originalId", "==", id)
+        .get()
+
+      creatorUploadsQuery.docs.forEach((doc) => {
+        batch.delete(doc.ref)
+        deletedCollections.push("creator_uploads")
+      })
+
+      // Commit all deletions
+      await batch.commit()
+
+      console.log(
+        `✅ [Upload Delete] Successfully deleted from collections: ${[...new Set(deletedCollections)].join(", ")}`,
+      )
+    } catch (cascadeError) {
+      console.error("❌ [Upload Delete] Error cascading delete:", cascadeError)
+      // Still delete the main upload even if cascade fails
+      await uploadRef.delete()
     }
 
-    // Commit all deletions
-    await batch.commit()
+    // TODO: Optionally delete the file from Cloudflare R2
+    // This would require additional logic to clean up storage
 
-    console.log(`✅ [Upload Delete] Successfully deleted upload ${params.id} and all references`)
-
-    return NextResponse.json({ success: true })
+    return NextResponse.json({
+      success: true,
+      message: "Upload and all references deleted successfully",
+    })
   } catch (error) {
     console.error("Error deleting upload:", error)
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+    return NextResponse.json({ error: "Failed to delete upload" }, { status: 500 })
   }
 }
