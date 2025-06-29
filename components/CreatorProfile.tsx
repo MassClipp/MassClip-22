@@ -93,11 +93,16 @@ export default function CreatorProfile({ creator: initialCreator, onRefresh }: C
       if (!creator?.id) return
 
       try {
+        console.log("Loading content for creator:", creator.id)
+
         // Load free content
         const freeResponse = await fetch(`/api/creator/${creator.id}/free-content`)
         if (freeResponse.ok) {
           const freeData = await freeResponse.json()
+          console.log("Free content loaded:", freeData)
           setFreeContent(freeData.content || [])
+        } else {
+          console.log("Free content response not ok:", freeResponse.status)
         }
 
         // Load premium content if available
@@ -105,6 +110,7 @@ export default function CreatorProfile({ creator: initialCreator, onRefresh }: C
           const premiumResponse = await fetch(`/api/creator/${creator.id}/product-boxes`)
           if (premiumResponse.ok) {
             const premiumData = await premiumResponse.json()
+            console.log("Premium content loaded:", premiumData)
             setPremiumContent(premiumData.productBoxes || [])
           }
         }
@@ -193,6 +199,7 @@ export default function CreatorProfile({ creator: initialCreator, onRefresh }: C
   }
 
   const handleContentTypeDetection = (types: string[]) => {
+    console.log("Content types detected:", types)
     setContentTypes(types)
   }
 
@@ -221,6 +228,9 @@ export default function CreatorProfile({ creator: initialCreator, onRefresh }: C
         return "All"
     }
   }
+
+  // Debug: Force show dropdown for testing
+  const showDropdown = contentTypes.length > 1 || true // Remove "|| true" after testing
 
   return (
     <div className="w-full max-w-6xl mx-auto p-6">
@@ -352,8 +362,8 @@ export default function CreatorProfile({ creator: initialCreator, onRefresh }: C
 
           {/* Content Filter and Tabs */}
           <div className="flex items-center gap-4 border-b border-gray-700">
-            {/* Content Type Dropdown - only show if multiple types exist */}
-            {contentTypes.length > 1 && (
+            {/* Content Type Dropdown - show for testing */}
+            {showDropdown && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button
@@ -374,33 +384,27 @@ export default function CreatorProfile({ creator: initialCreator, onRefresh }: C
                     <Grid3X3 className="w-4 h-4 mr-2" />
                     All Content
                   </DropdownMenuItem>
-                  {contentTypes.includes("videos") && (
-                    <DropdownMenuItem
-                      onClick={() => setSelectedContentType("videos")}
-                      className="text-gray-300 hover:text-white hover:bg-gray-700"
-                    >
-                      <Play className="w-4 h-4 mr-2" />
-                      Videos
-                    </DropdownMenuItem>
-                  )}
-                  {contentTypes.includes("images") && (
-                    <DropdownMenuItem
-                      onClick={() => setSelectedContentType("images")}
-                      className="text-gray-300 hover:text-white hover:bg-gray-700"
-                    >
-                      <ImageIcon className="w-4 h-4 mr-2" />
-                      Images
-                    </DropdownMenuItem>
-                  )}
-                  {contentTypes.includes("files") && (
-                    <DropdownMenuItem
-                      onClick={() => setSelectedContentType("files")}
-                      className="text-gray-300 hover:text-white hover:bg-gray-700"
-                    >
-                      <FileText className="w-4 h-4 mr-2" />
-                      Files
-                    </DropdownMenuItem>
-                  )}
+                  <DropdownMenuItem
+                    onClick={() => setSelectedContentType("videos")}
+                    className="text-gray-300 hover:text-white hover:bg-gray-700"
+                  >
+                    <Play className="w-4 h-4 mr-2" />
+                    Videos
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={() => setSelectedContentType("images")}
+                    className="text-gray-300 hover:text-white hover:bg-gray-700"
+                  >
+                    <ImageIcon className="w-4 h-4 mr-2" />
+                    Images
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={() => setSelectedContentType("files")}
+                    className="text-gray-300 hover:text-white hover:bg-gray-700"
+                  >
+                    <FileText className="w-4 h-4 mr-2" />
+                    Files
+                  </DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
             )}
