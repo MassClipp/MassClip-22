@@ -14,7 +14,7 @@ const bucketName = process.env.R2_BUCKET_NAME || process.env.CLOUDFLARE_R2_BUCKE
 const publicDomain = process.env.R2_PUBLIC_URL || process.env.CLOUDFLARE_R2_PUBLIC_URL || ""
 
 export interface ThumbnailGenerationOptions {
-  captureTime?: number // Time in seconds to capture (default: 5)
+  captureTime?: number // Time in seconds to capture (default: 1)
   quality?: number // JPEG quality 0-1 (default: 0.8)
   maxWidth?: number // Max thumbnail width (default: 1280)
   maxHeight?: number // Max thumbnail height (default: 720)
@@ -28,13 +28,13 @@ export interface ThumbnailResult {
 }
 
 /**
- * Generate thumbnail from video file (client-side)
+ * Generate thumbnail from video file (client-side) - Safari compatible
  */
 export async function generateThumbnailFromFile(
   videoFile: File,
   options: ThumbnailGenerationOptions = {},
 ): Promise<ThumbnailResult> {
-  const { captureTime = 5, quality = 0.8, maxWidth = 1280, maxHeight = 720 } = options
+  const { captureTime = 1, quality = 0.8, maxWidth = 1280, maxHeight = 720 } = options
 
   return new Promise((resolve, reject) => {
     try {
@@ -44,20 +44,47 @@ export async function generateThumbnailFromFile(
       video.playsInline = true
       video.crossOrigin = "anonymous"
 
+      // Safari-specific settings
+      video.setAttribute("webkit-playsinline", "true")
+      video.setAttribute("playsinline", "true")
+
       const fileURL = URL.createObjectURL(videoFile)
       video.src = fileURL
 
+      let thumbnailGenerated = false
+
       video.onloadedmetadata = () => {
-        // Ensure we don't seek beyond video duration
-        const seekTime = Math.min(captureTime, video.duration - 0.1)
+        if (thumbnailGenerated) return
+        // Ensure we don't seek beyond video duration, use earlier time for Safari
+        const seekTime = Math.min(captureTime, Math.max(0.1, video.duration * 0.05))
         video.currentTime = seekTime
       }
 
-      video.onseeked = async () => {
+      video.onloadeddata = () => {
+        if (thumbnailGenerated) return
+        // Fallback for Safari - try to generate immediately if metadata is loaded
+        generateThumbnailFromVideo()
+      }
+
+      video.onseeked = () => {
+        if (thumbnailGenerated) return
+        generateThumbnailFromVideo()
+      }
+
+      const generateThumbnailFromVideo = async () => {
+        if (thumbnailGenerated) return
+        thumbnailGenerated = true
+
         try {
           // Create canvas with video dimensions
           const canvas = document.createElement("canvas")
           let { videoWidth, videoHeight } = video
+
+          // Fallback dimensions if video dimensions aren't available
+          if (!videoWidth || !videoHeight) {
+            videoWidth = 1280
+            videoHeight = 720
+          }
 
           // Calculate scaled dimensions while maintaining aspect ratio
           if (videoWidth > maxWidth || videoHeight > maxHeight) {
@@ -123,11 +150,13 @@ export async function generateThumbnailFromFile(
         reject(new Error("Error loading video for thumbnail generation"))
       }
 
-      // Fallback timeout
+      // Fallback timeout - shorter for Safari
       setTimeout(() => {
-        URL.revokeObjectURL(fileURL)
-        reject(new Error("Thumbnail generation timeout"))
-      }, 30000) // 30 second timeout
+        if (!thumbnailGenerated) {
+          URL.revokeObjectURL(fileURL)
+          reject(new Error("Thumbnail generation timeout"))
+        }
+      }, 15000) // 15 second timeout
     } catch (error) {
       reject(error)
     }
@@ -135,13 +164,13 @@ export async function generateThumbnailFromFile(
 }
 
 /**
- * Generate thumbnail from video URL (client-side)
+ * Generate thumbnail from video URL (client-side) - Safari compatible
  */
 export async function generateThumbnailFromUrl(
   videoUrl: string,
   options: ThumbnailGenerationOptions = {},
 ): Promise<ThumbnailResult> {
-  const { captureTime = 5, quality = 0.8, maxWidth = 1280, maxHeight = 720 } = options
+  const { captureTime = 1, quality = 0.8, maxWidth = 1280, maxHeight = 720 } = options
 
   return new Promise((resolve, reject) => {
     try {
@@ -150,17 +179,44 @@ export async function generateThumbnailFromUrl(
       video.muted = true
       video.playsInline = true
       video.crossOrigin = "anonymous"
+
+      // Safari-specific settings
+      video.setAttribute("webkit-playsinline", "true")
+      video.setAttribute("playsinline", "true")
+
       video.src = videoUrl
 
+      let thumbnailGenerated = false
+
       video.onloadedmetadata = () => {
-        const seekTime = Math.min(captureTime, video.duration - 0.1)
+        if (thumbnailGenerated) return
+        const seekTime = Math.min(captureTime, Math.max(0.1, video.duration * 0.05))
         video.currentTime = seekTime
       }
 
-      video.onseeked = async () => {
+      video.onloadeddata = () => {
+        if (thumbnailGenerated) return
+        generateThumbnailFromVideo()
+      }
+
+      video.onseeked = () => {
+        if (thumbnailGenerated) return
+        generateThumbnailFromVideo()
+      }
+
+      const generateThumbnailFromVideo = async () => {
+        if (thumbnailGenerated) return
+        thumbnailGenerated = true
+
         try {
           const canvas = document.createElement("canvas")
           let { videoWidth, videoHeight } = video
+
+          // Fallback dimensions
+          if (!videoWidth || !videoHeight) {
+            videoWidth = 1280
+            videoHeight = 720
+          }
 
           // Scale dimensions
           if (videoWidth > maxWidth || videoHeight > maxHeight) {
@@ -217,8 +273,10 @@ export async function generateThumbnailFromUrl(
       }
 
       setTimeout(() => {
-        reject(new Error("Thumbnail generation timeout"))
-      }, 30000)
+        if (!thumbnailGenerated) {
+          reject(new Error("Thumbnail generation timeout"))
+        }
+      }, 15000)
     } catch (error) {
       reject(error)
     }
@@ -298,5 +356,30 @@ export async function validateThumbnailUrl(url: string): Promise<boolean> {
     return response.ok && response.headers.get("content-type")?.startsWith("image/")
   } catch {
     return false
+  }
+}
+
+/**
+ * Generate thumbnail data URL from video element (Safari compatible)
+ */
+export function generateThumbnailDataUrl(videoElement: HTMLVideoElement): string | null {
+  try {
+    const canvas = document.createElement("canvas")
+    const ctx = canvas.getContext("2d")
+
+    if (!ctx) return null
+
+    // Set canvas dimensions
+    canvas.width = videoElement.videoWidth || 320
+    canvas.height = videoElement.videoHeight || 180
+
+    // Draw video frame to canvas
+    ctx.drawImage(videoElement, 0, 0, canvas.width, canvas.height)
+
+    // Return data URL
+    return canvas.toDataURL("image/jpeg", 0.8)
+  } catch (error) {
+    console.error("Error generating thumbnail data URL:", error)
+    return null
   }
 }
