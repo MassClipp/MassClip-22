@@ -1,15 +1,15 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { motion } from "framer-motion"
-import { Plus, Settings, Trash2, Eye, EyeOff, Loader2, AlertCircle } from "lucide-react"
+import { Plus, Settings, Trash2, Eye, EyeOff, Loader2, AlertCircle, ChevronDown, ChevronUp } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Switch } from "@/components/ui/switch"
 import { useToast } from "@/hooks/use-toast"
 import { VideoThumbnail916 } from "@/components/video-thumbnail-916"
-import { collection, query, where, getDocs, doc, updateDoc, deleteDoc } from "firebase/firestore"
+import { collection, query, where, getDocs, doc, updateDoc, deleteDoc, onSnapshot } from "firebase/firestore"
 import { db } from "@/lib/firebase"
 import { useAuth } from "@/contexts/auth-context"
 
@@ -46,8 +46,16 @@ export default function BundlesPage() {
   const [loading, setLoading] = useState(true)
   const [contentLoading, setContentLoading] = useState<{ [key: string]: boolean }>({})
   const [showContent, setShowContent] = useState<{ [key: string]: boolean }>({})
+  const [showAllContent, setShowAllContent] = useState<{ [key: string]: boolean }>({})
   const [error, setError] = useState<string | null>(null)
+  const [currentlyPlaying, setCurrentlyPlaying] = useState<string | null>(null)
   const { toast } = useToast()
+
+  // Refs to track video elements for single playback
+  const videoRefs = useRef<{ [key: string]: HTMLVideoElement }>({})
+
+  // Real-time listeners for content updates
+  const contentListeners = useRef<{ [key: string]: () => void }>({})
 
   // Fetch product boxes
   const fetchProductBoxes = async () => {
@@ -76,19 +84,51 @@ export default function BundlesPage() {
       setProductBoxes(boxes)
       console.log(`✅ [Bundles] Loaded ${boxes.length} product boxes`)
 
-      // Initialize show content state and fetch content for each box
+      // Initialize show content state and set up real-time listeners
       const initialShowState: { [key: string]: boolean } = {}
+      const initialShowAllState: { [key: string]: boolean } = {}
+
       boxes.forEach((box: ProductBox) => {
         initialShowState[box.id] = true // Show content by default
-        fetchContentForBox(box)
+        initialShowAllState[box.id] = false // Show limited content initially
+        setupContentListener(box)
       })
+
       setShowContent(initialShowState)
+      setShowAllContent(initialShowAllState)
     } catch (err) {
       console.error("❌ [Bundles] Error:", err)
       setError(err instanceof Error ? err.message : "Failed to load bundles")
     } finally {
       setLoading(false)
     }
+  }
+
+  // Set up real-time listener for product box content
+  const setupContentListener = (productBox: ProductBox) => {
+    // Clean up existing listener
+    if (contentListeners.current[productBox.id]) {
+      contentListeners.current[productBox.id]()
+    }
+
+    // Set up new listener for productBoxContent collection
+    const contentQuery = query(collection(db, "productBoxContent"), where("productBoxId", "==", productBox.id))
+
+    const unsubscribe = onSnapshot(
+      contentQuery,
+      (snapshot) => {
+        console.log(`🔄 [Bundles] Content updated for box: ${productBox.id}`)
+        fetchContentForBox(productBox)
+      },
+      (error) => {
+        console.error(`❌ [Bundles] Error listening to content for box ${productBox.id}:`, error)
+      },
+    )
+
+    contentListeners.current[productBox.id] = unsubscribe
+
+    // Initial fetch
+    fetchContentForBox(productBox)
   }
 
   // Fetch content for a specific product box
@@ -225,6 +265,13 @@ export default function BundlesPage() {
 
     try {
       await deleteDoc(doc(db, "productBoxes", productBoxId))
+
+      // Clean up listener
+      if (contentListeners.current[productBoxId]) {
+        contentListeners.current[productBoxId]()
+        delete contentListeners.current[productBoxId]
+      }
+
       setProductBoxes((prev) => prev.filter((box) => box.id !== productBoxId))
       toast({
         title: "Success",
@@ -245,10 +292,50 @@ export default function BundlesPage() {
     setShowContent((prev) => ({ ...prev, [productBoxId]: !prev[productBoxId] }))
   }
 
-  // Handle content item click
-  const handleContentClick = (item: ContentItem) => {
-    window.open(item.fileUrl, "_blank")
+  // Toggle show all content
+  const toggleShowAllContent = (productBoxId: string) => {
+    setShowAllContent((prev) => ({ ...prev, [productBoxId]: !prev[productBoxId] }))
   }
+
+  // Handle content item click with single video playback
+  const handleContentClick = (item: ContentItem) => {
+    if (item.contentType === "video") {
+      // Pause currently playing video if different
+      if (currentlyPlaying && currentlyPlaying !== item.id) {
+        const currentVideo = videoRefs.current[currentlyPlaying]
+        if (currentVideo) {
+          currentVideo.pause()
+        }
+      }
+
+      // Set new playing video
+      setCurrentlyPlaying(item.id)
+
+      // Store video ref for future control
+      const videoElement = document.querySelector(`video[data-video-id="${item.id}"]`) as HTMLVideoElement
+      if (videoElement) {
+        videoRefs.current[item.id] = videoElement
+        videoElement.play()
+      }
+    } else {
+      // For non-video content, open in new tab
+      window.open(item.fileUrl, "_blank")
+    }
+  }
+
+  // Handle video pause
+  const handleVideoPause = (itemId: string) => {
+    if (currentlyPlaying === itemId) {
+      setCurrentlyPlaying(null)
+    }
+  }
+
+  // Clean up listeners on unmount
+  useEffect(() => {
+    return () => {
+      Object.values(contentListeners.current).forEach((unsubscribe) => unsubscribe())
+    }
+  }, [])
 
   useEffect(() => {
     if (user) {
@@ -271,7 +358,11 @@ export default function BundlesPage() {
         <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
         <h3 className="text-xl font-medium text-white mb-2">Failed to Load Bundles</h3>
         <p className="text-zinc-400 mb-4">{error}</p>
-        <Button onClick={fetchProductBoxes} variant="outline" className="border-zinc-700 hover:bg-zinc-800">
+        <Button
+          onClick={fetchProductBoxes}
+          variant="outline"
+          className="border-zinc-700 hover:bg-zinc-800 bg-transparent"
+        >
           Try Again
         </Button>
       </div>
@@ -309,6 +400,11 @@ export default function BundlesPage() {
             const boxContent = contentItems[productBox.id] || []
             const isContentLoading = contentLoading[productBox.id] || false
             const isContentVisible = showContent[productBox.id] || false
+            const showAll = showAllContent[productBox.id] || false
+
+            // Limit to 5 items unless "Show All" is enabled
+            const displayedContent = showAll ? boxContent : boxContent.slice(0, 5)
+            const hasMoreContent = boxContent.length > 5
 
             return (
               <motion.div
@@ -331,8 +427,8 @@ export default function BundlesPage() {
                         <div className="flex items-center gap-4">
                           <span className="text-2xl font-bold text-green-400">${productBox.price.toFixed(2)}</span>
                           <span className="text-sm text-zinc-500">
-                            {productBox.contentItems.length} content item
-                            {productBox.contentItems.length !== 1 ? "s" : ""}
+                            {boxContent.length} content item
+                            {boxContent.length !== 1 ? "s" : ""}
                           </span>
                         </div>
                       </div>
@@ -352,7 +448,7 @@ export default function BundlesPage() {
                   <CardContent>
                     {/* Content Section Header */}
                     <div className="flex items-center justify-between mb-4">
-                      <span className="text-sm text-zinc-400">Content ({productBox.contentItems.length})</span>
+                      <span className="text-sm text-zinc-400">Content ({boxContent.length})</span>
                       <Button
                         variant="ghost"
                         size="sm"
@@ -387,32 +483,65 @@ export default function BundlesPage() {
                             <Loader2 className="h-5 w-5 text-zinc-500 animate-spin" />
                             <span className="ml-2 text-sm text-zinc-400">Loading content...</span>
                           </div>
-                        ) : boxContent.length > 0 ? (
-                          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-                            {boxContent.map((item) => (
-                              <VideoThumbnail916
-                                key={item.id}
-                                title={item.title}
-                                videoUrl={item.fileUrl}
-                                thumbnailUrl={item.thumbnailUrl}
-                                fileSize={item.fileSize}
-                                duration={item.duration}
-                                contentType={item.contentType}
-                                onClick={() => handleContentClick(item)}
-                              />
-                            ))}
+                        ) : displayedContent.length > 0 ? (
+                          <>
+                            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
+                              {displayedContent.map((item) => (
+                                <VideoThumbnail916
+                                  key={item.id}
+                                  title={item.title}
+                                  videoUrl={item.fileUrl}
+                                  thumbnailUrl={item.thumbnailUrl}
+                                  fileSize={item.fileSize}
+                                  duration={item.duration}
+                                  contentType={item.contentType}
+                                  onClick={() => handleContentClick(item)}
+                                  onVideoPause={() => handleVideoPause(item.id)}
+                                  isPlaying={currentlyPlaying === item.id}
+                                  videoId={item.id}
+                                />
+                              ))}
 
-                            {/* Add Content Placeholder */}
-                            <div className="aspect-[9/16] bg-zinc-800/50 rounded-lg border-2 border-dashed border-zinc-700 flex flex-col items-center justify-center cursor-pointer hover:border-zinc-600 hover:bg-zinc-800/70 transition-all duration-200">
-                              <Plus className="w-8 h-8 text-zinc-500 mb-2" />
-                              <p className="text-xs text-zinc-500 text-center px-2">Add Content</p>
+                              {/* Add Content Placeholder */}
+                              <div className="aspect-[9/16] bg-zinc-800/50 rounded-lg border-2 border-dashed border-zinc-700 flex flex-col items-center justify-center cursor-pointer hover:border-zinc-600 hover:bg-zinc-800/70 transition-all duration-200">
+                                <Plus className="w-8 h-8 text-zinc-500 mb-2" />
+                                <p className="text-xs text-zinc-500 text-center px-2">Add Content</p>
+                              </div>
                             </div>
-                          </div>
+
+                            {/* Show More/Less Button */}
+                            {hasMoreContent && (
+                              <div className="flex justify-center mt-4">
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => toggleShowAllContent(productBox.id)}
+                                  className="border-zinc-700 text-zinc-300 hover:bg-zinc-800"
+                                >
+                                  {showAll ? (
+                                    <>
+                                      <ChevronUp className="h-4 w-4 mr-2" />
+                                      Show Less
+                                    </>
+                                  ) : (
+                                    <>
+                                      <ChevronDown className="h-4 w-4 mr-2" />
+                                      Show All ({boxContent.length})
+                                    </>
+                                  )}
+                                </Button>
+                              </div>
+                            )}
+                          </>
                         ) : (
                           <div className="text-center py-8">
                             <div className="text-4xl mb-2">📹</div>
                             <p className="text-sm text-zinc-500">No content added yet</p>
-                            <Button variant="outline" size="sm" className="mt-3 border-zinc-700 text-zinc-300">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="mt-3 border-zinc-700 text-zinc-300 bg-transparent"
+                            >
                               <Plus className="h-4 w-4 mr-2" />
                               Add Content
                             </Button>
@@ -425,7 +554,7 @@ export default function BundlesPage() {
                     <Button
                       variant="outline"
                       size="sm"
-                      className="w-full mt-4 border-zinc-700 text-zinc-300 hover:bg-zinc-800"
+                      className="w-full mt-4 border-zinc-700 text-zinc-300 hover:bg-zinc-800 bg-transparent"
                     >
                       <Plus className="h-4 w-4 mr-2" />
                       Add Content

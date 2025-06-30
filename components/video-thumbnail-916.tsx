@@ -3,34 +3,45 @@
 import type React from "react"
 
 import { useState, useRef } from "react"
-import { Play, Pause, Download } from "lucide-react"
+import { Play, Pause, Download, Music, File } from "lucide-react"
+import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
 
-// Named export as required
+interface VideoThumbnail916Props {
+  title: string
+  videoUrl: string
+  thumbnailUrl?: string
+  fileSize: number
+  duration?: number
+  contentType: "video" | "audio" | "image" | "document"
+  onClick?: () => void
+  onVideoPause?: () => void
+  isPlaying?: boolean
+  videoId?: string
+  className?: string
+}
+
 export function VideoThumbnail916({
   title,
   videoUrl,
   thumbnailUrl,
   fileSize,
   duration,
-  contentType = "video",
+  contentType,
   onClick,
+  onVideoPause,
+  isPlaying = false,
+  videoId,
   className = "",
-}: {
-  title: string
-  videoUrl: string
-  thumbnailUrl?: string
-  fileSize?: number
-  duration?: number
-  contentType?: "video" | "audio" | "image" | "document" | string
-  onClick?: () => void
-  className?: string
-}) {
+}: VideoThumbnail916Props) {
+  const [isHovered, setIsHovered] = useState(false)
+  const [thumbnailGenerated, setThumbnailGenerated] = useState(false)
+  const [generatedThumbnail, setGeneratedThumbnail] = useState<string>("")
   const videoRef = useRef<HTMLVideoElement>(null)
-  const [isPlaying, setIsPlaying] = useState(false)
+  const canvasRef = useRef<HTMLCanvasElement>(null)
 
   // Format file size
-  const formatFileSize = (bytes?: number): string => {
-    if (!bytes) return ""
+  const formatFileSize = (bytes: number): string => {
     if (bytes === 0) return "0 Bytes"
     const k = 1024
     const sizes = ["Bytes", "KB", "MB", "GB"]
@@ -41,101 +52,212 @@ export function VideoThumbnail916({
   // Format duration
   const formatDuration = (seconds?: number): string => {
     if (!seconds) return ""
-    const minutes = Math.floor(seconds / 60)
-    const remainingSeconds = seconds % 60
-    return `${minutes}:${remainingSeconds.toString().padStart(2, "0")}`
+    const mins = Math.floor(seconds / 60)
+    const secs = Math.floor(seconds % 60)
+    return `${mins}:${secs.toString().padStart(2, "0")}`
   }
 
-  // Handle play/pause
-  const togglePlay = (e: React.MouseEvent) => {
-    e.preventDefault()
-    e.stopPropagation()
+  // Generate thumbnail from video
+  const generateThumbnail = () => {
+    if (!videoRef.current || !canvasRef.current || thumbnailGenerated) return
 
-    if (!videoRef.current) return
+    const video = videoRef.current
+    const canvas = canvasRef.current
+    const ctx = canvas.getContext("2d")
 
-    if (isPlaying) {
-      videoRef.current.pause()
-      setIsPlaying(false)
-    } else {
-      // Pause all other videos first
-      document.querySelectorAll("video").forEach((v) => {
-        if (v !== videoRef.current) {
-          v.pause()
-        }
-      })
+    if (!ctx) return
 
-      videoRef.current
-        .play()
-        .then(() => {
-          setIsPlaying(true)
-        })
-        .catch((error) => {
-          console.error("Error playing video:", error)
-        })
+    const generateFrame = () => {
+      try {
+        // Set canvas dimensions to match video
+        canvas.width = video.videoWidth || 360
+        canvas.height = video.videoHeight || 640
+
+        // Draw video frame to canvas
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
+
+        // Convert to data URL
+        const dataURL = canvas.toDataURL("image/jpeg", 0.8)
+        setGeneratedThumbnail(dataURL)
+        setThumbnailGenerated(true)
+
+        console.log(`✅ Generated thumbnail for video: ${title}`)
+      } catch (error) {
+        console.error("Error generating thumbnail:", error)
+      }
+    }
+
+    // Set up video for thumbnail generation
+    video.currentTime = Math.min(video.duration * 0.1, 2) // 10% into video or 2 seconds
+    video.addEventListener("seeked", generateFrame, { once: true })
+  }
+
+  // Handle video load
+  const handleVideoLoad = () => {
+    if (contentType === "video" && !thumbnailUrl && !thumbnailGenerated) {
+      generateThumbnail()
     }
   }
 
+  // Handle click
+  const handleClick = () => {
+    if (contentType === "video" && videoRef.current) {
+      if (isPlaying) {
+        videoRef.current.pause()
+        onVideoPause?.()
+      } else {
+        onClick?.()
+      }
+    } else {
+      onClick?.()
+    }
+  }
+
+  // Handle video pause
+  const handleVideoPause = () => {
+    onVideoPause?.()
+  }
+
+  // Handle download
+  const handleDownload = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    const link = document.createElement("a")
+    link.href = videoUrl
+    link.download = title
+    link.click()
+  }
+
+  // Get display thumbnail
+  const displayThumbnail = thumbnailUrl || generatedThumbnail
+
   return (
-    <div className={`flex-shrink-0 w-full ${className}`}>
-      <div className="relative aspect-[9/16] overflow-hidden rounded-lg bg-zinc-900 group" onClick={onClick}>
-        {contentType === "video" ? (
-          <>
-            <video
-              ref={videoRef}
+    <div
+      className={`relative aspect-[9/16] bg-zinc-900 rounded-lg overflow-hidden cursor-pointer group ${className}`}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+      onClick={handleClick}
+    >
+      {/* Hidden video for thumbnail generation */}
+      {contentType === "video" && (
+        <>
+          <video
+            ref={videoRef}
+            className="hidden"
+            preload="metadata"
+            onLoadedData={handleVideoLoad}
+            onPause={handleVideoPause}
+            data-video-id={videoId}
+            crossOrigin="anonymous"
+          >
+            <source src={videoUrl} type="video/mp4" />
+          </video>
+          <canvas ref={canvasRef} className="hidden" />
+        </>
+      )}
+
+      {/* Content Display */}
+      {contentType === "video" ? (
+        <>
+          {/* Thumbnail Image */}
+          {displayThumbnail ? (
+            <img
+              src={displayThumbnail || "/placeholder.svg"}
+              alt={title}
               className="w-full h-full object-cover"
+              loading="lazy"
+            />
+          ) : (
+            <div className="w-full h-full bg-zinc-800 flex items-center justify-center">
+              <div className="text-zinc-500">Loading...</div>
+            </div>
+          )}
+
+          {/* Video Player (only when playing) */}
+          {isPlaying && (
+            <video
+              className="absolute inset-0 w-full h-full object-cover z-10"
+              autoPlay
+              controls
               preload="metadata"
-              onClick={togglePlay}
-              onEnded={() => setIsPlaying(false)}
-              poster={thumbnailUrl}
+              onPause={handleVideoPause}
+              data-video-id={videoId}
             >
               <source src={videoUrl} type="video/mp4" />
             </video>
+          )}
+        </>
+      ) : contentType === "audio" ? (
+        <div className="w-full h-full bg-purple-900/20 flex items-center justify-center">
+          <Music className="h-12 w-12 text-purple-400" />
+        </div>
+      ) : contentType === "image" ? (
+        <img src={videoUrl || "/placeholder.svg"} alt={title} className="w-full h-full object-cover" />
+      ) : (
+        <div className="w-full h-full bg-zinc-800 flex items-center justify-center">
+          <File className="h-12 w-12 text-zinc-400" />
+        </div>
+      )}
 
-            {/* Border that appears on hover */}
-            <div className="absolute inset-0 border border-white/0 group-hover:border-white/40 rounded-lg transition-all duration-200"></div>
-
-            {/* Play/Pause Button Overlay - Only visible on hover */}
-            <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-              <button
-                onClick={togglePlay}
-                className="w-10 h-10 rounded-full bg-black/50 flex items-center justify-center"
-              >
-                {isPlaying ? <Pause className="h-4 w-4 text-white" /> : <Play className="h-4 w-4 text-white" />}
-              </button>
-            </div>
-
-            {/* Download button - only visible on hover */}
-            <div className="absolute bottom-2 right-2 z-20 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-              <button
-                className="bg-black/70 hover:bg-black/90 p-1.5 rounded-full transition-all duration-300"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  e.preventDefault()
-                  const link = document.createElement("a")
-                  link.href = videoUrl
-                  link.download = `${title || "video"}.mp4`
-                  link.click()
-                }}
-                aria-label="Download"
-                title="Download"
-              >
-                <Download className="h-3.5 w-3.5 text-white" />
-              </button>
-            </div>
-          </>
-        ) : (
-          <div className="w-full h-full flex items-center justify-center bg-zinc-800">
-            <div className="text-center">
-              <p className="text-xs text-zinc-500 truncate px-1">{title}</p>
-            </div>
-          </div>
-        )}
+      {/* Content Type Badge */}
+      <div className="absolute top-2 left-2 z-20">
+        <Badge
+          variant="secondary"
+          className={`text-xs border-0 ${
+            contentType === "video"
+              ? "bg-red-600/80 text-white"
+              : contentType === "audio"
+                ? "bg-purple-600/80 text-white"
+                : contentType === "image"
+                  ? "bg-blue-600/80 text-white"
+                  : "bg-zinc-600/80 text-white"
+          }`}
+        >
+          {contentType.toUpperCase()}
+        </Badge>
       </div>
 
-      {/* File info below video */}
-      <div className="mt-1 flex justify-between items-center">
-        <span className="text-xs text-zinc-400 truncate max-w-[70%]">{title}</span>
-        {fileSize && fileSize > 0 && <span className="text-xs text-zinc-400">{formatFileSize(fileSize)}</span>}
+      {/* Duration Badge (for videos) */}
+      {duration && contentType === "video" && (
+        <div className="absolute top-2 right-2 z-20">
+          <Badge variant="secondary" className="text-xs bg-black/60 text-white border-0">
+            {formatDuration(duration)}
+          </Badge>
+        </div>
+      )}
+
+      {/* Play/Pause Button Overlay */}
+      {contentType === "video" && (
+        <div
+          className={`absolute inset-0 flex items-center justify-center z-30 transition-opacity duration-200 ${
+            isHovered || !displayThumbnail ? "opacity-100" : "opacity-0"
+          }`}
+        >
+          <div className="w-12 h-12 rounded-full bg-black/50 flex items-center justify-center backdrop-blur-sm">
+            {isPlaying ? <Pause className="h-6 w-6 text-white" /> : <Play className="h-6 w-6 text-white ml-0.5" />}
+          </div>
+        </div>
+      )}
+
+      {/* Download Button */}
+      <div
+        className={`absolute bottom-2 right-2 z-40 transition-opacity duration-200 ${
+          isHovered ? "opacity-100" : "opacity-0"
+        }`}
+      >
+        <Button
+          size="sm"
+          variant="secondary"
+          className="h-8 w-8 p-0 bg-black/50 hover:bg-black/70 border-0"
+          onClick={handleDownload}
+        >
+          <Download className="h-3 w-3 text-white" />
+        </Button>
+      </div>
+
+      {/* File Info Overlay */}
+      <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-2 z-20">
+        <div className="text-white text-xs font-medium truncate">{title}</div>
+        <div className="text-white/70 text-xs">{formatFileSize(fileSize)}</div>
       </div>
     </div>
   )
