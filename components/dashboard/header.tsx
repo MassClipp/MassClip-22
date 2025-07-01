@@ -1,10 +1,13 @@
 "use client"
 
+import type React from "react"
+
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/contexts/auth-context"
+import { Bell, Search, User, Upload, ExternalLink } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { Input } from "@/components/ui/input"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -13,34 +16,45 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { Input } from "@/components/ui/input"
-import { Search, Upload, User, LogOut, Settings, Bell } from "lucide-react"
 import { doc, getDoc } from "firebase/firestore"
 import { db } from "@/lib/firebase"
-import DashboardSidebar from "./sidebar"
+import Logo from "@/components/logo"
+import NavDropdown from "@/components/dashboard/nav-dropdown"
 
 export default function DashboardHeader() {
   const router = useRouter()
   const { user, signOut } = useAuth()
-  const [userProfile, setUserProfile] = useState<any>(null)
+  const [searchQuery, setSearchQuery] = useState("")
+  const [userData, setUserData] = useState<any>(null)
+  const [notifications, setNotifications] = useState<any[]>([])
 
+  // Fetch user data
   useEffect(() => {
-    const fetchUserProfile = async () => {
+    const fetchUserData = async () => {
       if (!user) return
 
       try {
         const userDoc = await getDoc(doc(db, "users", user.uid))
         if (userDoc.exists()) {
-          setUserProfile(userDoc.data())
+          setUserData(userDoc.data())
         }
       } catch (error) {
-        console.error("Error fetching user profile:", error)
+        console.error("Error fetching user data:", error)
       }
     }
 
-    fetchUserProfile()
+    fetchUserData()
   }, [user])
 
+  // Handle search
+  const handleSearch = (e: React.FormEvent) => {
+    e.preventDefault()
+    if (searchQuery.trim()) {
+      router.push(`/dashboard/explore?search=${encodeURIComponent(searchQuery)}`)
+    }
+  }
+
+  // Handle sign out
   const handleSignOut = async () => {
     try {
       await signOut()
@@ -51,85 +65,97 @@ export default function DashboardHeader() {
   }
 
   return (
-    <div className="flex h-screen">
-      {/* Sidebar */}
-      <DashboardSidebar />
+    <header className="sticky top-0 z-30 w-full border-b border-zinc-800/50 bg-black/80 backdrop-blur-sm">
+      <div className="container flex h-16 items-center justify-between px-4">
+        <div className="flex items-center gap-4">
+          <NavDropdown />
+          <Logo href="/dashboard" size="sm" />
+        </div>
 
-      {/* Main content area */}
-      <div className="flex-1 flex flex-col">
-        {/* Top header */}
-        <header className="h-16 border-b border-zinc-800/50 bg-zinc-900/95 backdrop-blur-sm flex items-center justify-between px-6">
-          {/* Search */}
-          <div className="flex-1 max-w-md">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-zinc-400 h-4 w-4" />
-              <Input
-                placeholder="Search content..."
-                className="pl-10 bg-zinc-800/50 border-zinc-700 text-white placeholder-zinc-400"
-              />
-            </div>
-          </div>
+        <div className="flex items-center gap-3">
+          <form onSubmit={handleSearch} className="relative hidden md:block">
+            <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-zinc-500" />
+            <Input
+              type="search"
+              placeholder="Search content..."
+              className="w-full max-w-[240px] bg-zinc-900/50 border-zinc-800 pl-9 focus-visible:ring-red-500"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+          </form>
 
-          {/* Right side actions */}
-          <div className="flex items-center gap-4">
-            {/* Upload button */}
-            <Button onClick={() => router.push("/dashboard/upload")} className="bg-red-600 hover:bg-red-700 text-white">
-              <Upload className="h-4 w-4 mr-2" />
-              Upload
+          <Button
+            onClick={() => router.push("/dashboard/upload")}
+            className="hidden md:flex bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 border-none"
+            size="sm"
+          >
+            <Upload className="h-4 w-4 mr-2" />
+            Upload
+          </Button>
+
+          {!userData && user && <div className="hidden md:flex h-8 w-24 bg-zinc-800 animate-pulse rounded"></div>}
+
+          {userData?.username && (
+            <Button
+              variant="outline"
+              onClick={() => window.open(`/creator/${userData.username}`, "_blank")}
+              className="hidden md:flex border-zinc-700 hover:bg-zinc-800"
+              size="sm"
+            >
+              <ExternalLink className="h-4 w-4 mr-2" />
+              View Profile
             </Button>
+          )}
 
-            {/* Notifications */}
-            <Button variant="ghost" size="icon" className="text-zinc-400 hover:text-white">
-              <Bell className="h-5 w-5" />
-            </Button>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" className="relative">
+                <Bell className="h-5 w-5 text-zinc-400" />
+                {notifications.length > 0 && (
+                  <span className="absolute top-1 right-1 h-2 w-2 rounded-full bg-red-500"></span>
+                )}
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-80 bg-zinc-900 border-zinc-800">
+              <DropdownMenuLabel>Notifications</DropdownMenuLabel>
+              <DropdownMenuSeparator className="bg-zinc-800" />
+              {notifications.length > 0 ? (
+                notifications.map((notification, index) => (
+                  <DropdownMenuItem key={index}>{notification.message}</DropdownMenuItem>
+                ))
+              ) : (
+                <div className="py-4 text-center text-sm text-zinc-500">No new notifications</div>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
 
-            {/* User dropdown */}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" className="relative h-8 w-8 rounded-full">
-                  <Avatar className="h-8 w-8">
-                    <AvatarImage
-                      src={userProfile?.profilePicture || "/placeholder.svg"}
-                      alt={userProfile?.displayName || "User"}
-                    />
-                    <AvatarFallback className="bg-red-600 text-white">
-                      {userProfile?.displayName?.charAt(0) || user?.email?.charAt(0) || "U"}
-                    </AvatarFallback>
-                  </Avatar>
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent className="w-56 bg-zinc-900 border-zinc-800" align="end" forceMount>
-                <DropdownMenuLabel className="font-normal">
-                  <div className="flex flex-col space-y-1">
-                    <p className="text-sm font-medium leading-none text-white">{userProfile?.displayName || "User"}</p>
-                    <p className="text-xs leading-none text-zinc-400">{user?.email}</p>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" className="rounded-full">
+                {userData?.profilePic ? (
+                  <img
+                    src={userData.profilePic || "/placeholder.svg"}
+                    alt={userData.displayName || "User"}
+                    className="h-8 w-8 rounded-full object-cover"
+                  />
+                ) : (
+                  <div className="h-8 w-8 rounded-full bg-zinc-800 flex items-center justify-center">
+                    <User className="h-4 w-4 text-zinc-400" />
                   </div>
-                </DropdownMenuLabel>
-                <DropdownMenuSeparator className="bg-zinc-800" />
-                <DropdownMenuItem
-                  className="text-zinc-300 hover:text-white hover:bg-zinc-800"
-                  onClick={() => router.push("/dashboard/profile")}
-                >
-                  <User className="mr-2 h-4 w-4" />
-                  <span>Profile</span>
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  className="text-zinc-300 hover:text-white hover:bg-zinc-800"
-                  onClick={() => router.push("/dashboard/settings")}
-                >
-                  <Settings className="mr-2 h-4 w-4" />
-                  <span>Settings</span>
-                </DropdownMenuItem>
-                <DropdownMenuSeparator className="bg-zinc-800" />
-                <DropdownMenuItem className="text-zinc-300 hover:text-white hover:bg-zinc-800" onClick={handleSignOut}>
-                  <LogOut className="mr-2 h-4 w-4" />
-                  <span>Log out</span>
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-        </header>
+                )}
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="bg-zinc-900 border-zinc-800">
+              <DropdownMenuLabel>{userData?.displayName || user?.displayName || "User"}</DropdownMenuLabel>
+              <DropdownMenuSeparator className="bg-zinc-800" />
+              <DropdownMenuItem onClick={() => router.push("/dashboard/profile")}>Profile Settings</DropdownMenuItem>
+              <DropdownMenuItem onClick={() => router.push("/dashboard/earnings")}>Earnings</DropdownMenuItem>
+              <DropdownMenuSeparator className="bg-zinc-800" />
+              <DropdownMenuItem onClick={handleSignOut}>Sign Out</DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
       </div>
-    </div>
+    </header>
   )
 }
