@@ -73,10 +73,11 @@ export default function BundlesPage() {
   })
   const { toast } = useToast()
 
-  const [availableFreeContent, setAvailableFreeContent] = useState<ContentItem[]>([])
+  const [availableUploads, setAvailableUploads] = useState<ContentItem[]>([])
   const [showAddContentModal, setShowAddContentModal] = useState<string | null>(null)
   const [selectedContentIds, setSelectedContentIds] = useState<string[]>([])
   const [addContentLoading, setAddContentLoading] = useState(false)
+  const [uploadsLoading, setUploadsLoading] = useState(false)
 
   // Real-time listeners for content updates
   const contentListeners = useRef<{ [key: string]: () => void }>({})
@@ -392,18 +393,90 @@ export default function BundlesPage() {
     return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + " " + sizes[i]
   }
 
-  // Fetch user's free content
-  const fetchUserFreeContent = async () => {
+  // Fetch user's uploads
+  const fetchUserUploads = async () => {
     if (!user) return
 
     try {
-      const response = await fetch(`/api/creator/${user.uid}/free-content`)
-      if (!response.ok) throw new Error("Failed to fetch free content")
+      setUploadsLoading(true)
+      console.log("🔍 [Bundles] Fetching user uploads...")
 
-      const data = await response.json()
-      setAvailableFreeContent(data.freeContent || [])
+      const token = await user.getIdToken()
+
+      // Try the creator uploads API first
+      let response = await fetch("/api/creator/uploads", {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      })
+
+      let data
+      if (response.ok) {
+        data = await response.json()
+        console.log("✅ [Bundles] Creator uploads API Response:", data)
+      } else {
+        // Fallback to uploads API
+        console.log("⚠️ [Bundles] Creator uploads failed, trying uploads API")
+        response = await fetch("/api/uploads", {
+          method: "GET",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+        })
+
+        if (response.ok) {
+          data = await response.json()
+          console.log("✅ [Bundles] Uploads API Response:", data)
+        } else {
+          throw new Error(`HTTP ${response.status}: Failed to fetch uploads`)
+        }
+      }
+
+      const uploadsData = Array.isArray(data.uploads)
+        ? data.uploads
+        : Array.isArray(data.videos)
+          ? data.videos
+          : Array.isArray(data)
+            ? data
+            : []
+
+      console.log("📊 [Bundles] Raw uploads data:", uploadsData)
+
+      // Filter uploads with valid URLs and convert to ContentItem format
+      const availableUploads = uploadsData
+        .filter((upload) => {
+          const hasValidUrl = upload.fileUrl && upload.fileUrl.startsWith("http")
+          console.log(`🔍 [Bundles] Upload ${upload.id}: hasValidUrl=${hasValidUrl}`)
+          return hasValidUrl
+        })
+        .map((upload) => ({
+          id: upload.id,
+          title: upload.title || upload.filename || upload.name || "Untitled",
+          filename: upload.filename || upload.title || upload.name || "Unknown",
+          fileUrl: upload.fileUrl,
+          thumbnailUrl: upload.thumbnailUrl || "",
+          mimeType: upload.mimeType || upload.type || "application/octet-stream",
+          fileSize: upload.fileSize || upload.size || 0,
+          contentType: getContentType(upload.mimeType || upload.type || ""),
+          duration: upload.duration,
+          createdAt: upload.createdAt || upload.addedAt || upload.timestamp,
+          type: upload.type || upload.mimeType?.split("/")[0] || "document",
+        }))
+
+      setAvailableUploads(availableUploads)
+      console.log(`✅ [Bundles] Loaded ${availableUploads.length} available uploads`)
     } catch (error) {
-      console.error("Error fetching free content:", error)
+      console.error("❌ [Bundles] Error fetching uploads:", error)
+      toast({
+        title: "Error",
+        description: "Failed to load uploads",
+        variant: "destructive",
+      })
+    } finally {
+      setUploadsLoading(false)
     }
   }
 
@@ -423,7 +496,7 @@ export default function BundlesPage() {
 
       // Add each selected content item to the product box
       for (const contentId of selectedContentIds) {
-        const contentItem = availableFreeContent.find((item) => item.id === contentId)
+        const contentItem = availableUploads.find((item) => item.id === contentId)
         if (!contentItem) continue
 
         // Create productBoxContent entry
@@ -833,7 +906,7 @@ export default function BundlesPage() {
                               <div
                                 className="aspect-[9/16] bg-zinc-800/50 rounded-lg border-2 border-dashed border-zinc-700 flex flex-col items-center justify-center cursor-pointer hover:border-zinc-600 hover:bg-zinc-800/70 transition-all duration-200"
                                 onClick={() => {
-                                  fetchUserFreeContent()
+                                  fetchUserUploads()
                                   setShowAddContentModal(productBox.id)
                                 }}
                               >
@@ -849,6 +922,10 @@ export default function BundlesPage() {
                                 variant="outline"
                                 size="sm"
                                 className="mt-3 border-zinc-700 text-zinc-300 bg-transparent"
+                                onClick={() => {
+                                  fetchUserUploads()
+                                  setShowAddContentModal(productBox.id)
+                                }}
                               >
                                 <Plus className="h-4 w-4 mr-2" />
                                 Add Content
@@ -864,6 +941,10 @@ export default function BundlesPage() {
                       variant="outline"
                       size="sm"
                       className="w-full mt-4 border-zinc-700 text-zinc-300 hover:bg-zinc-800 bg-transparent"
+                      onClick={() => {
+                        fetchUserUploads()
+                        setShowAddContentModal(productBox.id)
+                      }}
                     >
                       <Plus className="h-4 w-4 mr-2" />
                       Add Content
@@ -883,17 +964,20 @@ export default function BundlesPage() {
             <DialogTitle>Add Content to Bundle</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
-            <p className="text-sm text-zinc-400">
-              Select content from your free content library to add to this bundle:
-            </p>
+            <p className="text-sm text-zinc-400">Select content from your uploads to add to this bundle:</p>
 
-            {availableFreeContent.length === 0 ? (
+            {uploadsLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="h-5 w-5 text-zinc-500 animate-spin" />
+                <span className="ml-2 text-sm text-zinc-400">Loading uploads...</span>
+              </div>
+            ) : availableUploads.length === 0 ? (
               <div className="text-center py-8">
-                <p className="text-zinc-500">No free content available. Upload some free content first.</p>
+                <p className="text-zinc-500">No uploads available. Upload some content first.</p>
               </div>
             ) : (
               <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-5 gap-3 max-h-96 overflow-y-auto">
-                {availableFreeContent.map((item) => (
+                {availableUploads.map((item) => (
                   <div key={item.id} className="group relative">
                     <div
                       className={`relative aspect-[9/16] bg-zinc-800 rounded-lg overflow-hidden cursor-pointer border-2 transition-all duration-200 ${
@@ -907,12 +991,20 @@ export default function BundlesPage() {
                         )
                       }}
                     >
-                      {item.type === "video" ? (
-                        <video src={item.fileUrl} className="w-full h-full object-cover" muted preload="metadata" />
+                      {item.contentType === "video" ? (
+                        <video
+                          src={item.fileUrl}
+                          className="w-full h-full object-cover"
+                          muted
+                          preload="metadata"
+                          poster={item.thumbnailUrl}
+                        />
                       ) : (
                         <div className="w-full h-full flex items-center justify-center">
                           <div className="text-center">
-                            <div className="text-xl mb-1">{item.type === "audio" ? "🎵" : "📄"}</div>
+                            <div className="text-xl mb-1">
+                              {item.contentType === "audio" ? "🎵" : item.contentType === "image" ? "🖼️" : "📄"}
+                            </div>
                           </div>
                         </div>
                       )}
