@@ -1,10 +1,9 @@
 "use client"
 
 import { useRef } from "react"
-
 import { useState, useEffect } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { Plus, Trash2, Eye, EyeOff, Loader2, AlertCircle, Upload, Play, Pause, X } from "lucide-react"
+import { Plus, Trash2, Eye, EyeOff, Loader2, AlertCircle, Upload, Play, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -70,13 +69,13 @@ export default function BundlesPage() {
     billingType: "one_time",
     thumbnail: null,
   })
+  const [playingVideo, setPlayingVideo] = useState<string | null>(null)
   const { toast } = useToast()
 
   const [showAddContentModal, setShowAddContentModal] = useState(false)
   const [availableUploads, setAvailableUploads] = useState<ContentItem[]>([])
   const [uploadsLoading, setUploadsLoading] = useState(false)
   const [currentBundleId, setCurrentBundleId] = useState<string>("")
-  const [playingVideos, setPlayingVideos] = useState<{ [key: string]: boolean }>({})
 
   // Real-time listeners for content updates
   const contentListeners = useRef<{ [key: string]: () => void }>({})
@@ -308,6 +307,11 @@ export default function BundlesPage() {
     }
   }
 
+  // Toggle content visibility
+  const toggleContentVisibility = (productBoxId: string) => {
+    setShowContent((prev) => ({ ...prev, [productBoxId]: !prev[productBoxId] }))
+  }
+
   // Remove content from bundle
   const handleRemoveContentFromBundle = async (bundleId: string, contentId: string) => {
     if (!confirm("Are you sure you want to remove this content from the bundle?")) return
@@ -350,32 +354,23 @@ export default function BundlesPage() {
     }
   }
 
-  // Toggle content visibility
-  const toggleContentVisibility = (productBoxId: string) => {
-    setShowContent((prev) => ({ ...prev, [productBoxId]: !prev[productBoxId] }))
+  // Handle video play
+  const handleVideoPlay = (videoId: string, videoElement: HTMLVideoElement) => {
+    // Pause any currently playing video
+    if (playingVideo && playingVideo !== videoId) {
+      const currentVideo = document.querySelector(`video[data-video-id="${playingVideo}"]`) as HTMLVideoElement
+      if (currentVideo) {
+        currentVideo.pause()
+      }
+    }
+
+    setPlayingVideo(videoId)
+    videoElement.play()
   }
 
-  // Handle video play/pause
-  const toggleVideoPlay = (videoId: string, videoElement: HTMLVideoElement) => {
-    const isPlaying = playingVideos[videoId]
-
-    if (isPlaying) {
-      videoElement.pause()
-      setPlayingVideos((prev) => ({ ...prev, [videoId]: false }))
-    } else {
-      // Pause all other videos
-      Object.keys(playingVideos).forEach((id) => {
-        if (id !== videoId && playingVideos[id]) {
-          const otherVideo = document.querySelector(`video[data-video-id="${id}"]`) as HTMLVideoElement
-          if (otherVideo) {
-            otherVideo.pause()
-          }
-        }
-      })
-
-      videoElement.play()
-      setPlayingVideos((prev) => ({ ...prev, [videoId]: true }))
-    }
+  // Handle video pause
+  const handleVideoPause = (videoId: string) => {
+    setPlayingVideo(null)
   }
 
   // Handle create bundle
@@ -850,7 +845,7 @@ export default function BundlesPage() {
                       </Button>
                     </div>
 
-                    {/* Content Grid - Smaller Video Cards */}
+                    {/* Content Grid */}
                     <AnimatePresence>
                       {isContentVisible && (
                         <motion.div
@@ -873,79 +868,64 @@ export default function BundlesPage() {
                                     {item.contentType === "video" ? (
                                       <>
                                         <video
-                                          data-video-id={item.id}
                                           src={item.fileUrl}
                                           className="w-full h-full object-cover"
-                                          loop
-                                          playsInline
                                           preload="metadata"
                                           poster={item.thumbnailUrl}
-                                          onEnded={() => setPlayingVideos((prev) => ({ ...prev, [item.id]: false }))}
+                                          data-video-id={item.id}
+                                          onPlay={() => setPlayingVideo(item.id)}
+                                          onPause={() => handleVideoPause(item.id)}
+                                          onClick={() => {
+                                            // Open in full video player
+                                            window.open(`/video/${item.id}`, "_blank")
+                                          }}
                                         />
 
-                                        {/* Play/Pause Button */}
-                                        <div className="absolute inset-0 flex items-center justify-center">
-                                          <button
+                                        {/* Play Button Overlay */}
+                                        {playingVideo !== item.id && (
+                                          <div
+                                            className="absolute inset-0 flex items-center justify-center bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity duration-200"
                                             onClick={(e) => {
                                               e.stopPropagation()
-                                              const video = e.currentTarget
-                                                .closest(".relative")
-                                                ?.querySelector("video") as HTMLVideoElement
+                                              const video = document.querySelector(
+                                                `video[data-video-id="${item.id}"]`,
+                                              ) as HTMLVideoElement
                                               if (video) {
-                                                toggleVideoPlay(item.id, video)
+                                                handleVideoPlay(item.id, video)
                                               }
                                             }}
-                                            className={`w-12 h-12 rounded-full bg-black/60 backdrop-blur-sm flex items-center justify-center text-white transition-all duration-200 hover:bg-black/80 ${
-                                              playingVideos[item.id]
-                                                ? "opacity-0 group-hover:opacity-100"
-                                                : "opacity-100"
-                                            }`}
                                           >
-                                            {playingVideos[item.id] ? (
-                                              <Pause className="h-5 w-5" />
-                                            ) : (
-                                              <Play className="h-5 w-5 ml-0.5" />
-                                            )}
-                                          </button>
-                                        </div>
-
-                                        {/* Remove Button */}
-                                        <button
-                                          onClick={(e) => {
-                                            e.stopPropagation()
-                                            handleRemoveContentFromBundle(productBox.id, item.id)
-                                          }}
-                                          className="absolute top-1 right-1 w-6 h-6 rounded-full bg-red-600/80 backdrop-blur-sm flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-opacity duration-200 hover:bg-red-700/90"
-                                        >
-                                          <X className="h-3 w-3" />
-                                        </button>
-                                      </>
-                                    ) : (
-                                      <>
-                                        <div className="w-full h-full flex items-center justify-center">
-                                          <div className="text-center">
-                                            <div className="text-2xl mb-1">
-                                              {item.contentType === "audio"
-                                                ? "🎵"
-                                                : item.contentType === "image"
-                                                  ? "🖼️"
-                                                  : "📄"}
+                                            <div className="w-12 h-12 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center">
+                                              <Play className="w-6 h-6 text-white ml-1" fill="white" />
                                             </div>
                                           </div>
-                                        </div>
-
-                                        {/* Remove Button for non-video content */}
-                                        <button
-                                          onClick={(e) => {
-                                            e.stopPropagation()
-                                            handleRemoveContentFromBundle(productBox.id, item.id)
-                                          }}
-                                          className="absolute top-1 right-1 w-6 h-6 rounded-full bg-red-600/80 backdrop-blur-sm flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-opacity duration-200 hover:bg-red-700/90"
-                                        >
-                                          <X className="h-3 w-3" />
-                                        </button>
+                                        )}
                                       </>
+                                    ) : (
+                                      <div className="w-full h-full flex items-center justify-center">
+                                        <div className="text-center">
+                                          <div className="text-2xl mb-1">
+                                            {item.contentType === "audio"
+                                              ? "🎵"
+                                              : item.contentType === "image"
+                                                ? "🖼️"
+                                                : "📄"}
+                                          </div>
+                                        </div>
+                                      </div>
                                     )}
+
+                                    {/* Delete Button */}
+                                    <button
+                                      className="absolute top-1 right-1 w-6 h-6 rounded-full bg-red-600/80 hover:bg-red-600 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-10"
+                                      onClick={(e) => {
+                                        e.stopPropagation()
+                                        handleRemoveContentFromBundle(productBox.id, item.id)
+                                      }}
+                                      title="Remove from bundle"
+                                    >
+                                      <X className="w-3 h-3 text-white" />
+                                    </button>
                                   </div>
 
                                   {/* File info */}
