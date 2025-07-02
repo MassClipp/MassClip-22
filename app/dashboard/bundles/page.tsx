@@ -2,7 +2,19 @@
 
 import { useState, useEffect, useRef } from "react"
 import { motion } from "framer-motion"
-import { Plus, Settings, Trash2, Eye, EyeOff, Loader2, AlertCircle, ChevronDown, ChevronUp, Edit } from "lucide-react"
+import {
+  Plus,
+  Settings,
+  Trash2,
+  Eye,
+  EyeOff,
+  Loader2,
+  AlertCircle,
+  ChevronDown,
+  ChevronUp,
+  Edit,
+  X,
+} from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -471,6 +483,11 @@ export default function BundlesPage() {
                           <Badge variant={productBox.active ? "default" : "secondary"}>
                             {productBox.active ? "Active" : "Inactive"}
                           </Badge>
+                          {isEditMode && (
+                            <Badge variant="outline" className="border-blue-500 text-blue-400">
+                              Edit Mode
+                            </Badge>
+                          )}
                         </div>
                         <p className="text-zinc-400 mb-3">{productBox.description}</p>
                         <div className="flex items-center gap-4">
@@ -488,14 +505,20 @@ export default function BundlesPage() {
                           variant="ghost"
                           size="icon"
                           onClick={() => toggleEditMode(productBox.id)}
-                          className={editMode[productBox.id] ? "bg-blue-600 hover:bg-blue-700" : ""}
+                          className={isEditMode ? "bg-blue-600 hover:bg-blue-700 text-white" : "hover:bg-zinc-800"}
+                          title={isEditMode ? "Exit edit mode" : "Edit bundle"}
                         >
-                          <Edit className="h-4 w-4" />
+                          {isEditMode ? <X className="h-4 w-4" /> : <Edit className="h-4 w-4" />}
                         </Button>
-                        <Button variant="ghost" size="icon">
+                        <Button variant="ghost" size="icon" className="hover:bg-zinc-800">
                           <Settings className="h-4 w-4" />
                         </Button>
-                        <Button variant="ghost" size="icon" onClick={() => handleDelete(productBox.id)}>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleDelete(productBox.id)}
+                          className="hover:bg-red-900/50"
+                        >
                           <Trash2 className="h-4 w-4" />
                         </Button>
                       </div>
@@ -556,7 +579,7 @@ export default function BundlesPage() {
                                   onVideoPause={() => handleVideoPause(item.id)}
                                   isPlaying={currentlyPlaying === item.id}
                                   videoId={item.id}
-                                  editMode={editMode[productBox.id] || false}
+                                  editMode={isEditMode}
                                   onRemove={() => handleRemoveContent(productBox.id, item.id)}
                                 />
                               ))}
