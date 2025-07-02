@@ -4,7 +4,7 @@ import { useRef } from "react"
 
 import { useState, useEffect } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { Plus, Edit, Eye, EyeOff, Loader2, AlertCircle, Upload, X, Check } from "lucide-react"
+import { Plus, Edit, Eye, EyeOff, Loader2, AlertCircle, Upload, X, Check, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -332,7 +332,7 @@ export default function BundlesPage() {
 
   // Delete product box
   const handleDelete = async (productBoxId: string) => {
-    if (!confirm("Are you sure you want to delete this bundle?")) return
+    if (!confirm("Are you sure you want to delete this bundle? This action cannot be undone.")) return
 
     try {
       const idToken = await user?.getIdToken()
@@ -683,14 +683,14 @@ export default function BundlesPage() {
     }
   }
 
-  // Remove content from bundle - Fixed version
+  // Remove content from bundle - Enhanced for permanent deletion
   const handleRemoveContentFromBundle = async (productBoxId: string, contentId: string) => {
     if (!confirm("Remove this content from the bundle?")) return
 
     try {
       console.log(`🔍 [Bundles] Removing content ${contentId} from bundle ${productBoxId}`)
 
-      // Remove from productBoxContent collection
+      // Step 1: Remove from productBoxContent collection
       const contentQuery = query(
         collection(db, "productBoxContent"),
         where("productBoxId", "==", productBoxId),
@@ -703,37 +703,53 @@ export default function BundlesPage() {
 
       console.log(`✅ [Bundles] Removed ${deletePromises.length} productBoxContent entries`)
 
-      // Update bundle contentItems array using bundles collection
+      // Step 2: Update bundle contentItems array in both possible collections
       const currentBox = productBoxes.find((box) => box.id === productBoxId)
       if (currentBox) {
         const updatedContentItems = currentBox.contentItems.filter((id) => id !== contentId)
 
-        // Try bundles collection first, then fallback to productBoxes
+        // Try both collections to ensure permanent removal
+        const updatePromises = []
+
+        // Update bundles collection
         try {
-          await updateDoc(doc(db, "bundles", productBoxId), {
-            contentItems: updatedContentItems,
-            updatedAt: new Date(),
-          })
-          console.log("✅ [Bundles] Updated bundles collection")
+          updatePromises.push(
+            updateDoc(doc(db, "bundles", productBoxId), {
+              contentItems: updatedContentItems,
+              updatedAt: new Date(),
+            }),
+          )
         } catch (bundlesError) {
-          console.log("⚠️ [Bundles] Bundles collection update failed, trying productBoxes")
-          await updateDoc(doc(db, "productBoxes", productBoxId), {
-            contentItems: updatedContentItems,
-            updatedAt: new Date(),
-          })
-          console.log("✅ [Bundles] Updated productBoxes collection")
+          console.log("⚠️ [Bundles] Bundles collection not found, skipping")
         }
 
-        // Update local state immediately
+        // Update productBoxes collection as fallback
+        try {
+          updatePromises.push(
+            updateDoc(doc(db, "productBoxes", productBoxId), {
+              contentItems: updatedContentItems,
+              updatedAt: new Date(),
+            }),
+          )
+        } catch (productBoxesError) {
+          console.log("⚠️ [Bundles] ProductBoxes collection not found, skipping")
+        }
+
+        // Wait for all updates to complete
+        await Promise.allSettled(updatePromises)
+
+        // Step 3: Update local state immediately for instant UI feedback
         setProductBoxes((prev) =>
           prev.map((box) => (box.id === productBoxId ? { ...box, contentItems: updatedContentItems } : box)),
         )
 
-        // Update content items state
+        // Step 4: Update content items state to remove from UI
         setContentItems((prev) => ({
           ...prev,
           [productBoxId]: prev[productBoxId]?.filter((item) => item.id !== contentId) || [],
         }))
+
+        console.log(`✅ [Bundles] Successfully removed content ${contentId} from bundle ${productBoxId}`)
       }
 
       toast({
@@ -966,6 +982,14 @@ export default function BundlesPage() {
                         >
                           <Edit className="h-4 w-4" />
                         </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="hover:bg-red-900/50 text-red-400 hover:text-red-300"
+                          onClick={() => handleDelete(productBox.id)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
                       </div>
                     </div>
                   </CardHeader>
@@ -994,7 +1018,7 @@ export default function BundlesPage() {
                       </Button>
                     </div>
 
-                    {/* Content Grid - Smaller Video Cards */}
+                    {/* Content Grid */}
                     <AnimatePresence>
                       {isContentVisible && (
                         <motion.div
@@ -1071,7 +1095,7 @@ export default function BundlesPage() {
                                 </div>
                               ))}
 
-                              {/* Add Content Placeholder */}
+                              {/* Add Content Placeholder - Only show when there's existing content */}
                               <div
                                 className="aspect-[9/16] bg-zinc-800/50 rounded-lg border-2 border-dashed border-zinc-700 flex flex-col items-center justify-center cursor-pointer hover:border-zinc-600 hover:bg-zinc-800/70 transition-all duration-200"
                                 onClick={() => {
@@ -1084,13 +1108,14 @@ export default function BundlesPage() {
                               </div>
                             </div>
                           ) : (
+                            // Empty state - Show centered Add Content button
                             <div className="text-center py-8">
                               <div className="text-4xl mb-2">📹</div>
-                              <p className="text-sm text-zinc-500">No content added yet</p>
+                              <p className="text-sm text-zinc-500 mb-4">No content added yet</p>
                               <Button
                                 variant="outline"
                                 size="sm"
-                                className="mt-3 border-zinc-700 text-zinc-300 bg-transparent"
+                                className="border-zinc-700 text-zinc-300 bg-transparent hover:bg-zinc-800"
                                 onClick={() => {
                                   fetchUserUploads()
                                   setShowAddContentModal(productBox.id)
@@ -1104,20 +1129,6 @@ export default function BundlesPage() {
                         </motion.div>
                       )}
                     </AnimatePresence>
-
-                    {/* Add Content Button */}
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="w-full mt-4 border-zinc-700 text-zinc-300 hover:bg-zinc-800 bg-transparent"
-                      onClick={() => {
-                        fetchUserUploads()
-                        setShowAddContentModal(productBox.id)
-                      }}
-                    >
-                      <Plus className="h-4 w-4 mr-2" />
-                      Add Content
-                    </Button>
                   </CardContent>
                 </Card>
               </motion.div>
@@ -1167,9 +1178,12 @@ export default function BundlesPage() {
                 placeholder="9.99"
                 className="bg-zinc-800 border-zinc-700"
               />
-              <p className="text-xs text-zinc-500 mt-1">
-                Changing the price will create a new Stripe price and update the bundle automatically.
-              </p>
+              <div className="mt-2 p-3 bg-amber-900/20 border border-amber-700/50 rounded-md">
+                <p className="text-xs text-amber-200">
+                  <strong>Note:</strong> Changing the price will create a new Stripe price automatically. However, you
+                  may need to manually update the price in your Stripe Product Catalog if there are any sync issues.
+                </p>
+              </div>
             </div>
 
             <div className="flex justify-end gap-3 pt-4">
