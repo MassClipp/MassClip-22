@@ -12,8 +12,8 @@ import {
   AlertCircle,
   ChevronDown,
   ChevronUp,
+  Edit,
   X,
-  Pencil,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -24,7 +24,6 @@ import { VideoThumbnail916 } from "@/components/video-thumbnail-916"
 import { collection, query, where, getDocs, doc, updateDoc, deleteDoc, onSnapshot } from "firebase/firestore"
 import { db } from "@/lib/firebase"
 import { useAuth } from "@/contexts/auth-context"
-import { cn } from "@/lib/utils"
 
 interface ContentItem {
   id: string
@@ -52,36 +51,6 @@ interface ProductBox {
   updatedAt?: any
 }
 
-interface BundleItem {
-  id: string
-  title: string
-  size: string
-  thumb?: string
-}
-
-interface Bundle {
-  id: string
-  name: string
-  description: string
-  price: number
-  active: boolean
-  items: BundleItem[]
-}
-
-const initialBundles: Bundle[] = [
-  {
-    id: "bundle_1",
-    name: "product",
-    description: "Enjoy!",
-    price: 2,
-    active: true,
-    items: [
-      { id: "vid1", title: "video", size: "3.85 MB" },
-      { id: "vid2", title: "video", size: "6.86 MB" },
-    ],
-  },
-]
-
 export default function BundlesPage() {
   const { user } = useAuth()
   const [productBoxes, setProductBoxes] = useState<ProductBox[]>([])
@@ -93,8 +62,6 @@ export default function BundlesPage() {
   const [error, setError] = useState<string | null>(null)
   const [currentlyPlaying, setCurrentlyPlaying] = useState<string | null>(null)
   const [editMode, setEditMode] = useState<{ [key: string]: boolean }>({})
-  const [bundles, setBundles] = useState<Bundle[]>(initialBundles)
-  const [editingId, setEditingId] = useState<string | null>(null)
   const { toast } = useToast()
 
   // Refs to track video elements for single playback
@@ -436,16 +403,6 @@ export default function BundlesPage() {
     }
   }, [user])
 
-  const toggleEdit = (id: string) => {
-    setEditingId((prev) => (prev === id ? null : id))
-  }
-
-  const removeItemFromBundle = (bundleId: string, itemId: string) => {
-    setBundles((prev) =>
-      prev.map((b) => (b.id === bundleId ? { ...b, items: b.items.filter((i) => i.id !== itemId) } : b)),
-    )
-  }
-
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
@@ -473,10 +430,20 @@ export default function BundlesPage() {
   }
 
   return (
-    <main className="max-w-5xl mx-auto px-4 py-8 space-y-6">
-      <h1 className="text-3xl font-bold text-white">Bundles</h1>
-      <p className="text-zinc-400 mb-4">Create and manage premium content packages for your audience</p>
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-white">Bundles</h1>
+          <p className="text-zinc-400">Create and manage premium content packages for your audience</p>
+        </div>
+        <Button className="bg-red-600 hover:bg-red-700">
+          <Plus className="h-4 w-4 mr-2" />
+          Create Bundle
+        </Button>
+      </div>
 
+      {/* Product Boxes */}
       {productBoxes.length === 0 ? (
         <div className="text-center py-12">
           <div className="text-6xl mb-4">📦</div>
@@ -541,7 +508,7 @@ export default function BundlesPage() {
                           className={isEditMode ? "bg-blue-600 hover:bg-blue-700 text-white" : "hover:bg-zinc-800"}
                           title={isEditMode ? "Exit edit mode" : "Edit bundle"}
                         >
-                          {isEditMode ? <X className="h-4 w-4" /> : <Pencil className="h-4 w-4" />}
+                          {isEditMode ? <X className="h-4 w-4" /> : <Edit className="h-4 w-4" />}
                         </Button>
                         <Button variant="ghost" size="icon" className="hover:bg-zinc-800">
                           <Settings className="h-4 w-4" />
@@ -681,97 +648,6 @@ export default function BundlesPage() {
           })}
         </div>
       )}
-
-      {bundles.map((bundle) => {
-        const inEdit = editingId === bundle.id
-        return (
-          <Card key={bundle.id} className="bg-zinc-900/60 backdrop-blur border border-zinc-800 text-zinc-100">
-            <CardHeader className="flex flex-row items-start justify-between gap-4">
-              <div>
-                <h2 className="text-xl font-semibold flex items-center gap-2">
-                  {bundle.name}
-                  {inEdit && <Badge variant="secondary">Edit Mode</Badge>}
-                  {bundle.active && !inEdit && <Badge className="bg-red-600/20 text-red-400">Active</Badge>}
-                </h2>
-                <p className="text-sm text-zinc-400">{bundle.description}</p>
-                <p className="mt-2 text-lg">
-                  <span className="text-green-400">$</span> {bundle.price.toFixed(2)}
-                </p>
-              </div>
-
-              <div className="flex items-center gap-3">
-                {/* NEW EDIT ICON */}
-                <Button
-                  size="icon"
-                  variant="ghost"
-                  className={cn(
-                    "border border-transparent hover:bg-zinc-800",
-                    inEdit && "bg-blue-600/20 text-blue-400",
-                  )}
-                  title={inEdit ? "Exit edit mode" : "Edit bundle"}
-                  onClick={() => toggleEdit(bundle.id)}
-                >
-                  {inEdit ? <X className="h-4 w-4" /> : <Pencil className="h-4 w-4" />}
-                </Button>
-
-                {/* Existing settings / delete placeholders */}
-                <Button size="icon" variant="ghost" className="hover:bg-zinc-800">
-                  <Settings className="h-4 w-4 text-blue-400" />
-                </Button>
-                <Button size="icon" variant="ghost" className="hover:bg-zinc-800">
-                  <Trash2 className="h-4 w-4 text-red-500" />
-                </Button>
-              </div>
-            </CardHeader>
-
-            <CardContent className="space-y-4">
-              <h3 className="uppercase text-zinc-400 text-xs tracking-wider">
-                Content Preview{" "}
-                <span className="ml-1 bg-zinc-700 text-zinc-300 text-[10px] font-semibold px-1.5 py-0.5 rounded">
-                  {bundle.items.length} items
-                </span>
-              </h3>
-
-              {/* Thumbnails */}
-              <div className="grid grid-cols-[repeat(auto-fill,minmax(96px,1fr))] gap-4">
-                {bundle.items.map((item) => (
-                  <div
-                    key={item.id}
-                    className="relative flex flex-col items-center justify-center bg-zinc-800/60 aspect-[9/16] rounded"
-                  >
-                    {/* placeholder thumb */}
-                    <span className="text-xs text-zinc-400">{item.title}</span>
-                    <span className="text-[10px] text-zinc-500">{item.size}</span>
-
-                    {inEdit && (
-                      <button
-                        onClick={() => removeItemFromBundle(bundle.id, item.id)}
-                        className="absolute -top-2 -right-2 bg-red-600 hover:bg-red-700 text-white rounded-full p-1"
-                        title="Remove from bundle"
-                      >
-                        <Trash2 className="h-3 w-3" />
-                      </button>
-                    )}
-                  </div>
-                ))}
-              </div>
-
-              <div className="pt-4">
-                {!inEdit ? (
-                  <Button variant="secondary" size="sm">
-                    + Add Content
-                  </Button>
-                ) : (
-                  <p className="text-sm text-zinc-400">
-                    Click the red trash buttons to remove content. When finished, click the{" "}
-                    <span className="font-semibold">X</span> icon above to exit edit mode.
-                  </p>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        )
-      })}
-    </main>
+    </div>
   )
 }
