@@ -44,6 +44,8 @@ interface ProductBox {
   contentItems: string[]
   createdAt?: any
   updatedAt?: any
+  productId?: string
+  priceId?: string
 }
 
 interface CreateBundleForm {
@@ -97,7 +99,7 @@ export default function BundlesPage() {
   // Real-time listeners for content updates
   const contentListeners = useRef<{ [key: string]: () => void }>({})
 
-  // Fetch product boxes
+  // Fetch product boxes - Updated to use the bundles API
   const fetchProductBoxes = async () => {
     if (!user) return
 
@@ -105,24 +107,44 @@ export default function BundlesPage() {
       setLoading(true)
       setError(null)
 
-      console.log("🔍 [Bundles] Fetching product boxes...")
+      console.log("🔍 [Bundles] Fetching bundles...")
 
       const idToken = await user.getIdToken()
-      const response = await fetch(`/api/creator/${user.uid}/product-boxes`, {
+
+      // Use the bundles API instead of product-boxes
+      const response = await fetch(`/api/creator/bundles`, {
         headers: {
           Authorization: `Bearer ${idToken}`,
         },
       })
 
       if (!response.ok) {
-        throw new Error(`Failed to fetch product boxes: ${response.status}`)
+        throw new Error(`Failed to fetch bundles: ${response.status}`)
       }
 
       const data = await response.json()
-      const boxes = data.productBoxes || []
+      const bundles = data.bundles || []
+
+      console.log("📦 [Bundles] Raw bundles data:", bundles)
+
+      // Convert bundles to ProductBox format for compatibility
+      const boxes = bundles.map((bundle: any) => ({
+        id: bundle.id,
+        title: bundle.title,
+        description: bundle.description || "",
+        price: bundle.price,
+        currency: bundle.currency || "usd",
+        coverImage: bundle.coverImage,
+        active: bundle.active !== false, // Default to true if not specified
+        contentItems: bundle.contentItems || [],
+        createdAt: bundle.createdAt,
+        updatedAt: bundle.updatedAt,
+        productId: bundle.productId,
+        priceId: bundle.priceId,
+      }))
 
       setProductBoxes(boxes)
-      console.log(`✅ [Bundles] Loaded ${boxes.length} product boxes`)
+      console.log(`✅ [Bundles] Loaded ${boxes.length} bundles`)
 
       // Initialize show content state and set up real-time listeners
       const initialShowState: { [key: string]: boolean } = {}
@@ -272,11 +294,22 @@ export default function BundlesPage() {
 
       const newActiveStatus = !productBox.active
 
-      // Update in Firestore
-      await updateDoc(doc(db, "productBoxes", productBoxId), {
-        active: newActiveStatus,
-        updatedAt: new Date(),
+      // Update using bundles API
+      const idToken = await user?.getIdToken()
+      const response = await fetch(`/api/creator/bundles/${productBoxId}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${idToken}`,
+        },
+        body: JSON.stringify({
+          active: newActiveStatus,
+        }),
       })
+
+      if (!response.ok) {
+        throw new Error("Failed to update bundle status")
+      }
 
       // Update local state
       setProductBoxes((prev) =>
@@ -302,7 +335,17 @@ export default function BundlesPage() {
     if (!confirm("Are you sure you want to delete this bundle?")) return
 
     try {
-      await deleteDoc(doc(db, "productBoxes", productBoxId))
+      const idToken = await user?.getIdToken()
+      const response = await fetch(`/api/creator/bundles/${productBoxId}`, {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${idToken}`,
+        },
+      })
+
+      if (!response.ok) {
+        throw new Error("Failed to delete bundle")
+      }
 
       // Clean up listener
       if (contentListeners.current[productBoxId]) {
@@ -385,8 +428,8 @@ export default function BundlesPage() {
       })
       setShowCreateModal(false)
 
-      // Refresh bundles
-      fetchProductBoxes()
+      // Refresh bundles to show the new one
+      await fetchProductBoxes()
     } catch (error) {
       console.error("Error creating bundle:", error)
       toast({
@@ -399,7 +442,7 @@ export default function BundlesPage() {
     }
   }
 
-  // Handle edit bundle
+  // Handle edit bundle with Stripe price update
   const handleEditBundle = async (productBoxId: string) => {
     if (!editForm.title.trim() || !editForm.price) {
       toast({
@@ -413,13 +456,29 @@ export default function BundlesPage() {
     try {
       setEditLoading(true)
 
-      // Update in Firestore
-      await updateDoc(doc(db, "productBoxes", productBoxId), {
-        title: editForm.title.trim(),
-        description: editForm.description.trim(),
-        price: Number.parseFloat(editForm.price),
-        updatedAt: new Date(),
+      const currentBundle = productBoxes.find((box) => box.id === productBoxId)
+      const priceChanged = currentBundle && Number.parseFloat(editForm.price) !== currentBundle.price
+
+      const idToken = await user?.getIdToken()
+      const response = await fetch(`/api/creator/bundles/${productBoxId}`, {
+        method: "PUT",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${idToken}`,
+        },
+        body: JSON.stringify({
+          title: editForm.title.trim(),
+          description: editForm.description.trim(),
+          price: Number.parseFloat(editForm.price),
+        }),
       })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.message || "Failed to update bundle")
+      }
+
+      const data = await response.json()
 
       // Update local state
       setProductBoxes((prev) =>
@@ -437,7 +496,9 @@ export default function BundlesPage() {
 
       toast({
         title: "Success",
-        description: "Bundle updated successfully",
+        description: priceChanged
+          ? "Bundle updated successfully. Stripe price will be updated automatically."
+          : "Bundle updated successfully",
       })
 
       setShowEditModal(null)
@@ -445,7 +506,7 @@ export default function BundlesPage() {
       console.error("Error updating bundle:", error)
       toast({
         title: "Error",
-        description: "Failed to update bundle",
+        description: error instanceof Error ? error.message : "Failed to update bundle",
         variant: "destructive",
       })
     } finally {
@@ -592,11 +653,11 @@ export default function BundlesPage() {
         })
       }
 
-      // Update product box contentItems array
+      // Update product box contentItems array using bundles collection
       const currentBox = productBoxes.find((box) => box.id === productBoxId)
       if (currentBox) {
         const updatedContentItems = [...currentBox.contentItems, ...selectedContentIds]
-        await updateDoc(doc(db, "productBoxes", productBoxId), {
+        await updateDoc(doc(db, "bundles", productBoxId), {
           contentItems: updatedContentItems,
           updatedAt: new Date(),
         })
@@ -622,11 +683,13 @@ export default function BundlesPage() {
     }
   }
 
-  // Remove content from bundle
+  // Remove content from bundle - Fixed version
   const handleRemoveContentFromBundle = async (productBoxId: string, contentId: string) => {
     if (!confirm("Remove this content from the bundle?")) return
 
     try {
+      console.log(`🔍 [Bundles] Removing content ${contentId} from bundle ${productBoxId}`)
+
       // Remove from productBoxContent collection
       const contentQuery = query(
         collection(db, "productBoxContent"),
@@ -635,28 +698,50 @@ export default function BundlesPage() {
       )
       const contentSnapshot = await getDocs(contentQuery)
 
-      contentSnapshot.forEach(async (doc) => {
-        await deleteDoc(doc.ref)
-      })
+      const deletePromises = contentSnapshot.docs.map((docSnapshot) => deleteDoc(docSnapshot.ref))
+      await Promise.all(deletePromises)
 
-      // Update product box contentItems array
+      console.log(`✅ [Bundles] Removed ${deletePromises.length} productBoxContent entries`)
+
+      // Update bundle contentItems array using bundles collection
       const currentBox = productBoxes.find((box) => box.id === productBoxId)
       if (currentBox) {
         const updatedContentItems = currentBox.contentItems.filter((id) => id !== contentId)
-        await updateDoc(doc(db, "productBoxes", productBoxId), {
-          contentItems: updatedContentItems,
-          updatedAt: new Date(),
-        })
+
+        // Try bundles collection first, then fallback to productBoxes
+        try {
+          await updateDoc(doc(db, "bundles", productBoxId), {
+            contentItems: updatedContentItems,
+            updatedAt: new Date(),
+          })
+          console.log("✅ [Bundles] Updated bundles collection")
+        } catch (bundlesError) {
+          console.log("⚠️ [Bundles] Bundles collection update failed, trying productBoxes")
+          await updateDoc(doc(db, "productBoxes", productBoxId), {
+            contentItems: updatedContentItems,
+            updatedAt: new Date(),
+          })
+          console.log("✅ [Bundles] Updated productBoxes collection")
+        }
+
+        // Update local state immediately
+        setProductBoxes((prev) =>
+          prev.map((box) => (box.id === productBoxId ? { ...box, contentItems: updatedContentItems } : box)),
+        )
+
+        // Update content items state
+        setContentItems((prev) => ({
+          ...prev,
+          [productBoxId]: prev[productBoxId]?.filter((item) => item.id !== contentId) || [],
+        }))
       }
 
       toast({
         title: "Success",
         description: "Content removed from bundle",
       })
-
-      fetchProductBoxes() // Refresh bundles
     } catch (error) {
-      console.error("Error removing content from bundle:", error)
+      console.error("❌ [Bundles] Error removing content from bundle:", error)
       toast({
         title: "Error",
         description: "Failed to remove content from bundle",
@@ -1082,6 +1167,9 @@ export default function BundlesPage() {
                 placeholder="9.99"
                 className="bg-zinc-800 border-zinc-700"
               />
+              <p className="text-xs text-zinc-500 mt-1">
+                Changing the price will create a new Stripe price and update the bundle automatically.
+              </p>
             </div>
 
             <div className="flex justify-end gap-3 pt-4">
