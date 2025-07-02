@@ -29,6 +29,7 @@ interface ContentItem {
   duration?: number
   filename: string
   createdAt?: any
+  source?: string // Track where this content came from
 }
 
 interface ProductBox {
@@ -442,42 +443,220 @@ export default function BundlesPage() {
     }
   }
 
+  // Enhanced fetch user uploads - check multiple sources
   const fetchUserUploads = async () => {
     if (!user) return
 
     try {
       setUploadsLoading(true)
+      console.log("🔍 [Bundles] Fetching user content from multiple sources...")
+
       const idToken = await user.getIdToken()
-      const response = await fetch("/api/uploads", {
-        headers: {
-          Authorization: `Bearer ${idToken}`,
-        },
+      const allContent: ContentItem[] = []
+
+      // Source 1: Try uploads API
+      try {
+        const uploadsResponse = await fetch("/api/uploads", {
+          headers: {
+            Authorization: `Bearer ${idToken}`,
+          },
+        })
+
+        if (uploadsResponse.ok) {
+          const uploadsData = await uploadsResponse.json()
+          const uploads = uploadsData.uploads || uploadsData.videos || []
+
+          console.log(`📁 [Bundles] Found ${uploads.length} items from uploads API`)
+
+          uploads.forEach((upload: any) => {
+            if (upload.fileUrl && upload.fileUrl.startsWith("http")) {
+              allContent.push({
+                id: upload.id,
+                title: upload.title || upload.filename || upload.originalFileName || "Untitled",
+                fileUrl: upload.fileUrl || upload.publicUrl || upload.downloadUrl,
+                thumbnailUrl: upload.thumbnailUrl || "",
+                mimeType: upload.mimeType || upload.fileType || "application/octet-stream",
+                fileSize: upload.fileSize || upload.size || 0,
+                contentType: getContentType(upload.mimeType || upload.fileType || ""),
+                duration: upload.duration || undefined,
+                filename: upload.filename || upload.originalFileName || `${upload.id}.file`,
+                createdAt: upload.createdAt || upload.uploadedAt,
+                source: "uploads",
+              })
+            }
+          })
+        }
+      } catch (err) {
+        console.log("⚠️ [Bundles] Uploads API failed:", err)
+      }
+
+      // Source 2: Try creator uploads API
+      try {
+        const creatorResponse = await fetch("/api/creator/uploads", {
+          headers: {
+            Authorization: `Bearer ${idToken}`,
+          },
+        })
+
+        if (creatorResponse.ok) {
+          const creatorData = await creatorResponse.json()
+          const creatorUploads = creatorData.uploads || []
+
+          console.log(`📁 [Bundles] Found ${creatorUploads.length} items from creator uploads API`)
+
+          creatorUploads.forEach((upload: any) => {
+            // Avoid duplicates
+            if (
+              !allContent.find((item) => item.id === upload.id) &&
+              upload.fileUrl &&
+              upload.fileUrl.startsWith("http")
+            ) {
+              allContent.push({
+                id: upload.id,
+                title: upload.title || upload.filename || upload.originalFileName || "Untitled",
+                fileUrl: upload.fileUrl || upload.publicUrl || upload.downloadUrl,
+                thumbnailUrl: upload.thumbnailUrl || "",
+                mimeType: upload.mimeType || upload.fileType || "application/octet-stream",
+                fileSize: upload.fileSize || upload.size || 0,
+                contentType: getContentType(upload.mimeType || upload.fileType || ""),
+                duration: upload.duration || undefined,
+                filename: upload.filename || upload.originalFileName || `${upload.id}.file`,
+                createdAt: upload.createdAt || upload.uploadedAt,
+                source: "creator-uploads",
+              })
+            }
+          })
+        }
+      } catch (err) {
+        console.log("⚠️ [Bundles] Creator uploads API failed:", err)
+      }
+
+      // Source 3: Try free content API
+      try {
+        const freeContentResponse = await fetch("/api/free-content", {
+          headers: {
+            Authorization: `Bearer ${idToken}`,
+          },
+        })
+
+        if (freeContentResponse.ok) {
+          const freeContentData = await freeContentResponse.json()
+          const freeContent = freeContentData.content || freeContentData.videos || []
+
+          console.log(`📁 [Bundles] Found ${freeContent.length} items from free content API`)
+
+          freeContent.forEach((content: any) => {
+            // Avoid duplicates
+            if (
+              !allContent.find((item) => item.id === content.id) &&
+              content.fileUrl &&
+              content.fileUrl.startsWith("http")
+            ) {
+              allContent.push({
+                id: content.id,
+                title: content.title || content.filename || content.originalFileName || "Untitled",
+                fileUrl: content.fileUrl || content.publicUrl || content.downloadUrl,
+                thumbnailUrl: content.thumbnailUrl || "",
+                mimeType: content.mimeType || content.fileType || "application/octet-stream",
+                fileSize: content.fileSize || content.size || 0,
+                contentType: getContentType(content.mimeType || content.fileType || ""),
+                duration: content.duration || undefined,
+                filename: content.filename || content.originalFileName || `${content.id}.file`,
+                createdAt: content.createdAt || content.uploadedAt,
+                source: "free-content",
+              })
+            }
+          })
+        }
+      } catch (err) {
+        console.log("⚠️ [Bundles] Free content API failed:", err)
+      }
+
+      // Source 4: Direct Firestore query as fallback
+      if (allContent.length === 0) {
+        console.log("🔍 [Bundles] Trying direct Firestore queries...")
+
+        try {
+          // Check uploads collection
+          const uploadsQuery = query(collection(db, "uploads"), where("userId", "==", user.uid))
+          const uploadsSnapshot = await getDocs(uploadsQuery)
+
+          uploadsSnapshot.forEach((doc) => {
+            const data = doc.data()
+            if (data.fileUrl && data.fileUrl.startsWith("http")) {
+              allContent.push({
+                id: doc.id,
+                title: data.title || data.filename || data.originalFileName || "Untitled",
+                fileUrl: data.fileUrl || data.publicUrl || data.downloadUrl,
+                thumbnailUrl: data.thumbnailUrl || "",
+                mimeType: data.mimeType || data.fileType || "application/octet-stream",
+                fileSize: data.fileSize || data.size || 0,
+                contentType: getContentType(data.mimeType || data.fileType || ""),
+                duration: data.duration || undefined,
+                filename: data.filename || data.originalFileName || `${doc.id}.file`,
+                createdAt: data.createdAt || data.uploadedAt,
+                source: "firestore-uploads",
+              })
+            }
+          })
+
+          // Check freeContent collection
+          const freeContentQuery = query(collection(db, "freeContent"), where("creatorId", "==", user.uid))
+          const freeContentSnapshot = await getDocs(freeContentQuery)
+
+          freeContentSnapshot.forEach((doc) => {
+            const data = doc.data()
+            if (!allContent.find((item) => item.id === doc.id) && data.fileUrl && data.fileUrl.startsWith("http")) {
+              allContent.push({
+                id: doc.id,
+                title: data.title || data.filename || data.originalFileName || "Untitled",
+                fileUrl: data.fileUrl || data.publicUrl || data.downloadUrl,
+                thumbnailUrl: data.thumbnailUrl || "",
+                mimeType: data.mimeType || data.fileType || "application/octet-stream",
+                fileSize: data.fileSize || data.size || 0,
+                contentType: getContentType(data.mimeType || data.fileType || ""),
+                duration: data.duration || undefined,
+                filename: data.filename || data.originalFileName || `${doc.id}.file`,
+                createdAt: data.createdAt || data.uploadedAt,
+                source: "firestore-free-content",
+              })
+            }
+          })
+
+          console.log(`📁 [Bundles] Found ${allContent.length} items from direct Firestore queries`)
+        } catch (firestoreErr) {
+          console.error("❌ [Bundles] Direct Firestore query failed:", firestoreErr)
+        }
+      }
+
+      // Sort by creation date (newest first)
+      allContent.sort((a, b) => {
+        if (!a.createdAt || !b.createdAt) return 0
+        const aTime = a.createdAt.seconds || a.createdAt.getTime?.() / 1000 || 0
+        const bTime = b.createdAt.seconds || b.createdAt.getTime?.() / 1000 || 0
+        return bTime - aTime
       })
 
-      if (!response.ok) throw new Error("Failed to fetch uploads")
+      setAvailableUploads(allContent)
+      console.log(`✅ [Bundles] Total content found: ${allContent.length}`)
 
-      const data = await response.json()
-      const uploads = data.uploads || []
-
-      const formattedUploads: ContentItem[] = uploads.map((upload: any) => ({
-        id: upload.id,
-        title: upload.title || upload.filename || upload.originalFileName || "Untitled",
-        fileUrl: upload.fileUrl || upload.publicUrl || upload.downloadUrl || "",
-        thumbnailUrl: upload.thumbnailUrl || "",
-        mimeType: upload.mimeType || upload.fileType || "application/octet-stream",
-        fileSize: upload.fileSize || upload.size || 0,
-        contentType: getContentType(upload.mimeType || upload.fileType || ""),
-        duration: upload.duration || undefined,
-        filename: upload.filename || upload.originalFileName || `${upload.id}.file`,
-        createdAt: upload.createdAt || upload.uploadedAt,
-      }))
-
-      setAvailableUploads(formattedUploads)
+      if (allContent.length > 0) {
+        console.log(
+          "📊 [Bundles] Content sources breakdown:",
+          allContent.reduce(
+            (acc, item) => {
+              acc[item.source || "unknown"] = (acc[item.source || "unknown"] || 0) + 1
+              return acc
+            },
+            {} as Record<string, number>,
+          ),
+        )
+      }
     } catch (error) {
-      console.error("Error fetching uploads:", error)
+      console.error("❌ [Bundles] Error fetching uploads:", error)
       toast({
         title: "Error",
-        description: "Failed to load your uploads",
+        description: "Failed to load your content",
         variant: "destructive",
       })
     } finally {
@@ -710,52 +889,73 @@ export default function BundlesPage() {
               {uploadsLoading ? (
                 <div className="flex items-center justify-center py-8">
                   <Loader2 className="h-6 w-6 animate-spin" />
-                  <span className="ml-2">Loading your uploads...</span>
+                  <span className="ml-2">Loading your content...</span>
                 </div>
               ) : availableUploads.length > 0 ? (
-                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-                  {availableUploads.map((upload) => (
-                    <div
-                      key={upload.id}
-                      className="group cursor-pointer"
-                      onClick={() => handleAddContentToBundle(currentBundleId, upload.id)}
-                    >
-                      <div className="relative aspect-[9/16] bg-zinc-800 rounded-lg overflow-hidden">
-                        {upload.contentType === "video" ? (
-                          <video
-                            src={upload.fileUrl}
-                            className="w-full h-full object-cover group-hover:scale-105 transition-transform"
-                            preload="metadata"
-                            poster={upload.thumbnailUrl}
-                          />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center">
-                            <div className="text-center">
-                              <div className="text-2xl mb-1">
-                                {upload.contentType === "audio" ? "🎵" : upload.contentType === "image" ? "🖼️" : "📄"}
+                <div className="space-y-4">
+                  <p className="text-sm text-zinc-400">
+                    Found {availableUploads.length} content items from your library
+                  </p>
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+                    {availableUploads.map((upload) => (
+                      <div
+                        key={upload.id}
+                        className="group cursor-pointer"
+                        onClick={() => handleAddContentToBundle(currentBundleId, upload.id)}
+                      >
+                        <div className="relative aspect-[9/16] bg-zinc-800 rounded-lg overflow-hidden">
+                          {upload.contentType === "video" ? (
+                            <video
+                              src={upload.fileUrl}
+                              className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                              preload="metadata"
+                              poster={upload.thumbnailUrl}
+                            />
+                          ) : (
+                            <div className="w-full h-full flex items-center justify-center">
+                              <div className="text-center">
+                                <div className="text-2xl mb-1">
+                                  {upload.contentType === "audio" ? "🎵" : upload.contentType === "image" ? "🖼️" : "📄"}
+                                </div>
                               </div>
                             </div>
-                          </div>
-                        )}
+                          )}
 
-                        {/* Overlay */}
-                        <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                          <Plus className="w-8 h-8 text-white" />
+                          {/* Overlay */}
+                          <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                            <Plus className="w-8 h-8 text-white" />
+                          </div>
+
+                          {/* Source badge */}
+                          {upload.source && (
+                            <div className="absolute top-1 left-1 px-1 py-0.5 bg-black/60 rounded text-xs text-zinc-300">
+                              {upload.source}
+                            </div>
+                          )}
+                        </div>
+
+                        <div className="mt-1">
+                          <p className="text-xs text-zinc-400 truncate">{upload.title}</p>
+                          <p className="text-xs text-zinc-500">{formatFileSize(upload.fileSize)}</p>
                         </div>
                       </div>
-
-                      <div className="mt-1">
-                        <p className="text-xs text-zinc-400 truncate">{upload.title}</p>
-                        <p className="text-xs text-zinc-500">{formatFileSize(upload.fileSize)}</p>
-                      </div>
-                    </div>
-                  ))}
+                    ))}
+                  </div>
                 </div>
               ) : (
                 <div className="text-center py-8">
                   <div className="text-4xl mb-2">📹</div>
-                  <p className="text-zinc-400">No uploads found</p>
+                  <p className="text-zinc-400">No content found</p>
                   <p className="text-sm text-zinc-500 mt-1">Upload some content first to add to bundles</p>
+                  <div className="mt-4 space-y-2 text-xs text-zinc-600">
+                    <p>We searched in:</p>
+                    <ul className="list-disc list-inside space-y-1">
+                      <li>Your uploads</li>
+                      <li>Creator uploads</li>
+                      <li>Free content</li>
+                      <li>Direct database queries</li>
+                    </ul>
+                  </div>
                 </div>
               )}
             </div>
@@ -915,16 +1115,16 @@ export default function BundlesPage() {
                                       </div>
                                     )}
 
-                                    {/* Delete Button */}
+                                    {/* Delete Button - White X */}
                                     <button
-                                      className="absolute top-1 right-1 w-6 h-6 rounded-full bg-red-600/80 hover:bg-red-600 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-10"
+                                      className="absolute top-2 right-2 w-6 h-6 rounded-full bg-white/90 hover:bg-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-10 shadow-lg"
                                       onClick={(e) => {
                                         e.stopPropagation()
                                         handleRemoveContentFromBundle(productBox.id, item.id)
                                       }}
                                       title="Remove from bundle"
                                     >
-                                      <X className="w-3 h-3 text-white" />
+                                      <X className="w-3 h-3 text-black" />
                                     </button>
                                   </div>
 
