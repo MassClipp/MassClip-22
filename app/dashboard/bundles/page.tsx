@@ -4,7 +4,7 @@ import { useRef } from "react"
 
 import { useState, useEffect } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { Plus, Trash2, Eye, EyeOff, Loader2, AlertCircle, Upload } from "lucide-react"
+import { Plus, Trash2, Eye, EyeOff, Loader2, AlertCircle, Upload, Play, Pause, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -76,6 +76,7 @@ export default function BundlesPage() {
   const [availableUploads, setAvailableUploads] = useState<ContentItem[]>([])
   const [uploadsLoading, setUploadsLoading] = useState(false)
   const [currentBundleId, setCurrentBundleId] = useState<string>("")
+  const [playingVideos, setPlayingVideos] = useState<{ [key: string]: boolean }>({})
 
   // Real-time listeners for content updates
   const contentListeners = useRef<{ [key: string]: () => void }>({})
@@ -307,9 +308,74 @@ export default function BundlesPage() {
     }
   }
 
+  // Remove content from bundle
+  const handleRemoveContentFromBundle = async (bundleId: string, contentId: string) => {
+    if (!confirm("Are you sure you want to remove this content from the bundle?")) return
+
+    try {
+      const productBox = productBoxes.find((box) => box.id === bundleId)
+      if (!productBox) return
+
+      // Remove from contentItems array
+      const updatedContentItems = productBox.contentItems.filter((id) => id !== contentId)
+
+      // Update in Firestore
+      await updateDoc(doc(db, "productBoxes", bundleId), {
+        contentItems: updatedContentItems,
+        updatedAt: new Date(),
+      })
+
+      // Update local state
+      setProductBoxes((prev) =>
+        prev.map((box) => (box.id === bundleId ? { ...box, contentItems: updatedContentItems } : box)),
+      )
+
+      // Remove from content items display
+      setContentItems((prev) => ({
+        ...prev,
+        [bundleId]: prev[bundleId]?.filter((item) => item.id !== contentId) || [],
+      }))
+
+      toast({
+        title: "Success",
+        description: "Content removed from bundle",
+      })
+    } catch (error) {
+      console.error("Error removing content from bundle:", error)
+      toast({
+        title: "Error",
+        description: "Failed to remove content from bundle",
+        variant: "destructive",
+      })
+    }
+  }
+
   // Toggle content visibility
   const toggleContentVisibility = (productBoxId: string) => {
     setShowContent((prev) => ({ ...prev, [productBoxId]: !prev[productBoxId] }))
+  }
+
+  // Handle video play/pause
+  const toggleVideoPlay = (videoId: string, videoElement: HTMLVideoElement) => {
+    const isPlaying = playingVideos[videoId]
+
+    if (isPlaying) {
+      videoElement.pause()
+      setPlayingVideos((prev) => ({ ...prev, [videoId]: false }))
+    } else {
+      // Pause all other videos
+      Object.keys(playingVideos).forEach((id) => {
+        if (id !== videoId && playingVideos[id]) {
+          const otherVideo = document.querySelector(`video[data-video-id="${id}"]`) as HTMLVideoElement
+          if (otherVideo) {
+            otherVideo.pause()
+          }
+        }
+      })
+
+      videoElement.play()
+      setPlayingVideos((prev) => ({ ...prev, [videoId]: true }))
+    }
   }
 
   // Handle create bundle
@@ -664,7 +730,6 @@ export default function BundlesPage() {
                           <video
                             src={upload.fileUrl}
                             className="w-full h-full object-cover group-hover:scale-105 transition-transform"
-                            muted
                             preload="metadata"
                             poster={upload.thumbnailUrl}
                           />
@@ -803,43 +868,83 @@ export default function BundlesPage() {
                           ) : boxContent.length > 0 ? (
                             <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-6 gap-3">
                               {boxContent.map((item) => (
-                                <div key={item.id} className="group">
+                                <div key={item.id} className="group relative">
                                   <div className="relative aspect-[9/16] bg-zinc-800 rounded-lg overflow-hidden cursor-pointer">
                                     {item.contentType === "video" ? (
-                                      <video
-                                        src={item.fileUrl}
-                                        className="w-full h-full object-cover"
-                                        muted
-                                        loop
-                                        playsInline
-                                        preload="metadata"
-                                        poster={item.thumbnailUrl}
-                                        onMouseEnter={(e) => {
-                                          const video = e.target as HTMLVideoElement
-                                          video.play().catch(() => {})
-                                        }}
-                                        onMouseLeave={(e) => {
-                                          const video = e.target as HTMLVideoElement
-                                          video.pause()
-                                          video.currentTime = 0
-                                        }}
-                                        onClick={() => {
-                                          // Open in full video player like explore page
-                                          window.open(`/video/${item.id}`, "_blank")
-                                        }}
-                                      />
+                                      <>
+                                        <video
+                                          data-video-id={item.id}
+                                          src={item.fileUrl}
+                                          className="w-full h-full object-cover"
+                                          loop
+                                          playsInline
+                                          preload="metadata"
+                                          poster={item.thumbnailUrl}
+                                          onEnded={() => setPlayingVideos((prev) => ({ ...prev, [item.id]: false }))}
+                                        />
+
+                                        {/* Play/Pause Button */}
+                                        <div className="absolute inset-0 flex items-center justify-center">
+                                          <button
+                                            onClick={(e) => {
+                                              e.stopPropagation()
+                                              const video = e.currentTarget
+                                                .closest(".relative")
+                                                ?.querySelector("video") as HTMLVideoElement
+                                              if (video) {
+                                                toggleVideoPlay(item.id, video)
+                                              }
+                                            }}
+                                            className={`w-12 h-12 rounded-full bg-black/60 backdrop-blur-sm flex items-center justify-center text-white transition-all duration-200 hover:bg-black/80 ${
+                                              playingVideos[item.id]
+                                                ? "opacity-0 group-hover:opacity-100"
+                                                : "opacity-100"
+                                            }`}
+                                          >
+                                            {playingVideos[item.id] ? (
+                                              <Pause className="h-5 w-5" />
+                                            ) : (
+                                              <Play className="h-5 w-5 ml-0.5" />
+                                            )}
+                                          </button>
+                                        </div>
+
+                                        {/* Remove Button */}
+                                        <button
+                                          onClick={(e) => {
+                                            e.stopPropagation()
+                                            handleRemoveContentFromBundle(productBox.id, item.id)
+                                          }}
+                                          className="absolute top-1 right-1 w-6 h-6 rounded-full bg-red-600/80 backdrop-blur-sm flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-opacity duration-200 hover:bg-red-700/90"
+                                        >
+                                          <X className="h-3 w-3" />
+                                        </button>
+                                      </>
                                     ) : (
-                                      <div className="w-full h-full flex items-center justify-center">
-                                        <div className="text-center">
-                                          <div className="text-2xl mb-1">
-                                            {item.contentType === "audio"
-                                              ? "🎵"
-                                              : item.contentType === "image"
-                                                ? "🖼️"
-                                                : "📄"}
+                                      <>
+                                        <div className="w-full h-full flex items-center justify-center">
+                                          <div className="text-center">
+                                            <div className="text-2xl mb-1">
+                                              {item.contentType === "audio"
+                                                ? "🎵"
+                                                : item.contentType === "image"
+                                                  ? "🖼️"
+                                                  : "📄"}
+                                            </div>
                                           </div>
                                         </div>
-                                      </div>
+
+                                        {/* Remove Button for non-video content */}
+                                        <button
+                                          onClick={(e) => {
+                                            e.stopPropagation()
+                                            handleRemoveContentFromBundle(productBox.id, item.id)
+                                          }}
+                                          className="absolute top-1 right-1 w-6 h-6 rounded-full bg-red-600/80 backdrop-blur-sm flex items-center justify-center text-white opacity-0 group-hover:opacity-100 transition-opacity duration-200 hover:bg-red-700/90"
+                                        >
+                                          <X className="h-3 w-3" />
+                                        </button>
+                                      </>
                                     )}
                                   </div>
 
@@ -854,7 +959,11 @@ export default function BundlesPage() {
                               {/* Add Content Placeholder */}
                               <div
                                 className="aspect-[9/16] bg-zinc-800/50 rounded-lg border-2 border-dashed border-zinc-700 flex flex-col items-center justify-center cursor-pointer hover:border-zinc-600 hover:bg-zinc-800/70 transition-all duration-200"
-                                onClick={() => setShowAddContentModal(true)}
+                                onClick={() => {
+                                  setCurrentBundleId(productBox.id)
+                                  setShowAddContentModal(true)
+                                  fetchUserUploads()
+                                }}
                               >
                                 <Plus className="w-6 h-6 text-zinc-500 mb-1" />
                                 <p className="text-xs text-zinc-500 text-center px-1">Add Content</p>
@@ -868,6 +977,11 @@ export default function BundlesPage() {
                                 variant="outline"
                                 size="sm"
                                 className="mt-3 border-zinc-700 text-zinc-300 bg-transparent"
+                                onClick={() => {
+                                  setCurrentBundleId(productBox.id)
+                                  setShowAddContentModal(true)
+                                  fetchUserUploads()
+                                }}
                               >
                                 <Plus className="h-4 w-4 mr-2" />
                                 Add Content
