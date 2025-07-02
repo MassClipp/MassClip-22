@@ -2,19 +2,7 @@
 
 import { useState, useEffect, useRef } from "react"
 import { motion } from "framer-motion"
-import {
-  Plus,
-  Settings,
-  Trash2,
-  Eye,
-  EyeOff,
-  Loader2,
-  AlertCircle,
-  ChevronDown,
-  ChevronUp,
-  Edit,
-  X,
-} from "lucide-react"
+import { Plus, Settings, Trash2, Eye, EyeOff, Loader2, AlertCircle, ChevronDown, ChevronUp, Edit } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -508,7 +496,7 @@ export default function BundlesPage() {
                           className={isEditMode ? "bg-blue-600 hover:bg-blue-700 text-white" : "hover:bg-zinc-800"}
                           title={isEditMode ? "Exit edit mode" : "Edit bundle"}
                         >
-                          {isEditMode ? <X className="h-4 w-4" /> : <Edit className="h-4 w-4" />}
+                          {isEditMode ? <Edit className="h-4 w-4" /> : <Edit className="h-4 w-4" />}
                         </Button>
                         <Button variant="ghost" size="icon" className="hover:bg-zinc-800">
                           <Settings className="h-4 w-4" />
@@ -641,6 +629,39 @@ export default function BundlesPage() {
                       <Plus className="h-4 w-4 mr-2" />
                       Add Content
                     </Button>
+
+                    {/* Bottom Action Bar - This is where the icons are shown in the screenshot */}
+                    <div className="flex items-center justify-between mt-6 pt-4 border-t border-zinc-800">
+                      <div className="flex items-center gap-3">
+                        <Switch checked={productBox.active} onCheckedChange={() => handleToggleActive(productBox.id)} />
+                        <Button variant="ghost" size="icon" className="text-zinc-400 hover:text-white">
+                          <Eye className="h-4 w-4" />
+                        </Button>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => toggleEditMode(productBox.id)}
+                          className={isEditMode ? "bg-orange-600/20 text-orange-400" : "text-zinc-400 hover:text-white"}
+                          title={isEditMode ? "Exit edit mode" : "Edit bundle"}
+                        >
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                        <Button variant="ghost" size="icon" className="text-blue-400 hover:text-blue-300">
+                          <Settings className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => handleDelete(productBox.id)}
+                          className="text-red-500 hover:text-red-400"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
                   </CardContent>
                 </Card>
               </motion.div>
