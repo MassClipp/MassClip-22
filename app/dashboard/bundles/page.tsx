@@ -4,7 +4,7 @@ import { useRef } from "react"
 
 import { useState, useEffect } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { Plus, Settings, Trash2, Eye, EyeOff, Loader2, AlertCircle, Upload } from "lucide-react"
+import { Plus, Trash2, Eye, EyeOff, Loader2, AlertCircle, Upload } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -71,6 +71,11 @@ export default function BundlesPage() {
     thumbnail: null,
   })
   const { toast } = useToast()
+
+  const [showAddContentModal, setShowAddContentModal] = useState(false)
+  const [availableUploads, setAvailableUploads] = useState<ContentItem[]>([])
+  const [uploadsLoading, setUploadsLoading] = useState(false)
+  const [currentBundleId, setCurrentBundleId] = useState<string>("")
 
   // Real-time listeners for content updates
   const contentListeners = useRef<{ [key: string]: () => void }>({})
@@ -376,6 +381,94 @@ export default function BundlesPage() {
     }
   }
 
+  const fetchUserUploads = async () => {
+    if (!user) return
+
+    try {
+      setUploadsLoading(true)
+      const idToken = await user.getIdToken()
+      const response = await fetch("/api/uploads", {
+        headers: {
+          Authorization: `Bearer ${idToken}`,
+        },
+      })
+
+      if (!response.ok) throw new Error("Failed to fetch uploads")
+
+      const data = await response.json()
+      const uploads = data.uploads || []
+
+      const formattedUploads: ContentItem[] = uploads.map((upload: any) => ({
+        id: upload.id,
+        title: upload.title || upload.filename || upload.originalFileName || "Untitled",
+        fileUrl: upload.fileUrl || upload.publicUrl || upload.downloadUrl || "",
+        thumbnailUrl: upload.thumbnailUrl || "",
+        mimeType: upload.mimeType || upload.fileType || "application/octet-stream",
+        fileSize: upload.fileSize || upload.size || 0,
+        contentType: getContentType(upload.mimeType || upload.fileType || ""),
+        duration: upload.duration || undefined,
+        filename: upload.filename || upload.originalFileName || `${upload.id}.file`,
+        createdAt: upload.createdAt || upload.uploadedAt,
+      }))
+
+      setAvailableUploads(formattedUploads)
+    } catch (error) {
+      console.error("Error fetching uploads:", error)
+      toast({
+        title: "Error",
+        description: "Failed to load your uploads",
+        variant: "destructive",
+      })
+    } finally {
+      setUploadsLoading(false)
+    }
+  }
+
+  const handleAddContentToBundle = async (bundleId: string, uploadId: string) => {
+    try {
+      const productBox = productBoxes.find((box) => box.id === bundleId)
+      if (!productBox) return
+
+      // Check if content is already in bundle
+      if (productBox.contentItems.includes(uploadId)) {
+        toast({
+          title: "Already Added",
+          description: "This content is already in the bundle",
+          variant: "destructive",
+        })
+        return
+      }
+
+      // Add to contentItems array
+      const updatedContentItems = [...productBox.contentItems, uploadId]
+
+      // Update in Firestore
+      await updateDoc(doc(db, "productBoxes", bundleId), {
+        contentItems: updatedContentItems,
+        updatedAt: new Date(),
+      })
+
+      // Update local state
+      setProductBoxes((prev) =>
+        prev.map((box) => (box.id === bundleId ? { ...box, contentItems: updatedContentItems } : box)),
+      )
+
+      toast({
+        title: "Success",
+        description: "Content added to bundle",
+      })
+
+      setShowAddContentModal(false)
+    } catch (error) {
+      console.error("Error adding content to bundle:", error)
+      toast({
+        title: "Error",
+        description: "Failed to add content to bundle",
+        variant: "destructive",
+      })
+    }
+  }
+
   // Format file size
   const formatFileSize = (bytes: number): string => {
     if (bytes === 0) return "0 Bytes"
@@ -545,6 +638,69 @@ export default function BundlesPage() {
             </div>
           </DialogContent>
         </Dialog>
+
+        {/* Add Content Modal */}
+        <Dialog open={showAddContentModal} onOpenChange={setShowAddContentModal}>
+          <DialogContent className="bg-zinc-900 border-zinc-800 text-white max-w-4xl max-h-[80vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Add Content to Bundle</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              {uploadsLoading ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="h-6 w-6 animate-spin" />
+                  <span className="ml-2">Loading your uploads...</span>
+                </div>
+              ) : availableUploads.length > 0 ? (
+                <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+                  {availableUploads.map((upload) => (
+                    <div
+                      key={upload.id}
+                      className="group cursor-pointer"
+                      onClick={() => handleAddContentToBundle(currentBundleId, upload.id)}
+                    >
+                      <div className="relative aspect-[9/16] bg-zinc-800 rounded-lg overflow-hidden">
+                        {upload.contentType === "video" ? (
+                          <video
+                            src={upload.fileUrl}
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                            muted
+                            preload="metadata"
+                            poster={upload.thumbnailUrl}
+                          />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center">
+                            <div className="text-center">
+                              <div className="text-2xl mb-1">
+                                {upload.contentType === "audio" ? "🎵" : upload.contentType === "image" ? "🖼️" : "📄"}
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Overlay */}
+                        <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                          <Plus className="w-8 h-8 text-white" />
+                        </div>
+                      </div>
+
+                      <div className="mt-1">
+                        <p className="text-xs text-zinc-400 truncate">{upload.title}</p>
+                        <p className="text-xs text-zinc-500">{formatFileSize(upload.fileSize)}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-8">
+                  <div className="text-4xl mb-2">📹</div>
+                  <p className="text-zinc-400">No uploads found</p>
+                  <p className="text-sm text-zinc-500 mt-1">Upload some content first to add to bundles</p>
+                </div>
+              )}
+            </div>
+          </DialogContent>
+        </Dialog>
       </div>
 
       {/* Product Boxes */}
@@ -593,9 +749,6 @@ export default function BundlesPage() {
 
                       <div className="flex items-center gap-2">
                         <Switch checked={productBox.active} onCheckedChange={() => handleToggleActive(productBox.id)} />
-                        <Button variant="ghost" size="icon" className="hover:bg-zinc-800">
-                          <Settings className="h-4 w-4" />
-                        </Button>
                         <Button
                           variant="ghost"
                           size="icon"
@@ -651,12 +804,14 @@ export default function BundlesPage() {
                             <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-6 gap-3">
                               {boxContent.map((item) => (
                                 <div key={item.id} className="group">
-                                  <div className="relative aspect-[9/16] bg-zinc-800 rounded-lg overflow-hidden">
+                                  <div className="relative aspect-[9/16] bg-zinc-800 rounded-lg overflow-hidden cursor-pointer">
                                     {item.contentType === "video" ? (
                                       <video
                                         src={item.fileUrl}
-                                        className="w-full h-full object-cover cursor-pointer group-hover:scale-105 transition-transform"
+                                        className="w-full h-full object-cover"
                                         muted
+                                        loop
+                                        playsInline
                                         preload="metadata"
                                         poster={item.thumbnailUrl}
                                         onMouseEnter={(e) => {
@@ -668,10 +823,13 @@ export default function BundlesPage() {
                                           video.pause()
                                           video.currentTime = 0
                                         }}
-                                        onClick={() => window.open(item.fileUrl, "_blank")}
+                                        onClick={() => {
+                                          // Open in full video player like explore page
+                                          window.open(`/video/${item.id}`, "_blank")
+                                        }}
                                       />
                                     ) : (
-                                      <div className="w-full h-full flex items-center justify-center cursor-pointer">
+                                      <div className="w-full h-full flex items-center justify-center">
                                         <div className="text-center">
                                           <div className="text-2xl mb-1">
                                             {item.contentType === "audio"
@@ -683,22 +841,6 @@ export default function BundlesPage() {
                                         </div>
                                       </div>
                                     )}
-
-                                    {/* Content type badge */}
-                                    <div className="absolute top-1 left-1">
-                                      <Badge
-                                        variant="secondary"
-                                        className={`text-xs border-0 ${
-                                          item.contentType === "video"
-                                            ? "bg-red-600/80 text-white"
-                                            : item.contentType === "audio"
-                                              ? "bg-purple-600/80 text-white"
-                                              : "bg-black/60 text-white"
-                                        }`}
-                                      >
-                                        {item.contentType.toUpperCase()}
-                                      </Badge>
-                                    </div>
                                   </div>
 
                                   {/* File info */}
@@ -710,7 +852,10 @@ export default function BundlesPage() {
                               ))}
 
                               {/* Add Content Placeholder */}
-                              <div className="aspect-[9/16] bg-zinc-800/50 rounded-lg border-2 border-dashed border-zinc-700 flex flex-col items-center justify-center cursor-pointer hover:border-zinc-600 hover:bg-zinc-800/70 transition-all duration-200">
+                              <div
+                                className="aspect-[9/16] bg-zinc-800/50 rounded-lg border-2 border-dashed border-zinc-700 flex flex-col items-center justify-center cursor-pointer hover:border-zinc-600 hover:bg-zinc-800/70 transition-all duration-200"
+                                onClick={() => setShowAddContentModal(true)}
+                              >
                                 <Plus className="w-6 h-6 text-zinc-500 mb-1" />
                                 <p className="text-xs text-zinc-500 text-center px-1">Add Content</p>
                               </div>
@@ -738,6 +883,11 @@ export default function BundlesPage() {
                       variant="outline"
                       size="sm"
                       className="w-full mt-4 border-zinc-700 text-zinc-300 hover:bg-zinc-800 bg-transparent"
+                      onClick={() => {
+                        setCurrentBundleId(productBox.id)
+                        setShowAddContentModal(true)
+                        fetchUserUploads()
+                      }}
                     >
                       <Plus className="h-4 w-4 mr-2" />
                       Add Content

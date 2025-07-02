@@ -76,6 +76,7 @@
     "react-icons": "latest",
     "react-image-crop": "latest",
     "react-resizable-panels": "latest",
+    "react-router-dom": "latest",
     "recharts": "latest",
     "resend": "latest",
     "sonner": "latest",
