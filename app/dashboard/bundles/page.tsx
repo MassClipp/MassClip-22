@@ -4,7 +4,7 @@ import { useRef } from "react"
 
 import { useState, useEffect } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { Plus, Settings, Eye, EyeOff, Loader2, AlertCircle, Upload, X, Check } from "lucide-react"
+import { Plus, Edit, Eye, EyeOff, Loader2, AlertCircle, Upload, X, Check } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -54,6 +54,12 @@ interface CreateBundleForm {
   thumbnail: File | null
 }
 
+interface EditBundleForm {
+  title: string
+  description: string
+  price: string
+}
+
 export default function BundlesPage() {
   const { user } = useAuth()
   const [productBoxes, setProductBoxes] = useState<ProductBox[]>([])
@@ -78,6 +84,15 @@ export default function BundlesPage() {
   const [selectedContentIds, setSelectedContentIds] = useState<string[]>([])
   const [addContentLoading, setAddContentLoading] = useState(false)
   const [uploadsLoading, setUploadsLoading] = useState(false)
+
+  // Edit bundle states
+  const [showEditModal, setShowEditModal] = useState<string | null>(null)
+  const [editLoading, setEditLoading] = useState(false)
+  const [editForm, setEditForm] = useState<EditBundleForm>({
+    title: "",
+    description: "",
+    price: "",
+  })
 
   // Real-time listeners for content updates
   const contentListeners = useRef<{ [key: string]: () => void }>({})
@@ -382,6 +397,70 @@ export default function BundlesPage() {
     } finally {
       setCreateLoading(false)
     }
+  }
+
+  // Handle edit bundle
+  const handleEditBundle = async (productBoxId: string) => {
+    if (!editForm.title.trim() || !editForm.price) {
+      toast({
+        title: "Error",
+        description: "Please fill in all required fields",
+        variant: "destructive",
+      })
+      return
+    }
+
+    try {
+      setEditLoading(true)
+
+      // Update in Firestore
+      await updateDoc(doc(db, "productBoxes", productBoxId), {
+        title: editForm.title.trim(),
+        description: editForm.description.trim(),
+        price: Number.parseFloat(editForm.price),
+        updatedAt: new Date(),
+      })
+
+      // Update local state
+      setProductBoxes((prev) =>
+        prev.map((box) =>
+          box.id === productBoxId
+            ? {
+                ...box,
+                title: editForm.title.trim(),
+                description: editForm.description.trim(),
+                price: Number.parseFloat(editForm.price),
+              }
+            : box,
+        ),
+      )
+
+      toast({
+        title: "Success",
+        description: "Bundle updated successfully",
+      })
+
+      setShowEditModal(null)
+    } catch (error) {
+      console.error("Error updating bundle:", error)
+      toast({
+        title: "Error",
+        description: "Failed to update bundle",
+        variant: "destructive",
+      })
+    } finally {
+      setEditLoading(false)
+    }
+  }
+
+  // Open edit modal with pre-filled data
+  const openEditModal = (productBox: ProductBox) => {
+    setEditForm({
+      title: productBox.title,
+      description: productBox.description,
+      price: productBox.price.toString(),
+    })
+    setShowEditModal(productBox.id)
   }
 
   // Format file size
@@ -794,8 +873,13 @@ export default function BundlesPage() {
 
                       <div className="flex items-center gap-2">
                         <Switch checked={productBox.active} onCheckedChange={() => handleToggleActive(productBox.id)} />
-                        <Button variant="ghost" size="icon" className="hover:bg-zinc-800">
-                          <Settings className="h-4 w-4" />
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="hover:bg-zinc-800"
+                          onClick={() => openEditModal(productBox)}
+                        >
+                          <Edit className="h-4 w-4" />
                         </Button>
                       </div>
                     </div>
@@ -957,74 +1041,144 @@ export default function BundlesPage() {
         </div>
       )}
 
-      {/* Add Content Modal */}
-      <Dialog open={!!showAddContentModal} onOpenChange={() => setShowAddContentModal(null)}>
-        <DialogContent className="bg-zinc-900 border-zinc-800 text-white max-w-4xl max-h-[80vh] overflow-hidden">
+      {/* Edit Bundle Modal */}
+      <Dialog open={!!showEditModal} onOpenChange={() => setShowEditModal(null)}>
+        <DialogContent className="bg-zinc-900 border-zinc-800 text-white">
           <DialogHeader>
-            <DialogTitle>Add Content to Bundle</DialogTitle>
+            <DialogTitle>Edit Bundle</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
-            <p className="text-sm text-zinc-400">Select content from your uploads to add to this bundle:</p>
+            <div>
+              <Label htmlFor="edit-title">Title *</Label>
+              <Input
+                id="edit-title"
+                value={editForm.title}
+                onChange={(e) => setEditForm((prev) => ({ ...prev, title: e.target.value }))}
+                placeholder="Enter bundle title"
+                className="bg-zinc-800 border-zinc-700"
+              />
+            </div>
+
+            <div>
+              <Label htmlFor="edit-description">Description</Label>
+              <Textarea
+                id="edit-description"
+                value={editForm.description}
+                onChange={(e) => setEditForm((prev) => ({ ...prev, description: e.target.value }))}
+                placeholder="Describe your bundle"
+                className="bg-zinc-800 border-zinc-700"
+              />
+            </div>
+
+            <div>
+              <Label htmlFor="edit-price">Price (USD) *</Label>
+              <Input
+                id="edit-price"
+                type="number"
+                step="0.01"
+                min="0.50"
+                value={editForm.price}
+                onChange={(e) => setEditForm((prev) => ({ ...prev, price: e.target.value }))}
+                placeholder="9.99"
+                className="bg-zinc-800 border-zinc-700"
+              />
+            </div>
+
+            <div className="flex justify-end gap-3 pt-4">
+              <Button variant="outline" onClick={() => setShowEditModal(null)} className="border-zinc-700">
+                Cancel
+              </Button>
+              <Button
+                onClick={() => showEditModal && handleEditBundle(showEditModal)}
+                disabled={editLoading}
+                className="bg-red-600 hover:bg-red-700"
+              >
+                {editLoading ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Updating...
+                  </>
+                ) : (
+                  "Update Bundle"
+                )}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Add Content Modal */}
+      <Dialog open={!!showAddContentModal} onOpenChange={() => setShowAddContentModal(null)}>
+        <DialogContent className="bg-zinc-900 border-zinc-800 text-white max-w-4xl h-[80vh] flex flex-col">
+          <DialogHeader className="flex-shrink-0">
+            <DialogTitle>Add Content to Bundle</DialogTitle>
+          </DialogHeader>
+          <div className="flex flex-col flex-1 min-h-0 space-y-4">
+            <p className="text-sm text-zinc-400 flex-shrink-0">
+              Select content from your uploads to add to this bundle:
+            </p>
 
             {uploadsLoading ? (
-              <div className="flex items-center justify-center py-8">
+              <div className="flex items-center justify-center py-8 flex-1">
                 <Loader2 className="h-5 w-5 text-zinc-500 animate-spin" />
                 <span className="ml-2 text-sm text-zinc-400">Loading uploads...</span>
               </div>
             ) : availableUploads.length === 0 ? (
-              <div className="text-center py-8">
+              <div className="text-center py-8 flex-1 flex items-center justify-center">
                 <p className="text-zinc-500">No uploads available. Upload some content first.</p>
               </div>
             ) : (
-              <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-5 gap-3 max-h-96 overflow-y-auto">
-                {availableUploads.map((item) => (
-                  <div key={item.id} className="group relative">
-                    <div
-                      className={`relative aspect-[9/16] bg-zinc-800 rounded-lg overflow-hidden cursor-pointer border-2 transition-all duration-200 ${
-                        selectedContentIds.includes(item.id)
-                          ? "border-red-500 ring-2 ring-red-500/50"
-                          : "border-transparent hover:border-zinc-600"
-                      }`}
-                      onClick={() => {
-                        setSelectedContentIds((prev) =>
-                          prev.includes(item.id) ? prev.filter((id) => id !== item.id) : [...prev, item.id],
-                        )
-                      }}
-                    >
-                      {item.contentType === "video" ? (
-                        <video
-                          src={item.fileUrl}
-                          className="w-full h-full object-cover"
-                          muted
-                          preload="metadata"
-                          poster={item.thumbnailUrl}
-                        />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center">
-                          <div className="text-center">
-                            <div className="text-xl mb-1">
-                              {item.contentType === "audio" ? "🎵" : item.contentType === "image" ? "🖼️" : "📄"}
+              <div className="flex-1 overflow-y-auto">
+                <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-5 gap-3 pb-4">
+                  {availableUploads.map((item) => (
+                    <div key={item.id} className="group relative">
+                      <div
+                        className={`relative aspect-[9/16] bg-zinc-800 rounded-lg overflow-hidden cursor-pointer border-2 transition-all duration-200 ${
+                          selectedContentIds.includes(item.id)
+                            ? "border-red-500 ring-2 ring-red-500/50"
+                            : "border-transparent hover:border-zinc-600"
+                        }`}
+                        onClick={() => {
+                          setSelectedContentIds((prev) =>
+                            prev.includes(item.id) ? prev.filter((id) => id !== item.id) : [...prev, item.id],
+                          )
+                        }}
+                      >
+                        {item.contentType === "video" ? (
+                          <video
+                            src={item.fileUrl}
+                            className="w-full h-full object-cover"
+                            muted
+                            preload="metadata"
+                            poster={item.thumbnailUrl}
+                          />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center">
+                            <div className="text-center">
+                              <div className="text-xl mb-1">
+                                {item.contentType === "audio" ? "🎵" : item.contentType === "image" ? "🖼️" : "📄"}
+                              </div>
                             </div>
                           </div>
-                        </div>
-                      )}
+                        )}
 
-                      {/* Selection indicator */}
-                      {selectedContentIds.includes(item.id) && (
-                        <div className="absolute inset-0 bg-red-500/20 flex items-center justify-center">
-                          <div className="w-8 h-8 bg-red-500 rounded-full flex items-center justify-center">
-                            <Check className="w-4 h-4 text-white" />
+                        {/* Selection indicator */}
+                        {selectedContentIds.includes(item.id) && (
+                          <div className="absolute inset-0 bg-red-500/20 flex items-center justify-center">
+                            <div className="w-8 h-8 bg-red-500 rounded-full flex items-center justify-center">
+                              <Check className="w-4 h-4 text-white" />
+                            </div>
                           </div>
-                        </div>
-                      )}
+                        )}
+                      </div>
+                      <p className="text-xs text-zinc-400 mt-1 truncate">{item.title}</p>
                     </div>
-                    <p className="text-xs text-zinc-400 mt-1 truncate">{item.title}</p>
-                  </div>
-                ))}
+                  ))}
+                </div>
               </div>
             )}
 
-            <div className="flex justify-between items-center pt-4 border-t border-zinc-800">
+            <div className="flex justify-between items-center pt-4 border-t border-zinc-800 flex-shrink-0">
               <p className="text-sm text-zinc-400">
                 {selectedContentIds.length} item{selectedContentIds.length !== 1 ? "s" : ""} selected
               </p>
