@@ -4,7 +4,7 @@ import { useRef } from "react"
 
 import { useState, useEffect } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { Plus, Trash2, Eye, EyeOff, Loader2, AlertCircle, Upload, X } from "lucide-react"
+import { Plus, Settings, Eye, EyeOff, Loader2, AlertCircle, Upload, X, Check } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -15,7 +15,7 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useToast } from "@/hooks/use-toast"
-import { collection, query, where, getDocs, doc, updateDoc, deleteDoc, onSnapshot } from "firebase/firestore"
+import { collection, query, where, getDocs, doc, updateDoc, deleteDoc, onSnapshot, addDoc } from "firebase/firestore"
 import { db } from "@/lib/firebase"
 import { useAuth } from "@/contexts/auth-context"
 
@@ -30,7 +30,7 @@ interface ContentItem {
   duration?: number
   filename: string
   createdAt?: any
-  source?: string // Track where this content came from
+  type?: string
 }
 
 interface ProductBox {
@@ -71,14 +71,17 @@ export default function BundlesPage() {
     billingType: "one_time",
     thumbnail: null,
   })
-  const [playingVideo, setPlayingVideo] = useState<string | null>(null)
-  const [showAddContentModal, setShowAddContentModal] = useState(false)
-  const [availableUploads, setAvailableUploads] = useState<ContentItem[]>([])
-  const [uploadsLoading, setUploadsLoading] = useState(false)
   const { toast } = useToast()
 
+  const [availableFreeContent, setAvailableFreeContent] = useState<ContentItem[]>([])
+  const [showAddContentModal, setShowAddContentModal] = useState<string | null>(null)
+  const [selectedContentIds, setSelectedContentIds] = useState<string[]>([])
+  const [addContentLoading, setAddContentLoading] = useState(false)
+
+  // Real-time listeners for content updates
   const contentListeners = useRef<{ [key: string]: () => void }>({})
 
+  // Fetch product boxes
   const fetchProductBoxes = async () => {
     if (!user) return
 
@@ -105,10 +108,11 @@ export default function BundlesPage() {
       setProductBoxes(boxes)
       console.log(`✅ [Bundles] Loaded ${boxes.length} product boxes`)
 
+      // Initialize show content state and set up real-time listeners
       const initialShowState: { [key: string]: boolean } = {}
 
       boxes.forEach((box: ProductBox) => {
-        initialShowState[box.id] = true
+        initialShowState[box.id] = true // Show content by default
         setupContentListener(box)
       })
 
@@ -121,11 +125,14 @@ export default function BundlesPage() {
     }
   }
 
+  // Set up real-time listener for product box content
   const setupContentListener = (productBox: ProductBox) => {
+    // Clean up existing listener
     if (contentListeners.current[productBox.id]) {
       contentListeners.current[productBox.id]()
     }
 
+    // Set up new listener for productBoxContent collection
     const contentQuery = query(collection(db, "productBoxContent"), where("productBoxId", "==", productBox.id))
 
     const unsubscribe = onSnapshot(
@@ -141,9 +148,11 @@ export default function BundlesPage() {
 
     contentListeners.current[productBox.id] = unsubscribe
 
+    // Initial fetch
     fetchContentForBox(productBox)
   }
 
+  // Fetch content for a specific product box
   const fetchContentForBox = async (productBox: ProductBox) => {
     if (productBox.contentItems.length === 0) {
       setContentItems((prev) => ({ ...prev, [productBox.id]: [] }))
@@ -155,6 +164,7 @@ export default function BundlesPage() {
 
       console.log(`🔍 [Bundles] Fetching content for box: ${productBox.id}`)
 
+      // Method 1: Try productBoxContent collection first
       const contentQuery = query(collection(db, "productBoxContent"), where("productBoxId", "==", productBox.id))
       const contentSnapshot = await getDocs(contentQuery)
 
@@ -174,7 +184,6 @@ export default function BundlesPage() {
             duration: data.duration || undefined,
             filename: data.filename || `${doc.id}.file`,
             createdAt: data.createdAt,
-            source: "productBoxContent",
           }
 
           if (item.fileUrl && item.fileUrl.startsWith("http")) {
@@ -182,6 +191,7 @@ export default function BundlesPage() {
           }
         })
       } else {
+        // Method 2: Fallback to uploads collection
         for (const uploadId of productBox.contentItems) {
           try {
             const uploadDoc = await getDocs(query(collection(db, "uploads"), where("__name__", "==", uploadId)))
@@ -199,7 +209,7 @@ export default function BundlesPage() {
                 duration: uploadData.duration || undefined,
                 filename: uploadData.filename || uploadData.originalFileName || `${uploadId}.file`,
                 createdAt: uploadData.createdAt || uploadData.uploadedAt,
-                source: "uploads",
+                type: uploadData.type,
               }
 
               if (item.fileUrl && item.fileUrl.startsWith("http")) {
@@ -212,6 +222,7 @@ export default function BundlesPage() {
         }
       }
 
+      // Sort by creation date (newest first)
       items.sort((a, b) => {
         if (!a.createdAt || !b.createdAt) return 0
         const aTime = a.createdAt.seconds || a.createdAt.getTime?.() / 1000 || 0
@@ -229,6 +240,7 @@ export default function BundlesPage() {
     }
   }
 
+  // Determine content type from MIME type
   const getContentType = (mimeType: string): "video" | "audio" | "image" | "document" => {
     if (mimeType.startsWith("video/")) return "video"
     if (mimeType.startsWith("audio/")) return "audio"
@@ -236,6 +248,7 @@ export default function BundlesPage() {
     return "document"
   }
 
+  // Toggle active status
   const handleToggleActive = async (productBoxId: string) => {
     try {
       const productBox = productBoxes.find((box) => box.id === productBoxId)
@@ -243,11 +256,13 @@ export default function BundlesPage() {
 
       const newActiveStatus = !productBox.active
 
+      // Update in Firestore
       await updateDoc(doc(db, "productBoxes", productBoxId), {
         active: newActiveStatus,
         updatedAt: new Date(),
       })
 
+      // Update local state
       setProductBoxes((prev) =>
         prev.map((box) => (box.id === productBoxId ? { ...box, active: newActiveStatus } : box)),
       )
@@ -266,12 +281,14 @@ export default function BundlesPage() {
     }
   }
 
+  // Delete product box
   const handleDelete = async (productBoxId: string) => {
     if (!confirm("Are you sure you want to delete this bundle?")) return
 
     try {
       await deleteDoc(doc(db, "productBoxes", productBoxId))
 
+      // Clean up listener
       if (contentListeners.current[productBoxId]) {
         contentListeners.current[productBoxId]()
         delete contentListeners.current[productBoxId]
@@ -292,10 +309,12 @@ export default function BundlesPage() {
     }
   }
 
+  // Toggle content visibility
   const toggleContentVisibility = (productBoxId: string) => {
     setShowContent((prev) => ({ ...prev, [productBoxId]: !prev[productBoxId] }))
   }
 
+  // Handle create bundle
   const handleCreateBundle = async () => {
     if (!createForm.title.trim() || !createForm.price) {
       toast({
@@ -312,6 +331,7 @@ export default function BundlesPage() {
       const idToken = await user?.getIdToken()
       if (!idToken) throw new Error("Not authenticated")
 
+      // Create bundle via API (this will handle Stripe integration)
       const response = await fetch("/api/creator/bundles", {
         method: "POST",
         headers: {
@@ -339,6 +359,7 @@ export default function BundlesPage() {
         description: data.message || "Bundle created successfully",
       })
 
+      // Reset form and close modal
       setCreateForm({
         title: "",
         description: "",
@@ -348,6 +369,7 @@ export default function BundlesPage() {
       })
       setShowCreateModal(false)
 
+      // Refresh bundles
       fetchProductBoxes()
     } catch (error) {
       console.error("Error creating bundle:", error)
@@ -361,6 +383,7 @@ export default function BundlesPage() {
     }
   }
 
+  // Format file size
   const formatFileSize = (bytes: number): string => {
     if (bytes === 0) return "0 Bytes"
     const k = 1024
@@ -369,6 +392,128 @@ export default function BundlesPage() {
     return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + " " + sizes[i]
   }
 
+  // Fetch user's free content
+  const fetchUserFreeContent = async () => {
+    if (!user) return
+
+    try {
+      const response = await fetch(`/api/creator/${user.uid}/free-content`)
+      if (!response.ok) throw new Error("Failed to fetch free content")
+
+      const data = await response.json()
+      setAvailableFreeContent(data.freeContent || [])
+    } catch (error) {
+      console.error("Error fetching free content:", error)
+    }
+  }
+
+  // Handle adding content to bundle
+  const handleAddContentToBundle = async (productBoxId: string) => {
+    if (selectedContentIds.length === 0) {
+      toast({
+        title: "No Content Selected",
+        description: "Please select at least one content item to add",
+        variant: "destructive",
+      })
+      return
+    }
+
+    try {
+      setAddContentLoading(true)
+
+      // Add each selected content item to the product box
+      for (const contentId of selectedContentIds) {
+        const contentItem = availableFreeContent.find((item) => item.id === contentId)
+        if (!contentItem) continue
+
+        // Create productBoxContent entry
+        await addDoc(collection(db, "productBoxContent"), {
+          productBoxId,
+          uploadId: contentId,
+          title: contentItem.title,
+          fileUrl: contentItem.fileUrl,
+          thumbnailUrl: contentItem.thumbnailUrl || "",
+          mimeType: contentItem.mimeType,
+          fileSize: contentItem.fileSize,
+          filename: contentItem.filename,
+          createdAt: new Date(),
+        })
+      }
+
+      // Update product box contentItems array
+      const currentBox = productBoxes.find((box) => box.id === productBoxId)
+      if (currentBox) {
+        const updatedContentItems = [...currentBox.contentItems, ...selectedContentIds]
+        await updateDoc(doc(db, "productBoxes", productBoxId), {
+          contentItems: updatedContentItems,
+          updatedAt: new Date(),
+        })
+      }
+
+      toast({
+        title: "Success",
+        description: `Added ${selectedContentIds.length} content item${selectedContentIds.length !== 1 ? "s" : ""} to bundle`,
+      })
+
+      setShowAddContentModal(null)
+      setSelectedContentIds([])
+      fetchProductBoxes() // Refresh bundles
+    } catch (error) {
+      console.error("Error adding content to bundle:", error)
+      toast({
+        title: "Error",
+        description: "Failed to add content to bundle",
+        variant: "destructive",
+      })
+    } finally {
+      setAddContentLoading(false)
+    }
+  }
+
+  // Remove content from bundle
+  const handleRemoveContentFromBundle = async (productBoxId: string, contentId: string) => {
+    if (!confirm("Remove this content from the bundle?")) return
+
+    try {
+      // Remove from productBoxContent collection
+      const contentQuery = query(
+        collection(db, "productBoxContent"),
+        where("productBoxId", "==", productBoxId),
+        where("uploadId", "==", contentId),
+      )
+      const contentSnapshot = await getDocs(contentQuery)
+
+      contentSnapshot.forEach(async (doc) => {
+        await deleteDoc(doc.ref)
+      })
+
+      // Update product box contentItems array
+      const currentBox = productBoxes.find((box) => box.id === productBoxId)
+      if (currentBox) {
+        const updatedContentItems = currentBox.contentItems.filter((id) => id !== contentId)
+        await updateDoc(doc(db, "productBoxes", productBoxId), {
+          contentItems: updatedContentItems,
+          updatedAt: new Date(),
+        })
+      }
+
+      toast({
+        title: "Success",
+        description: "Content removed from bundle",
+      })
+
+      fetchProductBoxes() // Refresh bundles
+    } catch (error) {
+      console.error("Error removing content from bundle:", error)
+      toast({
+        title: "Error",
+        description: "Failed to remove content from bundle",
+        variant: "destructive",
+      })
+    }
+  }
+
+  // Clean up listeners on unmount
   useEffect(() => {
     return () => {
       Object.values(contentListeners.current).forEach((unsubscribe) => unsubscribe())
@@ -409,6 +554,7 @@ export default function BundlesPage() {
 
   return (
     <div className="space-y-6">
+      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-white">Bundles</h1>
@@ -529,6 +675,7 @@ export default function BundlesPage() {
         </Dialog>
       </div>
 
+      {/* Product Boxes */}
       {productBoxes.length === 0 ? (
         <div className="text-center py-12">
           <div className="text-6xl mb-4">📦</div>
@@ -575,21 +722,14 @@ export default function BundlesPage() {
                       <div className="flex items-center gap-2">
                         <Switch checked={productBox.active} onCheckedChange={() => handleToggleActive(productBox.id)} />
                         <Button variant="ghost" size="icon" className="hover:bg-zinc-800">
-                          <X className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleDelete(productBox.id)}
-                          className="hover:bg-red-900/50"
-                        >
-                          <Trash2 className="h-4 w-4" />
+                          <Settings className="h-4 w-4" />
                         </Button>
                       </div>
                     </div>
                   </CardHeader>
 
                   <CardContent>
+                    {/* Content Section Header */}
                     <div className="flex items-center justify-between mb-4">
                       <span className="text-sm text-zinc-400">Content ({boxContent.length})</span>
                       <Button
@@ -612,6 +752,7 @@ export default function BundlesPage() {
                       </Button>
                     </div>
 
+                    {/* Content Grid - Smaller Video Cards */}
                     <AnimatePresence>
                       {isContentVisible && (
                         <motion.div
@@ -629,30 +770,40 @@ export default function BundlesPage() {
                           ) : boxContent.length > 0 ? (
                             <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-6 gap-3">
                               {boxContent.map((item) => (
-                                <div key={item.id} className="group">
-                                  <div className="relative aspect-[9/16] bg-zinc-800 rounded-lg overflow-hidden">
+                                <div key={item.id} className="group relative">
+                                  <div className="relative aspect-[9/16] bg-zinc-900 rounded-lg overflow-hidden shadow-md border border-transparent hover:border-white/20 transition-all duration-300">
+                                    {/* Delete button */}
+                                    <button
+                                      onClick={(e) => {
+                                        e.stopPropagation()
+                                        handleRemoveContentFromBundle(productBox.id, item.id)
+                                      }}
+                                      className="absolute top-2 right-2 z-30 w-6 h-6 bg-red-600/80 hover:bg-red-600 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200"
+                                      title="Remove from bundle"
+                                    >
+                                      <X className="w-3 h-3 text-white" />
+                                    </button>
+
                                     {item.contentType === "video" ? (
                                       <video
                                         src={item.fileUrl}
-                                        className="w-full h-full object-cover cursor-pointer group-hover:scale-105 transition-transform"
+                                        className="w-full h-full object-cover cursor-pointer"
                                         muted
                                         preload="metadata"
                                         poster={item.thumbnailUrl}
                                         onMouseEnter={(e) => {
                                           const video = e.target as HTMLVideoElement
                                           video.play().catch(() => {})
-                                          setPlayingVideo(item.id)
                                         }}
                                         onMouseLeave={(e) => {
                                           const video = e.target as HTMLVideoElement
                                           video.pause()
                                           video.currentTime = 0
-                                          setPlayingVideo(null)
                                         }}
                                         onClick={() => window.open(item.fileUrl, "_blank")}
                                       />
                                     ) : (
-                                      <div className="w-full h-full flex items-center justify-center cursor-pointer">
+                                      <div className="w-full h-full flex items-center justify-center cursor-pointer bg-zinc-800">
                                         <div className="text-center">
                                           <div className="text-2xl mb-1">
                                             {item.contentType === "audio"
@@ -665,30 +816,27 @@ export default function BundlesPage() {
                                       </div>
                                     )}
 
-                                    <div className="absolute top-1 left-1">
-                                      <Badge
-                                        variant="secondary"
-                                        className={`text-xs border-0 ${
-                                          item.contentType === "video"
-                                            ? "bg-red-600/80 text-white"
-                                            : item.contentType === "audio"
-                                              ? "bg-purple-600/80 text-white"
-                                              : "bg-black/60 text-white"
-                                        }`}
-                                      >
-                                        {item.contentType.toUpperCase()}
-                                      </Badge>
-                                    </div>
+                                    {/* Play overlay for videos */}
+                                    {item.contentType === "video" && (
+                                      <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"></div>
+                                    )}
                                   </div>
 
-                                  <div className="mt-1">
-                                    <p className="text-xs text-zinc-400 truncate">{item.title}</p>
-                                    <p className="text-xs text-zinc-500">{formatFileSize(item.fileSize)}</p>
+                                  {/* File info */}
+                                  <div className="mt-2">
+                                    <p className="text-xs text-zinc-300 truncate font-light">{item.title}</p>
                                   </div>
                                 </div>
                               ))}
 
-                              <div className="aspect-[9/16] bg-zinc-800/50 rounded-lg border-2 border-dashed border-zinc-700 flex flex-col items-center justify-center cursor-pointer hover:border-zinc-600 hover:bg-zinc-800/70 transition-all duration-200">
+                              {/* Add Content Placeholder */}
+                              <div
+                                className="aspect-[9/16] bg-zinc-800/50 rounded-lg border-2 border-dashed border-zinc-700 flex flex-col items-center justify-center cursor-pointer hover:border-zinc-600 hover:bg-zinc-800/70 transition-all duration-200"
+                                onClick={() => {
+                                  fetchUserFreeContent()
+                                  setShowAddContentModal(productBox.id)
+                                }}
+                              >
                                 <Plus className="w-6 h-6 text-zinc-500 mb-1" />
                                 <p className="text-xs text-zinc-500 text-center px-1">Add Content</p>
                               </div>
@@ -711,6 +859,7 @@ export default function BundlesPage() {
                       )}
                     </AnimatePresence>
 
+                    {/* Add Content Button */}
                     <Button
                       variant="outline"
                       size="sm"
@@ -726,6 +875,90 @@ export default function BundlesPage() {
           })}
         </div>
       )}
+
+      {/* Add Content Modal */}
+      <Dialog open={!!showAddContentModal} onOpenChange={() => setShowAddContentModal(null)}>
+        <DialogContent className="bg-zinc-900 border-zinc-800 text-white max-w-4xl max-h-[80vh] overflow-hidden">
+          <DialogHeader>
+            <DialogTitle>Add Content to Bundle</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-zinc-400">
+              Select content from your free content library to add to this bundle:
+            </p>
+
+            {availableFreeContent.length === 0 ? (
+              <div className="text-center py-8">
+                <p className="text-zinc-500">No free content available. Upload some free content first.</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-5 gap-3 max-h-96 overflow-y-auto">
+                {availableFreeContent.map((item) => (
+                  <div key={item.id} className="group relative">
+                    <div
+                      className={`relative aspect-[9/16] bg-zinc-800 rounded-lg overflow-hidden cursor-pointer border-2 transition-all duration-200 ${
+                        selectedContentIds.includes(item.id)
+                          ? "border-red-500 ring-2 ring-red-500/50"
+                          : "border-transparent hover:border-zinc-600"
+                      }`}
+                      onClick={() => {
+                        setSelectedContentIds((prev) =>
+                          prev.includes(item.id) ? prev.filter((id) => id !== item.id) : [...prev, item.id],
+                        )
+                      }}
+                    >
+                      {item.type === "video" ? (
+                        <video src={item.fileUrl} className="w-full h-full object-cover" muted preload="metadata" />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center">
+                          <div className="text-center">
+                            <div className="text-xl mb-1">{item.type === "audio" ? "🎵" : "📄"}</div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Selection indicator */}
+                      {selectedContentIds.includes(item.id) && (
+                        <div className="absolute inset-0 bg-red-500/20 flex items-center justify-center">
+                          <div className="w-8 h-8 bg-red-500 rounded-full flex items-center justify-center">
+                            <Check className="w-4 h-4 text-white" />
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                    <p className="text-xs text-zinc-400 mt-1 truncate">{item.title}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="flex justify-between items-center pt-4 border-t border-zinc-800">
+              <p className="text-sm text-zinc-400">
+                {selectedContentIds.length} item{selectedContentIds.length !== 1 ? "s" : ""} selected
+              </p>
+              <div className="flex gap-3">
+                <Button variant="outline" onClick={() => setShowAddContentModal(null)} className="border-zinc-700">
+                  Cancel
+                </Button>
+                <Button
+                  onClick={() => showAddContentModal && handleAddContentToBundle(showAddContentModal)}
+                  disabled={selectedContentIds.length === 0 || addContentLoading}
+                  className="bg-red-600 hover:bg-red-700"
+                >
+                  {addContentLoading ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Adding...
+                    </>
+                  ) : (
+                    `Add ${selectedContentIds.length} Item${selectedContentIds.length !== 1 ? "s" : ""}`
+                  )}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

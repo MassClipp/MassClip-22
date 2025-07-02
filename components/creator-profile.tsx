@@ -336,8 +336,8 @@ export default function CreatorProfile({ creator: initialCreator }: { creator: C
           const q = query(favoritesRef, where("videoId", "==", item.id))
           const querySnapshot = await getDocs(q)
 
-          querySnapshot.forEach((document) => {
-            deleteDoc(doc(db, `users/${user.uid}/favorites`, document.id))
+          querySnapshot.forEach(async (document) => {
+            await deleteDoc(doc(db, `users/${user.uid}/favorites`, document.id))
           })
 
           toast({
@@ -382,7 +382,7 @@ export default function CreatorProfile({ creator: initialCreator }: { creator: C
 
     // Record a download
     const recordDownload = async () => {
-      if (!user || !item.id) return { success: false, message: "User not authenticated" }
+      if (!user) return { success: false, message: "User not authenticated" }
 
       if (isProUser) return { success: true }
 
@@ -640,7 +640,9 @@ export default function CreatorProfile({ creator: initialCreator }: { creator: C
           <div className="absolute bottom-2 left-2 right-2 z-30 flex items-center justify-between opacity-0 group-hover:opacity-100 transition-opacity duration-300">
             {/* Download button */}
             <button
-              className={`${hasReachedLimit ? "bg-zinc-800/90 cursor-not-allowed" : "bg-black/70 hover:bg-black/90"} p-1.5 rounded-full transition-all duration-300 ${downloadError ? "ring-1 ring-red-500" : ""}`}
+              className={`${
+                hasReachedLimit ? "bg-zinc-800/90 cursor-not-allowed" : "bg-black/70 hover:bg-black/90"
+              } p-1.5 rounded-full transition-all duration-300 ${downloadError ? "ring-1 ring-red-500" : ""}`}
               onClick={handleDownload}
               aria-label={hasReachedLimit ? "Download limit reached" : "Download video"}
               disabled={isDownloading || hasReachedLimit}
@@ -655,7 +657,9 @@ export default function CreatorProfile({ creator: initialCreator }: { creator: C
 
             {/* Favorite button */}
             <button
-              className={`bg-black/70 hover:bg-black/90 p-1.5 rounded-full transition-all duration-300 ${isFavorite ? "text-crimson" : "text-white"}`}
+              className={`bg-black/70 hover:bg-black/90 p-1.5 rounded-full transition-all duration-300 ${
+                isFavorite ? "text-crimson" : "text-white"
+              }`}
               onClick={toggleFavorite}
               aria-label={isFavorite ? "Remove from favorites" : "Add to favorites"}
               disabled={isCheckingFavorite}
