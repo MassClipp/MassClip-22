@@ -1,113 +1,260 @@
 "use client"
 
-import type React from "react"
+import * as React from "react"
+import { usePathname, useRouter } from "next/navigation"
+import {
+  LayoutDashboard,
+  Compass,
+  ShoppingBag,
+  Heart,
+  Crown,
+  Film,
+  Upload,
+  Package,
+  DollarSign,
+  User,
+  Menu,
+  ChevronDown,
+  ChevronRight,
+} from "lucide-react"
 
-import { useState } from "react"
-import Link from "next/link"
-import { usePathname } from "next/navigation"
-import { ChevronDown, ChevronRight } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuItem,
+  DropdownMenuSub,
+  DropdownMenuSubTrigger,
+  DropdownMenuSubContent,
+  DropdownMenuGroup,
+  DropdownMenuPortal,
+} from "@/components/ui/dropdown-menu"
+
 import { cn } from "@/lib/utils"
 
-interface NavItem {
+/* -------------------------------------------------------------------------- */
+/*                                   TYPES                                    */
+/* -------------------------------------------------------------------------- */
+
+interface RawNavSectionItem {
   title: string
-  href?: string
-  icon?: React.ComponentType<{ className?: string }>
-  children?: NavItem[]
+  url: string
+  icon?: React.ReactNode
+  external?: boolean
+  alert?: boolean
 }
 
-const navItems: NavItem[] = [
+interface RawNavSection {
+  title: string
+  url: string | "#"
+  items: RawNavSectionItem[]
+}
+
+/* -------------------------------------------------------------------------- */
+/*                              NAV DATA (static)                             */
+/* -------------------------------------------------------------------------- */
+
+const NAV: RawNavSection[] = [
   {
     title: "Dashboard",
-    href: "/dashboard",
+    url: "/dashboard",
+    items: [
+      {
+        title: "Overview",
+        url: "/dashboard",
+        icon: <LayoutDashboard className="h-4 w-4 mr-2" />,
+      },
+    ],
   },
   {
     title: "Explore",
-    children: [
-      { title: "Browse All", href: "/category/browse-all" },
-      { title: "Recently Added", href: "/category/recently-added" },
-      { title: "Cinema", href: "/category/cinema" },
-      { title: "Hustle Mentality", href: "/category/hustle-mentality" },
-      { title: "Introspection", href: "/category/introspection" },
+    url: "#",
+    items: [
+      {
+        title: "Discover Content",
+        url: "/dashboard/explore",
+        icon: <Compass className="h-4 w-4 mr-2" />,
+      },
+      {
+        title: "My Purchases",
+        url: "/dashboard/purchases",
+        icon: <ShoppingBag className="h-4 w-4 mr-2" />,
+      },
+      {
+        title: "Favorites",
+        url: "/dashboard/favorites",
+        icon: <Heart className="h-4 w-4 mr-2" />,
+      },
+      {
+        title: "Memberships",
+        url: "/dashboard/membership",
+        icon: <Crown className="h-4 w-4 mr-2" />,
+      },
     ],
   },
   {
     title: "Content Management",
-    children: [
-      { title: "Upload", href: "/dashboard/upload" },
-      { title: "My Uploads", href: "/dashboard/uploads" },
-      { title: "Free Content", href: "/dashboard/free-content" },
-      { title: "Categories", href: "/dashboard/categories" },
+    url: "#",
+    items: [
+      {
+        title: "Free Content",
+        url: "/dashboard/free-content",
+        icon: <Film className="h-4 w-4 mr-2" />,
+      },
+      {
+        title: "Upload Content",
+        url: "/dashboard/upload",
+        icon: <Upload className="h-4 w-4 mr-2" />,
+      },
+      {
+        title: "Product Boxes",
+        url: "/dashboard/product-boxes",
+        icon: <Package className="h-4 w-4 mr-2" />,
+      },
+      {
+        title: "Bundles",
+        url: "/dashboard/bundles",
+        icon: <Package className="h-4 w-4 mr-2" />,
+      },
     ],
   },
   {
     title: "Business",
-    children: [
-      { title: "Earnings", href: "/dashboard/earnings" },
-      { title: "Bundles", href: "/dashboard/bundles" },
-      { title: "Product Boxes", href: "/dashboard/product-boxes" },
+    url: "#",
+    items: [
+      {
+        title: "Earnings",
+        url: "/dashboard/earnings",
+        icon: <DollarSign className="h-4 w-4 mr-2" />,
+      },
     ],
   },
   {
     title: "Settings",
-    children: [
-      { title: "Profile", href: "/dashboard/profile" },
-      { title: "Stripe", href: "/dashboard/settings/stripe" },
-      { title: "Password", href: "/dashboard/password" },
-      { title: "Membership", href: "/dashboard/membership" },
+    url: "#",
+    items: [
+      {
+        title: "Profile Settings",
+        url: "/dashboard/profile",
+        icon: <User className="h-4 w-4 mr-2" />,
+      },
     ],
   },
 ]
 
-export function NavDropdown() {
+/* -------------------------------------------------------------------------- */
+/*                                COMPONENT                                   */
+/* -------------------------------------------------------------------------- */
+
+function NavDropdown() {
+  const [open, setOpen] = React.useState(false)
   const pathname = usePathname()
-  const [expandedItems, setExpandedItems] = useState<string[]>([])
+  const router = useRouter()
 
-  const toggleExpanded = (title: string) => {
-    setExpandedItems((prev) => (prev.includes(title) ? prev.filter((item) => item !== title) : [...prev, title]))
+  const go = (href: string, external = false) => {
+    setOpen(false)
+    if (external) {
+      window.open(href, "_blank")
+    } else {
+      router.push(href)
+    }
   }
 
-  const renderNavItem = (item: NavItem, level = 0) => {
-    const isExpanded = expandedItems.includes(item.title)
-    const hasChildren = item.children && item.children.length > 0
-    const isActive = item.href === pathname
+  return (
+    <DropdownMenu open={open} onOpenChange={setOpen}>
+      <DropdownMenuTrigger asChild>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="relative h-9 w-9 rounded-full bg-zinc-900 hover:bg-zinc-800 border border-zinc-800"
+        >
+          <Menu className="h-4 w-4 text-zinc-400" />
+          <span className="sr-only">Navigation</span>
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent
+        align="start"
+        sideOffset={8}
+        className="w-72 bg-zinc-900/95 backdrop-blur-md border border-zinc-800 shadow-xl rounded-xl p-2"
+      >
+        <DropdownMenuLabel className="px-2 py-1.5 text-xs font-normal text-zinc-500">NAVIGATION</DropdownMenuLabel>
+        <DropdownMenuSeparator className="bg-zinc-800" />
 
-    return (
-      <div key={item.title} className={cn("", level > 0 && "ml-4")}>
-        {item.href ? (
-          <Link
-            href={item.href}
-            className={cn(
-              "flex items-center gap-2 px-3 py-2 text-sm rounded-md transition-colors",
-              isActive ? "bg-red-600 text-white" : "text-zinc-300 hover:text-white hover:bg-zinc-800",
-            )}
-          >
-            {item.icon && <item.icon className="h-4 w-4" />}
-            {item.title}
-          </Link>
-        ) : (
-          <Button
-            variant="ghost"
-            onClick={() => toggleExpanded(item.title)}
-            className={cn(
-              "w-full justify-between px-3 py-2 text-sm text-zinc-300 hover:text-white hover:bg-zinc-800",
-              level === 0 && "font-medium",
-            )}
-          >
-            <span className="flex items-center gap-2">
-              {item.icon && <item.icon className="h-4 w-4" />}
-              {item.title}
-            </span>
-            {hasChildren && (isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />)}
-          </Button>
-        )}
+        <DropdownMenuGroup>
+          {NAV.map((section) => {
+            const firstIcon = section.items[0]?.icon
+            const hasSubmenu = section.url === "#"
+            if (hasSubmenu) {
+              return (
+                <DropdownMenuSub key={section.title}>
+                  <DropdownMenuSubTrigger
+                    className={cn(
+                      "px-2 py-1.5 rounded-lg text-sm cursor-pointer flex items-center justify-between",
+                      "hover:bg-zinc-800 data-[state=open]:bg-zinc-800",
+                    )}
+                  >
+                    <span className="flex items-center">
+                      {firstIcon}
+                      {section.title}
+                    </span>
+                    {open ? (
+                      <ChevronDown className="h-4 w-4 ml-1 text-zinc-500" />
+                    ) : (
+                      <ChevronRight className="h-4 w-4 ml-1 text-zinc-500" />
+                    )}
+                  </DropdownMenuSubTrigger>
+                  <DropdownMenuPortal>
+                    <DropdownMenuSubContent
+                      className="bg-zinc-900/95 backdrop-blur-md border border-zinc-800 shadow-xl rounded-xl p-2 min-w-[180px]"
+                      sideOffset={8}
+                    >
+                      {section.items.map((item) => {
+                        const active = pathname === item.url
+                        return (
+                          <DropdownMenuItem
+                            key={item.title}
+                            onClick={() => go(item.url, item.external)}
+                            className={cn(
+                              "px-2 py-1.5 rounded-lg text-sm cursor-pointer flex items-center justify-between",
+                              active ? "bg-red-600/10 text-red-500" : "hover:bg-zinc-800 focus:bg-zinc-800",
+                            )}
+                          >
+                            <div className="flex items-center">
+                              {item.icon}
+                              <span>{item.title}</span>
+                            </div>
+                          </DropdownMenuItem>
+                        )
+                      })}
+                    </DropdownMenuSubContent>
+                  </DropdownMenuPortal>
+                </DropdownMenuSub>
+              )
+            }
 
-        {hasChildren && isExpanded && (
-          <div className="mt-1 space-y-1">{item.children!.map((child) => renderNavItem(child, level + 1))}</div>
-        )}
-      </div>
-    )
-  }
-
-  return <nav className="space-y-1">{navItems.map((item) => renderNavItem(item))}</nav>
+            // no submenu
+            const active = pathname === section.url
+            return (
+              <DropdownMenuItem
+                key={section.title}
+                onClick={() => go(section.url)}
+                className={cn(
+                  "px-2 py-1.5 rounded-lg text-sm cursor-pointer flex items-center",
+                  active ? "bg-red-600/10 text-red-500" : "hover:bg-zinc-800 focus:bg-zinc-800",
+                )}
+              >
+                {firstIcon}
+                <span>{section.title}</span>
+              </DropdownMenuItem>
+            )
+          })}
+        </DropdownMenuGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
 }
+
+export default NavDropdown
