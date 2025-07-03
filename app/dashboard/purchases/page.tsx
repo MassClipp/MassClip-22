@@ -1,504 +1,186 @@
 "use client"
 
-import type React from "react"
-import { useState, useEffect, useRef } from "react"
-import { useAuth } from "@/contexts/auth-context"
-import { Card, CardContent } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { useToast } from "@/hooks/use-toast"
+import { useState, useEffect } from "react"
+import { motion, AnimatePresence } from "framer-motion"
 import {
-  Play,
-  Calendar,
-  DollarSign,
-  User,
-  Package,
-  Video,
-  RefreshCw,
   Search,
+  Filter,
+  RefreshCw,
   ShoppingBag,
-  Eye,
-  ChevronDown,
-  ChevronUp,
+  Package,
+  DollarSign,
+  Calendar,
+  User,
+  Play,
   Download,
   Heart,
-  File,
-  Music,
-  Pause,
-  Filter,
+  ChevronDown,
+  ChevronUp,
+  Loader2,
+  AlertCircle,
 } from "lucide-react"
-import { motion } from "framer-motion"
-import { format } from "date-fns"
+import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Card, CardContent } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { useRouter } from "next/navigation"
+import { useAuth } from "@/contexts/auth-context"
+import { useToast } from "@/hooks/use-toast"
 
-interface UnifiedPurchaseItem {
+interface Purchase {
+  id: string
+  type: "bundle" | "individual"
+  title: string
+  description?: string
+  price: number
+  currency: string
+  purchaseDate: Date
+  creatorUsername: string
+  creatorId: string
+  contentItems?: ContentItem[]
+  coverImageUrl?: string
+  customPreviewThumbnail?: string
+}
+
+interface ContentItem {
   id: string
   title: string
-  fileUrl: string
-  mimeType: string
-  fileSize: number
+  type: "video" | "audio" | "image" | "document"
+  url: string
   thumbnailUrl?: string
-  contentType: "video" | "audio" | "image" | "document"
   duration?: number
-  filename: string
-  displayTitle?: string
-  displaySize?: string
-  displayDuration?: string
-  displayResolution?: string
-  quality?: string
-}
-
-interface UnifiedPurchase {
-  id: string
-  productBoxId: string
-  productBoxTitle: string
-  productBoxDescription?: string
-  productBoxThumbnail?: string
-  creatorId: string
-  creatorName: string
-  creatorUsername: string
-  purchasedAt: Date
-  amount: number
-  currency: string
-  sessionId: string
-  items: UnifiedPurchaseItem[]
-  totalItems: number
-  totalSize: number
-}
-
-const containerVariants = {
-  hidden: { opacity: 0 },
-  visible: {
-    opacity: 1,
-    transition: {
-      staggerChildren: 0.08,
-    },
-  },
-}
-
-const itemVariants = {
-  hidden: { y: 20, opacity: 0 },
-  visible: {
-    y: 0,
-    opacity: 1,
-    transition: {
-      duration: 0.4,
-      ease: [0.25, 0.1, 0.25, 1.0],
-    },
-  },
+  size?: number
 }
 
 export default function FullScreenMyPurchasesPage() {
   const { user } = useAuth()
   const { toast } = useToast()
-  const [purchases, setPurchases] = useState<UnifiedPurchase[]>([])
+
+  const [purchases, setPurchases] = useState<Purchase[]>([])
   const [loading, setLoading] = useState(true)
-  const [refreshing, setRefreshing] = useState(false)
   const [searchTerm, setSearchTerm] = useState("")
-  const [sortBy, setSortBy] = useState<string>("newest")
-  const router = useRouter()
-  const [expandedPurchases, setExpandedPurchases] = useState<Record<string, boolean>>({})
+  const [sortBy, setSortBy] = useState("newest")
+  const [expandedPurchases, setExpandedPurchases] = useState<Set<string>>(new Set())
+  const [refreshing, setRefreshing] = useState(false)
 
-  // Toggle expanded state for a purchase
-  const toggleExpanded = (purchaseId: string) => {
-    setExpandedPurchases((prev) => ({
-      ...prev,
-      [purchaseId]: !prev[purchaseId],
-    }))
-  }
-
-  // Fetch user purchases from unified collection
+  // Fetch purchases
   const fetchPurchases = async () => {
-    if (!user) {
-      console.log("❌ [My Purchases] No user found")
-      setLoading(false)
-      return
-    }
+    if (!user) return
 
     try {
       setLoading(true)
-      console.log("🔍 [My Purchases] Fetching purchases for user:", user.uid)
-
-      // Get the Firebase auth token
       const token = await user.getIdToken()
 
-      // Try the main purchases API first (which checks all locations)
-      const response = await fetch(`/api/user/purchases?userId=${user.uid}`, {
+      const response = await fetch("/api/user/unified-purchases", {
         headers: {
           Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
         },
       })
 
-      console.log("🔍 [My Purchases] API response status:", response.status)
-
       if (!response.ok) {
-        const errorText = await response.text()
-        console.error("❌ [My Purchases] API error:", response.status, errorText)
-        throw new Error(`API returned ${response.status}: ${errorText}`)
+        throw new Error("Failed to fetch purchases")
       }
 
       const data = await response.json()
-      console.log("✅ [My Purchases] API response:", data)
-
-      const rawPurchases = data.purchases || []
-
-      // Convert timestamps and ensure proper format
-      const processedPurchases = rawPurchases.map((purchase: any) => ({
-        ...purchase,
-        purchasedAt: purchase.purchasedAt?.toDate ? purchase.purchasedAt.toDate() : new Date(purchase.purchasedAt),
-        // Ensure we have the required fields for the UI
-        productBoxId: purchase.itemId || purchase.productBoxId,
-        productBoxTitle: purchase.itemTitle || purchase.productBoxTitle || "Unknown Product",
-        productBoxDescription: purchase.itemDescription || purchase.productBoxDescription || "",
-        productBoxThumbnail: purchase.thumbnailUrl || purchase.customPreviewThumbnail || "",
-        items: purchase.items || [],
-        totalItems: purchase.totalItems || (purchase.items ? purchase.items.length : 0),
-      }))
-
-      setPurchases(processedPurchases)
-
-      if (refreshing) {
-        toast({
-          title: "Purchases refreshed",
-          description: `Found ${processedPurchases.length} purchases`,
-        })
-      }
-
-      console.log("✅ [My Purchases] Successfully loaded", processedPurchases.length, "purchases")
+      setPurchases(data.purchases || [])
     } catch (error) {
-      console.error("❌ [My Purchases] Error fetching purchases:", error)
+      console.error("Error fetching purchases:", error)
       toast({
-        title: "Error loading purchases",
-        description: error instanceof Error ? error.message : "Failed to load your purchase history. Please try again.",
+        title: "Error",
+        description: "Failed to load purchases",
         variant: "destructive",
       })
     } finally {
       setLoading(false)
-      setRefreshing(false)
     }
   }
 
-  // Initial load
-  useEffect(() => {
-    fetchPurchases()
-  }, [user])
-
-  // Refresh data
+  // Refresh purchases
   const handleRefresh = async () => {
     setRefreshing(true)
     await fetchPurchases()
+    setRefreshing(false)
+    toast({
+      title: "Refreshed",
+      description: "Purchase library updated",
+    })
   }
 
   // Filter and sort purchases
   const filteredPurchases = purchases
-    .filter((purchase) => {
-      const productBoxTitle = purchase.productBoxTitle || ""
-      const creatorName = purchase.creatorName || ""
-
-      const matchesSearch =
-        productBoxTitle.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        creatorName.toLowerCase().includes(searchTerm.toLowerCase())
-      return matchesSearch
-    })
+    .filter(
+      (purchase) =>
+        purchase.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        purchase.creatorUsername.toLowerCase().includes(searchTerm.toLowerCase()),
+    )
     .sort((a, b) => {
       switch (sortBy) {
         case "newest":
-          return new Date(b.purchasedAt || 0).getTime() - new Date(a.purchasedAt || 0).getTime()
+          return new Date(b.purchaseDate).getTime() - new Date(a.purchaseDate).getTime()
         case "oldest":
-          return new Date(a.purchasedAt || 0).getTime() - new Date(b.purchasedAt || 0).getTime()
-        case "price_high":
-          return (b.amount || 0) - (a.amount || 0)
-        case "price_low":
-          return (a.amount || 0) - (b.amount || 0)
-        case "creator":
-          return (a.creatorName || "").localeCompare(b.creatorName || "")
+          return new Date(a.purchaseDate).getTime() - new Date(b.purchaseDate).getTime()
+        case "price-high":
+          return b.price - a.price
+        case "price-low":
+          return a.price - b.price
+        case "title":
+          return a.title.localeCompare(b.title)
         default:
           return 0
       }
     })
 
-  // Calculate total spent safely
-  const totalSpent = purchases.reduce((sum, p) => {
-    const price = typeof p.amount === "number" && !isNaN(p.amount) ? p.amount : 0
-    return sum + price
-  }, 0)
+  // Toggle purchase expansion
+  const toggleExpanded = (purchaseId: string) => {
+    const newExpanded = new Set(expandedPurchases)
+    if (newExpanded.has(purchaseId)) {
+      newExpanded.delete(purchaseId)
+    } else {
+      newExpanded.add(purchaseId)
+    }
+    setExpandedPurchases(newExpanded)
+  }
+
+  // Calculate statistics
+  const totalPurchases = purchases.length
+  const totalItems = purchases.reduce((sum, purchase) => sum + (purchase.contentItems?.length || 0), 0)
+  const totalSpent = purchases.reduce((sum, purchase) => sum + purchase.price, 0)
 
   // Format price
-  const formatPrice = (amount = 0, currency = "usd") => {
-    if (typeof amount !== "number" || isNaN(amount)) {
-      return "$0.00"
-    }
+  const formatPrice = (price: number, currency = "usd") => {
     return new Intl.NumberFormat("en-US", {
       style: "currency",
       currency: currency.toUpperCase(),
-    }).format(amount)
+    }).format(price)
   }
 
-  // Handle content access
-  const handleAccess = (purchase: UnifiedPurchase) => {
-    router.push(`/product-box/${purchase.productBoxId}/content`)
+  // Format date
+  const formatDate = (date: Date) => {
+    return new Intl.DateTimeFormat("en-US", {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+    }).format(new Date(date))
   }
 
   // Format file size
-  const formatFileSize = (bytes: number) => {
-    if (bytes === 0) return "0 Bytes"
-    const k = 1024
+  const formatFileSize = (bytes?: number) => {
+    if (!bytes) return "Unknown"
     const sizes = ["Bytes", "KB", "MB", "GB"]
-    const i = Math.floor(Math.log(bytes) / Math.log(k))
-    return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + " " + sizes[i]
+    const i = Math.floor(Math.log(bytes) / Math.log(1024))
+    return Math.round((bytes / Math.pow(1024, i)) * 100) / 100 + " " + sizes[i]
   }
 
-  // ContentCard component
-  const ContentCard = ({ content }: { content: UnifiedPurchaseItem }) => {
-    const [isHovered, setIsHovered] = useState(false)
-    const [isFavorite, setIsFavorite] = useState(false)
-    const videoRef = useRef<HTMLVideoElement>(null)
-    const [isPlaying, setIsPlaying] = useState(false)
+  useEffect(() => {
+    fetchPurchases()
+  }, [user])
 
-    // Handle play/pause
-    const togglePlay = (e: React.MouseEvent) => {
-      e.preventDefault()
-      e.stopPropagation()
-
-      if (!videoRef.current) return
-
-      if (isPlaying) {
-        videoRef.current.pause()
-        setIsPlaying(false)
-      } else {
-        // Pause all other videos first
-        document.querySelectorAll("video").forEach((v) => {
-          if (v !== videoRef.current) {
-            v.pause()
-          }
-        })
-
-        videoRef.current
-          .play()
-          .then(() => {
-            setIsPlaying(true)
-          })
-          .catch((error) => {
-            console.error("Error playing video:", error)
-          })
-      }
-    }
-
-    // Handle download
-    const handleDownload = (e: React.MouseEvent) => {
-      e.preventDefault()
-      e.stopPropagation()
-
-      if (!content.fileUrl) return
-
-      const link = document.createElement("a")
-      link.href = content.fileUrl
-      link.download = content.filename || `${content.title}.mp4`
-      link.click()
-    }
-
-    // Toggle favorite
-    const toggleFavorite = (e: React.MouseEvent) => {
-      e.preventDefault()
-      e.stopPropagation()
-      setIsFavorite(!isFavorite)
-    }
-
-    return (
-      <div className="group relative w-full">
-        <div
-          className="relative aspect-[9/16] overflow-hidden rounded-xl bg-zinc-950 border border-zinc-800/50 hover:border-zinc-700/50 transition-all duration-300 w-full"
-          onMouseEnter={() => setIsHovered(true)}
-          onMouseLeave={() => setIsHovered(false)}
-        >
-          {/* Direct Video Player */}
-          {content.contentType === "video" ? (
-            <>
-              <video
-                ref={videoRef}
-                className="w-full h-full object-cover"
-                preload="metadata"
-                onClick={togglePlay}
-                onEnded={() => setIsPlaying(false)}
-                poster={content.thumbnailUrl}
-              >
-                <source src={content.fileUrl} type="video/mp4" />
-              </video>
-
-              {/* Play/Pause Button Overlay */}
-              <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-300 bg-black/20">
-                <button
-                  onClick={togglePlay}
-                  className="w-10 h-10 rounded-full bg-white/10 backdrop-blur-sm border border-white/20 flex items-center justify-center hover:bg-white/20 transition-all duration-200"
-                >
-                  {isPlaying ? (
-                    <Pause className="h-4 w-4 text-white" />
-                  ) : (
-                    <Play className="h-4 w-4 text-white ml-0.5" />
-                  )}
-                </button>
-              </div>
-            </>
-          ) : content.contentType === "audio" ? (
-            <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-purple-900/20 to-pink-900/20">
-              <Music className="h-6 w-6 text-purple-400" />
-            </div>
-          ) : content.contentType === "image" ? (
-            <img
-              src={content.fileUrl || content.thumbnailUrl}
-              alt={content.title}
-              className="w-full h-full object-cover"
-            />
-          ) : (
-            <div className="w-full h-full flex items-center justify-center bg-zinc-900/50">
-              <File className="h-6 w-6 text-zinc-500" />
-            </div>
-          )}
-
-          {/* Action buttons */}
-          <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-all duration-300 flex gap-1.5">
-            <button
-              className="w-7 h-7 rounded-full bg-black/50 backdrop-blur-sm border border-white/10 hover:bg-black/70 flex items-center justify-center transition-all duration-200"
-              onClick={handleDownload}
-              aria-label="Download"
-              title="Download"
-            >
-              <Download className="h-3 w-3 text-white" />
-            </button>
-            <button
-              className={`w-7 h-7 rounded-full bg-black/50 backdrop-blur-sm border border-white/10 hover:bg-black/70 flex items-center justify-center transition-all duration-200 ${
-                isFavorite ? "text-red-400" : "text-white"
-              }`}
-              onClick={toggleFavorite}
-              aria-label={isFavorite ? "Remove from favorites" : "Add to favorites"}
-              title={isFavorite ? "Remove from favorites" : "Add to favorites"}
-            >
-              <Heart className="h-3 w-3" fill={isFavorite ? "currentColor" : "none"} />
-            </button>
-          </div>
-        </div>
-
-        {/* File info */}
-        <div className="mt-1.5 px-0.5">
-          <div className="flex justify-between items-center text-xs text-zinc-500">
-            <span className="capitalize truncate">{content.contentType}</span>
-            <span className="text-xs">{formatFileSize(content.fileSize)}</span>
-          </div>
-        </div>
-      </div>
-    )
-  }
-
-  // PurchaseCard component
-  const PurchaseCard = ({ purchase }: { purchase: UnifiedPurchase }) => {
-    const isExpanded = expandedPurchases[purchase.id] || false
-    const displayItems = isExpanded ? purchase.items : purchase.items.slice(0, 12)
-    const hasMoreItems = purchase.items.length > 12
-
-    return (
-      <motion.div variants={itemVariants}>
-        <div className="group bg-zinc-950/50 backdrop-blur-sm border border-zinc-800/50 rounded-2xl overflow-hidden hover:border-zinc-700/50 transition-all duration-300">
-          {/* Header */}
-          <div className="p-6 border-b border-zinc-800/50">
-            <div className="flex items-start justify-between">
-              <div className="flex items-start gap-4">
-                <div className="w-12 h-12 rounded-xl bg-zinc-900/50 border border-zinc-800/50 flex items-center justify-center">
-                  <Package className="h-5 w-5 text-zinc-400" />
-                </div>
-                <div className="flex-1">
-                  <div className="flex items-center gap-3 mb-2">
-                    <h3 className="text-lg font-semibold text-white">{purchase.productBoxTitle || "Untitled"}</h3>
-                    <span className="px-2.5 py-1 text-xs font-medium rounded-full bg-zinc-800/50 text-zinc-400 border border-zinc-700/50">
-                      Bundle
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-6 text-sm text-zinc-500">
-                    <div className="flex items-center gap-1.5">
-                      <User className="h-3.5 w-3.5" />
-                      <span>{purchase.creatorName || purchase.creatorUsername || "Unknown Creator"}</span>
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      <Calendar className="h-3.5 w-3.5" />
-                      <span>{format(new Date(purchase.purchasedAt), "MMM d, yyyy")}</span>
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      <DollarSign className="h-3.5 w-3.5" />
-                      <span className="font-medium">
-                        {formatPrice(purchase.amount || 0, purchase.currency || "usd")}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-              </div>
-              <Button
-                onClick={() => handleAccess(purchase)}
-                className="bg-white text-black hover:bg-zinc-100 font-medium transition-all duration-200 h-10 px-6 rounded-xl shadow-sm"
-              >
-                <Play className="mr-2 h-4 w-4" />
-                Access
-              </Button>
-            </div>
-          </div>
-
-          {/* Content Items */}
-          {purchase.items && purchase.items.length > 0 && (
-            <div className="p-6">
-              <div className="flex justify-between items-center mb-4">
-                <h4 className="text-sm font-medium text-zinc-300">
-                  Content <span className="text-zinc-500">({purchase.totalItems} items)</span>
-                </h4>
-                {hasMoreItems && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => toggleExpanded(purchase.id)}
-                    className="text-xs text-zinc-500 hover:text-zinc-300 h-8 px-3 rounded-lg"
-                  >
-                    {isExpanded ? (
-                      <>
-                        Show Less <ChevronUp className="ml-1.5 h-3 w-3" />
-                      </>
-                    ) : (
-                      <>
-                        Show All <ChevronDown className="ml-1.5 h-3 w-3" />
-                      </>
-                    )}
-                  </Button>
-                )}
-              </div>
-              {/* Full width grid */}
-              <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10 2xl:grid-cols-12 gap-3">
-                {displayItems.map((content) => (
-                  <ContentCard key={content.id} content={content} />
-                ))}
-              </div>
-              {!isExpanded && hasMoreItems && (
-                <div className="mt-4 text-center">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => toggleExpanded(purchase.id)}
-                    className="text-sm text-zinc-500 hover:text-zinc-300 h-9 px-4 rounded-lg"
-                  >
-                    Show {purchase.items.length - 12} More Items <ChevronDown className="ml-2 h-4 w-4" />
-                  </Button>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      </motion.div>
-    )
-  }
-
-  if (loading && purchases.length === 0) {
+  if (loading) {
     return (
       <div className="fixed inset-0 bg-black flex items-center justify-center">
-        <div className="flex items-center gap-3">
-          <div className="animate-spin rounded-full h-6 w-6 border-2 border-white/20 border-t-white"></div>
-          <span className="text-zinc-400">Loading purchases...</span>
+        <div className="text-center">
+          <Loader2 className="h-8 w-8 text-zinc-500 animate-spin mx-auto mb-4" />
+          <p className="text-zinc-400">Loading your purchases...</p>
         </div>
       </div>
     )
@@ -512,167 +194,306 @@ export default function FullScreenMyPurchasesPage() {
         scrollbarColor: "#3f3f46 #18181b",
       }}
     >
-      <style jsx global>{`
-  /* Webkit browsers (Chrome, Safari, Edge) */
-  ::-webkit-scrollbar {
-    width: 8px;
-  }
-  
-  ::-webkit-scrollbar-track {
-    background: #18181b;
-  }
-  
-  ::-webkit-scrollbar-thumb {
-    background: #3f3f46;
-    border-radius: 4px;
-  }
-  
-  ::-webkit-scrollbar-thumb:hover {
-    background: #52525b;
-  }
-  
-  /* Firefox */
-  * {
-    scrollbar-width: thin;
-    scrollbar-color: #3f3f46 #18181b;
-  }
-`}</style>
-      <motion.div
-        className="min-h-full w-full pt-24 px-6 pb-6"
-        variants={containerVariants}
-        initial="hidden"
-        animate="visible"
-      >
+      <style jsx>{`
+        div::-webkit-scrollbar {
+          width: 8px;
+        }
+        div::-webkit-scrollbar-track {
+          background: #18181b;
+        }
+        div::-webkit-scrollbar-thumb {
+          background: #3f3f46;
+          border-radius: 4px;
+        }
+        div::-webkit-scrollbar-thumb:hover {
+          background: #52525b;
+        }
+      `}</style>
+
+      <div className="min-h-full w-full pt-24 px-6 pb-6">
         {/* Header */}
-        <motion.div variants={itemVariants} className="mb-8">
-          <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
-            <div>
-              <h1 className="text-3xl font-bold text-white mb-2">My Purchases</h1>
-              <p className="text-zinc-400">Your purchased content library</p>
-            </div>
-            <Button
-              onClick={handleRefresh}
-              variant="outline"
-              disabled={refreshing}
-              className="border-zinc-800 bg-zinc-950/50 text-zinc-300 hover:bg-zinc-900 hover:text-white hover:border-zinc-700 transition-all duration-200 h-10 px-4 rounded-xl"
-            >
-              <RefreshCw className={`h-4 w-4 mr-2 ${refreshing ? "animate-spin" : ""}`} />
-              Refresh
-            </Button>
+        <div className="flex items-center justify-between mb-8">
+          <div>
+            <h1 className="text-3xl font-bold text-white mb-2">My Purchases</h1>
+            <p className="text-zinc-400">Your purchased content library</p>
           </div>
-        </motion.div>
+          <Button
+            onClick={handleRefresh}
+            disabled={refreshing}
+            variant="outline"
+            className="border-zinc-700 text-zinc-300 hover:bg-zinc-800 bg-transparent"
+          >
+            <RefreshCw className={`h-4 w-4 mr-2 ${refreshing ? "animate-spin" : ""}`} />
+            Refresh
+          </Button>
+        </div>
 
         {/* Search and Filter */}
-        <motion.div variants={itemVariants} className="mb-8">
-          <div className="flex flex-col sm:flex-row gap-4">
-            <div className="flex-1 relative">
-              <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 h-4 w-4 text-zinc-500" />
-              <Input
-                placeholder="Search purchases..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-11 h-12 bg-zinc-950/50 border-zinc-800 focus:border-zinc-600 text-white placeholder:text-zinc-500 rounded-xl"
-              />
-            </div>
-            <div className="relative">
-              <Filter className="absolute left-4 top-1/2 transform -translate-y-1/2 h-4 w-4 text-zinc-500 pointer-events-none" />
-              <Select value={sortBy} onValueChange={setSortBy}>
-                <SelectTrigger className="w-[180px] h-12 pl-11 bg-zinc-950/50 border-zinc-800 text-white rounded-xl">
-                  <SelectValue placeholder="Sort by" />
-                </SelectTrigger>
-                <SelectContent className="bg-zinc-950 border-zinc-800">
-                  <SelectItem value="newest">Newest First</SelectItem>
-                  <SelectItem value="oldest">Oldest First</SelectItem>
-                  <SelectItem value="price_high">Price: High to Low</SelectItem>
-                  <SelectItem value="price_low">Price: Low to High</SelectItem>
-                  <SelectItem value="creator">Creator Name</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+        <div className="flex gap-4 mb-8">
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-zinc-500" />
+            <Input
+              placeholder="Search purchases..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-10 bg-zinc-900 border-zinc-800 text-white placeholder:text-zinc-500"
+            />
           </div>
-        </motion.div>
+          <Select value={sortBy} onValueChange={setSortBy}>
+            <SelectTrigger className="w-48 bg-zinc-900 border-zinc-800 text-white">
+              <Filter className="h-4 w-4 mr-2" />
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent className="bg-zinc-900 border-zinc-800">
+              <SelectItem value="newest">Newest First</SelectItem>
+              <SelectItem value="oldest">Oldest First</SelectItem>
+              <SelectItem value="price-high">Price: High to Low</SelectItem>
+              <SelectItem value="price-low">Price: Low to High</SelectItem>
+              <SelectItem value="title">Title A-Z</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
 
-        {/* Stats */}
-        <motion.div variants={itemVariants} className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-          <Card className="border-zinc-800/50 bg-zinc-950/50 backdrop-blur-sm">
+        {/* Statistics */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+          <Card className="bg-zinc-900/60 backdrop-blur-sm border-zinc-800/50">
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-zinc-500 mb-1">Total Purchases</p>
-                  <p className="text-2xl font-bold text-white">{purchases.length}</p>
+                  <p className="text-sm text-zinc-400 mb-1">Total Purchases</p>
+                  <p className="text-2xl font-bold text-white">{totalPurchases}</p>
                 </div>
-                <div className="w-12 h-12 rounded-xl bg-zinc-900/50 flex items-center justify-center">
-                  <ShoppingBag className="h-5 w-5 text-zinc-400" />
-                </div>
+                <ShoppingBag className="h-8 w-8 text-zinc-600" />
               </div>
             </CardContent>
           </Card>
 
-          <Card className="border-zinc-800/50 bg-zinc-950/50 backdrop-blur-sm">
+          <Card className="bg-zinc-900/60 backdrop-blur-sm border-zinc-800/50">
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-zinc-500 mb-1">Total Items</p>
-                  <p className="text-2xl font-bold text-white">
-                    {purchases.reduce((sum, p) => sum + (p.totalItems || 0), 0)}
-                  </p>
+                  <p className="text-sm text-zinc-400 mb-1">Total Items</p>
+                  <p className="text-2xl font-bold text-white">{totalItems}</p>
                 </div>
-                <div className="w-12 h-12 rounded-xl bg-zinc-900/50 flex items-center justify-center">
-                  <Video className="h-5 w-5 text-zinc-400" />
-                </div>
+                <Package className="h-8 w-8 text-zinc-600" />
               </div>
             </CardContent>
           </Card>
 
-          <Card className="border-zinc-800/50 bg-zinc-950/50 backdrop-blur-sm">
+          <Card className="bg-zinc-900/60 backdrop-blur-sm border-zinc-800/50">
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm text-zinc-500 mb-1">Total Spent</p>
+                  <p className="text-sm text-zinc-400 mb-1">Total Spent</p>
                   <p className="text-2xl font-bold text-white">{formatPrice(totalSpent)}</p>
                 </div>
-                <div className="w-12 h-12 rounded-xl bg-zinc-900/50 flex items-center justify-center">
-                  <DollarSign className="h-5 w-5 text-zinc-400" />
-                </div>
+                <DollarSign className="h-8 w-8 text-zinc-600" />
               </div>
             </CardContent>
           </Card>
-        </motion.div>
+        </div>
 
-        {/* Content */}
-        {filteredPurchases.length > 0 ? (
-          <motion.div variants={itemVariants} className="space-y-6">
-            {filteredPurchases.map((purchase) => (
-              <PurchaseCard key={purchase.id} purchase={purchase} />
-            ))}
-          </motion.div>
+        {/* Purchases List */}
+        {filteredPurchases.length === 0 ? (
+          <div className="text-center py-16">
+            <div className="max-w-md mx-auto bg-zinc-900/40 backdrop-blur-sm border border-zinc-800/50 rounded-xl p-8">
+              <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gradient-to-br from-zinc-800 to-zinc-900 flex items-center justify-center">
+                <ShoppingBag className="h-8 w-8 text-zinc-600" />
+              </div>
+              <h3 className="text-xl font-medium text-white mb-2">
+                {searchTerm ? "No matching purchases" : "No purchases yet"}
+              </h3>
+              <p className="text-zinc-400 mb-6">
+                {searchTerm
+                  ? "Try adjusting your search terms"
+                  : "Start exploring and purchasing premium content from creators"}
+              </p>
+              {!searchTerm && (
+                <Button
+                  className="bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white border-0"
+                  onClick={() => (window.location.href = "/")}
+                >
+                  Explore Content
+                </Button>
+              )}
+            </div>
+          </div>
         ) : (
-          <motion.div variants={itemVariants} className="flex items-center justify-center min-h-[400px]">
-            <Card className="border-zinc-800/50 bg-zinc-950/50 backdrop-blur-sm w-full max-w-md">
-              <CardContent className="p-12 text-center">
-                <div className="w-16 h-16 rounded-2xl bg-zinc-900/50 flex items-center justify-center mx-auto mb-6">
-                  <ShoppingBag className="h-8 w-8 text-zinc-500" />
-                </div>
-                <h3 className="text-xl font-semibold text-white mb-3">No Purchases Yet</h3>
-                <p className="text-zinc-500 mb-6 leading-relaxed">
-                  {searchTerm
-                    ? "No purchases match your search criteria."
-                    : "Start exploring and discover amazing content from creators."}
-                </p>
-                {!searchTerm && (
-                  <Button
-                    onClick={() => router.push("/dashboard/explore")}
-                    className="bg-white text-black hover:bg-zinc-100 font-medium h-11 px-6 rounded-xl"
-                  >
-                    <Eye className="h-4 w-4 mr-2" />
-                    Explore Content
-                  </Button>
-                )}
-              </CardContent>
-            </Card>
-          </motion.div>
+          <div className="space-y-6">
+            <AnimatePresence>
+              {filteredPurchases.map((purchase, index) => (
+                <motion.div
+                  key={purchase.id}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -20 }}
+                  transition={{ duration: 0.3, delay: index * 0.05 }}
+                >
+                  <Card className="bg-zinc-900/60 backdrop-blur-sm border-zinc-800/50 overflow-hidden hover:border-zinc-700/50 transition-all duration-300">
+                    <CardContent className="p-0">
+                      {/* Purchase Header */}
+                      <div className="p-6 border-b border-zinc-800/50">
+                        <div className="flex items-start justify-between">
+                          <div className="flex items-start gap-4">
+                            {/* Thumbnail */}
+                            <div className="w-16 h-16 rounded-lg bg-gradient-to-br from-zinc-800 to-zinc-900 flex items-center justify-center overflow-hidden flex-shrink-0">
+                              {purchase.coverImageUrl ? (
+                                <img
+                                  src={purchase.coverImageUrl || "/placeholder.svg"}
+                                  alt={purchase.title}
+                                  className="w-full h-full object-cover"
+                                />
+                              ) : (
+                                <Package className="h-8 w-8 text-zinc-600" />
+                              )}
+                            </div>
+
+                            {/* Purchase Info */}
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 mb-2">
+                                <h3 className="text-lg font-semibold text-white truncate">{purchase.title}</h3>
+                                <Badge variant="secondary" className="bg-zinc-800 text-zinc-300 border-0 flex-shrink-0">
+                                  {purchase.type === "bundle" ? "Bundle" : "Individual"}
+                                </Badge>
+                              </div>
+
+                              <div className="flex items-center gap-4 text-sm text-zinc-400 mb-2">
+                                <div className="flex items-center gap-1">
+                                  <User className="h-4 w-4" />
+                                  <span>{purchase.creatorUsername}</span>
+                                </div>
+                                <div className="flex items-center gap-1">
+                                  <Calendar className="h-4 w-4" />
+                                  <span>{formatDate(purchase.purchaseDate)}</span>
+                                </div>
+                                <div className="text-green-400 font-medium">
+                                  {formatPrice(purchase.price, purchase.currency)}
+                                </div>
+                              </div>
+
+                              {purchase.description && (
+                                <p className="text-sm text-zinc-500 line-clamp-2">{purchase.description}</p>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Actions */}
+                          <div className="flex items-center gap-2 flex-shrink-0">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="border-zinc-700 text-zinc-300 hover:bg-zinc-800 bg-transparent"
+                              onClick={() => toggleExpanded(purchase.id)}
+                            >
+                              {expandedPurchases.has(purchase.id) ? (
+                                <>
+                                  <ChevronUp className="h-4 w-4 mr-1" />
+                                  Collapse
+                                </>
+                              ) : (
+                                <>
+                                  <ChevronDown className="h-4 w-4 mr-1" />
+                                  Access
+                                </>
+                              )}
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Expanded Content */}
+                      <AnimatePresence>
+                        {expandedPurchases.has(purchase.id) && (
+                          <motion.div
+                            initial={{ height: 0, opacity: 0 }}
+                            animate={{ height: "auto", opacity: 1 }}
+                            exit={{ height: 0, opacity: 0 }}
+                            transition={{ duration: 0.3 }}
+                            className="overflow-hidden"
+                          >
+                            <div className="p-6 pt-0">
+                              <div className="mb-4">
+                                <h4 className="text-sm font-medium text-zinc-300 mb-3">
+                                  Content ({purchase.contentItems?.length || 0} items)
+                                </h4>
+                              </div>
+
+                              {purchase.contentItems && purchase.contentItems.length > 0 ? (
+                                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                                  {purchase.contentItems.map((item) => (
+                                    <div
+                                      key={item.id}
+                                      className="bg-zinc-800/50 rounded-lg p-4 hover:bg-zinc-800/70 transition-colors"
+                                    >
+                                      {/* Content Thumbnail */}
+                                      <div className="aspect-video bg-zinc-900 rounded-lg mb-3 overflow-hidden relative group">
+                                        {item.thumbnailUrl ? (
+                                          <img
+                                            src={item.thumbnailUrl || "/placeholder.svg"}
+                                            alt={item.title}
+                                            className="w-full h-full object-cover"
+                                          />
+                                        ) : (
+                                          <div className="w-full h-full flex items-center justify-center">
+                                            <Play className="h-8 w-8 text-zinc-600" />
+                                          </div>
+                                        )}
+
+                                        {/* Play Overlay */}
+                                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                          <Play className="h-8 w-8 text-white" />
+                                        </div>
+                                      </div>
+
+                                      {/* Content Info */}
+                                      <div className="space-y-2">
+                                        <h5 className="font-medium text-white text-sm line-clamp-1">{item.title}</h5>
+
+                                        <div className="flex items-center justify-between text-xs text-zinc-500">
+                                          <span className="capitalize">{item.type}</span>
+                                          {item.size && <span>{formatFileSize(item.size)}</span>}
+                                        </div>
+
+                                        {/* Content Actions */}
+                                        <div className="flex gap-2 pt-2">
+                                          <Button
+                                            size="sm"
+                                            variant="outline"
+                                            className="flex-1 h-8 text-xs border-zinc-700 text-zinc-300 hover:bg-zinc-700 bg-transparent"
+                                          >
+                                            <Download className="h-3 w-3 mr-1" />
+                                            Download
+                                          </Button>
+                                          <Button
+                                            size="sm"
+                                            variant="outline"
+                                            className="h-8 px-2 border-zinc-700 text-zinc-300 hover:bg-zinc-700 bg-transparent"
+                                          >
+                                            <Heart className="h-3 w-3" />
+                                          </Button>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : (
+                                <div className="text-center py-8">
+                                  <AlertCircle className="h-8 w-8 text-zinc-600 mx-auto mb-2" />
+                                  <p className="text-sm text-zinc-500">No content items found</p>
+                                </div>
+                              )}
+                            </div>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    </CardContent>
+                  </Card>
+                </motion.div>
+              ))}
+            </AnimatePresence>
+          </div>
         )}
-      </motion.div>
+      </div>
     </div>
   )
 }

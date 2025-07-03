@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
 import { useAuth } from "@/contexts/auth-context"
-import { useToast } from "@/hooks/use-toast"
+import { useToast } from "@/components/ui/use-toast"
 
 interface ProductBox {
   id: string
@@ -15,7 +15,9 @@ interface ProductBox {
   description: string
   price: number
   currency?: string
+  coverImage?: string
   coverImageUrl?: string
+  customPreviewThumbnail?: string
   active: boolean
   contentItems?: string[]
   createdAt?: any
@@ -138,6 +140,11 @@ export default function PremiumContentSection({ creatorId, creatorUsername, isOw
     }).format(price)
   }
 
+  // Get thumbnail URL with fallback priority
+  const getThumbnailUrl = (productBox: ProductBox) => {
+    return productBox.customPreviewThumbnail || productBox.coverImage || productBox.coverImageUrl || null
+  }
+
   useEffect(() => {
     fetchProductBoxes()
   }, [creatorId])
@@ -197,96 +204,109 @@ export default function PremiumContentSection({ creatorId, creatorUsername, isOw
       ) : (
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
           <AnimatePresence>
-            {productBoxes.map((productBox, index) => (
-              <motion.div
-                key={productBox.id}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -20 }}
-                transition={{ duration: 0.3, delay: index * 0.1 }}
-              >
-                <Card className="bg-zinc-900/60 backdrop-blur-sm border-zinc-800/50 overflow-hidden hover:border-zinc-700/50 transition-all duration-300 group">
-                  <CardContent className="p-0">
-                    {/* Cover Image or Placeholder */}
-                    <div className="relative aspect-video bg-gradient-to-br from-zinc-800 to-zinc-900 overflow-hidden">
-                      {productBox.coverImageUrl ? (
-                        <img
-                          src={productBox.coverImageUrl || "/placeholder.svg"}
-                          alt={productBox.title}
-                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                        />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center">
+            {productBoxes.map((productBox, index) => {
+              const thumbnailUrl = getThumbnailUrl(productBox)
+
+              return (
+                <motion.div
+                  key={productBox.id}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -20 }}
+                  transition={{ duration: 0.3, delay: index * 0.1 }}
+                >
+                  <Card className="bg-zinc-900/60 backdrop-blur-sm border-zinc-800/50 overflow-hidden hover:border-zinc-700/50 transition-all duration-300 group">
+                    <CardContent className="p-0">
+                      {/* Cover Image or Placeholder */}
+                      <div className="relative aspect-video bg-gradient-to-br from-zinc-800 to-zinc-900 overflow-hidden">
+                        {thumbnailUrl ? (
+                          <img
+                            src={thumbnailUrl || "/placeholder.svg"}
+                            alt={productBox.title}
+                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                            onError={(e) => {
+                              // Fallback to placeholder if image fails to load
+                              const target = e.target as HTMLImageElement
+                              target.style.display = "none"
+                              target.parentElement?.querySelector(".fallback-icon")?.classList.remove("hidden")
+                            }}
+                          />
+                        ) : null}
+
+                        {/* Fallback Icon */}
+                        <div
+                          className={`${thumbnailUrl ? "hidden" : "flex"} fallback-icon w-full h-full items-center justify-center`}
+                        >
                           <Package className="h-12 w-12 text-zinc-600 group-hover:text-zinc-500 transition-colors" />
                         </div>
-                      )}
 
-                      {/* Preview Overlay */}
-                      <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center">
-                        <div className="flex items-center gap-2 text-white/90">
-                          <Play className="h-5 w-5" />
-                          <span className="text-sm font-medium">Preview Bundle</span>
+                        {/* Preview Overlay */}
+                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center">
+                          <div className="flex items-center gap-2 text-white/90">
+                            <Play className="h-5 w-5" />
+                            <span className="text-sm font-medium">Preview Bundle</span>
+                          </div>
+                        </div>
+
+                        {/* Content Count Badge */}
+                        <div className="absolute top-3 right-3">
+                          <Badge variant="secondary" className="bg-black/60 text-white border-0">
+                            {productBox.contentItems?.length || 0} items
+                          </Badge>
                         </div>
                       </div>
 
-                      {/* Content Count Badge */}
-                      <div className="absolute top-3 right-3">
-                        <Badge variant="secondary" className="bg-black/60 text-white border-0">
-                          {productBox.contentItems?.length || 0} items
-                        </Badge>
-                      </div>
-                    </div>
-
-                    {/* Content */}
-                    <div className="p-6">
-                      <div className="mb-4">
-                        <h3 className="text-lg font-semibold text-white mb-2 line-clamp-1">{productBox.title}</h3>
-                        {productBox.description && (
-                          <p className="text-sm text-zinc-400 line-clamp-2">{productBox.description}</p>
-                        )}
-                      </div>
-
-                      {/* Price and Purchase */}
-                      <div className="flex items-center justify-between">
-                        <div className="text-2xl font-bold text-green-400">
-                          {formatPrice(productBox.price, productBox.currency)}
+                      {/* Content */}
+                      <div className="p-6">
+                        <div className="mb-4">
+                          <h3 className="text-lg font-semibold text-white mb-2 line-clamp-1">{productBox.title}</h3>
+                          {productBox.description && (
+                            <p className="text-sm text-zinc-400 line-clamp-2">{productBox.description}</p>
+                          )}
                         </div>
 
-                        {isOwner ? (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            className="border-zinc-700 text-zinc-300 hover:bg-zinc-800 bg-transparent"
-                            onClick={() => window.open(`/dashboard/bundles`, "_blank")}
-                          >
-                            Manage
-                          </Button>
-                        ) : (
-                          <Button
-                            size="sm"
-                            className="bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white border-0"
-                            onClick={() => handlePurchase(productBox.id)}
-                            disabled={purchaseLoading === productBox.id}
-                          >
-                            {purchaseLoading === productBox.id ? (
-                              <>
-                                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                                Processing...
-                              </>
-                            ) : (
-                              <>
-                                <ShoppingCart className="h-4 w-4 mr-2" />
-                                Purchase
-                              </>
-                            )}
-                          </Button>
-                        )}
+                        {/* Price and Purchase */}
+                        <div className="flex items-center justify-between">
+                          <div className="text-2xl font-bold text-green-400">
+                            {formatPrice(productBox.price, productBox.currency)}
+                          </div>
+
+                          {isOwner ? (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="border-zinc-700 text-zinc-300 hover:bg-zinc-800 bg-transparent"
+                              onClick={() => window.open(`/dashboard/bundles`, "_blank")}
+                            >
+                              Manage
+                            </Button>
+                          ) : (
+                            <Button
+                              size="sm"
+                              className="bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white border-0"
+                              onClick={() => handlePurchase(productBox.id)}
+                              disabled={purchaseLoading === productBox.id}
+                            >
+                              {purchaseLoading === productBox.id ? (
+                                <>
+                                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                                  Processing...
+                                </>
+                              ) : (
+                                <>
+                                  <ShoppingCart className="h-4 w-4 mr-2" />
+                                  Purchase
+                                </>
+                              )}
+                            </Button>
+                          )}
+                        </div>
                       </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              </motion.div>
-            ))}
+                    </CardContent>
+                  </Card>
+                </motion.div>
+              )
+            })}
           </AnimatePresence>
         </div>
       )}
