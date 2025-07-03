@@ -53,5 +53,3 @@ export function VideoCard({ id, title, thumbnailUrl, fileUrl, duration, type }: 
     </Link>
   )
 }
-
-export default VideoCard
