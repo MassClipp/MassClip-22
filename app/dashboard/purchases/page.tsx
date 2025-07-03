@@ -505,8 +505,44 @@ export default function FullScreenMyPurchasesPage() {
   }
 
   return (
-    <div className="fixed inset-0 bg-black overflow-auto">
-      <motion.div className="min-h-full w-full p-6" variants={containerVariants} initial="hidden" animate="visible">
+    <div
+      className="fixed inset-0 bg-black overflow-auto"
+      style={{
+        scrollbarWidth: "thin",
+        scrollbarColor: "#3f3f46 #18181b",
+      }}
+    >
+      <style jsx global>{`
+  /* Webkit browsers (Chrome, Safari, Edge) */
+  ::-webkit-scrollbar {
+    width: 8px;
+  }
+  
+  ::-webkit-scrollbar-track {
+    background: #18181b;
+  }
+  
+  ::-webkit-scrollbar-thumb {
+    background: #3f3f46;
+    border-radius: 4px;
+  }
+  
+  ::-webkit-scrollbar-thumb:hover {
+    background: #52525b;
+  }
+  
+  /* Firefox */
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: #3f3f46 #18181b;
+  }
+`}</style>
+      <motion.div
+        className="min-h-full w-full pt-24 px-6 pb-6"
+        variants={containerVariants}
+        initial="hidden"
+        animate="visible"
+      >
         {/* Header */}
         <motion.div variants={itemVariants} className="mb-8">
           <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
