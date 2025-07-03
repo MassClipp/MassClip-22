@@ -25,6 +25,7 @@ import {
   File,
   Music,
   Pause,
+  Filter,
 } from "lucide-react"
 import { motion } from "framer-motion"
 import { format } from "date-fns"
@@ -72,18 +73,18 @@ const containerVariants = {
   visible: {
     opacity: 1,
     transition: {
-      staggerChildren: 0.05,
+      staggerChildren: 0.08,
     },
   },
 }
 
 const itemVariants = {
-  hidden: { y: 10, opacity: 0 },
+  hidden: { y: 20, opacity: 0 },
   visible: {
     y: 0,
     opacity: 1,
     transition: {
-      duration: 0.3,
+      duration: 0.4,
       ease: [0.25, 0.1, 0.25, 1.0],
     },
   },
@@ -306,14 +307,10 @@ export default function MyPurchasesPage() {
       setIsFavorite(!isFavorite)
     }
 
-    // Update the ContentCard component to only show controls on hover
-    // Find the ContentCard component and replace its return statement
-
-    // Replace the ContentCard return statement with:
     return (
-      <div className="flex-shrink-0 w-full">
+      <div className="group relative">
         <div
-          className="relative aspect-[9/16] overflow-hidden rounded-lg bg-zinc-900 group"
+          className="relative aspect-[9/16] overflow-hidden rounded-xl bg-zinc-950 border border-zinc-800/50 hover:border-zinc-700/50 transition-all duration-300"
           onMouseEnter={() => setIsHovered(true)}
           onMouseLeave={() => setIsHovered(false)}
         >
@@ -331,21 +328,22 @@ export default function MyPurchasesPage() {
                 <source src={content.fileUrl} type="video/mp4" />
               </video>
 
-              {/* Border that appears on hover */}
-              <div className="absolute inset-0 border border-white/0 group-hover:border-white/40 rounded-lg transition-all duration-200"></div>
-
-              {/* Play/Pause Button Overlay - Only visible on hover */}
-              <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+              {/* Play/Pause Button Overlay */}
+              <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-300 bg-black/20">
                 <button
                   onClick={togglePlay}
-                  className="w-10 h-10 rounded-full bg-black/50 flex items-center justify-center"
+                  className="w-12 h-12 rounded-full bg-white/10 backdrop-blur-sm border border-white/20 flex items-center justify-center hover:bg-white/20 transition-all duration-200"
                 >
-                  {isPlaying ? <Pause className="h-4 w-4 text-white" /> : <Play className="h-4 w-4 text-white" />}
+                  {isPlaying ? (
+                    <Pause className="h-5 w-5 text-white" />
+                  ) : (
+                    <Play className="h-5 w-5 text-white ml-0.5" />
+                  )}
                 </button>
               </div>
             </>
           ) : content.contentType === "audio" ? (
-            <div className="w-full h-full flex items-center justify-center bg-purple-900/20">
+            <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-purple-900/20 to-pink-900/20">
               <Music className="h-8 w-8 text-purple-400" />
             </div>
           ) : content.contentType === "image" ? (
@@ -355,27 +353,24 @@ export default function MyPurchasesPage() {
               className="w-full h-full object-cover"
             />
           ) : (
-            <div className="w-full h-full flex items-center justify-center bg-zinc-800">
-              <File className="h-8 w-8 text-zinc-400" />
+            <div className="w-full h-full flex items-center justify-center bg-zinc-900/50">
+              <File className="h-8 w-8 text-zinc-500" />
             </div>
           )}
 
-          {/* Action buttons - only visible on hover */}
-          <div className="absolute bottom-2 right-2 z-20 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+          {/* Action buttons */}
+          <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-all duration-300 flex gap-2">
             <button
-              className="bg-black/70 hover:bg-black/90 p-1.5 rounded-full transition-all duration-300"
+              className="w-8 h-8 rounded-full bg-black/50 backdrop-blur-sm border border-white/10 hover:bg-black/70 flex items-center justify-center transition-all duration-200"
               onClick={handleDownload}
               aria-label="Download"
               title="Download"
             >
               <Download className="h-3.5 w-3.5 text-white" />
             </button>
-          </div>
-
-          <div className="absolute bottom-2 left-2 z-20 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
             <button
-              className={`bg-black/70 hover:bg-black/90 p-1.5 rounded-full transition-all duration-300 ${
-                isFavorite ? "text-red-500" : "text-white"
+              className={`w-8 h-8 rounded-full bg-black/50 backdrop-blur-sm border border-white/10 hover:bg-black/70 flex items-center justify-center transition-all duration-200 ${
+                isFavorite ? "text-red-400" : "text-white"
               }`}
               onClick={toggleFavorite}
               aria-label={isFavorite ? "Remove from favorites" : "Add to favorites"}
@@ -386,106 +381,108 @@ export default function MyPurchasesPage() {
           </div>
         </div>
 
-        {/* File info below video */}
-        <div className="mt-1 flex justify-between items-center">
-          <span className="text-xs text-zinc-400">video</span>
-          <span className="text-xs text-zinc-400">{formatFileSize(content.fileSize)}</span>
+        {/* File info */}
+        <div className="mt-2 px-1">
+          <div className="flex justify-between items-center text-xs text-zinc-500">
+            <span className="capitalize">{content.contentType}</span>
+            <span>{formatFileSize(content.fileSize)}</span>
+          </div>
         </div>
       </div>
     )
   }
 
-  // Update the PurchaseCard component to match the reference design
+  // Update the PurchaseCard component
   const PurchaseCard = ({ purchase }: { purchase: UnifiedPurchase }) => {
     const isExpanded = expandedPurchases[purchase.id] || false
-    const displayItems = isExpanded ? purchase.items : purchase.items.slice(0, 5)
-    const hasMoreItems = purchase.items.length > 5
+    const displayItems = isExpanded ? purchase.items : purchase.items.slice(0, 6)
+    const hasMoreItems = purchase.items.length > 6
 
     return (
       <motion.div variants={itemVariants}>
-        <div className="bg-zinc-900/40 rounded-lg overflow-hidden mb-4">
-          <div className="p-4 flex items-center gap-4">
-            {/* Bundle Icon */}
-            <div className="relative flex-shrink-0">
-              <div className="w-12 h-12 flex items-center justify-center bg-zinc-800 rounded-lg">
-                <Package className="h-5 w-5 text-zinc-400" />
-              </div>
-            </div>
-
-            {/* Content */}
-            <div className="flex flex-1 items-center justify-between">
-              <div>
-                <div className="flex items-center gap-2">
-                  <h3 className="text-lg font-medium text-white">{purchase.productBoxTitle || "Untitled"}</h3>
-                  <span className="px-2 py-0.5 text-xs rounded-full bg-zinc-800 text-zinc-400">Bundle</span>
+        <div className="group bg-zinc-950/50 backdrop-blur-sm border border-zinc-800/50 rounded-2xl overflow-hidden hover:border-zinc-700/50 transition-all duration-300">
+          {/* Header */}
+          <div className="p-6 border-b border-zinc-800/50">
+            <div className="flex items-start justify-between">
+              <div className="flex items-start gap-4">
+                <div className="w-12 h-12 rounded-xl bg-zinc-900/50 border border-zinc-800/50 flex items-center justify-center">
+                  <Package className="h-5 w-5 text-zinc-400" />
                 </div>
-                <div className="flex items-center gap-4 text-xs text-zinc-400 mt-1">
-                  <div className="flex items-center gap-1">
-                    <User className="h-3 w-3" />
-                    <span>{purchase.creatorName || purchase.creatorUsername || "Unknown Creator"}</span>
+                <div className="flex-1">
+                  <div className="flex items-center gap-3 mb-2">
+                    <h3 className="text-lg font-semibold text-white">{purchase.productBoxTitle || "Untitled"}</h3>
+                    <span className="px-2.5 py-1 text-xs font-medium rounded-full bg-zinc-800/50 text-zinc-400 border border-zinc-700/50">
+                      Bundle
+                    </span>
                   </div>
-                  <div className="flex items-center gap-1">
-                    <Calendar className="h-3 w-3" />
-                    <span>{format(new Date(purchase.purchasedAt), "MMM d, yyyy")}</span>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <DollarSign className="h-3 w-3" />
-                    <span>{formatPrice(purchase.amount || 0, purchase.currency || "usd")}</span>
+                  <div className="flex items-center gap-6 text-sm text-zinc-500">
+                    <div className="flex items-center gap-1.5">
+                      <User className="h-3.5 w-3.5" />
+                      <span>{purchase.creatorName || purchase.creatorUsername || "Unknown Creator"}</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <Calendar className="h-3.5 w-3.5" />
+                      <span>{format(new Date(purchase.purchasedAt), "MMM d, yyyy")}</span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <DollarSign className="h-3.5 w-3.5" />
+                      <span className="font-medium">
+                        {formatPrice(purchase.amount || 0, purchase.currency || "usd")}
+                      </span>
+                    </div>
                   </div>
                 </div>
               </div>
-
-              {/* Actions */}
-              <div className="flex gap-2">
-                <Button
-                  onClick={() => handleAccess(purchase)}
-                  className="bg-white text-black hover:bg-zinc-200 font-medium transition-colors duration-200 h-9 px-3 rounded-lg"
-                >
-                  <Play className="mr-2 h-4 w-4" />
-                  Access Bundle
-                </Button>
-              </div>
+              <Button
+                onClick={() => handleAccess(purchase)}
+                className="bg-white text-black hover:bg-zinc-100 font-medium transition-all duration-200 h-10 px-6 rounded-xl shadow-sm"
+              >
+                <Play className="mr-2 h-4 w-4" />
+                Access
+              </Button>
             </div>
           </div>
 
-          {/* Content Items Grid */}
+          {/* Content Items */}
           {purchase.items && purchase.items.length > 0 && (
-            <div className="p-4 border-t border-zinc-800/50">
-              <div className="flex justify-between items-center mb-3">
-                <h4 className="text-sm font-medium text-white">Bundle Content ({purchase.totalItems} items)</h4>
+            <div className="p-6">
+              <div className="flex justify-between items-center mb-4">
+                <h4 className="text-sm font-medium text-zinc-300">
+                  Content <span className="text-zinc-500">({purchase.totalItems} items)</span>
+                </h4>
                 {hasMoreItems && (
                   <Button
                     variant="ghost"
                     size="sm"
                     onClick={() => toggleExpanded(purchase.id)}
-                    className="text-xs text-zinc-400 hover:text-white h-7 px-2"
+                    className="text-xs text-zinc-500 hover:text-zinc-300 h-8 px-3 rounded-lg"
                   >
                     {isExpanded ? (
                       <>
-                        Show Less <ChevronUp className="ml-1 h-3 w-3" />
+                        Show Less <ChevronUp className="ml-1.5 h-3 w-3" />
                       </>
                     ) : (
                       <>
-                        Show All <ChevronDown className="ml-1 h-3 w-3" />
+                        Show All <ChevronDown className="ml-1.5 h-3 w-3" />
                       </>
                     )}
                   </Button>
                 )}
               </div>
-              <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-3">
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
                 {displayItems.map((content) => (
                   <ContentCard key={content.id} content={content} />
                 ))}
               </div>
               {!isExpanded && hasMoreItems && (
-                <div className="mt-3 text-center">
+                <div className="mt-4 text-center">
                   <Button
                     variant="ghost"
                     size="sm"
                     onClick={() => toggleExpanded(purchase.id)}
-                    className="text-xs text-zinc-400 hover:text-white h-7"
+                    className="text-sm text-zinc-500 hover:text-zinc-300 h-9 px-4 rounded-lg"
                   >
-                    Show {purchase.items.length - 5} More <ChevronDown className="ml-1 h-3 w-3" />
+                    Show {purchase.items.length - 6} More Items <ChevronDown className="ml-2 h-4 w-4" />
                   </Button>
                 </div>
               )}
@@ -498,134 +495,143 @@ export default function MyPurchasesPage() {
 
   if (loading && purchases.length === 0) {
     return (
-      <div className="flex items-center justify-center h-[calc(100vh-4rem)]">
-        <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-b-2 border-white"></div>
+      <div className="min-h-screen bg-black flex items-center justify-center">
+        <div className="flex items-center gap-3">
+          <div className="animate-spin rounded-full h-6 w-6 border-2 border-white/20 border-t-white"></div>
+          <span className="text-zinc-400">Loading purchases...</span>
+        </div>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-black flex flex-col">
+    <div className="min-h-screen bg-black">
       <motion.div
-        className="flex-1 container mx-auto px-6 py-8 space-y-8"
+        className="max-w-7xl mx-auto px-6 py-8"
         variants={containerVariants}
         initial="hidden"
         animate="visible"
       >
-        {/* Clean Header */}
-        <motion.div
-          variants={itemVariants}
-          className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6 border-b border-zinc-800/50 pb-8"
-        >
-          <div>
-            <h1 className="text-3xl font-bold text-white tracking-tight">My Purchases</h1>
-            <p className="text-zinc-400 mt-1">Access your purchased content and download history</p>
+        {/* Header */}
+        <motion.div variants={itemVariants} className="mb-8">
+          <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
+            <div>
+              <h1 className="text-3xl font-bold text-white mb-2">My Purchases</h1>
+              <p className="text-zinc-400">Your purchased content library</p>
+            </div>
+            <Button
+              onClick={handleRefresh}
+              variant="outline"
+              disabled={refreshing}
+              className="border-zinc-800 bg-zinc-950/50 text-zinc-300 hover:bg-zinc-900 hover:text-white hover:border-zinc-700 transition-all duration-200 h-10 px-4 rounded-xl"
+            >
+              <RefreshCw className={`h-4 w-4 mr-2 ${refreshing ? "animate-spin" : ""}`} />
+              Refresh
+            </Button>
           </div>
-
-          <Button
-            onClick={handleRefresh}
-            variant="outline"
-            disabled={refreshing}
-            className="border-zinc-700 text-zinc-300 hover:bg-zinc-800 hover:text-white"
-          >
-            <RefreshCw className={`h-4 w-4 mr-2 ${refreshing ? "animate-spin" : ""}`} />
-            Refresh
-          </Button>
         </motion.div>
 
-        {/* Clean Filters */}
-        <motion.div variants={itemVariants} className="flex flex-col lg:flex-row gap-4">
-          <div className="flex-1">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-zinc-500" />
+        {/* Search and Filter */}
+        <motion.div variants={itemVariants} className="mb-8">
+          <div className="flex flex-col sm:flex-row gap-4">
+            <div className="flex-1 relative">
+              <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 h-4 w-4 text-zinc-500" />
               <Input
                 placeholder="Search purchases..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10 bg-zinc-900/50 border-zinc-800 focus:border-zinc-600 text-white placeholder:text-zinc-500"
+                className="pl-11 h-12 bg-zinc-950/50 border-zinc-800 focus:border-zinc-600 text-white placeholder:text-zinc-500 rounded-xl"
               />
             </div>
+            <div className="relative">
+              <Filter className="absolute left-4 top-1/2 transform -translate-y-1/2 h-4 w-4 text-zinc-500 pointer-events-none" />
+              <Select value={sortBy} onValueChange={setSortBy}>
+                <SelectTrigger className="w-[180px] h-12 pl-11 bg-zinc-950/50 border-zinc-800 text-white rounded-xl">
+                  <SelectValue placeholder="Sort by" />
+                </SelectTrigger>
+                <SelectContent className="bg-zinc-950 border-zinc-800">
+                  <SelectItem value="newest">Newest First</SelectItem>
+                  <SelectItem value="oldest">Oldest First</SelectItem>
+                  <SelectItem value="price_high">Price: High to Low</SelectItem>
+                  <SelectItem value="price_low">Price: Low to High</SelectItem>
+                  <SelectItem value="creator">Creator Name</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
-
-          <Select value={sortBy} onValueChange={setSortBy}>
-            <SelectTrigger className="w-[180px] bg-zinc-900/50 border-zinc-800 text-white">
-              <SelectValue placeholder="Sort by" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="newest">Newest First</SelectItem>
-              <SelectItem value="oldest">Oldest First</SelectItem>
-              <SelectItem value="price_high">Price: High to Low</SelectItem>
-              <SelectItem value="price_low">Price: Low to High</SelectItem>
-              <SelectItem value="creator">Creator Name</SelectItem>
-            </SelectContent>
-          </Select>
         </motion.div>
 
-        {/* Clean Stats */}
-        <motion.div variants={itemVariants} className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <Card className="border border-zinc-800/50 bg-zinc-900/40 backdrop-blur-sm">
+        {/* Stats */}
+        <motion.div variants={itemVariants} className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+          <Card className="border-zinc-800/50 bg-zinc-950/50 backdrop-blur-sm">
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium text-zinc-400">Total Purchases</p>
+                  <p className="text-sm text-zinc-500 mb-1">Total Purchases</p>
                   <p className="text-2xl font-bold text-white">{purchases.length}</p>
                 </div>
-                <ShoppingBag className="h-5 w-5 text-zinc-500" />
+                <div className="w-12 h-12 rounded-xl bg-zinc-900/50 flex items-center justify-center">
+                  <ShoppingBag className="h-5 w-5 text-zinc-400" />
+                </div>
               </div>
             </CardContent>
           </Card>
 
-          <Card className="border border-zinc-800/50 bg-zinc-900/40 backdrop-blur-sm">
+          <Card className="border-zinc-800/50 bg-zinc-950/50 backdrop-blur-sm">
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium text-zinc-400">Total Items</p>
+                  <p className="text-sm text-zinc-500 mb-1">Total Items</p>
                   <p className="text-2xl font-bold text-white">
                     {purchases.reduce((sum, p) => sum + (p.totalItems || 0), 0)}
                   </p>
                 </div>
-                <Video className="h-5 w-5 text-zinc-500" />
+                <div className="w-12 h-12 rounded-xl bg-zinc-900/50 flex items-center justify-center">
+                  <Video className="h-5 w-5 text-zinc-400" />
+                </div>
               </div>
             </CardContent>
           </Card>
 
-          <Card className="border border-zinc-800/50 bg-zinc-900/40 backdrop-blur-sm">
+          <Card className="border-zinc-800/50 bg-zinc-950/50 backdrop-blur-sm">
             <CardContent className="p-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-medium text-zinc-400">Bundles</p>
-                  <p className="text-2xl font-bold text-white">{purchases.length}</p>
+                  <p className="text-sm text-zinc-500 mb-1">Total Spent</p>
+                  <p className="text-2xl font-bold text-white">{formatPrice(totalSpent)}</p>
                 </div>
-                <Package className="h-5 w-5 text-zinc-500" />
+                <div className="w-12 h-12 rounded-xl bg-zinc-900/50 flex items-center justify-center">
+                  <DollarSign className="h-5 w-5 text-zinc-400" />
+                </div>
               </div>
             </CardContent>
           </Card>
         </motion.div>
 
-        {/* Clean Content */}
+        {/* Content */}
         {filteredPurchases.length > 0 ? (
-          <motion.div variants={itemVariants} className="flex-1">
-            <div className="space-y-4">
-              {filteredPurchases.map((purchase) => (
-                <PurchaseCard key={purchase.id} purchase={purchase} />
-              ))}
-            </div>
+          <motion.div variants={itemVariants} className="space-y-6">
+            {filteredPurchases.map((purchase) => (
+              <PurchaseCard key={purchase.id} purchase={purchase} />
+            ))}
           </motion.div>
         ) : (
-          <motion.div variants={itemVariants} className="flex-1 flex items-center justify-center min-h-[400px]">
-            <Card className="border border-zinc-800/50 bg-zinc-900/40 backdrop-blur-sm w-full max-w-2xl">
+          <motion.div variants={itemVariants} className="flex items-center justify-center min-h-[400px]">
+            <Card className="border-zinc-800/50 bg-zinc-950/50 backdrop-blur-sm w-full max-w-md">
               <CardContent className="p-12 text-center">
-                <ShoppingBag className="h-12 w-12 text-zinc-600 mx-auto mb-4" />
-                <h3 className="text-xl font-semibold text-white mb-2">No Purchases Yet</h3>
-                <p className="text-zinc-400 mb-6 max-w-md mx-auto">
+                <div className="w-16 h-16 rounded-2xl bg-zinc-900/50 flex items-center justify-center mx-auto mb-6">
+                  <ShoppingBag className="h-8 w-8 text-zinc-500" />
+                </div>
+                <h3 className="text-xl font-semibold text-white mb-3">No Purchases Yet</h3>
+                <p className="text-zinc-500 mb-6 leading-relaxed">
                   {searchTerm
-                    ? "No purchases match your current search."
-                    : "You haven't purchased any content yet. Explore creators and find content you love."}
+                    ? "No purchases match your search criteria."
+                    : "Start exploring and discover amazing content from creators."}
                 </p>
                 {!searchTerm && (
                   <Button
-                    onClick={() => window.open("/dashboard/explore", "_blank")}
-                    className="bg-white text-black hover:bg-zinc-200 font-medium"
+                    onClick={() => router.push("/dashboard/explore")}
+                    className="bg-white text-black hover:bg-zinc-100 font-medium h-11 px-6 rounded-xl"
                   >
                     <Eye className="h-4 w-4 mr-2" />
                     Explore Content
