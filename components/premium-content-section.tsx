@@ -1,13 +1,15 @@
 "use client"
 
+import { Badge } from "@/components/ui/badge"
+
 import { useState, useEffect } from "react"
 import { motion } from "framer-motion"
 import { Package, Loader2, AlertCircle, ShoppingCart } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
 import { useAuth } from "@/contexts/auth-context"
-import { useToast } from "@/hooks/use-toast"
+import { useToast } from "@/components/ui/use-toast"
+import { useRouter } from "next/navigation"
 
 interface Bundle {
   id: string
@@ -29,15 +31,17 @@ interface Bundle {
 interface PremiumContentSectionProps {
   creatorId: string
   creatorUsername?: string
+  isOwner: boolean
 }
 
-export default function PremiumContentSection({ creatorId, creatorUsername }: PremiumContentSectionProps) {
+export default function PremiumContentSection({ creatorId, creatorUsername, isOwner }: PremiumContentSectionProps) {
   const { user } = useAuth()
   const { toast } = useToast()
   const [bundles, setBundles] = useState<Bundle[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [purchaseLoading, setPurchaseLoading] = useState<string | null>(null)
+  const router = useRouter()
 
   // Fetch creator's bundles
   const fetchCreatorBundles = async () => {
@@ -212,7 +216,7 @@ export default function PremiumContentSection({ creatorId, creatorUsername }: Pr
             <Card className="bg-zinc-900/50 border-zinc-800 overflow-hidden hover:border-zinc-700 transition-all duration-300 group">
               <div className="relative">
                 {/* Bundle Thumbnail */}
-                <div className="aspect-[4/3] bg-zinc-800 overflow-hidden">
+                <div className="aspect-square bg-zinc-800 overflow-hidden">
                   <img
                     src={getBundleThumbnail(bundle) || "/placeholder.svg"}
                     alt={bundle.title}
@@ -261,28 +265,39 @@ export default function PremiumContentSection({ creatorId, creatorUsername }: Pr
                   {/* Price and Purchase */}
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <span className="text-2xl font-bold text-green-400">${bundle.price.toFixed(2)}</span>
+                      <span className="text-2xl font-thin text-green-400">${bundle.price.toFixed(2)}</span>
                       <span className="text-xs text-zinc-500 uppercase">{bundle.currency}</span>
                     </div>
 
-                    <Button
-                      onClick={() => handlePurchase(bundle)}
-                      disabled={purchaseLoading === bundle.id}
-                      className="bg-red-600 hover:bg-red-700 text-white"
-                      size="sm"
-                    >
-                      {purchaseLoading === bundle.id ? (
-                        <>
-                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                          Processing...
-                        </>
-                      ) : (
-                        <>
-                          <ShoppingCart className="h-4 w-4 mr-2" />
-                          Purchase
-                        </>
-                      )}
-                    </Button>
+                    {isOwner ? (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="border-zinc-700 text-zinc-300 hover:bg-zinc-800 bg-transparent"
+                        onClick={() => router.push(`/dashboard/bundles`)}
+                      >
+                        Manage
+                      </Button>
+                    ) : (
+                      <Button
+                        size="sm"
+                        className="bg-gradient-to-r from-yellow-500 to-yellow-700 hover:from-yellow-600 hover:to-yellow-800 text-white border-0"
+                        onClick={() => handlePurchase(bundle)}
+                        disabled={purchaseLoading === bundle.id}
+                      >
+                        {purchaseLoading === bundle.id ? (
+                          <>
+                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                            Processing...
+                          </>
+                        ) : (
+                          <>
+                            <ShoppingCart className="h-4 w-4 mr-2" />
+                            Unlock Now
+                          </>
+                        )}
+                      </Button>
+                    )}
                   </div>
                 </div>
               </CardContent>
