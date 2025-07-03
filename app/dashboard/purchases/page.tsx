@@ -308,7 +308,7 @@ export default function MyPurchasesPage() {
     }
 
     return (
-      <div className="group relative w-full">
+      <div className="group relative w-full min-w-0">
         <div
           className="relative aspect-[9/16] overflow-hidden rounded-xl bg-zinc-950 border border-zinc-800/50 hover:border-zinc-700/50 transition-all duration-300 w-full"
           onMouseEnter={() => setIsHovered(true)}
@@ -392,7 +392,7 @@ export default function MyPurchasesPage() {
     )
   }
 
-  // Update the PurchaseCard component with better grid utilization
+  // Update the PurchaseCard component with full-width grid
   const PurchaseCard = ({ purchase }: { purchase: UnifiedPurchase }) => {
     const isExpanded = expandedPurchases[purchase.id] || false
     const displayItems = isExpanded ? purchase.items : purchase.items.slice(0, 12)
@@ -400,7 +400,7 @@ export default function MyPurchasesPage() {
 
     return (
       <motion.div variants={itemVariants}>
-        <div className="group bg-zinc-950/50 backdrop-blur-sm border border-zinc-800/50 rounded-2xl overflow-hidden hover:border-zinc-700/50 transition-all duration-300">
+        <div className="group bg-zinc-950/50 backdrop-blur-sm border border-zinc-800/50 rounded-2xl overflow-hidden hover:border-zinc-700/50 transition-all duration-300 w-full">
           {/* Header */}
           <div className="p-6 border-b border-zinc-800/50">
             <div className="flex items-start justify-between">
@@ -443,50 +443,54 @@ export default function MyPurchasesPage() {
             </div>
           </div>
 
-          {/* Content Items - Updated grid to fill more space */}
+          {/* Content Items - Full width grid that expands to fill container */}
           {purchase.items && purchase.items.length > 0 && (
-            <div className="p-6">
-              <div className="flex justify-between items-center mb-4">
-                <h4 className="text-sm font-medium text-zinc-300">
-                  Content <span className="text-zinc-500">({purchase.totalItems} items)</span>
-                </h4>
-                {hasMoreItems && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => toggleExpanded(purchase.id)}
-                    className="text-xs text-zinc-500 hover:text-zinc-300 h-8 px-3 rounded-lg"
-                  >
-                    {isExpanded ? (
-                      <>
-                        Show Less <ChevronUp className="ml-1.5 h-3 w-3" />
-                      </>
-                    ) : (
-                      <>
-                        Show All <ChevronDown className="ml-1.5 h-3 w-3" />
-                      </>
-                    )}
-                  </Button>
+            <div className="w-full">
+              <div className="p-6 w-full">
+                <div className="flex justify-between items-center mb-4">
+                  <h4 className="text-sm font-medium text-zinc-300">
+                    Content <span className="text-zinc-500">({purchase.totalItems} items)</span>
+                  </h4>
+                  {hasMoreItems && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => toggleExpanded(purchase.id)}
+                      className="text-xs text-zinc-500 hover:text-zinc-300 h-8 px-3 rounded-lg"
+                    >
+                      {isExpanded ? (
+                        <>
+                          Show Less <ChevronUp className="ml-1.5 h-3 w-3" />
+                        </>
+                      ) : (
+                        <>
+                          Show All <ChevronDown className="ml-1.5 h-3 w-3" />
+                        </>
+                      )}
+                    </Button>
+                  )}
+                </div>
+                {/* Full-width responsive grid that fills the entire container */}
+                <div className="w-full">
+                  <div className="grid w-full auto-cols-fr grid-cols-[repeat(auto-fill,minmax(120px,1fr))] sm:grid-cols-[repeat(auto-fill,minmax(140px,1fr))] md:grid-cols-[repeat(auto-fill,minmax(160px,1fr))] lg:grid-cols-[repeat(auto-fill,minmax(180px,1fr))] xl:grid-cols-[repeat(auto-fill,minmax(200px,1fr))] gap-3">
+                    {displayItems.map((content) => (
+                      <ContentCard key={content.id} content={content} />
+                    ))}
+                  </div>
+                </div>
+                {!isExpanded && hasMoreItems && (
+                  <div className="mt-4 text-center">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => toggleExpanded(purchase.id)}
+                      className="text-sm text-zinc-500 hover:text-zinc-300 h-9 px-4 rounded-lg"
+                    >
+                      Show {purchase.items.length - 12} More Items <ChevronDown className="ml-2 h-4 w-4" />
+                    </Button>
+                  </div>
                 )}
               </div>
-              {/* Enhanced grid with more columns to fill the space */}
-              <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10 2xl:grid-cols-12 gap-3">
-                {displayItems.map((content) => (
-                  <ContentCard key={content.id} content={content} />
-                ))}
-              </div>
-              {!isExpanded && hasMoreItems && (
-                <div className="mt-4 text-center">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => toggleExpanded(purchase.id)}
-                    className="text-sm text-zinc-500 hover:text-zinc-300 h-9 px-4 rounded-lg"
-                  >
-                    Show {purchase.items.length - 12} More Items <ChevronDown className="ml-2 h-4 w-4" />
-                  </Button>
-                </div>
-              )}
             </div>
           )}
         </div>
@@ -506,9 +510,9 @@ export default function MyPurchasesPage() {
   }
 
   return (
-    <div className="min-h-screen bg-black">
+    <div className="min-h-screen bg-black w-full">
       <motion.div
-        className="max-w-7xl mx-auto px-6 py-8"
+        className="w-full max-w-none mx-auto px-6 py-8"
         variants={containerVariants}
         initial="hidden"
         animate="visible"
@@ -611,7 +615,7 @@ export default function MyPurchasesPage() {
 
         {/* Content */}
         {filteredPurchases.length > 0 ? (
-          <motion.div variants={itemVariants} className="space-y-6">
+          <motion.div variants={itemVariants} className="space-y-6 w-full">
             {filteredPurchases.map((purchase) => (
               <PurchaseCard key={purchase.id} purchase={purchase} />
             ))}
