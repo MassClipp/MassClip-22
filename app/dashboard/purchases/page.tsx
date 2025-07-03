@@ -308,9 +308,9 @@ export default function MyPurchasesPage() {
     }
 
     return (
-      <div className="group relative">
+      <div className="group relative w-full">
         <div
-          className="relative aspect-[9/16] overflow-hidden rounded-xl bg-zinc-950 border border-zinc-800/50 hover:border-zinc-700/50 transition-all duration-300"
+          className="relative aspect-[9/16] overflow-hidden rounded-xl bg-zinc-950 border border-zinc-800/50 hover:border-zinc-700/50 transition-all duration-300 w-full"
           onMouseEnter={() => setIsHovered(true)}
           onMouseLeave={() => setIsHovered(false)}
         >
@@ -332,19 +332,19 @@ export default function MyPurchasesPage() {
               <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-300 bg-black/20">
                 <button
                   onClick={togglePlay}
-                  className="w-12 h-12 rounded-full bg-white/10 backdrop-blur-sm border border-white/20 flex items-center justify-center hover:bg-white/20 transition-all duration-200"
+                  className="w-10 h-10 rounded-full bg-white/10 backdrop-blur-sm border border-white/20 flex items-center justify-center hover:bg-white/20 transition-all duration-200"
                 >
                   {isPlaying ? (
-                    <Pause className="h-5 w-5 text-white" />
+                    <Pause className="h-4 w-4 text-white" />
                   ) : (
-                    <Play className="h-5 w-5 text-white ml-0.5" />
+                    <Play className="h-4 w-4 text-white ml-0.5" />
                   )}
                 </button>
               </div>
             </>
           ) : content.contentType === "audio" ? (
             <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-purple-900/20 to-pink-900/20">
-              <Music className="h-8 w-8 text-purple-400" />
+              <Music className="h-6 w-6 text-purple-400" />
             </div>
           ) : content.contentType === "image" ? (
             <img
@@ -354,49 +354,49 @@ export default function MyPurchasesPage() {
             />
           ) : (
             <div className="w-full h-full flex items-center justify-center bg-zinc-900/50">
-              <File className="h-8 w-8 text-zinc-500" />
+              <File className="h-6 w-6 text-zinc-500" />
             </div>
           )}
 
           {/* Action buttons */}
-          <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-all duration-300 flex gap-2">
+          <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-all duration-300 flex gap-1.5">
             <button
-              className="w-8 h-8 rounded-full bg-black/50 backdrop-blur-sm border border-white/10 hover:bg-black/70 flex items-center justify-center transition-all duration-200"
+              className="w-7 h-7 rounded-full bg-black/50 backdrop-blur-sm border border-white/10 hover:bg-black/70 flex items-center justify-center transition-all duration-200"
               onClick={handleDownload}
               aria-label="Download"
               title="Download"
             >
-              <Download className="h-3.5 w-3.5 text-white" />
+              <Download className="h-3 w-3 text-white" />
             </button>
             <button
-              className={`w-8 h-8 rounded-full bg-black/50 backdrop-blur-sm border border-white/10 hover:bg-black/70 flex items-center justify-center transition-all duration-200 ${
+              className={`w-7 h-7 rounded-full bg-black/50 backdrop-blur-sm border border-white/10 hover:bg-black/70 flex items-center justify-center transition-all duration-200 ${
                 isFavorite ? "text-red-400" : "text-white"
               }`}
               onClick={toggleFavorite}
               aria-label={isFavorite ? "Remove from favorites" : "Add to favorites"}
               title={isFavorite ? "Remove from favorites" : "Add to favorites"}
             >
-              <Heart className="h-3.5 w-3.5" fill={isFavorite ? "currentColor" : "none"} />
+              <Heart className="h-3 w-3" fill={isFavorite ? "currentColor" : "none"} />
             </button>
           </div>
         </div>
 
         {/* File info */}
-        <div className="mt-2 px-1">
+        <div className="mt-1.5 px-0.5">
           <div className="flex justify-between items-center text-xs text-zinc-500">
-            <span className="capitalize">{content.contentType}</span>
-            <span>{formatFileSize(content.fileSize)}</span>
+            <span className="capitalize truncate">{content.contentType}</span>
+            <span className="text-xs">{formatFileSize(content.fileSize)}</span>
           </div>
         </div>
       </div>
     )
   }
 
-  // Update the PurchaseCard component
+  // Update the PurchaseCard component with better grid utilization
   const PurchaseCard = ({ purchase }: { purchase: UnifiedPurchase }) => {
     const isExpanded = expandedPurchases[purchase.id] || false
-    const displayItems = isExpanded ? purchase.items : purchase.items.slice(0, 6)
-    const hasMoreItems = purchase.items.length > 6
+    const displayItems = isExpanded ? purchase.items : purchase.items.slice(0, 12)
+    const hasMoreItems = purchase.items.length > 12
 
     return (
       <motion.div variants={itemVariants}>
@@ -443,7 +443,7 @@ export default function MyPurchasesPage() {
             </div>
           </div>
 
-          {/* Content Items */}
+          {/* Content Items - Updated grid to fill more space */}
           {purchase.items && purchase.items.length > 0 && (
             <div className="p-6">
               <div className="flex justify-between items-center mb-4">
@@ -469,7 +469,8 @@ export default function MyPurchasesPage() {
                   </Button>
                 )}
               </div>
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-4">
+              {/* Enhanced grid with more columns to fill the space */}
+              <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10 2xl:grid-cols-12 gap-3">
                 {displayItems.map((content) => (
                   <ContentCard key={content.id} content={content} />
                 ))}
@@ -482,7 +483,7 @@ export default function MyPurchasesPage() {
                     onClick={() => toggleExpanded(purchase.id)}
                     className="text-sm text-zinc-500 hover:text-zinc-300 h-9 px-4 rounded-lg"
                   >
-                    Show {purchase.items.length - 6} More Items <ChevronDown className="ml-2 h-4 w-4" />
+                    Show {purchase.items.length - 12} More Items <ChevronDown className="ml-2 h-4 w-4" />
                   </Button>
                 </div>
               )}
