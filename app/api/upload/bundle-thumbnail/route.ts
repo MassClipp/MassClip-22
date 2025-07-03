@@ -1,9 +1,10 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3"
-import { db } from "@/lib/firebase-admin"
 import { verifyIdToken } from "@/lib/auth-utils"
+import { db } from "@/lib/firebase-admin"
+import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3"
 
-const s3Client = new S3Client({
+// Configure Cloudflare R2
+const r2Client = new S3Client({
   region: "auto",
   endpoint: process.env.CLOUDFLARE_R2_ENDPOINT,
   credentials: {
@@ -15,15 +16,9 @@ const s3Client = new S3Client({
 export async function POST(request: NextRequest) {
   try {
     // Verify authentication
-    const authHeader = request.headers.get("authorization")
-    if (!authHeader?.startsWith("Bearer ")) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
-
-    const token = authHeader.split(" ")[1]
-    const decodedToken = await verifyIdToken(token)
+    const decodedToken = await verifyIdToken(request)
     if (!decodedToken) {
-      return NextResponse.json({ error: "Invalid token" }, { status: 401 })
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
     const formData = await request.formData()
@@ -34,6 +29,18 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "File and bundle ID are required" }, { status: 400 })
     }
 
+    // Validate file type
+    const allowedTypes = ["image/jpeg", "image/jpg", "image/png", "image/webp"]
+    if (!allowedTypes.includes(file.type)) {
+      return NextResponse.json({ error: "Invalid file type. Only JPEG, PNG, and WebP are allowed." }, { status: 400 })
+    }
+
+    // Validate file size (5MB max)
+    const maxSize = 5 * 1024 * 1024
+    if (file.size > maxSize) {
+      return NextResponse.json({ error: "File too large. Maximum size is 5MB." }, { status: 400 })
+    }
+
     // Verify bundle ownership
     const bundleDoc = await db.collection("bundles").doc(bundleId).get()
     if (!bundleDoc.exists) {
@@ -41,30 +48,8 @@ export async function POST(request: NextRequest) {
     }
 
     const bundleData = bundleDoc.data()
-    if (bundleData?.userId !== decodedToken.uid) {
+    if (bundleData?.creatorId !== decodedToken.uid) {
       return NextResponse.json({ error: "Unauthorized to modify this bundle" }, { status: 403 })
-    }
-
-    // Validate file type
-    const allowedTypes = ["image/jpeg", "image/jpg", "image/png", "image/webp"]
-    if (!allowedTypes.includes(file.type)) {
-      return NextResponse.json(
-        {
-          error: "Invalid file type. Only JPEG, PNG, and WebP images are allowed.",
-        },
-        { status: 400 },
-      )
-    }
-
-    // Validate file size (max 5MB)
-    const maxSize = 5 * 1024 * 1024 // 5MB
-    if (file.size > maxSize) {
-      return NextResponse.json(
-        {
-          error: "File too large. Maximum size is 5MB.",
-        },
-        { status: 400 },
-      )
     }
 
     // Generate unique filename
@@ -73,7 +58,8 @@ export async function POST(request: NextRequest) {
     const fileName = `bundle-thumbnails/${bundleId}/${timestamp}.${fileExtension}`
 
     // Convert file to buffer
-    const buffer = Buffer.from(await file.arrayBuffer())
+    const arrayBuffer = await file.arrayBuffer()
+    const buffer = Buffer.from(arrayBuffer)
 
     // Upload to R2
     const uploadCommand = new PutObjectCommand({
@@ -81,26 +67,22 @@ export async function POST(request: NextRequest) {
       Key: fileName,
       Body: buffer,
       ContentType: file.type,
-      Metadata: {
-        bundleId: bundleId,
-        uploadedBy: decodedToken.uid,
-        originalName: file.name,
-      },
+      ContentLength: file.size,
     })
 
-    await s3Client.send(uploadCommand)
+    await r2Client.send(uploadCommand)
 
     // Generate public URL
     const publicUrl = `${process.env.CLOUDFLARE_R2_PUBLIC_URL}/${fileName}`
 
-    // Update bundle with new thumbnail URL
+    // Update bundle with new thumbnail
     await db.collection("bundles").doc(bundleId).update({
       coverImage: publicUrl,
       customPreviewThumbnail: publicUrl,
       updatedAt: new Date(),
     })
 
-    console.log(`✅ [Bundle Thumbnail] Uploaded thumbnail for bundle ${bundleId}: ${publicUrl}`)
+    console.log(`✅ [Bundle Thumbnail] Uploaded for bundle ${bundleId}: ${publicUrl}`)
 
     return NextResponse.json({
       success: true,

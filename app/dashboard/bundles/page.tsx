@@ -4,7 +4,7 @@ import { useRef } from "react"
 
 import { useState, useEffect } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { Plus, Edit, Eye, EyeOff, Loader2, AlertCircle, Upload, X, Check, Trash2 } from "lucide-react"
+import { Plus, Edit, Eye, EyeOff, Loader2, AlertCircle, Upload, X, Check, Trash2, ImageIcon } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -60,6 +60,7 @@ interface EditBundleForm {
   title: string
   description: string
   price: string
+  coverImage: string
 }
 
 export default function BundlesPage() {
@@ -90,10 +91,12 @@ export default function BundlesPage() {
   // Edit bundle states
   const [showEditModal, setShowEditModal] = useState<string | null>(null)
   const [editLoading, setEditLoading] = useState(false)
+  const [thumbnailUploading, setThumbnailUploading] = useState(false)
   const [editForm, setEditForm] = useState<EditBundleForm>({
     title: "",
     description: "",
     price: "",
+    coverImage: "",
   })
 
   // Real-time listeners for content updates
@@ -442,6 +445,51 @@ export default function BundlesPage() {
     }
   }
 
+  // Handle thumbnail upload for edit modal
+  const handleThumbnailUpload = async (file: File, bundleId: string) => {
+    try {
+      setThumbnailUploading(true)
+
+      const token = await user?.getIdToken()
+      const formData = new FormData()
+      formData.append("file", file)
+      formData.append("bundleId", bundleId)
+
+      const response = await fetch("/api/upload/bundle-thumbnail", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        body: formData,
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || "Failed to upload thumbnail")
+      }
+
+      const data = await response.json()
+      setEditForm((prev) => ({
+        ...prev,
+        coverImage: data.url,
+      }))
+
+      toast({
+        title: "Success",
+        description: "Thumbnail uploaded successfully",
+      })
+    } catch (error) {
+      console.error("Error uploading thumbnail:", error)
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to upload thumbnail",
+        variant: "destructive",
+      })
+    } finally {
+      setThumbnailUploading(false)
+    }
+  }
+
   // Handle edit bundle with Stripe price update
   const handleEditBundle = async (productBoxId: string) => {
     if (!editForm.title.trim() || !editForm.price) {
@@ -470,6 +518,7 @@ export default function BundlesPage() {
           title: editForm.title.trim(),
           description: editForm.description.trim(),
           price: Number.parseFloat(editForm.price),
+          coverImage: editForm.coverImage || null,
         }),
       })
 
@@ -489,6 +538,7 @@ export default function BundlesPage() {
                 title: editForm.title.trim(),
                 description: editForm.description.trim(),
                 price: Number.parseFloat(editForm.price),
+                coverImage: editForm.coverImage || box.coverImage,
               }
             : box,
         ),
@@ -520,6 +570,7 @@ export default function BundlesPage() {
       title: productBox.title,
       description: productBox.description,
       price: productBox.price.toString(),
+      coverImage: productBox.coverImage || "",
     })
     setShowEditModal(productBox.id)
   }
@@ -756,6 +807,9 @@ export default function BundlesPage() {
         title: "Success",
         description: "Content removed from bundle",
       })
+
+      // Force refresh the bundle data to ensure persistence
+      await fetchProductBoxes()
     } catch (error) {
       console.error("❌ [Bundles] Error removing content from bundle:", error)
       toast({
@@ -1139,7 +1193,7 @@ export default function BundlesPage() {
 
       {/* Edit Bundle Modal */}
       <Dialog open={!!showEditModal} onOpenChange={() => setShowEditModal(null)}>
-        <DialogContent className="bg-zinc-900 border-zinc-800 text-white">
+        <DialogContent className="bg-zinc-900 border-zinc-800 text-white max-w-2xl">
           <DialogHeader>
             <DialogTitle>Edit Bundle</DialogTitle>
           </DialogHeader>
@@ -1186,13 +1240,118 @@ export default function BundlesPage() {
               </div>
             </div>
 
+            {/* Thumbnail Upload Section */}
+            <div className="space-y-3">
+              <Label>Bundle Thumbnail</Label>
+              
+              {/* Current Thumbnail Preview */}
+              {editForm.coverImage && (
+                <div className="relative">
+                  <img
+                    src={editForm.coverImage || "/placeholder.svg"}
+                    alt="Bundle thumbnail"
+                    className="w-full h-48 object-cover rounded-lg border border-zinc-700"
+                  />
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setEditForm((prev) => ({ ...prev, coverImage: "" }))}
+                    className="absolute top-2 right-2 bg-black/50 hover:bg-black/70 text-white"
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+              )}
+
+              {/* Upload Options */}
+              <div className="space-y-3">
+                {/* URL Input */}
+                <Input
+                  placeholder="Enter thumbnail URL or upload a file below"
+                  value={editForm.coverImage}
+                  onChange={(e) => setEditForm((prev) => ({ ...prev, coverImage: e.target.value }))}
+                  className="bg-zinc-800 border-zinc-700 text-white"
+                />
+
+                {/* File Upload */}
+                <div className="flex items-center gap-3">
+                  <div className="relative flex-1">
+                    <input
+                      type="file"
+                      accept="image/jpeg,image/jpg,image/png,image/webp"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0]
+                        if (file && showEditModal) {
+                          // Validate file type
+                          const allowedTypes = ["image/jpeg", "image/jpg", "image/png", "image/webp"]
+                          if (!allowedTypes.includes(file.type)) {
+                            toast({
+                              title: "Invalid File Type",
+                              description: "Please select a JPEG, PNG, or WebP image",
+                              variant: "destructive",
+                            })
+                            return
+                          }
+
+                          // Validate file size (5MB max)
+                          const maxSize = 5 * 1024 * 1024
+                          if (file.size > maxSize) {
+                            toast({
+                              title: "File Too Large",
+                              description: "Please select an image smaller than 5MB",
+                              variant: "destructive",
+                            })
+                            return
+                          }
+
+                          handleThumbnailUpload(file, showEditModal)
+                        }
+                      }}
+                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                      disabled={thumbnailUploading}
+                    />
+                    <Button
+                      variant="outline"
+                      disabled={thumbnailUploading}
+                      className="w-full border-zinc-700 hover:bg-zinc-800 bg-transparent"
+                    >
+                      {thumbnailUploading ? (
+                        <>
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          Uploading...
+                        </>
+                      ) : (
+                        <>
+                          <Upload className="h-4 w-4 mr-2" />
+                          Upload New Thumbnail
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                </div>
+
+                <p className="text-xs text-zinc-500">
+                  Supported formats: JPEG, PNG, WebP. Maximum size: 5MB. Recommended size: 1280x720px
+                </p>
+              </div>
+
+              {/* No Thumbnail State */}
+              {!editForm.coverImage && (
+                <div className="border-2 border-dashed border-zinc-700 rounded-lg p-8 text-center">
+                  <ImageIcon className="h-12 w-12 text-zinc-600 mx-auto mb-3" />
+                  <p className="text-zinc-400 mb-2">No thumbnail selected</p>
+                  <p className="text-xs text-zinc-500">Upload an image or enter a URL above</p>
+                </div>
+              )}
+            </div>
+
             <div className="flex justify-end gap-3 pt-4">
               <Button variant="outline" onClick={() => setShowEditModal(null)} className="border-zinc-700">
                 Cancel
               </Button>
               <Button
                 onClick={() => showEditModal && handleEditBundle(showEditModal)}
-                disabled={editLoading}
+                disabled={editLoading || thumbnailUploading}
                 className="bg-red-600 hover:bg-red-700"
               >
                 {editLoading ? (
@@ -1276,37 +1435,4 @@ export default function BundlesPage() {
                       <p className="text-xs text-zinc-400 mt-1 truncate">{item.title}</p>
                     </div>
                   ))}
-                </div>
-              </div>
-            )}
-
-            <div className="flex justify-between items-center pt-4 border-t border-zinc-800 flex-shrink-0">
-              <p className="text-sm text-zinc-400">
-                {selectedContentIds.length} item{selectedContentIds.length !== 1 ? "s" : ""} selected
-              </p>
-              <div className="flex gap-3">
-                <Button variant="outline" onClick={() => setShowAddContentModal(null)} className="border-zinc-700">
-                  Cancel
-                </Button>
-                <Button
-                  onClick={() => showAddContentModal && handleAddContentToBundle(showAddContentModal)}
-                  disabled={selectedContentIds.length === 0 || addContentLoading}
-                  className="bg-red-600 hover:bg-red-700"
-                >
-                  {addContentLoading ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Adding...
-                    </>
-                  ) : (
-                    `Add ${selectedContentIds.length} Item${selectedContentIds.length !== 1 ? "s" : ""}`
-                  )}
-                </Button>
-              </div>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
-    </div>
-  )
-}
+                </div>\
