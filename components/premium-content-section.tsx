@@ -215,8 +215,8 @@ export default function PremiumContentSection({ creatorId, creatorUsername, isOw
           >
             <Card className="bg-zinc-900/50 border-zinc-800 overflow-hidden hover:border-zinc-700 transition-all duration-300 group">
               <div className="relative">
-                {/* Bundle Thumbnail */}
-                <div className="aspect-[3/2] bg-zinc-800 overflow-hidden">
+                {/* Bundle Thumbnail - Changed to square aspect ratio */}
+                <div className="aspect-square bg-zinc-800 overflow-hidden">
                   <img
                     src={getBundleThumbnail(bundle) || "/placeholder.svg"}
                     alt={bundle.title}
@@ -269,11 +269,9 @@ export default function PremiumContentSection({ creatorId, creatorUsername, isOw
 
                   {/* Price and Purchase */}
                   <div className="flex items-center justify-between pt-1">
-                    <div className="flex items-baseline gap-1">
-                      <span className="text-xl font-thin text-emerald-400 tracking-tight">
-                        ${bundle.price.toFixed(2)}
-                      </span>
-                      <span className="text-[10px] text-zinc-500 uppercase tracking-wider">{bundle.currency}</span>
+                    <div className="flex items-center gap-1">
+                      <span className="text-2xl font-light text-white tracking-tight">${bundle.price.toFixed(2)}</span>
+                      <span className="text-xs text-zinc-400 uppercase font-medium ml-1">{bundle.currency}</span>
                     </div>
 
                     {isOwner ? (
