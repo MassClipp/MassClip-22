@@ -690,48 +690,25 @@ export default function BundlesPage() {
     try {
       console.log(`🔍 [Bundles] Removing content ${contentId} from bundle ${productBoxId}`)
 
-      // Step 1: Remove from ALL possible productBoxContent entries
-      const queries = [
-        // Query by productBoxId and uploadId
-        query(
-          collection(db, "productBoxContent"),
-          where("productBoxId", "==", productBoxId),
-          where("uploadId", "==", contentId),
-        ),
-        // Query by productBoxId and id field
-        query(
-          collection(db, "productBoxContent"),
-          where("productBoxId", "==", productBoxId),
-          where("id", "==", contentId),
-        ),
-        // Query by boxId (alternative field name)
-        query(
-          collection(db, "productBoxContent"),
-          where("boxId", "==", productBoxId),
-          where("uploadId", "==", contentId),
-        ),
-      ]
+      // Step 1: Remove from productBoxContent collection
+      const contentQuery = query(
+        collection(db, "productBoxContent"),
+        where("productBoxId", "==", productBoxId),
+        where("uploadId", "==", contentId),
+      )
+      const contentSnapshot = await getDocs(contentQuery)
 
-      let totalDeleted = 0
-      for (const contentQuery of queries) {
-        try {
-          const contentSnapshot = await getDocs(contentQuery)
-          const deletePromises = contentSnapshot.docs.map((docSnapshot) => deleteDoc(docSnapshot.ref))
-          await Promise.all(deletePromises)
-          totalDeleted += deletePromises.length
-          console.log(`✅ [Bundles] Deleted ${deletePromises.length} entries from query`)
-        } catch (queryError) {
-          console.log(`⚠️ [Bundles] Query failed, continuing...`)
-        }
-      }
+      const deletePromises = contentSnapshot.docs.map((docSnapshot) => deleteDoc(docSnapshot.ref))
+      await Promise.all(deletePromises)
 
-      console.log(`✅ [Bundles] Total productBoxContent entries deleted: ${totalDeleted}`)
+      console.log(`✅ [Bundles] Removed ${deletePromises.length} productBoxContent entries`)
 
-      // Step 2: Update bundle contentItems array in ALL possible collections
+      // Step 2: Update bundle contentItems array in both possible collections
       const currentBox = productBoxes.find((box) => box.id === productBoxId)
       if (currentBox) {
         const updatedContentItems = currentBox.contentItems.filter((id) => id !== contentId)
 
+        // Try both collections to ensure permanent removal
         const updatePromises = []
 
         // Update bundles collection
@@ -742,9 +719,8 @@ export default function BundlesPage() {
               updatedAt: new Date(),
             }),
           )
-          console.log(`✅ [Bundles] Queued bundles collection update`)
         } catch (bundlesError) {
-          console.log("⚠️ [Bundles] Bundles collection update failed")
+          console.log("⚠️ [Bundles] Bundles collection not found, skipping")
         }
 
         // Update productBoxes collection as fallback
@@ -755,40 +731,30 @@ export default function BundlesPage() {
               updatedAt: new Date(),
             }),
           )
-          console.log(`✅ [Bundles] Queued productBoxes collection update`)
         } catch (productBoxesError) {
-          console.log("⚠️ [Bundles] ProductBoxes collection update failed")
+          console.log("⚠️ [Bundles] ProductBoxes collection not found, skipping")
         }
 
         // Wait for all updates to complete
-        const results = await Promise.allSettled(updatePromises)
-        const successfulUpdates = results.filter((result) => result.status === "fulfilled").length
-        console.log(`✅ [Bundles] Successfully updated ${successfulUpdates} collections`)
+        await Promise.allSettled(updatePromises)
 
         // Step 3: Update local state immediately for instant UI feedback
         setProductBoxes((prev) =>
           prev.map((box) => (box.id === productBoxId ? { ...box, contentItems: updatedContentItems } : box)),
         )
 
-        // Step 4: Update content items state to remove from UI immediately
+        // Step 4: Update content items state to remove from UI
         setContentItems((prev) => ({
           ...prev,
           [productBoxId]: prev[productBoxId]?.filter((item) => item.id !== contentId) || [],
         }))
-
-        // Step 5: Force refresh content for this box after a short delay
-        setTimeout(() => {
-          console.log(`🔄 [Bundles] Force refreshing content for box ${productBoxId}`)
-          const updatedBox = { ...currentBox, contentItems: updatedContentItems }
-          fetchContentForBox(updatedBox)
-        }, 1000)
 
         console.log(`✅ [Bundles] Successfully removed content ${contentId} from bundle ${productBoxId}`)
       }
 
       toast({
         title: "Success",
-        description: "Content permanently removed from bundle",
+        description: "Content removed from bundle",
       })
     } catch (error) {
       console.error("❌ [Bundles] Error removing content from bundle:", error)

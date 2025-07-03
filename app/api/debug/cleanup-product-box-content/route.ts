@@ -3,42 +3,93 @@ import { db } from "@/lib/firebase-admin"
 
 export async function POST(request: NextRequest) {
   try {
-    const { productBoxId, action } = await request.json()
+    console.log("🧹 [Cleanup] Starting product box content cleanup")
 
-    if (!productBoxId) {
-      return NextResponse.json({ error: "Product box ID is required" }, { status: 400 })
+    const cleanupResults = {
+      processedBundles: 0,
+      deletedEntries: 0,
+      skippedEntries: 0,
+      errors: 0,
+      details: [] as string[],
     }
 
-    console.log(`🧹 [Cleanup] Action: ${action} for product box: ${productBoxId}`)
+    // Get all bundles
+    const bundlesSnapshot = await db.collection("bundles").get()
+    console.log(`📦 [Cleanup] Found ${bundlesSnapshot.size} bundles to process`)
 
-    const results = {
-      action,
-      productBoxId,
-      success: false,
-      details: {},
-      timestamp: new Date().toISOString(),
+    for (const bundleDoc of bundlesSnapshot.docs) {
+      const bundleData = bundleDoc.data()
+      const bundleId = bundleDoc.id
+      const validContentItems = bundleData.contentItems || []
+
+      console.log(`🔍 [Cleanup] Processing bundle: ${bundleId} with ${validContentItems.length} valid content items`)
+
+      try {
+        // Get all productBoxContent entries for this bundle
+        const contentQuery = await db.collection("productBoxContent").where("productBoxId", "==", bundleId).get()
+
+        console.log(`📄 [Cleanup] Found ${contentQuery.size} productBoxContent entries for bundle ${bundleId}`)
+
+        for (const contentDoc of contentQuery.docs) {
+          const contentData = contentDoc.data()
+          const uploadId = contentData.uploadId
+
+          // Check if this upload ID is still in the bundle's contentItems array
+          if (!validContentItems.includes(uploadId)) {
+            // This is orphaned content - delete it
+            await contentDoc.ref.delete()
+            cleanupResults.deletedEntries++
+            cleanupResults.details.push(
+              `Deleted orphaned content: ${contentData.title || "Untitled"} (ID: ${contentDoc.id}) from bundle ${bundleId}`,
+            )
+            console.log(`🗑️ [Cleanup] Deleted orphaned content: ${contentDoc.id} from bundle ${bundleId}`)
+          } else {
+            cleanupResults.skippedEntries++
+            console.log(`✅ [Cleanup] Kept valid content: ${contentDoc.id} in bundle ${bundleId}`)
+          }
+        }
+
+        cleanupResults.processedBundles++
+      } catch (bundleError) {
+        console.error(`❌ [Cleanup] Error processing bundle ${bundleId}:`, bundleError)
+        cleanupResults.errors++
+        cleanupResults.details.push(`Error processing bundle ${bundleId}: ${bundleError}`)
+      }
     }
 
-    switch (action) {
-      case "cleanup_broken_records":
-        await cleanupBrokenRecords(productBoxId, results)
-        break
+    // Also clean up productBoxContent entries that reference non-existent bundles
+    console.log("🔍 [Cleanup] Checking for orphaned productBoxContent entries...")
 
-      case "full_cleanup_and_rebuild":
-        await fullCleanupAndRebuild(productBoxId, results)
-        break
+    const allContentSnapshot = await db.collection("productBoxContent").get()
+    const bundleIds = new Set(bundlesSnapshot.docs.map((doc) => doc.id))
 
-      default:
-        return NextResponse.json({ error: "Invalid action" }, { status: 400 })
+    for (const contentDoc of allContentSnapshot.docs) {
+      const contentData = contentDoc.data()
+      const productBoxId = contentData.productBoxId
+
+      if (!bundleIds.has(productBoxId)) {
+        // This content references a non-existent bundle
+        await contentDoc.ref.delete()
+        cleanupResults.deletedEntries++
+        cleanupResults.details.push(
+          `Deleted content referencing non-existent bundle: ${contentData.title || "Untitled"} (Bundle ID: ${productBoxId})`,
+        )
+        console.log(`🗑️ [Cleanup] Deleted content referencing non-existent bundle: ${contentDoc.id}`)
+      }
     }
 
-    results.success = true
-    return NextResponse.json(results)
+    console.log("✅ [Cleanup] Cleanup completed", cleanupResults)
+
+    return NextResponse.json({
+      success: true,
+      message: "Product box content cleanup completed",
+      results: cleanupResults,
+    })
   } catch (error) {
-    console.error("Error during cleanup:", error)
+    console.error("❌ [Cleanup] Error during cleanup:", error)
     return NextResponse.json(
       {
-        error: "Failed to cleanup content",
+        error: "Failed to cleanup product box content",
         details: error instanceof Error ? error.message : "Unknown error",
       },
       { status: 500 },
@@ -46,232 +97,84 @@ export async function POST(request: NextRequest) {
   }
 }
 
-async function cleanupBrokenRecords(productBoxId: string, results: any) {
-  console.log("🗑️ Cleaning up broken records...")
+export async function GET(request: NextRequest) {
+  try {
+    console.log("🔍 [Cleanup] Analyzing product box content for cleanup")
 
-  // Get all productBoxContent records for this product box
-  const productBoxContentSnapshot = await db
-    .collection("productBoxContent")
-    .where("productBoxId", "==", productBoxId)
-    .get()
-
-  const brokenRecords = []
-  const validRecords = []
-
-  for (const doc of productBoxContentSnapshot.docs) {
-    const data = doc.data()
-
-    // Check if record is missing critical fields
-    const isBroken = !data.fileUrl || !data.mimeType || !data.fileSize || data.fileName === "Unknown" || !data.fileName
-
-    if (isBroken) {
-      brokenRecords.push(doc.id)
-    } else {
-      validRecords.push(doc.id)
+    const analysisResults = {
+      totalBundles: 0,
+      totalContentEntries: 0,
+      orphanedEntries: 0,
+      validEntries: 0,
+      bundlesWithOrphanedContent: [] as string[],
+      orphanedDetails: [] as any[],
     }
-  }
 
-  // Delete broken records in batches
-  const batch = db.batch()
-  for (const recordId of brokenRecords) {
-    const recordRef = db.collection("productBoxContent").doc(recordId)
-    batch.delete(recordRef)
-  }
+    // Get all bundles
+    const bundlesSnapshot = await db.collection("bundles").get()
+    analysisResults.totalBundles = bundlesSnapshot.size
 
-  await batch.commit()
+    const bundleIds = new Set(bundlesSnapshot.docs.map((doc) => doc.id))
 
-  results.details.cleanup = {
-    brokenRecordsDeleted: brokenRecords.length,
-    validRecordsKept: validRecords.length,
-    deletedIds: brokenRecords,
-  }
+    // Get all productBoxContent entries
+    const allContentSnapshot = await db.collection("productBoxContent").get()
+    analysisResults.totalContentEntries = allContentSnapshot.size
 
-  console.log(`✅ Deleted ${brokenRecords.length} broken records, kept ${validRecords.length} valid records`)
-}
-
-async function fullCleanupAndRebuild(productBoxId: string, results: any) {
-  console.log("🔄 Full cleanup and rebuild...")
-
-  // Step 1: Delete ALL existing productBoxContent records for this product box
-  const existingRecordsSnapshot = await db
-    .collection("productBoxContent")
-    .where("productBoxId", "==", productBoxId)
-    .get()
-
-  const deleteBatch = db.batch()
-  const deletedIds = []
-
-  for (const doc of existingRecordsSnapshot.docs) {
-    deleteBatch.delete(doc.ref)
-    deletedIds.push(doc.id)
-  }
-
-  await deleteBatch.commit()
-
-  console.log(`🗑️ Deleted ${deletedIds.length} existing records`)
-
-  // Step 2: Get product box data
-  const productBoxDoc = await db.collection("productBoxes").doc(productBoxId).get()
-  if (!productBoxDoc.exists) {
-    throw new Error("Product box not found")
-  }
-
-  const productBoxData = productBoxDoc.data()!
-
-  // Step 3: Check if contents subcollection exists and has data
-  const contentsSnapshot = await db.collection("productBoxes").doc(productBoxId).collection("contents").get()
-
-  const newRecords = []
-
-  if (!contentsSnapshot.empty) {
-    // Rebuild from contents subcollection
-    console.log("📁 Rebuilding from contents subcollection...")
-
-    const createBatch = db.batch()
-
-    for (const contentDoc of contentsSnapshot.docs) {
+    for (const contentDoc of allContentSnapshot.docs) {
       const contentData = contentDoc.data()
-      const newRecordId = `${productBoxId}_${contentDoc.id}`
-      const newRecordRef = db.collection("productBoxContent").doc(newRecordId)
+      const productBoxId = contentData.productBoxId
+      const uploadId = contentData.uploadId
 
-      const newRecord = {
-        productBoxId,
-        contentId: contentDoc.id,
-        status: "completed",
-
-        // Required fields
-        fileName: contentData.title || "Unknown",
-        originalFileName: contentData.title || "Unknown",
-        title: contentData.title || "Unknown",
-
-        // File metadata
-        fileType: contentData.mimeType || "video/mp4",
-        fileSize: contentData.size || 15728640,
-        category: contentData.category || "video",
-
-        // URLs
-        publicUrl:
-          contentData.fileUrl || "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
-        downloadUrl:
-          contentData.fileUrl || "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
-        thumbnailUrl:
-          contentData.thumbnailUrl || `/placeholder.svg?height=200&width=160&text=${contentData.category || "Video"}`,
-
-        // Timestamps
-        uploadedAt: contentData.uploadedAt || new Date(),
-        createdAt: new Date(),
-
-        // Additional metadata
-        creatorId: productBoxData.creatorId,
-        description: contentData.description,
-        duration: contentData.duration || 596,
-
-        // Video detection
-        isVideo: contentData.category === "video" || contentData.mimeType?.includes("video"),
+      // Check if bundle exists
+      if (!bundleIds.has(productBoxId)) {
+        analysisResults.orphanedEntries++
+        analysisResults.orphanedDetails.push({
+          contentId: contentDoc.id,
+          title: contentData.title || "Untitled",
+          bundleId: productBoxId,
+          reason: "Bundle does not exist",
+        })
+        continue
       }
 
-      createBatch.set(newRecordRef, newRecord)
-      newRecords.push(newRecordId)
-    }
+      // Check if upload is still in bundle's contentItems
+      const bundleDoc = bundlesSnapshot.docs.find((doc) => doc.id === productBoxId)
+      if (bundleDoc) {
+        const bundleData = bundleDoc.data()
+        const validContentItems = bundleData.contentItems || []
 
-    await createBatch.commit()
-  } else {
-    // Create sample content if no contents subcollection exists
-    console.log("🎬 Creating sample content...")
-
-    const sampleContents = [
-      {
-        title: "Premium Video 1",
-        fileUrl: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
-        thumbnailUrl: "/placeholder.svg?height=200&width=160&text=Video+1",
-        mimeType: "video/mp4",
-        size: 15728640,
-        category: "video",
-        duration: 596,
-      },
-      {
-        title: "Premium Video 2",
-        fileUrl: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4",
-        thumbnailUrl: "/placeholder.svg?height=200&width=160&text=Video+2",
-        mimeType: "video/mp4",
-        size: 13631488,
-        category: "video",
-        duration: 653,
-      },
-      {
-        title: "Premium Video 3",
-        fileUrl: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4",
-        thumbnailUrl: "/placeholder.svg?height=200&width=160&text=Video+3",
-        mimeType: "video/mp4",
-        size: 12582912,
-        category: "video",
-        duration: 15,
-      },
-    ]
-
-    const createBatch = db.batch()
-
-    for (let i = 0; i < sampleContents.length; i++) {
-      const content = sampleContents[i]
-      const contentId = `sample_${i + 1}`
-      const newRecordId = `${productBoxId}_${contentId}`
-      const newRecordRef = db.collection("productBoxContent").doc(newRecordId)
-
-      const newRecord = {
-        productBoxId,
-        contentId,
-        status: "completed",
-
-        // Required fields
-        fileName: content.title,
-        originalFileName: content.title,
-        title: content.title,
-
-        // File metadata
-        fileType: content.mimeType,
-        fileSize: content.size,
-        category: content.category,
-
-        // URLs
-        publicUrl: content.fileUrl,
-        downloadUrl: content.fileUrl,
-        thumbnailUrl: content.thumbnailUrl,
-
-        // Timestamps
-        uploadedAt: new Date(),
-        createdAt: new Date(),
-
-        // Additional metadata
-        creatorId: productBoxData.creatorId,
-        duration: content.duration,
-
-        // Video detection
-        isVideo: true,
+        if (!validContentItems.includes(uploadId)) {
+          analysisResults.orphanedEntries++
+          if (!analysisResults.bundlesWithOrphanedContent.includes(productBoxId)) {
+            analysisResults.bundlesWithOrphanedContent.push(productBoxId)
+          }
+          analysisResults.orphanedDetails.push({
+            contentId: contentDoc.id,
+            title: contentData.title || "Untitled",
+            bundleId: productBoxId,
+            uploadId: uploadId,
+            reason: "Upload not in bundle's contentItems array",
+          })
+        } else {
+          analysisResults.validEntries++
+        }
       }
-
-      createBatch.set(newRecordRef, newRecord)
-      newRecords.push(newRecordId)
-
-      // Also create in contents subcollection
-      const contentsRef = db.collection("productBoxes").doc(productBoxId).collection("contents").doc(contentId)
-      createBatch.set(contentsRef, {
-        ...content,
-        createdAt: new Date(),
-        uploadedAt: new Date(),
-      })
     }
 
-    await createBatch.commit()
-  }
+    console.log("📊 [Cleanup] Analysis completed", analysisResults)
 
-  results.details.rebuild = {
-    deletedRecords: deletedIds.length,
-    createdRecords: newRecords.length,
-    newRecordIds: newRecords,
-    source: contentsSnapshot.empty ? "sample_content" : "contents_subcollection",
+    return NextResponse.json({
+      success: true,
+      analysis: analysisResults,
+    })
+  } catch (error) {
+    console.error("❌ [Cleanup] Error during analysis:", error)
+    return NextResponse.json(
+      {
+        error: "Failed to analyze product box content",
+        details: error instanceof Error ? error.message : "Unknown error",
+      },
+      { status: 500 },
+    )
   }
-
-  console.log(
-    `✅ Rebuilt ${newRecords.length} records from ${contentsSnapshot.empty ? "sample content" : "contents subcollection"}`,
-  )
 }
