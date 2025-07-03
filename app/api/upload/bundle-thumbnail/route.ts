@@ -1,9 +1,11 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { verifyIdToken } from "@/lib/auth-utils"
 import { db } from "@/lib/firebase-admin"
-import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3"
+import { S3Client, PutObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3"
+import { v4 as uuidv4 } from "uuid"
 
-const s3Client = new S3Client({
+// Configure Cloudflare R2
+const r2Client = new S3Client({
   region: "auto",
   endpoint: process.env.CLOUDFLARE_R2_ENDPOINT,
   credentials: {
@@ -12,164 +14,120 @@ const s3Client = new S3Client({
   },
 })
 
+const BUCKET_NAME = process.env.CLOUDFLARE_R2_BUCKET_NAME!
+const PUBLIC_URL = process.env.CLOUDFLARE_R2_PUBLIC_URL!
+
 export async function POST(request: NextRequest) {
   try {
-    console.log("🖼️ [Bundle Thumbnail] Starting upload process")
-
     // Verify authentication
     const decodedToken = await verifyIdToken(request)
     if (!decodedToken) {
-      console.error("❌ [Bundle Thumbnail] Authentication failed")
-      return NextResponse.json(
-        {
-          error: "Authentication required",
-          code: "UNAUTHORIZED",
-        },
-        { status: 401 },
-      )
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const userId = decodedToken.uid
-    console.log(`✅ [Bundle Thumbnail] User authenticated: ${userId}`)
-
-    // Parse form data
     const formData = await request.formData()
     const file = formData.get("file") as File
     const bundleId = formData.get("bundleId") as string
 
     if (!file) {
-      console.error("❌ [Bundle Thumbnail] No file provided")
-      return NextResponse.json(
-        {
-          error: "No file provided",
-          code: "NO_FILE",
-        },
-        { status: 400 },
-      )
+      return NextResponse.json({ error: "No file provided" }, { status: 400 })
     }
 
     if (!bundleId) {
-      console.error("❌ [Bundle Thumbnail] No bundle ID provided")
-      return NextResponse.json(
-        {
-          error: "Bundle ID is required",
-          code: "NO_BUNDLE_ID",
-        },
-        { status: 400 },
-      )
+      return NextResponse.json({ error: "Bundle ID is required" }, { status: 400 })
+    }
+
+    // Verify bundle ownership
+    const bundleDoc = await db.collection("bundles").doc(bundleId).get()
+    if (!bundleDoc.exists) {
+      // Try productBoxes collection as fallback
+      const productBoxDoc = await db.collection("productBoxes").doc(bundleId).get()
+      if (!productBoxDoc.exists) {
+        return NextResponse.json({ error: "Bundle not found" }, { status: 404 })
+      }
+
+      const productBoxData = productBoxDoc.data()
+      if (productBoxData?.creatorId !== decodedToken.uid) {
+        return NextResponse.json({ error: "Not authorized to modify this bundle" }, { status: 403 })
+      }
+    } else {
+      const bundleData = bundleDoc.data()
+      if (bundleData?.creatorId !== decodedToken.uid) {
+        return NextResponse.json({ error: "Not authorized to modify this bundle" }, { status: 403 })
+      }
     }
 
     // Validate file type
     const allowedTypes = ["image/jpeg", "image/jpg", "image/png", "image/webp"]
     if (!allowedTypes.includes(file.type)) {
-      console.error(`❌ [Bundle Thumbnail] Invalid file type: ${file.type}`)
       return NextResponse.json(
-        {
-          error: "Invalid file type. Only JPEG, PNG, and WebP are allowed",
-          code: "INVALID_FILE_TYPE",
-        },
+        { error: "Invalid file type. Only JPEG, PNG, and WebP images are allowed." },
         { status: 400 },
       )
     }
 
-    // Validate file size (max 5MB)
+    // Validate file size (5MB max)
     const maxSize = 5 * 1024 * 1024 // 5MB
     if (file.size > maxSize) {
-      console.error(`❌ [Bundle Thumbnail] File too large: ${file.size} bytes`)
-      return NextResponse.json(
-        {
-          error: "File too large. Maximum size is 5MB",
-          code: "FILE_TOO_LARGE",
-        },
-        { status: 400 },
-      )
+      return NextResponse.json({ error: "File too large. Maximum size is 5MB." }, { status: 400 })
     }
 
-    // Verify bundle ownership
-    let bundleDoc = await db.collection("bundles").doc(bundleId).get()
-    if (!bundleDoc.exists) {
-      bundleDoc = await db.collection("productBoxes").doc(bundleId).get()
-    }
-
-    if (!bundleDoc.exists) {
-      console.error(`❌ [Bundle Thumbnail] Bundle not found: ${bundleId}`)
-      return NextResponse.json(
-        {
-          error: "Bundle not found",
-          code: "BUNDLE_NOT_FOUND",
-        },
-        { status: 404 },
-      )
-    }
-
-    const bundleData = bundleDoc.data()
-    if (bundleData?.creatorId !== userId) {
-      console.error(`❌ [Bundle Thumbnail] User ${userId} not authorized for bundle ${bundleId}`)
-      return NextResponse.json(
-        {
-          error: "Not authorized to modify this bundle",
-          code: "NOT_AUTHORIZED",
-        },
-        { status: 403 },
-      )
-    }
+    console.log(`📸 [Thumbnail Upload] Uploading thumbnail for bundle: ${bundleId}`)
 
     // Generate unique filename
-    const timestamp = Date.now()
-    const fileExtension = file.name.split(".").pop()
-    const fileName = `bundle-thumbnails/${bundleId}/${timestamp}.${fileExtension}`
-
-    console.log(`📤 [Bundle Thumbnail] Uploading to R2: ${fileName}`)
+    const fileExtension = file.name.split(".").pop() || "jpg"
+    const fileName = `bundle-thumbnails/${bundleId}/${uuidv4()}.${fileExtension}`
 
     // Convert file to buffer
     const arrayBuffer = await file.arrayBuffer()
     const buffer = Buffer.from(arrayBuffer)
 
-    // Upload to Cloudflare R2
+    // Upload to R2
     const uploadCommand = new PutObjectCommand({
-      Bucket: process.env.CLOUDFLARE_R2_BUCKET_NAME!,
+      Bucket: BUCKET_NAME,
       Key: fileName,
       Body: buffer,
       ContentType: file.type,
-      ContentLength: buffer.length,
+      ContentLength: file.size,
       Metadata: {
         bundleId,
-        uploadedBy: userId,
+        creatorId: decodedToken.uid,
         originalName: file.name,
       },
     })
 
-    await s3Client.send(uploadCommand)
+    await r2Client.send(uploadCommand)
 
-    // Generate public URL
-    const publicUrl = `${process.env.CLOUDFLARE_R2_PUBLIC_URL}/${fileName}`
-
-    console.log(`✅ [Bundle Thumbnail] Upload successful: ${publicUrl}`)
+    // Construct public URL
+    const publicUrl = `${PUBLIC_URL}/${fileName}`
 
     // Update bundle with thumbnail URL
-    await bundleDoc.ref.update({
+    const updateData = {
+      coverImage: publicUrl,
       customPreviewThumbnail: publicUrl,
-      thumbnailUpdatedAt: new Date(),
       updatedAt: new Date(),
-    })
+    }
 
-    console.log(`✅ [Bundle Thumbnail] Bundle updated with thumbnail URL`)
+    if (bundleDoc.exists) {
+      await bundleDoc.ref.update(updateData)
+    } else {
+      await db.collection("productBoxes").doc(bundleId).update(updateData)
+    }
+
+    console.log(`✅ [Thumbnail Upload] Thumbnail uploaded successfully: ${publicUrl}`)
 
     return NextResponse.json({
       success: true,
       url: publicUrl,
       fileName,
-      fileSize: file.size,
-      fileType: file.type,
-      bundleId,
+      message: "Thumbnail uploaded successfully",
     })
   } catch (error) {
-    console.error("❌ [Bundle Thumbnail] Upload error:", error)
+    console.error("❌ [Thumbnail Upload] Error:", error)
     return NextResponse.json(
       {
         error: "Failed to upload thumbnail",
-        code: "UPLOAD_FAILED",
-        details: error instanceof Error ? error.message : "Unknown error",
+        message: error instanceof Error ? error.message : "Unknown error",
       },
       { status: 500 },
     )
@@ -178,82 +136,74 @@ export async function POST(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   try {
-    console.log("🗑️ [Bundle Thumbnail] Starting delete process")
-
     // Verify authentication
     const decodedToken = await verifyIdToken(request)
     if (!decodedToken) {
-      return NextResponse.json(
-        {
-          error: "Authentication required",
-          code: "UNAUTHORIZED",
-        },
-        { status: 401 },
-      )
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const userId = decodedToken.uid
     const { searchParams } = new URL(request.url)
     const bundleId = searchParams.get("bundleId")
+    const fileName = searchParams.get("fileName")
 
-    if (!bundleId) {
-      return NextResponse.json(
-        {
-          error: "Bundle ID is required",
-          code: "NO_BUNDLE_ID",
-        },
-        { status: 400 },
-      )
+    if (!bundleId || !fileName) {
+      return NextResponse.json({ error: "Bundle ID and file name are required" }, { status: 400 })
     }
 
     // Verify bundle ownership
-    let bundleDoc = await db.collection("bundles").doc(bundleId).get()
+    const bundleDoc = await db.collection("bundles").doc(bundleId).get()
     if (!bundleDoc.exists) {
-      bundleDoc = await db.collection("productBoxes").doc(bundleId).get()
+      const productBoxDoc = await db.collection("productBoxes").doc(bundleId).get()
+      if (!productBoxDoc.exists) {
+        return NextResponse.json({ error: "Bundle not found" }, { status: 404 })
+      }
+
+      const productBoxData = productBoxDoc.data()
+      if (productBoxData?.creatorId !== decodedToken.uid) {
+        return NextResponse.json({ error: "Not authorized to modify this bundle" }, { status: 403 })
+      }
+    } else {
+      const bundleData = bundleDoc.data()
+      if (bundleData?.creatorId !== decodedToken.uid) {
+        return NextResponse.json({ error: "Not authorized to modify this bundle" }, { status: 403 })
+      }
     }
 
-    if (!bundleDoc.exists) {
-      return NextResponse.json(
-        {
-          error: "Bundle not found",
-          code: "BUNDLE_NOT_FOUND",
-        },
-        { status: 404 },
-      )
-    }
+    console.log(`🗑️ [Thumbnail Delete] Deleting thumbnail: ${fileName}`)
 
-    const bundleData = bundleDoc.data()
-    if (bundleData?.creatorId !== userId) {
-      return NextResponse.json(
-        {
-          error: "Not authorized to modify this bundle",
-          code: "NOT_AUTHORIZED",
-        },
-        { status: 403 },
-      )
-    }
-
-    // Remove thumbnail URL from bundle
-    await bundleDoc.ref.update({
-      customPreviewThumbnail: null,
-      thumbnailUpdatedAt: new Date(),
-      updatedAt: new Date(),
+    // Delete from R2
+    const deleteCommand = new DeleteObjectCommand({
+      Bucket: BUCKET_NAME,
+      Key: fileName,
     })
 
-    console.log(`✅ [Bundle Thumbnail] Thumbnail removed from bundle: ${bundleId}`)
+    await r2Client.send(deleteCommand)
+
+    // Update bundle to remove thumbnail URL
+    const updateData = {
+      coverImage: null,
+      customPreviewThumbnail: null,
+      updatedAt: new Date(),
+    }
+
+    if (bundleDoc.exists) {
+      await bundleDoc.ref.update(updateData)
+    } else {
+      await db.collection("productBoxes").doc(bundleId).update(updateData)
+    }
+
+    console.log(`✅ [Thumbnail Delete] Thumbnail deleted successfully`)
 
     return NextResponse.json({
       success: true,
-      message: "Thumbnail removed successfully",
-      bundleId,
+      message: "Thumbnail deleted successfully",
     })
   } catch (error) {
-    console.error("❌ [Bundle Thumbnail] Delete error:", error)
+    console.error("❌ [Thumbnail Delete] Error:", error)
     return NextResponse.json(
       {
-        error: "Failed to remove thumbnail",
-        code: "DELETE_FAILED",
-        details: error instanceof Error ? error.message : "Unknown error",
+        error: "Failed to delete thumbnail",
+        message: error instanceof Error ? error.message : "Unknown error",
       },
       { status: 500 },
     )

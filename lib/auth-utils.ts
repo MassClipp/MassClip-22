@@ -1,117 +1,226 @@
 import type { NextRequest } from "next/server"
 import { auth } from "@/lib/firebase-admin"
-import type { DecodedIdToken } from "firebase-admin/auth"
+import { db } from "@/lib/firebase-admin"
 
-export async function verifyIdToken(request: NextRequest): Promise<DecodedIdToken | null> {
+export interface DecodedToken {
+  uid: string
+  email?: string
+  email_verified?: boolean
+  name?: string
+  picture?: string
+  iss: string
+  aud: string
+  auth_time: number
+  user_id: string
+  sub: string
+  iat: number
+  exp: number
+  firebase: {
+    identities: Record<string, any>
+    sign_in_provider: string
+  }
+}
+
+/**
+ * Verify Firebase ID token from request headers
+ */
+export async function verifyIdToken(request: NextRequest): Promise<DecodedToken | null> {
   try {
     const authHeader = request.headers.get("authorization")
-
-    if (!authHeader) {
-      console.error("❌ [Auth Utils] No authorization header found")
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      console.log("❌ [Auth] No valid authorization header found")
       return null
     }
 
-    if (!authHeader.startsWith("Bearer ")) {
-      console.error("❌ [Auth Utils] Invalid authorization header format")
+    const idToken = authHeader.split("Bearer ")[1]
+    if (!idToken) {
+      console.log("❌ [Auth] No ID token found in authorization header")
       return null
     }
 
-    const token = authHeader.split("Bearer ")[1]
+    // Verify the ID token
+    const decodedToken = await auth.verifyIdToken(idToken)
+    console.log(`✅ [Auth] Token verified for user: ${decodedToken.uid}`)
 
-    if (!token) {
-      console.error("❌ [Auth Utils] No token found in authorization header")
-      return null
-    }
-
-    console.log("🔍 [Auth Utils] Verifying Firebase ID token...")
-
-    const decodedToken = await auth.verifyIdToken(token)
-
-    console.log(`✅ [Auth Utils] Token verified for user: ${decodedToken.uid}`)
-
-    return decodedToken
+    return decodedToken as DecodedToken
   } catch (error) {
-    console.error("❌ [Auth Utils] Token verification failed:", error)
-
-    if (error instanceof Error) {
-      // Log specific Firebase Auth errors
-      if (error.message.includes("Firebase ID token has expired")) {
-        console.error("❌ [Auth Utils] Token expired")
-      } else if (error.message.includes("Firebase ID token has invalid signature")) {
-        console.error("❌ [Auth Utils] Invalid token signature")
-      } else if (error.message.includes("Firebase ID token has no 'kid' claim")) {
-        console.error("❌ [Auth Utils] Invalid token format")
-      }
-    }
-
+    console.error("❌ [Auth] Token verification failed:", error)
     return null
   }
 }
 
-export async function getAuthenticatedUser(request: NextRequest) {
-  const decodedToken = await verifyIdToken(request)
-
-  if (!decodedToken) {
-    return {
-      success: false,
-      error: "Authentication required",
-      status: 401,
+/**
+ * Get user data from Firestore
+ */
+export async function getUserData(uid: string) {
+  try {
+    const userDoc = await db.collection("users").doc(uid).get()
+    if (!userDoc.exists) {
+      console.log(`❌ [Auth] User document not found: ${uid}`)
+      return null
     }
-  }
 
-  return {
-    success: true,
-    user: decodedToken,
-    userId: decodedToken.uid,
-  }
-}
+    const userData = userDoc.data()
+    console.log(`✅ [Auth] User data retrieved: ${uid}`)
 
-export function createAuthError(message = "Authentication required", status = 401) {
-  return {
-    error: message,
-    code: "UNAUTHORIZED",
-    status,
+    return {
+      id: userDoc.id,
+      ...userData,
+    }
+  } catch (error) {
+    console.error(`❌ [Auth] Error getting user data for ${uid}:`, error)
+    return null
   }
 }
 
-export function createForbiddenError(message = "Access denied") {
-  return {
-    error: message,
-    code: "FORBIDDEN",
-    status: 403,
-  }
-}
-
-// Helper to extract user ID from request headers
-export async function extractUserId(request: NextRequest): Promise<string | null> {
-  const decodedToken = await verifyIdToken(request)
-  return decodedToken?.uid || null
-}
-
-// Helper to check if user owns a resource
+/**
+ * Check if user owns a resource
+ */
 export async function verifyResourceOwnership(
-  request: NextRequest,
-  resourceCreatorId: string,
-): Promise<{ authorized: boolean; userId?: string; error?: string }> {
-  const decodedToken = await verifyIdToken(request)
-
-  if (!decodedToken) {
-    return {
-      authorized: false,
-      error: "Authentication required",
+  uid: string,
+  collection: string,
+  resourceId: string,
+  ownerField = "creatorId",
+): Promise<boolean> {
+  try {
+    const resourceDoc = await db.collection(collection).doc(resourceId).get()
+    if (!resourceDoc.exists) {
+      console.log(`❌ [Auth] Resource not found: ${collection}/${resourceId}`)
+      return false
     }
-  }
 
-  if (decodedToken.uid !== resourceCreatorId) {
-    return {
-      authorized: false,
-      userId: decodedToken.uid,
-      error: "Not authorized to access this resource",
+    const resourceData = resourceDoc.data()
+    const isOwner = resourceData?.[ownerField] === uid
+
+    console.log(
+      `${isOwner ? "✅" : "❌"} [Auth] Ownership check: ${uid} ${isOwner ? "owns" : "does not own"} ${collection}/${resourceId}`,
+    )
+
+    return isOwner
+  } catch (error) {
+    console.error(`❌ [Auth] Error checking ownership for ${collection}/${resourceId}:`, error)
+    return false
+  }
+}
+
+/**
+ * Verify user has required permissions
+ */
+export async function verifyUserPermissions(uid: string, requiredPermissions: string[]): Promise<boolean> {
+  try {
+    const userData = await getUserData(uid)
+    if (!userData) {
+      return false
     }
-  }
 
-  return {
-    authorized: true,
-    userId: decodedToken.uid,
+    const userPermissions = userData.permissions || []
+    const hasAllPermissions = requiredPermissions.every((permission) => userPermissions.includes(permission))
+
+    console.log(
+      `${hasAllPermissions ? "✅" : "❌"} [Auth] Permission check: ${uid} ${hasAllPermissions ? "has" : "lacks"} required permissions`,
+    )
+
+    return hasAllPermissions
+  } catch (error) {
+    console.error(`❌ [Auth] Error checking permissions for ${uid}:`, error)
+    return false
+  }
+}
+
+/**
+ * Check if user is admin
+ */
+export async function isAdmin(uid: string): Promise<boolean> {
+  try {
+    const userData = await getUserData(uid)
+    const isUserAdmin = userData?.role === "admin" || userData?.isAdmin === true
+
+    console.log(`${isUserAdmin ? "✅" : "❌"} [Auth] Admin check: ${uid} ${isUserAdmin ? "is" : "is not"} admin`)
+
+    return isUserAdmin
+  } catch (error) {
+    console.error(`❌ [Auth] Error checking admin status for ${uid}:`, error)
+    return false
+  }
+}
+
+/**
+ * Verify user has active subscription
+ */
+export async function verifyActiveSubscription(uid: string): Promise<boolean> {
+  try {
+    const userData = await getUserData(uid)
+    if (!userData) {
+      return false
+    }
+
+    const hasActiveSubscription =
+      userData.subscriptionStatus === "active" || userData.plan === "premium" || userData.plan === "creator_pro"
+
+    console.log(
+      `${hasActiveSubscription ? "✅" : "❌"} [Auth] Subscription check: ${uid} ${hasActiveSubscription ? "has" : "lacks"} active subscription`,
+    )
+
+    return hasActiveSubscription
+  } catch (error) {
+    console.error(`❌ [Auth] Error checking subscription for ${uid}:`, error)
+    return false
+  }
+}
+
+/**
+ * Create or update user session
+ */
+export async function createUserSession(uid: string, sessionData: Record<string, any>) {
+  try {
+    await db
+      .collection("userSessions")
+      .doc(uid)
+      .set(
+        {
+          ...sessionData,
+          lastActive: new Date(),
+          createdAt: new Date(),
+        },
+        { merge: true },
+      )
+
+    console.log(`✅ [Auth] Session created/updated for user: ${uid}`)
+  } catch (error) {
+    console.error(`❌ [Auth] Error creating session for ${uid}:`, error)
+    throw error
+  }
+}
+
+/**
+ * Get user session
+ */
+export async function getUserSession(uid: string) {
+  try {
+    const sessionDoc = await db.collection("userSessions").doc(uid).get()
+    if (!sessionDoc.exists) {
+      return null
+    }
+
+    return {
+      id: sessionDoc.id,
+      ...sessionDoc.data(),
+    }
+  } catch (error) {
+    console.error(`❌ [Auth] Error getting session for ${uid}:`, error)
+    return null
+  }
+}
+
+/**
+ * Delete user session
+ */
+export async function deleteUserSession(uid: string) {
+  try {
+    await db.collection("userSessions").doc(uid).delete()
+    console.log(`✅ [Auth] Session deleted for user: ${uid}`)
+  } catch (error) {
+    console.error(`❌ [Auth] Error deleting session for ${uid}:`, error)
+    throw error
   }
 }
