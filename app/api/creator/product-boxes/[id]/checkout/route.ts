@@ -183,26 +183,31 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       creatorAmount: priceInCents - platformFee,
     })
 
-    // Create or get Stripe price
+    // Create or get Stripe price using creator's connected account
     let stripePriceId = productBox.priceId
 
     if (!stripePriceId) {
       console.log(`🔄 [Checkout] Creating Stripe product and price for bundle: ${params.id}`)
 
       try {
-        // Create Stripe product if it doesn't exist
+        // Create Stripe product if it doesn't exist - using creator's connected account
         let stripeProductId = productBox.productId
 
         if (!stripeProductId) {
-          const stripeProduct = await stripe.products.create({
-            name: productBox.title,
-            description: productBox.description || `Premium content by ${creatorData.username || "Creator"}`,
-            images: productBox.coverImage ? [productBox.coverImage] : [],
-            metadata: {
-              bundleId: params.id,
-              creatorId: productBox.creatorId,
+          const stripeProduct = await stripe.products.create(
+            {
+              name: productBox.title,
+              description: productBox.description || `Premium content by ${creatorData.username || "Creator"}`,
+              images: productBox.coverImage ? [productBox.coverImage] : [],
+              metadata: {
+                bundleId: params.id,
+                creatorId: productBox.creatorId,
+              },
             },
-          })
+            {
+              stripeAccount: creatorData.stripeAccountId, // Use creator's connected account
+            },
+          )
           stripeProductId = stripeProduct.id
 
           // Update bundle with Stripe product ID
@@ -211,19 +216,26 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
             updatedAt: new Date(),
           })
 
-          console.log(`✅ [Checkout] Created Stripe product: ${stripeProductId}`)
+          console.log(
+            `✅ [Checkout] Created Stripe product: ${stripeProductId} on account: ${creatorData.stripeAccountId}`,
+          )
         }
 
-        // Create Stripe price
-        const stripePrice = await stripe.prices.create({
-          unit_amount: priceInCents,
-          currency: "usd",
-          product: stripeProductId,
-          metadata: {
-            bundleId: params.id,
-            creatorId: productBox.creatorId,
+        // Create Stripe price - using creator's connected account
+        const stripePrice = await stripe.prices.create(
+          {
+            unit_amount: priceInCents,
+            currency: "usd",
+            product: stripeProductId,
+            metadata: {
+              bundleId: params.id,
+              creatorId: productBox.creatorId,
+            },
           },
-        })
+          {
+            stripeAccount: creatorData.stripeAccountId, // Use creator's connected account
+          },
+        )
         stripePriceId = stripePrice.id
 
         // Update bundle with Stripe price ID
@@ -232,7 +244,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
           updatedAt: new Date(),
         })
 
-        console.log(`✅ [Checkout] Created Stripe price: ${stripePriceId}`)
+        console.log(`✅ [Checkout] Created Stripe price: ${stripePriceId} on account: ${creatorData.stripeAccountId}`)
       } catch (stripeError) {
         console.error("❌ [Checkout] Failed to create Stripe product/price:", stripeError)
         return new NextResponse("Failed to create payment configuration", { status: 500 })

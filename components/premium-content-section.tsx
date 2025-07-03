@@ -291,7 +291,7 @@ export default function PremiumContentSection({
                     ) : (
                       <Button
                         size="sm"
-                        className="bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700 text-white border-0 text-xs px-3 py-1.5 h-auto shadow-lg shadow-yellow-500/20"
+                        className="bg-zinc-800 hover:bg-zinc-700 text-white border border-zinc-700 text-xs px-3 py-1.5 h-auto shadow-sm"
                         onClick={() => handlePurchase(bundle)}
                         disabled={purchaseLoading === bundle.id}
                       >
