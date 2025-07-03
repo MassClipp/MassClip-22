@@ -1,7 +1,6 @@
 "use client"
 
 import type React from "react"
-
 import { useState, useEffect, useRef } from "react"
 import { useAuth } from "@/contexts/auth-context"
 import { Card, CardContent } from "@/components/ui/card"
@@ -90,7 +89,7 @@ const itemVariants = {
   },
 }
 
-export default function MyPurchasesPage() {
+export default function FullScreenMyPurchasesPage() {
   const { user } = useAuth()
   const { toast } = useToast()
   const [purchases, setPurchases] = useState<UnifiedPurchase[]>([])
@@ -251,7 +250,7 @@ export default function MyPurchasesPage() {
     return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + " " + sizes[i]
   }
 
-  // Update the ContentCard component to show video player directly
+  // ContentCard component
   const ContentCard = ({ content }: { content: UnifiedPurchaseItem }) => {
     const [isHovered, setIsHovered] = useState(false)
     const [isFavorite, setIsFavorite] = useState(false)
@@ -314,7 +313,7 @@ export default function MyPurchasesPage() {
           onMouseEnter={() => setIsHovered(true)}
           onMouseLeave={() => setIsHovered(false)}
         >
-          {/* Direct Video Player - No Thumbnails */}
+          {/* Direct Video Player */}
           {content.contentType === "video" ? (
             <>
               <video
@@ -392,7 +391,7 @@ export default function MyPurchasesPage() {
     )
   }
 
-  // Update the PurchaseCard component with better grid utilization
+  // PurchaseCard component
   const PurchaseCard = ({ purchase }: { purchase: UnifiedPurchase }) => {
     const isExpanded = expandedPurchases[purchase.id] || false
     const displayItems = isExpanded ? purchase.items : purchase.items.slice(0, 12)
@@ -443,7 +442,7 @@ export default function MyPurchasesPage() {
             </div>
           </div>
 
-          {/* Content Items - Updated grid to fill more space */}
+          {/* Content Items */}
           {purchase.items && purchase.items.length > 0 && (
             <div className="p-6">
               <div className="flex justify-between items-center mb-4">
@@ -469,7 +468,7 @@ export default function MyPurchasesPage() {
                   </Button>
                 )}
               </div>
-              {/* Enhanced grid with more columns to fill the space */}
+              {/* Full width grid */}
               <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 xl:grid-cols-10 2xl:grid-cols-12 gap-3">
                 {displayItems.map((content) => (
                   <ContentCard key={content.id} content={content} />
@@ -496,7 +495,7 @@ export default function MyPurchasesPage() {
 
   if (loading && purchases.length === 0) {
     return (
-      <div className="min-h-screen bg-black flex items-center justify-center">
+      <div className="fixed inset-0 bg-black flex items-center justify-center">
         <div className="flex items-center gap-3">
           <div className="animate-spin rounded-full h-6 w-6 border-2 border-white/20 border-t-white"></div>
           <span className="text-zinc-400">Loading purchases...</span>
@@ -506,13 +505,8 @@ export default function MyPurchasesPage() {
   }
 
   return (
-    <div className="min-h-screen bg-black w-full">
-      <motion.div
-        className="w-full px-4 sm:px-6 lg:px-8 py-6"
-        variants={containerVariants}
-        initial="hidden"
-        animate="visible"
-      >
+    <div className="fixed inset-0 bg-black overflow-auto">
+      <motion.div className="min-h-full w-full p-6" variants={containerVariants} initial="hidden" animate="visible">
         {/* Header */}
         <motion.div variants={itemVariants} className="mb-8">
           <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
