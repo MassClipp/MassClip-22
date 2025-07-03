@@ -205,7 +205,7 @@ export default function PremiumContentSection({ creatorId, creatorUsername, isOw
 
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
         {bundles.map((bundle, index) => (
           <motion.div
             key={bundle.id}
@@ -216,7 +216,7 @@ export default function PremiumContentSection({ creatorId, creatorUsername, isOw
             <Card className="bg-zinc-900/50 border-zinc-800 overflow-hidden hover:border-zinc-700 transition-all duration-300 group">
               <div className="relative">
                 {/* Bundle Thumbnail */}
-                <div className="aspect-square bg-zinc-800 overflow-hidden">
+                <div className="aspect-[3/2] bg-zinc-800 overflow-hidden">
                   <img
                     src={getBundleThumbnail(bundle) || "/placeholder.svg"}
                     alt={bundle.title}
@@ -254,7 +254,7 @@ export default function PremiumContentSection({ creatorId, creatorUsername, isOw
                 </div>
               </div>
 
-              <CardContent className="p-4">
+              <CardContent className="p-4 bg-gradient-to-b from-zinc-900/80 to-zinc-900/95">
                 <div className="space-y-3">
                   {/* Title and Description */}
                   <div>
