@@ -31,3 +31,6 @@ export function isPublicRoute(pathname: string): boolean {
 
   return publicRoutes.some((route) => pathname === route || pathname.startsWith(`${route}/`))
 }
+
+// Re-export Firebase Admin token verifier for convenience
+export { verifyIdToken } from "./firebase-admin"
