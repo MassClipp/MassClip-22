@@ -1243,7 +1243,7 @@ export default function BundlesPage() {
             {/* Thumbnail Upload Section */}
             <div className="space-y-3">
               <Label>Bundle Thumbnail</Label>
-              
+
               {/* Current Thumbnail Preview */}
               {editForm.coverImage && (
                 <div className="relative">
@@ -1435,4 +1435,35 @@ export default function BundlesPage() {
                       <p className="text-xs text-zinc-400 mt-1 truncate">{item.title}</p>
                     </div>
                   ))}
-                </div>\
+                </div>
+              </div>
+            )}
+
+            <div className="flex justify-between items-center pt-4 border-t border-zinc-800 flex-shrink-0">
+              <p className="text-sm text-zinc-400">{selectedContentIds.length} item(s) selected</p>
+              <div className="flex gap-3">
+                <Button variant="outline" onClick={() => setShowAddContentModal(null)} className="border-zinc-700">
+                  Cancel
+                </Button>
+                <Button
+                  onClick={() => showAddContentModal && handleAddContentToBundle(showAddContentModal)}
+                  disabled={selectedContentIds.length === 0 || addContentLoading}
+                  className="bg-red-600 hover:bg-red-700"
+                >
+                  {addContentLoading ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Adding...
+                    </>
+                  ) : (
+                    `Add ${selectedContentIds.length} Item${selectedContentIds.length !== 1 ? "s" : ""}`
+                  )}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+    </div>
+  )
+}

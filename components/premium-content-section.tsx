@@ -1,52 +1,52 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { motion, AnimatePresence } from "framer-motion"
-import { Play, Plus, ShoppingCart, Loader2, AlertCircle, Package } from "lucide-react"
+import { motion } from "framer-motion"
+import { Package, Loader2, AlertCircle, ShoppingCart } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
 import { Card, CardContent } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
 import { useAuth } from "@/contexts/auth-context"
-import { useToast } from "@/components/ui/use-toast"
+import { useToast } from "@/hooks/use-toast"
 
-interface ProductBox {
+interface Bundle {
   id: string
   title: string
   description: string
   price: number
-  currency?: string
+  currency: string
   coverImage?: string
-  coverImageUrl?: string
   customPreviewThumbnail?: string
+  coverImageUrl?: string
   active: boolean
-  contentItems?: string[]
+  contentItems: string[]
   createdAt?: any
   updatedAt?: any
+  productId?: string
+  priceId?: string
 }
 
 interface PremiumContentSectionProps {
   creatorId: string
-  creatorUsername: string
-  isOwner: boolean
+  creatorUsername?: string
 }
 
-export default function PremiumContentSection({ creatorId, creatorUsername, isOwner }: PremiumContentSectionProps) {
+export default function PremiumContentSection({ creatorId, creatorUsername }: PremiumContentSectionProps) {
   const { user } = useAuth()
   const { toast } = useToast()
-  const [productBoxes, setProductBoxes] = useState<ProductBox[]>([])
+  const [bundles, setBundles] = useState<Bundle[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [purchaseLoading, setPurchaseLoading] = useState<string | null>(null)
 
-  // Fetch product boxes for this creator
-  const fetchProductBoxes = async () => {
+  // Fetch creator's bundles
+  const fetchCreatorBundles = async () => {
     try {
       setLoading(true)
       setError(null)
 
-      console.log("🔍 [Premium Content] Fetching product boxes for creator:", creatorId)
+      console.log(`🔍 [Premium Content] Fetching bundles for creator: ${creatorId}`)
 
-      // Use the updated API endpoint
       const response = await fetch(`/api/creator/${creatorId}/product-boxes`, {
         method: "GET",
         headers: {
@@ -55,25 +55,38 @@ export default function PremiumContentSection({ creatorId, creatorUsername, isOw
       })
 
       if (!response.ok) {
-        throw new Error(`Failed to fetch product boxes: ${response.status}`)
+        if (response.status === 404) {
+          setBundles([])
+          return
+        }
+        throw new Error(`Failed to fetch bundles: ${response.status}`)
       }
 
       const data = await response.json()
-      console.log("📦 [Premium Content] Product boxes response:", data)
+      const creatorBundles = data.productBoxes || data.bundles || []
 
-      const boxes = data.productBoxes || []
+      // Filter only active bundles and convert to Bundle format
+      const activeBundles = creatorBundles
+        .filter((bundle: any) => bundle.active !== false)
+        .map((bundle: any) => ({
+          id: bundle.id,
+          title: bundle.title,
+          description: bundle.description || "",
+          price: bundle.price || 0,
+          currency: bundle.currency || "usd",
+          coverImage: bundle.coverImage,
+          customPreviewThumbnail: bundle.customPreviewThumbnail,
+          coverImageUrl: bundle.coverImageUrl,
+          active: bundle.active !== false,
+          contentItems: bundle.contentItems || [],
+          createdAt: bundle.createdAt,
+          updatedAt: bundle.updatedAt,
+          productId: bundle.productId,
+          priceId: bundle.priceId,
+        }))
 
-      // Filter for active bundles only and sort by creation date
-      const activeBoxes = boxes
-        .filter((box: ProductBox) => box.active === true)
-        .sort((a: ProductBox, b: ProductBox) => {
-          const aTime = a.createdAt?.seconds || 0
-          const bTime = b.createdAt?.seconds || 0
-          return bTime - aTime
-        })
-
-      setProductBoxes(activeBoxes)
-      console.log(`✅ [Premium Content] Loaded ${activeBoxes.length} active product boxes`)
+      setBundles(activeBundles)
+      console.log(`✅ [Premium Content] Loaded ${activeBundles.length} active bundles`)
     } catch (err) {
       console.error("❌ [Premium Content] Error:", err)
       setError(err instanceof Error ? err.message : "Failed to load premium content")
@@ -82,41 +95,42 @@ export default function PremiumContentSection({ creatorId, creatorUsername, isOw
     }
   }
 
-  // Handle purchase
-  const handlePurchase = async (productBoxId: string) => {
+  // Handle bundle purchase
+  const handlePurchase = async (bundle: Bundle) => {
     if (!user) {
       toast({
-        title: "Sign In Required",
-        description: "Please sign in to purchase premium content",
+        title: "Authentication Required",
+        description: "Please log in to purchase this bundle",
         variant: "destructive",
       })
       return
     }
 
     try {
-      setPurchaseLoading(productBoxId)
-      console.log("🛒 [Premium Content] Starting purchase for:", productBoxId)
+      setPurchaseLoading(bundle.id)
 
       const idToken = await user.getIdToken()
-
-      const response = await fetch(`/api/creator/product-boxes/${productBoxId}/checkout`, {
+      const response = await fetch(`/api/creator/product-boxes/${bundle.id}/checkout`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${idToken}`,
         },
+        body: JSON.stringify({
+          successUrl: `${window.location.origin}/purchase/success?session_id={CHECKOUT_SESSION_ID}`,
+          cancelUrl: window.location.href,
+        }),
       })
 
       if (!response.ok) {
         const errorData = await response.json()
-        throw new Error(errorData.error || "Failed to create checkout session")
+        throw new Error(errorData.message || "Failed to create checkout session")
       }
 
       const data = await response.json()
 
-      if (data.checkoutUrl) {
-        console.log("✅ [Premium Content] Redirecting to checkout:", data.checkoutUrl)
-        window.location.href = data.checkoutUrl
+      if (data.url) {
+        window.location.href = data.url
       } else {
         throw new Error("No checkout URL received")
       }
@@ -132,27 +146,27 @@ export default function PremiumContentSection({ creatorId, creatorUsername, isOw
     }
   }
 
-  // Format price
-  const formatPrice = (price: number, currency = "usd") => {
-    return new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency: currency.toUpperCase(),
-    }).format(price)
-  }
-
-  // Get thumbnail URL with fallback priority
-  const getThumbnailUrl = (productBox: ProductBox) => {
-    return productBox.customPreviewThumbnail || productBox.coverImage || productBox.coverImageUrl || null
+  // Get the best available thumbnail with priority order
+  const getBundleThumbnail = (bundle: Bundle): string => {
+    // Priority: customPreviewThumbnail > coverImage > coverImageUrl > placeholder
+    return (
+      bundle.customPreviewThumbnail ||
+      bundle.coverImage ||
+      bundle.coverImageUrl ||
+      "/placeholder.svg?height=400&width=300&text=Bundle"
+    )
   }
 
   useEffect(() => {
-    fetchProductBoxes()
+    if (creatorId) {
+      fetchCreatorBundles()
+    }
   }, [creatorId])
 
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
-        <Loader2 className="h-8 w-8 text-zinc-500 animate-spin" />
+        <Loader2 className="h-6 w-6 text-zinc-500 animate-spin" />
         <span className="ml-3 text-zinc-400">Loading premium content...</span>
       </div>
     )
@@ -161,12 +175,12 @@ export default function PremiumContentSection({ creatorId, creatorUsername, isOw
   if (error) {
     return (
       <div className="text-center py-12">
-        <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
-        <h3 className="text-xl font-medium text-white mb-2">Failed to Load Premium Content</h3>
+        <AlertCircle className="h-8 w-8 text-red-500 mx-auto mb-3" />
         <p className="text-zinc-400 mb-4">{error}</p>
         <Button
-          onClick={fetchProductBoxes}
+          onClick={fetchCreatorBundles}
           variant="outline"
+          size="sm"
           className="border-zinc-700 hover:bg-zinc-800 bg-transparent"
         >
           Try Again
@@ -175,141 +189,107 @@ export default function PremiumContentSection({ creatorId, creatorUsername, isOw
     )
   }
 
+  if (bundles.length === 0) {
+    return (
+      <div className="text-center py-12">
+        <Package className="h-12 w-12 text-zinc-600 mx-auto mb-4" />
+        <h3 className="text-lg font-medium text-white mb-2">No Premium Content</h3>
+        <p className="text-zinc-400">This creator hasn't published any premium bundles yet.</p>
+      </div>
+    )
+  }
+
   return (
-    <div>
-      {productBoxes.length === 0 ? (
-        <div className="py-16 text-center">
-          <div className="max-w-md mx-auto bg-zinc-900/40 backdrop-blur-sm border border-zinc-800/50 rounded-xl p-8">
-            <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gradient-to-br from-zinc-800 to-zinc-900 flex items-center justify-center">
-              <Package className="h-8 w-8 text-zinc-600" />
-            </div>
-            <h3 className="text-xl font-medium text-white mb-2">No Premium Content</h3>
-            <p className="text-zinc-400 mb-6">
-              {isOwner
-                ? "Create premium content bundles to monetize your work and provide exclusive value to your audience."
-                : `${creatorUsername} hasn't created any premium content bundles yet.`}
-            </p>
-
-            {isOwner && (
-              <Button
-                className="bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white border-0"
-                onClick={() => window.open("/dashboard/bundles", "_blank")}
-              >
-                <Plus className="h-4 w-4 mr-2" />
-                Create Bundle
-              </Button>
-            )}
-          </div>
-        </div>
-      ) : (
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-          <AnimatePresence>
-            {productBoxes.map((productBox, index) => {
-              const thumbnailUrl = getThumbnailUrl(productBox)
-
-              return (
-                <motion.div
-                  key={productBox.id}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -20 }}
-                  transition={{ duration: 0.3, delay: index * 0.1 }}
-                >
-                  <Card className="bg-zinc-900/60 backdrop-blur-sm border-zinc-800/50 overflow-hidden hover:border-zinc-700/50 transition-all duration-300 group">
-                    <CardContent className="p-0">
-                      {/* Cover Image or Placeholder */}
-                      <div className="relative aspect-video bg-gradient-to-br from-zinc-800 to-zinc-900 overflow-hidden">
-                        {thumbnailUrl ? (
-                          <img
-                            src={thumbnailUrl || "/placeholder.svg"}
-                            alt={productBox.title}
-                            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                            onError={(e) => {
-                              // Fallback to placeholder if image fails to load
-                              const target = e.target as HTMLImageElement
-                              target.style.display = "none"
-                              target.parentElement?.querySelector(".fallback-icon")?.classList.remove("hidden")
-                            }}
-                          />
-                        ) : null}
-
-                        {/* Fallback Icon */}
-                        <div
-                          className={`${thumbnailUrl ? "hidden" : "flex"} fallback-icon w-full h-full items-center justify-center`}
-                        >
-                          <Package className="h-12 w-12 text-zinc-600 group-hover:text-zinc-500 transition-colors" />
-                        </div>
-
-                        {/* Preview Overlay */}
-                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center">
-                          <div className="flex items-center gap-2 text-white/90">
-                            <Play className="h-5 w-5" />
-                            <span className="text-sm font-medium">Preview Bundle</span>
+    <div className="space-y-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {bundles.map((bundle, index) => (
+          <motion.div
+            key={bundle.id}
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.3, delay: index * 0.1 }}
+          >
+            <Card className="bg-zinc-900/50 border-zinc-800 overflow-hidden hover:border-zinc-700 transition-all duration-300 group">
+              <div className="relative">
+                {/* Bundle Thumbnail */}
+                <div className="aspect-[4/3] bg-zinc-800 overflow-hidden">
+                  <img
+                    src={getBundleThumbnail(bundle) || "/placeholder.svg"}
+                    alt={bundle.title}
+                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                    onError={(e) => {
+                      // Fallback to package icon if image fails to load
+                      const target = e.target as HTMLImageElement
+                      target.style.display = "none"
+                      const parent = target.parentElement
+                      if (parent) {
+                        parent.innerHTML = `
+                          <div class="w-full h-full flex items-center justify-center bg-zinc-800">
+                            <div class="text-center">
+                              <div class="w-16 h-16 mx-auto mb-3 text-zinc-600">
+                                <svg viewBox="0 0 24 24" fill="currentColor" class="w-full h-full">
+                                  <path d="M12 2L2 7L12 12L22 7L12 2Z" />
+                                  <path d="M2 17L12 22L22 17" />
+                                  <path d="M2 12L12 17L22 12" />
+                                </svg>
+                              </div>
+                              <p class="text-xs text-zinc-500">Bundle</p>
+                            </div>
                           </div>
-                        </div>
+                        `
+                      }
+                    }}
+                  />
+                </div>
 
-                        {/* Content Count Badge */}
-                        <div className="absolute top-3 right-3">
-                          <Badge variant="secondary" className="bg-black/60 text-white border-0">
-                            {productBox.contentItems?.length || 0} items
-                          </Badge>
-                        </div>
-                      </div>
+                {/* Content Count Badge */}
+                <div className="absolute top-3 right-3">
+                  <Badge variant="secondary" className="bg-black/70 text-white border-0">
+                    {bundle.contentItems.length} items
+                  </Badge>
+                </div>
+              </div>
 
-                      {/* Content */}
-                      <div className="p-6">
-                        <div className="mb-4">
-                          <h3 className="text-lg font-semibold text-white mb-2 line-clamp-1">{productBox.title}</h3>
-                          {productBox.description && (
-                            <p className="text-sm text-zinc-400 line-clamp-2">{productBox.description}</p>
-                          )}
-                        </div>
+              <CardContent className="p-4">
+                <div className="space-y-3">
+                  {/* Title and Description */}
+                  <div>
+                    <h3 className="font-semibold text-white text-lg mb-1 line-clamp-1">{bundle.title}</h3>
+                    {bundle.description && <p className="text-sm text-zinc-400 line-clamp-2">{bundle.description}</p>}
+                  </div>
 
-                        {/* Price and Purchase */}
-                        <div className="flex items-center justify-between">
-                          <div className="text-2xl font-bold text-green-400">
-                            {formatPrice(productBox.price, productBox.currency)}
-                          </div>
+                  {/* Price and Purchase */}
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <span className="text-2xl font-bold text-green-400">${bundle.price.toFixed(2)}</span>
+                      <span className="text-xs text-zinc-500 uppercase">{bundle.currency}</span>
+                    </div>
 
-                          {isOwner ? (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="border-zinc-700 text-zinc-300 hover:bg-zinc-800 bg-transparent"
-                              onClick={() => window.open(`/dashboard/bundles`, "_blank")}
-                            >
-                              Manage
-                            </Button>
-                          ) : (
-                            <Button
-                              size="sm"
-                              className="bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white border-0"
-                              onClick={() => handlePurchase(productBox.id)}
-                              disabled={purchaseLoading === productBox.id}
-                            >
-                              {purchaseLoading === productBox.id ? (
-                                <>
-                                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                                  Processing...
-                                </>
-                              ) : (
-                                <>
-                                  <ShoppingCart className="h-4 w-4 mr-2" />
-                                  Purchase
-                                </>
-                              )}
-                            </Button>
-                          )}
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </motion.div>
-              )
-            })}
-          </AnimatePresence>
-        </div>
-      )}
+                    <Button
+                      onClick={() => handlePurchase(bundle)}
+                      disabled={purchaseLoading === bundle.id}
+                      className="bg-red-600 hover:bg-red-700 text-white"
+                      size="sm"
+                    >
+                      {purchaseLoading === bundle.id ? (
+                        <>
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          Processing...
+                        </>
+                      ) : (
+                        <>
+                          <ShoppingCart className="h-4 w-4 mr-2" />
+                          Purchase
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </motion.div>
+        ))}
+      </div>
     </div>
   )
 }
