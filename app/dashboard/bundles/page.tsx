@@ -393,7 +393,7 @@ export default function BundlesPage() {
       const idToken = await user?.getIdToken()
       if (!idToken) throw new Error("Not authenticated")
 
-      // Create bundle via API (this will handle Stripe integration)
+      // Create bundle via API first
       const response = await fetch("/api/creator/bundles", {
         method: "POST",
         headers: {
@@ -415,6 +415,33 @@ export default function BundlesPage() {
       }
 
       const data = await response.json()
+      const bundleId = data.bundleId
+
+      // Upload thumbnail if provided
+      if (createForm.thumbnail && bundleId) {
+        try {
+          const formData = new FormData()
+          formData.append("file", createForm.thumbnail)
+          formData.append("bundleId", bundleId)
+
+          const uploadResponse = await fetch("/api/upload/bundle-thumbnail", {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${idToken}`,
+            },
+            body: formData,
+          })
+
+          if (uploadResponse.ok) {
+            console.log("✅ [Bundles] Thumbnail uploaded successfully")
+          } else {
+            console.warn("⚠️ [Bundles] Thumbnail upload failed, but bundle was created")
+          }
+        } catch (uploadError) {
+          console.error("❌ [Bundles] Thumbnail upload error:", uploadError)
+          // Don't fail the entire creation for thumbnail upload issues
+        }
+      }
 
       toast({
         title: "Success",

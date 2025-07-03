@@ -31,10 +31,14 @@ interface Bundle {
 interface PremiumContentSectionProps {
   creatorId: string
   creatorUsername?: string
-  isOwner: boolean
+  isOwner?: boolean
 }
 
-export default function PremiumContentSection({ creatorId, creatorUsername, isOwner }: PremiumContentSectionProps) {
+export default function PremiumContentSection({
+  creatorId,
+  creatorUsername,
+  isOwner = false,
+}: PremiumContentSectionProps) {
   const { user } = useAuth()
   const { toast } = useToast()
   const [bundles, setBundles] = useState<Bundle[]>([])
@@ -153,12 +157,13 @@ export default function PremiumContentSection({ creatorId, creatorUsername, isOw
   // Get the best available thumbnail with priority order
   const getBundleThumbnail = (bundle: Bundle): string => {
     // Priority: customPreviewThumbnail > coverImage > coverImageUrl > placeholder
-    return (
-      bundle.customPreviewThumbnail ||
-      bundle.coverImage ||
-      bundle.coverImageUrl ||
-      "/placeholder.svg?height=400&width=300&text=Bundle"
-    )
+    const thumbnail = bundle.customPreviewThumbnail || bundle.coverImage || bundle.coverImageUrl
+
+    if (thumbnail && thumbnail.startsWith("http")) {
+      return thumbnail
+    }
+
+    return "/placeholder.svg?height=400&width=400&text=Bundle"
   }
 
   useEffect(() => {

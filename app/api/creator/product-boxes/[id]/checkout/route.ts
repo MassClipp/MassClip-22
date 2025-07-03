@@ -56,10 +56,16 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
 
     const { successUrl, cancelUrl } = body
 
-    // Get product box with error handling
+    // Get product box with error handling - try both collections
     let productBoxDoc, productBox
     try {
-      productBoxDoc = await db.collection("productBoxes").doc(params.id).get()
+      // Try bundles collection first
+      productBoxDoc = await db.collection("bundles").doc(params.id).get()
+
+      if (!productBoxDoc.exists) {
+        // Fallback to productBoxes collection
+        productBoxDoc = await db.collection("productBoxes").doc(params.id).get()
+      }
 
       if (!productBoxDoc.exists) {
         console.error(`❌ [Checkout] Product box not found: ${params.id}`)
@@ -73,6 +79,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
         price: productBox?.price,
         active: productBox?.active,
         creatorId: productBox?.creatorId,
+        hasStripeProductId: !!productBox?.productId,
+        hasStripePriceId: !!productBox?.priceId,
       })
     } catch (dbError) {
       console.error(`❌ [Checkout] Database error fetching product box:`, dbError)
@@ -175,6 +183,62 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       creatorAmount: priceInCents - platformFee,
     })
 
+    // Create or get Stripe price
+    let stripePriceId = productBox.priceId
+
+    if (!stripePriceId) {
+      console.log(`🔄 [Checkout] Creating Stripe product and price for bundle: ${params.id}`)
+
+      try {
+        // Create Stripe product if it doesn't exist
+        let stripeProductId = productBox.productId
+
+        if (!stripeProductId) {
+          const stripeProduct = await stripe.products.create({
+            name: productBox.title,
+            description: productBox.description || `Premium content by ${creatorData.username || "Creator"}`,
+            images: productBox.coverImage ? [productBox.coverImage] : [],
+            metadata: {
+              bundleId: params.id,
+              creatorId: productBox.creatorId,
+            },
+          })
+          stripeProductId = stripeProduct.id
+
+          // Update bundle with Stripe product ID
+          await db.collection("bundles").doc(params.id).update({
+            productId: stripeProductId,
+            updatedAt: new Date(),
+          })
+
+          console.log(`✅ [Checkout] Created Stripe product: ${stripeProductId}`)
+        }
+
+        // Create Stripe price
+        const stripePrice = await stripe.prices.create({
+          unit_amount: priceInCents,
+          currency: "usd",
+          product: stripeProductId,
+          metadata: {
+            bundleId: params.id,
+            creatorId: productBox.creatorId,
+          },
+        })
+        stripePriceId = stripePrice.id
+
+        // Update bundle with Stripe price ID
+        await db.collection("bundles").doc(params.id).update({
+          priceId: stripePriceId,
+          updatedAt: new Date(),
+        })
+
+        console.log(`✅ [Checkout] Created Stripe price: ${stripePriceId}`)
+      } catch (stripeError) {
+        console.error("❌ [Checkout] Failed to create Stripe product/price:", stripeError)
+        return new NextResponse("Failed to create payment configuration", { status: 500 })
+      }
+    }
+
     // Create checkout session with comprehensive error handling
     console.log(`🔄 [Checkout] Creating Stripe session...`)
 
@@ -182,17 +246,7 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
       mode: "payment" as const,
       line_items: [
         {
-          price_data: {
-            currency: "usd",
-            product_data: {
-              name: productBox.title,
-              description:
-                productBox.description ||
-                `Premium content by ${creatorData.username || creatorData.displayName || "Creator"}`,
-              images: productBox.thumbnailUrl ? [productBox.thumbnailUrl] : undefined,
-            },
-            unit_amount: priceInCents,
-          },
+          price: stripePriceId,
           quantity: 1,
         },
       ],
@@ -222,8 +276,8 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     }
 
     console.log(`🔄 [Checkout] Session data prepared:`, {
-      amount: sessionData.line_items[0].price_data.unit_amount,
-      productName: sessionData.line_items[0].price_data.product_data.name,
+      priceId: stripePriceId,
+      productName: productBox.title,
       platformFee,
       stripeAccountId: creatorData.stripeAccountId,
     })
