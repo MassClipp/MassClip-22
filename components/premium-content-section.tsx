@@ -220,7 +220,8 @@ export default function PremiumContentSection({ creatorId, creatorUsername, isOw
                   <img
                     src={getBundleThumbnail(bundle) || "/placeholder.svg"}
                     alt={bundle.title}
-                    className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                    className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-300"
+                    style={{ objectFit: "cover" }}
                     onError={(e) => {
                       // Fallback to package icon if image fails to load
                       const target = e.target as HTMLImageElement
@@ -254,26 +255,32 @@ export default function PremiumContentSection({ creatorId, creatorUsername, isOw
                 </div>
               </div>
 
-              <CardContent className="p-4 bg-gradient-to-b from-zinc-900/80 to-zinc-900/95">
+              <CardContent className="p-4 bg-gradient-to-br from-zinc-900/90 via-zinc-900/95 to-black/90 border-t border-zinc-800/50 backdrop-blur-sm">
                 <div className="space-y-3">
                   {/* Title and Description */}
-                  <div>
-                    <h3 className="font-semibold text-white text-lg mb-1 line-clamp-1">{bundle.title}</h3>
-                    {bundle.description && <p className="text-sm text-zinc-400 line-clamp-2">{bundle.description}</p>}
+                  <div className="space-y-1">
+                    <h3 className="font-semibold text-white text-base mb-1 line-clamp-1 tracking-tight">
+                      {bundle.title}
+                    </h3>
+                    {bundle.description && (
+                      <p className="text-xs text-zinc-400 line-clamp-2 leading-relaxed">{bundle.description}</p>
+                    )}
                   </div>
 
                   {/* Price and Purchase */}
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <span className="text-2xl font-thin text-green-400">${bundle.price.toFixed(2)}</span>
-                      <span className="text-xs text-zinc-500 uppercase">{bundle.currency}</span>
+                  <div className="flex items-center justify-between pt-1">
+                    <div className="flex items-baseline gap-1">
+                      <span className="text-xl font-thin text-emerald-400 tracking-tight">
+                        ${bundle.price.toFixed(2)}
+                      </span>
+                      <span className="text-[10px] text-zinc-500 uppercase tracking-wider">{bundle.currency}</span>
                     </div>
 
                     {isOwner ? (
                       <Button
                         variant="outline"
                         size="sm"
-                        className="border-zinc-700 text-zinc-300 hover:bg-zinc-800 bg-transparent"
+                        className="border-zinc-700/70 text-zinc-300 hover:bg-zinc-800/80 bg-transparent text-xs px-3 py-1.5 h-auto"
                         onClick={() => router.push(`/dashboard/bundles`)}
                       >
                         Manage
@@ -281,18 +288,18 @@ export default function PremiumContentSection({ creatorId, creatorUsername, isOw
                     ) : (
                       <Button
                         size="sm"
-                        className="bg-gradient-to-r from-yellow-500 to-yellow-700 hover:from-yellow-600 hover:to-yellow-800 text-white border-0"
+                        className="bg-gradient-to-r from-yellow-500 to-yellow-600 hover:from-yellow-600 hover:to-yellow-700 text-white border-0 text-xs px-3 py-1.5 h-auto shadow-lg shadow-yellow-500/20"
                         onClick={() => handlePurchase(bundle)}
                         disabled={purchaseLoading === bundle.id}
                       >
                         {purchaseLoading === bundle.id ? (
                           <>
-                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                            <Loader2 className="h-3 w-3 mr-1.5 animate-spin" />
                             Processing...
                           </>
                         ) : (
                           <>
-                            <ShoppingCart className="h-4 w-4 mr-2" />
+                            <ShoppingCart className="h-3 w-3 mr-1.5" />
                             Unlock Now
                           </>
                         )}
