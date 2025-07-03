@@ -15,7 +15,7 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { useToast } from "@/hooks/use-toast"
-import { collection, query, where, getDocs, doc, updateDoc, deleteDoc, onSnapshot, addDoc } from "firebase/firestore"
+import { collection, query, where, getDocs, doc, updateDoc, onSnapshot, addDoc, writeBatch } from "firebase/firestore"
 import { db } from "@/lib/firebase"
 import { useAuth } from "@/contexts/auth-context"
 
@@ -683,12 +683,15 @@ export default function BundlesPage() {
     }
   }
 
-  // Remove content from bundle - Enhanced for permanent deletion
+  // Remove content from bundle - Enhanced for permanent deletion with batch operations
   const handleRemoveContentFromBundle = async (productBoxId: string, contentId: string) => {
     if (!confirm("Remove this content from the bundle?")) return
 
     try {
       console.log(`🔍 [Bundles] Removing content ${contentId} from bundle ${productBoxId}`)
+
+      // Use Firestore batch for atomic operations
+      const batch = writeBatch(db)
 
       // Step 1: Remove from productBoxContent collection
       const contentQuery = query(
@@ -698,45 +701,39 @@ export default function BundlesPage() {
       )
       const contentSnapshot = await getDocs(contentQuery)
 
-      const deletePromises = contentSnapshot.docs.map((docSnapshot) => deleteDoc(docSnapshot.ref))
-      await Promise.all(deletePromises)
+      contentSnapshot.docs.forEach((docSnapshot) => {
+        batch.delete(docSnapshot.ref)
+      })
 
-      console.log(`✅ [Bundles] Removed ${deletePromises.length} productBoxContent entries`)
+      console.log(`📝 [Bundles] Queued ${contentSnapshot.docs.length} productBoxContent deletions`)
 
-      // Step 2: Update bundle contentItems array in both possible collections
+      // Step 2: Update bundle contentItems array
       const currentBox = productBoxes.find((box) => box.id === productBoxId)
       if (currentBox) {
         const updatedContentItems = currentBox.contentItems.filter((id) => id !== contentId)
 
-        // Try both collections to ensure permanent removal
-        const updatePromises = []
-
         // Update bundles collection
+        const bundleRef = doc(db, "bundles", productBoxId)
+        batch.update(bundleRef, {
+          contentItems: updatedContentItems,
+          updatedAt: new Date(),
+        })
+
+        // Also update productBoxes collection if it exists (for compatibility)
         try {
-          updatePromises.push(
-            updateDoc(doc(db, "bundles", productBoxId), {
-              contentItems: updatedContentItems,
-              updatedAt: new Date(),
-            }),
-          )
-        } catch (bundlesError) {
-          console.log("⚠️ [Bundles] Bundles collection not found, skipping")
+          const productBoxRef = doc(db, "productBoxes", productBoxId)
+          batch.update(productBoxRef, {
+            contentItems: updatedContentItems,
+            updatedAt: new Date(),
+          })
+        } catch (productBoxError) {
+          console.log("⚠️ [Bundles] ProductBoxes collection update skipped")
         }
 
-        // Update productBoxes collection as fallback
-        try {
-          updatePromises.push(
-            updateDoc(doc(db, "productBoxes", productBoxId), {
-              contentItems: updatedContentItems,
-              updatedAt: new Date(),
-            }),
-          )
-        } catch (productBoxesError) {
-          console.log("⚠️ [Bundles] ProductBoxes collection not found, skipping")
-        }
+        // Commit all changes atomically
+        await batch.commit()
 
-        // Wait for all updates to complete
-        await Promise.allSettled(updatePromises)
+        console.log(`✅ [Bundles] Batch operation completed for content ${contentId}`)
 
         // Step 3: Update local state immediately for instant UI feedback
         setProductBoxes((prev) =>
