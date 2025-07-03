@@ -963,30 +963,108 @@ export default function BundlesPage() {
                 </div>
               </div>
 
-              <div>
-                <Label htmlFor="thumbnail">Thumbnail (Optional)</Label>
-                <div className="mt-2 flex items-center gap-4">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="border-zinc-700 bg-transparent"
-                    onClick={() => document.getElementById("thumbnail-input")?.click()}
-                  >
-                    <Upload className="h-4 w-4 mr-2" />
-                    Upload Thumbnail
-                  </Button>
-                  <input
-                    id="thumbnail-input"
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={(e) => {
-                      const file = e.target.files?.[0] || null
-                      setCreateForm((prev) => ({ ...prev, thumbnail: file }))
+              {/* Enhanced Thumbnail Section */}
+              <div className="space-y-4">
+                <Label>Bundle Thumbnail (Optional)</Label>
+
+                {/* Thumbnail Preview */}
+                {createForm.thumbnail && (
+                  <div className="relative">
+                    <div className="aspect-square w-32 h-32 rounded-lg overflow-hidden border border-zinc-700">
+                      <img
+                        src={URL.createObjectURL(createForm.thumbnail) || "/placeholder.svg"}
+                        alt="Thumbnail preview"
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setCreateForm((prev) => ({ ...prev, thumbnail: null }))}
+                      className="absolute -top-2 -right-2 h-6 w-6 rounded-full bg-red-600 hover:bg-red-700 text-white p-0"
+                    >
+                      <X className="h-3 w-3" />
+                    </Button>
+                    <p className="text-xs text-zinc-400 mt-2">{createForm.thumbnail.name}</p>
+                  </div>
+                )}
+
+                {/* Upload Area */}
+                {!createForm.thumbnail && (
+                  <div
+                    className="border-2 border-dashed border-zinc-700 rounded-lg p-8 text-center hover:border-zinc-600 transition-colors cursor-pointer"
+                    onClick={() => document.getElementById("thumbnail-upload")?.click()}
+                    onDragOver={(e) => {
+                      e.preventDefault()
+                      e.currentTarget.classList.add("border-zinc-500")
                     }}
-                  />
-                  {createForm.thumbnail && <span className="text-sm text-zinc-400">{createForm.thumbnail.name}</span>}
-                </div>
+                    onDragLeave={(e) => {
+                      e.preventDefault()
+                      e.currentTarget.classList.remove("border-zinc-500")
+                    }}
+                    onDrop={(e) => {
+                      e.preventDefault()
+                      e.currentTarget.classList.remove("border-zinc-500")
+                      const files = e.dataTransfer.files
+                      if (files.length > 0) {
+                        const file = files[0]
+                        if (file.type.startsWith("image/")) {
+                          setCreateForm((prev) => ({ ...prev, thumbnail: file }))
+                        }
+                      }
+                    }}
+                  >
+                    <div className="space-y-3">
+                      <div className="w-16 h-16 mx-auto bg-zinc-800 rounded-lg flex items-center justify-center">
+                        <Upload className="h-8 w-8 text-zinc-500" />
+                      </div>
+                      <div>
+                        <p className="text-sm text-zinc-300 font-medium">Upload bundle thumbnail</p>
+                        <p className="text-xs text-zinc-500 mt-1">Drag and drop an image here, or click to browse</p>
+                      </div>
+                      <div className="text-xs text-zinc-600">
+                        Supports: JPEG, PNG, WebP • Max size: 5MB • Recommended: 400x400px
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Hidden File Input */}
+                <input
+                  id="thumbnail-upload"
+                  type="file"
+                  accept="image/jpeg,image/jpg,image/png,image/webp"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0]
+                    if (file) {
+                      // Validate file type
+                      const allowedTypes = ["image/jpeg", "image/jpg", "image/png", "image/webp"]
+                      if (!allowedTypes.includes(file.type)) {
+                        toast({
+                          title: "Invalid File Type",
+                          description: "Please select a JPEG, PNG, or WebP image",
+                          variant: "destructive",
+                        })
+                        return
+                      }
+
+                      // Validate file size (5MB max)
+                      const maxSize = 5 * 1024 * 1024
+                      if (file.size > maxSize) {
+                        toast({
+                          title: "File Too Large",
+                          description: "Please select an image smaller than 5MB",
+                          variant: "destructive",
+                        })
+                        return
+                      }
+
+                      setCreateForm((prev) => ({ ...prev, thumbnail: file }))
+                    }
+                  }}
+                />
               </div>
 
               <div className="flex justify-end gap-3 pt-4">

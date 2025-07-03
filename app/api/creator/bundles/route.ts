@@ -1,173 +1,268 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { initializeApp, getApps, cert } from "firebase-admin/app"
+import { verifyIdToken } from "@/lib/auth-utils"
 import { db } from "@/lib/firebase-admin"
-import { verifyIdToken } from "@/lib/firebase-admin"
 import { stripe } from "@/lib/stripe"
+import { S3Client } from "@aws-sdk/client-s3"
 
-// Initialize Firebase Admin if not already initialized
-if (!getApps().length) {
-  try {
-    initializeApp({
-      credential: cert({
-        projectId: process.env.FIREBASE_PROJECT_ID,
-        clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-        privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n"),
-      }),
-    })
-  } catch (error) {
-    console.error("❌ [Bundles API] Firebase Admin initialization error:", error)
-  }
+// Configure Cloudflare R2
+const r2Client = new S3Client({
+  region: "auto",
+  endpoint: process.env.CLOUDFLARE_R2_ENDPOINT,
+  credentials: {
+    accessKeyId: process.env.CLOUDFLARE_R2_ACCESS_KEY_ID!,
+    secretAccessKey: process.env.CLOUDFLARE_R2_SECRET_ACCESS_KEY!,
+  },
+})
+
+interface BundleCreationError {
+  code: string
+  message: string
+  details?: string
+  suggestedActions: string[]
 }
 
-export async function GET(req: NextRequest) {
-  console.log("🔍 [Creator Bundles] GET request received")
-
+export async function GET(request: NextRequest) {
   try {
-    // Get auth token
-    const authHeader = req.headers.get("authorization")
-    if (!authHeader?.startsWith("Bearer ")) {
-      console.error("❌ [Creator Bundles] Missing authorization header")
-      return new NextResponse("Unauthorized", { status: 401 })
+    // Verify authentication
+    const decodedToken = await verifyIdToken(request)
+    if (!decodedToken) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const token = authHeader.split("Bearer ")[1]
-    const decodedToken = await verifyIdToken(token)
-    const userId = decodedToken.uid
+    console.log(`🔍 [Bundles API] Fetching bundles for user: ${decodedToken.uid}`)
 
-    console.log(`✅ [Creator Bundles] User authenticated: ${userId}`)
-
-    // Fetch bundles for this creator
-    const bundlesSnapshot = await db.collection("bundles").where("creatorId", "==", userId).get()
+    // Query bundles collection for this creator
+    const bundlesSnapshot = await db
+      .collection("bundles")
+      .where("creatorId", "==", decodedToken.uid)
+      .orderBy("createdAt", "desc")
+      .get()
 
     const bundles = bundlesSnapshot.docs.map((doc) => ({
       id: doc.id,
       ...doc.data(),
     }))
 
-    console.log(`✅ [Creator Bundles] Found ${bundles.length} bundles for creator ${userId}`)
+    console.log(`✅ [Bundles API] Found ${bundles.length} bundles`)
 
     return NextResponse.json({
-      bundles,
       success: true,
+      bundles,
+      count: bundles.length,
     })
   } catch (error) {
-    console.error("❌ [Creator Bundles] Error:", error)
-    return new NextResponse("Internal server error", { status: 500 })
+    console.error("❌ [Bundles API] Error fetching bundles:", error)
+    return NextResponse.json(
+      {
+        error: "Failed to fetch bundles",
+        details: error instanceof Error ? error.message : "Unknown error",
+      },
+      { status: 500 },
+    )
   }
 }
 
-export async function POST(req: NextRequest) {
-  console.log("🔄 [Creator Bundles] POST request received")
-
+export async function POST(request: NextRequest) {
   try {
-    // Get auth token
-    const authHeader = req.headers.get("authorization")
-    if (!authHeader?.startsWith("Bearer ")) {
-      console.error("❌ [Creator Bundles] Missing authorization header")
-      return new NextResponse("Unauthorized", { status: 401 })
+    // Verify authentication
+    const decodedToken = await verifyIdToken(request)
+    if (!decodedToken) {
+      return NextResponse.json(
+        {
+          code: "AUTHENTICATION_REQUIRED",
+          message: "Authentication required",
+          suggestedActions: ["Please log in to create bundles"],
+        } as BundleCreationError,
+        { status: 401 },
+      )
     }
 
-    const token = authHeader.split("Bearer ")[1]
-    const decodedToken = await verifyIdToken(token)
     const userId = decodedToken.uid
-
-    console.log(`✅ [Creator Bundles] User authenticated: ${userId}`)
+    console.log(`🔍 [Bundle Creation] User: ${userId}`)
 
     // Parse request body
-    const body = await req.json()
+    const body = await request.json()
     const { title, description, price, currency = "usd", type = "one_time" } = body
 
+    console.log(`📦 [Bundle Creation] Request data:`, {
+      title,
+      description,
+      price,
+      currency,
+      type,
+    })
+
     // Validate required fields
-    if (!title || !price || price < 0.5) {
-      return new NextResponse("Invalid bundle data", { status: 400 })
+    if (!title?.trim()) {
+      return NextResponse.json(
+        {
+          code: "VALIDATION_ERROR",
+          message: "Title is required",
+          suggestedActions: ["Please provide a bundle title"],
+        } as BundleCreationError,
+        { status: 400 },
+      )
     }
 
-    // Get creator data to check Stripe account
-    const creatorDoc = await db.collection("users").doc(userId).get()
-    if (!creatorDoc.exists) {
-      return new NextResponse("Creator not found", { status: 404 })
+    if (!price || typeof price !== "number" || price < 0.5) {
+      return NextResponse.json(
+        {
+          code: "VALIDATION_ERROR",
+          message: "Price must be at least $0.50",
+          suggestedActions: ["Please set a price of $0.50 or higher"],
+        } as BundleCreationError,
+        { status: 400 },
+      )
     }
 
-    const creatorData = creatorDoc.data()
-    const hasStripeAccount = !!creatorData?.stripeAccountId
+    if (price > 999.99) {
+      return NextResponse.json(
+        {
+          code: "VALIDATION_ERROR",
+          message: "Price cannot exceed $999.99",
+          suggestedActions: ["Please set a price of $999.99 or lower"],
+        } as BundleCreationError,
+        { status: 400 },
+      )
+    }
 
-    console.log(`🔍 [Creator Bundles] Creator has Stripe account: ${hasStripeAccount}`)
+    // Get user data to check Stripe account
+    const userDoc = await db.collection("users").doc(userId).get()
+    if (!userDoc.exists) {
+      return NextResponse.json(
+        {
+          code: "USER_NOT_FOUND",
+          message: "User profile not found",
+          suggestedActions: ["Please complete your profile setup"],
+        } as BundleCreationError,
+        { status: 404 },
+      )
+    }
+
+    const userData = userDoc.data()
+    console.log(`👤 [Bundle Creation] User data:`, {
+      username: userData?.username,
+      hasStripeAccount: !!userData?.stripeAccountId,
+      stripeOnboardingComplete: userData?.stripeOnboardingComplete,
+    })
 
     // Create bundle document
     const bundleData = {
       title: title.trim(),
       description: description?.trim() || "",
-      price: Number.parseFloat(price),
+      price,
       currency,
       type,
       creatorId: userId,
+      creatorUsername: userData?.username || "",
       active: true,
       contentItems: [],
       createdAt: new Date(),
       updatedAt: new Date(),
     }
 
-    // If creator has Stripe account, create Stripe product and price
-    if (hasStripeAccount) {
+    // Add bundle to Firestore
+    const bundleRef = await db.collection("bundles").add(bundleData)
+    const bundleId = bundleRef.id
+
+    console.log(`✅ [Bundle Creation] Bundle created: ${bundleId}`)
+
+    // Create Stripe product and price if user has connected account
+    let stripeProductId = null
+    let stripePriceId = null
+
+    if (userData?.stripeAccountId) {
       try {
+        console.log(`🔄 [Bundle Creation] Creating Stripe product for connected account: ${userData.stripeAccountId}`)
+
         // Create Stripe product on creator's connected account
         const stripeProduct = await stripe.products.create(
           {
             name: title.trim(),
-            description: description?.trim() || `Premium content by ${creatorData.username || "Creator"}`,
+            description: description?.trim() || `Premium content bundle by ${userData.username || "Creator"}`,
             metadata: {
+              bundleId,
               creatorId: userId,
-              bundleType: type,
             },
           },
           {
-            stripeAccount: creatorData.stripeAccountId,
+            stripeAccount: userData.stripeAccountId,
           },
         )
+
+        stripeProductId = stripeProduct.id
+        console.log(`✅ [Bundle Creation] Stripe product created: ${stripeProductId}`)
 
         // Create Stripe price on creator's connected account
         const stripePrice = await stripe.prices.create(
           {
-            unit_amount: Math.round(Number.parseFloat(price) * 100),
-            currency,
-            product: stripeProduct.id,
+            unit_amount: Math.round(price * 100), // Convert to cents
+            currency: currency.toLowerCase(),
+            product: stripeProductId,
             metadata: {
+              bundleId,
               creatorId: userId,
-              bundleType: type,
             },
           },
           {
-            stripeAccount: creatorData.stripeAccountId,
+            stripeAccount: userData.stripeAccountId,
           },
         )
 
-        // Add Stripe IDs to bundle data
-        bundleData.productId = stripeProduct.id
-        bundleData.priceId = stripePrice.id
+        stripePriceId = stripePrice.id
+        console.log(`✅ [Bundle Creation] Stripe price created: ${stripePriceId}`)
 
-        console.log(`✅ [Creator Bundles] Created Stripe product: ${stripeProduct.id} and price: ${stripePrice.id}`)
+        // Update bundle with Stripe IDs
+        await bundleRef.update({
+          productId: stripeProductId,
+          priceId: stripePriceId,
+          updatedAt: new Date(),
+        })
+
+        console.log(`✅ [Bundle Creation] Bundle updated with Stripe IDs`)
       } catch (stripeError) {
-        console.error("❌ [Creator Bundles] Stripe error:", stripeError)
-        // Continue without Stripe integration - can be added later
+        console.error("❌ [Bundle Creation] Stripe error:", stripeError)
+        // Don't fail the entire creation for Stripe issues
+        console.log("⚠️ [Bundle Creation] Continuing without Stripe integration")
       }
+    } else {
+      console.log("⚠️ [Bundle Creation] No Stripe account connected, skipping Stripe integration")
     }
 
-    // Save bundle to Firestore
-    const bundleRef = await db.collection("bundles").add(bundleData)
-
-    console.log(`✅ [Creator Bundles] Bundle created: ${bundleRef.id}`)
-
-    return NextResponse.json({
+    // Return success response
+    const response = {
       success: true,
-      bundleId: bundleRef.id,
-      message: "Bundle created successfully",
+      bundleId,
       bundle: {
-        id: bundleRef.id,
+        id: bundleId,
         ...bundleData,
+        productId: stripeProductId,
+        priceId: stripePriceId,
       },
-    })
+      stripe: {
+        productId: stripeProductId,
+        priceId: stripePriceId,
+      },
+      message: "Bundle created successfully",
+    }
+
+    console.log(`✅ [Bundle Creation] Success response:`, response)
+
+    return NextResponse.json(response)
   } catch (error) {
-    console.error("❌ [Creator Bundles] Error:", error)
-    return new NextResponse("Internal server error", { status: 500 })
+    console.error("❌ [Bundle Creation] Error:", error)
+
+    const errorResponse: BundleCreationError = {
+      code: "CREATION_FAILED",
+      message: "Failed to create bundle",
+      details: error instanceof Error ? error.message : "Unknown error",
+      suggestedActions: [
+        "Check your internet connection",
+        "Try again in a few moments",
+        "Contact support if the issue persists",
+      ],
+    }
+
+    return NextResponse.json(errorResponse, { status: 500 })
   }
 }
