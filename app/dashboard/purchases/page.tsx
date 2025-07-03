@@ -82,7 +82,19 @@ export default function FullScreenMyPurchasesPage() {
       }
 
       const data = await response.json()
-      setPurchases(data.purchases || [])
+      const purchasesData = data.purchases || []
+
+      // Validate and clean the purchases data
+      const validPurchases = purchasesData.map((purchase: any) => ({
+        ...purchase,
+        title: purchase.title || purchase.itemTitle || "Untitled Purchase",
+        creatorUsername: purchase.creatorUsername || purchase.creatorName || "Unknown Creator",
+        price: purchase.price || 0,
+        currency: purchase.currency || "usd",
+        purchaseDate: purchase.purchaseDate || purchase.purchasedAt || new Date(),
+      }))
+
+      setPurchases(validPurchases)
     } catch (error) {
       console.error("Error fetching purchases:", error)
       toast({
@@ -110,8 +122,8 @@ export default function FullScreenMyPurchasesPage() {
   const filteredPurchases = purchases
     .filter(
       (purchase) =>
-        purchase.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        purchase.creatorUsername.toLowerCase().includes(searchTerm.toLowerCase()),
+        (purchase.title || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (purchase.creatorUsername || "").toLowerCase().includes(searchTerm.toLowerCase()),
     )
     .sort((a, b) => {
       switch (sortBy) {

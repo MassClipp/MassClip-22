@@ -5,146 +5,274 @@ import { stripe } from "@/lib/stripe"
 
 export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
   try {
+    console.log(`🔍 [Checkout API] Starting checkout for bundle: ${params.id}`)
+
     // Verify authentication
     const decodedToken = await verifyIdToken(request)
     if (!decodedToken) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+      console.error("❌ [Checkout API] Authentication failed")
+      return NextResponse.json(
+        {
+          error: "Authentication required",
+          code: "UNAUTHORIZED",
+        },
+        { status: 401 },
+      )
     }
 
-    const bundleId = params.id
+    const userId = decodedToken.uid
+    console.log(`✅ [Checkout API] User authenticated: ${userId}`)
+
+    // Parse request body
     const body = await request.json()
     const { successUrl, cancelUrl } = body
 
-    console.log(`🛒 [Checkout] Creating checkout session for bundle: ${bundleId}`)
+    console.log(`📦 [Checkout API] Request data:`, {
+      bundleId: params.id,
+      successUrl,
+      cancelUrl,
+      userId,
+    })
 
-    // Get bundle data
-    const bundleDoc = await db.collection("bundles").doc(bundleId).get()
+    // Get bundle data - try both collections
+    let bundleDoc = await db.collection("bundles").doc(params.id).get()
+
     if (!bundleDoc.exists) {
-      // Try productBoxes collection as fallback
-      const productBoxDoc = await db.collection("productBoxes").doc(bundleId).get()
-      if (!productBoxDoc.exists) {
-        return NextResponse.json({ error: "Bundle not found" }, { status: 404 })
-      }
+      // Fallback to productBoxes collection
+      bundleDoc = await db.collection("productBoxes").doc(params.id).get()
     }
 
-    const bundleData = bundleDoc.exists
-      ? bundleDoc.data()
-      : (await db.collection("productBoxes").doc(bundleId).get()).data()
-    if (!bundleData) {
-      return NextResponse.json({ error: "Bundle data not found" }, { status: 404 })
+    if (!bundleDoc.exists) {
+      console.error(`❌ [Checkout API] Bundle not found: ${params.id}`)
+      return NextResponse.json(
+        {
+          error: "Bundle not found",
+          code: "BUNDLE_NOT_FOUND",
+        },
+        { status: 404 },
+      )
+    }
+
+    const bundleData = bundleDoc.data()
+    console.log(`✅ [Checkout API] Bundle found:`, {
+      title: bundleData?.title,
+      price: bundleData?.price,
+      creatorId: bundleData?.creatorId,
+      priceId: bundleData?.priceId,
+      productId: bundleData?.productId,
+    })
+
+    // Validate bundle data
+    if (!bundleData?.active) {
+      console.error(`❌ [Checkout API] Bundle is inactive: ${params.id}`)
+      return NextResponse.json(
+        {
+          error: "This bundle is currently unavailable",
+          code: "BUNDLE_INACTIVE",
+        },
+        { status: 400 },
+      )
+    }
+
+    if (!bundleData?.price || bundleData.price <= 0) {
+      console.error(`❌ [Checkout API] Invalid bundle price: ${bundleData?.price}`)
+      return NextResponse.json(
+        {
+          error: "Invalid bundle pricing",
+          code: "INVALID_PRICE",
+        },
+        { status: 400 },
+      )
     }
 
     // Get creator data
     const creatorDoc = await db.collection("users").doc(bundleData.creatorId).get()
     if (!creatorDoc.exists) {
-      return NextResponse.json({ error: "Creator not found" }, { status: 404 })
+      console.error(`❌ [Checkout API] Creator not found: ${bundleData.creatorId}`)
+      return NextResponse.json(
+        {
+          error: "Creator not found",
+          code: "CREATOR_NOT_FOUND",
+        },
+        { status: 404 },
+      )
     }
 
     const creatorData = creatorDoc.data()
+    console.log(`✅ [Checkout API] Creator found:`, {
+      username: creatorData?.username,
+      stripeAccountId: creatorData?.stripeAccountId ? "present" : "missing",
+      stripeOnboardingComplete: creatorData?.stripeOnboardingComplete,
+    })
+
+    // Check if creator has Stripe account
     if (!creatorData?.stripeAccountId) {
-      return NextResponse.json({ error: "Creator has not connected Stripe account" }, { status: 400 })
+      console.error(`❌ [Checkout API] Creator has no Stripe account: ${bundleData.creatorId}`)
+      return NextResponse.json(
+        {
+          error: "Payment processing not available for this creator",
+          code: "NO_STRIPE_ACCOUNT",
+        },
+        { status: 400 },
+      )
     }
 
-    // Create or get Stripe product and price
-    let productId = bundleData.productId
+    // Check if we have a Stripe price ID
     let priceId = bundleData.priceId
 
-    if (!productId || !priceId) {
-      console.log(`🔄 [Checkout] Creating Stripe product for bundle: ${bundleId}`)
+    if (!priceId) {
+      console.log(`⚠️ [Checkout API] No price ID found, creating new Stripe price`)
 
-      // Create product
-      const product = await stripe.products.create(
-        {
-          name: bundleData.title,
-          description: bundleData.description || `Premium content bundle by ${creatorData.username}`,
-          metadata: {
-            bundleId,
-            creatorId: bundleData.creatorId,
+      try {
+        // Create Stripe product if it doesn't exist
+        let productId = bundleData.productId
+
+        if (!productId) {
+          const stripeProduct = await stripe.products.create(
+            {
+              name: bundleData.title,
+              description: bundleData.description || `Premium content by ${creatorData.username}`,
+              metadata: {
+                bundleId: params.id,
+                creatorId: bundleData.creatorId,
+              },
+            },
+            {
+              stripeAccount: creatorData.stripeAccountId,
+            },
+          )
+          productId = stripeProduct.id
+
+          // Update bundle with product ID
+          await bundleDoc.ref.update({
+            productId,
+            updatedAt: new Date(),
+          })
+
+          console.log(`✅ [Checkout API] Created Stripe product: ${productId}`)
+        }
+
+        // Create Stripe price
+        const stripePrice = await stripe.prices.create(
+          {
+            unit_amount: Math.round(bundleData.price * 100), // Convert to cents
+            currency: bundleData.currency || "usd",
+            product: productId,
+            metadata: {
+              bundleId: params.id,
+              creatorId: bundleData.creatorId,
+            },
           },
-        },
-        {
-          stripeAccount: creatorData.stripeAccountId,
-        },
-      )
-
-      // Create price
-      const price = await stripe.prices.create(
-        {
-          unit_amount: Math.round(bundleData.price * 100),
-          currency: bundleData.currency || "usd",
-          product: product.id,
-          metadata: {
-            bundleId,
-            creatorId: bundleData.creatorId,
+          {
+            stripeAccount: creatorData.stripeAccountId,
           },
-        },
-        {
-          stripeAccount: creatorData.stripeAccountId,
-        },
-      )
+        )
 
-      productId = product.id
-      priceId = price.id
+        priceId = stripePrice.id
 
-      // Update bundle with Stripe IDs
-      const updateData = {
-        productId,
-        priceId,
-        updatedAt: new Date(),
-      }
+        // Update bundle with price ID
+        await bundleDoc.ref.update({
+          priceId,
+          updatedAt: new Date(),
+        })
 
-      if (bundleDoc.exists) {
-        await bundleDoc.ref.update(updateData)
-      } else {
-        await db.collection("productBoxes").doc(bundleId).update(updateData)
+        console.log(`✅ [Checkout API] Created Stripe price: ${priceId}`)
+      } catch (stripeError) {
+        console.error(`❌ [Checkout API] Failed to create Stripe price:`, stripeError)
+        return NextResponse.json(
+          {
+            error: "Failed to setup payment processing",
+            code: "STRIPE_SETUP_FAILED",
+            details: stripeError instanceof Error ? stripeError.message : "Unknown error",
+          },
+          { status: 500 },
+        )
       }
     }
 
-    // Create checkout session
-    const session = await stripe.checkout.sessions.create(
-      {
-        payment_method_types: ["card"],
-        line_items: [
-          {
-            price: priceId,
-            quantity: 1,
-          },
-        ],
-        mode: "payment",
-        success_url: successUrl,
-        cancel_url: cancelUrl,
-        metadata: {
-          bundleId,
-          creatorId: bundleData.creatorId,
-          buyerId: decodedToken.uid,
-        },
-        payment_intent_data: {
-          application_fee_amount: Math.round(bundleData.price * 100 * 0.1), // 10% platform fee
+    // Create Stripe checkout session
+    try {
+      console.log(`🔄 [Checkout API] Creating Stripe checkout session`)
+
+      const session = await stripe.checkout.sessions.create(
+        {
+          payment_method_types: ["card"],
+          line_items: [
+            {
+              price: priceId,
+              quantity: 1,
+            },
+          ],
+          mode: "payment",
+          success_url:
+            successUrl || `${process.env.NEXT_PUBLIC_SITE_URL}/purchase/success?session_id={CHECKOUT_SESSION_ID}`,
+          cancel_url: cancelUrl || `${process.env.NEXT_PUBLIC_SITE_URL}/creator/${creatorData.username}`,
           metadata: {
-            bundleId,
+            bundleId: params.id,
+            buyerId: userId,
             creatorId: bundleData.creatorId,
-            buyerId: decodedToken.uid,
+          },
+          payment_intent_data: {
+            application_fee_amount: Math.round(bundleData.price * 100 * 0.05), // 5% platform fee
+            metadata: {
+              bundleId: params.id,
+              buyerId: userId,
+              creatorId: bundleData.creatorId,
+            },
           },
         },
-      },
-      {
-        stripeAccount: creatorData.stripeAccountId,
-      },
-    )
+        {
+          stripeAccount: creatorData.stripeAccountId,
+        },
+      )
 
-    console.log(`✅ [Checkout] Created checkout session: ${session.id}`)
+      console.log(`✅ [Checkout API] Stripe session created: ${session.id}`)
 
-    return NextResponse.json({
-      success: true,
-      url: session.url,
-      sessionId: session.id,
-    })
+      // Log the checkout attempt
+      await db.collection("checkoutAttempts").add({
+        bundleId: params.id,
+        buyerId: userId,
+        creatorId: bundleData.creatorId,
+        sessionId: session.id,
+        amount: bundleData.price,
+        currency: bundleData.currency || "usd",
+        status: "created",
+        createdAt: new Date(),
+      })
+
+      return NextResponse.json({
+        success: true,
+        sessionId: session.id,
+        url: session.url,
+        bundle: {
+          id: params.id,
+          title: bundleData.title,
+          price: bundleData.price,
+          currency: bundleData.currency || "usd",
+        },
+        creator: {
+          id: bundleData.creatorId,
+          username: creatorData.username,
+        },
+      })
+    } catch (stripeError) {
+      console.error(`❌ [Checkout API] Stripe checkout session creation failed:`, stripeError)
+      return NextResponse.json(
+        {
+          error: "Failed to create checkout session",
+          code: "CHECKOUT_CREATION_FAILED",
+          details: stripeError instanceof Error ? stripeError.message : "Unknown error",
+        },
+        { status: 500 },
+      )
+    }
   } catch (error) {
-    console.error("❌ [Checkout] Error:", error)
+    console.error(`❌ [Checkout API] Unexpected error:`, error)
     return NextResponse.json(
       {
-        error: "Failed to create checkout session",
-        message: error instanceof Error ? error.message : "Unknown error",
+        error: "Internal server error",
+        code: "INTERNAL_ERROR",
+        details: error instanceof Error ? error.message : "Unknown error",
       },
       { status: 500 },
     )
@@ -153,36 +281,58 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
 
 export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
   try {
-    const bundleId = params.id
+    console.log(`🔍 [Checkout API] GET request for bundle: ${params.id}`)
+
+    // Verify authentication
+    const decodedToken = await verifyIdToken(request)
+    if (!decodedToken) {
+      return NextResponse.json(
+        {
+          error: "Authentication required",
+          code: "UNAUTHORIZED",
+        },
+        { status: 401 },
+      )
+    }
 
     // Get bundle data
-    const bundleDoc = await db.collection("bundles").doc(bundleId).get()
-    let bundleData = null
+    let bundleDoc = await db.collection("bundles").doc(params.id).get()
 
-    if (bundleDoc.exists) {
-      bundleData = { id: bundleDoc.id, ...bundleDoc.data() }
-    } else {
-      // Try productBoxes collection as fallback
-      const productBoxDoc = await db.collection("productBoxes").doc(bundleId).get()
-      if (productBoxDoc.exists) {
-        bundleData = { id: productBoxDoc.id, ...productBoxDoc.data() }
-      }
+    if (!bundleDoc.exists) {
+      bundleDoc = await db.collection("productBoxes").doc(params.id).get()
     }
 
-    if (!bundleData) {
-      return NextResponse.json({ error: "Bundle not found" }, { status: 404 })
+    if (!bundleDoc.exists) {
+      return NextResponse.json(
+        {
+          error: "Bundle not found",
+          code: "BUNDLE_NOT_FOUND",
+        },
+        { status: 404 },
+      )
     }
+
+    const bundleData = bundleDoc.data()
 
     return NextResponse.json({
       success: true,
-      bundle: bundleData,
+      bundle: {
+        id: params.id,
+        title: bundleData?.title,
+        description: bundleData?.description,
+        price: bundleData?.price,
+        currency: bundleData?.currency || "usd",
+        active: bundleData?.active,
+        creatorId: bundleData?.creatorId,
+        hasStripeIntegration: !!(bundleData?.priceId && bundleData?.productId),
+      },
     })
   } catch (error) {
-    console.error("❌ [Checkout] Error getting bundle:", error)
+    console.error(`❌ [Checkout API] GET error:`, error)
     return NextResponse.json(
       {
-        error: "Failed to get bundle",
-        message: error instanceof Error ? error.message : "Unknown error",
+        error: "Internal server error",
+        code: "INTERNAL_ERROR",
       },
       { status: 500 },
     )

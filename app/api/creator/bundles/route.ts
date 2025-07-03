@@ -1,8 +1,25 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { verifyIdToken } from "@/lib/auth-utils"
+import { auth } from "@/lib/firebase-admin"
 import { db } from "@/lib/firebase-admin"
 import { stripe } from "@/lib/stripe"
 import { S3Client } from "@aws-sdk/client-s3"
+
+// Helper function to verify ID token
+async function verifyIdToken(request: NextRequest) {
+  try {
+    const authHeader = request.headers.get("authorization")
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return null
+    }
+
+    const token = authHeader.substring(7)
+    const decodedToken = await auth.verifyIdToken(token)
+    return decodedToken
+  } catch (error) {
+    console.error("Error verifying token:", error)
+    return null
+  }
+}
 
 // Configure Cloudflare R2
 const r2Client = new S3Client({
