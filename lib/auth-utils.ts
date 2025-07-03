@@ -1,72 +1,25 @@
-import { auth } from "@/lib/firebase-admin"
 import type { NextRequest } from "next/server"
+import { verifyIdToken as firebaseVerifyIdToken } from "@/lib/firebase-admin"
 
-export interface DecodedToken {
-  uid: string
-  email?: string
-  email_verified?: boolean
-  name?: string
-  picture?: string
-  iss: string
-  aud: string
-  auth_time: number
-  user_id: string
-  sub: string
-  iat: number
-  exp: number
-  firebase: {
-    identities: Record<string, any>
-    sign_in_provider: string
-  }
-}
-
-/**
- * Verify Firebase ID token from Authorization header
- */
-export async function verifyIdToken(request: NextRequest): Promise<DecodedToken | null> {
+export async function verifyIdToken(request: NextRequest) {
   try {
-    const authHeader = request.headers.get("Authorization")
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    const authHeader = request.headers.get("authorization")
+    if (!authHeader?.startsWith("Bearer ")) {
+      console.error("❌ [Auth Utils] Missing or invalid authorization header")
       return null
     }
 
-    const idToken = authHeader.substring(7) // Remove 'Bearer ' prefix
-    if (!idToken) {
+    const token = authHeader.split("Bearer ")[1]
+    if (!token) {
+      console.error("❌ [Auth Utils] No token found in authorization header")
       return null
     }
 
-    // Verify the ID token using Firebase Admin SDK
-    const decodedToken = await auth.verifyIdToken(idToken)
-    return decodedToken as DecodedToken
+    const decodedToken = await firebaseVerifyIdToken(token)
+    console.log(`✅ [Auth Utils] Token verified for user: ${decodedToken.uid}`)
+    return decodedToken
   } catch (error) {
-    console.error("Error verifying ID token:", error)
+    console.error("❌ [Auth Utils] Token verification failed:", error)
     return null
   }
-}
-
-/**
- * Extract user ID from Authorization header
- */
-export async function getUserIdFromToken(request: NextRequest): Promise<string | null> {
-  const decodedToken = await verifyIdToken(request)
-  return decodedToken?.uid || null
-}
-
-/**
- * Verify user authentication and return user ID
- */
-export async function requireAuth(request: NextRequest): Promise<string> {
-  const userId = await getUserIdFromToken(request)
-  if (!userId) {
-    throw new Error("Authentication required")
-  }
-  return userId
-}
-
-/**
- * Check if user is authenticated
- */
-export async function isAuthenticated(request: NextRequest): Promise<boolean> {
-  const userId = await getUserIdFromToken(request)
-  return !!userId
 }
