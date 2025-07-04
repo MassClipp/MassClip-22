@@ -103,6 +103,3 @@ export async function createOrUpdateUserProfile(userId: string, profileData: Rec
 }
 
 export { FieldValue }
-
-// Alias export for compatibility with code expecting `adminDb`
-export { db as adminDb }
