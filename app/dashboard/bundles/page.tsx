@@ -781,40 +781,16 @@ export default function BundlesPage() {
 
       console.log(`✅ [Bundles] Removed ${deletePromises.length} productBoxContent entries`)
 
-      // Step 2: Update bundle contentItems array in both possible collections
+      // Step 2: Update bundle contentItems array
       const currentBox = productBoxes.find((box) => box.id === productBoxId)
       if (currentBox) {
         const updatedContentItems = currentBox.contentItems.filter((id) => id !== contentId)
 
-        // Try both collections to ensure permanent removal
-        const updatePromises = []
-
         // Update bundles collection
-        try {
-          updatePromises.push(
-            updateDoc(doc(db, "bundles", productBoxId), {
-              contentItems: updatedContentItems,
-              updatedAt: new Date(),
-            }),
-          )
-        } catch (bundlesError) {
-          console.log("⚠️ [Bundles] Bundles collection not found, skipping")
-        }
-
-        // Update productBoxes collection as fallback
-        try {
-          updatePromises.push(
-            updateDoc(doc(db, "productBoxes", productBoxId), {
-              contentItems: updatedContentItems,
-              updatedAt: new Date(),
-            }),
-          )
-        } catch (productBoxesError) {
-          console.log("⚠️ [Bundles] ProductBoxes collection not found, skipping")
-        }
-
-        // Wait for all updates to complete
-        await Promise.allSettled(updatePromises)
+        await updateDoc(doc(db, "bundles", productBoxId), {
+          contentItems: updatedContentItems,
+          updatedAt: new Date(),
+        })
 
         // Step 3: Update local state immediately for instant UI feedback
         setProductBoxes((prev) =>
@@ -1203,7 +1179,7 @@ export default function BundlesPage() {
                                         e.stopPropagation()
                                         handleRemoveContentFromBundle(productBox.id, item.id)
                                       }}
-                                      className="absolute top-2 right-2 z-30 w-6 h-6 bg-red-600/80 hover:bg-red-600 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200"
+                                      className="absolute top-2 right-2 z-30 w-6 h-6 bg-red-600/90 hover:bg-red-600 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-200 shadow-lg"
                                       title="Remove from bundle"
                                     >
                                       <X className="w-3 h-3 text-white" />
