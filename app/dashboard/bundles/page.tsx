@@ -768,17 +768,32 @@ export default function BundlesPage() {
     try {
       console.log(`🔍 [Bundles] Removing content ${contentId} from bundle ${productBoxId}`)
 
-      // Step 1: Remove from productBoxContent collection
-      const contentQuery = query(
+      // Step 1: Remove from productBoxContent collection using both contentId and uploadId
+      const contentQuery1 = query(
         collection(db, "productBoxContent"),
         where("productBoxId", "==", productBoxId),
         where("uploadId", "==", contentId),
       )
-      const contentSnapshot = await getDocs(contentQuery)
+      const contentQuery2 = query(collection(db, "productBoxContent"), where("productBoxId", "==", productBoxId))
 
-      const deletePromises = contentSnapshot.docs.map((docSnapshot) => deleteDoc(docSnapshot.ref))
+      const [contentSnapshot1, contentSnapshot2] = await Promise.all([getDocs(contentQuery1), getDocs(contentQuery2)])
+
+      // Delete all matching documents
+      const deletePromises: Promise<void>[] = []
+
+      contentSnapshot1.docs.forEach((docSnapshot) => {
+        deletePromises.push(deleteDoc(docSnapshot.ref))
+      })
+
+      // Also check for documents where the document ID matches the contentId
+      contentSnapshot2.docs.forEach((docSnapshot) => {
+        const data = docSnapshot.data()
+        if (docSnapshot.id === contentId || data.uploadId === contentId) {
+          deletePromises.push(deleteDoc(docSnapshot.ref))
+        }
+      })
+
       await Promise.all(deletePromises)
-
       console.log(`✅ [Bundles] Removed ${deletePromises.length} productBoxContent entries`)
 
       // Step 2: Update bundle contentItems array

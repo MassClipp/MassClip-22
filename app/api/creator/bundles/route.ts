@@ -1,78 +1,79 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { auth } from "@/lib/firebase-admin"
-import { db } from "@/lib/firebase-admin"
-import { stripe } from "@/lib/stripe"
+import { getAuth } from "firebase-admin/auth"
+import { getFirestore } from "firebase-admin/firestore"
+import { initializeApp, getApps, cert } from "firebase-admin/app"
 
-// Helper function to verify ID token
-async function verifyIdToken(request: NextRequest) {
-  try {
-    const authHeader = request.headers.get("authorization")
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      return null
-    }
-
-    const token = authHeader.substring(7)
-    const decodedToken = await auth.verifyIdToken(token)
-    return decodedToken
-  } catch (error) {
-    console.error("Error verifying token:", error)
-    return null
+// Initialize Firebase Admin
+if (!getApps().length) {
+  const serviceAccount = {
+    type: "service_account",
+    project_id: process.env.FIREBASE_PROJECT_ID,
+    private_key_id: process.env.FIREBASE_PRIVATE_KEY_ID,
+    private_key: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n"),
+    client_email: process.env.FIREBASE_CLIENT_EMAIL,
+    client_id: process.env.FIREBASE_CLIENT_ID,
+    auth_uri: "https://accounts.google.com/o/oauth2/auth",
+    token_uri: "https://oauth2.googleapis.com/token",
+    auth_provider_x509_cert_url: "https://www.googleapis.com/oauth2/v1/certs",
+    client_x509_cert_url: `https://www.googleapis.com/robot/v1/metadata/x509/${process.env.FIREBASE_CLIENT_EMAIL}`,
   }
+
+  initializeApp({
+    credential: cert(serviceAccount as any),
+  })
 }
+
+const db = getFirestore()
+const auth = getAuth()
 
 export async function GET(request: NextRequest) {
   try {
-    // Verify authentication
-    const decodedToken = await verifyIdToken(request)
-    if (!decodedToken) {
+    const authHeader = request.headers.get("authorization")
+    if (!authHeader?.startsWith("Bearer ")) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    console.log(`🔍 [Bundles API] Fetching bundles for user: ${decodedToken.uid}`)
+    const idToken = authHeader.split("Bearer ")[1]
+    const decodedToken = await auth.verifyIdToken(idToken)
+    const userId = decodedToken.uid
 
-    let bundles: any[] = []
+    console.log(`🔍 [Bundles API] Fetching bundles for user: ${userId}`)
 
-    try {
-      // Try to fetch from bundles collection first
-      const bundlesQuery = db.collection("bundles").where("creatorId", "==", decodedToken.uid)
-      const bundlesSnapshot = await bundlesQuery.get()
+    // Query bundles collection
+    const bundlesRef = db.collection("bundles")
+    const bundlesQuery = bundlesRef.where("creatorId", "==", userId)
+    const bundlesSnapshot = await bundlesQuery.get()
 
-      if (!bundlesSnapshot.empty) {
-        bundles = bundlesSnapshot.docs.map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-        }))
-        console.log(`✅ [Bundles API] Found ${bundles.length} bundles in bundles collection`)
-      } else {
-        console.log("📝 [Bundles API] No bundles found in bundles collection, checking productBoxes...")
+    const bundles: any[] = []
 
-        // Fallback to productBoxes collection
-        const productBoxesQuery = db.collection("productBoxes").where("creatorId", "==", decodedToken.uid)
-        const productBoxesSnapshot = await productBoxesQuery.get()
+    bundlesSnapshot.forEach((doc) => {
+      const data = doc.data()
+      bundles.push({
+        id: doc.id,
+        title: data.title || "Untitled Bundle",
+        description: data.description || "",
+        price: data.price || 0,
+        currency: data.currency || "usd",
+        coverImage: data.coverImage || null,
+        active: data.active !== false,
+        contentItems: data.contentItems || [],
+        createdAt: data.createdAt,
+        updatedAt: data.updatedAt,
+        productId: data.productId || null,
+        priceId: data.priceId || null,
+        type: data.type || "one_time",
+      })
+    })
 
-        if (!productBoxesSnapshot.empty) {
-          bundles = productBoxesSnapshot.docs.map((doc) => ({
-            id: doc.id,
-            ...doc.data(),
-          }))
-          console.log(`✅ [Bundles API] Found ${bundles.length} bundles in productBoxes collection`)
-        }
-      }
-    } catch (firestoreError) {
-      console.error("❌ [Bundles API] Firestore error:", firestoreError)
-
-      // Return empty array instead of failing
-      bundles = []
-    }
-
-    // Sort bundles by creation date (client-side sorting)
+    // Sort by creation date (newest first)
     bundles.sort((a, b) => {
-      const aTime = a.createdAt?.seconds || a.createdAt?.getTime?.() / 1000 || 0
-      const bTime = b.createdAt?.seconds || b.createdAt?.getTime?.() / 1000 || 0
+      if (!a.createdAt || !b.createdAt) return 0
+      const aTime = a.createdAt.seconds || a.createdAt.getTime?.() / 1000 || 0
+      const bTime = b.createdAt.seconds || b.createdAt.getTime?.() / 1000 || 0
       return bTime - aTime
     })
 
-    console.log(`📦 [Bundles API] Returning ${bundles.length} bundles`)
+    console.log(`✅ [Bundles API] Found ${bundles.length} bundles`)
 
     return NextResponse.json({
       success: true,
@@ -85,7 +86,6 @@ export async function GET(request: NextRequest) {
       {
         error: "Failed to fetch bundles",
         details: error instanceof Error ? error.message : "Unknown error",
-        bundles: [], // Return empty array as fallback
       },
       { status: 500 },
     )
@@ -94,88 +94,32 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    // Verify authentication
-    const decodedToken = await verifyIdToken(request)
-    if (!decodedToken) {
+    const authHeader = request.headers.get("authorization")
+    if (!authHeader?.startsWith("Bearer ")) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
+
+    const idToken = authHeader.split("Bearer ")[1]
+    const decodedToken = await auth.verifyIdToken(idToken)
+    const userId = decodedToken.uid
 
     const body = await request.json()
     const { title, description, price, currency = "usd", type = "one_time" } = body
 
-    // Validation
-    if (!title?.trim()) {
-      return NextResponse.json({ error: "Title is required" }, { status: 400 })
+    if (!title || !price) {
+      return NextResponse.json({ error: "Title and price are required" }, { status: 400 })
     }
 
-    if (!price || price < 0.5) {
-      return NextResponse.json({ error: "Price must be at least $0.50" }, { status: 400 })
-    }
+    console.log(`🔍 [Bundles API] Creating bundle for user: ${userId}`)
 
-    console.log(`🔨 [Bundles API] Creating bundle for user: ${decodedToken.uid}`)
-
-    // Get user data for Stripe account
-    const userDoc = await db.collection("users").doc(decodedToken.uid).get()
-    const userData = userDoc.data()
-    const stripeAccountId = userData?.stripeAccountId
-
-    let productId = null
-    let priceId = null
-
-    // Create Stripe product and price if Stripe is configured
-    if (stripe && stripeAccountId) {
-      try {
-        console.log(`💳 [Bundles API] Creating Stripe product for account: ${stripeAccountId}`)
-
-        const product = await stripe.products.create(
-          {
-            name: title.trim(),
-            description: description?.trim() || "",
-            metadata: {
-              creatorId: decodedToken.uid,
-              type: "bundle",
-            },
-          },
-          {
-            stripeAccount: stripeAccountId,
-          },
-        )
-
-        const stripePrice = await stripe.prices.create(
-          {
-            unit_amount: Math.round(price * 100),
-            currency: currency.toLowerCase(),
-            product: product.id,
-            metadata: {
-              creatorId: decodedToken.uid,
-              type: "bundle",
-            },
-          },
-          {
-            stripeAccount: stripeAccountId,
-          },
-        )
-
-        productId = product.id
-        priceId = stripePrice.id
-
-        console.log(`✅ [Bundles API] Created Stripe product: ${productId}, price: ${priceId}`)
-      } catch (stripeError) {
-        console.error("❌ [Bundles API] Stripe error:", stripeError)
-        // Continue without Stripe integration
-      }
-    }
-
-    // Create bundle in Firestore
+    // Create bundle document
     const bundleData = {
       title: title.trim(),
       description: description?.trim() || "",
       price: Number(price),
-      currency: currency.toLowerCase(),
+      currency,
       type,
-      creatorId: decodedToken.uid,
-      productId,
-      priceId,
+      creatorId: userId,
       active: true,
       contentItems: [],
       createdAt: new Date(),
@@ -183,15 +127,14 @@ export async function POST(request: NextRequest) {
     }
 
     const bundleRef = await db.collection("bundles").add(bundleData)
+    const bundleId = bundleRef.id
 
-    console.log(`✅ [Bundles API] Bundle created with ID: ${bundleRef.id}`)
+    console.log(`✅ [Bundles API] Created bundle: ${bundleId}`)
 
     return NextResponse.json({
       success: true,
+      bundleId,
       message: "Bundle created successfully",
-      bundleId: bundleRef.id,
-      productId,
-      priceId,
     })
   } catch (error) {
     console.error("❌ [Bundles API] Error creating bundle:", error)

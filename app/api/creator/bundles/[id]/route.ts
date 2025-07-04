@@ -1,43 +1,44 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { auth } from "@/lib/firebase-admin"
-import { db } from "@/lib/firebase-admin"
-import { stripe } from "@/lib/stripe"
+import { getAuth } from "firebase-admin/auth"
+import { getFirestore } from "firebase-admin/firestore"
+import { initializeApp, getApps, cert } from "firebase-admin/app"
 
-// Helper function to verify ID token
-async function verifyIdToken(request: NextRequest) {
+// Initialize Firebase Admin
+if (!getApps().length) {
+  const serviceAccount = {
+    type: "service_account",
+    project_id: process.env.FIREBASE_PROJECT_ID,
+    private_key_id: process.env.FIREBASE_PRIVATE_KEY_ID,
+    private_key: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n"),
+    client_email: process.env.FIREBASE_CLIENT_EMAIL,
+    client_id: process.env.FIREBASE_CLIENT_ID,
+    auth_uri: "https://accounts.google.com/o/oauth2/auth",
+    token_uri: "https://oauth2.googleapis.com/token",
+    auth_provider_x509_cert_url: "https://www.googleapis.com/oauth2/v1/certs",
+    client_x509_cert_url: `https://www.googleapis.com/robot/v1/metadata/x509/${process.env.FIREBASE_CLIENT_EMAIL}`,
+  }
+
+  initializeApp({
+    credential: cert(serviceAccount as any),
+  })
+}
+
+const db = getFirestore()
+const auth = getAuth()
+
+export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
   try {
     const authHeader = request.headers.get("authorization")
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      return null
-    }
-
-    const token = authHeader.substring(7)
-    const decodedToken = await auth.verifyIdToken(token)
-    return decodedToken
-  } catch (error) {
-    console.error("Error verifying token:", error)
-    return null
-  }
-}
-
-interface RouteParams {
-  params: {
-    id: string
-  }
-}
-
-export async function GET(request: NextRequest, { params }: RouteParams) {
-  try {
-    // Verify authentication
-    const decodedToken = await verifyIdToken(request)
-    if (!decodedToken) {
+    if (!authHeader?.startsWith("Bearer ")) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const bundleId = params.id
-    console.log(`🔍 [Bundle GET] Fetching bundle: ${bundleId}`)
+    const idToken = authHeader.split("Bearer ")[1]
+    const decodedToken = await auth.verifyIdToken(idToken)
+    const userId = decodedToken.uid
 
-    // Get bundle document
+    const bundleId = params.id
+
     const bundleDoc = await db.collection("bundles").doc(bundleId).get()
 
     if (!bundleDoc.exists) {
@@ -46,22 +47,19 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
 
     const bundleData = bundleDoc.data()
 
-    // Check if user owns this bundle
-    if (bundleData?.creatorId !== decodedToken.uid) {
-      return NextResponse.json({ error: "Access denied" }, { status: 403 })
-    }
-
-    const bundle = {
-      id: bundleDoc.id,
-      ...bundleData,
+    if (bundleData?.creatorId !== userId) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 403 })
     }
 
     return NextResponse.json({
       success: true,
-      bundle,
+      bundle: {
+        id: bundleDoc.id,
+        ...bundleData,
+      },
     })
   } catch (error) {
-    console.error("❌ [Bundle GET] Error:", error)
+    console.error("❌ [Bundle API] Error:", error)
     return NextResponse.json(
       {
         error: "Failed to fetch bundle",
@@ -72,166 +70,20 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
   }
 }
 
-export async function PUT(request: NextRequest, { params }: RouteParams) {
+export async function PUT(request: NextRequest, { params }: { params: { id: string } }) {
   try {
-    // Verify authentication
-    const decodedToken = await verifyIdToken(request)
-    if (!decodedToken) {
+    const authHeader = request.headers.get("authorization")
+    if (!authHeader?.startsWith("Bearer ")) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
+
+    const idToken = authHeader.split("Bearer ")[1]
+    const decodedToken = await auth.verifyIdToken(idToken)
+    const userId = decodedToken.uid
 
     const bundleId = params.id
     const body = await request.json()
 
-    console.log(`🔄 [Bundle PUT] Updating bundle: ${bundleId}`, body)
-
-    // Get existing bundle
-    const bundleDoc = await db.collection("bundles").doc(bundleId).get()
-
-    if (!bundleDoc.exists) {
-      return NextResponse.json({ error: "Bundle not found" }, { status: 404 })
-    }
-
-    const existingData = bundleDoc.data()
-
-    // Check if user owns this bundle
-    if (existingData?.creatorId !== decodedToken.uid) {
-      return NextResponse.json({ error: "Access denied" }, { status: 403 })
-    }
-
-    // Prepare update data
-    const updateData: any = {
-      updatedAt: new Date(),
-    }
-
-    if (body.title !== undefined) updateData.title = body.title.trim()
-    if (body.description !== undefined) updateData.description = body.description.trim()
-    if (body.price !== undefined) updateData.price = body.price
-    if (body.coverImage !== undefined) updateData.coverImage = body.coverImage
-    if (body.active !== undefined) updateData.active = body.active
-
-    // Update bundle in Firestore
-    await db.collection("bundles").doc(bundleId).update(updateData)
-
-    // If price changed and Stripe is configured, update Stripe price
-    if (body.price !== undefined && body.price !== existingData?.price && stripe && existingData?.productId) {
-      try {
-        const userData = await db.collection("users").doc(decodedToken.uid).get()
-        const userStripeAccount = userData.data()?.stripeAccountId
-
-        if (userStripeAccount) {
-          // Create new price in Stripe (prices are immutable)
-          const newPrice = await stripe.prices.create(
-            {
-              unit_amount: Math.round(body.price * 100),
-              currency: existingData.currency || "usd",
-              product: existingData.productId,
-              metadata: {
-                bundleId,
-                creatorId: decodedToken.uid,
-              },
-            },
-            {
-              stripeAccount: userStripeAccount,
-            },
-          )
-
-          // Update bundle with new price ID
-          await db.collection("bundles").doc(bundleId).update({
-            priceId: newPrice.id,
-          })
-
-          console.log(`✅ [Bundle PUT] Created new Stripe price: ${newPrice.id}`)
-        }
-      } catch (stripeError) {
-        console.error("❌ [Bundle PUT] Stripe error:", stripeError)
-        // Don't fail the update for Stripe issues
-      }
-    }
-
-    console.log(`✅ [Bundle PUT] Bundle updated successfully`)
-
-    return NextResponse.json({
-      success: true,
-      message: "Bundle updated successfully",
-    })
-  } catch (error) {
-    console.error("❌ [Bundle PUT] Error:", error)
-    return NextResponse.json(
-      {
-        error: "Failed to update bundle",
-        details: error instanceof Error ? error.message : "Unknown error",
-      },
-      { status: 500 },
-    )
-  }
-}
-
-export async function PATCH(request: NextRequest, { params }: RouteParams) {
-  try {
-    // Verify authentication
-    const decodedToken = await verifyIdToken(request)
-    if (!decodedToken) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
-
-    const bundleId = params.id
-    const body = await request.json()
-
-    console.log(`🔄 [Bundle PATCH] Updating bundle: ${bundleId}`, body)
-
-    // Get existing bundle
-    const bundleDoc = await db.collection("bundles").doc(bundleId).get()
-
-    if (!bundleDoc.exists) {
-      return NextResponse.json({ error: "Bundle not found" }, { status: 404 })
-    }
-
-    const existingData = bundleDoc.data()
-
-    // Check if user owns this bundle
-    if (existingData?.creatorId !== decodedToken.uid) {
-      return NextResponse.json({ error: "Access denied" }, { status: 403 })
-    }
-
-    // Update only the provided fields
-    const updateData: any = {
-      ...body,
-      updatedAt: new Date(),
-    }
-
-    await db.collection("bundles").doc(bundleId).update(updateData)
-
-    console.log(`✅ [Bundle PATCH] Bundle updated successfully`)
-
-    return NextResponse.json({
-      success: true,
-      message: "Bundle updated successfully",
-    })
-  } catch (error) {
-    console.error("❌ [Bundle PATCH] Error:", error)
-    return NextResponse.json(
-      {
-        error: "Failed to update bundle",
-        details: error instanceof Error ? error.message : "Unknown error",
-      },
-      { status: 500 },
-    )
-  }
-}
-
-export async function DELETE(request: NextRequest, { params }: RouteParams) {
-  try {
-    // Verify authentication
-    const decodedToken = await verifyIdToken(request)
-    if (!decodedToken) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
-
-    const bundleId = params.id
-    console.log(`🗑️ [Bundle DELETE] Deleting bundle: ${bundleId}`)
-
-    // Get existing bundle
     const bundleDoc = await db.collection("bundles").doc(bundleId).get()
 
     if (!bundleDoc.exists) {
@@ -240,28 +92,133 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
 
     const bundleData = bundleDoc.data()
 
-    // Check if user owns this bundle
-    if (bundleData?.creatorId !== decodedToken.uid) {
-      return NextResponse.json({ error: "Access denied" }, { status: 403 })
+    if (bundleData?.creatorId !== userId) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 403 })
     }
 
-    // Delete associated content first
-    const contentQuery = await db.collection("productBoxContent").where("productBoxId", "==", bundleId).get()
+    const updateData: any = {
+      updatedAt: new Date(),
+    }
 
-    const deletePromises = contentQuery.docs.map((doc) => doc.ref.delete())
-    await Promise.all(deletePromises)
+    if (body.title !== undefined) updateData.title = body.title.trim()
+    if (body.description !== undefined) updateData.description = body.description.trim()
+    if (body.price !== undefined) updateData.price = Number(body.price)
+    if (body.coverImage !== undefined) updateData.coverImage = body.coverImage
+    if (body.active !== undefined) updateData.active = body.active
+
+    await db.collection("bundles").doc(bundleId).update(updateData)
+
+    return NextResponse.json({
+      success: true,
+      message: "Bundle updated successfully",
+    })
+  } catch (error) {
+    console.error("❌ [Bundle API] Error updating:", error)
+    return NextResponse.json(
+      {
+        error: "Failed to update bundle",
+        details: error instanceof Error ? error.message : "Unknown error",
+      },
+      { status: 500 },
+    )
+  }
+}
+
+export async function PATCH(request: NextRequest, { params }: { params: { id: string } }) {
+  try {
+    const authHeader = request.headers.get("authorization")
+    if (!authHeader?.startsWith("Bearer ")) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
+    const idToken = authHeader.split("Bearer ")[1]
+    const decodedToken = await auth.verifyIdToken(idToken)
+    const userId = decodedToken.uid
+
+    const bundleId = params.id
+    const body = await request.json()
+
+    const bundleDoc = await db.collection("bundles").doc(bundleId).get()
+
+    if (!bundleDoc.exists) {
+      return NextResponse.json({ error: "Bundle not found" }, { status: 404 })
+    }
+
+    const bundleData = bundleDoc.data()
+
+    if (bundleData?.creatorId !== userId) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 403 })
+    }
+
+    const updateData: any = {
+      updatedAt: new Date(),
+    }
+
+    if (body.active !== undefined) updateData.active = body.active
+
+    await db.collection("bundles").doc(bundleId).update(updateData)
+
+    return NextResponse.json({
+      success: true,
+      message: "Bundle status updated successfully",
+    })
+  } catch (error) {
+    console.error("❌ [Bundle API] Error updating status:", error)
+    return NextResponse.json(
+      {
+        error: "Failed to update bundle status",
+        details: error instanceof Error ? error.message : "Unknown error",
+      },
+      { status: 500 },
+    )
+  }
+}
+
+export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
+  try {
+    const authHeader = request.headers.get("authorization")
+    if (!authHeader?.startsWith("Bearer ")) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
+    const idToken = authHeader.split("Bearer ")[1]
+    const decodedToken = await auth.verifyIdToken(idToken)
+    const userId = decodedToken.uid
+
+    const bundleId = params.id
+
+    const bundleDoc = await db.collection("bundles").doc(bundleId).get()
+
+    if (!bundleDoc.exists) {
+      return NextResponse.json({ error: "Bundle not found" }, { status: 404 })
+    }
+
+    const bundleData = bundleDoc.data()
+
+    if (bundleData?.creatorId !== userId) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 403 })
+    }
+
+    // Delete associated content
+    const contentQuery = db.collection("productBoxContent").where("productBoxId", "==", bundleId)
+    const contentSnapshot = await contentQuery.get()
+
+    const batch = db.batch()
+    contentSnapshot.docs.forEach((doc) => {
+      batch.delete(doc.ref)
+    })
 
     // Delete the bundle
-    await db.collection("bundles").doc(bundleId).delete()
+    batch.delete(db.collection("bundles").doc(bundleId))
 
-    console.log(`✅ [Bundle DELETE] Bundle deleted successfully`)
+    await batch.commit()
 
     return NextResponse.json({
       success: true,
       message: "Bundle deleted successfully",
     })
   } catch (error) {
-    console.error("❌ [Bundle DELETE] Error:", error)
+    console.error("❌ [Bundle API] Error deleting:", error)
     return NextResponse.json(
       {
         error: "Failed to delete bundle",
