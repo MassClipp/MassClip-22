@@ -1,9 +1,8 @@
-// -----------------------------------------------------------------------------
-// Firebase *client-side* initialisation (unchanged from original)
-// -----------------------------------------------------------------------------
 import { initializeApp, getApps } from "firebase/app"
 import { getAuth, connectAuthEmulator } from "firebase/auth"
 import { getFirestore, connectFirestoreEmulator } from "firebase/firestore"
+import type { NextAuthOptions } from "next-auth"
+import GoogleProvider from "next-auth/providers/google"
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -15,61 +14,63 @@ const firebaseConfig = {
   measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID,
 }
 
-let clientApp
-if (getApps().length === 0) {
-  clientApp = initializeApp(firebaseConfig)
-} else {
-  clientApp = getApps()[0]
-}
+// Initialize Firebase
+const app = !getApps().length ? initializeApp(firebaseConfig) : getApps()[0]
 
-export const auth = getAuth(clientApp)
-export const db = getFirestore(clientApp)
+// Initialize Firebase Auth
+export const auth = getAuth(app)
 
-// Connect to local emulators in development (optional)
-if (typeof window !== "undefined" && process.env.NODE_ENV === "development") {
-  if (process.env.NEXT_PUBLIC_USE_FIREBASE_EMULATORS === "true") {
-    try {
-      if (!auth.config.emulator) {
-        connectAuthEmulator(auth, "http://localhost:9099")
-      }
-      if (!(db as any)._delegate._databaseId.database.includes("localhost")) {
-        connectFirestoreEmulator(db, "localhost", 8080)
-      }
-    } catch {
-      /* ignore – emulator may already be connected */
+// Initialize Firestore
+export const db = getFirestore(app)
+
+// Connect to emulators in development
+if (process.env.NODE_ENV === "development" && typeof window !== "undefined") {
+  try {
+    if (!auth._delegate._config.emulator) {
+      connectAuthEmulator(auth, "http://localhost:9099")
     }
+  } catch (error) {
+    // Emulator already connected
+  }
+
+  try {
+    if (!db._delegate._databaseId.projectId.includes("demo-")) {
+      connectFirestoreEmulator(db, "localhost", 8080)
+    }
+  } catch (error) {
+    // Emulator already connected
   }
 }
 
-// -----------------------------------------------------------------------------
-// NextAuth configuration – exported as `authOptions`
-// -----------------------------------------------------------------------------
-import type { NextAuthOptions } from "next-auth"
-import GoogleProvider from "next-auth/providers/google"
-
+// NextAuth configuration
 export const authOptions: NextAuthOptions = {
   providers: [
     GoogleProvider({
-      clientId: process.env.GOOGLE_CLIENT_ID ?? "",
-      clientSecret: process.env.GOOGLE_CLIENT_SECRET ?? "",
+      clientId: process.env.GOOGLE_CLIENT_ID!,
+      clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
     }),
   ],
-  session: { strategy: "jwt" },
-  pages: {
-    signIn: "/login",
-    error: "/login",
+  session: {
+    strategy: "jwt",
   },
   callbacks: {
+    async jwt({ token, user }) {
+      if (user) {
+        token.uid = user.id
+      }
+      return token
+    },
     async session({ session, token }) {
-      if (token.sub) {
-        // @ts-ignore – extend session type ad-hoc
-        session.user.id = token.sub
+      if (session.user) {
+        session.user.id = token.uid as string
       }
       return session
     },
   },
-  secret: process.env.NEXTAUTH_SECRET,
+  pages: {
+    signIn: "/login",
+    error: "/login",
+  },
 }
 
-// Re-export the Firebase app in case other modules import default
-export default clientApp
+export default auth

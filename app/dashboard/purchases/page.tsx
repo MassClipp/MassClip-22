@@ -2,12 +2,11 @@
 
 import { useEffect, useState } from "react"
 import { useFirebaseAuth } from "@/hooks/use-firebase-auth"
-import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
-import { AlertCircle, Package, Calendar, Play } from "lucide-react"
-import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Package, Calendar, Play } from "lucide-react"
 import { toast } from "@/hooks/use-toast"
 import PurchasesFullScreen from "@/components/purchases-full-screen"
+import { Suspense } from "react"
 
 interface Purchase {
   id: string
@@ -34,6 +33,38 @@ interface Purchase {
 }
 
 type TabType = "downloads" | "orders"
+
+function PurchasesLoading() {
+  return (
+    <div className="min-h-screen bg-black text-white pt-24">
+      <div className="px-6">
+        <div className="mb-8">
+          <Skeleton className="h-10 w-64 mb-6 bg-zinc-800" />
+          <div className="flex gap-8 mb-6">
+            <Skeleton className="h-6 w-24 bg-zinc-800" />
+            <Skeleton className="h-6 w-20 bg-zinc-800" />
+          </div>
+          <Skeleton className="h-12 w-full max-w-xl bg-zinc-800" />
+        </div>
+        <div className="space-y-3">
+          {[...Array(3)].map((_, i) => (
+            <div key={i} className="flex items-center gap-4 p-4 bg-zinc-900/50 rounded-lg border border-zinc-800">
+              <Skeleton className="h-16 w-16 rounded-lg bg-zinc-800" />
+              <div className="flex-1">
+                <Skeleton className="h-5 w-48 mb-2 bg-zinc-800" />
+                <Skeleton className="h-4 w-32 bg-zinc-800" />
+              </div>
+              <div className="flex gap-2">
+                <Skeleton className="h-9 w-20 bg-zinc-800" />
+                <Skeleton className="h-9 w-24 bg-zinc-800" />
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
 
 export default function PurchasesPage() {
   const { user, loading: authLoading } = useFirebaseAuth()
@@ -164,66 +195,20 @@ export default function PurchasesPage() {
     }
   }
 
-  if (authLoading || loading) {
-    return (
-      <div className="min-h-screen bg-black text-white">
-        <div className="w-full px-8 py-12">
-          <div className="mb-12">
-            <Skeleton className="h-12 w-64 mb-6 bg-zinc-800" />
-            <div className="flex gap-8 mb-8">
-              <Skeleton className="h-8 w-24 bg-zinc-800" />
-              <Skeleton className="h-8 w-24 bg-zinc-800" />
-            </div>
-            <Skeleton className="h-12 w-full max-w-2xl bg-zinc-800" />
-          </div>
-          <div className="space-y-6">
-            {[...Array(3)].map((_, i) => (
-              <div key={i} className="flex items-center gap-6 p-8 bg-zinc-900 rounded-lg">
-                <Skeleton className="h-20 w-20 rounded-lg bg-zinc-800" />
-                <div className="flex-1">
-                  <Skeleton className="h-6 w-48 mb-3 bg-zinc-800" />
-                  <Skeleton className="h-4 w-32 bg-zinc-800" />
-                </div>
-                <div className="flex gap-3">
-                  <Skeleton className="h-10 w-24 bg-zinc-800" />
-                  <Skeleton className="h-10 w-28 bg-zinc-800" />
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-    )
-  }
-
-  if (error) {
-    return (
-      <div className="min-h-screen bg-black text-white">
-        <div className="w-full px-8 py-12">
-          <Alert variant="destructive" className="bg-red-900/20 border-red-800 max-w-2xl">
-            <AlertCircle className="h-4 w-4" />
-            <AlertDescription>{error}</AlertDescription>
-          </Alert>
-          <Button onClick={fetchPurchases} className="mt-4 bg-red-600 hover:bg-red-700" variant="default">
-            Try Again
-          </Button>
-        </div>
-      </div>
-    )
-  }
-
   return (
-    <PurchasesFullScreen
-      purchases={purchases}
-      loading={loading}
-      error={error}
-      searchQuery={searchQuery}
-      setSearchQuery={setSearchQuery}
-      activeTab={activeTab}
-      setActiveTab={setActiveTab}
-      handleDownload={handleDownload}
-      filteredPurchases={filteredPurchases}
-      getContentIcon={getContentIcon}
-    />
+    <Suspense fallback={<PurchasesLoading />}>
+      <PurchasesFullScreen
+        purchases={purchases}
+        loading={loading}
+        error={error}
+        searchQuery={searchQuery}
+        setSearchQuery={setSearchQuery}
+        activeTab={activeTab}
+        setActiveTab={setActiveTab}
+        handleDownload={handleDownload}
+        filteredPurchases={filteredPurchases}
+        getContentIcon={getContentIcon}
+      />
+    </Suspense>
   )
 }
