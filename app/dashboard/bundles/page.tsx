@@ -1,10 +1,8 @@
 "use client"
 
 import { useRef } from "react"
-
 import { useState, useEffect } from "react"
-import { motion, AnimatePresence } from "framer-motion"
-import { Plus, Edit, Eye, EyeOff, Loader2, AlertCircle, Upload, X, Check, Trash2, ImageIcon } from "lucide-react"
+import { Plus, Eye, AlertCircle, X, Trash2, Package, DollarSign } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -18,6 +16,9 @@ import { useToast } from "@/hooks/use-toast"
 import { collection, query, where, getDocs, doc, updateDoc, deleteDoc, onSnapshot, addDoc } from "firebase/firestore"
 import { db } from "@/lib/firebase"
 import { useAuth } from "@/contexts/auth-context"
+import { useFirebaseAuth } from "@/hooks/use-firebase-auth"
+import { Skeleton } from "@/components/ui/skeleton"
+import { Alert, AlertDescription } from "@/components/ui/alert"
 
 interface ContentItem {
   id: string
@@ -63,7 +64,34 @@ interface EditBundleForm {
   coverImage: string
 }
 
+interface BundleContent {
+  id: string
+  uploadId: string
+  title: string
+  description?: string
+  thumbnailUrl?: string
+  fileUrl: string
+  fileType: string
+  fileSize: number
+  addedAt: any
+}
+
+interface Bundle {
+  id: string
+  title: string
+  description: string
+  price: number
+  currency: string
+  isActive: boolean
+  creatorId: string
+  contentItems: BundleContent[]
+  contentCount: number
+  createdAt: any
+  updatedAt: any
+}
+
 export default function BundlesPage() {
+  const { user: authUser, loading: authLoading } = useFirebaseAuth()
   const { user } = useAuth()
   const [productBoxes, setProductBoxes] = useState<ProductBox[]>([])
   const [contentItems, setContentItems] = useState<{ [key: string]: ContentItem[] }>({})
@@ -101,6 +129,20 @@ export default function BundlesPage() {
 
   // Real-time listeners for content updates
   const contentListeners = useRef<{ [key: string]: () => void }>({})
+
+  const [bundles, setBundles] = useState<Bundle[]>([])
+  const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false)
+  const [selectedBundle, setSelectedBundle] = useState<Bundle | null>(null)
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
+
+  // Form states
+  const [newBundle, setNewBundle] = useState({
+    title: "",
+    description: "",
+    price: "",
+    currency: "usd",
+    isActive: true,
+  })
 
   // Fetch product boxes - Updated to use the bundles API
   const fetchProductBoxes = async () => {
@@ -163,6 +205,247 @@ export default function BundlesPage() {
       setError(err instanceof Error ? err.message : "Failed to load bundles")
     } finally {
       setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    if (authUser) {
+      fetchBundles()
+      fetchUploads()
+    }
+  }, [authUser])
+
+  const fetchBundles = async () => {
+    try {
+      setLoading(true)
+      setError(null)
+
+      const token = await authUser.getIdToken()
+      const response = await fetch("/api/creator/bundles", {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch bundles: ${response.status}`)
+      }
+
+      const data = await response.json()
+      setBundles(data.bundles || [])
+    } catch (err) {
+      console.error("Error fetching bundles:", err)
+      setError(err instanceof Error ? err.message : "Failed to fetch bundles")
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const fetchUploads = async () => {
+    try {
+      const token = await authUser.getIdToken()
+      const response = await fetch("/api/creator/uploads", {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
+
+      if (!response.ok) {
+        throw new Error("Failed to fetch uploads")
+      }
+
+      const data = await response.json()
+      setAvailableUploads(data.uploads || [])
+    } catch (err) {
+      console.error("Error fetching uploads:", err)
+    }
+  }
+
+  const handleCreateBundle = async () => {
+    try {
+      if (!newBundle.title || !newBundle.price) {
+        toast({
+          title: "Error",
+          description: "Title and price are required",
+          variant: "destructive",
+        })
+        return
+      }
+
+      const token = await user?.getIdToken()
+      if (!token) throw new Error("Not authenticated")
+
+      const response = await fetch("/api/creator/bundles", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify(newBundle),
+      })
+
+      if (!response.ok) {
+        throw new Error("Failed to create bundle")
+      }
+
+      const data = await response.json()
+      setBundles((prev) => [data, ...prev])
+      setIsCreateDialogOpen(false)
+      setNewBundle({
+        title: "",
+        description: "",
+        price: "",
+        currency: "usd",
+        isActive: true,
+      })
+
+      toast({
+        title: "Success",
+        description: "Bundle created successfully",
+      })
+    } catch (error) {
+      console.error("Error creating bundle:", error)
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to create bundle",
+        variant: "destructive",
+      })
+    } finally {
+      setCreateLoading(false)
+    }
+  }
+
+  const handleAddContentToBundle = async (bundleId: string, uploadId: string) => {
+    try {
+      const token = await authUser.getIdToken()
+      const response = await fetch(`/api/creator/bundles/${bundleId}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          action: "add_content",
+          uploadId,
+        }),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || "Failed to add content")
+      }
+
+      // Refresh bundles to show updated content
+      await fetchBundles()
+
+      toast({
+        title: "Success",
+        description: "Content added to bundle",
+      })
+    } catch (err) {
+      console.error("Error adding content to bundle:", err)
+      toast({
+        title: "Error",
+        description: err instanceof Error ? err.message : "Failed to add content",
+        variant: "destructive",
+      })
+    } finally {
+      setCreateLoading(false)
+    }
+  }
+
+  const handleRemoveContentFromBundle = async (bundleId: string, uploadId: string) => {
+    try {
+      const token = await authUser.getIdToken()
+      const response = await fetch(`/api/creator/bundles/${bundleId}`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          action: "remove_content",
+          uploadId,
+        }),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || "Failed to remove content")
+      }
+
+      // Update local state immediately for better UX
+      setBundles((prev) =>
+        prev.map((bundle) => {
+          if (bundle.id === bundleId) {
+            return {
+              ...bundle,
+              contentItems: bundle.contentItems.filter((item) => item.uploadId !== uploadId),
+              contentCount: bundle.contentCount - 1,
+            }
+          }
+          return bundle
+        }),
+      )
+
+      toast({
+        title: "Success",
+        description: "Content removed from bundle",
+      })
+    } catch (err) {
+      console.error("Error removing content from bundle:", err)
+      toast({
+        title: "Error",
+        description: err instanceof Error ? err.message : "Failed to remove content",
+        variant: "destructive",
+      })
+      // Refresh bundles on error to ensure consistency
+      await fetchBundles()
+    }
+  }
+
+  const handleDeleteBundle = async (bundleId: string) => {
+    if (!confirm("Are you sure you want to delete this bundle? This action cannot be undone.")) {
+      return
+    }
+
+    try {
+      const token = await authUser.getIdToken()
+      const response = await fetch(`/api/creator/bundles/${bundleId}`, {
+        method: "DELETE",
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
+
+      if (!response.ok) {
+        throw new Error("Failed to delete bundle")
+      }
+
+      setBundles((prev) => prev.filter((bundle) => bundle.id !== bundleId))
+
+      toast({
+        title: "Success",
+        description: "Bundle deleted successfully",
+      })
+    } catch (err) {
+      console.error("Error deleting bundle:", err)
+      toast({
+        title: "Error",
+        description: "Failed to delete bundle",
+        variant: "destructive",
+      })
+    }
+  }
+
+  const formatPrice = (price: number, currency: string) => {
+    try {
+      return new Intl.NumberFormat("en-US", {
+        style: "currency",
+        currency: currency.toUpperCase(),
+      }).format(price)
+    } catch {
+      return `$${price.toFixed(2)}`
     }
   }
 
@@ -242,15 +525,15 @@ export default function BundlesPage() {
               const item: ContentItem = {
                 id: uploadId,
                 title: uploadData.title || uploadData.filename || uploadData.originalFileName || "Untitled",
-                fileUrl: uploadData.fileUrl || uploadData.publicUrl || uploadData.downloadUrl || "",
+                filename: uploadData.filename || uploadData.title || uploadData.name || "Unknown",
+                fileUrl: uploadData.fileUrl,
                 thumbnailUrl: uploadData.thumbnailUrl || "",
-                mimeType: uploadData.mimeType || uploadData.fileType || "application/octet-stream",
+                mimeType: uploadData.mimeType || uploadData.type || "application/octet-stream",
                 fileSize: uploadData.fileSize || uploadData.size || 0,
                 contentType: getContentType(uploadData.mimeType || uploadData.fileType || ""),
-                duration: uploadData.duration || undefined,
-                filename: uploadData.filename || uploadData.originalFileName || `${uploadId}.file`,
-                createdAt: uploadData.createdAt || uploadData.uploadedAt,
-                type: uploadData.type,
+                duration: uploadData.duration,
+                createdAt: uploadData.createdAt || uploadData.addedAt || uploadData.timestamp,
+                type: uploadData.type || uploadData.mimeType?.split("/")[0] || "document",
               }
 
               if (item.fileUrl && item.fileUrl.startsWith("http")) {
@@ -377,7 +660,7 @@ export default function BundlesPage() {
   }
 
   // Handle create bundle
-  const handleCreateBundle = async () => {
+  const handleCreateBundleOld = async () => {
     if (!createForm.title.trim() || !createForm.price) {
       toast({
         title: "Error",
@@ -699,7 +982,7 @@ export default function BundlesPage() {
   }
 
   // Handle adding content to bundle
-  const handleAddContentToBundle = async (productBoxId: string) => {
+  const handleAddContentToBundleOld = async (productBoxId: string) => {
     if (selectedContentIds.length === 0) {
       toast({
         title: "No Content Selected",
@@ -762,7 +1045,7 @@ export default function BundlesPage() {
   }
 
   // Remove content from bundle - Enhanced for permanent deletion
-  const handleRemoveContentFromBundle = async (productBoxId: string, contentId: string) => {
+  const handleRemoveContentFromBundleOld = async (productBoxId: string, contentId: string) => {
     if (!confirm("Remove this content from the bundle?")) return
 
     try {
@@ -851,715 +1134,296 @@ export default function BundlesPage() {
     }
   }, [user])
 
-  if (loading) {
+  if (authLoading || loading) {
     return (
-      <div className="flex items-center justify-center py-12">
-        <Loader2 className="h-8 w-8 text-zinc-500 animate-spin" />
-        <span className="ml-3 text-zinc-400">Loading bundles...</span>
+      <div className="min-h-screen bg-black text-white">
+        <div className="container mx-auto px-6 py-8">
+          <div className="mb-8">
+            <Skeleton className="h-10 w-64 mb-3 bg-zinc-800" />
+            <Skeleton className="h-5 w-96 bg-zinc-800" />
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {[...Array(3)].map((_, i) => (
+              <Card key={i} className="bg-zinc-900 border-zinc-800">
+                <CardContent className="p-6">
+                  <Skeleton className="h-6 w-3/4 mb-2 bg-zinc-800" />
+                  <Skeleton className="h-4 w-1/2 mb-4 bg-zinc-800" />
+                  <Skeleton className="h-20 w-full bg-zinc-800" />
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </div>
       </div>
     )
   }
 
   if (error) {
     return (
-      <div className="text-center py-12">
-        <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
-        <h3 className="text-xl font-medium text-white mb-2">Failed to Load Bundles</h3>
-        <p className="text-zinc-400 mb-4">{error}</p>
-        <Button
-          onClick={fetchProductBoxes}
-          variant="outline"
-          className="border-zinc-700 hover:bg-zinc-800 bg-transparent"
-        >
-          Try Again
-        </Button>
+      <div className="min-h-screen bg-black text-white">
+        <div className="container mx-auto px-6 py-8">
+          <Alert variant="destructive" className="bg-red-900/20 border-red-800">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+          <Button onClick={fetchBundles} className="mt-4 bg-red-600 hover:bg-red-700" variant="default">
+            Try Again
+          </Button>
+        </div>
       </div>
     )
   }
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-white">Bundles</h1>
-          <p className="text-zinc-400">Create and manage premium content packages for your audience</p>
-        </div>
-
-        <Dialog open={showCreateModal} onOpenChange={setShowCreateModal}>
-          <DialogTrigger asChild>
-            <Button className="bg-red-600 hover:bg-red-700">
-              <Plus className="h-4 w-4 mr-2" />
-              Create Bundle
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="bg-zinc-900 border-zinc-800 text-white">
-            <DialogHeader>
-              <DialogTitle>Create New Bundle</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4">
-              <div>
-                <Label htmlFor="title">Title *</Label>
-                <Input
-                  id="title"
-                  value={createForm.title}
-                  onChange={(e) => setCreateForm((prev) => ({ ...prev, title: e.target.value }))}
-                  placeholder="Enter bundle title"
-                  className="bg-zinc-800 border-zinc-700"
-                />
-              </div>
-
-              <div>
-                <Label htmlFor="description">Description</Label>
-                <Textarea
-                  id="description"
-                  value={createForm.description}
-                  onChange={(e) => setCreateForm((prev) => ({ ...prev, description: e.target.value }))}
-                  placeholder="Describe your bundle"
-                  className="bg-zinc-800 border-zinc-700"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
+    <div className="min-h-screen bg-black text-white">
+      <div className="container mx-auto px-6 py-8">
+        {/* Header */}
+        <div className="flex items-center justify-between mb-8">
+          <div>
+            <h1 className="text-3xl font-bold mb-2">Bundles</h1>
+            <p className="text-zinc-400">Create and manage premium content packages for your audience</p>
+          </div>
+          <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+            <DialogTrigger asChild>
+              <Button className="bg-red-600 hover:bg-red-700">
+                <Plus className="h-4 w-4 mr-2" />
+                Create Bundle
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="bg-zinc-900 border-zinc-800 text-white">
+              <DialogHeader>
+                <DialogTitle>Create New Bundle</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4">
                 <div>
-                  <Label htmlFor="price">Price (USD) *</Label>
+                  <Label htmlFor="title">Title</Label>
                   <Input
-                    id="price"
-                    type="number"
-                    step="0.01"
-                    min="0.50"
-                    value={createForm.price}
-                    onChange={(e) => setCreateForm((prev) => ({ ...prev, price: e.target.value }))}
-                    placeholder="9.99"
+                    id="title"
+                    value={newBundle.title}
+                    onChange={(e) => setNewBundle((prev) => ({ ...prev, title: e.target.value }))}
+                    placeholder="Bundle title"
                     className="bg-zinc-800 border-zinc-700"
                   />
                 </div>
-
                 <div>
-                  <Label htmlFor="billing">Billing Type</Label>
-                  <Select
-                    value={createForm.billingType}
-                    onValueChange={(value: "one_time" | "subscription") =>
-                      setCreateForm((prev) => ({ ...prev, billingType: value }))
-                    }
+                  <Label htmlFor="description">Description</Label>
+                  <Textarea
+                    id="description"
+                    value={newBundle.description}
+                    onChange={(e) => setNewBundle((prev) => ({ ...prev, description: e.target.value }))}
+                    placeholder="Bundle description"
+                    className="bg-zinc-800 border-zinc-700"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="price">Price</Label>
+                    <Input
+                      id="price"
+                      type="number"
+                      step="0.01"
+                      value={newBundle.price}
+                      onChange={(e) => setNewBundle((prev) => ({ ...prev, price: e.target.value }))}
+                      placeholder="0.00"
+                      className="bg-zinc-800 border-zinc-700"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="currency">Currency</Label>
+                    <Select
+                      value={newBundle.currency}
+                      onValueChange={(value) => setNewBundle((prev) => ({ ...prev, currency: value }))}
+                    >
+                      <SelectTrigger className="bg-zinc-800 border-zinc-700">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent className="bg-zinc-800 border-zinc-700">
+                        <SelectItem value="usd">USD</SelectItem>
+                        <SelectItem value="eur">EUR</SelectItem>
+                        <SelectItem value="gbp">GBP</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Switch
+                    id="active"
+                    checked={newBundle.isActive}
+                    onCheckedChange={(checked) => setNewBundle((prev) => ({ ...prev, isActive: checked }))}
+                  />
+                  <Label htmlFor="active">Active</Label>
+                </div>
+                <div className="flex gap-2 pt-4">
+                  <Button onClick={handleCreateBundle} className="flex-1 bg-red-600 hover:bg-red-700">
+                    Create Bundle
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={() => setIsCreateDialogOpen(false)}
+                    className="flex-1 border-zinc-700"
                   >
-                    <SelectTrigger className="bg-zinc-800 border-zinc-700">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent className="bg-zinc-800 border-zinc-700">
-                      <SelectItem value="one_time">One-time Payment</SelectItem>
-                      <SelectItem value="subscription">Monthly Subscription</SelectItem>
-                    </SelectContent>
-                  </Select>
+                    Cancel
+                  </Button>
                 </div>
               </div>
-
-              {/* Enhanced Thumbnail Section */}
-              <div className="space-y-4">
-                <Label>Bundle Thumbnail (Optional)</Label>
-
-                {/* Thumbnail Preview */}
-                {createForm.thumbnail && (
-                  <div className="relative">
-                    <div className="aspect-square w-32 h-32 rounded-lg overflow-hidden border border-zinc-700">
-                      <img
-                        src={URL.createObjectURL(createForm.thumbnail) || "/placeholder.svg"}
-                        alt="Thumbnail preview"
-                        className="w-full h-full object-cover"
-                      />
-                    </div>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setCreateForm((prev) => ({ ...prev, thumbnail: null }))}
-                      className="absolute -top-2 -right-2 h-6 w-6 rounded-full bg-red-600 hover:bg-red-700 text-white p-0"
-                    >
-                      <X className="h-3 w-3" />
-                    </Button>
-                    <p className="text-xs text-zinc-400 mt-2">{createForm.thumbnail.name}</p>
-                  </div>
-                )}
-
-                {/* Upload Area */}
-                {!createForm.thumbnail && (
-                  <div
-                    className="border-2 border-dashed border-zinc-700 rounded-lg p-8 text-center hover:border-zinc-600 transition-colors cursor-pointer"
-                    onClick={() => document.getElementById("thumbnail-upload")?.click()}
-                    onDragOver={(e) => {
-                      e.preventDefault()
-                      e.currentTarget.classList.add("border-zinc-500")
-                    }}
-                    onDragLeave={(e) => {
-                      e.preventDefault()
-                      e.currentTarget.classList.remove("border-zinc-500")
-                    }}
-                    onDrop={(e) => {
-                      e.preventDefault()
-                      e.currentTarget.classList.remove("border-zinc-500")
-                      const files = e.dataTransfer.files
-                      if (files.length > 0) {
-                        const file = files[0]
-                        if (file.type.startsWith("image/")) {
-                          setCreateForm((prev) => ({ ...prev, thumbnail: file }))
-                        }
-                      }
-                    }}
-                  >
-                    <div className="space-y-3">
-                      <div className="w-16 h-16 mx-auto bg-zinc-800 rounded-lg flex items-center justify-center">
-                        <Upload className="h-8 w-8 text-zinc-500" />
-                      </div>
-                      <div>
-                        <p className="text-sm text-zinc-300 font-medium">Upload bundle thumbnail</p>
-                        <p className="text-xs text-zinc-500 mt-1">Drag and drop an image here, or click to browse</p>
-                      </div>
-                      <div className="text-xs text-zinc-600">
-                        Supports: JPEG, PNG, WebP • Max size: 5MB • Recommended: 400x400px
-                      </div>
-                    </div>
-                  </div>
-                )}
-
-                {/* Hidden File Input */}
-                <input
-                  id="thumbnail-upload"
-                  type="file"
-                  accept="image/jpeg,image/jpg,image/png,image/webp"
-                  className="hidden"
-                  onChange={(e) => {
-                    const file = e.target.files?.[0]
-                    if (file) {
-                      // Validate file type
-                      const allowedTypes = ["image/jpeg", "image/jpg", "image/png", "image/webp"]
-                      if (!allowedTypes.includes(file.type)) {
-                        toast({
-                          title: "Invalid File Type",
-                          description: "Please select a JPEG, PNG, or WebP image",
-                          variant: "destructive",
-                        })
-                        return
-                      }
-
-                      // Validate file size (5MB max)
-                      const maxSize = 5 * 1024 * 1024
-                      if (file.size > maxSize) {
-                        toast({
-                          title: "File Too Large",
-                          description: "Please select an image smaller than 5MB",
-                          variant: "destructive",
-                        })
-                        return
-                      }
-
-                      setCreateForm((prev) => ({ ...prev, thumbnail: file }))
-                    }
-                  }}
-                />
-              </div>
-
-              <div className="flex justify-end gap-3 pt-4">
-                <Button variant="outline" onClick={() => setShowCreateModal(false)} className="border-zinc-700">
-                  Cancel
-                </Button>
-                <Button onClick={handleCreateBundle} disabled={createLoading} className="bg-red-600 hover:bg-red-700">
-                  {createLoading ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Creating...
-                    </>
-                  ) : (
-                    "Create Bundle"
-                  )}
-                </Button>
-              </div>
-            </div>
-          </DialogContent>
-        </Dialog>
-      </div>
-
-      {/* Product Boxes */}
-      {productBoxes.length === 0 ? (
-        <div className="text-center py-12">
-          <div className="text-6xl mb-4">📦</div>
-          <h3 className="text-xl font-medium text-white mb-2">No Bundles Yet</h3>
-          <p className="text-zinc-400 mb-4">Create your first premium content bundle to get started</p>
-          <Button className="bg-red-600 hover:bg-red-700" onClick={() => setShowCreateModal(true)}>
-            <Plus className="h-4 w-4 mr-2" />
-            Create Your First Bundle
-          </Button>
+            </DialogContent>
+          </Dialog>
         </div>
-      ) : (
-        <div className="space-y-6">
-          {productBoxes.map((productBox, index) => {
-            const boxContent = contentItems[productBox.id] || []
-            const isContentLoading = contentLoading[productBox.id] || false
-            const isContentVisible = showContent[productBox.id] || false
 
-            return (
-              <motion.div
-                key={productBox.id}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.3, delay: index * 0.1 }}
+        {/* Bundles Grid */}
+        {bundles.length === 0 ? (
+          <div className="text-center py-16">
+            <div className="max-w-md mx-auto">
+              <div className="w-24 h-24 mx-auto mb-6 bg-zinc-900 rounded-full flex items-center justify-center">
+                <Package className="h-12 w-12 text-zinc-600" />
+              </div>
+              <h3 className="text-xl font-semibold mb-3">No bundles yet</h3>
+              <p className="text-zinc-400 mb-6">Create your first bundle to start selling premium content packages.</p>
+              <Button onClick={() => setIsCreateDialogOpen(true)} className="bg-red-600 hover:bg-red-700">
+                <Plus className="h-4 w-4 mr-2" />
+                Create Your First Bundle
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
+            {bundles.map((bundle) => (
+              <Card
+                key={bundle.id}
+                className="bg-zinc-900/50 border-zinc-800 hover:border-zinc-700 transition-all duration-300"
               >
-                <Card className="bg-zinc-900/50 border-zinc-800 overflow-hidden">
-                  <CardHeader>
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-3 mb-2">
-                          <CardTitle className="text-xl text-white">{productBox.title}</CardTitle>
-                          <Badge variant={productBox.active ? "default" : "secondary"}>
-                            {productBox.active ? "Active" : "Inactive"}
-                          </Badge>
-                        </div>
-                        <p className="text-zinc-400 mb-3">{productBox.description}</p>
-                        <div className="flex items-center gap-4">
-                          <span className="text-2xl font-bold text-green-400">${productBox.price.toFixed(2)}</span>
-                          <span className="text-sm text-zinc-500">
-                            {boxContent.length} content item{boxContent.length !== 1 ? "s" : ""}
-                          </span>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-2">
-                        <Switch checked={productBox.active} onCheckedChange={() => handleToggleActive(productBox.id)} />
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="hover:bg-zinc-800"
-                          onClick={() => openEditModal(productBox)}
-                        >
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="hover:bg-red-900/50 text-red-400 hover:text-red-300"
-                          onClick={() => handleDelete(productBox.id)}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
+                <CardHeader className="pb-4">
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1 min-w-0">
+                      <CardTitle className="text-lg font-semibold text-white mb-1 truncate">{bundle.title}</CardTitle>
+                      <p className="text-sm text-zinc-400 line-clamp-2">{bundle.description}</p>
                     </div>
-                  </CardHeader>
-
-                  <CardContent>
-                    {/* Content Section Header */}
-                    <div className="flex items-center justify-between mb-4">
-                      <span className="text-sm text-zinc-400">Content ({boxContent.length})</span>
+                    <div className="flex items-center gap-2 ml-4">
+                      <Badge
+                        variant={bundle.isActive ? "default" : "secondary"}
+                        className={bundle.isActive ? "bg-green-600" : "bg-zinc-600"}
+                      >
+                        {bundle.isActive ? "Active" : "Inactive"}
+                      </Badge>
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={() => toggleContentVisibility(productBox.id)}
-                        className="text-xs text-zinc-400 hover:text-white hover:bg-zinc-800"
+                        onClick={() => handleDeleteBundle(bundle.id)}
+                        className="text-red-400 hover:text-red-300 hover:bg-red-900/20"
                       >
-                        {isContentVisible ? (
-                          <>
-                            <EyeOff className="h-3 w-3 mr-1" />
-                            Hide
-                          </>
-                        ) : (
-                          <>
-                            <Eye className="h-3 w-3 mr-1" />
-                            Show Content
-                          </>
-                        )}
+                        <Trash2 className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent className="pt-0">
+                  <div className="flex items-center justify-between mb-4">
+                    <div className="flex items-center gap-2">
+                      <DollarSign className="h-4 w-4 text-green-400" />
+                      <span className="font-semibold text-green-400">{formatPrice(bundle.price, bundle.currency)}</span>
+                    </div>
+                    <div className="text-sm text-zinc-400">{bundle.contentCount} content items</div>
+                  </div>
+
+                  {/* Content Items */}
+                  <div className="space-y-3 mb-4">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-sm font-medium text-zinc-300">Content ({bundle.contentCount})</h4>
+                      <Button variant="ghost" size="sm" className="text-zinc-400 hover:text-zinc-300 text-xs">
+                        <Eye className="h-3 w-3 mr-1" />
+                        Hide
                       </Button>
                     </div>
 
-                    {/* Content Grid */}
-                    <AnimatePresence>
-                      {isContentVisible && (
-                        <motion.div
-                          initial={{ opacity: 0, height: 0 }}
-                          animate={{ opacity: 1, height: "auto" }}
-                          exit={{ opacity: 0, height: 0 }}
-                          transition={{ duration: 0.3 }}
-                          className="space-y-4"
-                        >
-                          {isContentLoading ? (
-                            <div className="flex items-center justify-center py-8">
-                              <Loader2 className="h-5 w-5 text-zinc-500 animate-spin" />
-                              <span className="ml-2 text-sm text-zinc-400">Loading content...</span>
-                            </div>
-                          ) : boxContent.length > 0 ? (
-                            <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-6 gap-3">
-                              {boxContent.map((item) => (
-                                <div key={item.id} className="group relative">
-                                  <div className="relative aspect-[9/16] bg-zinc-900 rounded-lg overflow-hidden shadow-md border border-transparent hover:border-white/20 transition-all duration-300">
-                                    {/* Delete button */}
-                                    <button
-                                      onClick={(e) => {
-                                        e.stopPropagation()
-                                        handleRemoveContentFromBundle(productBox.id, item.id)
-                                      }}
-                                      className="absolute top-2 right-2 z-30 w-6 h-6 bg-red-600/90 hover:bg-red-600 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all duration-200 shadow-lg"
-                                      title="Remove from bundle"
-                                    >
-                                      <X className="w-3 h-3 text-white" />
-                                    </button>
-
-                                    {item.contentType === "video" ? (
-                                      <video
-                                        src={item.fileUrl}
-                                        className="w-full h-full object-cover cursor-pointer"
-                                        muted
-                                        preload="metadata"
-                                        poster={item.thumbnailUrl}
-                                        onMouseEnter={(e) => {
-                                          const video = e.target as HTMLVideoElement
-                                          video.play().catch(() => {})
-                                        }}
-                                        onMouseLeave={(e) => {
-                                          const video = e.target as HTMLVideoElement
-                                          video.pause()
-                                          video.currentTime = 0
-                                        }}
-                                        onClick={() => window.open(item.fileUrl, "_blank")}
-                                      />
-                                    ) : (
-                                      <div className="w-full h-full flex items-center justify-center cursor-pointer bg-zinc-800">
-                                        <div className="text-center">
-                                          <div className="text-2xl mb-1">
-                                            {item.contentType === "audio"
-                                              ? "🎵"
-                                              : item.contentType === "image"
-                                                ? "🖼️"
-                                                : "📄"}
-                                          </div>
-                                        </div>
-                                      </div>
-                                    )}
-
-                                    {/* Play overlay for videos */}
-                                    {item.contentType === "video" && (
-                                      <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"></div>
-                                    )}
-                                  </div>
-
-                                  {/* File info */}
-                                  <div className="mt-2">
-                                    <p className="text-xs text-zinc-300 truncate font-light">{item.title}</p>
-                                  </div>
-                                </div>
-                              ))}
-
-                              {/* Add Content Placeholder - Only show when there's existing content */}
-                              <div
-                                className="aspect-[9/16] bg-zinc-800/50 rounded-lg border-2 border-dashed border-zinc-700 flex flex-col items-center justify-center cursor-pointer hover:border-zinc-600 hover:bg-zinc-800/70 transition-all duration-200"
-                                onClick={() => {
-                                  fetchUserUploads()
-                                  setShowAddContentModal(productBox.id)
-                                }}
-                              >
-                                <Plus className="w-6 h-6 text-zinc-500 mb-1" />
-                                <p className="text-xs text-zinc-500 text-center px-1">Add Content</p>
+                    <div className="grid grid-cols-2 gap-2">
+                      {bundle.contentItems.map((item) => (
+                        <div key={item.id} className="relative group">
+                          <div className="aspect-video bg-zinc-800 rounded-lg overflow-hidden">
+                            {item.thumbnailUrl ? (
+                              <img
+                                src={item.thumbnailUrl || "/placeholder.svg"}
+                                alt={item.title}
+                                className="w-full h-full object-cover"
+                              />
+                            ) : (
+                              <div className="w-full h-full flex items-center justify-center">
+                                <Package className="h-6 w-6 text-zinc-600" />
                               </div>
-                            </div>
-                          ) : (
-                            // Empty state - Show centered Add Content button
-                            <div className="text-center py-8">
-                              <div className="text-4xl mb-2">📹</div>
-                              <p className="text-sm text-zinc-500 mb-4">No content added yet</p>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                className="border-zinc-700 text-zinc-300 bg-transparent hover:bg-zinc-800"
-                                onClick={() => {
-                                  fetchUserUploads()
-                                  setShowAddContentModal(productBox.id)
-                                }}
-                              >
-                                <Plus className="h-4 w-4 mr-2" />
-                                Add Content
-                              </Button>
-                            </div>
-                          )}
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
-                  </CardContent>
-                </Card>
-              </motion.div>
-            )
-          })}
-        </div>
-      )}
+                            )}
+                            <button
+                              onClick={() => handleRemoveContentFromBundle(bundle.id, item.uploadId)}
+                              className="absolute top-1 right-1 w-6 h-6 bg-red-600 hover:bg-red-700 rounded-full flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                            >
+                              <X className="h-3 w-3 text-white" />
+                            </button>
+                          </div>
+                          <p className="text-xs text-zinc-400 mt-1 truncate">{item.title}</p>
+                        </div>
+                      ))}
 
-      {/* Edit Bundle Modal */}
-      <Dialog open={!!showEditModal} onOpenChange={() => setShowEditModal(null)}>
-        <DialogContent className="bg-zinc-900 border-zinc-800 text-white max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>Edit Bundle</DialogTitle>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <Label htmlFor="edit-title">Title *</Label>
-              <Input
-                id="edit-title"
-                value={editForm.title}
-                onChange={(e) => setEditForm((prev) => ({ ...prev, title: e.target.value }))}
-                placeholder="Enter bundle title"
-                className="bg-zinc-800 border-zinc-700"
-              />
-            </div>
-
-            <div>
-              <Label htmlFor="edit-description">Description</Label>
-              <Textarea
-                id="edit-description"
-                value={editForm.description}
-                onChange={(e) => setEditForm((prev) => ({ ...prev, description: e.target.value }))}
-                placeholder="Describe your bundle"
-                className="bg-zinc-800 border-zinc-700"
-              />
-            </div>
-
-            <div>
-              <Label htmlFor="edit-price">Price (USD) *</Label>
-              <Input
-                id="edit-price"
-                type="number"
-                step="0.01"
-                min="0.50"
-                value={editForm.price}
-                onChange={(e) => setEditForm((prev) => ({ ...prev, price: e.target.value }))}
-                placeholder="9.99"
-                className="bg-zinc-800 border-zinc-700"
-              />
-              <div className="mt-2 p-3 bg-amber-900/20 border border-amber-700/50 rounded-md">
-                <p className="text-xs text-amber-200">
-                  <strong>Note:</strong> Changing the price will create a new Stripe price automatically. However, you
-                  may need to manually update the price in your Stripe Product Catalog if there are any sync issues.
-                </p>
-              </div>
-            </div>
-
-            {/* Thumbnail Upload Section */}
-            <div className="space-y-3">
-              <Label>Bundle Thumbnail</Label>
-
-              {/* Current Thumbnail Preview */}
-              {editForm.coverImage && (
-                <div className="relative">
-                  <img
-                    src={editForm.coverImage || "/placeholder.svg"}
-                    alt="Bundle thumbnail"
-                    className="w-full h-48 object-cover rounded-lg border border-zinc-700"
-                  />
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setEditForm((prev) => ({ ...prev, coverImage: "" }))}
-                    className="absolute top-2 right-2 bg-black/50 hover:bg-black/70 text-white"
-                  >
-                    <X className="h-4 w-4" />
-                  </Button>
-                </div>
-              )}
-
-              {/* Upload Options */}
-              <div className="space-y-3">
-                {/* URL Input */}
-                <Input
-                  placeholder="Enter thumbnail URL or upload a file below"
-                  value={editForm.coverImage}
-                  onChange={(e) => setEditForm((prev) => ({ ...prev, coverImage: e.target.value }))}
-                  className="bg-zinc-800 border-zinc-700 text-white"
-                />
-
-                {/* File Upload */}
-                <div className="flex items-center gap-3">
-                  <div className="relative flex-1">
-                    <input
-                      type="file"
-                      accept="image/jpeg,image/jpg,image/png,image/webp"
-                      onChange={(e) => {
-                        const file = e.target.files?.[0]
-                        if (file && showEditModal) {
-                          // Validate file type
-                          const allowedTypes = ["image/jpeg", "image/jpg", "image/png", "image/webp"]
-                          if (!allowedTypes.includes(file.type)) {
-                            toast({
-                              title: "Invalid File Type",
-                              description: "Please select a JPEG, PNG, or WebP image",
-                              variant: "destructive",
-                            })
-                            return
-                          }
-
-                          // Validate file size (5MB max)
-                          const maxSize = 5 * 1024 * 1024
-                          if (file.size > maxSize) {
-                            toast({
-                              title: "File Too Large",
-                              description: "Please select an image smaller than 5MB",
-                              variant: "destructive",
-                            })
-                            return
-                          }
-
-                          handleThumbnailUpload(file, showEditModal)
-                        }
-                      }}
-                      className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                      disabled={thumbnailUploading}
-                    />
-                    <Button
-                      variant="outline"
-                      disabled={thumbnailUploading}
-                      className="w-full border-zinc-700 hover:bg-zinc-800 bg-transparent"
-                    >
-                      {thumbnailUploading ? (
-                        <>
-                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                          Uploading...
-                        </>
-                      ) : (
-                        <>
-                          <Upload className="h-4 w-4 mr-2" />
-                          Upload New Thumbnail
-                        </>
-                      )}
-                    </Button>
-                  </div>
-                </div>
-
-                <p className="text-xs text-zinc-500">
-                  Supported formats: JPEG, PNG, WebP. Maximum size: 5MB. Recommended size: 1280x720px
-                </p>
-              </div>
-
-              {/* No Thumbnail State */}
-              {!editForm.coverImage && (
-                <div className="border-2 border-dashed border-zinc-700 rounded-lg p-8 text-center">
-                  <ImageIcon className="h-12 w-12 text-zinc-600 mx-auto mb-3" />
-                  <p className="text-zinc-400 mb-2">No thumbnail selected</p>
-                  <p className="text-xs text-zinc-500">Upload an image or enter a URL above</p>
-                </div>
-              )}
-            </div>
-
-            <div className="flex justify-end gap-3 pt-4">
-              <Button variant="outline" onClick={() => setShowEditModal(null)} className="border-zinc-700">
-                Cancel
-              </Button>
-              <Button
-                onClick={() => showEditModal && handleEditBundle(showEditModal)}
-                disabled={editLoading || thumbnailUploading}
-                className="bg-red-600 hover:bg-red-700"
-              >
-                {editLoading ? (
-                  <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Updating...
-                  </>
-                ) : (
-                  "Update Bundle"
-                )}
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
-
-      {/* Add Content Modal */}
-      <Dialog open={!!showAddContentModal} onOpenChange={() => setShowAddContentModal(null)}>
-        <DialogContent className="bg-zinc-900 border-zinc-800 text-white max-w-4xl h-[80vh] flex flex-col">
-          <DialogHeader className="flex-shrink-0">
-            <DialogTitle>Add Content to Bundle</DialogTitle>
-          </DialogHeader>
-          <div className="flex flex-col flex-1 min-h-0 space-y-4">
-            <p className="text-sm text-zinc-400 flex-shrink-0">
-              Select content from your uploads to add to this bundle:
-            </p>
-
-            {uploadsLoading ? (
-              <div className="flex items-center justify-center py-8 flex-1">
-                <Loader2 className="h-5 w-5 text-zinc-500 animate-spin" />
-                <span className="ml-2 text-sm text-zinc-400">Loading uploads...</span>
-              </div>
-            ) : availableUploads.length === 0 ? (
-              <div className="text-center py-8 flex-1 flex items-center justify-center">
-                <p className="text-zinc-500">No uploads available. Upload some content first.</p>
-              </div>
-            ) : (
-              <div className="flex-1 overflow-y-auto">
-                <div className="grid grid-cols-3 sm:grid-cols-4 lg:grid-cols-5 gap-3 pb-4">
-                  {availableUploads.map((item) => (
-                    <div key={item.id} className="group relative">
-                      <div
-                        className={`relative aspect-[9/16] bg-zinc-800 rounded-lg overflow-hidden cursor-pointer border-2 transition-all duration-200 ${
-                          selectedContentIds.includes(item.id)
-                            ? "border-red-500 ring-2 ring-red-500/50"
-                            : "border-transparent hover:border-zinc-600"
-                        }`}
-                        onClick={() => {
-                          setSelectedContentIds((prev) =>
-                            prev.includes(item.id) ? prev.filter((id) => id !== item.id) : [...prev, item.id],
-                          )
-                        }}
-                      >
-                        {item.contentType === "video" ? (
-                          <video
-                            src={item.fileUrl}
-                            className="w-full h-full object-cover"
-                            muted
-                            preload="metadata"
-                            poster={item.thumbnailUrl}
-                          />
-                        ) : (
-                          <div className="w-full h-full flex items-center justify-center">
+                      {/* Add Content Button */}
+                      <Dialog>
+                        <DialogTrigger asChild>
+                          <div className="aspect-video border-2 border-dashed border-zinc-700 rounded-lg flex items-center justify-center cursor-pointer hover:border-zinc-600 transition-colors">
                             <div className="text-center">
-                              <div className="text-xl mb-1">
-                                {item.contentType === "audio" ? "🎵" : item.contentType === "image" ? "🖼️" : "📄"}
-                              </div>
+                              <Plus className="h-6 w-6 text-zinc-600 mx-auto mb-1" />
+                              <p className="text-xs text-zinc-600">Add Content</p>
                             </div>
                           </div>
-                        )}
-
-                        {/* Selection indicator */}
-                        {selectedContentIds.includes(item.id) && (
-                          <div className="absolute inset-0 bg-red-500/20 flex items-center justify-center">
-                            <div className="w-8 h-8 bg-red-500 rounded-full flex items-center justify-center">
-                              <Check className="w-4 h-4 text-white" />
+                        </DialogTrigger>
+                        <DialogContent className="bg-zinc-900 border-zinc-800 text-white max-w-2xl">
+                          <DialogHeader>
+                            <DialogTitle>Add Content to Bundle</DialogTitle>
+                          </DialogHeader>
+                          <div className="max-h-96 overflow-y-auto">
+                            <div className="grid grid-cols-1 gap-3">
+                              {availableUploads
+                                .filter((upload) => !bundle.contentItems.some((item) => item.uploadId === upload.id))
+                                .map((upload) => (
+                                  <div key={upload.id} className="flex items-center gap-4 p-3 bg-zinc-800 rounded-lg">
+                                    <div className="w-16 h-12 bg-zinc-700 rounded overflow-hidden flex-shrink-0">
+                                      {upload.thumbnailUrl ? (
+                                        <img
+                                          src={upload.thumbnailUrl || "/placeholder.svg"}
+                                          alt={upload.title}
+                                          className="w-full h-full object-cover"
+                                        />
+                                      ) : (
+                                        <div className="w-full h-full flex items-center justify-center">
+                                          <Package className="h-4 w-4 text-zinc-500" />
+                                        </div>
+                                      )}
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                      <h4 className="font-medium text-white truncate">{upload.title}</h4>
+                                      <p className="text-sm text-zinc-400 truncate">{upload.description}</p>
+                                    </div>
+                                    <Button
+                                      onClick={() => handleAddContentToBundle(bundle.id, upload.id)}
+                                      size="sm"
+                                      className="bg-red-600 hover:bg-red-700"
+                                    >
+                                      Add
+                                    </Button>
+                                  </div>
+                                ))}
+                              {availableUploads.filter(
+                                (upload) => !bundle.contentItems.some((item) => item.uploadId === upload.id),
+                              ).length === 0 && (
+                                <p className="text-center text-zinc-400 py-8">No available content to add</p>
+                              )}
                             </div>
                           </div>
-                        )}
-                      </div>
-                      <p className="text-xs text-zinc-400 mt-1 truncate">{item.title}</p>
+                        </DialogContent>
+                      </Dialog>
                     </div>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            <div className="flex justify-between items-center pt-4 border-t border-zinc-800 flex-shrink-0">
-              <p className="text-sm text-zinc-400">{selectedContentIds.length} item(s) selected</p>
-              <div className="flex gap-3">
-                <Button variant="outline" onClick={() => setShowAddContentModal(null)} className="border-zinc-700">
-                  Cancel
-                </Button>
-                <Button
-                  onClick={() => showAddContentModal && handleAddContentToBundle(showAddContentModal)}
-                  disabled={selectedContentIds.length === 0 || addContentLoading}
-                  className="bg-red-600 hover:bg-red-700"
-                >
-                  {addContentLoading ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Adding...
-                    </>
-                  ) : (
-                    `Add ${selectedContentIds.length} Item${selectedContentIds.length !== 1 ? "s" : ""}`
-                  )}
-                </Button>
-              </div>
-            </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
           </div>
-        </DialogContent>
-      </Dialog>
+        )}
+      </div>
     </div>
   )
 }

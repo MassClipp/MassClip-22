@@ -168,34 +168,30 @@ export default function PurchasesPage() {
     }
   }
 
-  const getContentTypeFromTitle = (title: string) => {
-    const lower = title.toLowerCase()
-    if (lower.includes("video") || lower.includes("clip")) return "video"
-    if (lower.includes("audio") || lower.includes("music")) return "audio"
-    if (lower.includes("image") || lower.includes("photo")) return "image"
-    return "bundle"
-  }
-
   if (authLoading || loading) {
     return (
       <div className="min-h-screen bg-black text-white">
-        <div className="container mx-auto px-6 py-8 max-w-4xl">
-          <div className="mb-8">
+        <div className="w-full px-8 py-12">
+          <div className="mb-12">
             <Skeleton className="h-12 w-64 mb-6 bg-zinc-800" />
             <div className="flex gap-8 mb-8">
               <Skeleton className="h-8 w-24 bg-zinc-800" />
               <Skeleton className="h-8 w-24 bg-zinc-800" />
             </div>
+            <Skeleton className="h-12 w-full max-w-2xl bg-zinc-800" />
           </div>
-          <div className="space-y-4">
+          <div className="space-y-6">
             {[...Array(3)].map((_, i) => (
-              <div key={i} className="flex items-center gap-4 p-6 bg-zinc-900 rounded-lg">
-                <Skeleton className="h-16 w-16 rounded-lg bg-zinc-800" />
+              <div key={i} className="flex items-center gap-6 p-8 bg-zinc-900 rounded-lg">
+                <Skeleton className="h-20 w-20 rounded-lg bg-zinc-800" />
                 <div className="flex-1">
-                  <Skeleton className="h-6 w-48 mb-2 bg-zinc-800" />
+                  <Skeleton className="h-6 w-48 mb-3 bg-zinc-800" />
                   <Skeleton className="h-4 w-32 bg-zinc-800" />
                 </div>
-                <Skeleton className="h-10 w-24 bg-zinc-800" />
+                <div className="flex gap-3">
+                  <Skeleton className="h-10 w-24 bg-zinc-800" />
+                  <Skeleton className="h-10 w-28 bg-zinc-800" />
+                </div>
               </div>
             ))}
           </div>
@@ -207,8 +203,8 @@ export default function PurchasesPage() {
   if (error) {
     return (
       <div className="min-h-screen bg-black text-white">
-        <div className="container mx-auto px-6 py-8 max-w-4xl">
-          <Alert variant="destructive" className="bg-red-900/20 border-red-800">
+        <div className="w-full px-8 py-12">
+          <Alert variant="destructive" className="bg-red-900/20 border-red-800 max-w-2xl">
             <AlertCircle className="h-4 w-4" />
             <AlertDescription>{error}</AlertDescription>
           </Alert>
@@ -222,16 +218,16 @@ export default function PurchasesPage() {
 
   return (
     <div className="min-h-screen bg-black text-white">
-      <div className="container mx-auto px-6 py-8 max-w-4xl">
+      <div className="w-full px-8 py-12">
         {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-4xl font-bold mb-8">My Purchases</h1>
+        <div className="mb-12">
+          <h1 className="text-5xl font-bold mb-12">My Purchases</h1>
 
           {/* Tabs */}
-          <div className="flex gap-8 mb-8">
+          <div className="flex gap-12 mb-12">
             <button
               onClick={() => setActiveTab("downloads")}
-              className={`text-xl font-medium pb-2 border-b-2 transition-colors ${
+              className={`text-2xl font-medium pb-3 border-b-2 transition-colors ${
                 activeTab === "downloads"
                   ? "text-white border-white"
                   : "text-zinc-500 border-transparent hover:text-zinc-300"
@@ -241,7 +237,7 @@ export default function PurchasesPage() {
             </button>
             <button
               onClick={() => setActiveTab("orders")}
-              className={`text-xl font-medium pb-2 border-b-2 transition-colors ${
+              className={`text-2xl font-medium pb-3 border-b-2 transition-colors ${
                 activeTab === "orders"
                   ? "text-white border-white"
                   : "text-zinc-500 border-transparent hover:text-zinc-300"
@@ -252,13 +248,13 @@ export default function PurchasesPage() {
           </div>
 
           {/* Search */}
-          <div className="relative mb-8">
-            <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-zinc-400 h-5 w-5" />
+          <div className="relative max-w-2xl">
+            <Search className="absolute left-6 top-1/2 transform -translate-y-1/2 text-zinc-400 h-6 w-6" />
             <Input
               placeholder="Search your purchases..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-12 bg-zinc-900 border-zinc-700 text-white placeholder:text-zinc-500 h-12 text-lg"
+              className="pl-16 bg-zinc-900 border-zinc-700 text-white placeholder:text-zinc-500 h-14 text-lg rounded-xl"
             />
           </div>
         </div>
@@ -270,28 +266,28 @@ export default function PurchasesPage() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -20 }}
-              className="text-center py-16"
+              className="text-center py-24"
             >
-              <div className="max-w-md mx-auto">
-                <div className="w-24 h-24 mx-auto mb-6 bg-zinc-900 rounded-full flex items-center justify-center">
-                  <Package className="h-12 w-12 text-zinc-600" />
+              <div className="max-w-lg mx-auto">
+                <div className="w-32 h-32 mx-auto mb-8 bg-zinc-900 rounded-full flex items-center justify-center">
+                  <Package className="h-16 w-16 text-zinc-600" />
                 </div>
-                <h3 className="text-xl font-semibold mb-3">
+                <h3 className="text-2xl font-semibold mb-4">
                   {searchQuery
                     ? "No purchases match your search"
                     : activeTab === "downloads"
                       ? "No downloads yet"
                       : "No orders yet"}
                 </h3>
-                <p className="text-zinc-400 mb-6">
+                <p className="text-zinc-400 text-lg mb-8">
                   {searchQuery
                     ? "Try adjusting your search to find what you're looking for."
                     : "Start exploring premium content to build your collection."}
                 </p>
                 {!searchQuery && (
-                  <Button asChild className="bg-red-600 hover:bg-red-700">
+                  <Button asChild className="bg-red-600 hover:bg-red-700 h-12 px-8 text-lg">
                     <Link href="/dashboard/explore">
-                      <ExternalLink className="h-4 w-4 mr-2" />
+                      <ExternalLink className="h-5 w-5 mr-3" />
                       Explore Content
                     </Link>
                   </Button>
@@ -299,7 +295,7 @@ export default function PurchasesPage() {
               </div>
             </motion.div>
           ) : (
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-4">
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-6">
               {filteredPurchases.map((purchase, index) => (
                 <motion.div
                   key={purchase.id}
@@ -308,10 +304,10 @@ export default function PurchasesPage() {
                   transition={{ delay: index * 0.1 }}
                 >
                   <Card className="bg-zinc-900/50 border-zinc-800 hover:border-zinc-700 transition-all duration-300 overflow-hidden">
-                    <CardContent className="p-6">
-                      <div className="flex items-center gap-6">
+                    <CardContent className="p-8">
+                      <div className="flex items-center gap-8">
                         {/* Icon/Thumbnail */}
-                        <div className="w-16 h-16 bg-zinc-800 rounded-lg flex items-center justify-center flex-shrink-0 overflow-hidden">
+                        <div className="w-20 h-20 bg-zinc-800 rounded-xl flex items-center justify-center flex-shrink-0 overflow-hidden">
                           {purchase.thumbnailUrl ? (
                             <img
                               src={purchase.thumbnailUrl || "/placeholder.svg"}
@@ -327,22 +323,22 @@ export default function PurchasesPage() {
 
                         {/* Content */}
                         <div className="flex-1 min-w-0">
-                          <h3 className="text-xl font-semibold text-white mb-1 truncate">{purchase.title}</h3>
-                          <p className="text-zinc-400 text-sm">{purchase.creatorUsername}</p>
+                          <h3 className="text-2xl font-semibold text-white mb-2 truncate">{purchase.title}</h3>
+                          <p className="text-zinc-400 text-lg">{purchase.creatorUsername}</p>
                         </div>
 
                         {/* Actions */}
-                        <div className="flex items-center gap-3 flex-shrink-0">
+                        <div className="flex items-center gap-4 flex-shrink-0">
                           {purchase.status === "completed" && activeTab === "downloads" && (
                             <>
                               <Button
                                 onClick={() => handleDownload(purchase)}
                                 variant="outline"
-                                className="border-zinc-700 hover:bg-zinc-800 bg-transparent text-white"
+                                className="border-zinc-700 hover:bg-zinc-800 bg-transparent text-white h-12 px-6 text-base"
                               >
                                 Download
                               </Button>
-                              <Button asChild className="bg-zinc-800 hover:bg-zinc-700 text-white">
+                              <Button asChild className="bg-zinc-800 hover:bg-zinc-700 text-white h-12 px-6 text-base">
                                 <Link
                                   href={
                                     purchase.type === "bundle"
@@ -356,18 +352,18 @@ export default function PurchasesPage() {
                             </>
                           )}
                           {activeTab === "orders" && (
-                            <div className="flex items-center gap-3">
+                            <div className="flex items-center gap-4">
                               <Badge
                                 variant={purchase.status === "completed" ? "default" : "secondary"}
                                 className={
                                   purchase.status === "completed"
-                                    ? "bg-green-600 text-white"
-                                    : "bg-zinc-700 text-zinc-300"
+                                    ? "bg-green-600 text-white text-sm px-3 py-1"
+                                    : "bg-zinc-700 text-zinc-300 text-sm px-3 py-1"
                                 }
                               >
                                 {purchase.status}
                               </Badge>
-                              <span className="text-lg font-semibold text-white">${purchase.price.toFixed(2)}</span>
+                              <span className="text-xl font-semibold text-white">${purchase.price.toFixed(2)}</span>
                             </div>
                           )}
                         </div>
