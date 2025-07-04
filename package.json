@@ -11,7 +11,7 @@
   "dependencies": {
     "@ai-sdk/openai": "^0.0.66",
     "@auth/core": "latest",
-    "@auth/firebase-adapter": "^1.0.12",
+    "@auth/firebase-adapter": "latest",
     "@aws-sdk/client-s3": "latest",
     "@aws-sdk/s3-request-presigner": "latest",
     "@chakra-ui/react": "latest",
