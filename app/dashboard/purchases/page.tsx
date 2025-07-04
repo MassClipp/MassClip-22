@@ -1,90 +1,95 @@
 "use client"
 
-import { useState, useEffect, useMemo } from "react"
-import { useRouter } from "next/navigation"
+import { useEffect, useState } from "react"
+import { useFirebaseAuth } from "@/hooks/use-firebase-auth"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
+import { AlertCircle, Download, Eye, Search } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Search, Package, Calendar, DollarSign, AlertCircle, RefreshCw, Download } from "lucide-react"
-import { useFirebaseAuth } from "@/hooks/use-firebase-auth"
+import { formatDistanceToNow } from "date-fns"
+import Link from "next/link"
+import { toast } from "@/hooks/use-toast"
 
 interface Purchase {
   id: string
   title?: string
   description?: string
-  price?: number
-  currency?: string
-  status?: string
-  purchaseDate?: any
-  productType?: string
-  creatorUsername?: string
-  creatorId?: string
-  productId?: string
-  bundleId?: string
+  price: number
+  currency: string
+  status: string
+  createdAt: any
+  updatedAt: any
   productBoxId?: string
-  stripeSessionId?: string
-  metadata?: any
+  bundleId?: string
+  creatorId?: string
+  creatorUsername?: string
+  type?: "product_box" | "bundle" | "subscription"
+  downloadUrl?: string
+  thumbnailUrl?: string
+  metadata?: {
+    title?: string
+    description?: string
+    [key: string]: any
+  }
 }
 
 export default function PurchasesPage() {
+  const { user, loading: authLoading } = useFirebaseAuth()
   const [purchases, setPurchases] = useState<Purchase[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [searchQuery, setSearchQuery] = useState("")
-  const { user, loading: authLoading } = useFirebaseAuth()
-  const router = useRouter()
+  const [filterStatus, setFilterStatus] = useState("all")
+
+  useEffect(() => {
+    if (user) {
+      fetchPurchases()
+    }
+  }, [user])
 
   const fetchPurchases = async () => {
-    if (!user) return
-
     try {
       setLoading(true)
       setError(null)
 
       const token = await user.getIdToken()
       const response = await fetch("/api/user/unified-purchases", {
-        method: "GET",
         headers: {
           Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
         },
       })
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}))
-        throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`)
+        throw new Error(`Failed to fetch purchases: ${response.status}`)
       }
 
       const data = await response.json()
 
-      if (data.success) {
-        // Ensure all purchases have required fields with fallbacks
-        const normalizedPurchases = (data.purchases || []).map((purchase: any) => ({
-          id: purchase.id || "",
-          title: purchase.title || purchase.productName || "Untitled Purchase",
-          description: purchase.description || purchase.productDescription || "",
-          price: typeof purchase.price === "number" ? purchase.price : 0,
-          currency: purchase.currency || "usd",
-          status: purchase.status || "completed",
-          purchaseDate: purchase.purchaseDate || purchase.createdAt || new Date(),
-          productType: purchase.productType || purchase.type || "unknown",
-          creatorUsername: purchase.creatorUsername || purchase.creator || "Unknown Creator",
-          creatorId: purchase.creatorId || "",
-          productId: purchase.productId || "",
-          bundleId: purchase.bundleId || "",
-          productBoxId: purchase.productBoxId || "",
-          stripeSessionId: purchase.stripeSessionId || "",
-          metadata: purchase.metadata || {},
-          ...purchase,
-        }))
+      // Ensure all purchases have required fields with fallbacks
+      const normalizedPurchases = (data.purchases || []).map((purchase: any) => ({
+        id: purchase.id || "",
+        title: purchase.title || purchase.metadata?.title || "Untitled Purchase",
+        description: purchase.description || purchase.metadata?.description || "",
+        price: purchase.price || 0,
+        currency: purchase.currency || "usd",
+        status: purchase.status || "completed",
+        createdAt: purchase.createdAt || new Date(),
+        updatedAt: purchase.updatedAt || new Date(),
+        productBoxId: purchase.productBoxId || null,
+        bundleId: purchase.bundleId || null,
+        creatorId: purchase.creatorId || "",
+        creatorUsername: purchase.creatorUsername || "Unknown Creator",
+        type: purchase.type || "product_box",
+        downloadUrl: purchase.downloadUrl || "",
+        thumbnailUrl: purchase.thumbnailUrl || "",
+        metadata: purchase.metadata || {},
+      }))
 
-        setPurchases(normalizedPurchases)
-      } else {
-        throw new Error(data.error || "Failed to fetch purchases")
-      }
+      setPurchases(normalizedPurchases)
     } catch (err) {
       console.error("Error fetching purchases:", err)
       setError(err instanceof Error ? err.message : "Failed to fetch purchases")
@@ -93,240 +98,236 @@ export default function PurchasesPage() {
     }
   }
 
-  useEffect(() => {
-    if (!authLoading && user) {
-      fetchPurchases()
-    } else if (!authLoading && !user) {
-      router.push("/login")
+  const handleDownload = async (purchase: Purchase) => {
+    try {
+      const token = await user.getIdToken()
+      const endpoint =
+        purchase.type === "bundle"
+          ? `/api/bundles/${purchase.bundleId}/download`
+          : `/api/product-box/${purchase.productBoxId}/direct-content`
+
+      const response = await fetch(endpoint, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
+
+      if (!response.ok) {
+        throw new Error("Failed to download content")
+      }
+
+      const blob = await response.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement("a")
+      a.href = url
+      a.download = `${purchase.title || "content"}.zip`
+      document.body.appendChild(a)
+      a.click()
+      window.URL.revokeObjectURL(url)
+      document.body.removeChild(a)
+
+      toast({
+        title: "Download started",
+        description: `${purchase.title} is being downloaded.`,
+      })
+    } catch (err) {
+      console.error("Download error:", err)
+      toast({
+        title: "Download failed",
+        description: "Failed to download the content. Please try again.",
+        variant: "destructive",
+      })
     }
-  }, [user, authLoading, router])
+  }
 
-  // Filter purchases based on search query with safe string operations
-  const filteredPurchases = useMemo(() => {
-    if (!searchQuery.trim()) return purchases
+  const filteredPurchases = purchases.filter((purchase) => {
+    const matchesSearch =
+      searchQuery === "" ||
+      (purchase.title && purchase.title.toLowerCase().includes(searchQuery.toLowerCase())) ||
+      (purchase.description && purchase.description.toLowerCase().includes(searchQuery.toLowerCase())) ||
+      (purchase.creatorUsername && purchase.creatorUsername.toLowerCase().includes(searchQuery.toLowerCase()))
 
-    const query = searchQuery.toLowerCase().trim()
+    const matchesStatus = filterStatus === "all" || purchase.status === filterStatus
 
-    return purchases.filter((purchase) => {
-      // Safely check each field with fallbacks
-      const title = (purchase.title || "").toLowerCase()
-      const description = (purchase.description || "").toLowerCase()
-      const creatorUsername = (purchase.creatorUsername || "").toLowerCase()
-      const productType = (purchase.productType || "").toLowerCase()
-      const status = (purchase.status || "").toLowerCase()
+    return matchesSearch && matchesStatus
+  })
 
-      return (
-        title.includes(query) ||
-        description.includes(query) ||
-        creatorUsername.includes(query) ||
-        productType.includes(query) ||
-        status.includes(query)
-      )
-    })
-  }, [purchases, searchQuery])
+  const formatPrice = (price: number, currency: string) => {
+    try {
+      return new Intl.NumberFormat("en-US", {
+        style: "currency",
+        currency: currency.toUpperCase(),
+      }).format(price)
+    } catch {
+      return `$${price.toFixed(2)}`
+    }
+  }
 
   const formatDate = (date: any) => {
     try {
-      if (!date) return "Unknown date"
-
-      // Handle Firestore timestamp
-      if (date.toDate && typeof date.toDate === "function") {
-        return date.toDate().toLocaleDateString()
+      let dateObj = date
+      if (date?.toDate) {
+        dateObj = date.toDate()
+      } else if (typeof date === "string") {
+        dateObj = new Date(date)
       }
-
-      // Handle regular date
-      if (date instanceof Date) {
-        return date.toLocaleDateString()
-      }
-
-      // Handle string date
-      if (typeof date === "string") {
-        return new Date(date).toLocaleDateString()
-      }
-
-      return "Unknown date"
-    } catch (error) {
-      console.error("Error formatting date:", error)
-      return "Unknown date"
+      return formatDistanceToNow(dateObj, { addSuffix: true })
+    } catch {
+      return "Recently"
     }
   }
 
-  const getStatusColor = (status: string) => {
-    switch (status?.toLowerCase()) {
-      case "completed":
-      case "active":
-        return "default"
-      case "pending":
-        return "secondary"
-      case "cancelled":
-      case "failed":
-        return "destructive"
-      default:
-        return "outline"
-    }
-  }
-
-  if (authLoading) {
+  if (authLoading || loading) {
     return (
       <div className="container mx-auto px-4 py-8">
-        <div className="space-y-6">
-          <Skeleton className="h-8 w-48" />
-          <Skeleton className="h-10 w-full max-w-md" />
-          <div className="grid gap-6">
-            {[...Array(3)].map((_, i) => (
-              <Card key={i}>
-                <CardHeader>
-                  <Skeleton className="h-6 w-3/4" />
-                  <Skeleton className="h-4 w-full" />
-                </CardHeader>
-                <CardContent>
-                  <Skeleton className="h-20 w-full" />
-                </CardContent>
-              </Card>
-            ))}
-          </div>
+        <div className="mb-8">
+          <Skeleton className="h-8 w-48 mb-2" />
+          <Skeleton className="h-4 w-96" />
+        </div>
+        <div className="grid gap-4">
+          {[...Array(3)].map((_, i) => (
+            <Card key={i}>
+              <CardHeader>
+                <Skeleton className="h-6 w-3/4" />
+                <Skeleton className="h-4 w-1/2" />
+              </CardHeader>
+              <CardContent>
+                <Skeleton className="h-4 w-full mb-2" />
+                <Skeleton className="h-4 w-2/3" />
+              </CardContent>
+            </Card>
+          ))}
         </div>
       </div>
     )
   }
 
-  if (!user) {
-    return null // Will redirect to login
+  if (error) {
+    return (
+      <div className="container mx-auto px-4 py-8">
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+        <Button onClick={fetchPurchases} className="mt-4 bg-transparent" variant="outline">
+          Try Again
+        </Button>
+      </div>
+    )
   }
 
   return (
     <div className="container mx-auto px-4 py-8">
-      <div className="space-y-6">
-        {/* Header */}
-        <div>
-          <h1 className="text-3xl font-bold">My Purchases</h1>
-          <p className="text-muted-foreground">View and manage your purchased content</p>
-        </div>
-
-        {/* Search */}
-        <div className="relative max-w-md">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input
-            placeholder="Search purchases..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-10"
-          />
-        </div>
-
-        {/* Error State */}
-        {error && (
-          <Alert variant="destructive">
-            <AlertCircle className="h-4 w-4" />
-            <AlertDescription className="flex items-center justify-between">
-              <span>{error}</span>
-              <Button variant="outline" size="sm" onClick={fetchPurchases} className="ml-4 bg-transparent">
-                <RefreshCw className="mr-2 h-4 w-4" />
-                Try Again
-              </Button>
-            </AlertDescription>
-          </Alert>
-        )}
-
-        {/* Loading State */}
-        {loading && !error && (
-          <div className="grid gap-6">
-            {[...Array(3)].map((_, i) => (
-              <Card key={i}>
-                <CardHeader>
-                  <Skeleton className="h-6 w-3/4" />
-                  <Skeleton className="h-4 w-full" />
-                </CardHeader>
-                <CardContent>
-                  <Skeleton className="h-20 w-full" />
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        )}
-
-        {/* Empty State */}
-        {!loading && !error && filteredPurchases.length === 0 && purchases.length === 0 && (
-          <Card className="text-center py-12">
-            <CardContent>
-              <Package className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
-              <h3 className="text-lg font-semibold mb-2">No purchases yet</h3>
-              <p className="text-muted-foreground mb-4">
-                You haven't purchased any content yet. Browse our catalog to find premium content.
-              </p>
-              <Button onClick={() => router.push("/dashboard/explore")}>Browse Content</Button>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* No Search Results */}
-        {!loading && !error && filteredPurchases.length === 0 && purchases.length > 0 && (
-          <Card className="text-center py-12">
-            <CardContent>
-              <Search className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
-              <h3 className="text-lg font-semibold mb-2">No results found</h3>
-              <p className="text-muted-foreground mb-4">No purchases match your search query "{searchQuery}"</p>
-              <Button variant="outline" onClick={() => setSearchQuery("")}>
-                Clear Search
-              </Button>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Purchases List */}
-        {!loading && !error && filteredPurchases.length > 0 && (
-          <div className="grid gap-6">
-            {filteredPurchases.map((purchase) => (
-              <Card key={purchase.id} className="hover:shadow-lg transition-shadow">
-                <CardHeader>
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <CardTitle className="line-clamp-2">{purchase.title}</CardTitle>
-                      <CardDescription className="line-clamp-2">
-                        {purchase.description || "No description available"}
-                      </CardDescription>
-                    </div>
-                    <Badge variant={getStatusColor(purchase.status || "")}>
-                      {(purchase.status || "unknown").charAt(0).toUpperCase() + (purchase.status || "unknown").slice(1)}
-                    </Badge>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                      <div className="flex items-center space-x-2">
-                        <DollarSign className="h-4 w-4 text-muted-foreground" />
-                        <span>
-                          ${(purchase.price || 0).toFixed(2)} {(purchase.currency || "USD").toUpperCase()}
-                        </span>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <Calendar className="h-4 w-4 text-muted-foreground" />
-                        <span>{formatDate(purchase.purchaseDate)}</span>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <Package className="h-4 w-4 text-muted-foreground" />
-                        <span className="capitalize">{purchase.productType || "Unknown"}</span>
-                      </div>
-                      <div className="text-muted-foreground">by {purchase.creatorUsername || "Unknown Creator"}</div>
-                    </div>
-
-                    <div className="flex space-x-2">
-                      <Button variant="outline" size="sm">
-                        <Download className="mr-2 h-4 w-4" />
-                        Access Content
-                      </Button>
-                      <Button variant="outline" size="sm">
-                        View Details
-                      </Button>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        )}
+      <div className="mb-8">
+        <h1 className="text-3xl font-bold mb-2">My Purchases</h1>
+        <p className="text-muted-foreground">View and manage your purchased content</p>
       </div>
+
+      {/* Search and Filter */}
+      <div className="mb-6 flex flex-col sm:flex-row gap-4">
+        <div className="flex-1">
+          <Label htmlFor="search">Search purchases</Label>
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+            <Input
+              id="search"
+              placeholder="Search by title, description, or creator..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-10"
+            />
+          </div>
+        </div>
+        <div>
+          <Label htmlFor="status">Filter by status</Label>
+          <select
+            id="status"
+            value={filterStatus}
+            onChange={(e) => setFilterStatus(e.target.value)}
+            className="w-full px-3 py-2 border border-input rounded-md bg-background"
+          >
+            <option value="all">All statuses</option>
+            <option value="completed">Completed</option>
+            <option value="pending">Pending</option>
+            <option value="failed">Failed</option>
+          </select>
+        </div>
+      </div>
+
+      {/* Purchases List */}
+      {filteredPurchases.length === 0 ? (
+        <Card>
+          <CardContent className="py-8 text-center">
+            <p className="text-muted-foreground mb-4">
+              {searchQuery || filterStatus !== "all"
+                ? "No purchases match your filters"
+                : "You haven't made any purchases yet"}
+            </p>
+            {!searchQuery && filterStatus === "all" && (
+              <Button asChild>
+                <Link href="/dashboard/explore">Explore Content</Link>
+              </Button>
+            )}
+          </CardContent>
+        </Card>
+      ) : (
+        <div className="grid gap-4">
+          {filteredPurchases.map((purchase) => (
+            <Card key={purchase.id}>
+              <CardHeader>
+                <div className="flex justify-between items-start">
+                  <div>
+                    <CardTitle className="text-lg">{purchase.title}</CardTitle>
+                    <CardDescription>
+                      {purchase.creatorUsername && `by ${purchase.creatorUsername}`}
+                      {purchase.createdAt && ` • ${formatDate(purchase.createdAt)}`}
+                    </CardDescription>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Badge variant={purchase.status === "completed" ? "default" : "secondary"}>{purchase.status}</Badge>
+                    <span className="font-semibold">{formatPrice(purchase.price, purchase.currency)}</span>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {purchase.description && <p className="text-sm text-muted-foreground mb-4">{purchase.description}</p>}
+                <div className="flex gap-2">
+                  {purchase.status === "completed" && (
+                    <>
+                      <Button onClick={() => handleDownload(purchase)} size="sm" variant="outline">
+                        <Download className="h-4 w-4 mr-2" />
+                        Download
+                      </Button>
+                      <Button asChild size="sm" variant="outline">
+                        <Link
+                          href={
+                            purchase.type === "bundle"
+                              ? `/bundles/${purchase.bundleId}`
+                              : `/product-box/${purchase.productBoxId}/content`
+                          }
+                        >
+                          <Eye className="h-4 w-4 mr-2" />
+                          View
+                        </Link>
+                      </Button>
+                    </>
+                  )}
+                  {purchase.status === "pending" && (
+                    <Button size="sm" variant="outline" disabled>
+                      Processing...
+                    </Button>
+                  )}
+                  {purchase.status === "failed" && (
+                    <Button onClick={fetchPurchases} size="sm" variant="outline">
+                      Retry
+                    </Button>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
