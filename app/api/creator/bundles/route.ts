@@ -2,7 +2,6 @@ import { type NextRequest, NextResponse } from "next/server"
 import { auth } from "@/lib/firebase-admin"
 import { db } from "@/lib/firebase-admin"
 import { stripe } from "@/lib/stripe"
-import { S3Client } from "@aws-sdk/client-s3"
 
 // Helper function to verify ID token
 async function verifyIdToken(request: NextRequest) {
@@ -21,16 +20,6 @@ async function verifyIdToken(request: NextRequest) {
   }
 }
 
-// Configure Cloudflare R2
-const r2Client = new S3Client({
-  region: "auto",
-  endpoint: process.env.CLOUDFLARE_R2_ENDPOINT,
-  credentials: {
-    accessKeyId: process.env.CLOUDFLARE_R2_ACCESS_KEY_ID!,
-    secretAccessKey: process.env.CLOUDFLARE_R2_SECRET_ACCESS_KEY!,
-  },
-})
-
 interface BundleCreationError {
   code: string
   message: string
@@ -48,17 +37,64 @@ export async function GET(request: NextRequest) {
 
     console.log(`🔍 [Bundles API] Fetching bundles for user: ${decodedToken.uid}`)
 
-    // Query bundles collection for this creator
-    const bundlesSnapshot = await db
-      .collection("bundles")
-      .where("creatorId", "==", decodedToken.uid)
-      .orderBy("createdAt", "desc")
-      .get()
+    // Query bundles collection for this creator - Remove orderBy to avoid index issues
+    let bundlesSnapshot
+    try {
+      bundlesSnapshot = await db.collection("bundles").where("creatorId", "==", decodedToken.uid).get()
+    } catch (firestoreError) {
+      console.error("❌ [Bundles API] Firestore query error:", firestoreError)
 
-    const bundles = bundlesSnapshot.docs.map((doc) => ({
-      id: doc.id,
-      ...doc.data(),
-    }))
+      // Fallback: Try without the where clause to see if collection exists
+      try {
+        const allBundlesSnapshot = await db.collection("bundles").limit(1).get()
+        console.log(`📊 [Bundles API] Collection exists, found ${allBundlesSnapshot.size} documents`)
+      } catch (collectionError) {
+        console.error("❌ [Bundles API] Collection doesn't exist:", collectionError)
+        return NextResponse.json({
+          success: true,
+          bundles: [],
+          count: 0,
+          message: "No bundles collection found",
+        })
+      }
+
+      // Return empty array if query fails
+      return NextResponse.json({
+        success: true,
+        bundles: [],
+        count: 0,
+        message: "Query failed, returning empty results",
+      })
+    }
+
+    const bundles = bundlesSnapshot.docs.map((doc) => {
+      const data = doc.data()
+      return {
+        id: doc.id,
+        title: data.title || "Untitled Bundle",
+        description: data.description || "",
+        price: data.price || 0,
+        currency: data.currency || "usd",
+        type: data.type || "one_time",
+        creatorId: data.creatorId,
+        creatorUsername: data.creatorUsername || "",
+        active: data.active !== false,
+        contentItems: data.contentItems || [],
+        createdAt: data.createdAt,
+        updatedAt: data.updatedAt,
+        productId: data.productId,
+        priceId: data.priceId,
+        coverImage: data.coverImage,
+      }
+    })
+
+    // Sort by creation date client-side (newest first)
+    bundles.sort((a, b) => {
+      if (!a.createdAt || !b.createdAt) return 0
+      const aTime = a.createdAt.seconds || a.createdAt.getTime?.() / 1000 || 0
+      const bTime = b.createdAt.seconds || b.createdAt.getTime?.() / 1000 || 0
+      return bTime - aTime
+    })
 
     console.log(`✅ [Bundles API] Found ${bundles.length} bundles`)
 
@@ -73,6 +109,7 @@ export async function GET(request: NextRequest) {
       {
         error: "Failed to fetch bundles",
         details: error instanceof Error ? error.message : "Unknown error",
+        success: false,
       },
       { status: 500 },
     )
@@ -144,19 +181,17 @@ export async function POST(request: NextRequest) {
     }
 
     // Get user data to check Stripe account
-    const userDoc = await db.collection("users").doc(userId).get()
-    if (!userDoc.exists) {
-      return NextResponse.json(
-        {
-          code: "USER_NOT_FOUND",
-          message: "User profile not found",
-          suggestedActions: ["Please complete your profile setup"],
-        } as BundleCreationError,
-        { status: 404 },
-      )
+    let userData = null
+    try {
+      const userDoc = await db.collection("users").doc(userId).get()
+      if (userDoc.exists) {
+        userData = userDoc.data()
+      }
+    } catch (userError) {
+      console.error("❌ [Bundle Creation] Error fetching user data:", userError)
+      // Continue without user data
     }
 
-    const userData = userDoc.data()
     console.log(`👤 [Bundle Creation] User data:`, {
       username: userData?.username,
       hasStripeAccount: !!userData?.stripeAccountId,
@@ -188,7 +223,7 @@ export async function POST(request: NextRequest) {
     let stripeProductId = null
     let stripePriceId = null
 
-    if (userData?.stripeAccountId) {
+    if (userData?.stripeAccountId && stripe) {
       try {
         console.log(`🔄 [Bundle Creation] Creating Stripe product for connected account: ${userData.stripeAccountId}`)
 
