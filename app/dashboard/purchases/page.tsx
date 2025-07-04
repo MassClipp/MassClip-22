@@ -1,508 +1,329 @@
 "use client"
 
-import { useState, useEffect } from "react"
-import { motion, AnimatePresence } from "framer-motion"
-import {
-  Search,
-  Filter,
-  RefreshCw,
-  ShoppingBag,
-  Package,
-  DollarSign,
-  Calendar,
-  User,
-  Play,
-  Download,
-  Heart,
-  ChevronDown,
-  ChevronUp,
-  Loader2,
-  AlertCircle,
-} from "lucide-react"
+import { useState, useEffect, useMemo } from "react"
+import { useRouter } from "next/navigation"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { useAuth } from "@/contexts/auth-context"
-import { useToast } from "@/hooks/use-toast"
+import { Skeleton } from "@/components/ui/skeleton"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Search, Package, Calendar, DollarSign, AlertCircle, RefreshCw, Download } from "lucide-react"
+import { useFirebaseAuth } from "@/hooks/use-firebase-auth"
 
 interface Purchase {
   id: string
-  type: "bundle" | "individual"
-  title: string
+  title?: string
   description?: string
-  price: number
-  currency: string
-  purchaseDate: Date
-  creatorUsername: string
-  creatorId: string
-  contentItems?: ContentItem[]
-  coverImageUrl?: string
-  customPreviewThumbnail?: string
+  price?: number
+  currency?: string
+  status?: string
+  purchaseDate?: any
+  productType?: string
+  creatorUsername?: string
+  creatorId?: string
+  productId?: string
+  bundleId?: string
+  productBoxId?: string
+  stripeSessionId?: string
+  metadata?: any
 }
 
-interface ContentItem {
-  id: string
-  title: string
-  type: "video" | "audio" | "image" | "document"
-  url: string
-  thumbnailUrl?: string
-  duration?: number
-  size?: number
-}
-
-export default function FullScreenMyPurchasesPage() {
-  const { user } = useAuth()
-  const { toast } = useToast()
-
+export default function PurchasesPage() {
   const [purchases, setPurchases] = useState<Purchase[]>([])
   const [loading, setLoading] = useState(true)
-  const [searchTerm, setSearchTerm] = useState("")
-  const [sortBy, setSortBy] = useState("newest")
-  const [expandedPurchases, setExpandedPurchases] = useState<Set<string>>(new Set())
-  const [refreshing, setRefreshing] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [searchQuery, setSearchQuery] = useState("")
+  const { user, loading: authLoading } = useFirebaseAuth()
+  const router = useRouter()
 
-  // Fetch purchases
   const fetchPurchases = async () => {
     if (!user) return
 
     try {
       setLoading(true)
-      const token = await user.getIdToken()
+      setError(null)
 
+      const token = await user.getIdToken()
       const response = await fetch("/api/user/unified-purchases", {
+        method: "GET",
         headers: {
           Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
         },
       })
 
       if (!response.ok) {
-        throw new Error("Failed to fetch purchases")
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`)
       }
 
       const data = await response.json()
-      const purchasesData = data.purchases || []
 
-      // Validate and clean the purchases data
-      const validPurchases = purchasesData.map((purchase: any) => ({
-        ...purchase,
-        title: purchase.title || purchase.itemTitle || "Untitled Purchase",
-        creatorUsername: purchase.creatorUsername || purchase.creatorName || "Unknown Creator",
-        price: purchase.price || 0,
-        currency: purchase.currency || "usd",
-        purchaseDate: purchase.purchaseDate || purchase.purchasedAt || new Date(),
-      }))
+      if (data.success) {
+        // Ensure all purchases have required fields with fallbacks
+        const normalizedPurchases = (data.purchases || []).map((purchase: any) => ({
+          id: purchase.id || "",
+          title: purchase.title || purchase.productName || "Untitled Purchase",
+          description: purchase.description || purchase.productDescription || "",
+          price: typeof purchase.price === "number" ? purchase.price : 0,
+          currency: purchase.currency || "usd",
+          status: purchase.status || "completed",
+          purchaseDate: purchase.purchaseDate || purchase.createdAt || new Date(),
+          productType: purchase.productType || purchase.type || "unknown",
+          creatorUsername: purchase.creatorUsername || purchase.creator || "Unknown Creator",
+          creatorId: purchase.creatorId || "",
+          productId: purchase.productId || "",
+          bundleId: purchase.bundleId || "",
+          productBoxId: purchase.productBoxId || "",
+          stripeSessionId: purchase.stripeSessionId || "",
+          metadata: purchase.metadata || {},
+          ...purchase,
+        }))
 
-      setPurchases(validPurchases)
-    } catch (error) {
-      console.error("Error fetching purchases:", error)
-      toast({
-        title: "Error",
-        description: "Failed to load purchases",
-        variant: "destructive",
-      })
+        setPurchases(normalizedPurchases)
+      } else {
+        throw new Error(data.error || "Failed to fetch purchases")
+      }
+    } catch (err) {
+      console.error("Error fetching purchases:", err)
+      setError(err instanceof Error ? err.message : "Failed to fetch purchases")
     } finally {
       setLoading(false)
     }
   }
 
-  // Refresh purchases
-  const handleRefresh = async () => {
-    setRefreshing(true)
-    await fetchPurchases()
-    setRefreshing(false)
-    toast({
-      title: "Refreshed",
-      description: "Purchase library updated",
-    })
-  }
-
-  // Filter and sort purchases
-  const filteredPurchases = purchases
-    .filter(
-      (purchase) =>
-        (purchase.title || "").toLowerCase().includes(searchTerm.toLowerCase()) ||
-        (purchase.creatorUsername || "").toLowerCase().includes(searchTerm.toLowerCase()),
-    )
-    .sort((a, b) => {
-      switch (sortBy) {
-        case "newest":
-          return new Date(b.purchaseDate).getTime() - new Date(a.purchaseDate).getTime()
-        case "oldest":
-          return new Date(a.purchaseDate).getTime() - new Date(b.purchaseDate).getTime()
-        case "price-high":
-          return b.price - a.price
-        case "price-low":
-          return a.price - b.price
-        case "title":
-          return a.title.localeCompare(b.title)
-        default:
-          return 0
-      }
-    })
-
-  // Toggle purchase expansion
-  const toggleExpanded = (purchaseId: string) => {
-    const newExpanded = new Set(expandedPurchases)
-    if (newExpanded.has(purchaseId)) {
-      newExpanded.delete(purchaseId)
-    } else {
-      newExpanded.add(purchaseId)
-    }
-    setExpandedPurchases(newExpanded)
-  }
-
-  // Calculate statistics
-  const totalPurchases = purchases.length
-  const totalItems = purchases.reduce((sum, purchase) => sum + (purchase.contentItems?.length || 0), 0)
-  const totalSpent = purchases.reduce((sum, purchase) => sum + purchase.price, 0)
-
-  // Format price
-  const formatPrice = (price: number, currency = "usd") => {
-    return new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency: currency.toUpperCase(),
-    }).format(price)
-  }
-
-  // Format date
-  const formatDate = (date: Date) => {
-    return new Intl.DateTimeFormat("en-US", {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-    }).format(new Date(date))
-  }
-
-  // Format file size
-  const formatFileSize = (bytes?: number) => {
-    if (!bytes) return "Unknown"
-    const sizes = ["Bytes", "KB", "MB", "GB"]
-    const i = Math.floor(Math.log(bytes) / Math.log(1024))
-    return Math.round((bytes / Math.pow(1024, i)) * 100) / 100 + " " + sizes[i]
-  }
-
   useEffect(() => {
-    fetchPurchases()
-  }, [user])
+    if (!authLoading && user) {
+      fetchPurchases()
+    } else if (!authLoading && !user) {
+      router.push("/login")
+    }
+  }, [user, authLoading, router])
 
-  if (loading) {
+  // Filter purchases based on search query with safe string operations
+  const filteredPurchases = useMemo(() => {
+    if (!searchQuery.trim()) return purchases
+
+    const query = searchQuery.toLowerCase().trim()
+
+    return purchases.filter((purchase) => {
+      // Safely check each field with fallbacks
+      const title = (purchase.title || "").toLowerCase()
+      const description = (purchase.description || "").toLowerCase()
+      const creatorUsername = (purchase.creatorUsername || "").toLowerCase()
+      const productType = (purchase.productType || "").toLowerCase()
+      const status = (purchase.status || "").toLowerCase()
+
+      return (
+        title.includes(query) ||
+        description.includes(query) ||
+        creatorUsername.includes(query) ||
+        productType.includes(query) ||
+        status.includes(query)
+      )
+    })
+  }, [purchases, searchQuery])
+
+  const formatDate = (date: any) => {
+    try {
+      if (!date) return "Unknown date"
+
+      // Handle Firestore timestamp
+      if (date.toDate && typeof date.toDate === "function") {
+        return date.toDate().toLocaleDateString()
+      }
+
+      // Handle regular date
+      if (date instanceof Date) {
+        return date.toLocaleDateString()
+      }
+
+      // Handle string date
+      if (typeof date === "string") {
+        return new Date(date).toLocaleDateString()
+      }
+
+      return "Unknown date"
+    } catch (error) {
+      console.error("Error formatting date:", error)
+      return "Unknown date"
+    }
+  }
+
+  const getStatusColor = (status: string) => {
+    switch (status?.toLowerCase()) {
+      case "completed":
+      case "active":
+        return "default"
+      case "pending":
+        return "secondary"
+      case "cancelled":
+      case "failed":
+        return "destructive"
+      default:
+        return "outline"
+    }
+  }
+
+  if (authLoading) {
     return (
-      <div className="fixed inset-0 bg-black flex items-center justify-center">
-        <div className="text-center">
-          <Loader2 className="h-8 w-8 text-zinc-500 animate-spin mx-auto mb-4" />
-          <p className="text-zinc-400">Loading your purchases...</p>
+      <div className="container mx-auto px-4 py-8">
+        <div className="space-y-6">
+          <Skeleton className="h-8 w-48" />
+          <Skeleton className="h-10 w-full max-w-md" />
+          <div className="grid gap-6">
+            {[...Array(3)].map((_, i) => (
+              <Card key={i}>
+                <CardHeader>
+                  <Skeleton className="h-6 w-3/4" />
+                  <Skeleton className="h-4 w-full" />
+                </CardHeader>
+                <CardContent>
+                  <Skeleton className="h-20 w-full" />
+                </CardContent>
+              </Card>
+            ))}
+          </div>
         </div>
       </div>
     )
   }
 
+  if (!user) {
+    return null // Will redirect to login
+  }
+
   return (
-    <div
-      className="fixed inset-0 bg-black overflow-auto"
-      style={{
-        scrollbarWidth: "thin",
-        scrollbarColor: "#3f3f46 #18181b",
-      }}
-    >
-      <style jsx>{`
-        div::-webkit-scrollbar {
-          width: 8px;
-        }
-        div::-webkit-scrollbar-track {
-          background: #18181b;
-        }
-        div::-webkit-scrollbar-thumb {
-          background: #3f3f46;
-          border-radius: 4px;
-        }
-        div::-webkit-scrollbar-thumb:hover {
-          background: #52525b;
-        }
-      `}</style>
-
-      <div className="min-h-full w-full pt-24 px-6 pb-6">
+    <div className="container mx-auto px-4 py-8">
+      <div className="space-y-6">
         {/* Header */}
-        <div className="flex items-center justify-between mb-8">
-          <div>
-            <h1 className="text-3xl font-bold text-white mb-2">My Purchases</h1>
-            <p className="text-zinc-400">Your purchased content library</p>
+        <div>
+          <h1 className="text-3xl font-bold">My Purchases</h1>
+          <p className="text-muted-foreground">View and manage your purchased content</p>
+        </div>
+
+        {/* Search */}
+        <div className="relative max-w-md">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Search purchases..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-10"
+          />
+        </div>
+
+        {/* Error State */}
+        {error && (
+          <Alert variant="destructive">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription className="flex items-center justify-between">
+              <span>{error}</span>
+              <Button variant="outline" size="sm" onClick={fetchPurchases} className="ml-4 bg-transparent">
+                <RefreshCw className="mr-2 h-4 w-4" />
+                Try Again
+              </Button>
+            </AlertDescription>
+          </Alert>
+        )}
+
+        {/* Loading State */}
+        {loading && !error && (
+          <div className="grid gap-6">
+            {[...Array(3)].map((_, i) => (
+              <Card key={i}>
+                <CardHeader>
+                  <Skeleton className="h-6 w-3/4" />
+                  <Skeleton className="h-4 w-full" />
+                </CardHeader>
+                <CardContent>
+                  <Skeleton className="h-20 w-full" />
+                </CardContent>
+              </Card>
+            ))}
           </div>
-          <Button
-            onClick={handleRefresh}
-            disabled={refreshing}
-            variant="outline"
-            className="border-zinc-700 text-zinc-300 hover:bg-zinc-800 bg-transparent"
-          >
-            <RefreshCw className={`h-4 w-4 mr-2 ${refreshing ? "animate-spin" : ""}`} />
-            Refresh
-          </Button>
-        </div>
+        )}
 
-        {/* Search and Filter */}
-        <div className="flex gap-4 mb-8">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-zinc-500" />
-            <Input
-              placeholder="Search purchases..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10 bg-zinc-900 border-zinc-800 text-white placeholder:text-zinc-500"
-            />
-          </div>
-          <Select value={sortBy} onValueChange={setSortBy}>
-            <SelectTrigger className="w-48 bg-zinc-900 border-zinc-800 text-white">
-              <Filter className="h-4 w-4 mr-2" />
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent className="bg-zinc-900 border-zinc-800">
-              <SelectItem value="newest">Newest First</SelectItem>
-              <SelectItem value="oldest">Oldest First</SelectItem>
-              <SelectItem value="price-high">Price: High to Low</SelectItem>
-              <SelectItem value="price-low">Price: Low to High</SelectItem>
-              <SelectItem value="title">Title A-Z</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-
-        {/* Statistics */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-          <Card className="bg-zinc-900/60 backdrop-blur-sm border-zinc-800/50">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-zinc-400 mb-1">Total Purchases</p>
-                  <p className="text-2xl font-bold text-white">{totalPurchases}</p>
-                </div>
-                <ShoppingBag className="h-8 w-8 text-zinc-600" />
-              </div>
+        {/* Empty State */}
+        {!loading && !error && filteredPurchases.length === 0 && purchases.length === 0 && (
+          <Card className="text-center py-12">
+            <CardContent>
+              <Package className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
+              <h3 className="text-lg font-semibold mb-2">No purchases yet</h3>
+              <p className="text-muted-foreground mb-4">
+                You haven't purchased any content yet. Browse our catalog to find premium content.
+              </p>
+              <Button onClick={() => router.push("/dashboard/explore")}>Browse Content</Button>
             </CardContent>
           </Card>
+        )}
 
-          <Card className="bg-zinc-900/60 backdrop-blur-sm border-zinc-800/50">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-zinc-400 mb-1">Total Items</p>
-                  <p className="text-2xl font-bold text-white">{totalItems}</p>
-                </div>
-                <Package className="h-8 w-8 text-zinc-600" />
-              </div>
+        {/* No Search Results */}
+        {!loading && !error && filteredPurchases.length === 0 && purchases.length > 0 && (
+          <Card className="text-center py-12">
+            <CardContent>
+              <Search className="mx-auto h-12 w-12 text-muted-foreground mb-4" />
+              <h3 className="text-lg font-semibold mb-2">No results found</h3>
+              <p className="text-muted-foreground mb-4">No purchases match your search query "{searchQuery}"</p>
+              <Button variant="outline" onClick={() => setSearchQuery("")}>
+                Clear Search
+              </Button>
             </CardContent>
           </Card>
-
-          <Card className="bg-zinc-900/60 backdrop-blur-sm border-zinc-800/50">
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-sm text-zinc-400 mb-1">Total Spent</p>
-                  <p className="text-2xl font-bold text-white">{formatPrice(totalSpent)}</p>
-                </div>
-                <DollarSign className="h-8 w-8 text-zinc-600" />
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+        )}
 
         {/* Purchases List */}
-        {filteredPurchases.length === 0 ? (
-          <div className="text-center py-16">
-            <div className="max-w-md mx-auto bg-zinc-900/40 backdrop-blur-sm border border-zinc-800/50 rounded-xl p-8">
-              <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gradient-to-br from-zinc-800 to-zinc-900 flex items-center justify-center">
-                <ShoppingBag className="h-8 w-8 text-zinc-600" />
-              </div>
-              <h3 className="text-xl font-medium text-white mb-2">
-                {searchTerm ? "No matching purchases" : "No purchases yet"}
-              </h3>
-              <p className="text-zinc-400 mb-6">
-                {searchTerm
-                  ? "Try adjusting your search terms"
-                  : "Start exploring and purchasing premium content from creators"}
-              </p>
-              {!searchTerm && (
-                <Button
-                  className="bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white border-0"
-                  onClick={() => (window.location.href = "/")}
-                >
-                  Explore Content
-                </Button>
-              )}
-            </div>
-          </div>
-        ) : (
-          <div className="space-y-6">
-            <AnimatePresence>
-              {filteredPurchases.map((purchase, index) => (
-                <motion.div
-                  key={purchase.id}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -20 }}
-                  transition={{ duration: 0.3, delay: index * 0.05 }}
-                >
-                  <Card className="bg-zinc-900/60 backdrop-blur-sm border-zinc-800/50 overflow-hidden hover:border-zinc-700/50 transition-all duration-300">
-                    <CardContent className="p-0">
-                      {/* Purchase Header */}
-                      <div className="p-6 border-b border-zinc-800/50">
-                        <div className="flex items-start justify-between">
-                          <div className="flex items-start gap-4">
-                            {/* Thumbnail */}
-                            <div className="w-16 h-16 rounded-lg bg-gradient-to-br from-zinc-800 to-zinc-900 flex items-center justify-center overflow-hidden flex-shrink-0">
-                              {purchase.coverImageUrl ? (
-                                <img
-                                  src={purchase.coverImageUrl || "/placeholder.svg"}
-                                  alt={purchase.title}
-                                  className="w-full h-full object-cover"
-                                />
-                              ) : (
-                                <Package className="h-8 w-8 text-zinc-600" />
-                              )}
-                            </div>
-
-                            {/* Purchase Info */}
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2 mb-2">
-                                <h3 className="text-lg font-semibold text-white truncate">{purchase.title}</h3>
-                                <Badge variant="secondary" className="bg-zinc-800 text-zinc-300 border-0 flex-shrink-0">
-                                  {purchase.type === "bundle" ? "Bundle" : "Individual"}
-                                </Badge>
-                              </div>
-
-                              <div className="flex items-center gap-4 text-sm text-zinc-400 mb-2">
-                                <div className="flex items-center gap-1">
-                                  <User className="h-4 w-4" />
-                                  <span>{purchase.creatorUsername}</span>
-                                </div>
-                                <div className="flex items-center gap-1">
-                                  <Calendar className="h-4 w-4" />
-                                  <span>{formatDate(purchase.purchaseDate)}</span>
-                                </div>
-                                <div className="text-green-400 font-medium">
-                                  {formatPrice(purchase.price, purchase.currency)}
-                                </div>
-                              </div>
-
-                              {purchase.description && (
-                                <p className="text-sm text-zinc-500 line-clamp-2">{purchase.description}</p>
-                              )}
-                            </div>
-                          </div>
-
-                          {/* Actions */}
-                          <div className="flex items-center gap-2 flex-shrink-0">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="border-zinc-700 text-zinc-300 hover:bg-zinc-800 bg-transparent"
-                              onClick={() => toggleExpanded(purchase.id)}
-                            >
-                              {expandedPurchases.has(purchase.id) ? (
-                                <>
-                                  <ChevronUp className="h-4 w-4 mr-1" />
-                                  Collapse
-                                </>
-                              ) : (
-                                <>
-                                  <ChevronDown className="h-4 w-4 mr-1" />
-                                  Access
-                                </>
-                              )}
-                            </Button>
-                          </div>
-                        </div>
+        {!loading && !error && filteredPurchases.length > 0 && (
+          <div className="grid gap-6">
+            {filteredPurchases.map((purchase) => (
+              <Card key={purchase.id} className="hover:shadow-lg transition-shadow">
+                <CardHeader>
+                  <div className="flex items-start justify-between">
+                    <div className="flex-1">
+                      <CardTitle className="line-clamp-2">{purchase.title}</CardTitle>
+                      <CardDescription className="line-clamp-2">
+                        {purchase.description || "No description available"}
+                      </CardDescription>
+                    </div>
+                    <Badge variant={getStatusColor(purchase.status || "")}>
+                      {(purchase.status || "unknown").charAt(0).toUpperCase() + (purchase.status || "unknown").slice(1)}
+                    </Badge>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                      <div className="flex items-center space-x-2">
+                        <DollarSign className="h-4 w-4 text-muted-foreground" />
+                        <span>
+                          ${(purchase.price || 0).toFixed(2)} {(purchase.currency || "USD").toUpperCase()}
+                        </span>
                       </div>
+                      <div className="flex items-center space-x-2">
+                        <Calendar className="h-4 w-4 text-muted-foreground" />
+                        <span>{formatDate(purchase.purchaseDate)}</span>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <Package className="h-4 w-4 text-muted-foreground" />
+                        <span className="capitalize">{purchase.productType || "Unknown"}</span>
+                      </div>
+                      <div className="text-muted-foreground">by {purchase.creatorUsername || "Unknown Creator"}</div>
+                    </div>
 
-                      {/* Expanded Content */}
-                      <AnimatePresence>
-                        {expandedPurchases.has(purchase.id) && (
-                          <motion.div
-                            initial={{ height: 0, opacity: 0 }}
-                            animate={{ height: "auto", opacity: 1 }}
-                            exit={{ height: 0, opacity: 0 }}
-                            transition={{ duration: 0.3 }}
-                            className="overflow-hidden"
-                          >
-                            <div className="p-6 pt-0">
-                              <div className="mb-4">
-                                <h4 className="text-sm font-medium text-zinc-300 mb-3">
-                                  Content ({purchase.contentItems?.length || 0} items)
-                                </h4>
-                              </div>
-
-                              {purchase.contentItems && purchase.contentItems.length > 0 ? (
-                                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-                                  {purchase.contentItems.map((item) => (
-                                    <div
-                                      key={item.id}
-                                      className="bg-zinc-800/50 rounded-lg p-4 hover:bg-zinc-800/70 transition-colors"
-                                    >
-                                      {/* Content Thumbnail */}
-                                      <div className="aspect-video bg-zinc-900 rounded-lg mb-3 overflow-hidden relative group">
-                                        {item.thumbnailUrl ? (
-                                          <img
-                                            src={item.thumbnailUrl || "/placeholder.svg"}
-                                            alt={item.title}
-                                            className="w-full h-full object-cover"
-                                          />
-                                        ) : (
-                                          <div className="w-full h-full flex items-center justify-center">
-                                            <Play className="h-8 w-8 text-zinc-600" />
-                                          </div>
-                                        )}
-
-                                        {/* Play Overlay */}
-                                        <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                                          <Play className="h-8 w-8 text-white" />
-                                        </div>
-                                      </div>
-
-                                      {/* Content Info */}
-                                      <div className="space-y-2">
-                                        <h5 className="font-medium text-white text-sm line-clamp-1">{item.title}</h5>
-
-                                        <div className="flex items-center justify-between text-xs text-zinc-500">
-                                          <span className="capitalize">{item.type}</span>
-                                          {item.size && <span>{formatFileSize(item.size)}</span>}
-                                        </div>
-
-                                        {/* Content Actions */}
-                                        <div className="flex gap-2 pt-2">
-                                          <Button
-                                            size="sm"
-                                            variant="outline"
-                                            className="flex-1 h-8 text-xs border-zinc-700 text-zinc-300 hover:bg-zinc-700 bg-transparent"
-                                          >
-                                            <Download className="h-3 w-3 mr-1" />
-                                            Download
-                                          </Button>
-                                          <Button
-                                            size="sm"
-                                            variant="outline"
-                                            className="h-8 px-2 border-zinc-700 text-zinc-300 hover:bg-zinc-700 bg-transparent"
-                                          >
-                                            <Heart className="h-3 w-3" />
-                                          </Button>
-                                        </div>
-                                      </div>
-                                    </div>
-                                  ))}
-                                </div>
-                              ) : (
-                                <div className="text-center py-8">
-                                  <AlertCircle className="h-8 w-8 text-zinc-600 mx-auto mb-2" />
-                                  <p className="text-sm text-zinc-500">No content items found</p>
-                                </div>
-                              )}
-                            </div>
-                          </motion.div>
-                        )}
-                      </AnimatePresence>
-                    </CardContent>
-                  </Card>
-                </motion.div>
-              ))}
-            </AnimatePresence>
+                    <div className="flex space-x-2">
+                      <Button variant="outline" size="sm">
+                        <Download className="mr-2 h-4 w-4" />
+                        Access Content
+                      </Button>
+                      <Button variant="outline" size="sm">
+                        View Details
+                      </Button>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
           </div>
         )}
       </div>
