@@ -10,156 +10,128 @@ export async function POST(request: NextRequest) {
     const { sessionId } = await request.json()
 
     if (!sessionId) {
-      return NextResponse.json({ error: "Missing session ID" }, { status: 400 })
+      return NextResponse.json({ error: "Session ID is required" }, { status: 400 })
     }
 
-    console.log("🔍 [Debug] Retrieving Stripe session:", sessionId)
+    // Determine expected session type based on our Stripe key
+    const stripeKey = process.env.STRIPE_SECRET_KEY!
+    const isLiveKey = stripeKey.startsWith("sk_live_")
+    const isTestKey = stripeKey.startsWith("sk_test_")
+    const sessionIsLive = sessionId.startsWith("cs_live_")
+    const sessionIsTest = sessionId.startsWith("cs_test_")
 
-    // Check environment configuration
-    const environment = {
-      stripeKeyExists: !!process.env.STRIPE_SECRET_KEY,
-      stripeKeyPrefix: process.env.STRIPE_SECRET_KEY?.substring(0, 7),
-      isTestMode: process.env.STRIPE_SECRET_KEY?.startsWith("sk_test_"),
-      isLiveMode: process.env.STRIPE_SECRET_KEY?.startsWith("sk_live_"),
-      sessionIdPrefix: sessionId.substring(0, 7),
-      sessionIsTest: sessionId.startsWith("cs_test_"),
-      sessionIsLive: sessionId.startsWith("cs_live_"),
-      nodeEnv: process.env.NODE_ENV,
-    }
-
-    console.log("🔧 [Debug] Environment check:", environment)
-
-    // Check for test/live mode mismatch
-    if (environment.isTestMode && environment.sessionIsLive) {
+    // Check for mode mismatch before making API call
+    if (isLiveKey && sessionIsTest) {
       return NextResponse.json(
         {
-          error: "Test/Live mode mismatch",
-          details: "You're using a test Stripe key but trying to access a live session",
-          environment,
-          recommendation: "Either use a live Stripe key or use a test session ID (cs_test_...)",
+          error: "Mode Mismatch: Live key cannot access test session",
+          details: `Your Stripe key (${stripeKey.substring(0, 8)}...) is a live key, but you're trying to access a test session (${sessionId.substring(0, 8)}...)`,
+          recommendation:
+            "Use a test key (sk_test_...) to access test sessions, or use a live session ID (cs_live_...) with your live key",
           configurationSteps: [
             "1. Check your STRIPE_SECRET_KEY environment variable",
-            "2. Ensure it matches the session type you're trying to access",
-            "3. For testing, use sk_test_... keys with cs_test_... sessions",
-            "4. For production, use sk_live_... keys with cs_live_... sessions",
+            "2. Ensure it matches the session type you want to access",
+            "3. For testing: use sk_test_... keys with cs_test_... sessions",
+            "4. For production: use sk_live_... keys with cs_live_... sessions",
           ],
         },
         { status: 400 },
       )
     }
 
-    if (environment.isLiveMode && environment.sessionIsTest) {
+    if (isTestKey && sessionIsLive) {
       return NextResponse.json(
         {
-          error: "Test/Live mode mismatch",
-          details: "You're using a live Stripe key but trying to access a test session",
-          environment,
-          recommendation: "Either use a test Stripe key or use a live session ID (cs_live_...)",
+          error: "Mode Mismatch: Test key cannot access live session",
+          details: `Your Stripe key (${stripeKey.substring(0, 8)}...) is a test key, but you're trying to access a live session (${sessionId.substring(0, 8)}...)`,
+          recommendation:
+            "Use a live key (sk_live_...) to access live sessions, or use a test session ID (cs_test_...) with your test key",
           configurationSteps: [
             "1. Check your STRIPE_SECRET_KEY environment variable",
-            "2. Ensure it matches the session type you're trying to access",
-            "3. For testing, use sk_test_... keys with cs_test_... sessions",
-            "4. For production, use sk_live_... keys with cs_live_... sessions",
+            "2. Ensure it matches the session type you want to access",
+            "3. For testing: use sk_test_... keys with cs_test_... sessions",
+            "4. For production: use sk_live_... keys with cs_live_... sessions",
           ],
         },
         { status: 400 },
       )
     }
-
-    // Retrieve the Stripe session with all details
-    let session: Stripe.Checkout.Session
-    let lineItems: Stripe.ApiList<Stripe.LineItem> | null = null
 
     try {
-      session = await stripe.checkout.sessions.retrieve(sessionId, {
-        expand: ["payment_intent", "line_items", "line_items.data.price.product"],
-      })
+      // Attempt to retrieve the session
+      const session = await stripe.checkout.sessions.retrieve(sessionId)
 
-      // Get line items separately for more details
-      lineItems = await stripe.checkout.sessions.listLineItems(sessionId, {
-        expand: ["data.price.product"],
-      })
-    } catch (stripeError: any) {
-      console.error("❌ [Debug] Stripe error:", stripeError)
-
-      return NextResponse.json(
-        {
-          error: stripeError.message,
-          type: stripeError.type,
-          code: stripeError.code,
-          statusCode: stripeError.statusCode,
-          requestId: stripeError.requestId,
-          environment,
-          recommendation:
-            stripeError.statusCode === 404
-              ? "Check if the session ID is correct and matches your Stripe account mode (test/live)"
-              : "Check your Stripe configuration and try again",
-          troubleshooting: {
-            sessionNotFound: "The session ID may be incorrect, expired, or from a different Stripe account",
-            modeCheck: "Verify that your Stripe key mode matches the session type",
-            expiration: "Checkout sessions expire after 24 hours",
-          },
-        },
-        { status: stripeError.statusCode || 500 },
-      )
-    }
-
-    const debugInfo = {
-      success: true,
-      session: {
-        id: session.id,
-        status: session.status,
-        payment_status: session.payment_status,
-        amount_total: session.amount_total,
-        currency: session.currency,
-        customer_email: session.customer_details?.email,
-        metadata: session.metadata,
-        created: new Date(session.created * 1000).toISOString(),
-        expires_at: new Date(session.expires_at * 1000).toISOString(),
-        payment_intent: session.payment_intent,
-        mode: session.mode,
-        success_url: session.success_url,
-        cancel_url: session.cancel_url,
-        url: session.url,
-      },
-      lineItems:
-        lineItems?.data.map((item) => ({
-          id: item.id,
-          amount_total: item.amount_total,
-          currency: item.currency,
-          description: item.description,
-          quantity: item.quantity,
-          price: {
-            id: item.price?.id,
-            unit_amount: item.price?.unit_amount,
-            currency: item.price?.currency,
-            product: item.price?.product,
-          },
-        })) || [],
-      environment,
-      analysis: {
-        isExpired: new Date() > new Date(session.expires_at * 1000),
+      // Analyze the session
+      const analysis = {
+        isExpired: session.expires_at * 1000 < Date.now(),
         isPaid: session.payment_status === "paid",
         isComplete: session.status === "complete",
         hasMetadata: Object.keys(session.metadata || {}).length > 0,
-      },
+        createdHoursAgo: Math.floor((Date.now() - session.created * 1000) / (1000 * 60 * 60)),
+      }
+
+      return NextResponse.json({
+        success: true,
+        session: {
+          id: session.id,
+          status: session.status,
+          payment_status: session.payment_status,
+          amount_total: session.amount_total,
+          currency: session.currency,
+          customer_email: session.customer_email,
+          created: session.created * 1000, // Convert to milliseconds
+          expires_at: session.expires_at * 1000, // Convert to milliseconds
+          metadata: session.metadata,
+          mode: session.mode,
+        },
+        analysis,
+        environment: {
+          stripeKeyType: isLiveKey ? "live" : isTestKey ? "test" : "unknown",
+          sessionType: sessionIsLive ? "live" : sessionIsTest ? "test" : "unknown",
+          modesMatch: (isLiveKey && sessionIsLive) || (isTestKey && sessionIsTest),
+        },
+      })
+    } catch (stripeError: any) {
+      // Handle specific Stripe errors
+      if (stripeError.code === "resource_missing") {
+        return NextResponse.json(
+          {
+            error: "Session Not Found",
+            details: `The session ${sessionId} was not found in your Stripe account`,
+            recommendation: "Verify the session ID is correct and belongs to the correct Stripe account",
+            configurationSteps: [
+              "1. Double-check the session ID is complete and correct",
+              "2. Ensure the session belongs to the same Stripe account as your API key",
+              "3. Check if the session has expired (sessions expire after 24 hours)",
+              "4. Verify you're using the correct test/live mode",
+            ],
+            stripeError: {
+              code: stripeError.code,
+              message: stripeError.message,
+              type: stripeError.type,
+            },
+          },
+          { status: 404 },
+        )
+      }
+
+      // Handle other Stripe errors
+      return NextResponse.json(
+        {
+          error: "Stripe API Error",
+          details: stripeError.message,
+          recommendation: "Check your Stripe configuration and API key permissions",
+          stripeError: {
+            code: stripeError.code,
+            message: stripeError.message,
+            type: stripeError.type,
+          },
+        },
+        { status: 400 },
+      )
     }
-
-    console.log("✅ [Debug] Session retrieved successfully")
-    return NextResponse.json(debugInfo)
-  } catch (error: any) {
-    console.error("❌ [Debug] Error retrieving session:", error)
-
-    return NextResponse.json(
-      {
-        error: error.message || "Unknown error",
-        type: error.type,
-        code: error.code,
-        statusCode: error.statusCode,
-        requestId: error.requestId,
-        details: "An unexpected error occurred while debugging the session",
-      },
-      { status: error.statusCode || 500 },
-    )
+  } catch (error) {
+    console.error("Error debugging Stripe session:", error)
+    return NextResponse.json({ error: "Internal server error while debugging session" }, { status: 500 })
   }
 }
