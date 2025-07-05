@@ -70,7 +70,7 @@ export default function PurchaseSuccessPage() {
 
       const idToken = await user.getIdToken()
 
-      const response = await fetch("/api/verify-purchase", {
+      const response = await fetch("/api/purchase/verify", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
