@@ -304,8 +304,8 @@ export default function PurchasesPage() {
   // Loading state
   if (authLoading || loading) {
     return (
-      <div className="min-h-screen bg-black text-white">
-        <div className="container mx-auto px-4 py-8 max-w-6xl">
+      <div className="min-h-screen bg-gradient-to-br from-black via-gray-900 to-black text-white">
+        <div className="px-4 py-8 max-w-7xl mx-auto">
           <div className="animate-pulse">
             <div className="h-12 w-80 mb-4 bg-gray-800/50 rounded"></div>
             <div className="h-6 w-64 mb-8 bg-gray-800/50 rounded"></div>
@@ -337,8 +337,8 @@ export default function PurchasesPage() {
   // Error state
   if (error) {
     return (
-      <div className="min-h-screen bg-black text-white">
-        <div className="container mx-auto px-4 py-8 max-w-6xl">
+      <div className="min-h-screen bg-gradient-to-br from-black via-gray-900 to-black text-white">
+        <div className="px-4 py-8 max-w-7xl mx-auto">
           <Alert variant="destructive" className="bg-red-900/20 border-red-800 mb-4">
             <AlertCircle className="h-4 w-4" />
             <AlertDescription>{error}</AlertDescription>
@@ -363,8 +363,8 @@ export default function PurchasesPage() {
   // Not authenticated state
   if (!user) {
     return (
-      <div className="min-h-screen bg-black text-white">
-        <div className="container mx-auto px-4 py-8 max-w-6xl">
+      <div className="min-h-screen bg-gradient-to-br from-black via-gray-900 to-black text-white">
+        <div className="px-4 py-8 max-w-7xl mx-auto">
           <div className="flex items-center justify-center min-h-96">
             <div className="max-w-md mx-auto text-center">
               <div className="w-24 h-24 mx-auto mb-6 bg-gray-800/50 rounded-full flex items-center justify-center border border-gray-700/50">
@@ -389,8 +389,11 @@ export default function PurchasesPage() {
 
   // Main content
   return (
-    <div className="min-h-screen bg-black text-white">
-      <div className="container mx-auto px-4 py-8 max-w-6xl">
+    <div className="min-h-screen bg-gradient-to-br from-black via-gray-900 to-black text-white">
+      {/* Background overlay for additional depth */}
+      <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-black/20 pointer-events-none" />
+
+      <div className="relative z-10 px-4 py-8 max-w-7xl mx-auto">
         {/* Header Section */}
         <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="mb-8">
           <div className="flex items-center justify-between mb-8">
@@ -441,7 +444,7 @@ export default function PurchasesPage() {
           </div>
 
           {/* Tabs */}
-          <div className="flex gap-1 mb-8 bg-gray-800/50 rounded-lg p-1">
+          <div className="flex gap-1 mb-8 bg-gray-800/50 backdrop-blur-sm rounded-lg p-1 border border-gray-700/30">
             {[
               { value: "all", label: "All Items" },
               { value: "downloads", label: "Downloads" },
@@ -454,7 +457,7 @@ export default function PurchasesPage() {
                 className={cn(
                   "px-4 py-2 text-sm font-medium rounded-md transition-all duration-200",
                   activeTab === tab.value
-                    ? "bg-gray-700 text-white"
+                    ? "bg-gray-700 text-white shadow-lg"
                     : "text-gray-400 hover:text-white hover:bg-gray-700/50",
                 )}
               >
@@ -471,12 +474,12 @@ export default function PurchasesPage() {
                 placeholder="Search your collection..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-12 bg-gray-800/50 border-gray-700/50 text-white placeholder:text-gray-400 h-12 rounded-lg focus:border-gray-600 focus:ring-1 focus:ring-gray-600"
+                className="pl-12 bg-gray-800/50 backdrop-blur-sm border-gray-700/50 text-white placeholder:text-gray-400 h-12 rounded-lg focus:border-gray-600 focus:ring-1 focus:ring-gray-600"
               />
             </div>
 
             <Select value={sortBy} onValueChange={(value) => setSortBy(value as SortOption)}>
-              <SelectTrigger className="w-48 h-12 bg-gray-800/50 border-gray-700/50 text-white rounded-lg focus:border-gray-600 focus:ring-1 focus:ring-gray-600">
+              <SelectTrigger className="w-48 h-12 bg-gray-800/50 backdrop-blur-sm border-gray-700/50 text-white rounded-lg focus:border-gray-600 focus:ring-1 focus:ring-gray-600">
                 <SortAsc className="h-4 w-4 mr-2" />
                 <SelectValue placeholder="Date Added" />
               </SelectTrigger>
@@ -489,7 +492,7 @@ export default function PurchasesPage() {
             </Select>
 
             <Select value={filterBy} onValueChange={(value) => setFilterBy(value as FilterOption)}>
-              <SelectTrigger className="w-48 h-12 bg-gray-800/50 border-gray-700/50 text-white rounded-lg focus:border-gray-600 focus:ring-1 focus:ring-gray-600">
+              <SelectTrigger className="w-48 h-12 bg-gray-800/50 backdrop-blur-sm border-gray-700/50 text-white rounded-lg focus:border-gray-600 focus:ring-1 focus:ring-gray-600">
                 <Filter className="h-4 w-4 mr-2" />
                 <SelectValue placeholder="All Types" />
               </SelectTrigger>
@@ -515,7 +518,7 @@ export default function PurchasesPage() {
                 className="flex items-center justify-center min-h-96"
               >
                 <div className="max-w-md mx-auto text-center">
-                  <div className="w-24 h-24 mx-auto mb-6 bg-gray-800/50 rounded-full flex items-center justify-center border border-gray-700/50">
+                  <div className="w-24 h-24 mx-auto mb-6 bg-gray-800/50 backdrop-blur-sm rounded-full flex items-center justify-center border border-gray-700/50">
                     <Package className="h-12 w-12 text-gray-500" />
                   </div>
                   <h3 className="text-2xl font-semibold mb-4 text-white">
