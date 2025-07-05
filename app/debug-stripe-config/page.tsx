@@ -6,12 +6,15 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge"
 import { AlertCircle, CheckCircle, Info, Copy } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
+import Link from "next/link"
 
 interface StripeConfig {
   stripeKeyExists: boolean
   stripeKeyPrefix: string
   isTestMode: boolean
   isLiveMode: boolean
+  environment: string
+  timestamp: string
 }
 
 export default function DebugStripeConfigPage() {
@@ -27,6 +30,13 @@ export default function DebugStripeConfigPage() {
       const response = await fetch("/api/debug/stripe-config")
       const data = await response.json()
       setConfig(data)
+
+      if (response.ok) {
+        toast({
+          title: "Configuration Loaded",
+          description: "Stripe configuration retrieved successfully",
+        })
+      }
     } catch (error) {
       console.error("Failed to check Stripe config:", error)
       toast({
@@ -100,6 +110,11 @@ export default function DebugStripeConfigPage() {
         <div className="text-center">
           <h1 className="text-3xl font-bold text-white mb-2">Stripe Configuration Debug</h1>
           <p className="text-gray-400">Diagnose Stripe configuration and session issues</p>
+          <div className="mt-4">
+            <Link href="/dashboard" className="text-amber-400 hover:text-amber-300 underline">
+              ← Back to Dashboard
+            </Link>
+          </div>
         </div>
 
         {/* Stripe Configuration Check */}
@@ -143,6 +158,24 @@ export default function DebugStripeConfigPage() {
                     {config.isTestMode ? "Test" : config.isLiveMode ? "Live" : "Unknown"}
                   </Badge>
                 </div>
+
+                <div className="flex items-center justify-between">
+                  <span className="text-gray-300">Environment:</span>
+                  <Badge variant="outline">{config.environment}</Badge>
+                </div>
+
+                {!config.stripeKeyExists && (
+                  <div className="bg-red-900/20 border border-red-500/30 rounded-lg p-4">
+                    <div className="flex items-center gap-2 mb-2">
+                      <AlertCircle className="h-4 w-4 text-red-400" />
+                      <span className="text-red-400 font-medium">Configuration Issue</span>
+                    </div>
+                    <p className="text-red-300 text-sm">
+                      STRIPE_SECRET_KEY environment variable is not set. Please add your Stripe secret key to your
+                      environment variables.
+                    </p>
+                  </div>
+                )}
               </div>
             )}
           </CardContent>
@@ -179,8 +212,15 @@ export default function DebugStripeConfigPage() {
                       <AlertCircle className="h-4 w-4 text-red-400" />
                       <span className="text-red-400 font-medium">Error</span>
                     </div>
-                    <p className="text-red-300 text-sm">{sessionDebug.error}</p>
-                    {sessionDebug.details && <p className="text-red-300/80 text-xs mt-1">{sessionDebug.details}</p>}
+                    <p className="text-red-300 text-sm mb-2">{sessionDebug.error}</p>
+                    {sessionDebug.details && <p className="text-red-300/80 text-xs mb-2">{sessionDebug.details}</p>}
+                    {sessionDebug.recommendation && (
+                      <div className="bg-amber-900/20 border border-amber-500/30 rounded p-3 mt-3">
+                        <p className="text-amber-300 text-sm">
+                          <strong>Recommendation:</strong> {sessionDebug.recommendation}
+                        </p>
+                      </div>
+                    )}
                   </div>
                 ) : (
                   <div className="bg-green-900/20 border border-green-500/30 rounded-lg p-4">
@@ -210,6 +250,14 @@ export default function DebugStripeConfigPage() {
                           <span className="text-gray-400">Customer:</span>
                           <p className="text-white">{sessionDebug.session.customer_email || "N/A"}</p>
                         </div>
+                        <div>
+                          <span className="text-gray-400">Created:</span>
+                          <p className="text-white">{new Date(sessionDebug.session.created).toLocaleString()}</p>
+                        </div>
+                        <div>
+                          <span className="text-gray-400">Expires:</span>
+                          <p className="text-white">{new Date(sessionDebug.session.expires_at).toLocaleString()}</p>
+                        </div>
                       </div>
                     )}
                   </div>
@@ -233,6 +281,38 @@ export default function DebugStripeConfigPage() {
                 </div>
               </div>
             )}
+          </CardContent>
+        </Card>
+
+        {/* Common Issues */}
+        <Card className="bg-gray-800/30 border-gray-700/50">
+          <CardHeader>
+            <CardTitle className="text-white flex items-center gap-2">
+              <Info className="h-5 w-5" />
+              Common Issues & Solutions
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="space-y-3 text-sm">
+              <div className="border-l-4 border-amber-500 pl-4">
+                <h4 className="text-amber-400 font-medium">Test/Live Mode Mismatch</h4>
+                <p className="text-gray-300">
+                  Make sure your Stripe key mode (test/live) matches your session ID prefix (cs_test_/cs_live_).
+                </p>
+              </div>
+
+              <div className="border-l-4 border-blue-500 pl-4">
+                <h4 className="text-blue-400 font-medium">Session Not Found</h4>
+                <p className="text-gray-300">
+                  Sessions expire after 24 hours. Check if the session ID is correct and hasn't expired.
+                </p>
+              </div>
+
+              <div className="border-l-4 border-green-500 pl-4">
+                <h4 className="text-green-400 font-medium">Environment Variables</h4>
+                <p className="text-gray-300">Ensure STRIPE_SECRET_KEY is properly set in your environment variables.</p>
+              </div>
+            </div>
           </CardContent>
         </Card>
       </div>

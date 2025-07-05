@@ -19,6 +19,40 @@ export async function POST(request: NextRequest) {
 
     console.log("📋 [Purchase Verify] Session ID:", sessionId.substring(0, 20) + "...")
 
+    // Check for test/live mode mismatch early
+    const isTestKey = process.env.STRIPE_SECRET_KEY?.startsWith("sk_test_")
+    const isLiveKey = process.env.STRIPE_SECRET_KEY?.startsWith("sk_live_")
+    const isTestSession = sessionId.startsWith("cs_test_")
+    const isLiveSession = sessionId.startsWith("cs_live_")
+
+    if (isTestKey && isLiveSession) {
+      console.error("❌ [Purchase Verify] Test/Live mode mismatch: Test key with live session")
+      return NextResponse.json(
+        {
+          error: "Configuration Error: Test/Live Mode Mismatch",
+          details:
+            "You're using a test Stripe key but trying to access a live session. Please check your Stripe configuration.",
+          sessionType: "live",
+          keyType: "test",
+        },
+        { status: 400 },
+      )
+    }
+
+    if (isLiveKey && isTestSession) {
+      console.error("❌ [Purchase Verify] Test/Live mode mismatch: Live key with test session")
+      return NextResponse.json(
+        {
+          error: "Configuration Error: Test/Live Mode Mismatch",
+          details:
+            "You're using a live Stripe key but trying to access a test session. Please check your Stripe configuration.",
+          sessionType: "test",
+          keyType: "live",
+        },
+        { status: 400 },
+      )
+    }
+
     // Verify user if token is provided
     let userId: string | null = null
     if (idToken) {
@@ -46,6 +80,7 @@ export async function POST(request: NextRequest) {
         type: stripeError.type,
         code: stripeError.code,
         statusCode: stripeError.statusCode,
+        requestId: stripeError.requestId,
       })
 
       if (stripeError.statusCode === 404) {
@@ -54,6 +89,11 @@ export async function POST(request: NextRequest) {
             error: "Payment session not found. Please check your session ID.",
             details: "This could mean the session has expired, is invalid, or there's a test/live mode mismatch.",
             sessionId: sessionId.substring(0, 20) + "...",
+            stripeError: {
+              type: stripeError.type,
+              code: stripeError.code,
+              message: stripeError.message,
+            },
           },
           { status: 404 },
         )
@@ -64,6 +104,7 @@ export async function POST(request: NextRequest) {
           error: `Failed to retrieve payment session: ${stripeError.message}`,
           type: stripeError.type,
           code: stripeError.code,
+          details: "There was an error communicating with Stripe. Please try again or contact support.",
         },
         { status: 500 },
       )
@@ -79,6 +120,8 @@ export async function POST(request: NextRequest) {
       payment_status: session.payment_status,
       status: session.status,
       metadata: session.metadata,
+      amount_total: session.amount_total,
+      currency: session.currency,
     })
 
     // Check if the session was paid
@@ -92,6 +135,7 @@ export async function POST(request: NextRequest) {
           error: "Payment not completed",
           status: session.payment_status,
           sessionStatus: session.status,
+          details: "The payment for this session has not been completed successfully.",
         },
         { status: 400 },
       )
@@ -105,6 +149,7 @@ export async function POST(request: NextRequest) {
         {
           error: "Product box ID not found in session metadata",
           availableMetadata: Object.keys(session.metadata || {}),
+          details: "The purchase session is missing required product information.",
         },
         { status: 400 },
       )
@@ -116,7 +161,13 @@ export async function POST(request: NextRequest) {
     const buyerUid = session.metadata?.buyerUid || userId
     if (!buyerUid) {
       console.error("❌ [Purchase Verify] Buyer ID not found")
-      return NextResponse.json({ error: "Buyer ID not found" }, { status: 400 })
+      return NextResponse.json(
+        {
+          error: "Buyer ID not found",
+          details: "Unable to identify the purchaser for this transaction.",
+        },
+        { status: 400 },
+      )
     }
 
     console.log("👤 [Purchase Verify] Buyer UID:", buyerUid)
@@ -186,18 +237,32 @@ export async function POST(request: NextRequest) {
       productBoxDoc = await db.collection("productBoxes").doc(productBoxId).get()
       if (!productBoxDoc.exists) {
         console.error("❌ [Purchase Verify] Product box not found:", productBoxId)
-        return NextResponse.json({ error: "Product box not found" }, { status: 404 })
+        return NextResponse.json(
+          {
+            error: "Product box not found",
+            productBoxId,
+            details: "The purchased product could not be found in our database.",
+          },
+          { status: 404 },
+        )
       }
       productBoxData = productBoxDoc.data()!
       console.log("📦 [Purchase Verify] Product box found:", productBoxData.title)
     } catch (productBoxError) {
       console.error("❌ [Purchase Verify] Error fetching product box:", productBoxError)
-      return NextResponse.json({ error: "Failed to fetch product box details" }, { status: 500 })
+      return NextResponse.json(
+        {
+          error: "Failed to fetch product box details",
+          details: "There was an error retrieving the product information.",
+        },
+        { status: 500 },
+      )
     }
 
     // Record the purchase in the user's purchases subcollection
+    let purchaseRef
     try {
-      const purchaseRef = await db
+      purchaseRef = await db
         .collection("users")
         .doc(buyerUid)
         .collection("purchases")
@@ -215,7 +280,13 @@ export async function POST(request: NextRequest) {
       console.log("✅ [Purchase Verify] Created purchase record:", purchaseRef.id)
     } catch (purchaseError) {
       console.error("❌ [Purchase Verify] Error creating purchase record:", purchaseError)
-      return NextResponse.json({ error: "Failed to record purchase" }, { status: 500 })
+      return NextResponse.json(
+        {
+          error: "Failed to record purchase",
+          details: "The purchase could not be saved to your account.",
+        },
+        { status: 500 },
+      )
     }
 
     // Increment sales counter on the product box
@@ -288,7 +359,7 @@ export async function POST(request: NextRequest) {
     const purchaseResponse = {
       success: true,
       purchase: {
-        id: sessionId,
+        id: purchaseRef.id,
         productBoxId,
         sessionId,
         amount: session.amount_total ? session.amount_total / 100 : 0,
@@ -316,7 +387,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       {
         error: "Failed to verify purchase",
-        details: error instanceof Error ? error.message : "Unknown error",
+        details: error instanceof Error ? error.message : "An unexpected error occurred",
       },
       { status: 500 },
     )

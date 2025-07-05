@@ -35,6 +35,7 @@ export async function POST(request: NextRequest) {
           error: "Test/Live mode mismatch",
           details: "You're using a test Stripe key but trying to access a live session",
           environment,
+          recommendation: "Either use a live Stripe key or use a test session ID (cs_test_...)",
         },
         { status: 400 },
       )
@@ -46,6 +47,7 @@ export async function POST(request: NextRequest) {
           error: "Test/Live mode mismatch",
           details: "You're using a live Stripe key but trying to access a test session",
           environment,
+          recommendation: "Either use a test Stripe key or use a live session ID (cs_live_...)",
         },
         { status: 400 },
       )
@@ -75,12 +77,17 @@ export async function POST(request: NextRequest) {
           statusCode: stripeError.statusCode,
           requestId: stripeError.requestId,
           environment,
+          recommendation:
+            stripeError.statusCode === 404
+              ? "Check if the session ID is correct and matches your Stripe account mode (test/live)"
+              : "Check your Stripe configuration and try again",
         },
         { status: stripeError.statusCode || 500 },
       )
     }
 
     const debugInfo = {
+      success: true,
       session: {
         id: session.id,
         status: session.status,
