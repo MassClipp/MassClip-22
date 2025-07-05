@@ -286,23 +286,23 @@ export default function PurchasesPage() {
 
   if (authLoading || loading) {
     return (
-      <div className="fixed inset-0 bg-slate-900 text-white overflow-hidden">
+      <div className="fixed inset-0 bg-gradient-to-br from-black via-gray-900 to-gray-800 text-white overflow-hidden">
         <div className="absolute inset-0 pt-16">
           <div className="h-full w-full overflow-y-auto">
             {/* Header Skeleton */}
-            <div className="w-full px-8 py-8 border-b border-slate-700/50">
-              <Skeleton className="h-12 w-80 mb-4 bg-slate-700/50" />
-              <Skeleton className="h-6 w-64 mb-8 bg-slate-700/50" />
+            <div className="w-full px-8 py-8 border-b border-gray-700/30">
+              <Skeleton className="h-12 w-80 mb-4 bg-gray-700/30" />
+              <Skeleton className="h-6 w-64 mb-8 bg-gray-700/30" />
               <div className="flex gap-4 mb-8">
-                <Skeleton className="h-10 w-24 bg-slate-700/50" />
-                <Skeleton className="h-10 w-24 bg-slate-700/50" />
-                <Skeleton className="h-10 w-24 bg-slate-700/50" />
-                <Skeleton className="h-10 w-24 bg-slate-700/50" />
+                <Skeleton className="h-10 w-24 bg-gray-700/30" />
+                <Skeleton className="h-10 w-24 bg-gray-700/30" />
+                <Skeleton className="h-10 w-24 bg-gray-700/30" />
+                <Skeleton className="h-10 w-24 bg-gray-700/30" />
               </div>
               <div className="flex gap-4">
-                <Skeleton className="h-12 flex-1 bg-slate-700/50" />
-                <Skeleton className="h-12 w-40 bg-slate-700/50" />
-                <Skeleton className="h-12 w-40 bg-slate-700/50" />
+                <Skeleton className="h-12 flex-1 bg-gray-700/30" />
+                <Skeleton className="h-12 w-40 bg-gray-700/30" />
+                <Skeleton className="h-12 w-40 bg-gray-700/30" />
               </div>
             </div>
 
@@ -310,13 +310,13 @@ export default function PurchasesPage() {
             <div className="p-8">
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                 {[...Array(8)].map((_, i) => (
-                  <div key={i} className="bg-slate-800/50 rounded-lg overflow-hidden">
-                    <Skeleton className="h-48 w-full bg-slate-700/50" />
+                  <div key={i} className="bg-gray-800/30 rounded-lg overflow-hidden border border-gray-700/20">
+                    <Skeleton className="h-48 w-full bg-gray-700/30" />
                     <div className="p-4">
-                      <Skeleton className="h-5 w-full mb-2 bg-slate-700/50" />
-                      <Skeleton className="h-4 w-20 mb-3 bg-slate-700/50" />
-                      <Skeleton className="h-4 w-24 mb-2 bg-slate-700/50" />
-                      <Skeleton className="h-4 w-16 bg-slate-700/50" />
+                      <Skeleton className="h-5 w-full mb-2 bg-gray-700/30" />
+                      <Skeleton className="h-4 w-20 mb-3 bg-gray-700/30" />
+                      <Skeleton className="h-4 w-24 mb-2 bg-gray-700/30" />
+                      <Skeleton className="h-4 w-16 bg-gray-700/30" />
                     </div>
                   </div>
                 ))}
@@ -330,7 +330,7 @@ export default function PurchasesPage() {
 
   if (error) {
     return (
-      <div className="fixed inset-0 bg-slate-900 text-white overflow-hidden">
+      <div className="fixed inset-0 bg-gradient-to-br from-black via-gray-900 to-gray-800 text-white overflow-hidden">
         <div className="absolute inset-0 pt-16">
           <div className="h-full w-full overflow-y-auto px-8 py-8">
             <Alert variant="destructive" className="bg-red-900/20 border-red-800">
@@ -347,16 +347,16 @@ export default function PurchasesPage() {
   }
 
   return (
-    <div className="fixed inset-0 bg-slate-900 text-white overflow-hidden">
+    <div className="fixed inset-0 bg-gradient-to-br from-black via-gray-900 to-gray-800 text-white overflow-hidden">
       <div className="absolute inset-0 pt-16">
         <div className="h-full w-full overflow-y-auto">
           {/* Header Section */}
-          <div className="w-full px-8 py-8 border-b border-slate-700/50 sticky top-0 z-20 bg-slate-900/95 backdrop-blur-sm">
+          <div className="w-full px-8 py-8 border-b border-gray-700/30 sticky top-0 z-20 bg-gradient-to-br from-black/95 via-gray-900/95 to-gray-800/95 backdrop-blur-sm">
             <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="max-w-7xl mx-auto">
               <div className="flex items-center justify-between mb-8">
                 <div>
                   <h1 className="text-4xl font-bold text-white mb-2">My Collection</h1>
-                  <p className="text-slate-400 text-base">
+                  <p className="text-gray-400 text-base">
                     {purchases.length} premium content items • $
                     {purchases.reduce((sum, p) => sum + p.price, 0).toFixed(2)} total value
                   </p>
@@ -369,8 +369,8 @@ export default function PurchasesPage() {
                     className={cn(
                       "h-10 w-10 p-0",
                       viewMode === "grid"
-                        ? "bg-slate-700 text-white hover:bg-slate-600"
-                        : "text-slate-400 hover:text-white hover:bg-slate-800",
+                        ? "bg-gray-700 text-white hover:bg-gray-600"
+                        : "text-gray-400 hover:text-white hover:bg-gray-800",
                     )}
                   >
                     <Grid3X3 className="h-4 w-4" />
@@ -382,8 +382,8 @@ export default function PurchasesPage() {
                     className={cn(
                       "h-10 w-10 p-0",
                       viewMode === "list"
-                        ? "bg-slate-700 text-white hover:bg-slate-600"
-                        : "text-slate-400 hover:text-white hover:bg-slate-800",
+                        ? "bg-gray-700 text-white hover:bg-gray-600"
+                        : "text-gray-400 hover:text-white hover:bg-gray-800",
                     )}
                   >
                     <List className="h-4 w-4" />
@@ -392,7 +392,7 @@ export default function PurchasesPage() {
               </div>
 
               {/* Tabs */}
-              <div className="flex gap-1 mb-8 bg-slate-800/50 rounded-lg p-1">
+              <div className="flex gap-1 mb-8 bg-gray-800/50 rounded-lg p-1">
                 {[
                   { value: "all", label: "All Items" },
                   { value: "downloads", label: "Downloads" },
@@ -405,8 +405,8 @@ export default function PurchasesPage() {
                     className={cn(
                       "px-4 py-2 text-sm font-medium rounded-md transition-all duration-200",
                       activeTab === tab.value
-                        ? "bg-slate-700 text-white"
-                        : "text-slate-400 hover:text-white hover:bg-slate-700/50",
+                        ? "bg-gray-700 text-white"
+                        : "text-gray-400 hover:text-white hover:bg-gray-700/50",
                     )}
                   >
                     {tab.label}
@@ -417,21 +417,21 @@ export default function PurchasesPage() {
               {/* Controls */}
               <div className="flex flex-col sm:flex-row gap-4">
                 <div className="relative flex-1">
-                  <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-slate-400 h-4 w-4" />
+                  <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
                   <Input
                     placeholder="Search your collection..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    className="pl-12 bg-slate-800/50 border-slate-700 text-white placeholder:text-slate-400 h-12 rounded-lg focus:border-slate-600 focus:ring-1 focus:ring-slate-600"
+                    className="pl-12 bg-gray-800/50 border-gray-700/50 text-white placeholder:text-gray-400 h-12 rounded-lg focus:border-gray-600 focus:ring-1 focus:ring-gray-600"
                   />
                 </div>
 
                 <Select value={sortBy} onValueChange={(value) => setSortBy(value as SortOption)}>
-                  <SelectTrigger className="w-48 h-12 bg-slate-800/50 border-slate-700 text-white rounded-lg focus:border-slate-600 focus:ring-1 focus:ring-slate-600">
+                  <SelectTrigger className="w-48 h-12 bg-gray-800/50 border-gray-700/50 text-white rounded-lg focus:border-gray-600 focus:ring-1 focus:ring-gray-600">
                     <SortAsc className="h-4 w-4 mr-2" />
                     <SelectValue placeholder="Date Added" />
                   </SelectTrigger>
-                  <SelectContent className="bg-slate-800 border-slate-700">
+                  <SelectContent className="bg-gray-800 border-gray-700">
                     <SelectItem value="date">Date Added</SelectItem>
                     <SelectItem value="price">Price</SelectItem>
                     <SelectItem value="title">Title</SelectItem>
@@ -440,11 +440,11 @@ export default function PurchasesPage() {
                 </Select>
 
                 <Select value={filterBy} onValueChange={(value) => setFilterBy(value as FilterOption)}>
-                  <SelectTrigger className="w-48 h-12 bg-slate-800/50 border-slate-700 text-white rounded-lg focus:border-slate-600 focus:ring-1 focus:ring-slate-600">
+                  <SelectTrigger className="w-48 h-12 bg-gray-800/50 border-gray-700/50 text-white rounded-lg focus:border-gray-600 focus:ring-1 focus:ring-gray-600">
                     <Filter className="h-4 w-4 mr-2" />
                     <SelectValue placeholder="All Types" />
                   </SelectTrigger>
-                  <SelectContent className="bg-slate-800 border-slate-700">
+                  <SelectContent className="bg-gray-800 border-gray-700">
                     <SelectItem value="all">All Types</SelectItem>
                     <SelectItem value="video">Videos</SelectItem>
                     <SelectItem value="audio">Audio</SelectItem>
@@ -468,8 +468,8 @@ export default function PurchasesPage() {
                     className="flex items-center justify-center min-h-96"
                   >
                     <div className="max-w-md mx-auto text-center">
-                      <div className="w-24 h-24 mx-auto mb-6 bg-slate-800 rounded-full flex items-center justify-center border border-slate-700">
-                        <Package className="h-12 w-12 text-slate-500" />
+                      <div className="w-24 h-24 mx-auto mb-6 bg-gray-800/50 rounded-full flex items-center justify-center border border-gray-700/50">
+                        <Package className="h-12 w-12 text-gray-500" />
                       </div>
                       <h3 className="text-2xl font-semibold mb-4 text-white">
                         {searchQuery
@@ -480,7 +480,7 @@ export default function PurchasesPage() {
                               ? "No recent activity"
                               : "Your collection awaits"}
                       </h3>
-                      <p className="text-slate-400 mb-8 text-base">
+                      <p className="text-gray-400 mb-8 text-base">
                         {searchQuery
                           ? "Try adjusting your search or filters to discover your content."
                           : "Start building your premium content library with exclusive downloads and bundles."}
@@ -512,9 +512,9 @@ export default function PurchasesPage() {
                             transition={{ delay: index * 0.05 }}
                             className="group"
                           >
-                            <div className="bg-slate-800/50 rounded-lg overflow-hidden border border-slate-700/50 hover:border-slate-600 transition-all duration-300 hover:transform hover:scale-[1.02]">
+                            <div className="bg-gray-800/30 rounded-lg overflow-hidden border border-gray-700/20 hover:border-gray-600/40 transition-all duration-300 hover:transform hover:scale-[1.02] hover:shadow-xl hover:shadow-black/20">
                               {/* Thumbnail */}
-                              <div className="relative aspect-video overflow-hidden bg-slate-700">
+                              <div className="relative aspect-video overflow-hidden bg-gradient-to-br from-gray-700 to-gray-800">
                                 {getThumbnailUrl(purchase) ? (
                                   <img
                                     src={getThumbnailUrl(purchase) || "/placeholder.svg"}
@@ -522,16 +522,29 @@ export default function PurchasesPage() {
                                     className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
                                   />
                                 ) : (
-                                  <div className="w-full h-full flex items-center justify-center bg-slate-700">
-                                    <div className="w-8 h-8 bg-blue-500 rounded flex items-center justify-center">
-                                      {getContentIcon(purchase.type || "product_box", purchase.metadata?.contentType)}
+                                  <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-gray-700 to-gray-800 relative">
+                                    {/* Clean geometric pattern background */}
+                                    <div className="absolute inset-0 opacity-10">
+                                      <div
+                                        className="w-full h-full"
+                                        style={{
+                                          backgroundImage: `radial-gradient(circle at 25% 25%, rgba(59, 130, 246, 0.3) 0%, transparent 50%), 
+                                                         radial-gradient(circle at 75% 75%, rgba(147, 51, 234, 0.3) 0%, transparent 50%)`,
+                                        }}
+                                      />
+                                    </div>
+                                    {/* Clean centered icon */}
+                                    <div className="relative z-10 w-16 h-16 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl flex items-center justify-center shadow-lg">
+                                      <div className="text-white">
+                                        {getContentIcon(purchase.type || "product_box", purchase.metadata?.contentType)}
+                                      </div>
                                     </div>
                                   </div>
                                 )}
 
                                 {/* Content Type Badge */}
                                 <div className="absolute top-3 left-3">
-                                  <Badge className="bg-slate-900/80 text-white border-0 text-xs px-2 py-1">
+                                  <Badge className="bg-black/70 text-white border-0 text-xs px-2 py-1 backdrop-blur-sm">
                                     {getContentIcon(purchase.type || "product_box", purchase.metadata?.contentType)}
                                     <span className="ml-1 capitalize">
                                       {purchase.metadata?.contentType || purchase.type?.replace("_", " ") || "Video"}
@@ -544,7 +557,7 @@ export default function PurchasesPage() {
                                   onClick={() => toggleFavorite(purchase.id)}
                                   size="sm"
                                   variant="ghost"
-                                  className="absolute top-3 right-3 h-8 w-8 p-0 bg-slate-900/80 hover:bg-slate-800 text-white"
+                                  className="absolute top-3 right-3 h-8 w-8 p-0 bg-black/70 hover:bg-black/80 backdrop-blur-sm text-white"
                                 >
                                   <Heart
                                     className={cn(
@@ -557,7 +570,7 @@ export default function PurchasesPage() {
                                 {/* Progress bar for downloads */}
                                 {purchase.downloadProgress && purchase.downloadProgress > 0 && (
                                   <div className="absolute bottom-0 left-0 right-0 p-3">
-                                    <Progress value={purchase.downloadProgress} className="h-1 bg-slate-600" />
+                                    <Progress value={purchase.downloadProgress} className="h-1 bg-gray-600" />
                                   </div>
                                 )}
                               </div>
@@ -571,17 +584,17 @@ export default function PurchasesPage() {
                                       <Button
                                         variant="ghost"
                                         size="sm"
-                                        className="h-6 w-6 p-0 text-slate-400 hover:text-white"
+                                        className="h-6 w-6 p-0 text-gray-400 hover:text-white"
                                       >
                                         <MoreHorizontal className="h-4 w-4" />
                                       </Button>
                                     </DropdownMenuTrigger>
-                                    <DropdownMenuContent className="bg-slate-800 border-slate-700">
-                                      <DropdownMenuItem className="text-white hover:bg-slate-700">
+                                    <DropdownMenuContent className="bg-gray-800 border-gray-700">
+                                      <DropdownMenuItem className="text-white hover:bg-gray-700">
                                         <Download className="h-4 w-4 mr-2" />
                                         Download
                                       </DropdownMenuItem>
-                                      <DropdownMenuItem className="text-white hover:bg-slate-700">
+                                      <DropdownMenuItem className="text-white hover:bg-gray-700">
                                         <Share2 className="h-4 w-4 mr-2" />
                                         Share
                                       </DropdownMenuItem>
@@ -593,9 +606,9 @@ export default function PurchasesPage() {
                                   </DropdownMenu>
                                 </div>
 
-                                <p className="text-slate-400 text-sm mb-3">{purchase.creatorUsername}</p>
+                                <p className="text-gray-400 text-sm mb-3">{purchase.creatorUsername}</p>
 
-                                <div className="flex items-center justify-between text-sm text-slate-400 mb-3">
+                                <div className="flex items-center justify-between text-sm text-gray-400 mb-3">
                                   <div className="flex items-center gap-1">
                                     <Clock className="h-3 w-3" />
                                     <span>{formatDate(purchase.createdAt)}</span>
@@ -608,7 +621,7 @@ export default function PurchasesPage() {
                                     <DollarSign className="h-4 w-4" />
                                     <span>{purchase.price.toFixed(2)}</span>
                                   </div>
-                                  <span className="text-slate-400 text-sm">{purchase.metadata?.contentCount || 0}</span>
+                                  <span className="text-gray-400 text-sm">{purchase.metadata?.contentCount || 0}</span>
                                 </div>
                               </div>
                             </div>
@@ -625,10 +638,10 @@ export default function PurchasesPage() {
                             transition={{ delay: index * 0.02 }}
                             className="group"
                           >
-                            <div className="bg-slate-800/50 rounded-lg overflow-hidden border border-slate-700/50 hover:border-slate-600 transition-all duration-300">
+                            <div className="bg-gray-800/30 rounded-lg overflow-hidden border border-gray-700/20 hover:border-gray-600/40 transition-all duration-300">
                               <div className="flex items-center p-6">
                                 {/* List view thumbnail */}
-                                <div className="w-16 h-16 rounded-lg overflow-hidden flex-shrink-0 mr-4 bg-slate-700">
+                                <div className="w-16 h-16 rounded-lg overflow-hidden flex-shrink-0 mr-4 bg-gradient-to-br from-gray-700 to-gray-800">
                                   {getThumbnailUrl(purchase) ? (
                                     <img
                                       src={getThumbnailUrl(purchase) || "/placeholder.svg"}
@@ -636,9 +649,25 @@ export default function PurchasesPage() {
                                       className="w-full h-full object-cover"
                                     />
                                   ) : (
-                                    <div className="w-full h-full flex items-center justify-center bg-slate-700">
-                                      <div className="w-6 h-6 bg-blue-500 rounded flex items-center justify-center">
-                                        {getContentIcon(purchase.type || "product_box", purchase.metadata?.contentType)}
+                                    <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-gray-700 to-gray-800 relative">
+                                      {/* Clean geometric pattern background */}
+                                      <div className="absolute inset-0 opacity-10">
+                                        <div
+                                          className="w-full h-full"
+                                          style={{
+                                            backgroundImage: `radial-gradient(circle at 25% 25%, rgba(59, 130, 246, 0.3) 0%, transparent 50%), 
+                                                           radial-gradient(circle at 75% 75%, rgba(147, 51, 234, 0.3) 0%, transparent 50%)`,
+                                          }}
+                                        />
+                                      </div>
+                                      {/* Clean centered icon */}
+                                      <div className="relative z-10 w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
+                                        <div className="text-white text-sm">
+                                          {getContentIcon(
+                                            purchase.type || "product_box",
+                                            purchase.metadata?.contentType,
+                                          )}
+                                        </div>
                                       </div>
                                     </div>
                                   )}
@@ -649,8 +678,8 @@ export default function PurchasesPage() {
                                   <div className="flex items-start justify-between">
                                     <div className="flex-1 min-w-0">
                                       <h3 className="text-lg font-medium text-white mb-1 truncate">{purchase.title}</h3>
-                                      <p className="text-slate-400 text-sm mb-2">{purchase.creatorUsername}</p>
-                                      <div className="flex items-center gap-4 text-sm text-slate-400">
+                                      <p className="text-gray-400 text-sm mb-2">{purchase.creatorUsername}</p>
+                                      <div className="flex items-center gap-4 text-sm text-gray-400">
                                         <span>{formatDate(purchase.createdAt)}</span>
                                         <span>{purchase.metadata?.contentCount || 0} items</span>
                                       </div>
@@ -662,12 +691,12 @@ export default function PurchasesPage() {
                                         onClick={() => toggleFavorite(purchase.id)}
                                         variant="ghost"
                                         size="sm"
-                                        className="h-8 w-8 p-0 text-slate-400 hover:text-white"
+                                        className="h-8 w-8 p-0 text-gray-400 hover:text-white"
                                       >
                                         <Heart
                                           className={cn(
                                             "h-4 w-4 transition-colors",
-                                            purchase.isFavorite ? "fill-red-500 text-red-500" : "text-slate-400",
+                                            purchase.isFavorite ? "fill-red-500 text-red-500" : "text-gray-400",
                                           )}
                                         />
                                       </Button>
@@ -675,7 +704,7 @@ export default function PurchasesPage() {
                                         onClick={() => handleDownload(purchase)}
                                         variant="outline"
                                         size="sm"
-                                        className="border-slate-600 hover:bg-slate-700 bg-transparent text-white h-8 px-3"
+                                        className="border-gray-600 hover:bg-gray-700 bg-transparent text-white h-8 px-3"
                                       >
                                         <Download className="h-3 w-3 mr-1" />
                                         Download
@@ -683,7 +712,7 @@ export default function PurchasesPage() {
                                       <Button
                                         asChild
                                         size="sm"
-                                        className="bg-slate-700 hover:bg-slate-600 text-white h-8 px-3"
+                                        className="bg-gray-700 hover:bg-gray-600 text-white h-8 px-3"
                                       >
                                         <Link
                                           href={
