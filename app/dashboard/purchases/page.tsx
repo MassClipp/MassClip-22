@@ -4,10 +4,8 @@ import { useEffect, useState } from "react"
 import { useFirebaseAuth } from "@/hooks/use-firebase-auth"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Progress } from "@/components/ui/progress"
 import {
   AlertCircle,
   Search,
@@ -15,29 +13,21 @@ import {
   Calendar,
   ExternalLink,
   Play,
-  Download,
-  Eye,
-  Heart,
   Filter,
   SortAsc,
   Grid3X3,
   List,
-  Clock,
-  DollarSign,
   FileVideo,
   Music,
   ImageIcon,
-  MoreHorizontal,
-  Share2,
-  Trash2,
   RefreshCw,
 } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import Link from "next/link"
 import { toast } from "@/hooks/use-toast"
 import { motion, AnimatePresence } from "framer-motion"
 import { cn } from "@/lib/utils"
+import PurchasesCollectionDisplay from "@/components/purchases-collection-display"
 
 interface Purchase {
   id: string
@@ -458,7 +448,7 @@ export default function PurchasesPage() {
                       "h-10 w-10 p-0",
                       viewMode === "list"
                         ? "bg-gray-700 text-white hover:bg-gray-600"
-                        : "text-gray-400 hover:text-white hover:bg-gray-800",
+                        : "text-gray-400 hover:text-white hover:bg-gray-700/50",
                     )}
                   >
                     <List className="h-4 w-4" />
@@ -581,259 +571,12 @@ export default function PurchasesPage() {
                     exit={{ opacity: 0 }}
                     className="w-full"
                   >
-                    {viewMode === "grid" ? (
-                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                        {filteredAndSortedPurchases.map((purchase, index) => (
-                          <motion.div
-                            key={purchase.id}
-                            initial={{ opacity: 0, y: 20 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            transition={{ delay: index * 0.05 }}
-                            className="group"
-                          >
-                            <div className="bg-gray-900/40 backdrop-blur-sm rounded-lg overflow-hidden border border-gray-700/20 hover:border-gray-600/40 transition-all duration-300 hover:transform hover:scale-[1.02] hover:shadow-xl hover:shadow-black/20">
-                              {/* Thumbnail */}
-                              <div className="relative aspect-video overflow-hidden bg-gradient-to-br from-gray-700 to-gray-800">
-                                {getThumbnailUrl(purchase) ? (
-                                  <img
-                                    src={getThumbnailUrl(purchase) || "/placeholder.svg"}
-                                    alt={purchase.title}
-                                    className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
-                                  />
-                                ) : (
-                                  <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-gray-700 to-gray-800 relative">
-                                    {/* Clean geometric pattern background */}
-                                    <div className="absolute inset-0 opacity-10">
-                                      <div
-                                        className="w-full h-full"
-                                        style={{
-                                          backgroundImage: `radial-gradient(circle at 25% 25%, rgba(59, 130, 246, 0.3) 0%, transparent 50%), 
-                                                         radial-gradient(circle at 75% 75%, rgba(147, 51, 234, 0.3) 0%, transparent 50%)`,
-                                        }}
-                                      />
-                                    </div>
-                                    {/* Clean centered icon */}
-                                    <div className="relative z-10 w-16 h-16 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl flex items-center justify-center shadow-lg">
-                                      <div className="text-white">
-                                        {getContentIcon(purchase.type || "product_box", purchase.metadata?.contentType)}
-                                      </div>
-                                    </div>
-                                  </div>
-                                )}
-
-                                {/* Content Type Badge */}
-                                <div className="absolute top-3 left-3">
-                                  <Badge className="bg-black/70 text-white border-0 text-xs px-2 py-1 backdrop-blur-sm">
-                                    {getContentIcon(purchase.type || "product_box", purchase.metadata?.contentType)}
-                                    <span className="ml-1 capitalize">
-                                      {purchase.metadata?.contentType || purchase.type?.replace("_", " ") || "Video"}
-                                    </span>
-                                  </Badge>
-                                </div>
-
-                                {/* Favorite button */}
-                                <Button
-                                  onClick={() => toggleFavorite(purchase.id)}
-                                  size="sm"
-                                  variant="ghost"
-                                  className="absolute top-3 right-3 h-8 w-8 p-0 bg-black/70 hover:bg-black/80 backdrop-blur-sm text-white"
-                                >
-                                  <Heart
-                                    className={cn(
-                                      "h-4 w-4 transition-colors",
-                                      purchase.isFavorite ? "fill-red-500 text-red-500" : "text-white",
-                                    )}
-                                  />
-                                </Button>
-
-                                {/* Progress bar for downloads */}
-                                {purchase.downloadProgress && purchase.downloadProgress > 0 && (
-                                  <div className="absolute bottom-0 left-0 right-0 p-3">
-                                    <Progress value={purchase.downloadProgress} className="h-1 bg-gray-600" />
-                                  </div>
-                                )}
-                              </div>
-
-                              {/* Content */}
-                              <div className="p-4">
-                                <div className="flex items-start justify-between mb-2">
-                                  <h3 className="text-base font-medium text-white line-clamp-1">{purchase.title}</h3>
-                                  <DropdownMenu>
-                                    <DropdownMenuTrigger asChild>
-                                      <Button
-                                        variant="ghost"
-                                        size="sm"
-                                        className="h-6 w-6 p-0 text-gray-400 hover:text-white"
-                                      >
-                                        <MoreHorizontal className="h-4 w-4" />
-                                      </Button>
-                                    </DropdownMenuTrigger>
-                                    <DropdownMenuContent className="bg-gray-800 border-gray-700">
-                                      <DropdownMenuItem
-                                        className="text-white hover:bg-gray-700"
-                                        onClick={() => handleDownload(purchase)}
-                                      >
-                                        <Download className="h-4 w-4 mr-2" />
-                                        Download
-                                      </DropdownMenuItem>
-                                      <DropdownMenuItem className="text-white hover:bg-gray-700">
-                                        <Share2 className="h-4 w-4 mr-2" />
-                                        Share
-                                      </DropdownMenuItem>
-                                      <DropdownMenuItem className="text-red-400 hover:bg-red-500/10">
-                                        <Trash2 className="h-4 w-4 mr-2" />
-                                        Remove
-                                      </DropdownMenuItem>
-                                    </DropdownMenuContent>
-                                  </DropdownMenu>
-                                </div>
-
-                                <p className="text-gray-400 text-sm mb-3">{purchase.creatorUsername}</p>
-
-                                <div className="flex items-center justify-between text-sm text-gray-400 mb-3">
-                                  <div className="flex items-center gap-1">
-                                    <Clock className="h-3 w-3" />
-                                    <span>{formatDate(purchase.createdAt)}</span>
-                                  </div>
-                                  <span className="text-right">{purchase.metadata?.contentCount || 0} items</span>
-                                </div>
-
-                                <div className="flex items-center justify-between">
-                                  <div className="flex items-center gap-1 text-white font-medium">
-                                    <DollarSign className="h-4 w-4" />
-                                    <span>{purchase.price.toFixed(2)}</span>
-                                  </div>
-                                  <Button
-                                    asChild
-                                    size="sm"
-                                    className="bg-gray-700 hover:bg-gray-600 text-white h-8 px-3"
-                                  >
-                                    <Link
-                                      href={
-                                        purchase.type === "bundle"
-                                          ? `/bundles/${purchase.bundleId}`
-                                          : `/product-box/${purchase.productBoxId}/content`
-                                      }
-                                    >
-                                      <Eye className="h-3 w-3 mr-1" />
-                                      View
-                                    </Link>
-                                  </Button>
-                                </div>
-                              </div>
-                            </div>
-                          </motion.div>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="space-y-4">
-                        {filteredAndSortedPurchases.map((purchase, index) => (
-                          <motion.div
-                            key={purchase.id}
-                            initial={{ opacity: 0, x: -20 }}
-                            animate={{ opacity: 1, x: 0 }}
-                            transition={{ delay: index * 0.02 }}
-                            className="group"
-                          >
-                            <div className="bg-gray-900/30 backdrop-blur-sm rounded-lg overflow-hidden border border-gray-700/20 hover:border-gray-600/40 transition-all duration-300">
-                              <div className="flex items-center p-6">
-                                {/* List view thumbnail */}
-                                <div className="w-16 h-16 rounded-lg overflow-hidden flex-shrink-0 mr-4 bg-gradient-to-br from-gray-700 to-gray-800">
-                                  {getThumbnailUrl(purchase) ? (
-                                    <img
-                                      src={getThumbnailUrl(purchase) || "/placeholder.svg"}
-                                      alt={purchase.title}
-                                      className="w-full h-full object-cover"
-                                    />
-                                  ) : (
-                                    <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-gray-700 to-gray-800 relative">
-                                      {/* Clean geometric pattern background */}
-                                      <div className="absolute inset-0 opacity-10">
-                                        <div
-                                          className="w-full h-full"
-                                          style={{
-                                            backgroundImage: `radial-gradient(circle at 25% 25%, rgba(59, 130, 246, 0.3) 0%, transparent 50%), 
-                                                           radial-gradient(circle at 75% 75%, rgba(147, 51, 234, 0.3) 0%, transparent 50%)`,
-                                          }}
-                                        />
-                                      </div>
-                                      {/* Clean centered icon */}
-                                      <div className="relative z-10 w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
-                                        <div className="text-white text-sm">
-                                          {getContentIcon(
-                                            purchase.type || "product_box",
-                                            purchase.metadata?.contentType,
-                                          )}
-                                        </div>
-                                      </div>
-                                    </div>
-                                  )}
-                                </div>
-
-                                {/* Content */}
-                                <div className="flex-1 min-w-0">
-                                  <div className="flex items-start justify-between">
-                                    <div className="flex-1 min-w-0">
-                                      <h3 className="text-lg font-medium text-white mb-1 truncate">{purchase.title}</h3>
-                                      <p className="text-gray-400 text-sm mb-2">{purchase.creatorUsername}</p>
-                                      <div className="flex items-center gap-4 text-sm text-gray-400">
-                                        <span>{formatDate(purchase.createdAt)}</span>
-                                        <span>{purchase.metadata?.contentCount || 0} items</span>
-                                      </div>
-                                    </div>
-
-                                    {/* Actions */}
-                                    <div className="flex items-center gap-3 ml-6">
-                                      <Button
-                                        onClick={() => toggleFavorite(purchase.id)}
-                                        variant="ghost"
-                                        size="sm"
-                                        className="h-8 w-8 p-0 text-gray-400 hover:text-white"
-                                      >
-                                        <Heart
-                                          className={cn(
-                                            "h-4 w-4 transition-colors",
-                                            purchase.isFavorite ? "fill-red-500 text-red-500" : "text-gray-400",
-                                          )}
-                                        />
-                                      </Button>
-                                      <Button
-                                        onClick={() => handleDownload(purchase)}
-                                        variant="outline"
-                                        size="sm"
-                                        className="border-gray-600 hover:bg-gray-700 bg-transparent text-white h-8 px-3"
-                                      >
-                                        <Download className="h-3 w-3 mr-1" />
-                                        Download
-                                      </Button>
-                                      <Button
-                                        asChild
-                                        size="sm"
-                                        className="bg-gray-700 hover:bg-gray-600 text-white h-8 px-3"
-                                      >
-                                        <Link
-                                          href={
-                                            purchase.type === "bundle"
-                                              ? `/bundles/${purchase.bundleId}`
-                                              : `/product-box/${purchase.productBoxId}/content`
-                                          }
-                                        >
-                                          <Eye className="h-3 w-3 mr-1" />
-                                          View
-                                        </Link>
-                                      </Button>
-                                      <span className="text-lg font-medium text-white ml-2">
-                                        ${purchase.price.toFixed(2)}
-                                      </span>
-                                    </div>
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                          </motion.div>
-                        ))}
-                      </div>
-                    )}
+                    <PurchasesCollectionDisplay
+                      purchases={filteredAndSortedPurchases}
+                      viewMode={viewMode}
+                      handleDownload={handleDownload}
+                      toggleFavorite={toggleFavorite}
+                    />
                   </motion.div>
                 )}
               </AnimatePresence>
