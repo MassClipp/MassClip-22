@@ -1,11 +1,25 @@
 "use client"
 
-import { useState } from "react"
-import { Button } from "@/components/ui/button"
+import { useEffect, useState } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
-import { AlertCircle, CheckCircle, Info, Copy, Settings, ExternalLink } from "lucide-react"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import { Separator } from "@/components/ui/separator"
 import { useToast } from "@/hooks/use-toast"
+import {
+  CheckCircle,
+  XCircle,
+  AlertCircle,
+  RefreshCw,
+  Bug,
+  Settings,
+  ArrowLeft,
+  ExternalLink,
+  Copy,
+  Info,
+} from "lucide-react"
 import Link from "next/link"
 
 interface StripeConfig {
@@ -17,31 +31,41 @@ interface StripeConfig {
   timestamp: string
 }
 
-export default function DebugStripeConfigPage() {
-  const [config, setConfig] = useState<StripeConfig | null>(null)
-  const [loading, setLoading] = useState(false)
-  const [sessionId, setSessionId] = useState("")
-  const [sessionDebug, setSessionDebug] = useState<any>(null)
-  const { toast } = useToast()
+interface SessionDebugResult {
+  success?: boolean
+  error?: string
+  session?: any
+  environment?: any
+  recommendation?: string
+  configurationSteps?: string[]
+}
 
-  const checkStripeConfig = async () => {
-    setLoading(true)
+export default function DebugStripeConfigPage() {
+  const { toast } = useToast()
+  const [config, setConfig] = useState<StripeConfig | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [sessionId, setSessionId] = useState("")
+  const [debugResult, setDebugResult] = useState<SessionDebugResult | null>(null)
+  const [debugLoading, setDebugLoading] = useState(false)
+  const [lastChecked, setLastChecked] = useState<string>("")
+
+  const fetchStripeConfig = async () => {
     try {
+      setLoading(true)
       const response = await fetch("/api/debug/stripe-config")
+
+      if (!response.ok) {
+        throw new Error("Failed to fetch Stripe configuration")
+      }
+
       const data = await response.json()
       setConfig(data)
-
-      if (response.ok) {
-        toast({
-          title: "Configuration Loaded",
-          description: "Stripe configuration retrieved successfully",
-        })
-      }
+      setLastChecked(new Date().toLocaleString())
     } catch (error) {
-      console.error("Failed to check Stripe config:", error)
+      console.error("Error fetching Stripe config:", error)
       toast({
         title: "Error",
-        description: "Failed to check Stripe configuration",
+        description: "Failed to fetch Stripe configuration",
         variant: "destructive",
       })
     } finally {
@@ -59,8 +83,10 @@ export default function DebugStripeConfigPage() {
       return
     }
 
-    setLoading(true)
     try {
+      setDebugLoading(true)
+      setDebugResult(null)
+
       const response = await fetch("/api/debug/stripe-session", {
         method: "POST",
         headers: {
@@ -70,337 +96,316 @@ export default function DebugStripeConfigPage() {
       })
 
       const data = await response.json()
-      setSessionDebug(data)
+      setDebugResult(data)
 
-      if (!response.ok) {
+      if (response.ok) {
         toast({
-          title: "Session Debug Failed",
-          description: data.error || "Failed to debug session",
-          variant: "destructive",
+          title: "Debug Complete",
+          description: "Session debug information retrieved successfully",
         })
       } else {
         toast({
-          title: "Session Retrieved",
-          description: "Session debug information loaded successfully",
+          title: "Debug Failed",
+          description: data.error || "Failed to debug session",
+          variant: "destructive",
         })
       }
     } catch (error) {
-      console.error("Failed to debug session:", error)
+      console.error("Error debugging session:", error)
       toast({
         title: "Error",
         description: "Failed to debug session",
         variant: "destructive",
       })
     } finally {
-      setLoading(false)
+      setDebugLoading(false)
     }
   }
 
-  const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text)
+  const copySessionId = () => {
+    navigator.clipboard.writeText(sessionId)
     toast({
       title: "Copied!",
-      description: "Content copied to clipboard",
+      description: "Session ID copied to clipboard",
     })
+  }
+
+  const copyDebugResult = () => {
+    if (debugResult) {
+      navigator.clipboard.writeText(JSON.stringify(debugResult, null, 2))
+      toast({
+        title: "Copied!",
+        description: "Debug result copied to clipboard",
+      })
+    }
+  }
+
+  useEffect(() => {
+    fetchStripeConfig()
+  }, [])
+
+  const getStatusIcon = (exists: boolean) => {
+    return exists ? <CheckCircle className="h-4 w-4 text-green-500" /> : <XCircle className="h-4 w-4 text-red-500" />
+  }
+
+  const getModeColor = (isLive: boolean) => {
+    return isLive ? "bg-red-500" : "bg-amber-500"
   }
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-black via-gray-900 to-gray-800 p-4">
       <div className="max-w-4xl mx-auto space-y-6">
-        <div className="text-center">
-          <h1 className="text-3xl font-bold text-white mb-2">Stripe Configuration Debug</h1>
-          <p className="text-gray-400">Diagnose Stripe configuration and session issues</p>
-          <div className="mt-4 flex justify-center gap-4">
-            <Link href="/dashboard" className="text-amber-400 hover:text-amber-300 underline">
-              ← Back to Dashboard
+        {/* Header */}
+        <div className="flex items-center gap-4 mb-6">
+          <Button asChild variant="outline" size="sm" className="border-gray-600 bg-transparent">
+            <Link href="/dashboard">
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              Back to Dashboard
             </Link>
-            <Link
-              href="https://dashboard.stripe.com"
-              target="_blank"
-              className="text-blue-400 hover:text-blue-300 underline flex items-center gap-1"
-            >
-              Stripe Dashboard <ExternalLink className="h-3 w-3" />
-            </Link>
+          </Button>
+          <div>
+            <h1 className="text-3xl font-bold text-white">Stripe Configuration Debug</h1>
+            <p className="text-gray-400">Diagnose Stripe configuration and session issues</p>
           </div>
+          <Button asChild variant="outline" size="sm" className="border-gray-600 ml-auto bg-transparent">
+            <Link href="https://dashboard.stripe.com" target="_blank">
+              <ExternalLink className="h-4 w-4 mr-2" />
+              Stripe Dashboard
+            </Link>
+          </Button>
         </div>
 
-        {/* Stripe Configuration Check */}
-        <Card className="bg-gray-800/30 border-gray-700/50">
+        {/* Stripe Configuration */}
+        <Card className="bg-gray-800/30 border-gray-700/50 backdrop-blur-sm">
           <CardHeader>
-            <CardTitle className="text-white flex items-center gap-2">
-              <Settings className="h-5 w-5" />
-              Stripe Configuration
-            </CardTitle>
+            <div className="flex items-center gap-2">
+              <Settings className="h-5 w-5 text-blue-400" />
+              <CardTitle className="text-white">Stripe Configuration</CardTitle>
+            </div>
             <CardDescription>Check your Stripe API key configuration</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <Button onClick={checkStripeConfig} disabled={loading} className="w-full">
-              {loading ? "Checking..." : "Check Stripe Config"}
-            </Button>
-
-            {config && (
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-gray-300">Stripe Key Exists:</span>
-                  <Badge variant={config.stripeKeyExists ? "default" : "destructive"}>
-                    {config.stripeKeyExists ? (
-                      <CheckCircle className="h-3 w-3 mr-1" />
-                    ) : (
-                      <AlertCircle className="h-3 w-3 mr-1" />
-                    )}
-                    {config.stripeKeyExists ? "Yes" : "No"}
+            {loading ? (
+              <div className="flex items-center justify-center py-8">
+                <RefreshCw className="h-6 w-6 animate-spin text-gray-400" />
+                <span className="ml-2 text-gray-400">Loading configuration...</span>
+              </div>
+            ) : config ? (
+              <>
+                <div className="flex justify-between items-center">
+                  <Button
+                    onClick={fetchStripeConfig}
+                    variant="outline"
+                    size="sm"
+                    className="border-gray-600 bg-transparent"
+                  >
+                    <RefreshCw className="h-4 w-4 mr-2" />
+                    Check Stripe Config
+                  </Button>
+                  <Badge variant="outline" className="border-blue-500 text-blue-400">
+                    {getStatusIcon(config.stripeKeyExists)}
+                    <span className="ml-1">{config.stripeKeyExists ? "Yes" : "No"}</span>
                   </Badge>
                 </div>
 
-                <div className="flex items-center justify-between">
-                  <span className="text-gray-300">Key Prefix:</span>
-                  <Badge variant="outline" className="font-mono">
-                    {config.stripeKeyPrefix}
-                  </Badge>
-                </div>
-
-                <div className="flex items-center justify-between">
-                  <span className="text-gray-300">Mode:</span>
-                  <Badge variant={config.isTestMode ? "secondary" : "default"}>
-                    {config.isTestMode ? "Test" : config.isLiveMode ? "Live" : "Unknown"}
-                  </Badge>
-                </div>
-
-                <div className="flex items-center justify-between">
-                  <span className="text-gray-300">Environment:</span>
-                  <Badge variant="outline">{config.environment}</Badge>
-                </div>
-
-                <div className="flex items-center justify-between">
-                  <span className="text-gray-300">Last Checked:</span>
-                  <span className="text-gray-400 text-sm">{new Date(config.timestamp).toLocaleString()}</span>
-                </div>
-
-                {!config.stripeKeyExists && (
-                  <div className="bg-red-900/20 border border-red-500/30 rounded-lg p-4">
-                    <div className="flex items-center gap-2 mb-2">
-                      <AlertCircle className="h-4 w-4 text-red-400" />
-                      <span className="text-red-400 font-medium">Configuration Issue</span>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-3">
+                    <div className="flex justify-between items-center">
+                      <span className="text-gray-400">Stripe Key Exists:</span>
+                      <div className="flex items-center gap-2">
+                        {getStatusIcon(config.stripeKeyExists)}
+                        <span className="text-white">{config.stripeKeyExists ? "Yes" : "No"}</span>
+                      </div>
                     </div>
-                    <p className="text-red-300 text-sm mb-3">
-                      STRIPE_SECRET_KEY environment variable is not set. Please add your Stripe secret key to your
-                      environment variables.
-                    </p>
-                    <div className="bg-gray-900/50 p-3 rounded font-mono text-xs text-gray-300">
-                      STRIPE_SECRET_KEY=sk_test_... # for testing
-                      <br />
-                      STRIPE_SECRET_KEY=sk_live_... # for production
+
+                    <div className="flex justify-between items-center">
+                      <span className="text-gray-400">Key Prefix:</span>
+                      <code className="text-white bg-gray-700 px-2 py-1 rounded text-sm">{config.stripeKeyPrefix}</code>
+                    </div>
+
+                    <div className="flex justify-between items-center">
+                      <span className="text-gray-400">Mode:</span>
+                      <Badge className={`${getModeColor(config.isLiveMode)} text-white`}>
+                        {config.isLiveMode ? "Live" : config.isTestMode ? "Test" : "Unknown"}
+                      </Badge>
                     </div>
                   </div>
-                )}
-              </div>
+
+                  <div className="space-y-3">
+                    <div className="flex justify-between items-center">
+                      <span className="text-gray-400">Environment:</span>
+                      <span className="text-white">{config.environment}</span>
+                    </div>
+
+                    <div className="flex justify-between items-center">
+                      <span className="text-gray-400">Last Checked:</span>
+                      <span className="text-white text-sm">{lastChecked}</span>
+                    </div>
+                  </div>
+                </div>
+              </>
+            ) : (
+              <Alert variant="destructive">
+                <AlertCircle className="h-4 w-4" />
+                <AlertTitle>Configuration Error</AlertTitle>
+                <AlertDescription>Failed to load Stripe configuration</AlertDescription>
+              </Alert>
             )}
           </CardContent>
         </Card>
 
         {/* Session Debug */}
-        <Card className="bg-gray-800/30 border-gray-700/50">
+        <Card className="bg-gray-800/30 border-gray-700/50 backdrop-blur-sm">
           <CardHeader>
-            <CardTitle className="text-white flex items-center gap-2">
-              <AlertCircle className="h-5 w-5" />
-              Session Debug
-            </CardTitle>
+            <div className="flex items-center gap-2">
+              <Bug className="h-5 w-5 text-amber-400" />
+              <CardTitle className="text-white">Session Debug</CardTitle>
+            </div>
             <CardDescription>Debug a specific Stripe checkout session</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="flex gap-2">
-              <input
-                type="text"
+              <Input
                 placeholder="Enter session ID (cs_test_... or cs_live_...)"
                 value={sessionId}
                 onChange={(e) => setSessionId(e.target.value)}
-                className="flex-1 px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-amber-500"
+                className="bg-gray-700 border-gray-600 text-white placeholder-gray-400"
               />
-              <Button onClick={debugSession} disabled={loading || !sessionId.trim()}>
-                {loading ? "Debugging..." : "Debug Session"}
+              <Button
+                onClick={copySessionId}
+                variant="outline"
+                size="sm"
+                className="border-gray-600 bg-transparent"
+                disabled={!sessionId}
+              >
+                <Copy className="h-4 w-4" />
               </Button>
             </div>
 
-            {sessionDebug && (
-              <div className="space-y-4">
-                {sessionDebug.error ? (
-                  <div className="bg-red-900/20 border border-red-500/30 rounded-lg p-4">
-                    <div className="flex items-center gap-2 mb-2">
-                      <AlertCircle className="h-4 w-4 text-red-400" />
-                      <span className="text-red-400 font-medium">Error</span>
-                    </div>
-                    <p className="text-red-300 text-sm mb-2">{sessionDebug.error}</p>
-                    {sessionDebug.details && <p className="text-red-300/80 text-xs mb-2">{sessionDebug.details}</p>}
+            <Button
+              onClick={debugSession}
+              disabled={debugLoading || !sessionId.trim()}
+              className="w-full bg-amber-600 hover:bg-amber-700 text-black"
+            >
+              {debugLoading ? (
+                <>
+                  <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                  Debugging Session...
+                </>
+              ) : (
+                <>
+                  <Bug className="h-4 w-4 mr-2" />
+                  Debug Session
+                </>
+              )}
+            </Button>
 
-                    {sessionDebug.recommendation && (
-                      <div className="bg-amber-900/20 border border-amber-500/30 rounded p-3 mt-3">
-                        <p className="text-amber-300 text-sm">
-                          <strong>Recommendation:</strong> {sessionDebug.recommendation}
-                        </p>
-                      </div>
-                    )}
+            {debugResult && (
+              <div className="mt-4 space-y-4">
+                <Separator className="bg-gray-600" />
 
-                    {sessionDebug.configurationSteps && (
-                      <div className="bg-blue-900/20 border border-blue-500/30 rounded p-3 mt-3">
-                        <p className="text-blue-300 text-sm font-medium mb-2">Configuration Steps:</p>
-                        <ol className="text-blue-300/80 text-sm space-y-1">
-                          {sessionDebug.configurationSteps.map((step: string, index: number) => (
-                            <li key={index}>{step}</li>
-                          ))}
-                        </ol>
-                      </div>
-                    )}
-                  </div>
+                <div className="flex items-center justify-between">
+                  <h4 className="text-white font-medium">Debug Results</h4>
+                  <Button
+                    onClick={copyDebugResult}
+                    variant="outline"
+                    size="sm"
+                    className="border-gray-600 bg-transparent"
+                  >
+                    <Copy className="h-4 w-4 mr-2" />
+                    Copy
+                  </Button>
+                </div>
+
+                {debugResult.error ? (
+                  <Alert variant="destructive">
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertTitle>Debug Failed</AlertTitle>
+                    <AlertDescription>{debugResult.error}</AlertDescription>
+                  </Alert>
                 ) : (
-                  <div className="bg-green-900/20 border border-green-500/30 rounded-lg p-4">
-                    <div className="flex items-center gap-2 mb-2">
-                      <CheckCircle className="h-4 w-4 text-green-400" />
-                      <span className="text-green-400 font-medium">Session Found</span>
-                    </div>
-                    {sessionDebug.session && (
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
-                        <div>
-                          <span className="text-gray-400">Status:</span>
-                          <p className="text-white">{sessionDebug.session.status}</p>
-                        </div>
-                        <div>
-                          <span className="text-gray-400">Payment Status:</span>
-                          <p className="text-white">{sessionDebug.session.payment_status}</p>
-                        </div>
-                        <div>
-                          <span className="text-gray-400">Amount:</span>
-                          <p className="text-white">
-                            {sessionDebug.session.amount_total
-                              ? `${(sessionDebug.session.amount_total / 100).toFixed(2)} ${sessionDebug.session.currency?.toUpperCase()}`
-                              : "N/A"}
-                          </p>
-                        </div>
-                        <div>
-                          <span className="text-gray-400">Customer:</span>
-                          <p className="text-white">{sessionDebug.session.customer_email || "N/A"}</p>
-                        </div>
-                        <div>
-                          <span className="text-gray-400">Created:</span>
-                          <p className="text-white">{new Date(sessionDebug.session.created).toLocaleString()}</p>
-                        </div>
-                        <div>
-                          <span className="text-gray-400">Expires:</span>
-                          <p className="text-white">{new Date(sessionDebug.session.expires_at).toLocaleString()}</p>
-                        </div>
-                      </div>
-                    )}
+                  <Alert className="border-green-500/30 bg-green-500/10">
+                    <CheckCircle className="h-4 w-4 text-green-400" />
+                    <AlertTitle className="text-green-400">Debug Successful</AlertTitle>
+                    <AlertDescription className="text-green-300">
+                      Session information retrieved successfully
+                    </AlertDescription>
+                  </Alert>
+                )}
 
-                    {sessionDebug.analysis && (
-                      <div className="mt-4 p-3 bg-gray-800/50 rounded">
-                        <h4 className="text-white font-medium mb-2">Analysis</h4>
-                        <div className="grid grid-cols-2 gap-2 text-sm">
-                          <div className="flex items-center gap-2">
-                            <span className="text-gray-400">Expired:</span>
-                            <Badge variant={sessionDebug.analysis.isExpired ? "destructive" : "default"}>
-                              {sessionDebug.analysis.isExpired ? "Yes" : "No"}
-                            </Badge>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <span className="text-gray-400">Paid:</span>
-                            <Badge variant={sessionDebug.analysis.isPaid ? "default" : "secondary"}>
-                              {sessionDebug.analysis.isPaid ? "Yes" : "No"}
-                            </Badge>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <span className="text-gray-400">Complete:</span>
-                            <Badge variant={sessionDebug.analysis.isComplete ? "default" : "secondary"}>
-                              {sessionDebug.analysis.isComplete ? "Yes" : "No"}
-                            </Badge>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <span className="text-gray-400">Has Metadata:</span>
-                            <Badge variant={sessionDebug.analysis.hasMetadata ? "default" : "secondary"}>
-                              {sessionDebug.analysis.hasMetadata ? "Yes" : "No"}
-                            </Badge>
-                          </div>
-                        </div>
-                      </div>
-                    )}
+                {debugResult.recommendation && (
+                  <Alert className="border-blue-500/30 bg-blue-500/10">
+                    <Info className="h-4 w-4 text-blue-400" />
+                    <AlertTitle className="text-blue-400">Recommendation</AlertTitle>
+                    <AlertDescription className="text-blue-300">{debugResult.recommendation}</AlertDescription>
+                  </Alert>
+                )}
+
+                {debugResult.configurationSteps && (
+                  <div className="bg-gray-700/50 rounded-lg p-4">
+                    <h5 className="text-white font-medium mb-2">Configuration Steps:</h5>
+                    <ol className="list-decimal list-inside space-y-1 text-gray-300 text-sm">
+                      {debugResult.configurationSteps.map((step, index) => (
+                        <li key={index}>{step}</li>
+                      ))}
+                    </ol>
                   </div>
                 )}
 
-                <div className="bg-gray-800/50 rounded-lg p-4">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="text-gray-300 font-medium">Full Debug Info</span>
-                    <Button
-                      onClick={() => copyToClipboard(JSON.stringify(sessionDebug, null, 2))}
-                      size="sm"
-                      variant="ghost"
-                      className="h-6 w-6 p-0"
-                    >
-                      <Copy className="h-3 w-3" />
-                    </Button>
-                  </div>
-                  <pre className="text-xs text-gray-300 overflow-auto max-h-60 bg-gray-900/50 p-3 rounded">
-                    {JSON.stringify(sessionDebug, null, 2)}
+                <details className="bg-gray-700/50 rounded-lg">
+                  <summary className="p-4 cursor-pointer text-white font-medium">View Raw Debug Data</summary>
+                  <pre className="p-4 text-xs text-gray-300 overflow-auto max-h-60 bg-gray-800/50">
+                    {JSON.stringify(debugResult, null, 2)}
                   </pre>
-                </div>
+                </details>
               </div>
             )}
           </CardContent>
         </Card>
 
-        {/* Common Issues */}
-        <Card className="bg-gray-800/30 border-gray-700/50">
+        {/* Common Issues & Solutions */}
+        <Card className="bg-gray-800/30 border-gray-700/50 backdrop-blur-sm">
           <CardHeader>
-            <CardTitle className="text-white flex items-center gap-2">
-              <Info className="h-5 w-5" />
-              Common Issues & Solutions
-            </CardTitle>
+            <div className="flex items-center gap-2">
+              <Info className="h-5 w-5 text-blue-400" />
+              <CardTitle className="text-white">Common Issues & Solutions</CardTitle>
+            </div>
+            <CardDescription>Troubleshoot common Stripe configuration problems</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="space-y-3 text-sm">
-              <div className="border-l-4 border-amber-500 pl-4">
-                <h4 className="text-amber-400 font-medium">Test/Live Mode Mismatch</h4>
-                <p className="text-gray-300 mb-2">
-                  Make sure your Stripe key mode (test/live) matches your session ID prefix (cs_test_/cs_live_).
-                </p>
-                <ul className="text-gray-400 text-xs space-y-1 list-disc ml-4">
-                  <li>Test keys (sk_test_...) work with test sessions (cs_test_...)</li>
-                  <li>Live keys (sk_live_...) work with live sessions (cs_live_...)</li>
-                </ul>
-              </div>
+            <div className="bg-amber-900/20 border border-amber-500/30 rounded-lg p-4">
+              <h4 className="text-amber-400 font-medium mb-2">Test/Live Mode Mismatch</h4>
+              <p className="text-amber-300 text-sm mb-3">
+                This occurs when your Stripe API key mode doesn't match the session type you're trying to access.
+              </p>
+              <ul className="text-amber-300/80 text-sm space-y-1 ml-4 list-disc">
+                <li>Test keys (sk_test_...) can only access test sessions (cs_test_...)</li>
+                <li>Live keys (sk_live_...) can only access live sessions (cs_live_...)</li>
+                <li>Check your STRIPE_SECRET_KEY environment variable</li>
+                <li>Ensure you're using the correct session ID for your environment</li>
+              </ul>
+            </div>
 
-              <div className="border-l-4 border-blue-500 pl-4">
-                <h4 className="text-blue-400 font-medium">Session Not Found</h4>
-                <p className="text-gray-300 mb-2">
-                  Sessions expire after 24 hours. Check if the session ID is correct and hasn't expired.
-                </p>
-                <ul className="text-gray-400 text-xs space-y-1 list-disc ml-4">
-                  <li>Verify the session ID is complete and correct</li>
-                  <li>Check if the session was created in the same Stripe account</li>
-                  <li>Ensure the session hasn't expired (24-hour limit)</li>
-                </ul>
-              </div>
+            <div className="bg-red-900/20 border border-red-500/30 rounded-lg p-4">
+              <h4 className="text-red-400 font-medium mb-2">Session Not Found (404)</h4>
+              <p className="text-red-300 text-sm mb-3">The session ID cannot be found in your Stripe account.</p>
+              <ul className="text-red-300/80 text-sm space-y-1 ml-4 list-disc">
+                <li>Verify the session ID is correct and complete</li>
+                <li>Check if the session belongs to the correct Stripe account</li>
+                <li>Sessions expire after 24 hours</li>
+                <li>Ensure test/live mode consistency</li>
+              </ul>
+            </div>
 
-              <div className="border-l-4 border-green-500 pl-4">
-                <h4 className="text-green-400 font-medium">Environment Variables</h4>
-                <p className="text-gray-300 mb-2">
-                  Ensure STRIPE_SECRET_KEY is properly set in your environment variables.
-                </p>
-                <ul className="text-gray-400 text-xs space-y-1 list-disc ml-4">
-                  <li>Check your .env.local file or deployment environment</li>
-                  <li>Restart your development server after changing environment variables</li>
-                  <li>Use different keys for development and production</li>
-                </ul>
-              </div>
-
-              <div className="border-l-4 border-purple-500 pl-4">
-                <h4 className="text-purple-400 font-medium">Webhook Configuration</h4>
-                <p className="text-gray-300 mb-2">
-                  Ensure your Stripe webhooks are properly configured for your environment.
-                </p>
-                <ul className="text-gray-400 text-xs space-y-1 list-disc ml-4">
-                  <li>Set up separate webhook endpoints for test and live modes</li>
-                  <li>Verify webhook signing secrets match your environment</li>
-                  <li>Test webhook delivery in Stripe dashboard</li>
-                </ul>
-              </div>
+            <div className="bg-blue-900/20 border border-blue-500/30 rounded-lg p-4">
+              <h4 className="text-blue-400 font-medium mb-2">API Connection Issues</h4>
+              <p className="text-blue-300 text-sm mb-3">Problems connecting to the Stripe API.</p>
+              <ul className="text-blue-300/80 text-sm space-y-1 ml-4 list-disc">
+                <li>Verify your Stripe API key is valid and active</li>
+                <li>Check network connectivity</li>
+                <li>Ensure API key has the necessary permissions</li>
+                <li>Check for any Stripe service outages</li>
+              </ul>
             </div>
           </CardContent>
         </Card>
