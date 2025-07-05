@@ -347,11 +347,15 @@ export default function PurchasesPage() {
   }
 
   return (
-    <div className="fixed inset-0 bg-gradient-to-br from-black via-gray-900 to-gray-800 text-white overflow-hidden">
+    <div className="fixed inset-0 bg-gradient-to-br from-black via-gray-900 to-gray-800 relative overflow-hidden">
+      {/* Enhanced gradient background with depth */}
+      <div className="absolute inset-0 bg-gradient-to-b from-black/80 via-gray-900/60 to-transparent pointer-events-none" />
+      <div className="absolute inset-0 bg-gradient-to-br from-gray-900/40 via-black/60 to-gray-800/80 pointer-events-none" />
+      <div className="absolute top-0 left-0 right-0 h-96 bg-gradient-to-b from-black/90 via-gray-900/70 to-transparent pointer-events-none" />
       <div className="absolute inset-0 pt-16">
         <div className="h-full w-full overflow-y-auto">
           {/* Header Section */}
-          <div className="w-full px-8 py-8 border-b border-gray-700/30 sticky top-0 z-20 bg-gradient-to-br from-black/95 via-gray-900/95 to-gray-800/95 backdrop-blur-sm">
+          <div className="w-full px-8 py-8 sticky top-0 z-20 bg-gradient-to-br from-black/95 via-gray-900/90 to-gray-800/85 backdrop-blur-md border-b border-gray-700/20">
             <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="max-w-7xl mx-auto">
               <div className="flex items-center justify-between mb-8">
                 <div>
@@ -458,14 +462,14 @@ export default function PurchasesPage() {
 
           {/* Content Section */}
           <div className="w-full p-8">
-            <div className="max-w-7xl mx-auto">
+            <div className="max-w-7xl mx-auto relative z-10">
               <AnimatePresence mode="wait">
                 {filteredAndSortedPurchases.length === 0 ? (
                   <motion.div
                     initial={{ opacity: 0, y: 40 }}
                     animate={{ opacity: 1, y: 0 }}
                     exit={{ opacity: 0, y: -40 }}
-                    className="flex items-center justify-center min-h-96"
+                    className="flex items-center justify-center min-h-96 relative z-10"
                   >
                     <div className="max-w-md mx-auto text-center">
                       <div className="w-24 h-24 mx-auto mb-6 bg-gray-800/50 rounded-full flex items-center justify-center border border-gray-700/50">
@@ -512,7 +516,7 @@ export default function PurchasesPage() {
                             transition={{ delay: index * 0.05 }}
                             className="group"
                           >
-                            <div className="bg-gray-800/30 rounded-lg overflow-hidden border border-gray-700/20 hover:border-gray-600/40 transition-all duration-300 hover:transform hover:scale-[1.02] hover:shadow-xl hover:shadow-black/20">
+                            <div className="bg-gray-900/40 backdrop-blur-sm rounded-lg overflow-hidden border border-gray-700/20 hover:border-gray-600/40 transition-all duration-300 hover:transform hover:scale-[1.02] hover:shadow-xl hover:shadow-black/20">
                               {/* Thumbnail */}
                               <div className="relative aspect-video overflow-hidden bg-gradient-to-br from-gray-700 to-gray-800">
                                 {getThumbnailUrl(purchase) ? (
@@ -638,7 +642,7 @@ export default function PurchasesPage() {
                             transition={{ delay: index * 0.02 }}
                             className="group"
                           >
-                            <div className="bg-gray-800/30 rounded-lg overflow-hidden border border-gray-700/20 hover:border-gray-600/40 transition-all duration-300">
+                            <div className="bg-gray-900/30 backdrop-blur-sm rounded-lg overflow-hidden border border-gray-700/20 hover:border-gray-600/40 transition-all duration-300">
                               <div className="flex items-center p-6">
                                 {/* List view thumbnail */}
                                 <div className="w-16 h-16 rounded-lg overflow-hidden flex-shrink-0 mr-4 bg-gradient-to-br from-gray-700 to-gray-800">
