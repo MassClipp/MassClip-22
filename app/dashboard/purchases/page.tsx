@@ -183,8 +183,8 @@ export default function PurchasesPage() {
   if (authLoading || loading) {
     return (
       <div className="min-h-screen bg-black text-white">
-        <div className="w-full px-4 sm:px-6 lg:px-8 py-6 pt-24">
-          <div className="max-w-6xl mx-auto">
+        <div className="w-full h-full pt-20">
+          <div className="px-6 py-8">
             <div className="mb-8">
               <Skeleton className="h-12 w-64 mb-6 bg-zinc-800" />
               <div className="flex gap-8 mb-8">
@@ -213,8 +213,8 @@ export default function PurchasesPage() {
   if (error) {
     return (
       <div className="min-h-screen bg-black text-white">
-        <div className="w-full px-4 sm:px-6 lg:px-8 py-6 pt-24">
-          <div className="max-w-6xl mx-auto">
+        <div className="w-full h-full pt-20">
+          <div className="px-6 py-8">
             <Alert variant="destructive" className="bg-red-900/20 border-red-800">
               <AlertCircle className="h-4 w-4" />
               <AlertDescription>{error}</AlertDescription>
@@ -230,8 +230,8 @@ export default function PurchasesPage() {
 
   return (
     <div className="min-h-screen bg-black text-white">
-      <div className="w-full px-4 sm:px-6 lg:px-8 py-6 pt-24">
-        <div className="max-w-6xl mx-auto">
+      <div className="w-full h-full pt-20">
+        <div className="px-6 py-8">
           {/* Header */}
           <div className="mb-8">
             <h1 className="text-4xl font-bold mb-8 text-white">My Purchases</h1>
@@ -317,10 +317,10 @@ export default function PurchasesPage() {
                     transition={{ delay: index * 0.05 }}
                   >
                     <Card className="bg-zinc-900/50 border-zinc-800 hover:border-zinc-700 hover:bg-zinc-900/70 transition-all duration-300 overflow-hidden rounded-xl">
-                      <CardContent className="p-6">
-                        <div className="flex items-center gap-6">
-                          {/* Enhanced Thumbnail */}
-                          <div className="w-20 h-20 bg-zinc-800 rounded-xl flex items-center justify-center flex-shrink-0 overflow-hidden border border-zinc-700">
+                      <CardContent className="p-0">
+                        <div className="flex items-center gap-0">
+                          {/* Enhanced Thumbnail - No padding/margin */}
+                          <div className="w-24 h-24 bg-zinc-800 flex items-center justify-center flex-shrink-0 overflow-hidden">
                             {getThumbnailUrl(purchase) ? (
                               <img
                                 src={getThumbnailUrl(purchase) || "/placeholder.svg"}
@@ -332,11 +332,11 @@ export default function PurchasesPage() {
                                   target.style.display = "none"
                                   const parent = target.parentElement
                                   if (parent) {
-                                    parent.innerHTML = `
-                                      <div class="w-full h-full flex items-center justify-center bg-gradient-to-br from-zinc-700 to-zinc-800">
-                                        ${getContentIcon(purchase.type || "product_box").props.children}
-                                      </div>
-                                    `
+                                    const iconDiv = document.createElement("div")
+                                    iconDiv.className =
+                                      "w-full h-full flex items-center justify-center bg-gradient-to-br from-zinc-700 to-zinc-800"
+                                    iconDiv.innerHTML = `<svg class="h-6 w-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>`
+                                    parent.appendChild(iconDiv)
                                   }
                                 }}
                               />
@@ -347,58 +347,65 @@ export default function PurchasesPage() {
                             )}
                           </div>
 
-                          {/* Content */}
-                          <div className="flex-1 min-w-0">
-                            <h3 className="text-xl font-semibold text-white mb-1 truncate">{purchase.title}</h3>
-                            <p className="text-zinc-400 text-sm mb-1">{purchase.creatorUsername}</p>
-                            {purchase.metadata?.contentCount && (
-                              <p className="text-zinc-500 text-xs">
-                                {purchase.metadata.contentCount} item{purchase.metadata.contentCount !== 1 ? "s" : ""}
-                              </p>
-                            )}
-                          </div>
-
-                          {/* Actions */}
-                          <div className="flex items-center gap-3 flex-shrink-0">
-                            {purchase.status === "completed" && activeTab === "downloads" && (
-                              <>
-                                <Button
-                                  onClick={() => handleDownload(purchase)}
-                                  variant="outline"
-                                  className="border-zinc-700 hover:bg-zinc-800 bg-transparent text-white h-10 px-4"
-                                >
-                                  <Download className="h-4 w-4 mr-2" />
-                                  Download
-                                </Button>
-                                <Button asChild className="bg-zinc-800 hover:bg-zinc-700 text-white h-10 px-4">
-                                  <Link
-                                    href={
-                                      purchase.type === "bundle"
-                                        ? `/bundles/${purchase.bundleId}`
-                                        : `/product-box/${purchase.productBoxId}/content`
-                                    }
-                                  >
-                                    <Eye className="h-4 w-4 mr-2" />
-                                    View bundle
-                                  </Link>
-                                </Button>
-                              </>
-                            )}
-                            {activeTab === "orders" && (
-                              <div className="flex items-center gap-4">
-                                <Badge
-                                  variant={purchase.status === "completed" ? "default" : "secondary"}
-                                  className={
-                                    purchase.status === "completed"
-                                      ? "bg-green-600 text-white px-3 py-1"
-                                      : "bg-zinc-700 text-zinc-300 px-3 py-1"
-                                  }
-                                >
-                                  {purchase.status}
-                                </Badge>
-                                <span className="text-xl font-semibold text-white">${purchase.price.toFixed(2)}</span>
+                          {/* Content - Proper padding only on content area */}
+                          <div className="flex-1 min-w-0 px-6 py-6">
+                            <div className="flex items-center justify-between">
+                              <div className="flex-1 min-w-0">
+                                <h3 className="text-xl font-semibold text-white mb-1 truncate">{purchase.title}</h3>
+                                <p className="text-zinc-400 text-sm mb-1">{purchase.creatorUsername}</p>
+                                {purchase.metadata?.contentCount !== undefined && (
+                                  <p className="text-zinc-500 text-xs">
+                                    {purchase.metadata.contentCount} item
+                                    {purchase.metadata.contentCount !== 1 ? "s" : ""}
+                                  </p>
+                                )}
                               </div>
-                            )}
+
+                              {/* Actions */}
+                              <div className="flex items-center gap-3 flex-shrink-0 ml-4">
+                                {purchase.status === "completed" && activeTab === "downloads" && (
+                                  <>
+                                    <Button
+                                      onClick={() => handleDownload(purchase)}
+                                      variant="outline"
+                                      className="border-zinc-700 hover:bg-zinc-800 bg-transparent text-white h-10 px-4"
+                                    >
+                                      <Download className="h-4 w-4 mr-2" />
+                                      Download
+                                    </Button>
+                                    <Button asChild className="bg-zinc-800 hover:bg-zinc-700 text-white h-10 px-4">
+                                      <Link
+                                        href={
+                                          purchase.type === "bundle"
+                                            ? `/bundles/${purchase.bundleId}`
+                                            : `/product-box/${purchase.productBoxId}/content`
+                                        }
+                                      >
+                                        <Eye className="h-4 w-4 mr-2" />
+                                        View bundle
+                                      </Link>
+                                    </Button>
+                                  </>
+                                )}
+                                {activeTab === "orders" && (
+                                  <div className="flex items-center gap-4">
+                                    <Badge
+                                      variant={purchase.status === "completed" ? "default" : "secondary"}
+                                      className={
+                                        purchase.status === "completed"
+                                          ? "bg-green-600 text-white px-3 py-1"
+                                          : "bg-zinc-700 text-zinc-300 px-3 py-1"
+                                      }
+                                    >
+                                      {purchase.status}
+                                    </Badge>
+                                    <span className="text-xl font-semibold text-white">
+                                      ${purchase.price.toFixed(2)}
+                                    </span>
+                                  </div>
+                                )}
+                              </div>
+                            </div>
                           </div>
                         </div>
                       </CardContent>
