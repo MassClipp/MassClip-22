@@ -1,61 +1,115 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { auth, db } from "@/lib/firebase-admin"
+import { adminDb } from "@/lib/firebase-admin"
+import { getServerSession } from "next-auth"
+import { authOptions } from "@/app/api/auth/[...nextauth]/route"
 
 export async function GET(request: NextRequest) {
   try {
-    // Get user ID from query params
-    const searchParams = request.nextUrl.searchParams
-    const userId = searchParams.get("userId")
+    console.log("🛒 [Unified Purchases] Starting fetch...")
 
-    // Get auth token from header
-    const authHeader = request.headers.get("authorization")
+    // Get user session
+    const session = await getServerSession(authOptions)
+    if (!session?.user?.email) {
+      console.log("❌ [Unified Purchases] No authenticated user")
+      return NextResponse.json({ error: "Authentication required" }, { status: 401 })
+    }
 
-    let authenticatedUserId: string | null = null
+    const userId = session.user.email
+    console.log(`👤 [Unified Purchases] Fetching purchases for user: ${userId}`)
 
-    // Verify auth token if provided
-    if (authHeader && authHeader.startsWith("Bearer ")) {
-      const token = authHeader.substring(7)
-      try {
-        const decodedToken = await auth.verifyIdToken(token)
-        authenticatedUserId = decodedToken.uid
-        console.log("✅ [Unified Purchases API] Authenticated user:", authenticatedUserId)
-      } catch (error) {
-        console.error("❌ [Unified Purchases API] Error verifying auth token:", error)
+    // Query all purchases for this user
+    const purchasesQuery = adminDb
+      .collection("purchases")
+      .where("userId", "==", userId)
+      .where("status", "==", "completed")
+      .orderBy("createdAt", "desc")
+
+    const purchasesSnapshot = await purchasesQuery.get()
+    console.log(`📦 [Unified Purchases] Found ${purchasesSnapshot.size} completed purchases`)
+
+    if (purchasesSnapshot.empty) {
+      console.log("ℹ️ [Unified Purchases] No purchases found for user")
+      return NextResponse.json({
+        purchases: [],
+        total: 0,
+        message: "No purchases found",
+      })
+    }
+
+    // Process purchases and enrich with additional data
+    const purchases = []
+
+    for (const doc of purchasesSnapshot.docs) {
+      const purchaseData = doc.data()
+      console.log(`📄 [Unified Purchases] Processing purchase: ${doc.id}`, {
+        type: purchaseData.type,
+        productBoxId: purchaseData.productBoxId,
+        bundleId: purchaseData.bundleId,
+        title: purchaseData.title,
+      })
+
+      // Get creator username
+      let creatorUsername = "Unknown Creator"
+      if (purchaseData.creatorId) {
+        try {
+          const creatorDoc = await adminDb.collection("users").doc(purchaseData.creatorId).get()
+          if (creatorDoc.exists) {
+            const creatorData = creatorDoc.data()
+            creatorUsername = creatorData?.username || creatorData?.displayName || "Unknown Creator"
+          }
+        } catch (error) {
+          console.warn(`⚠️ [Unified Purchases] Could not fetch creator data for ${purchaseData.creatorId}:`, error)
+        }
       }
-    }
 
-    // Use provided userId or authenticated userId
-    const finalUserId = userId || authenticatedUserId
-
-    if (!finalUserId) {
-      console.error("❌ [Unified Purchases API] No user ID provided")
-      return NextResponse.json({ error: "User ID is required" }, { status: 400 })
-    }
-
-    console.log("🔍 [Unified Purchases API] Fetching unified purchases for user:", finalUserId)
-
-    // Get unified purchases
-    const unifiedPurchasesRef = db.collection("userPurchases").doc(finalUserId).collection("purchases")
-    const unifiedSnapshot = await unifiedPurchasesRef.orderBy("purchasedAt", "desc").get()
-
-    console.log(`📊 [Unified Purchases API] Found ${unifiedSnapshot.size} unified purchases`)
-
-    const purchases = unifiedSnapshot.docs.map((doc) => {
-      const data = doc.data()
-      return {
+      // Enrich purchase data
+      const enrichedPurchase = {
         id: doc.id,
-        ...data,
-        purchasedAt: data.purchasedAt?.toDate?.() || new Date(data.purchasedAt || Date.now()),
+        title: purchaseData.title || purchaseData.metadata?.title || "Untitled Purchase",
+        description: purchaseData.description || purchaseData.metadata?.description || "",
+        price: purchaseData.price || 0,
+        currency: purchaseData.currency || "usd",
+        status: purchaseData.status || "completed",
+        createdAt: purchaseData.createdAt?.toDate?.() || purchaseData.createdAt || new Date(),
+        updatedAt: purchaseData.updatedAt?.toDate?.() || purchaseData.updatedAt || new Date(),
+        productBoxId: purchaseData.productBoxId || null,
+        bundleId: purchaseData.bundleId || null,
+        creatorId: purchaseData.creatorId || "",
+        creatorUsername: creatorUsername,
+        type: purchaseData.type || "product_box",
+        downloadUrl: purchaseData.downloadUrl || "",
+        thumbnailUrl: purchaseData.thumbnailUrl || purchaseData.metadata?.thumbnailUrl || "",
+        isFavorite: purchaseData.isFavorite || false,
+        rating: purchaseData.rating || 0,
+        downloadProgress: purchaseData.downloadProgress || 0,
+        lastAccessed: purchaseData.lastAccessed?.toDate?.() || null,
+        metadata: {
+          title: purchaseData.metadata?.title || purchaseData.title,
+          description: purchaseData.metadata?.description || purchaseData.description,
+          contentCount: purchaseData.metadata?.contentCount || 0,
+          thumbnailUrl: purchaseData.metadata?.thumbnailUrl || purchaseData.thumbnailUrl || "",
+          duration: purchaseData.metadata?.duration || 0,
+          fileSize: purchaseData.metadata?.fileSize || "Unknown",
+          contentType: purchaseData.metadata?.contentType || "video",
+          ...purchaseData.metadata,
+        },
       }
-    })
 
-    console.log("✅ [Unified Purchases API] Returning", purchases.length, "purchases")
-    return NextResponse.json({ purchases })
+      purchases.push(enrichedPurchase)
+    }
+
+    console.log(`✅ [Unified Purchases] Returning ${purchases.length} enriched purchases`)
+
+    return NextResponse.json({
+      purchases,
+      total: purchases.length,
+      totalValue: purchases.reduce((sum, p) => sum + (p.price || 0), 0),
+    })
   } catch (error) {
-    console.error("❌ [Unified Purchases API] Error:", error)
+    console.error("❌ [Unified Purchases] Error fetching purchases:", error)
     return NextResponse.json(
       {
-        error: "Failed to fetch unified purchases",
+        error: "Failed to fetch purchases",
         details: error instanceof Error ? error.message : "Unknown error",
       },
       { status: 500 },
