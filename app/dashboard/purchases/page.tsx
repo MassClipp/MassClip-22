@@ -110,6 +110,7 @@ export default function PurchasesPage() {
 
       const data = await response.json()
 
+      // Enhanced purchase normalization with additional fields
       const normalizedPurchases = (data.purchases || []).map((purchase: any) => ({
         id: purchase.id || "",
         title: purchase.title || purchase.metadata?.title || "Untitled Purchase",
@@ -202,12 +203,14 @@ export default function PurchasesPage() {
 
   const filteredAndSortedPurchases = purchases
     .filter((purchase) => {
+      // Search filter
       const matchesSearch =
         searchQuery === "" ||
         (purchase.title && purchase.title.toLowerCase().includes(searchQuery.toLowerCase())) ||
         (purchase.description && purchase.description.toLowerCase().includes(searchQuery.toLowerCase())) ||
         (purchase.creatorUsername && purchase.creatorUsername.toLowerCase().includes(searchQuery.toLowerCase()))
 
+      // Tab filter
       const matchesTab =
         activeTab === "all" ||
         (activeTab === "downloads" && purchase.status === "completed") ||
@@ -216,6 +219,7 @@ export default function PurchasesPage() {
           purchase.lastAccessed &&
           new Date().getTime() - purchase.lastAccessed.getTime() < 7 * 24 * 60 * 60 * 1000)
 
+      // Content type filter
       const matchesFilter =
         filterBy === "all" ||
         purchase.metadata?.contentType === filterBy ||
@@ -271,30 +275,52 @@ export default function PurchasesPage() {
     })
   }
 
+  const formatDuration = (seconds: number) => {
+    const hours = Math.floor(seconds / 3600)
+    const minutes = Math.floor((seconds % 3600) / 60)
+    if (hours > 0) {
+      return `${hours}h ${minutes}m`
+    }
+    return `${minutes}m`
+  }
+
   if (authLoading || loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-black via-gray-900 to-gray-700 text-white">
-        <div className="pt-16 px-8 py-8">
-          <div className="max-w-7xl mx-auto">
-            <Skeleton className="h-12 w-80 mb-4 bg-gray-800" />
-            <Skeleton className="h-6 w-64 mb-8 bg-gray-800" />
-            <div className="flex gap-4 mb-8">
-              <Skeleton className="h-10 w-24 bg-gray-800" />
-              <Skeleton className="h-10 w-24 bg-gray-800" />
-              <Skeleton className="h-10 w-24 bg-gray-800" />
-              <Skeleton className="h-10 w-24 bg-gray-800" />
+      <div className="fixed inset-0 bg-gradient-to-br from-black via-gray-900 to-white/10 text-white overflow-hidden">
+        <div className="absolute inset-0 pt-16">
+          <div className="h-full w-full overflow-y-auto">
+            {/* Header Skeleton */}
+            <div className="w-full px-8 py-8 border-b border-gray-700/30">
+              <Skeleton className="h-12 w-80 mb-4 bg-gray-700/30" />
+              <Skeleton className="h-6 w-64 mb-8 bg-gray-700/30" />
+              <div className="flex gap-4 mb-8">
+                <Skeleton className="h-10 w-24 bg-gray-700/30" />
+                <Skeleton className="h-10 w-24 bg-gray-700/30" />
+                <Skeleton className="h-10 w-24 bg-gray-700/30" />
+                <Skeleton className="h-10 w-24 bg-gray-700/30" />
+              </div>
+              <div className="flex gap-4">
+                <Skeleton className="h-12 flex-1 bg-gray-700/30" />
+                <Skeleton className="h-12 w-40 bg-gray-700/30" />
+                <Skeleton className="h-12 w-40 bg-gray-700/30" />
+              </div>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-              {[...Array(8)].map((_, i) => (
-                <div key={i} className="bg-gray-800 rounded-lg overflow-hidden">
-                  <Skeleton className="h-48 w-full bg-gray-700" />
-                  <div className="p-4">
-                    <Skeleton className="h-5 w-full mb-2 bg-gray-700" />
-                    <Skeleton className="h-4 w-20 mb-3 bg-gray-700" />
-                    <Skeleton className="h-4 w-24 bg-gray-700" />
+
+            {/* Content Skeleton */}
+            <div className="p-8">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                {[...Array(8)].map((_, i) => (
+                  <div key={i} className="bg-gray-800/30 rounded-lg overflow-hidden border border-gray-700/20">
+                    <Skeleton className="h-48 w-full bg-gray-700/30" />
+                    <div className="p-4">
+                      <Skeleton className="h-5 w-full mb-2 bg-gray-700/30" />
+                      <Skeleton className="h-4 w-20 mb-3 bg-gray-700/30" />
+                      <Skeleton className="h-4 w-24 mb-2 bg-gray-700/30" />
+                      <Skeleton className="h-4 w-16 bg-gray-700/30" />
+                    </div>
                   </div>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
           </div>
         </div>
@@ -304,14 +330,14 @@ export default function PurchasesPage() {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-black via-gray-900 to-gray-700 text-white">
-        <div className="pt-16 px-8 py-8">
-          <div className="max-w-7xl mx-auto">
+      <div className="fixed inset-0 bg-gradient-to-br from-black via-gray-900 to-white/10 text-white overflow-hidden">
+        <div className="absolute inset-0 pt-16">
+          <div className="h-full w-full overflow-y-auto px-8 py-8">
             <Alert variant="destructive" className="bg-red-900/20 border-red-800">
               <AlertCircle className="h-4 w-4" />
               <AlertDescription>{error}</AlertDescription>
             </Alert>
-            <Button onClick={fetchPurchases} className="mt-4 bg-red-600 hover:bg-red-700">
+            <Button onClick={fetchPurchases} className="mt-4 bg-red-600 hover:bg-red-700" variant="default">
               Try Again
             </Button>
           </div>
@@ -321,15 +347,17 @@ export default function PurchasesPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-black via-gray-900 to-gray-700 text-white">
-      {/* Top gradient overlay for depth */}
-      <div className="absolute top-0 left-0 right-0 h-64 bg-gradient-to-b from-black/80 to-transparent pointer-events-none z-10" />
+    <div className="fixed inset-0 bg-gradient-to-br from-black via-gray-900 to-white/10 relative overflow-hidden">
+      {/* Enhanced gradient background with depth and subtle white accent */}
+      <div className="absolute inset-0 bg-gradient-to-b from-black/90 via-gray-900/70 to-white/5 pointer-events-none" />
+      <div className="absolute inset-0 bg-gradient-to-tr from-black/80 via-gray-800/60 to-white/8 pointer-events-none" />
+      <div className="absolute top-0 left-0 right-0 h-96 bg-gradient-to-b from-black/95 via-gray-900/80 to-transparent pointer-events-none" />
 
-      <div className="pt-16 relative z-20">
-        {/* Header Section */}
-        <div className="px-8 py-8 bg-gradient-to-b from-black/60 to-transparent backdrop-blur-sm">
-          <div className="max-w-7xl mx-auto">
-            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
+      <div className="absolute inset-0 pt-16">
+        <div className="h-full w-full overflow-y-auto">
+          {/* Header Section */}
+          <div className="w-full px-8 py-8 sticky top-0 z-20 bg-gradient-to-br from-black/95 via-gray-900/90 to-white/5 backdrop-blur-md border-b border-gray-700/20">
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="max-w-7xl mx-auto">
               <div className="flex items-center justify-between mb-8">
                 <div>
                   <h1 className="text-4xl font-bold text-white mb-2">My Collection</h1>
@@ -399,12 +427,12 @@ export default function PurchasesPage() {
                     placeholder="Search your collection..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    className="pl-12 bg-gray-800/50 border-gray-700 text-white placeholder:text-gray-400 h-12 rounded-lg focus:border-gray-600"
+                    className="pl-12 bg-gray-800/50 border-gray-700/50 text-white placeholder:text-gray-400 h-12 rounded-lg focus:border-gray-600 focus:ring-1 focus:ring-gray-600"
                   />
                 </div>
 
                 <Select value={sortBy} onValueChange={(value) => setSortBy(value as SortOption)}>
-                  <SelectTrigger className="w-48 h-12 bg-gray-800/50 border-gray-700 text-white rounded-lg">
+                  <SelectTrigger className="w-48 h-12 bg-gray-800/50 border-gray-700/50 text-white rounded-lg focus:border-gray-600 focus:ring-1 focus:ring-gray-600">
                     <SortAsc className="h-4 w-4 mr-2" />
                     <SelectValue placeholder="Date Added" />
                   </SelectTrigger>
@@ -417,7 +445,7 @@ export default function PurchasesPage() {
                 </Select>
 
                 <Select value={filterBy} onValueChange={(value) => setFilterBy(value as FilterOption)}>
-                  <SelectTrigger className="w-48 h-12 bg-gray-800/50 border-gray-700 text-white rounded-lg">
+                  <SelectTrigger className="w-48 h-12 bg-gray-800/50 border-gray-700/50 text-white rounded-lg focus:border-gray-600 focus:ring-1 focus:ring-gray-600">
                     <Filter className="h-4 w-4 mr-2" />
                     <SelectValue placeholder="All Types" />
                   </SelectTrigger>
@@ -432,275 +460,292 @@ export default function PurchasesPage() {
               </div>
             </motion.div>
           </div>
-        </div>
 
-        {/* Content Section */}
-        <div className="px-8 py-8">
-          <div className="max-w-7xl mx-auto">
-            <AnimatePresence mode="wait">
-              {filteredAndSortedPurchases.length === 0 ? (
-                <motion.div
-                  initial={{ opacity: 0, y: 40 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -40 }}
-                  className="flex items-center justify-center min-h-96"
-                >
-                  <div className="max-w-md mx-auto text-center">
-                    <div className="w-24 h-24 mx-auto mb-6 bg-gray-800/50 rounded-full flex items-center justify-center border border-gray-700">
-                      <Package className="h-12 w-12 text-gray-500" />
+          {/* Content Section */}
+          <div className="w-full p-8">
+            <div className="max-w-7xl mx-auto relative z-10">
+              <AnimatePresence mode="wait">
+                {filteredAndSortedPurchases.length === 0 ? (
+                  <motion.div
+                    initial={{ opacity: 0, y: 40 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    exit={{ opacity: 0, y: -40 }}
+                    className="flex items-center justify-center min-h-96 relative z-10"
+                  >
+                    <div className="max-w-md mx-auto text-center">
+                      <div className="w-24 h-24 mx-auto mb-6 bg-gray-800/50 rounded-full flex items-center justify-center border border-gray-700/50">
+                        <Package className="h-12 w-12 text-gray-500" />
+                      </div>
+                      <h3 className="text-2xl font-semibold mb-4 text-white">
+                        {searchQuery
+                          ? "No matches found"
+                          : activeTab === "favorites"
+                            ? "No favorites yet"
+                            : activeTab === "recent"
+                              ? "No recent activity"
+                              : "Your collection awaits"}
+                      </h3>
+                      <p className="text-gray-400 mb-8 text-base">
+                        {searchQuery
+                          ? "Try adjusting your search or filters to discover your content."
+                          : "Start building your premium content library with exclusive downloads and bundles."}
+                      </p>
+                      {!searchQuery && (
+                        <Button asChild className="bg-red-600 hover:bg-red-700 h-12 px-6">
+                          <Link href="/dashboard/explore">
+                            <ExternalLink className="h-4 w-4 mr-2" />
+                            Explore Premium Content
+                          </Link>
+                        </Button>
+                      )}
                     </div>
-                    <h3 className="text-2xl font-semibold mb-4 text-white">
-                      {searchQuery
-                        ? "No matches found"
-                        : activeTab === "favorites"
-                          ? "No favorites yet"
-                          : activeTab === "recent"
-                            ? "No recent activity"
-                            : "Your collection awaits"}
-                    </h3>
-                    <p className="text-gray-400 mb-8 text-base">
-                      {searchQuery
-                        ? "Try adjusting your search or filters to discover your content."
-                        : "Start building your premium content library with exclusive downloads and bundles."}
-                    </p>
-                    {!searchQuery && (
-                      <Button asChild className="bg-red-600 hover:bg-red-700 h-12 px-6">
-                        <Link href="/dashboard/explore">
-                          <ExternalLink className="h-4 w-4 mr-2" />
-                          Explore Premium Content
-                        </Link>
-                      </Button>
-                    )}
-                  </div>
-                </motion.div>
-              ) : (
-                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                  {viewMode === "grid" ? (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                      {filteredAndSortedPurchases.map((purchase, index) => (
-                        <motion.div
-                          key={purchase.id}
-                          initial={{ opacity: 0, y: 20 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          transition={{ delay: index * 0.05 }}
-                          className="group"
-                        >
-                          <div className="bg-gray-800/60 backdrop-blur-sm rounded-lg overflow-hidden border border-gray-700/30 hover:border-gray-600/50 transition-all duration-300 hover:transform hover:scale-[1.02]">
-                            {/* Thumbnail */}
-                            <div className="relative aspect-video overflow-hidden bg-gradient-to-br from-gray-700 to-gray-800">
-                              {getThumbnailUrl(purchase) ? (
-                                <img
-                                  src={getThumbnailUrl(purchase) || "/placeholder.svg"}
-                                  alt={purchase.title}
-                                  className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
-                                />
-                              ) : (
-                                <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-gray-700 to-gray-800">
-                                  <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl flex items-center justify-center">
-                                    <div className="text-white">
-                                      {getContentIcon(purchase.type || "product_box", purchase.metadata?.contentType)}
-                                    </div>
-                                  </div>
-                                </div>
-                              )}
-
-                              {/* Content Type Badge */}
-                              <div className="absolute top-3 left-3">
-                                <Badge className="bg-black/70 text-white border-0 text-xs px-2 py-1">
-                                  {getContentIcon(purchase.type || "product_box", purchase.metadata?.contentType)}
-                                  <span className="ml-1 capitalize">
-                                    {purchase.metadata?.contentType || purchase.type?.replace("_", " ") || "Video"}
-                                  </span>
-                                </Badge>
-                              </div>
-
-                              {/* Favorite button */}
-                              <Button
-                                onClick={() => toggleFavorite(purchase.id)}
-                                size="sm"
-                                variant="ghost"
-                                className="absolute top-3 right-3 h-8 w-8 p-0 bg-black/70 hover:bg-black/80 text-white"
-                              >
-                                <Heart
-                                  className={cn(
-                                    "h-4 w-4 transition-colors",
-                                    purchase.isFavorite ? "fill-red-500 text-red-500" : "text-white",
-                                  )}
-                                />
-                              </Button>
-
-                              {/* Progress bar for downloads */}
-                              {purchase.downloadProgress && purchase.downloadProgress > 0 && (
-                                <div className="absolute bottom-0 left-0 right-0 p-3">
-                                  <Progress value={purchase.downloadProgress} className="h-1 bg-gray-600" />
-                                </div>
-                              )}
-                            </div>
-
-                            {/* Content */}
-                            <div className="p-4">
-                              <div className="flex items-start justify-between mb-2">
-                                <h3 className="text-base font-medium text-white line-clamp-1">{purchase.title}</h3>
-                                <DropdownMenu>
-                                  <DropdownMenuTrigger asChild>
-                                    <Button
-                                      variant="ghost"
-                                      size="sm"
-                                      className="h-6 w-6 p-0 text-gray-400 hover:text-white"
-                                    >
-                                      <MoreHorizontal className="h-4 w-4" />
-                                    </Button>
-                                  </DropdownMenuTrigger>
-                                  <DropdownMenuContent className="bg-gray-800 border-gray-700">
-                                    <DropdownMenuItem
-                                      className="text-white hover:bg-gray-700"
-                                      onClick={() => handleDownload(purchase)}
-                                    >
-                                      <Download className="h-4 w-4 mr-2" />
-                                      Download
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem className="text-white hover:bg-gray-700">
-                                      <Share2 className="h-4 w-4 mr-2" />
-                                      Share
-                                    </DropdownMenuItem>
-                                    <DropdownMenuItem className="text-red-400 hover:bg-red-500/10">
-                                      <Trash2 className="h-4 w-4 mr-2" />
-                                      Remove
-                                    </DropdownMenuItem>
-                                  </DropdownMenuContent>
-                                </DropdownMenu>
-                              </div>
-
-                              <p className="text-gray-400 text-sm mb-3">{purchase.creatorUsername}</p>
-
-                              <div className="flex items-center justify-between text-sm text-gray-400 mb-3">
-                                <div className="flex items-center gap-1">
-                                  <Clock className="h-3 w-3" />
-                                  <span>{formatDate(purchase.createdAt)}</span>
-                                </div>
-                                <span>{purchase.metadata?.contentCount || 0} items</span>
-                              </div>
-
-                              <div className="flex items-center justify-between">
-                                <div className="flex items-center gap-1 text-white font-medium">
-                                  <DollarSign className="h-4 w-4" />
-                                  <span>{purchase.price.toFixed(2)}</span>
-                                </div>
-                                <Button asChild size="sm" className="bg-gray-700 hover:bg-gray-600 text-white h-8 px-3">
-                                  <Link
-                                    href={
-                                      purchase.type === "bundle"
-                                        ? `/bundles/${purchase.bundleId}`
-                                        : `/product-box/${purchase.productBoxId}/content`
-                                    }
-                                  >
-                                    <Eye className="h-3 w-3 mr-1" />
-                                    View
-                                  </Link>
-                                </Button>
-                              </div>
-                            </div>
-                          </div>
-                        </motion.div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="space-y-4">
-                      {filteredAndSortedPurchases.map((purchase, index) => (
-                        <motion.div
-                          key={purchase.id}
-                          initial={{ opacity: 0, x: -20 }}
-                          animate={{ opacity: 1, x: 0 }}
-                          transition={{ delay: index * 0.02 }}
-                        >
-                          <div className="bg-gray-800/60 backdrop-blur-sm rounded-lg border border-gray-700/30 hover:border-gray-600/50 transition-all duration-300">
-                            <div className="flex items-center p-6">
-                              {/* List view thumbnail */}
-                              <div className="w-16 h-16 rounded-lg overflow-hidden flex-shrink-0 mr-4 bg-gradient-to-br from-gray-700 to-gray-800">
+                  </motion.div>
+                ) : (
+                  <motion.div
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    className="w-full"
+                  >
+                    {viewMode === "grid" ? (
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                        {filteredAndSortedPurchases.map((purchase, index) => (
+                          <motion.div
+                            key={purchase.id}
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ delay: index * 0.05 }}
+                            className="group"
+                          >
+                            <div className="bg-gray-900/40 backdrop-blur-sm rounded-lg overflow-hidden border border-gray-700/20 hover:border-gray-600/40 transition-all duration-300 hover:transform hover:scale-[1.02] hover:shadow-xl hover:shadow-black/20">
+                              {/* Thumbnail */}
+                              <div className="relative aspect-video overflow-hidden bg-gradient-to-br from-gray-700 to-gray-800">
                                 {getThumbnailUrl(purchase) ? (
                                   <img
                                     src={getThumbnailUrl(purchase) || "/placeholder.svg"}
                                     alt={purchase.title}
-                                    className="w-full h-full object-cover"
+                                    className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
                                   />
                                 ) : (
-                                  <div className="w-full h-full flex items-center justify-center">
-                                    <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
-                                      <div className="text-white text-sm">
+                                  <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-gray-700 to-gray-800 relative">
+                                    {/* Clean geometric pattern background */}
+                                    <div className="absolute inset-0 opacity-10">
+                                      <div
+                                        className="w-full h-full"
+                                        style={{
+                                          backgroundImage: `radial-gradient(circle at 25% 25%, rgba(59, 130, 246, 0.3) 0%, transparent 50%), 
+                                                         radial-gradient(circle at 75% 75%, rgba(147, 51, 234, 0.3) 0%, transparent 50%)`,
+                                        }}
+                                      />
+                                    </div>
+                                    {/* Clean centered icon */}
+                                    <div className="relative z-10 w-16 h-16 bg-gradient-to-br from-blue-500 to-purple-600 rounded-xl flex items-center justify-center shadow-lg">
+                                      <div className="text-white">
                                         {getContentIcon(purchase.type || "product_box", purchase.metadata?.contentType)}
                                       </div>
                                     </div>
                                   </div>
                                 )}
+
+                                {/* Content Type Badge */}
+                                <div className="absolute top-3 left-3">
+                                  <Badge className="bg-black/70 text-white border-0 text-xs px-2 py-1 backdrop-blur-sm">
+                                    {getContentIcon(purchase.type || "product_box", purchase.metadata?.contentType)}
+                                    <span className="ml-1 capitalize">
+                                      {purchase.metadata?.contentType || purchase.type?.replace("_", " ") || "Video"}
+                                    </span>
+                                  </Badge>
+                                </div>
+
+                                {/* Favorite button */}
+                                <Button
+                                  onClick={() => toggleFavorite(purchase.id)}
+                                  size="sm"
+                                  variant="ghost"
+                                  className="absolute top-3 right-3 h-8 w-8 p-0 bg-black/70 hover:bg-black/80 backdrop-blur-sm text-white"
+                                >
+                                  <Heart
+                                    className={cn(
+                                      "h-4 w-4 transition-colors",
+                                      purchase.isFavorite ? "fill-red-500 text-red-500" : "text-white",
+                                    )}
+                                  />
+                                </Button>
+
+                                {/* Progress bar for downloads */}
+                                {purchase.downloadProgress && purchase.downloadProgress > 0 && (
+                                  <div className="absolute bottom-0 left-0 right-0 p-3">
+                                    <Progress value={purchase.downloadProgress} className="h-1 bg-gray-600" />
+                                  </div>
+                                )}
                               </div>
 
                               {/* Content */}
-                              <div className="flex-1 min-w-0">
-                                <div className="flex items-start justify-between">
-                                  <div className="flex-1 min-w-0">
-                                    <h3 className="text-lg font-medium text-white mb-1 truncate">{purchase.title}</h3>
-                                    <p className="text-gray-400 text-sm mb-2">{purchase.creatorUsername}</p>
-                                    <div className="flex items-center gap-4 text-sm text-gray-400">
-                                      <span>{formatDate(purchase.createdAt)}</span>
-                                      <span>{purchase.metadata?.contentCount || 0} items</span>
-                                    </div>
-                                  </div>
-
-                                  {/* Actions */}
-                                  <div className="flex items-center gap-3 ml-6">
-                                    <Button
-                                      onClick={() => toggleFavorite(purchase.id)}
-                                      variant="ghost"
-                                      size="sm"
-                                      className="h-8 w-8 p-0 text-gray-400 hover:text-white"
-                                    >
-                                      <Heart
-                                        className={cn(
-                                          "h-4 w-4 transition-colors",
-                                          purchase.isFavorite ? "fill-red-500 text-red-500" : "text-gray-400",
-                                        )}
-                                      />
-                                    </Button>
-                                    <Button
-                                      onClick={() => handleDownload(purchase)}
-                                      variant="outline"
-                                      size="sm"
-                                      className="border-gray-600 hover:bg-gray-700 bg-transparent text-white h-8 px-3"
-                                    >
-                                      <Download className="h-3 w-3 mr-1" />
-                                      Download
-                                    </Button>
-                                    <Button
-                                      asChild
-                                      size="sm"
-                                      className="bg-gray-700 hover:bg-gray-600 text-white h-8 px-3"
-                                    >
-                                      <Link
-                                        href={
-                                          purchase.type === "bundle"
-                                            ? `/bundles/${purchase.bundleId}`
-                                            : `/product-box/${purchase.productBoxId}/content`
-                                        }
+                              <div className="p-4">
+                                <div className="flex items-start justify-between mb-2">
+                                  <h3 className="text-base font-medium text-white line-clamp-1">{purchase.title}</h3>
+                                  <DropdownMenu>
+                                    <DropdownMenuTrigger asChild>
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        className="h-6 w-6 p-0 text-gray-400 hover:text-white"
                                       >
-                                        <Eye className="h-3 w-3 mr-1" />
-                                        View
-                                      </Link>
-                                    </Button>
-                                    <span className="text-lg font-medium text-white ml-2">
-                                      ${purchase.price.toFixed(2)}
-                                    </span>
+                                        <MoreHorizontal className="h-4 w-4" />
+                                      </Button>
+                                    </DropdownMenuTrigger>
+                                    <DropdownMenuContent className="bg-gray-800 border-gray-700">
+                                      <DropdownMenuItem className="text-white hover:bg-gray-700">
+                                        <Download className="h-4 w-4 mr-2" />
+                                        Download
+                                      </DropdownMenuItem>
+                                      <DropdownMenuItem className="text-white hover:bg-gray-700">
+                                        <Share2 className="h-4 w-4 mr-2" />
+                                        Share
+                                      </DropdownMenuItem>
+                                      <DropdownMenuItem className="text-red-400 hover:bg-red-500/10">
+                                        <Trash2 className="h-4 w-4 mr-2" />
+                                        Remove
+                                      </DropdownMenuItem>
+                                    </DropdownMenuContent>
+                                  </DropdownMenu>
+                                </div>
+
+                                <p className="text-gray-400 text-sm mb-3">{purchase.creatorUsername}</p>
+
+                                <div className="flex items-center justify-between text-sm text-gray-400 mb-3">
+                                  <div className="flex items-center gap-1">
+                                    <Clock className="h-3 w-3" />
+                                    <span>{formatDate(purchase.createdAt)}</span>
+                                  </div>
+                                  <span className="text-right">{purchase.metadata?.contentCount || 0}</span>
+                                </div>
+
+                                <div className="flex items-center justify-between">
+                                  <div className="flex items-center gap-1 text-white font-medium">
+                                    <DollarSign className="h-4 w-4" />
+                                    <span>{purchase.price.toFixed(2)}</span>
+                                  </div>
+                                  <span className="text-gray-400 text-sm">{purchase.metadata?.contentCount || 0}</span>
+                                </div>
+                              </div>
+                            </div>
+                          </motion.div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="space-y-4">
+                        {filteredAndSortedPurchases.map((purchase, index) => (
+                          <motion.div
+                            key={purchase.id}
+                            initial={{ opacity: 0, x: -20 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            transition={{ delay: index * 0.02 }}
+                            className="group"
+                          >
+                            <div className="bg-gray-900/30 backdrop-blur-sm rounded-lg overflow-hidden border border-gray-700/20 hover:border-gray-600/40 transition-all duration-300">
+                              <div className="flex items-center p-6">
+                                {/* List view thumbnail */}
+                                <div className="w-16 h-16 rounded-lg overflow-hidden flex-shrink-0 mr-4 bg-gradient-to-br from-gray-700 to-gray-800">
+                                  {getThumbnailUrl(purchase) ? (
+                                    <img
+                                      src={getThumbnailUrl(purchase) || "/placeholder.svg"}
+                                      alt={purchase.title}
+                                      className="w-full h-full object-cover"
+                                    />
+                                  ) : (
+                                    <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-gray-700 to-gray-800 relative">
+                                      {/* Clean geometric pattern background */}
+                                      <div className="absolute inset-0 opacity-10">
+                                        <div
+                                          className="w-full h-full"
+                                          style={{
+                                            backgroundImage: `radial-gradient(circle at 25% 25%, rgba(59, 130, 246, 0.3) 0%, transparent 50%), 
+                                                           radial-gradient(circle at 75% 75%, rgba(147, 51, 234, 0.3) 0%, transparent 50%)`,
+                                          }}
+                                        />
+                                      </div>
+                                      {/* Clean centered icon */}
+                                      <div className="relative z-10 w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center">
+                                        <div className="text-white text-sm">
+                                          {getContentIcon(
+                                            purchase.type || "product_box",
+                                            purchase.metadata?.contentType,
+                                          )}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  )}
+                                </div>
+
+                                {/* Content */}
+                                <div className="flex-1 min-w-0">
+                                  <div className="flex items-start justify-between">
+                                    <div className="flex-1 min-w-0">
+                                      <h3 className="text-lg font-medium text-white mb-1 truncate">{purchase.title}</h3>
+                                      <p className="text-gray-400 text-sm mb-2">{purchase.creatorUsername}</p>
+                                      <div className="flex items-center gap-4 text-sm text-gray-400">
+                                        <span>{formatDate(purchase.createdAt)}</span>
+                                        <span>{purchase.metadata?.contentCount || 0} items</span>
+                                      </div>
+                                    </div>
+
+                                    {/* Actions */}
+                                    <div className="flex items-center gap-3 ml-6">
+                                      <Button
+                                        onClick={() => toggleFavorite(purchase.id)}
+                                        variant="ghost"
+                                        size="sm"
+                                        className="h-8 w-8 p-0 text-gray-400 hover:text-white"
+                                      >
+                                        <Heart
+                                          className={cn(
+                                            "h-4 w-4 transition-colors",
+                                            purchase.isFavorite ? "fill-red-500 text-red-500" : "text-gray-400",
+                                          )}
+                                        />
+                                      </Button>
+                                      <Button
+                                        onClick={() => handleDownload(purchase)}
+                                        variant="outline"
+                                        size="sm"
+                                        className="border-gray-600 hover:bg-gray-700 bg-transparent text-white h-8 px-3"
+                                      >
+                                        <Download className="h-3 w-3 mr-1" />
+                                        Download
+                                      </Button>
+                                      <Button
+                                        asChild
+                                        size="sm"
+                                        className="bg-gray-700 hover:bg-gray-600 text-white h-8 px-3"
+                                      >
+                                        <Link
+                                          href={
+                                            purchase.type === "bundle"
+                                              ? `/bundles/${purchase.bundleId}`
+                                              : `/product-box/${purchase.productBoxId}/content`
+                                          }
+                                        >
+                                          <Eye className="h-3 w-3 mr-1" />
+                                          View bundle
+                                        </Link>
+                                      </Button>
+                                      <span className="text-lg font-medium text-white ml-2">
+                                        ${purchase.price.toFixed(2)}
+                                      </span>
+                                    </div>
                                   </div>
                                 </div>
                               </div>
                             </div>
-                          </div>
-                        </motion.div>
-                      ))}
-                    </div>
-                  )}
-                </motion.div>
-              )}
-            </AnimatePresence>
+                          </motion.div>
+                        ))}
+                      </div>
+                    )}
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
           </div>
         </div>
       </div>
