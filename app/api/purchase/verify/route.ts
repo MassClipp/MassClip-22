@@ -52,6 +52,8 @@ export async function POST(request: NextRequest) {
         return NextResponse.json(
           {
             error: "Payment session not found. Please check your session ID.",
+            details: "This could mean the session has expired, is invalid, or there's a test/live mode mismatch.",
+            sessionId: sessionId.substring(0, 20) + "...",
           },
           { status: 404 },
         )
@@ -60,6 +62,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         {
           error: `Failed to retrieve payment session: ${stripeError.message}`,
+          type: stripeError.type,
+          code: stripeError.code,
         },
         { status: 500 },
       )
