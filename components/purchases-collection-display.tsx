@@ -5,7 +5,6 @@ import { useFirebaseAuth } from "@/hooks/use-firebase-auth"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Skeleton } from "@/components/ui/skeleton"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Progress } from "@/components/ui/progress"
 import {
@@ -310,36 +309,38 @@ export default function PurchasesCollectionDisplay() {
     return (
       <div className="min-h-screen bg-black text-white">
         <div className="container mx-auto px-4 py-8 max-w-6xl">
-          {/* Header Skeleton */}
-          <div className="mb-8">
-            <Skeleton className="h-12 w-80 mb-4 bg-gray-800/50" />
-            <Skeleton className="h-6 w-64 mb-8 bg-gray-800/50" />
-            <div className="flex gap-4 mb-8">
-              <Skeleton className="h-10 w-24 bg-gray-800/50" />
-              <Skeleton className="h-10 w-24 bg-gray-800/50" />
-              <Skeleton className="h-10 w-24 bg-gray-800/50" />
-              <Skeleton className="h-10 w-24 bg-gray-800/50" />
-            </div>
-            <div className="flex gap-4">
-              <Skeleton className="h-12 flex-1 bg-gray-800/50" />
-              <Skeleton className="h-12 w-40 bg-gray-800/50" />
-              <Skeleton className="h-12 w-40 bg-gray-800/50" />
-            </div>
-          </div>
-
-          {/* Content Skeleton */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-            {[...Array(8)].map((_, i) => (
-              <div key={i} className="bg-gray-800/30 rounded-lg overflow-hidden border border-gray-700/20">
-                <Skeleton className="h-48 w-full bg-gray-700/50" />
-                <div className="p-4">
-                  <Skeleton className="h-5 w-full mb-2 bg-gray-700/50" />
-                  <Skeleton className="h-4 w-20 mb-3 bg-gray-700/50" />
-                  <Skeleton className="h-4 w-24 mb-2 bg-gray-700/50" />
-                  <Skeleton className="h-4 w-16 bg-gray-700/50" />
-                </div>
+          <div className="animate-pulse">
+            {/* Header Skeleton */}
+            <div className="mb-8">
+              <div className="h-12 w-80 mb-4 bg-gray-800/50 rounded"></div>
+              <div className="h-6 w-64 mb-8 bg-gray-800/50 rounded"></div>
+              <div className="flex gap-4 mb-8">
+                <div className="h-10 w-24 bg-gray-800/50 rounded"></div>
+                <div className="h-10 w-24 bg-gray-800/50 rounded"></div>
+                <div className="h-10 w-24 bg-gray-800/50 rounded"></div>
+                <div className="h-10 w-24 bg-gray-800/50 rounded"></div>
               </div>
-            ))}
+              <div className="flex gap-4">
+                <div className="h-12 flex-1 bg-gray-800/30 rounded-lg overflow-hidden border border-gray-700/20"></div>
+                <div className="h-12 w-40 bg-gray-800/30 rounded-lg overflow-hidden border border-gray-700/20"></div>
+                <div className="h-12 w-40 bg-gray-800/30 rounded-lg overflow-hidden border border-gray-700/20"></div>
+              </div>
+            </div>
+
+            {/* Content Skeleton */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+              {[...Array(8)].map((_, i) => (
+                <div key={i} className="bg-gray-800/30 rounded-lg overflow-hidden border border-gray-700/20">
+                  <div className="h-48 w-full bg-gray-700/50 rounded"></div>
+                  <div className="p-4">
+                    <div className="h-5 w-full mb-2 bg-gray-700/50 rounded"></div>
+                    <div className="h-4 w-20 mb-3 bg-gray-700/50 rounded"></div>
+                    <div className="h-4 w-24 mb-2 bg-gray-700/50 rounded"></div>
+                    <div className="h-4 w-16 bg-gray-700/50 rounded"></div>
+                  </div>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       </div>
@@ -430,7 +431,7 @@ export default function PurchasesCollectionDisplay() {
                   "h-10 w-10 p-0",
                   viewMode === "grid"
                     ? "bg-gray-700 text-white hover:bg-gray-600"
-                    : "text-gray-400 hover:text-white hover:bg-gray-800",
+                    : "text-gray-400 hover:text-white hover:bg-gray-800/50",
                 )}
               >
                 <Grid3X3 className="h-4 w-4" />
@@ -443,7 +444,7 @@ export default function PurchasesCollectionDisplay() {
                   "h-10 w-10 p-0",
                   viewMode === "list"
                     ? "bg-gray-700 text-white hover:bg-gray-600"
-                    : "text-gray-400 hover:text-white hover:bg-gray-800",
+                    : "text-gray-400 hover:text-white hover:bg-gray-800/50",
                 )}
               >
                 <List className="h-4 w-4" />
@@ -512,7 +513,7 @@ export default function PurchasesCollectionDisplay() {
                 <SelectItem value="bundle">Bundles</SelectItem>
               </SelectContent>
             </Select>
-          </div>
+          </motion.div>
         </motion.div>
 
         {/* Content Section */}
