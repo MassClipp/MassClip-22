@@ -105,13 +105,21 @@ export default function PurchasesPage() {
       })
 
       if (!response.ok) {
+        if (response.status === 404) {
+          // No purchases found - this is normal for new users
+          setPurchases([])
+          return
+        }
         throw new Error(`Failed to fetch purchases: ${response.status}`)
       }
 
       const data = await response.json()
 
+      // Handle case where API returns success but no purchases
+      const purchasesArray = data.purchases || []
+
       // Enhanced purchase normalization with additional fields
-      const normalizedPurchases = (data.purchases || []).map((purchase: any) => ({
+      const normalizedPurchases = purchasesArray.map((purchase: any) => ({
         id: purchase.id || "",
         title: purchase.title || purchase.metadata?.title || "Untitled Purchase",
         description: purchase.description || purchase.metadata?.description || "",
@@ -142,6 +150,7 @@ export default function PurchasesPage() {
       }))
 
       setPurchases(normalizedPurchases)
+      console.log(`✅ [Purchases] Loaded ${normalizedPurchases.length} purchases`)
     } catch (err) {
       console.error("Error fetching purchases:", err)
       setError(err instanceof Error ? err.message : "Failed to fetch purchases")
@@ -483,14 +492,18 @@ export default function PurchasesPage() {
                             ? "No favorites yet"
                             : activeTab === "recent"
                               ? "No recent activity"
-                              : "Your collection awaits"}
+                              : purchases.length === 0
+                                ? "No purchases yet"
+                                : "Your collection awaits"}
                       </h3>
                       <p className="text-gray-400 mb-8 text-base">
                         {searchQuery
                           ? "Try adjusting your search or filters to discover your content."
-                          : "Start building your premium content library with exclusive downloads and bundles."}
+                          : purchases.length === 0
+                            ? "Start building your premium content library with exclusive downloads and bundles."
+                            : "Start exploring your content with the filters above."}
                       </p>
-                      {!searchQuery && (
+                      {!searchQuery && purchases.length === 0 && (
                         <Button asChild className="bg-red-600 hover:bg-red-700 h-12 px-6">
                           <Link href="/dashboard/explore">
                             <ExternalLink className="h-4 w-4 mr-2" />

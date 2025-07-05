@@ -6,41 +6,6 @@ import { stripe } from "@/lib/stripe"
 export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
   try {
     console.log(`🔍 [Checkout API] Starting checkout for bundle: ${params.id}`)
-    console.log(`🔍 [Checkout API] Environment: ${process.env.VERCEL_ENV || "development"}`)
-
-    // Log Stripe configuration
-    const stripeKey = process.env.STRIPE_SECRET_KEY
-    const stripeTestKey = process.env.STRIPE_SECRET_KEY_TEST
-    const vercelEnv = process.env.VERCEL_ENV || "development"
-    const isProduction = vercelEnv === "production"
-    const activeKey = isProduction ? stripeKey : stripeTestKey || stripeKey
-
-    console.log(`🔍 [Checkout API] Stripe config:`, {
-      hasMainKey: !!stripeKey,
-      hasTestKey: !!stripeTestKey,
-      activeKeyType: activeKey?.startsWith("sk_live_") ? "live" : "test",
-      keySource: isProduction
-        ? "STRIPE_SECRET_KEY"
-        : stripeTestKey
-          ? "STRIPE_SECRET_KEY_TEST"
-          : "STRIPE_SECRET_KEY (fallback)",
-    })
-
-    // Test Stripe connection early
-    try {
-      await stripe.accounts.list({ limit: 1 })
-      console.log(`✅ [Checkout API] Stripe connection verified`)
-    } catch (stripeTestError: any) {
-      console.error(`❌ [Checkout API] Stripe connection failed:`, stripeTestError)
-      return NextResponse.json(
-        {
-          error: "Stripe configuration error",
-          code: "STRIPE_CONNECTION_FAILED",
-          details: stripeTestError.message,
-        },
-        { status: 500 },
-      )
-    }
 
     // Verify authentication
     const decodedToken = await verifyIdToken(request)
@@ -58,7 +23,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     const userId = decodedToken.uid
     console.log(`✅ [Checkout API] User authenticated: ${userId}`)
 
-    // Parse request body with error handling
+    // Parse request body
     let body
     try {
       body = await request.json()
@@ -75,19 +40,12 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
 
     const { successUrl, cancelUrl } = body
 
-    console.log(`📦 [Checkout API] Request data:`, {
-      bundleId: params.id,
-      successUrl,
-      cancelUrl,
-      userId,
-    })
-
-    // Get bundle data - try both collections
-    let bundleDoc = await db.collection("bundles").doc(params.id).get()
+    // Get bundle data - try productBoxes collection first
+    let bundleDoc = await db.collection("productBoxes").doc(params.id).get()
 
     if (!bundleDoc.exists) {
-      // Fallback to productBoxes collection
-      bundleDoc = await db.collection("productBoxes").doc(params.id).get()
+      // Fallback to bundles collection
+      bundleDoc = await db.collection("bundles").doc(params.id).get()
     }
 
     if (!bundleDoc.exists) {
@@ -106,8 +64,6 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       title: bundleData?.title,
       price: bundleData?.price,
       creatorId: bundleData?.creatorId,
-      priceId: bundleData?.priceId,
-      productId: bundleData?.productId,
     })
 
     // Validate bundle data
@@ -149,8 +105,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     const creatorData = creatorDoc.data()
     console.log(`✅ [Checkout API] Creator found:`, {
       username: creatorData?.username,
-      stripeAccountId: creatorData?.stripeAccountId ? "present" : "missing",
-      stripeOnboardingComplete: creatorData?.stripeOnboardingComplete,
+      hasStripeAccount: !!creatorData?.stripeAccountId,
     })
 
     // Check if creator has Stripe account
@@ -165,79 +120,6 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       )
     }
 
-    // Check if we have a Stripe price ID
-    let priceId = bundleData.priceId
-
-    if (!priceId) {
-      console.log(`⚠️ [Checkout API] No price ID found, creating new Stripe price`)
-
-      try {
-        // Create Stripe product if it doesn't exist
-        let productId = bundleData.productId
-
-        if (!productId) {
-          const stripeProduct = await stripe.products.create(
-            {
-              name: bundleData.title,
-              description: bundleData.description || `Premium content by ${creatorData.username}`,
-              metadata: {
-                bundleId: params.id,
-                creatorId: bundleData.creatorId,
-              },
-            },
-            {
-              stripeAccount: creatorData.stripeAccountId,
-            },
-          )
-          productId = stripeProduct.id
-
-          // Update bundle with product ID
-          await bundleDoc.ref.update({
-            productId,
-            updatedAt: new Date(),
-          })
-
-          console.log(`✅ [Checkout API] Created Stripe product: ${productId}`)
-        }
-
-        // Create Stripe price
-        const stripePrice = await stripe.prices.create(
-          {
-            unit_amount: Math.round(bundleData.price * 100), // Convert to cents
-            currency: bundleData.currency || "usd",
-            product: productId,
-            metadata: {
-              bundleId: params.id,
-              creatorId: bundleData.creatorId,
-            },
-          },
-          {
-            stripeAccount: creatorData.stripeAccountId,
-          },
-        )
-
-        priceId = stripePrice.id
-
-        // Update bundle with price ID
-        await bundleDoc.ref.update({
-          priceId,
-          updatedAt: new Date(),
-        })
-
-        console.log(`✅ [Checkout API] Created Stripe price: ${priceId}`)
-      } catch (stripeError) {
-        console.error(`❌ [Checkout API] Failed to create Stripe price:`, stripeError)
-        return NextResponse.json(
-          {
-            error: "Failed to setup payment processing",
-            code: "STRIPE_SETUP_FAILED",
-            details: stripeError instanceof Error ? stripeError.message : "Unknown error",
-          },
-          { status: 500 },
-        )
-      }
-    }
-
     // Create Stripe checkout session
     try {
       console.log(`🔄 [Checkout API] Creating Stripe checkout session`)
@@ -247,7 +129,18 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
           payment_method_types: ["card"],
           line_items: [
             {
-              price: priceId,
+              price_data: {
+                currency: bundleData.currency || "usd",
+                product_data: {
+                  name: bundleData.title,
+                  description: bundleData.description || `Premium content by ${creatorData.username}`,
+                  metadata: {
+                    bundleId: params.id,
+                    creatorId: bundleData.creatorId,
+                  },
+                },
+                unit_amount: Math.round(bundleData.price * 100), // Convert to cents
+              },
               quantity: 1,
             },
           ],
@@ -303,24 +196,24 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
           username: creatorData.username,
         },
       })
-    } catch (stripeError) {
+    } catch (stripeError: any) {
       console.error(`❌ [Checkout API] Stripe checkout session creation failed:`, stripeError)
       return NextResponse.json(
         {
           error: "Failed to create checkout session",
           code: "CHECKOUT_CREATION_FAILED",
-          details: stripeError instanceof Error ? stripeError.message : "Unknown error",
+          details: stripeError.message || "Unknown error",
         },
         { status: 500 },
       )
     }
-  } catch (error) {
+  } catch (error: any) {
     console.error(`❌ [Checkout API] Unexpected error:`, error)
     return NextResponse.json(
       {
         error: "Internal server error",
         code: "INTERNAL_ERROR",
-        details: error instanceof Error ? error.message : "Unknown error",
+        details: error.message || "Unknown error",
       },
       { status: 500 },
     )
@@ -344,10 +237,10 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
     }
 
     // Get bundle data
-    let bundleDoc = await db.collection("bundles").doc(params.id).get()
+    let bundleDoc = await db.collection("productBoxes").doc(params.id).get()
 
     if (!bundleDoc.exists) {
-      bundleDoc = await db.collection("productBoxes").doc(params.id).get()
+      bundleDoc = await db.collection("bundles").doc(params.id).get()
     }
 
     if (!bundleDoc.exists) {
@@ -375,7 +268,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
         hasStripeIntegration: !!(bundleData?.priceId && bundleData?.productId),
       },
     })
-  } catch (error) {
+  } catch (error: any) {
     console.error(`❌ [Checkout API] GET error:`, error)
     return NextResponse.json(
       {
