@@ -3,9 +3,10 @@
 import { useEffect, useState } from "react"
 import { useSearchParams } from "next/navigation"
 import { useAuth } from "@/contexts/auth-context"
-import { CheckCircle, Loader2, AlertCircle, ArrowRight, Download, RefreshCw, Bug } from "lucide-react"
+import { CheckCircle, Loader2, AlertCircle, ArrowRight, Download, RefreshCw, Bug, Copy } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { useToast } from "@/hooks/use-toast"
 import Link from "next/link"
 
 interface PurchaseDetails {
@@ -21,14 +22,22 @@ interface PurchaseDetails {
   status: string
 }
 
+interface DebugInfo {
+  session?: any
+  error?: string
+  environment?: any
+}
+
 export default function PurchaseSuccessPage() {
   const { user, loading: authLoading } = useAuth()
   const searchParams = useSearchParams()
+  const { toast } = useToast()
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [debugInfo, setDebugInfo] = useState<string | null>(null)
+  const [debugInfo, setDebugInfo] = useState<DebugInfo | null>(null)
   const [purchaseDetails, setPurchaseDetails] = useState<PurchaseDetails | null>(null)
   const [retryCount, setRetryCount] = useState(0)
+  const [showDebug, setShowDebug] = useState(false)
 
   const sessionId = searchParams.get("session_id")
 
@@ -36,6 +45,7 @@ export default function PurchaseSuccessPage() {
     if (!sessionId) return
 
     try {
+      console.log("🔍 [Debug] Fetching session debug info...")
       const response = await fetch("/api/debug/stripe-session", {
         method: "POST",
         headers: {
@@ -44,12 +54,18 @@ export default function PurchaseSuccessPage() {
         body: JSON.stringify({ sessionId }),
       })
 
+      const data = await response.json()
+
       if (response.ok) {
-        const data = await response.json()
-        setDebugInfo(JSON.stringify(data.session, null, 2))
+        console.log("✅ [Debug] Session debug info retrieved:", data)
+        setDebugInfo(data)
+      } else {
+        console.error("❌ [Debug] Session debug failed:", data)
+        setDebugInfo({ error: data.error || "Debug failed" })
       }
     } catch (error) {
-      console.error("Debug session failed:", error)
+      console.error("❌ [Debug] Debug session failed:", error)
+      setDebugInfo({ error: "Failed to fetch debug info" })
     }
   }
 
@@ -66,7 +82,11 @@ export default function PurchaseSuccessPage() {
     }
 
     try {
-      console.log("🔍 [Purchase Success] Verifying purchase:", { sessionId, attempt: retryCount + 1 })
+      console.log("🔍 [Purchase Success] Verifying purchase:", {
+        sessionId: sessionId.substring(0, 20) + "...",
+        attempt: retryCount + 1,
+        userId: user.uid,
+      })
 
       const idToken = await user.getIdToken()
 
@@ -74,6 +94,7 @@ export default function PurchaseSuccessPage() {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          Authorization: `Bearer ${idToken}`,
         },
         body: JSON.stringify({
           sessionId,
@@ -87,10 +108,8 @@ export default function PurchaseSuccessPage() {
         const errorData = await response.json().catch(() => ({ error: "Verification failed" }))
         console.error("❌ [Purchase Success] Error response:", errorData)
 
-        // If it's a metadata issue, try to debug the session
-        if (errorData.error?.includes("metadata") || errorData.error?.includes("Product information")) {
-          await debugSession()
-        }
+        // Automatically fetch debug info on error
+        await debugSession()
 
         throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`)
       }
@@ -100,9 +119,23 @@ export default function PurchaseSuccessPage() {
 
       setPurchaseDetails(data.purchase)
       setError(null)
+
+      // Show success toast
+      toast({
+        title: "Purchase Verified!",
+        description: "Your payment has been confirmed and content is now available.",
+      })
     } catch (error) {
       console.error("❌ [Purchase Success] Error:", error)
-      setError(error instanceof Error ? error.message : "Failed to verify purchase")
+      const errorMessage = error instanceof Error ? error.message : "Failed to verify purchase"
+      setError(errorMessage)
+
+      // Show error toast
+      toast({
+        title: "Verification Failed",
+        description: errorMessage,
+        variant: "destructive",
+      })
     } finally {
       setLoading(false)
     }
@@ -124,6 +157,26 @@ export default function PurchaseSuccessPage() {
     setRetryCount((prev) => prev + 1)
   }
 
+  const copySessionId = () => {
+    if (sessionId) {
+      navigator.clipboard.writeText(sessionId)
+      toast({
+        title: "Copied!",
+        description: "Session ID copied to clipboard",
+      })
+    }
+  }
+
+  const copyDebugInfo = () => {
+    if (debugInfo) {
+      navigator.clipboard.writeText(JSON.stringify(debugInfo, null, 2))
+      toast({
+        title: "Copied!",
+        description: "Debug info copied to clipboard",
+      })
+    }
+  }
+
   if (authLoading || (loading && !purchaseDetails)) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-black via-gray-900 to-gray-800 flex items-center justify-center">
@@ -134,6 +187,9 @@ export default function PurchaseSuccessPage() {
           </h2>
           <p className="text-gray-400">Please wait while we confirm your payment</p>
           {retryCount > 0 && <p className="text-gray-500 text-sm mt-2">Attempt {retryCount + 1}</p>}
+          {sessionId && (
+            <p className="text-gray-600 text-xs mt-2 font-mono">Session: {sessionId.substring(0, 20)}...</p>
+          )}
         </div>
       </div>
     )
@@ -142,13 +198,13 @@ export default function PurchaseSuccessPage() {
   if (error) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-black via-gray-900 to-gray-800 flex items-center justify-center p-4">
-        <Card className="w-full max-w-2xl bg-gray-800/30 border-gray-700/50 backdrop-blur-sm">
+        <Card className="w-full max-w-3xl bg-gray-800/30 border-gray-700/50 backdrop-blur-sm">
           <CardHeader className="text-center">
             <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gradient-to-br from-red-500/20 to-red-600/20 flex items-center justify-center border border-red-500/30">
               <AlertCircle className="h-8 w-8 text-red-400" />
             </div>
             <CardTitle className="text-white text-2xl">Purchase Verification Failed</CardTitle>
-            <CardDescription className="text-gray-400 text-lg">Failed to retrieve payment session</CardDescription>
+            <CardDescription className="text-gray-400 text-lg">{error}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
             <div className="text-center">
@@ -156,19 +212,36 @@ export default function PurchaseSuccessPage() {
                 Don't worry! Your payment was likely successful. You can try verifying again or check your purchases.
               </p>
               {sessionId && (
-                <div className="bg-gray-800/50 rounded-lg p-3 mb-4">
-                  <p className="text-gray-500 text-xs font-mono">Session: {sessionId.substring(0, 20)}...</p>
+                <div className="bg-gray-800/50 rounded-lg p-3 mb-4 flex items-center justify-between">
+                  <p className="text-gray-500 text-xs font-mono">Session: {sessionId.substring(0, 30)}...</p>
+                  <Button onClick={copySessionId} size="sm" variant="ghost" className="h-6 w-6 p-0">
+                    <Copy className="h-3 w-3" />
+                  </Button>
                 </div>
               )}
             </div>
 
             {debugInfo && (
               <div className="bg-gray-800/50 rounded-lg p-4 border border-gray-700/50">
-                <div className="flex items-center gap-2 mb-2">
-                  <Bug className="h-4 w-4 text-amber-400" />
-                  <span className="text-amber-400 text-sm font-medium">Debug Information</span>
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <Bug className="h-4 w-4 text-amber-400" />
+                    <span className="text-amber-400 text-sm font-medium">Debug Information</span>
+                  </div>
+                  <div className="flex gap-2">
+                    <Button onClick={() => setShowDebug(!showDebug)} size="sm" variant="ghost" className="text-xs">
+                      {showDebug ? "Hide" : "Show"}
+                    </Button>
+                    <Button onClick={copyDebugInfo} size="sm" variant="ghost" className="h-6 w-6 p-0">
+                      <Copy className="h-3 w-3" />
+                    </Button>
+                  </div>
                 </div>
-                <pre className="text-xs text-gray-300 overflow-auto max-h-40">{debugInfo}</pre>
+                {showDebug && (
+                  <pre className="text-xs text-gray-300 overflow-auto max-h-60 bg-gray-900/50 p-3 rounded">
+                    {JSON.stringify(debugInfo, null, 2)}
+                  </pre>
+                )}
               </div>
             )}
 
@@ -180,6 +253,14 @@ export default function PurchaseSuccessPage() {
               >
                 <RefreshCw className="h-4 w-4 mr-2" />
                 Try Again
+              </Button>
+              <Button
+                onClick={debugSession}
+                className="w-full bg-amber-600 hover:bg-amber-700 text-black"
+                variant="outline"
+              >
+                <Bug className="h-4 w-4 mr-2" />
+                Debug Session
               </Button>
               <Button
                 asChild
