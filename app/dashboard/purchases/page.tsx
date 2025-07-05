@@ -182,9 +182,9 @@ export default function PurchasesPage() {
 
   if (authLoading || loading) {
     return (
-      <div className="min-h-screen bg-black text-white">
-        <div className="w-full h-full pt-20">
-          <div className="px-6 py-8">
+      <div className="fixed inset-0 bg-black text-white overflow-hidden">
+        <div className="absolute inset-0 pt-16">
+          <div className="h-full w-full px-6 py-8 overflow-y-auto">
             <div className="mb-8">
               <Skeleton className="h-12 w-64 mb-6 bg-zinc-800" />
               <div className="flex gap-8 mb-8">
@@ -194,13 +194,15 @@ export default function PurchasesPage() {
             </div>
             <div className="space-y-4">
               {[...Array(3)].map((_, i) => (
-                <div key={i} className="flex items-center gap-6 p-6 bg-zinc-900/50 rounded-xl border border-zinc-800">
-                  <Skeleton className="h-20 w-20 rounded-xl bg-zinc-800" />
-                  <div className="flex-1">
+                <div key={i} className="flex items-center gap-0 bg-zinc-900/50 rounded-none border-0">
+                  <Skeleton className="h-24 w-24 bg-zinc-800 rounded-none" />
+                  <div className="flex-1 px-6 py-6">
                     <Skeleton className="h-6 w-48 mb-2 bg-zinc-800" />
                     <Skeleton className="h-4 w-32 bg-zinc-800" />
                   </div>
-                  <Skeleton className="h-10 w-24 bg-zinc-800" />
+                  <div className="px-6">
+                    <Skeleton className="h-10 w-24 bg-zinc-800" />
+                  </div>
                 </div>
               ))}
             </div>
@@ -212,9 +214,9 @@ export default function PurchasesPage() {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-black text-white">
-        <div className="w-full h-full pt-20">
-          <div className="px-6 py-8">
+      <div className="fixed inset-0 bg-black text-white overflow-hidden">
+        <div className="absolute inset-0 pt-16">
+          <div className="h-full w-full px-6 py-8 overflow-y-auto">
             <Alert variant="destructive" className="bg-red-900/20 border-red-800">
               <AlertCircle className="h-4 w-4" />
               <AlertDescription>{error}</AlertDescription>
@@ -229,14 +231,14 @@ export default function PurchasesPage() {
   }
 
   return (
-    <div className="min-h-screen bg-black text-white">
-      <div className="w-full h-full pt-20">
-        <div className="px-6 py-8">
-          {/* Header */}
-          <div className="mb-8">
+    <div className="fixed inset-0 bg-black text-white overflow-hidden">
+      <div className="absolute inset-0 pt-16">
+        <div className="h-full w-full overflow-y-auto">
+          {/* Header Section - Full Width */}
+          <div className="w-full px-6 py-8 border-b border-zinc-800/50">
             <h1 className="text-4xl font-bold mb-8 text-white">My Purchases</h1>
 
-            {/* Tabs */}
+            {/* Tabs - Full Width */}
             <div className="flex gap-8 mb-8 border-b border-zinc-800">
               <button
                 onClick={() => setActiveTab("downloads")}
@@ -260,161 +262,164 @@ export default function PurchasesPage() {
               </button>
             </div>
 
-            {/* Search */}
-            <div className="relative mb-8">
+            {/* Search - Full Width */}
+            <div className="relative">
               <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-zinc-400 h-5 w-5" />
               <Input
                 placeholder="Search your purchases..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-12 bg-zinc-900/50 border-zinc-700 text-white placeholder:text-zinc-500 h-14 text-lg rounded-xl focus:border-zinc-600 focus:ring-1 focus:ring-zinc-600"
+                className="pl-12 bg-zinc-900/50 border-zinc-700 text-white placeholder:text-zinc-500 h-14 text-lg rounded-xl focus:border-zinc-600 focus:ring-1 focus:ring-zinc-600 w-full"
               />
             </div>
           </div>
 
-          {/* Content */}
-          <AnimatePresence mode="wait">
-            {filteredPurchases.length === 0 ? (
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -20 }}
-                className="text-center py-20"
-              >
-                <div className="max-w-md mx-auto">
-                  <div className="w-24 h-24 mx-auto mb-6 bg-zinc-900/50 rounded-full flex items-center justify-center border border-zinc-800">
-                    <Package className="h-12 w-12 text-zinc-600" />
+          {/* Content Section - Full Width, No Padding */}
+          <div className="w-full">
+            <AnimatePresence mode="wait">
+              {filteredPurchases.length === 0 ? (
+                <motion.div
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -20 }}
+                  className="flex items-center justify-center h-96 px-6"
+                >
+                  <div className="max-w-md mx-auto text-center">
+                    <div className="w-24 h-24 mx-auto mb-6 bg-zinc-900/50 rounded-full flex items-center justify-center border border-zinc-800">
+                      <Package className="h-12 w-12 text-zinc-600" />
+                    </div>
+                    <h3 className="text-2xl font-semibold mb-4 text-white">
+                      {searchQuery
+                        ? "No purchases match your search"
+                        : activeTab === "downloads"
+                          ? "No downloads yet"
+                          : "No orders yet"}
+                    </h3>
+                    <p className="text-zinc-400 mb-8 text-lg">
+                      {searchQuery
+                        ? "Try adjusting your search to find what you're looking for."
+                        : "Start exploring premium content to build your collection."}
+                    </p>
+                    {!searchQuery && (
+                      <Button asChild className="bg-red-600 hover:bg-red-700 h-12 px-8 text-lg">
+                        <Link href="/dashboard/explore">
+                          <ExternalLink className="h-5 w-5 mr-2" />
+                          Explore Content
+                        </Link>
+                      </Button>
+                    )}
                   </div>
-                  <h3 className="text-2xl font-semibold mb-4 text-white">
-                    {searchQuery
-                      ? "No purchases match your search"
-                      : activeTab === "downloads"
-                        ? "No downloads yet"
-                        : "No orders yet"}
-                  </h3>
-                  <p className="text-zinc-400 mb-8 text-lg">
-                    {searchQuery
-                      ? "Try adjusting your search to find what you're looking for."
-                      : "Start exploring premium content to build your collection."}
-                  </p>
-                  {!searchQuery && (
-                    <Button asChild className="bg-red-600 hover:bg-red-700 h-12 px-8 text-lg">
-                      <Link href="/dashboard/explore">
-                        <ExternalLink className="h-5 w-5 mr-2" />
-                        Explore Content
-                      </Link>
-                    </Button>
-                  )}
-                </div>
-              </motion.div>
-            ) : (
-              <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="space-y-4">
-                {filteredPurchases.map((purchase, index) => (
-                  <motion.div
-                    key={purchase.id}
-                    initial={{ opacity: 0, y: 20 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: index * 0.05 }}
-                  >
-                    <Card className="bg-zinc-900/50 border-zinc-800 hover:border-zinc-700 hover:bg-zinc-900/70 transition-all duration-300 overflow-hidden rounded-xl">
-                      <CardContent className="p-0">
-                        <div className="flex items-center gap-0">
-                          {/* Enhanced Thumbnail - No padding/margin */}
-                          <div className="w-24 h-24 bg-zinc-800 flex items-center justify-center flex-shrink-0 overflow-hidden">
-                            {getThumbnailUrl(purchase) ? (
-                              <img
-                                src={getThumbnailUrl(purchase) || "/placeholder.svg"}
-                                alt={purchase.title}
-                                className="w-full h-full object-cover"
-                                onError={(e) => {
-                                  // Fallback to icon if image fails to load
-                                  const target = e.target as HTMLImageElement
-                                  target.style.display = "none"
-                                  const parent = target.parentElement
-                                  if (parent) {
-                                    const iconDiv = document.createElement("div")
-                                    iconDiv.className =
-                                      "w-full h-full flex items-center justify-center bg-gradient-to-br from-zinc-700 to-zinc-800"
-                                    iconDiv.innerHTML = `<svg class="h-6 w-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>`
-                                    parent.appendChild(iconDiv)
-                                  }
-                                }}
-                              />
-                            ) : (
-                              <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-zinc-700 to-zinc-800">
-                                {getContentIcon(purchase.type || "product_box")}
-                              </div>
-                            )}
-                          </div>
+                </motion.div>
+              ) : (
+                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="w-full">
+                  {filteredPurchases.map((purchase, index) => (
+                    <motion.div
+                      key={purchase.id}
+                      initial={{ opacity: 0, y: 20 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: index * 0.02 }}
+                      className="w-full"
+                    >
+                      <Card className="bg-zinc-900/30 border-0 border-b border-zinc-800/50 hover:bg-zinc-900/50 transition-all duration-300 rounded-none shadow-none">
+                        <CardContent className="p-0">
+                          <div className="flex items-center w-full">
+                            {/* Thumbnail - No padding, edge-to-edge */}
+                            <div className="w-24 h-24 bg-zinc-800 flex items-center justify-center flex-shrink-0 overflow-hidden">
+                              {getThumbnailUrl(purchase) ? (
+                                <img
+                                  src={getThumbnailUrl(purchase) || "/placeholder.svg"}
+                                  alt={purchase.title}
+                                  className="w-full h-full object-cover"
+                                  onError={(e) => {
+                                    // Fallback to icon if image fails to load
+                                    const target = e.target as HTMLImageElement
+                                    target.style.display = "none"
+                                    const parent = target.parentElement
+                                    if (parent) {
+                                      const iconDiv = document.createElement("div")
+                                      iconDiv.className =
+                                        "w-full h-full flex items-center justify-center bg-gradient-to-br from-zinc-700 to-zinc-800"
+                                      iconDiv.innerHTML = `<svg class="h-6 w-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>`
+                                      parent.appendChild(iconDiv)
+                                    }
+                                  }}
+                                />
+                              ) : (
+                                <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-zinc-700 to-zinc-800">
+                                  {getContentIcon(purchase.type || "product_box")}
+                                </div>
+                              )}
+                            </div>
 
-                          {/* Content - Proper padding only on content area */}
-                          <div className="flex-1 min-w-0 px-6 py-6">
-                            <div className="flex items-center justify-between">
-                              <div className="flex-1 min-w-0">
-                                <h3 className="text-xl font-semibold text-white mb-1 truncate">{purchase.title}</h3>
-                                <p className="text-zinc-400 text-sm mb-1">{purchase.creatorUsername}</p>
-                                {purchase.metadata?.contentCount !== undefined && (
-                                  <p className="text-zinc-500 text-xs">
-                                    {purchase.metadata.contentCount} item
-                                    {purchase.metadata.contentCount !== 1 ? "s" : ""}
-                                  </p>
-                                )}
-                              </div>
+                            {/* Content - Proper spacing only for text content */}
+                            <div className="flex-1 min-w-0 px-6 py-6">
+                              <div className="flex items-center justify-between w-full">
+                                <div className="flex-1 min-w-0">
+                                  <h3 className="text-xl font-semibold text-white mb-1 truncate">{purchase.title}</h3>
+                                  <p className="text-zinc-400 text-sm mb-1">{purchase.creatorUsername}</p>
+                                  {purchase.metadata?.contentCount !== undefined && (
+                                    <p className="text-zinc-500 text-xs">
+                                      {purchase.metadata.contentCount} item
+                                      {purchase.metadata.contentCount !== 1 ? "s" : ""}
+                                    </p>
+                                  )}
+                                </div>
 
-                              {/* Actions */}
-                              <div className="flex items-center gap-3 flex-shrink-0 ml-4">
-                                {purchase.status === "completed" && activeTab === "downloads" && (
-                                  <>
-                                    <Button
-                                      onClick={() => handleDownload(purchase)}
-                                      variant="outline"
-                                      className="border-zinc-700 hover:bg-zinc-800 bg-transparent text-white h-10 px-4"
-                                    >
-                                      <Download className="h-4 w-4 mr-2" />
-                                      Download
-                                    </Button>
-                                    <Button asChild className="bg-zinc-800 hover:bg-zinc-700 text-white h-10 px-4">
-                                      <Link
-                                        href={
-                                          purchase.type === "bundle"
-                                            ? `/bundles/${purchase.bundleId}`
-                                            : `/product-box/${purchase.productBoxId}/content`
+                                {/* Actions */}
+                                <div className="flex items-center gap-3 flex-shrink-0 ml-6">
+                                  {purchase.status === "completed" && activeTab === "downloads" && (
+                                    <>
+                                      <Button
+                                        onClick={() => handleDownload(purchase)}
+                                        variant="outline"
+                                        className="border-zinc-700 hover:bg-zinc-800 bg-transparent text-white h-10 px-4"
+                                      >
+                                        <Download className="h-4 w-4 mr-2" />
+                                        Download
+                                      </Button>
+                                      <Button asChild className="bg-zinc-800 hover:bg-zinc-700 text-white h-10 px-4">
+                                        <Link
+                                          href={
+                                            purchase.type === "bundle"
+                                              ? `/bundles/${purchase.bundleId}`
+                                              : `/product-box/${purchase.productBoxId}/content`
+                                          }
+                                        >
+                                          <Eye className="h-4 w-4 mr-2" />
+                                          View bundle
+                                        </Link>
+                                      </Button>
+                                    </>
+                                  )}
+                                  {activeTab === "orders" && (
+                                    <div className="flex items-center gap-4">
+                                      <Badge
+                                        variant={purchase.status === "completed" ? "default" : "secondary"}
+                                        className={
+                                          purchase.status === "completed"
+                                            ? "bg-green-600 text-white px-3 py-1"
+                                            : "bg-zinc-700 text-zinc-300 px-3 py-1"
                                         }
                                       >
-                                        <Eye className="h-4 w-4 mr-2" />
-                                        View bundle
-                                      </Link>
-                                    </Button>
-                                  </>
-                                )}
-                                {activeTab === "orders" && (
-                                  <div className="flex items-center gap-4">
-                                    <Badge
-                                      variant={purchase.status === "completed" ? "default" : "secondary"}
-                                      className={
-                                        purchase.status === "completed"
-                                          ? "bg-green-600 text-white px-3 py-1"
-                                          : "bg-zinc-700 text-zinc-300 px-3 py-1"
-                                      }
-                                    >
-                                      {purchase.status}
-                                    </Badge>
-                                    <span className="text-xl font-semibold text-white">
-                                      ${purchase.price.toFixed(2)}
-                                    </span>
-                                  </div>
-                                )}
+                                        {purchase.status}
+                                      </Badge>
+                                      <span className="text-xl font-semibold text-white">
+                                        ${purchase.price.toFixed(2)}
+                                      </span>
+                                    </div>
+                                  )}
+                                </div>
                               </div>
                             </div>
                           </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  </motion.div>
-                ))}
-              </motion.div>
-            )}
-          </AnimatePresence>
+                        </CardContent>
+                      </Card>
+                    </motion.div>
+                  ))}
+                </motion.div>
+              )}
+            </AnimatePresence>
+          </div>
         </div>
       </div>
     </div>
