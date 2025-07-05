@@ -1,98 +1,91 @@
 import { NextResponse } from "next/server"
-
-function getStripeKey(): { key: string; source: string } {
-  const vercelEnv = process.env.VERCEL_ENV || "development"
-  const isProduction = vercelEnv === "production"
-
-  let stripeKey: string | undefined
-  let source: string
-
-  if (isProduction) {
-    stripeKey = process.env.STRIPE_SECRET_KEY
-    source = "STRIPE_SECRET_KEY (production)"
-  } else {
-    if (process.env.STRIPE_SECRET_KEY_TEST) {
-      stripeKey = process.env.STRIPE_SECRET_KEY_TEST
-      source = "STRIPE_SECRET_KEY_TEST (preview/development)"
-    } else {
-      stripeKey = process.env.STRIPE_SECRET_KEY
-      source = "STRIPE_SECRET_KEY (fallback)"
-    }
-  }
-
-  if (!stripeKey) {
-    throw new Error("No Stripe key found")
-  }
-
-  return { key: stripeKey, source }
-}
+import { stripe } from "@/lib/stripe"
 
 export async function GET() {
   try {
+    console.log("🔍 [Stripe Config] Checking Stripe configuration...")
+
+    // Get environment info
     const vercelEnv = process.env.VERCEL_ENV || "development"
     const nodeEnv = process.env.NODE_ENV || "development"
 
-    let stripeKeyExists = false
-    let stripeKeyPrefix = "Not set"
-    let isTestMode = false
-    let isLiveMode = false
-    let keySource = "None"
+    // Check which Stripe key is being used
+    const stripeKey = process.env.STRIPE_SECRET_KEY
+    const stripeTestKey = process.env.STRIPE_SECRET_KEY_TEST
 
-    try {
-      const { key, source } = getStripeKey()
-      stripeKeyExists = true
-      stripeKeyPrefix = key.substring(0, 8)
-      isTestMode = key.startsWith("sk_test_")
-      isLiveMode = key.startsWith("sk_live_")
-      keySource = source
-    } catch (error) {
-      // Key not found, keep defaults
+    let activeKey: string | undefined
+    let keySource: string
+
+    if (vercelEnv === "production") {
+      activeKey = stripeKey
+      keySource = "STRIPE_SECRET_KEY (production)"
+    } else {
+      activeKey = stripeTestKey || stripeKey
+      keySource = stripeTestKey ? "STRIPE_SECRET_KEY_TEST (preview/dev)" : "STRIPE_SECRET_KEY (fallback)"
     }
 
-    // Check available keys
-    const hasMainKey = !!process.env.STRIPE_SECRET_KEY
-    const hasTestKey = !!process.env.STRIPE_SECRET_KEY_TEST
-    const mainKeyPrefix = process.env.STRIPE_SECRET_KEY?.substring(0, 8) || "Not set"
-    const testKeyPrefix = process.env.STRIPE_SECRET_KEY_TEST?.substring(0, 8) || "Not set"
+    if (!activeKey) {
+      return NextResponse.json({
+        success: false,
+        error: "No Stripe key configured",
+        config: {
+          vercelEnv,
+          nodeEnv,
+          hasMainKey: !!stripeKey,
+          hasTestKey: !!stripeTestKey,
+          keySource: "none",
+        },
+      })
+    }
 
-    return NextResponse.json({
-      stripeKeyExists,
-      stripeKeyPrefix,
-      isTestMode,
-      isLiveMode,
+    const keyPrefix = activeKey.substring(0, 7)
+    const isLiveKey = keyPrefix === "sk_live"
+    const isTestKey = keyPrefix === "sk_test"
+
+    // Test the key by making a simple API call
+    let keyValid = false
+    let testError: string | null = null
+
+    try {
+      await stripe.balance.retrieve()
+      keyValid = true
+      console.log("✅ [Stripe Config] Key validation successful")
+    } catch (error: any) {
+      testError = error.message
+      console.error("❌ [Stripe Config] Key validation failed:", error.message)
+    }
+
+    const config = {
+      success: true,
+      keyExists: true,
+      keyValid,
+      keyPrefix,
+      mode: isLiveKey ? "live" : isTestKey ? "test" : "unknown",
       environment: vercelEnv,
-      nodeEnv,
+      nodeEnvironment: nodeEnv,
       keySource,
-      availableKeys: {
-        hasMainKey,
-        hasTestKey,
-        mainKeyPrefix,
-        testKeyPrefix,
+      expectedSessionType: isLiveKey ? "cs_live_..." : "cs_test_...",
+      lastChecked: new Date().toISOString(),
+      testError,
+      environmentVariables: {
+        hasMainKey: !!stripeKey,
+        hasTestKey: !!stripeTestKey,
+        vercelEnv,
+        nodeEnv,
       },
-      recommendations: {
-        currentSetup: stripeKeyExists ? "✅ Key configured" : "❌ No key found",
-        environmentMatch:
-          vercelEnv === "production" && isLiveMode
-            ? "✅ Production using live keys"
-            : vercelEnv !== "production" && isTestMode
-              ? "✅ Preview/Dev using test keys"
-              : "⚠️ Environment/key mismatch detected",
-      },
-      timestamp: new Date().toISOString(),
-    })
-  } catch (error: any) {
-    console.error("Stripe config debug error:", error)
+    }
 
+    console.log("📊 [Stripe Config] Configuration:", config)
+    return NextResponse.json(config)
+  } catch (error: any) {
+    console.error("❌ [Stripe Config] Configuration check failed:", error)
     return NextResponse.json(
       {
-        error: "Failed to check Stripe configuration",
+        success: false,
+        error: "Configuration check failed",
         details: error.message,
-        stripeKeyExists: false,
-        stripeKeyPrefix: "Error",
-        isTestMode: false,
-        isLiveMode: false,
-        environment: process.env.VERCEL_ENV || "development",
-        timestamp: new Date().toISOString(),
+        keyExists: false,
+        keyValid: false,
       },
       { status: 500 },
     )

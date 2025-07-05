@@ -23,8 +23,21 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     const userId = decodedToken.uid
     console.log(`✅ [Checkout API] User authenticated: ${userId}`)
 
-    // Parse request body
-    const body = await request.json()
+    // Parse request body with error handling
+    let body
+    try {
+      body = await request.json()
+    } catch (parseError) {
+      console.error("❌ [Checkout API] Failed to parse request body:", parseError)
+      return NextResponse.json(
+        {
+          error: "Invalid request body",
+          code: "INVALID_REQUEST_BODY",
+        },
+        { status: 400 },
+      )
+    }
+
     const { successUrl, cancelUrl } = body
 
     console.log(`📦 [Checkout API] Request data:`, {
