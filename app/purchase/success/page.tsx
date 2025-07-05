@@ -126,14 +126,14 @@ export default function PurchaseSuccessPage() {
 
   if (authLoading || (loading && !purchaseDetails)) {
     return (
-      <div className="min-h-screen bg-black flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-br from-black via-gray-900 to-gray-800 flex items-center justify-center">
         <div className="text-center">
           <Loader2 className="h-12 w-12 text-amber-500 animate-spin mx-auto mb-4" />
           <h2 className="text-2xl font-light text-white mb-2">
             {authLoading ? "Authenticating..." : "Verifying your purchase..."}
           </h2>
-          <p className="text-zinc-400">Please wait while we confirm your payment</p>
-          {retryCount > 0 && <p className="text-zinc-500 text-sm mt-2">Attempt {retryCount + 1}</p>}
+          <p className="text-gray-400">Please wait while we confirm your payment</p>
+          {retryCount > 0 && <p className="text-gray-500 text-sm mt-2">Attempt {retryCount + 1}</p>}
         </div>
       </div>
     )
@@ -141,39 +141,50 @@ export default function PurchaseSuccessPage() {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-black flex items-center justify-center p-4">
-        <Card className="w-full max-w-2xl bg-zinc-900/90 border-zinc-800">
+      <div className="min-h-screen bg-gradient-to-br from-black via-gray-900 to-gray-800 flex items-center justify-center p-4">
+        <Card className="w-full max-w-2xl bg-gray-800/30 border-gray-700/50 backdrop-blur-sm">
           <CardHeader className="text-center">
-            <AlertCircle className="h-16 w-16 text-red-500 mx-auto mb-4" />
-            <CardTitle className="text-white">Purchase Verification Failed</CardTitle>
-            <CardDescription className="text-zinc-400">{error}</CardDescription>
+            <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gradient-to-br from-red-500/20 to-red-600/20 flex items-center justify-center border border-red-500/30">
+              <AlertCircle className="h-8 w-8 text-red-400" />
+            </div>
+            <CardTitle className="text-white text-2xl">Purchase Verification Failed</CardTitle>
+            <CardDescription className="text-gray-400 text-lg">Failed to retrieve payment session</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="space-y-6">
             <div className="text-center">
-              <p className="text-zinc-400 text-sm mb-4">
+              <p className="text-gray-400 text-sm mb-4">
                 Don't worry! Your payment was likely successful. You can try verifying again or check your purchases.
               </p>
               {sessionId && (
-                <p className="text-zinc-500 text-xs font-mono mb-4">Session: {sessionId.substring(0, 20)}...</p>
+                <div className="bg-gray-800/50 rounded-lg p-3 mb-4">
+                  <p className="text-gray-500 text-xs font-mono">Session: {sessionId.substring(0, 20)}...</p>
+                </div>
               )}
             </div>
 
             {debugInfo && (
-              <div className="bg-zinc-800 rounded-lg p-4">
+              <div className="bg-gray-800/50 rounded-lg p-4 border border-gray-700/50">
                 <div className="flex items-center gap-2 mb-2">
                   <Bug className="h-4 w-4 text-amber-400" />
                   <span className="text-amber-400 text-sm font-medium">Debug Information</span>
                 </div>
-                <pre className="text-xs text-zinc-300 overflow-auto max-h-40">{debugInfo}</pre>
+                <pre className="text-xs text-gray-300 overflow-auto max-h-40">{debugInfo}</pre>
               </div>
             )}
 
-            <div className="flex flex-col gap-2">
-              <Button onClick={handleRetry} className="w-full" variant="outline">
+            <div className="flex flex-col gap-3">
+              <Button
+                onClick={handleRetry}
+                className="w-full bg-gray-700 hover:bg-gray-600 text-white border-gray-600"
+                variant="outline"
+              >
                 <RefreshCw className="h-4 w-4 mr-2" />
                 Try Again
               </Button>
-              <Button asChild className="w-full">
+              <Button
+                asChild
+                className="w-full bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white"
+              >
                 <Link href="/dashboard/purchases">View My Purchases</Link>
               </Button>
             </div>
@@ -184,29 +195,29 @@ export default function PurchaseSuccessPage() {
   }
 
   return (
-    <div className="min-h-screen bg-black flex items-center justify-center p-4">
-      <Card className="w-full max-w-2xl bg-gradient-to-br from-zinc-900/90 to-zinc-950/90 border-zinc-800 shadow-2xl">
+    <div className="min-h-screen bg-gradient-to-br from-black via-gray-900 to-gray-800 flex items-center justify-center p-4">
+      <Card className="w-full max-w-2xl bg-gray-800/30 border-gray-700/50 backdrop-blur-sm shadow-2xl">
         <CardHeader className="text-center pb-6">
-          <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center shadow-lg">
-            <CheckCircle className="h-10 w-10 text-white" />
+          <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-gradient-to-br from-green-500/20 to-emerald-600/20 flex items-center justify-center border border-green-500/30 shadow-lg">
+            <CheckCircle className="h-10 w-10 text-green-400" />
           </div>
           <CardTitle className="text-3xl font-light text-white mb-2">Purchase Successful!</CardTitle>
-          <CardDescription className="text-zinc-400 text-lg">
+          <CardDescription className="text-gray-400 text-lg">
             Thank you for your purchase. You now have access to premium content.
           </CardDescription>
         </CardHeader>
 
         <CardContent className="space-y-6">
           {purchaseDetails && (
-            <div className="bg-zinc-800/50 rounded-lg p-6 space-y-4">
+            <div className="bg-gray-800/30 rounded-lg p-6 space-y-4 border border-gray-700/30">
               <h3 className="text-xl font-medium text-white">Purchase Details</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                 <div>
-                  <span className="text-zinc-400">Product:</span>
+                  <span className="text-gray-400">Product:</span>
                   <p className="text-white font-medium">{purchaseDetails.itemTitle}</p>
                 </div>
                 <div>
-                  <span className="text-zinc-400">Amount:</span>
+                  <span className="text-gray-400">Amount:</span>
                   <p className="text-white font-medium">
                     {new Intl.NumberFormat("en-US", {
                       style: "currency",
@@ -215,11 +226,11 @@ export default function PurchaseSuccessPage() {
                   </p>
                 </div>
                 <div>
-                  <span className="text-zinc-400">Transaction ID:</span>
+                  <span className="text-gray-400">Transaction ID:</span>
                   <p className="text-white font-mono text-xs">{purchaseDetails.sessionId}</p>
                 </div>
                 <div>
-                  <span className="text-zinc-400">Purchase Date:</span>
+                  <span className="text-gray-400">Purchase Date:</span>
                   <p className="text-white font-medium">{new Date(purchaseDetails.purchasedAt).toLocaleDateString()}</p>
                 </div>
               </div>
@@ -229,14 +240,18 @@ export default function PurchaseSuccessPage() {
           <div className="flex flex-col sm:flex-row gap-4">
             <Button
               asChild
-              className="flex-1 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-black"
+              className="flex-1 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-black font-medium"
             >
               <Link href={`/product-box/${purchaseDetails?.productBoxId}/content`}>
                 <Download className="h-4 w-4 mr-2" />
                 Access Content
               </Link>
             </Button>
-            <Button asChild variant="outline" className="flex-1 border-zinc-700 hover:bg-zinc-800">
+            <Button
+              asChild
+              variant="outline"
+              className="flex-1 border-gray-600 hover:bg-gray-700 text-white bg-transparent"
+            >
               <Link href="/dashboard/purchases">
                 <ArrowRight className="h-4 w-4 mr-2" />
                 View All Purchases
@@ -244,8 +259,8 @@ export default function PurchaseSuccessPage() {
             </Button>
           </div>
 
-          <div className="text-center pt-4 border-t border-zinc-800">
-            <p className="text-zinc-400 text-sm">
+          <div className="text-center pt-4 border-t border-gray-700/50">
+            <p className="text-gray-400 text-sm">
               A receipt has been sent to your email address. If you have any issues accessing your content,{" "}
               <Link href="/support" className="text-amber-400 hover:text-amber-300 underline">
                 contact support
