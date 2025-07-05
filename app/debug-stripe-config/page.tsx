@@ -48,6 +48,7 @@ export default function DebugStripeConfigPage() {
   const [debugResult, setDebugResult] = useState<SessionDebugResult | null>(null)
   const [debugLoading, setDebugLoading] = useState(false)
   const [lastChecked, setLastChecked] = useState<string>("")
+  const [environmentInfo, setEnvironmentInfo] = useState<any>(null)
 
   const fetchStripeConfig = async () => {
     try {
@@ -61,6 +62,13 @@ export default function DebugStripeConfigPage() {
       const data = await response.json()
       setConfig(data)
       setLastChecked(new Date().toLocaleString())
+
+      // Also fetch environment-specific info
+      const envResponse = await fetch("/api/debug/environment-info")
+      if (envResponse.ok) {
+        const envData = await envResponse.json()
+        setEnvironmentInfo(envData)
+      }
     } catch (error) {
       console.error("Error fetching Stripe config:", error)
       toast({
@@ -249,6 +257,75 @@ export default function DebugStripeConfigPage() {
                 <AlertCircle className="h-4 w-4" />
                 <AlertTitle>Configuration Error</AlertTitle>
                 <AlertDescription>Failed to load Stripe configuration</AlertDescription>
+              </Alert>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Environment Detection */}
+        <Card className="bg-gray-800/30 border-gray-700/50 backdrop-blur-sm">
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <AlertCircle className="h-5 w-5 text-purple-400" />
+              <CardTitle className="text-white">Environment Detection</CardTitle>
+            </div>
+            <CardDescription>Check if preview vs production environment is causing issues</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {environmentInfo && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-3">
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-400">Current Environment:</span>
+                    <Badge variant={environmentInfo.isProduction ? "default" : "secondary"}>
+                      {environmentInfo.isProduction ? "Production" : "Preview/Development"}
+                    </Badge>
+                  </div>
+
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-400">Vercel Environment:</span>
+                    <span className="text-white">{environmentInfo.vercelEnv || "Not detected"}</span>
+                  </div>
+
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-400">Node Environment:</span>
+                    <span className="text-white">{environmentInfo.nodeEnv}</span>
+                  </div>
+                </div>
+
+                <div className="space-y-3">
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-400">Stripe Webhook URL:</span>
+                    <span className="text-white text-sm truncate">{environmentInfo.webhookUrl}</span>
+                  </div>
+
+                  <div className="flex justify-between items-center">
+                    <span className="text-gray-400">Expected Session Type:</span>
+                    <Badge variant={config?.isLiveMode ? "destructive" : "secondary"}>
+                      {config?.isLiveMode ? "cs_live_..." : "cs_test_..."}
+                    </Badge>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {environmentInfo && !environmentInfo.isProduction && config?.isLiveMode && (
+              <Alert className="border-amber-500/30 bg-amber-500/10">
+                <AlertCircle className="h-4 w-4 text-amber-400" />
+                <AlertTitle className="text-amber-400">Environment Mismatch Detected!</AlertTitle>
+                <AlertDescription className="text-amber-300">
+                  You're using <strong>live Stripe keys</strong> in a <strong>preview environment</strong>. This can
+                  cause session lookup failures if your checkout sessions are being created with test keys.
+                  <br />
+                  <br />
+                  <strong>Recommendations:</strong>
+                  <ul className="list-disc ml-4 mt-2 space-y-1">
+                    <li>Use test keys (sk_test_...) in preview environments</li>
+                    <li>Use live keys (sk_live_...) only in production</li>
+                    <li>Check your Vercel environment variables configuration</li>
+                    <li>Ensure webhook endpoints match your environment</li>
+                  </ul>
+                </AlertDescription>
               </Alert>
             )}
           </CardContent>
