@@ -6,6 +6,41 @@ import { stripe } from "@/lib/stripe"
 export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
   try {
     console.log(`🔍 [Checkout API] Starting checkout for bundle: ${params.id}`)
+    console.log(`🔍 [Checkout API] Environment: ${process.env.VERCEL_ENV || "development"}`)
+
+    // Log Stripe configuration
+    const stripeKey = process.env.STRIPE_SECRET_KEY
+    const stripeTestKey = process.env.STRIPE_SECRET_KEY_TEST
+    const vercelEnv = process.env.VERCEL_ENV || "development"
+    const isProduction = vercelEnv === "production"
+    const activeKey = isProduction ? stripeKey : stripeTestKey || stripeKey
+
+    console.log(`🔍 [Checkout API] Stripe config:`, {
+      hasMainKey: !!stripeKey,
+      hasTestKey: !!stripeTestKey,
+      activeKeyType: activeKey?.startsWith("sk_live_") ? "live" : "test",
+      keySource: isProduction
+        ? "STRIPE_SECRET_KEY"
+        : stripeTestKey
+          ? "STRIPE_SECRET_KEY_TEST"
+          : "STRIPE_SECRET_KEY (fallback)",
+    })
+
+    // Test Stripe connection early
+    try {
+      await stripe.accounts.list({ limit: 1 })
+      console.log(`✅ [Checkout API] Stripe connection verified`)
+    } catch (stripeTestError: any) {
+      console.error(`❌ [Checkout API] Stripe connection failed:`, stripeTestError)
+      return NextResponse.json(
+        {
+          error: "Stripe configuration error",
+          code: "STRIPE_CONNECTION_FAILED",
+          details: stripeTestError.message,
+        },
+        { status: 500 },
+      )
+    }
 
     // Verify authentication
     const decodedToken = await verifyIdToken(request)
