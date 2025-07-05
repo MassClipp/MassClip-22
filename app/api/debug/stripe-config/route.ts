@@ -1,13 +1,13 @@
-import { type NextRequest, NextResponse } from "next/server"
+import { NextResponse } from "next/server"
 
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
     const stripeKey = process.env.STRIPE_SECRET_KEY
 
     if (!stripeKey) {
       return NextResponse.json({
         stripeKeyExists: false,
-        stripeKeyPrefix: "Not set",
+        stripeKeyPrefix: "",
         isTestMode: false,
         isLiveMode: false,
         environment: process.env.NODE_ENV || "development",
@@ -26,11 +26,8 @@ export async function GET(request: NextRequest) {
       isTestMode,
       isLiveMode,
       environment: process.env.NODE_ENV || "development",
+      vercelEnv: process.env.VERCEL_ENV || "development",
       timestamp: new Date().toISOString(),
-      vercelEnv: process.env.VERCEL_ENV,
-      keyLength: stripeKey.length,
-      // Don't expose the actual key, just validation info
-      keyValidFormat: stripeKey.length > 20 && (isTestMode || isLiveMode),
     })
   } catch (error) {
     console.error("Error checking Stripe config:", error)

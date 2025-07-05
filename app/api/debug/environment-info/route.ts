@@ -1,33 +1,70 @@
-import { type NextRequest, NextResponse } from "next/server"
+import { NextResponse } from "next/server"
 
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
-    const headers = request.headers
-    const url = new URL(request.url)
+    // Detect current environment
+    const nodeEnv = process.env.NODE_ENV || "development"
+    const vercelEnv = process.env.VERCEL_ENV || "development"
+    const vercelUrl = process.env.VERCEL_URL
+    const isProduction = vercelEnv === "production"
+    const isPreview = vercelEnv === "preview"
 
-    const environmentInfo = {
-      // Vercel-specific environment detection
-      vercelEnv: process.env.VERCEL_ENV || "development",
-      vercelUrl: process.env.VERCEL_URL,
-      isProduction: process.env.NODE_ENV === "production",
-      nodeEnv: process.env.NODE_ENV || "development",
-
-      // Current request info
-      currentUrl: url.origin,
-      host: headers.get("host"),
-
-      // Stripe configuration
-      stripeKeyExists: !!process.env.STRIPE_SECRET_KEY,
-      stripeKeyPrefix: process.env.STRIPE_SECRET_KEY?.substring(0, 8) || "Not set",
-
-      // Webhook URL (where Stripe sends webhooks)
-      webhookUrl: `${url.origin}/api/stripe/webhook`,
-
-      // Other relevant environment info
-      timestamp: new Date().toISOString(),
+    // Determine webhook URL based on environment
+    let webhookUrl = ""
+    if (process.env.NEXT_PUBLIC_SITE_URL) {
+      webhookUrl = `${process.env.NEXT_PUBLIC_SITE_URL}/api/stripe/webhook`
+    } else if (vercelUrl) {
+      webhookUrl = `https://${vercelUrl}/api/stripe/webhook`
+    } else {
+      webhookUrl = "http://localhost:3000/api/stripe/webhook"
     }
 
-    return NextResponse.json(environmentInfo)
+    // Check Stripe configuration
+    const stripeKey = process.env.STRIPE_SECRET_KEY
+    const isLiveStripeKey = stripeKey?.startsWith("sk_live_")
+    const isTestStripeKey = stripeKey?.startsWith("sk_test_")
+
+    // Determine expected session type
+    let expectedSessionType = "unknown"
+    if (isLiveStripeKey) {
+      expectedSessionType = "cs_live_..."
+    } else if (isTestStripeKey) {
+      expectedSessionType = "cs_test_..."
+    }
+
+    // Check for potential mismatches
+    const potentialIssues = []
+
+    if (isPreview && isLiveStripeKey) {
+      potentialIssues.push({
+        type: "environment_mismatch",
+        severity: "high",
+        message: "Using live Stripe keys in preview environment",
+        recommendation: "Consider using test keys for preview deployments",
+      })
+    }
+
+    if (isProduction && isTestStripeKey) {
+      potentialIssues.push({
+        type: "environment_mismatch",
+        severity: "medium",
+        message: "Using test Stripe keys in production environment",
+        recommendation: "Ensure you're using live keys for production",
+      })
+    }
+
+    return NextResponse.json({
+      nodeEnv,
+      vercelEnv,
+      vercelUrl,
+      isProduction,
+      isPreview,
+      webhookUrl,
+      stripeKeyType: isLiveStripeKey ? "live" : isTestStripeKey ? "test" : "unknown",
+      expectedSessionType,
+      potentialIssues,
+      timestamp: new Date().toISOString(),
+    })
   } catch (error) {
     console.error("Error getting environment info:", error)
     return NextResponse.json({ error: "Failed to get environment information" }, { status: 500 })
