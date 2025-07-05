@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react"
 import { useSearchParams } from "next/navigation"
 import { useAuth } from "@/contexts/auth-context"
-import { CheckCircle, Loader2, AlertCircle, ArrowRight, Download, RefreshCw, Bug, Copy } from "lucide-react"
+import { CheckCircle, Loader2, AlertCircle, ArrowRight, Download, RefreshCw, Bug, Copy, Settings } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { useToast } from "@/hooks/use-toast"
@@ -26,6 +26,8 @@ interface DebugInfo {
   session?: any
   error?: string
   environment?: any
+  stripeError?: any
+  recommendation?: string
 }
 
 export default function PurchaseSuccessPage() {
@@ -38,6 +40,7 @@ export default function PurchaseSuccessPage() {
   const [purchaseDetails, setPurchaseDetails] = useState<PurchaseDetails | null>(null)
   const [retryCount, setRetryCount] = useState(0)
   const [showDebug, setShowDebug] = useState(false)
+  const [isTestLiveMismatch, setIsTestLiveMismatch] = useState(false)
 
   const sessionId = searchParams.get("session_id")
 
@@ -61,7 +64,16 @@ export default function PurchaseSuccessPage() {
         setDebugInfo(data)
       } else {
         console.error("❌ [Debug] Session debug failed:", data)
-        setDebugInfo({ error: data.error || "Debug failed" })
+        setDebugInfo({
+          error: data.error || "Debug failed",
+          recommendation: data.recommendation,
+          environment: data.environment,
+        })
+
+        // Check for test/live mismatch
+        if (data.error?.includes("Test/Live mode mismatch")) {
+          setIsTestLiveMismatch(true)
+        }
       }
     } catch (error) {
       console.error("❌ [Debug] Debug session failed:", error)
@@ -107,6 +119,11 @@ export default function PurchaseSuccessPage() {
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ error: "Verification failed" }))
         console.error("❌ [Purchase Success] Error response:", errorData)
+
+        // Check for test/live mismatch
+        if (errorData.error?.includes("Test/Live Mode Mismatch")) {
+          setIsTestLiveMismatch(true)
+        }
 
         // Automatically fetch debug info on error
         await debugSession()
@@ -154,6 +171,7 @@ export default function PurchaseSuccessPage() {
     setLoading(true)
     setError(null)
     setDebugInfo(null)
+    setIsTestLiveMismatch(false)
     setRetryCount((prev) => prev + 1)
   }
 
@@ -198,7 +216,7 @@ export default function PurchaseSuccessPage() {
   if (error) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-black via-gray-900 to-gray-800 flex items-center justify-center p-4">
-        <Card className="w-full max-w-3xl bg-gray-800/30 border-gray-700/50 backdrop-blur-sm">
+        <Card className="w-full max-w-4xl bg-gray-800/30 border-gray-700/50 backdrop-blur-sm">
           <CardHeader className="text-center">
             <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gradient-to-br from-red-500/20 to-red-600/20 flex items-center justify-center border border-red-500/30">
               <AlertCircle className="h-8 w-8 text-red-400" />
@@ -207,6 +225,32 @@ export default function PurchaseSuccessPage() {
             <CardDescription className="text-gray-400 text-lg">{error}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
+            {/* Test/Live Mode Mismatch Warning */}
+            {isTestLiveMismatch && (
+              <div className="bg-amber-900/20 border border-amber-500/30 rounded-lg p-4">
+                <div className="flex items-center gap-2 mb-2">
+                  <Settings className="h-4 w-4 text-amber-400" />
+                  <span className="text-amber-400 font-medium">Configuration Issue Detected</span>
+                </div>
+                <p className="text-amber-300 text-sm mb-3">
+                  There's a mismatch between your Stripe configuration and the payment session. This typically happens
+                  when:
+                </p>
+                <ul className="text-amber-300/80 text-sm space-y-1 ml-4 list-disc">
+                  <li>Using test Stripe keys with a live payment session</li>
+                  <li>Using live Stripe keys with a test payment session</li>
+                </ul>
+                <div className="mt-3">
+                  <Button asChild size="sm" className="bg-amber-600 hover:bg-amber-700 text-black">
+                    <Link href="/debug-stripe-config">
+                      <Settings className="h-3 w-3 mr-1" />
+                      Check Configuration
+                    </Link>
+                  </Button>
+                </div>
+              </div>
+            )}
+
             <div className="text-center">
               <p className="text-gray-400 text-sm mb-4">
                 Don't worry! Your payment was likely successful. You can try verifying again or check your purchases.
@@ -237,6 +281,15 @@ export default function PurchaseSuccessPage() {
                     </Button>
                   </div>
                 </div>
+
+                {debugInfo.recommendation && (
+                  <div className="mb-3 p-3 bg-blue-900/20 border border-blue-500/30 rounded">
+                    <p className="text-blue-300 text-sm">
+                      <strong>Recommendation:</strong> {debugInfo.recommendation}
+                    </p>
+                  </div>
+                )}
+
                 {showDebug && (
                   <pre className="text-xs text-gray-300 overflow-auto max-h-60 bg-gray-900/50 p-3 rounded">
                     {JSON.stringify(debugInfo, null, 2)}
@@ -261,6 +314,12 @@ export default function PurchaseSuccessPage() {
               >
                 <Bug className="h-4 w-4 mr-2" />
                 Debug Session
+              </Button>
+              <Button asChild className="w-full bg-blue-600 hover:bg-blue-700 text-white">
+                <Link href="/debug-stripe-config">
+                  <Settings className="h-4 w-4 mr-2" />
+                  Check Stripe Config
+                </Link>
               </Button>
               <Button
                 asChild

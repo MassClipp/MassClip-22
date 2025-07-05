@@ -25,6 +25,11 @@ export async function POST(request: NextRequest) {
     const isTestSession = sessionId.startsWith("cs_test_")
     const isLiveSession = sessionId.startsWith("cs_live_")
 
+    console.log("🔧 [Purchase Verify] Mode check:", {
+      keyType: isTestKey ? "test" : isLiveKey ? "live" : "unknown",
+      sessionType: isTestSession ? "test" : isLiveSession ? "live" : "unknown",
+    })
+
     if (isTestKey && isLiveSession) {
       console.error("❌ [Purchase Verify] Test/Live mode mismatch: Test key with live session")
       return NextResponse.json(
@@ -34,6 +39,7 @@ export async function POST(request: NextRequest) {
             "You're using a test Stripe key but trying to access a live session. Please check your Stripe configuration.",
           sessionType: "live",
           keyType: "test",
+          recommendation: "Either use a live Stripe key or use a test session ID (cs_test_...)",
         },
         { status: 400 },
       )
@@ -48,6 +54,7 @@ export async function POST(request: NextRequest) {
             "You're using a live Stripe key but trying to access a test session. Please check your Stripe configuration.",
           sessionType: "test",
           keyType: "live",
+          recommendation: "Either use a test Stripe key or use a live session ID (cs_live_...)",
         },
         { status: 400 },
       )
@@ -94,6 +101,7 @@ export async function POST(request: NextRequest) {
               code: stripeError.code,
               message: stripeError.message,
             },
+            recommendation: "Check if the session ID is correct and matches your Stripe account mode (test/live)",
           },
           { status: 404 },
         )
@@ -105,6 +113,7 @@ export async function POST(request: NextRequest) {
           type: stripeError.type,
           code: stripeError.code,
           details: "There was an error communicating with Stripe. Please try again or contact support.",
+          recommendation: "Check your Stripe configuration and try again",
         },
         { status: 500 },
       )

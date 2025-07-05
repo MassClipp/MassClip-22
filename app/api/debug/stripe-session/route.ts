@@ -24,6 +24,7 @@ export async function POST(request: NextRequest) {
       sessionIdPrefix: sessionId.substring(0, 7),
       sessionIsTest: sessionId.startsWith("cs_test_"),
       sessionIsLive: sessionId.startsWith("cs_live_"),
+      nodeEnv: process.env.NODE_ENV,
     }
 
     console.log("🔧 [Debug] Environment check:", environment)
@@ -36,6 +37,12 @@ export async function POST(request: NextRequest) {
           details: "You're using a test Stripe key but trying to access a live session",
           environment,
           recommendation: "Either use a live Stripe key or use a test session ID (cs_test_...)",
+          configurationSteps: [
+            "1. Check your STRIPE_SECRET_KEY environment variable",
+            "2. Ensure it matches the session type you're trying to access",
+            "3. For testing, use sk_test_... keys with cs_test_... sessions",
+            "4. For production, use sk_live_... keys with cs_live_... sessions",
+          ],
         },
         { status: 400 },
       )
@@ -48,6 +55,12 @@ export async function POST(request: NextRequest) {
           details: "You're using a live Stripe key but trying to access a test session",
           environment,
           recommendation: "Either use a test Stripe key or use a live session ID (cs_live_...)",
+          configurationSteps: [
+            "1. Check your STRIPE_SECRET_KEY environment variable",
+            "2. Ensure it matches the session type you're trying to access",
+            "3. For testing, use sk_test_... keys with cs_test_... sessions",
+            "4. For production, use sk_live_... keys with cs_live_... sessions",
+          ],
         },
         { status: 400 },
       )
@@ -81,6 +94,11 @@ export async function POST(request: NextRequest) {
             stripeError.statusCode === 404
               ? "Check if the session ID is correct and matches your Stripe account mode (test/live)"
               : "Check your Stripe configuration and try again",
+          troubleshooting: {
+            sessionNotFound: "The session ID may be incorrect, expired, or from a different Stripe account",
+            modeCheck: "Verify that your Stripe key mode matches the session type",
+            expiration: "Checkout sessions expire after 24 hours",
+          },
         },
         { status: stripeError.statusCode || 500 },
       )
@@ -102,6 +120,7 @@ export async function POST(request: NextRequest) {
         mode: session.mode,
         success_url: session.success_url,
         cancel_url: session.cancel_url,
+        url: session.url,
       },
       lineItems:
         lineItems?.data.map((item) => ({
@@ -118,6 +137,12 @@ export async function POST(request: NextRequest) {
           },
         })) || [],
       environment,
+      analysis: {
+        isExpired: new Date() > new Date(session.expires_at * 1000),
+        isPaid: session.payment_status === "paid",
+        isComplete: session.status === "complete",
+        hasMetadata: Object.keys(session.metadata || {}).length > 0,
+      },
     }
 
     console.log("✅ [Debug] Session retrieved successfully")
@@ -132,6 +157,7 @@ export async function POST(request: NextRequest) {
         code: error.code,
         statusCode: error.statusCode,
         requestId: error.requestId,
+        details: "An unexpected error occurred while debugging the session",
       },
       { status: error.statusCode || 500 },
     )
