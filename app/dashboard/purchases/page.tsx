@@ -30,6 +30,7 @@ import {
   MoreHorizontal,
   Share2,
   Trash2,
+  RefreshCw,
 } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
@@ -47,6 +48,7 @@ interface Purchase {
   status: string
   createdAt: any
   updatedAt: any
+  purchasedAt?: any
   productBoxId?: string
   bundleId?: string
   creatorId?: string
@@ -89,34 +91,52 @@ export default function PurchasesPage() {
   useEffect(() => {
     if (user) {
       fetchPurchases()
+    } else if (!authLoading) {
+      setLoading(false)
     }
-  }, [user])
+  }, [user, authLoading])
 
   const fetchPurchases = async () => {
     try {
       setLoading(true)
       setError(null)
+      console.log("🔄 [Purchases Page] Starting fetch...")
+
+      if (!user) {
+        console.log("❌ [Purchases Page] No user found")
+        setError("Please log in to view your purchases")
+        return
+      }
 
       const token = await user.getIdToken()
+      console.log("🔑 [Purchases Page] Got auth token")
+
       const response = await fetch("/api/user/unified-purchases", {
         headers: {
           Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
         },
       })
 
+      console.log("📡 [Purchases Page] API response status:", response.status)
+
       if (!response.ok) {
         if (response.status === 404) {
-          // No purchases found - this is normal for new users
+          console.log("ℹ️ [Purchases Page] No purchases found (404)")
           setPurchases([])
           return
         }
-        throw new Error(`Failed to fetch purchases: ${response.status}`)
+        const errorText = await response.text()
+        console.error("❌ [Purchases Page] API error:", errorText)
+        throw new Error(`Failed to fetch purchases: ${response.status} - ${errorText}`)
       }
 
       const data = await response.json()
+      console.log("📦 [Purchases Page] API response data:", data)
 
       // Handle case where API returns success but no purchases
       const purchasesArray = data.purchases || []
+      console.log(`📊 [Purchases Page] Processing ${purchasesArray.length} purchases`)
 
       // Enhanced purchase normalization with additional fields
       const normalizedPurchases = purchasesArray.map((purchase: any) => ({
@@ -126,8 +146,9 @@ export default function PurchasesPage() {
         price: purchase.price || 0,
         currency: purchase.currency || "usd",
         status: purchase.status || "completed",
-        createdAt: purchase.createdAt || new Date(),
+        createdAt: purchase.createdAt || purchase.purchasedAt || new Date(),
         updatedAt: purchase.updatedAt || new Date(),
+        purchasedAt: purchase.purchasedAt || purchase.createdAt || new Date(),
         productBoxId: purchase.productBoxId || null,
         bundleId: purchase.bundleId || null,
         creatorId: purchase.creatorId || "",
@@ -150,9 +171,9 @@ export default function PurchasesPage() {
       }))
 
       setPurchases(normalizedPurchases)
-      console.log(`✅ [Purchases] Loaded ${normalizedPurchases.length} purchases`)
+      console.log(`✅ [Purchases Page] Loaded ${normalizedPurchases.length} purchases`)
     } catch (err) {
-      console.error("Error fetching purchases:", err)
+      console.error("❌ [Purchases Page] Error fetching purchases:", err)
       setError(err instanceof Error ? err.message : "Failed to fetch purchases")
     } finally {
       setLoading(false)
@@ -284,15 +305,7 @@ export default function PurchasesPage() {
     })
   }
 
-  const formatDuration = (seconds: number) => {
-    const hours = Math.floor(seconds / 3600)
-    const minutes = Math.floor((seconds % 3600) / 60)
-    if (hours > 0) {
-      return `${hours}h ${minutes}m`
-    }
-    return `${minutes}m`
-  }
-
+  // Show loading state
   if (authLoading || loading) {
     return (
       <div className="fixed inset-0 bg-gradient-to-br from-black via-gray-900 to-white/10 text-white overflow-hidden">
@@ -337,18 +350,57 @@ export default function PurchasesPage() {
     )
   }
 
+  // Show error state
   if (error) {
     return (
       <div className="fixed inset-0 bg-gradient-to-br from-black via-gray-900 to-white/10 text-white overflow-hidden">
         <div className="absolute inset-0 pt-16">
           <div className="h-full w-full overflow-y-auto px-8 py-8">
-            <Alert variant="destructive" className="bg-red-900/20 border-red-800">
+            <Alert variant="destructive" className="bg-red-900/20 border-red-800 mb-4">
               <AlertCircle className="h-4 w-4" />
               <AlertDescription>{error}</AlertDescription>
             </Alert>
-            <Button onClick={fetchPurchases} className="mt-4 bg-red-600 hover:bg-red-700" variant="default">
-              Try Again
-            </Button>
+            <div className="flex gap-4">
+              <Button onClick={fetchPurchases} className="bg-red-600 hover:bg-red-700" variant="default">
+                <RefreshCw className="h-4 w-4 mr-2" />
+                Try Again
+              </Button>
+              <Button asChild variant="outline" className="border-gray-600 text-white hover:bg-gray-700 bg-transparent">
+                <Link href="/dashboard/explore">
+                  <ExternalLink className="h-4 w-4 mr-2" />
+                  Browse Content
+                </Link>
+              </Button>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // Show not authenticated state
+  if (!user) {
+    return (
+      <div className="fixed inset-0 bg-gradient-to-br from-black via-gray-900 to-white/10 text-white overflow-hidden">
+        <div className="absolute inset-0 pt-16">
+          <div className="h-full w-full overflow-y-auto px-8 py-8">
+            <div className="flex items-center justify-center min-h-96">
+              <div className="max-w-md mx-auto text-center">
+                <div className="w-24 h-24 mx-auto mb-6 bg-gray-800/50 rounded-full flex items-center justify-center border border-gray-700/50">
+                  <AlertCircle className="h-12 w-12 text-gray-500" />
+                </div>
+                <h3 className="text-2xl font-semibold mb-4 text-white">Authentication Required</h3>
+                <p className="text-gray-400 mb-8 text-base">
+                  Please log in to view your purchases and access your premium content.
+                </p>
+                <Button asChild className="bg-red-600 hover:bg-red-700 h-12 px-6">
+                  <Link href="/login">
+                    <ExternalLink className="h-4 w-4 mr-2" />
+                    Sign In
+                  </Link>
+                </Button>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -376,6 +428,15 @@ export default function PurchasesPage() {
                   </p>
                 </div>
                 <div className="flex items-center gap-2">
+                  <Button
+                    onClick={fetchPurchases}
+                    variant="ghost"
+                    size="sm"
+                    className="h-10 px-3 text-gray-400 hover:text-white hover:bg-gray-800"
+                  >
+                    <RefreshCw className="h-4 w-4 mr-2" />
+                    Refresh
+                  </Button>
                   <Button
                     variant={viewMode === "grid" ? "default" : "ghost"}
                     size="sm"
@@ -608,7 +669,10 @@ export default function PurchasesPage() {
                                       </Button>
                                     </DropdownMenuTrigger>
                                     <DropdownMenuContent className="bg-gray-800 border-gray-700">
-                                      <DropdownMenuItem className="text-white hover:bg-gray-700">
+                                      <DropdownMenuItem
+                                        className="text-white hover:bg-gray-700"
+                                        onClick={() => handleDownload(purchase)}
+                                      >
                                         <Download className="h-4 w-4 mr-2" />
                                         Download
                                       </DropdownMenuItem>
@@ -631,7 +695,7 @@ export default function PurchasesPage() {
                                     <Clock className="h-3 w-3" />
                                     <span>{formatDate(purchase.createdAt)}</span>
                                   </div>
-                                  <span className="text-right">{purchase.metadata?.contentCount || 0}</span>
+                                  <span className="text-right">{purchase.metadata?.contentCount || 0} items</span>
                                 </div>
 
                                 <div className="flex items-center justify-between">
@@ -639,7 +703,22 @@ export default function PurchasesPage() {
                                     <DollarSign className="h-4 w-4" />
                                     <span>{purchase.price.toFixed(2)}</span>
                                   </div>
-                                  <span className="text-gray-400 text-sm">{purchase.metadata?.contentCount || 0}</span>
+                                  <Button
+                                    asChild
+                                    size="sm"
+                                    className="bg-gray-700 hover:bg-gray-600 text-white h-8 px-3"
+                                  >
+                                    <Link
+                                      href={
+                                        purchase.type === "bundle"
+                                          ? `/bundles/${purchase.bundleId}`
+                                          : `/product-box/${purchase.productBoxId}/content`
+                                      }
+                                    >
+                                      <Eye className="h-3 w-3 mr-1" />
+                                      View
+                                    </Link>
+                                  </Button>
                                 </div>
                               </div>
                             </div>
@@ -740,7 +819,7 @@ export default function PurchasesPage() {
                                           }
                                         >
                                           <Eye className="h-3 w-3 mr-1" />
-                                          View bundle
+                                          View
                                         </Link>
                                       </Button>
                                       <span className="text-lg font-medium text-white ml-2">

@@ -103,13 +103,3 @@ export async function createOrUpdateUserProfile(userId: string, profileData: Rec
 }
 
 export { FieldValue }
-
-/* -------------------------------------------------------------------------- */
-/*                          Alias export for compatibility                    */
-/* -------------------------------------------------------------------------- */
-
-/**
- * Some legacy parts of the codebase expect a named export called `adminDb`.
- * Re-export `db` under that name to avoid “missing module export” errors.
- */
-export const adminDb = db
