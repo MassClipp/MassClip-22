@@ -1,74 +1,101 @@
 import { type NextRequest, NextResponse } from "next/server"
-import Stripe from "stripe"
-import { doc, getDoc } from "firebase/firestore"
-import { db } from "@/lib/firebase"
-
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: "2024-06-20",
-})
+import { db } from "@/lib/firebase-admin"
+import { stripe } from "@/lib/stripe"
 
 export async function POST(request: NextRequest) {
   try {
-    const { priceId, creatorId, successUrl, cancelUrl } = await request.json()
+    console.log("🛒 [Premium Checkout] Starting premium subscription checkout")
 
-    if (!priceId || !creatorId) {
-      return NextResponse.json({ error: "Price ID and creator ID are required" }, { status: 400 })
+    const { buyerUid, priceId, successUrl, cancelUrl } = await request.json()
+
+    if (!buyerUid) {
+      console.error("❌ [Premium Checkout] Missing buyer UID")
+      return NextResponse.json({ error: "Buyer UID is required" }, { status: 400 })
     }
 
-    // Get creator's Stripe account ID
-    const creatorDoc = await getDoc(doc(db, "users", creatorId))
-    if (!creatorDoc.exists()) {
-      return NextResponse.json({ error: "Creator not found" }, { status: 404 })
+    if (!priceId) {
+      console.error("❌ [Premium Checkout] Missing price ID")
+      return NextResponse.json({ error: "Price ID is required" }, { status: 400 })
     }
 
-    const creatorData = creatorDoc.data()
-    const stripeAccountId = creatorData.stripeAccountId
+    console.log("📋 [Premium Checkout] Request details:", {
+      buyerUid,
+      priceId,
+      hasSuccessUrl: !!successUrl,
+      hasCancelUrl: !!cancelUrl,
+    })
 
-    if (!stripeAccountId) {
-      return NextResponse.json({ error: "Creator's Stripe account not connected" }, { status: 400 })
+    // Get buyer details for customer info
+    let customerEmail = null
+    let customerName = null
+    try {
+      const buyerDoc = await db.collection("users").doc(buyerUid).get()
+      if (buyerDoc.exists) {
+        const buyerData = buyerDoc.data()
+        customerEmail = buyerData?.email
+        customerName = buyerData?.displayName || buyerData?.name
+        console.log("👤 [Premium Checkout] Buyer details found")
+      }
+    } catch (buyerError) {
+      console.warn("⚠️ [Premium Checkout] Could not fetch buyer details:", buyerError)
     }
 
-    // Get the price from the Stripe price object
-    const priceObj = await stripe.prices.retrieve(priceId)
-    const amount = priceObj.unit_amount || 0
-
-    // Calculate 25% platform fee
-    const applicationFee = Math.round(amount * 0.25)
-
-    // Create checkout session
-    const session = await stripe.checkout.sessions.create(
-      {
-        mode: "payment",
-        line_items: [
-          {
-            price: priceId,
-            quantity: 1,
-          },
-        ],
-        success_url:
-          successUrl || `${process.env.NEXT_PUBLIC_SITE_URL}/purchase/success?session_id={CHECKOUT_SESSION_ID}`,
-        cancel_url: cancelUrl || `${process.env.NEXT_PUBLIC_SITE_URL}/creator/${creatorData.username}`,
-        metadata: {
-          creator_id: creatorId,
-          price_id: priceId,
+    // Create Stripe checkout session for subscription
+    const sessionData = {
+      payment_method_types: ["card"] as const,
+      line_items: [
+        {
+          price: priceId,
+          quantity: 1,
         },
-        payment_intent_data: {
-          application_fee_amount: applicationFee, // 25% platform fee
-          metadata: {
-            creator_id: creatorId,
-            platformFeeAmount: applicationFee.toString(),
-            creatorAmount: (amount - applicationFee).toString(),
-          },
-        },
+      ],
+      mode: "subscription" as const,
+      success_url:
+        successUrl || `${process.env.NEXT_PUBLIC_SITE_URL}/subscription/success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: cancelUrl || `${process.env.NEXT_PUBLIC_SITE_URL}/pricing`,
+      customer_email: customerEmail || undefined,
+      metadata: {
+        buyerUid,
+        type: "premium_subscription",
+        timestamp: new Date().toISOString(),
       },
-      {
-        stripeAccount: stripeAccountId,
-      },
-    )
+    }
 
-    return NextResponse.json({ url: session.url })
+    console.log("🔧 [Premium Checkout] Creating subscription session:", {
+      priceId,
+      mode: sessionData.mode,
+      hasCustomerEmail: !!sessionData.customer_email,
+      metadataKeys: Object.keys(sessionData.metadata),
+    })
+
+    const session = await stripe.checkout.sessions.create(sessionData)
+
+    console.log("✅ [Premium Checkout] Subscription session created:", {
+      sessionId: session.id,
+      sessionType: session.id.startsWith("cs_test_") ? "test" : "live",
+      mode: session.mode,
+      url: session.url,
+    })
+
+    return NextResponse.json({
+      sessionId: session.id,
+      url: session.url,
+      mode: "subscription",
+    })
   } catch (error) {
-    console.error("Error creating checkout session:", error)
-    return NextResponse.json({ error: "Failed to create checkout session" }, { status: 500 })
+    console.error("❌ [Premium Checkout] Error creating subscription session:", {
+      error: error instanceof Error ? error.message : "Unknown error",
+      stack: error instanceof Error ? error.stack : undefined,
+      name: error instanceof Error ? error.name : "Unknown",
+    })
+
+    return NextResponse.json(
+      {
+        error: "Failed to create subscription session",
+        details: error instanceof Error ? error.message : "An unexpected error occurred",
+        errorType: error instanceof Error ? error.name : "Unknown",
+      },
+      { status: 500 },
+    )
   }
 }
