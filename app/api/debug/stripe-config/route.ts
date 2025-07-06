@@ -1,58 +1,32 @@
 import { NextResponse } from "next/server"
+import { getStripeDebugInfo } from "@/lib/stripe-dynamic"
 
 export async function GET() {
   try {
-    const vercelEnv = process.env.VERCEL_ENV || "development"
-    const nodeEnv = process.env.NODE_ENV || "development"
+    const debugInfo = getStripeDebugInfo()
 
-    // Check for Stripe keys
-    const stripeKey = process.env.STRIPE_SECRET_KEY
-    const stripeTestKey = process.env.STRIPE_SECRET_KEY_TEST
-
-    // Determine which key is being used
-    const isProduction = vercelEnv === "production"
-    const activeKey = isProduction ? stripeKey : stripeTestKey || stripeKey
-
-    const stripeKeyExists = !!activeKey
-    const stripeKeyPrefix = activeKey ? activeKey.substring(0, 8) : "none"
-    const isTestMode = stripeKeyPrefix.startsWith("sk_test_")
-    const isLiveMode = stripeKeyPrefix.startsWith("sk_live_")
-
-    console.log(`🔍 [Stripe Config] Environment: ${vercelEnv}`)
-    console.log(`🔍 [Stripe Config] Key type: ${isLiveMode ? "live" : isTestMode ? "test" : "unknown"}`)
-    console.log(`🔍 [Stripe Config] Has main key: ${!!stripeKey}`)
-    console.log(`🔍 [Stripe Config] Has test key: ${!!stripeTestKey}`)
-
-    const config = {
-      stripeKeyExists,
-      stripeKeyPrefix,
-      isTestMode,
-      isLiveMode,
-      environment: vercelEnv,
-      nodeEnvironment: nodeEnv,
+    return NextResponse.json({
+      stripeKeyExists: debugInfo.hasTestKey || debugInfo.hasLiveKey,
+      stripeKeyPrefix: debugInfo.testKeyPrefix || debugInfo.liveKeyPrefix || "none",
+      isTestMode: !!debugInfo.hasTestKey,
+      isLiveMode: !!debugInfo.hasLiveKey,
+      environment: debugInfo.environment,
+      isProduction: debugInfo.isProduction,
       timestamp: new Date().toISOString(),
-      keyConfiguration: {
-        hasMainKey: !!stripeKey,
-        hasTestKey: !!stripeTestKey,
-        activeKeySource: isProduction
-          ? "STRIPE_SECRET_KEY"
-          : stripeTestKey
-            ? "STRIPE_SECRET_KEY_TEST"
-            : "STRIPE_SECRET_KEY (fallback)",
-        recommendedSetup: isProduction
-          ? "Use STRIPE_SECRET_KEY with live keys"
-          : "Use STRIPE_SECRET_KEY_TEST with test keys",
+      availableKeys: {
+        test: debugInfo.hasTestKey,
+        live: debugInfo.hasLiveKey,
       },
-    }
-
-    return NextResponse.json(config)
-  } catch (error: any) {
-    console.error(`❌ [Stripe Config] Error:`, error)
+      keyPrefixes: {
+        test: debugInfo.testKeyPrefix,
+        live: debugInfo.liveKeyPrefix,
+      },
+    })
+  } catch (error) {
     return NextResponse.json(
       {
-        error: "Failed to check Stripe configuration",
-        details: error.message,
-        timestamp: new Date().toISOString(),
+        error: "Failed to get Stripe configuration",
+        details: error instanceof Error ? error.message : "Unknown error",
       },
       { status: 500 },
     )

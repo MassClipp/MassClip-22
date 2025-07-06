@@ -1,10 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
-import Stripe from "stripe"
 import { auth, db } from "@/lib/firebase-admin"
-
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: "2024-06-20",
-})
+import { getStripeClientForSession, validateSessionKeyCompatibility, getStripeDebugInfo } from "@/lib/stripe-dynamic"
 
 export async function POST(request: NextRequest) {
   try {
@@ -19,42 +15,39 @@ export async function POST(request: NextRequest) {
 
     console.log("📋 [Purchase Verify] Session ID:", sessionId.substring(0, 20) + "...")
 
-    // Check for test/live mode mismatch early
-    const isTestKey = process.env.STRIPE_SECRET_KEY?.startsWith("sk_test_")
-    const isLiveKey = process.env.STRIPE_SECRET_KEY?.startsWith("sk_live_")
-    const isTestSession = sessionId.startsWith("cs_test_")
-    const isLiveSession = sessionId.startsWith("cs_live_")
+    // Get debug information
+    const debugInfo = getStripeDebugInfo(sessionId)
+    console.log("🔧 [Purchase Verify] Debug info:", debugInfo)
 
-    console.log("🔧 [Purchase Verify] Mode check:", {
-      keyType: isTestKey ? "test" : isLiveKey ? "live" : "unknown",
-      sessionType: isTestSession ? "test" : isLiveSession ? "live" : "unknown",
-    })
-
-    if (isTestKey && isLiveSession) {
-      console.error("❌ [Purchase Verify] Test/Live mode mismatch: Test key with live session")
+    // Get the appropriate Stripe client for this session
+    let stripeConfig
+    try {
+      stripeConfig = getStripeClientForSession(sessionId)
+      console.log(`✅ [Purchase Verify] Using ${stripeConfig.mode} Stripe client (${stripeConfig.keyPrefix})`)
+    } catch (stripeError: any) {
+      console.error("❌ [Purchase Verify] Stripe client configuration error:", stripeError.message)
       return NextResponse.json(
         {
-          error: "Configuration Error: Test/Live Mode Mismatch",
-          details:
-            "You're using a test Stripe key but trying to access a live session. Please check your Stripe configuration.",
-          sessionType: "live",
-          keyType: "test",
-          recommendation: "Either use a live Stripe key or use a test session ID (cs_test_...)",
+          error: "Stripe Configuration Error",
+          details: stripeError.message,
+          debugInfo,
+          recommendation: "Check your STRIPE_SECRET_KEY_TEST and STRIPE_SECRET_KEY_LIVE environment variables",
         },
-        { status: 400 },
+        { status: 500 },
       )
     }
 
-    if (isLiveKey && isTestSession) {
-      console.error("❌ [Purchase Verify] Test/Live mode mismatch: Live key with test session")
+    // Validate compatibility
+    if (!validateSessionKeyCompatibility(sessionId, stripeConfig)) {
+      console.error("❌ [Purchase Verify] Session/Key compatibility check failed")
       return NextResponse.json(
         {
           error: "Configuration Error: Test/Live Mode Mismatch",
-          details:
-            "You're using a live Stripe key but trying to access a test session. Please check your Stripe configuration.",
-          sessionType: "test",
-          keyType: "live",
-          recommendation: "Either use a test Stripe key or use a live session ID (cs_live_...)",
+          details: `Session type (${debugInfo.sessionType}) doesn't match available Stripe keys`,
+          sessionType: debugInfo.sessionType,
+          keyType: stripeConfig.mode,
+          debugInfo,
+          recommendation: `Use ${debugInfo.expectedKeyType} key for ${debugInfo.sessionType} sessions`,
         },
         { status: 400 },
       )
@@ -73,11 +66,11 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Retrieve the Stripe session with detailed error handling
-    let session: Stripe.Checkout.Session
+    // Retrieve the Stripe session with the correct client
+    let session
     try {
       console.log("🔄 [Purchase Verify] Retrieving Stripe session...")
-      session = await stripe.checkout.sessions.retrieve(sessionId, {
+      session = await stripeConfig.client.checkout.sessions.retrieve(sessionId, {
         expand: ["payment_intent", "line_items"],
       })
       console.log("✅ [Purchase Verify] Stripe session retrieved successfully")
@@ -93,15 +86,16 @@ export async function POST(request: NextRequest) {
       if (stripeError.statusCode === 404) {
         return NextResponse.json(
           {
-            error: "Payment session not found. Please check your session ID.",
-            details: "This could mean the session has expired, is invalid, or there's a test/live mode mismatch.",
+            error: "Payment session not found",
+            details: "This session ID does not exist in your Stripe account or may have expired",
             sessionId: sessionId.substring(0, 20) + "...",
             stripeError: {
               type: stripeError.type,
               code: stripeError.code,
               message: stripeError.message,
             },
-            recommendation: "Check if the session ID is correct and matches your Stripe account mode (test/live)",
+            debugInfo,
+            recommendation: "Verify the session ID is correct and belongs to your Stripe account",
           },
           { status: 404 },
         )
@@ -112,7 +106,8 @@ export async function POST(request: NextRequest) {
           error: `Failed to retrieve payment session: ${stripeError.message}`,
           type: stripeError.type,
           code: stripeError.code,
-          details: "There was an error communicating with Stripe. Please try again or contact support.",
+          details: "There was an error communicating with Stripe",
+          debugInfo,
           recommendation: "Check your Stripe configuration and try again",
         },
         { status: 500 },

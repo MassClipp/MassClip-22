@@ -1,42 +1,45 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { useAuth } from "@/contexts/auth-context"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { useFirebaseAuth } from "@/hooks/use-firebase-auth"
+import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Skeleton } from "@/components/ui/skeleton"
 import { useToast } from "@/hooks/use-toast"
 import {
   Search,
   Filter,
   Grid3X3,
   List,
-  RefreshCw,
-  Download,
   Calendar,
   DollarSign,
   Package,
-  AlertCircle,
+  RefreshCw,
   ExternalLink,
   Eye,
   Clock,
+  CheckCircle,
+  AlertCircle,
+  ShoppingBag,
 } from "lucide-react"
+import Image from "next/image"
 import Link from "next/link"
-import { format } from "date-fns"
 
 interface Purchase {
   id: string
-  productBoxId: string
+  productBoxId?: string
+  bundleId?: string
   itemTitle: string
   itemDescription?: string
+  thumbnailUrl?: string
   amount: number
   currency: string
   purchasedAt: Date
   status: string
-  thumbnailUrl?: string
   creatorUsername?: string
   creatorName?: string
   type: "product_box" | "bundle" | "subscription"
@@ -44,8 +47,9 @@ interface Purchase {
 }
 
 export default function PurchasesPage() {
-  const { user, loading: authLoading } = useAuth()
+  const { user, loading: authLoading } = useFirebaseAuth()
   const { toast } = useToast()
+
   const [purchases, setPurchases] = useState<Purchase[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -62,27 +66,24 @@ export default function PurchasesPage() {
       setLoading(true)
       setError(null)
 
-      const idToken = await user.getIdToken()
       const response = await fetch("/api/user/unified-purchases", {
         headers: {
-          Authorization: `Bearer ${idToken}`,
+          Authorization: `Bearer ${await user.getIdToken()}`,
         },
       })
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: "Failed to fetch purchases" }))
-        throw new Error(errorData.error || `HTTP ${response.status}`)
+        throw new Error("Failed to fetch purchases")
       }
 
       const data = await response.json()
       setPurchases(data.purchases || [])
     } catch (error) {
       console.error("Error fetching purchases:", error)
-      const errorMessage = error instanceof Error ? error.message : "Failed to load purchases"
-      setError(errorMessage)
+      setError(error instanceof Error ? error.message : "Failed to load purchases")
       toast({
         title: "Error",
-        description: errorMessage,
+        description: "Failed to load your purchases",
         variant: "destructive",
       })
     } finally {
@@ -91,11 +92,8 @@ export default function PurchasesPage() {
   }
 
   useEffect(() => {
-    if (!authLoading && user) {
+    if (user && !authLoading) {
       fetchPurchases()
-    } else if (!authLoading && !user) {
-      setError("Please log in to view your purchases")
-      setLoading(false)
     }
   }, [user, authLoading])
 
@@ -110,7 +108,7 @@ export default function PurchasesPage() {
       const matchesType = filterType === "all" || purchase.type === filterType
       const matchesTab =
         activeTab === "all" ||
-        (activeTab === "recent" && new Date(purchase.purchasedAt).getTime() > Date.now() - 7 * 24 * 60 * 60 * 1000) ||
+        (activeTab === "recent" && isRecentPurchase(purchase)) ||
         (activeTab === "downloads" && purchase.type === "product_box") ||
         (activeTab === "favorites" && false) // TODO: Implement favorites
 
@@ -124,52 +122,83 @@ export default function PurchasesPage() {
           return b.amount - a.amount
         case "title":
           return a.itemTitle.localeCompare(b.itemTitle)
+        case "creator":
+          return (a.creatorName || "").localeCompare(b.creatorName || "")
         default:
           return 0
       }
     })
 
-  const totalValue = purchases.reduce((sum, purchase) => sum + purchase.amount, 0)
+  const isRecentPurchase = (purchase: Purchase) => {
+    const oneWeekAgo = new Date()
+    oneWeekAgo.setDate(oneWeekAgo.getDate() - 7)
+    return new Date(purchase.purchasedAt) > oneWeekAgo
+  }
 
-  if (authLoading || loading) {
+  const totalValue = purchases.reduce((sum, purchase) => sum + purchase.amount, 0)
+  const totalItems = purchases.length
+
+  const getTypeIcon = (type: string) => {
+    switch (type) {
+      case "product_box":
+        return <Package className="h-4 w-4" />
+      case "bundle":
+        return <ShoppingBag className="h-4 w-4" />
+      case "subscription":
+        return <RefreshCw className="h-4 w-4" />
+      default:
+        return <Package className="h-4 w-4" />
+    }
+  }
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case "completed":
+        return "bg-green-500/20 text-green-400 border-green-500/30"
+      case "pending":
+        return "bg-yellow-500/20 text-yellow-400 border-yellow-500/30"
+      case "failed":
+        return "bg-red-500/20 text-red-400 border-red-500/30"
+      default:
+        return "bg-gray-500/20 text-gray-400 border-gray-500/30"
+    }
+  }
+
+  if (authLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-black via-gray-900 to-black">
-        <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-black/20" />
-        <div className="relative flex items-center justify-center min-h-screen">
-          <div className="text-center">
-            <RefreshCw className="h-12 w-12 text-red-500 animate-spin mx-auto mb-4" />
-            <h2 className="text-2xl font-light text-white mb-2">Loading your collection...</h2>
-            <p className="text-gray-400">Please wait while we fetch your purchases</p>
+        <div className="bg-gradient-to-t from-black/50 via-transparent to-black/20 min-h-screen">
+          <div className="px-4 max-w-7xl mx-auto py-8">
+            <div className="space-y-6">
+              <Skeleton className="h-12 w-64 bg-gray-800" />
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {[...Array(3)].map((_, i) => (
+                  <Skeleton key={i} className="h-24 bg-gray-800" />
+                ))}
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {[...Array(6)].map((_, i) => (
+                  <Skeleton key={i} className="h-64 bg-gray-800" />
+                ))}
+              </div>
+            </div>
           </div>
         </div>
       </div>
     )
   }
 
-  if (error) {
+  if (!user) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-black via-gray-900 to-black">
-        <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-black/20" />
-        <div className="relative flex items-center justify-center min-h-screen px-4">
-          <Card className="w-full max-w-md bg-gray-800/30 border-gray-700/50 backdrop-blur-sm">
-            <CardHeader className="text-center">
-              <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gradient-to-br from-red-500/20 to-red-600/20 flex items-center justify-center border border-red-500/30">
-                <AlertCircle className="h-8 w-8 text-red-400" />
-              </div>
-              <CardTitle className="text-white">Unable to Load Purchases</CardTitle>
-              <CardDescription className="text-gray-400">{error}</CardDescription>
-            </CardHeader>
-            <CardContent className="text-center space-y-4">
-              <Button onClick={fetchPurchases} className="w-full bg-red-600 hover:bg-red-700 text-white">
-                <RefreshCw className="h-4 w-4 mr-2" />
-                Try Again
-              </Button>
-              <Button
-                asChild
-                variant="outline"
-                className="w-full border-gray-600 hover:bg-gray-700 text-white bg-transparent"
-              >
-                <Link href="/dashboard">Back to Dashboard</Link>
+      <div className="min-h-screen bg-gradient-to-br from-black via-gray-900 to-black flex items-center justify-center">
+        <div className="bg-gradient-to-t from-black/50 via-transparent to-black/20 min-h-screen w-full flex items-center justify-center">
+          <Card className="bg-gray-800/30 border-gray-700/50 backdrop-blur-sm">
+            <CardContent className="p-8 text-center">
+              <AlertCircle className="h-12 w-12 text-red-400 mx-auto mb-4" />
+              <h2 className="text-xl font-semibold text-white mb-2">Authentication Required</h2>
+              <p className="text-gray-400 mb-4">Please log in to view your purchases</p>
+              <Button asChild className="bg-red-600 hover:bg-red-700">
+                <Link href="/login">Log In</Link>
               </Button>
             </CardContent>
           </Card>
@@ -180,75 +209,84 @@ export default function PurchasesPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-black via-gray-900 to-black">
-      <div className="absolute inset-0 bg-gradient-to-t from-black/50 via-transparent to-black/20" />
-      <div className="relative">
-        {/* Header */}
-        <div className="px-4 max-w-7xl mx-auto pt-8 pb-6">
-          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
-            <div>
-              <h1 className="text-4xl font-bold text-white mb-2">My Collection</h1>
-              <p className="text-gray-400 text-lg">
-                {purchases.length} premium content items • ${totalValue.toFixed(2)} total value
-              </p>
-            </div>
-            <div className="flex items-center gap-3">
-              <Button
-                onClick={fetchPurchases}
-                variant="outline"
-                size="sm"
-                className="border-gray-600 hover:bg-gray-700 text-white bg-transparent backdrop-blur-sm"
-              >
-                <RefreshCw className="h-4 w-4 mr-2" />
-                Refresh
-              </Button>
-              <div className="flex items-center gap-1 bg-gray-800/50 rounded-lg p-1 backdrop-blur-sm border border-gray-700/50">
-                <Button
-                  variant={viewMode === "grid" ? "default" : "ghost"}
-                  size="sm"
-                  onClick={() => setViewMode("grid")}
-                  className="h-8 w-8 p-0"
-                >
-                  <Grid3X3 className="h-4 w-4" />
-                </Button>
-                <Button
-                  variant={viewMode === "list" ? "default" : "ghost"}
-                  size="sm"
-                  onClick={() => setViewMode("list")}
-                  className="h-8 w-8 p-0"
-                >
-                  <List className="h-4 w-4" />
-                </Button>
-              </div>
-            </div>
+      <div className="bg-gradient-to-t from-black/50 via-transparent to-black/20 min-h-screen">
+        <div className="px-4 max-w-7xl mx-auto py-8">
+          {/* Header */}
+          <div className="mb-8">
+            <h1 className="text-4xl font-bold text-white mb-2">My Collection</h1>
+            <p className="text-gray-400">
+              {totalItems} premium content items • ${totalValue.toFixed(2)} total value
+            </p>
           </div>
-        </div>
 
-        {/* Tabs */}
-        <div className="px-4 max-w-7xl mx-auto mb-6">
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+          {/* Stats Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
+            <Card className="bg-gray-800/30 border-gray-700/50 backdrop-blur-sm">
+              <CardContent className="p-6">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-blue-500/20 rounded-lg">
+                    <Package className="h-5 w-5 text-blue-400" />
+                  </div>
+                  <div>
+                    <p className="text-2xl font-bold text-white">{totalItems}</p>
+                    <p className="text-sm text-gray-400">Total Items</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-gray-800/30 border-gray-700/50 backdrop-blur-sm">
+              <CardContent className="p-6">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-green-500/20 rounded-lg">
+                    <DollarSign className="h-5 w-5 text-green-400" />
+                  </div>
+                  <div>
+                    <p className="text-2xl font-bold text-white">${totalValue.toFixed(2)}</p>
+                    <p className="text-sm text-gray-400">Total Value</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-gray-800/30 border-gray-700/50 backdrop-blur-sm">
+              <CardContent className="p-6">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-purple-500/20 rounded-lg">
+                    <Clock className="h-5 w-5 text-purple-400" />
+                  </div>
+                  <div>
+                    <p className="text-2xl font-bold text-white">{purchases.filter(isRecentPurchase).length}</p>
+                    <p className="text-sm text-gray-400">Recent</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Tabs */}
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="mb-6">
             <TabsList className="bg-gray-800/50 border border-gray-700/50 backdrop-blur-sm">
-              <TabsTrigger value="all" className="data-[state=active]:bg-red-600">
+              <TabsTrigger value="all" className="data-[state=active]:bg-gray-700">
                 All Items
               </TabsTrigger>
-              <TabsTrigger value="downloads" className="data-[state=active]:bg-red-600">
+              <TabsTrigger value="downloads" className="data-[state=active]:bg-gray-700">
                 Downloads
               </TabsTrigger>
-              <TabsTrigger value="favorites" className="data-[state=active]:bg-red-600">
+              <TabsTrigger value="favorites" className="data-[state=active]:bg-gray-700">
                 Favorites
               </TabsTrigger>
-              <TabsTrigger value="recent" className="data-[state=active]:bg-red-600">
+              <TabsTrigger value="recent" className="data-[state=active]:bg-gray-700">
                 Recent
               </TabsTrigger>
             </TabsList>
           </Tabs>
-        </div>
 
-        {/* Controls */}
-        <div className="px-4 max-w-7xl mx-auto mb-8">
-          <div className="flex flex-col lg:flex-row gap-4">
+          {/* Controls */}
+          <div className="flex flex-col sm:flex-row gap-4 mb-6">
             <div className="flex-1">
               <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
                 <Input
                   placeholder="Search your collection..."
                   value={searchTerm}
@@ -257,7 +295,8 @@ export default function PurchasesPage() {
                 />
               </div>
             </div>
-            <div className="flex gap-3">
+
+            <div className="flex gap-2">
               <Select value={sortBy} onValueChange={setSortBy}>
                 <SelectTrigger className="w-40 bg-gray-800/50 border-gray-700/50 text-white backdrop-blur-sm">
                   <Calendar className="h-4 w-4 mr-2" />
@@ -267,8 +306,10 @@ export default function PurchasesPage() {
                   <SelectItem value="date">Date Added</SelectItem>
                   <SelectItem value="amount">Price</SelectItem>
                   <SelectItem value="title">Title</SelectItem>
+                  <SelectItem value="creator">Creator</SelectItem>
                 </SelectContent>
               </Select>
+
               <Select value={filterType} onValueChange={setFilterType}>
                 <SelectTrigger className="w-32 bg-gray-800/50 border-gray-700/50 text-white backdrop-blur-sm">
                   <Filter className="h-4 w-4 mr-2" />
@@ -281,216 +322,175 @@ export default function PurchasesPage() {
                   <SelectItem value="subscription">Subscriptions</SelectItem>
                 </SelectContent>
               </Select>
+
+              <div className="flex bg-gray-800/50 border border-gray-700/50 rounded-md backdrop-blur-sm">
+                <Button
+                  variant={viewMode === "grid" ? "default" : "ghost"}
+                  size="sm"
+                  onClick={() => setViewMode("grid")}
+                  className="rounded-r-none"
+                >
+                  <Grid3X3 className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant={viewMode === "list" ? "default" : "ghost"}
+                  size="sm"
+                  onClick={() => setViewMode("list")}
+                  className="rounded-l-none"
+                >
+                  <List className="h-4 w-4" />
+                </Button>
+              </div>
+
+              <Button
+                onClick={fetchPurchases}
+                variant="outline"
+                size="sm"
+                className="border-gray-700/50 bg-gray-800/50 text-white hover:bg-gray-700/50 backdrop-blur-sm"
+              >
+                <RefreshCw className="h-4 w-4" />
+              </Button>
             </div>
           </div>
-        </div>
 
-        {/* Content */}
-        <div className="px-4 max-w-7xl mx-auto pb-8">
-          {filteredPurchases.length === 0 ? (
-            <div className="text-center py-16">
-              <div className="w-24 h-24 mx-auto mb-6 rounded-full bg-gradient-to-br from-gray-700/20 to-gray-800/20 flex items-center justify-center border border-gray-700/30">
-                <Package className="h-12 w-12 text-gray-500" />
-              </div>
-              <h3 className="text-2xl font-semibold text-white mb-3">
-                {purchases.length === 0 ? "No purchases yet" : "No items match your search"}
-              </h3>
-              <p className="text-gray-400 mb-8 max-w-md mx-auto">
-                {purchases.length === 0
-                  ? "Start building your premium content library with exclusive downloads and bundles."
-                  : "Try adjusting your search terms or filters to find what you're looking for."}
-              </p>
-              {purchases.length === 0 && (
-                <Button
-                  asChild
-                  className="bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white"
-                >
+          {/* Content */}
+          {loading ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {[...Array(6)].map((_, i) => (
+                <Card key={i} className="bg-gray-800/30 border-gray-700/50 backdrop-blur-sm">
+                  <CardContent className="p-6">
+                    <Skeleton className="h-40 w-full mb-4 bg-gray-700" />
+                    <Skeleton className="h-4 w-3/4 mb-2 bg-gray-700" />
+                    <Skeleton className="h-4 w-1/2 bg-gray-700" />
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          ) : error ? (
+            <Card className="bg-gray-800/30 border-gray-700/50 backdrop-blur-sm">
+              <CardContent className="p-8 text-center">
+                <AlertCircle className="h-12 w-12 text-red-400 mx-auto mb-4" />
+                <h3 className="text-lg font-semibold text-white mb-2">Error Loading Purchases</h3>
+                <p className="text-gray-400 mb-4">{error}</p>
+                <Button onClick={fetchPurchases} className="bg-red-600 hover:bg-red-700">
+                  <RefreshCw className="h-4 w-4 mr-2" />
+                  Try Again
+                </Button>
+              </CardContent>
+            </Card>
+          ) : filteredPurchases.length === 0 ? (
+            <Card className="bg-gray-800/30 border-gray-700/50 backdrop-blur-sm">
+              <CardContent className="p-12 text-center">
+                <div className="w-16 h-16 bg-gray-700/50 rounded-full flex items-center justify-center mx-auto mb-6">
+                  <Package className="h-8 w-8 text-gray-400" />
+                </div>
+                <h3 className="text-xl font-semibold text-white mb-2">No purchases yet</h3>
+                <p className="text-gray-400 mb-6">
+                  Start building your premium content library with exclusive downloads and bundles.
+                </p>
+                <Button asChild className="bg-red-600 hover:bg-red-700">
                   <Link href="/dashboard/explore">
                     <ExternalLink className="h-4 w-4 mr-2" />
                     Explore Premium Content
                   </Link>
                 </Button>
-              )}
-            </div>
+              </CardContent>
+            </Card>
           ) : (
-            <div
-              className={
-                viewMode === "grid"
-                  ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6"
-                  : "space-y-4"
-              }
-            >
+            <div className={viewMode === "grid" ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6" : "space-y-4"}>
               {filteredPurchases.map((purchase) => (
-                <PurchaseCard key={purchase.id} purchase={purchase} viewMode={viewMode} />
+                <Card
+                  key={purchase.id}
+                  className="bg-gray-800/30 border-gray-700/50 backdrop-blur-sm hover:bg-gray-800/40 transition-colors"
+                >
+                  <CardContent className={viewMode === "grid" ? "p-6" : "p-4"}>
+                    <div className={viewMode === "grid" ? "space-y-4" : "flex gap-4"}>
+                      {/* Thumbnail */}
+                      <div
+                        className={viewMode === "grid" ? "aspect-video relative" : "w-24 h-16 relative flex-shrink-0"}
+                      >
+                        {purchase.thumbnailUrl ? (
+                          <Image
+                            src={purchase.thumbnailUrl || "/placeholder.svg"}
+                            alt={purchase.itemTitle}
+                            fill
+                            className="object-cover rounded-lg"
+                          />
+                        ) : (
+                          <div className="w-full h-full bg-gray-700/50 rounded-lg flex items-center justify-center">
+                            {getTypeIcon(purchase.type)}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Content */}
+                      <div className="flex-1 space-y-2">
+                        <div className="flex items-start justify-between gap-2">
+                          <h3 className="font-semibold text-white line-clamp-2">{purchase.itemTitle}</h3>
+                          <Badge className={getStatusColor(purchase.status)}>
+                            {purchase.status === "completed" && <CheckCircle className="h-3 w-3 mr-1" />}
+                            {purchase.status}
+                          </Badge>
+                        </div>
+
+                        {purchase.itemDescription && (
+                          <p className="text-sm text-gray-400 line-clamp-2">{purchase.itemDescription}</p>
+                        )}
+
+                        <div className="flex items-center gap-4 text-sm text-gray-400">
+                          <div className="flex items-center gap-1">
+                            {getTypeIcon(purchase.type)}
+                            <span className="capitalize">{purchase.type.replace("_", " ")}</span>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <DollarSign className="h-3 w-3" />
+                            <span>${purchase.amount.toFixed(2)}</span>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <Calendar className="h-3 w-3" />
+                            <span>{new Date(purchase.purchasedAt).toLocaleDateString()}</span>
+                          </div>
+                        </div>
+
+                        {purchase.creatorName && (
+                          <p className="text-sm text-gray-400">
+                            by {purchase.creatorName}
+                            {purchase.creatorUsername && ` (@${purchase.creatorUsername})`}
+                          </p>
+                        )}
+
+                        {/* Actions */}
+                        <div className="flex gap-2 pt-2">
+                          {purchase.type === "product_box" && purchase.productBoxId && (
+                            <Button asChild size="sm" className="bg-blue-600 hover:bg-blue-700">
+                              <Link href={`/product-box/${purchase.productBoxId}/content`}>
+                                <Eye className="h-4 w-4 mr-2" />
+                                View Content
+                              </Link>
+                            </Button>
+                          )}
+
+                          <Button
+                            asChild
+                            size="sm"
+                            variant="outline"
+                            className="border-gray-600 text-gray-300 hover:bg-gray-700 bg-transparent"
+                          >
+                            <Link href={`/creator/${purchase.creatorUsername}`}>
+                              <ExternalLink className="h-4 w-4 mr-2" />
+                              Creator Profile
+                            </Link>
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
               ))}
             </div>
           )}
         </div>
       </div>
     </div>
-  )
-}
-
-interface PurchaseCardProps {
-  purchase: Purchase
-  viewMode: "grid" | "list"
-}
-
-function PurchaseCard({ purchase, viewMode }: PurchaseCardProps) {
-  const getStatusColor = (status: string) => {
-    switch (status.toLowerCase()) {
-      case "completed":
-        return "bg-green-500"
-      case "pending":
-        return "bg-yellow-500"
-      case "failed":
-        return "bg-red-500"
-      default:
-        return "bg-gray-500"
-    }
-  }
-
-  const getTypeIcon = (type: string) => {
-    switch (type) {
-      case "product_box":
-        return <Package className="h-4 w-4" />
-      case "bundle":
-        return <Grid3X3 className="h-4 w-4" />
-      case "subscription":
-        return <Clock className="h-4 w-4" />
-      default:
-        return <Package className="h-4 w-4" />
-    }
-  }
-
-  if (viewMode === "list") {
-    return (
-      <Card className="bg-gray-800/30 border-gray-700/50 backdrop-blur-sm hover:bg-gray-800/50 transition-all duration-200">
-        <CardContent className="p-4">
-          <div className="flex items-center gap-4">
-            <div className="w-16 h-16 rounded-lg bg-gray-700/50 flex items-center justify-center overflow-hidden">
-              {purchase.thumbnailUrl ? (
-                <img
-                  src={purchase.thumbnailUrl || "/placeholder.svg"}
-                  alt={purchase.itemTitle}
-                  className="w-full h-full object-cover"
-                />
-              ) : (
-                <Package className="h-8 w-8 text-gray-400" />
-              )}
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 mb-1">
-                <h3 className="font-semibold text-white truncate">{purchase.itemTitle}</h3>
-                <Badge variant="outline" className="border-gray-600 text-gray-300">
-                  {getTypeIcon(purchase.type)}
-                  <span className="ml-1 capitalize">{purchase.type.replace("_", " ")}</span>
-                </Badge>
-              </div>
-              <p className="text-sm text-gray-400 mb-2">
-                by {purchase.creatorName || purchase.creatorUsername || "Unknown Creator"}
-              </p>
-              <div className="flex items-center gap-4 text-sm text-gray-400">
-                <span className="flex items-center gap-1">
-                  <Calendar className="h-3 w-3" />
-                  {format(new Date(purchase.purchasedAt), "MMM d, yyyy")}
-                </span>
-                <span className="flex items-center gap-1">
-                  <DollarSign className="h-3 w-3" />${purchase.amount.toFixed(2)}
-                </span>
-                <div className="flex items-center gap-1">
-                  <div className={`w-2 h-2 rounded-full ${getStatusColor(purchase.status)}`} />
-                  <span className="capitalize">{purchase.status}</span>
-                </div>
-              </div>
-            </div>
-            <div className="flex items-center gap-2">
-              <Button
-                asChild
-                size="sm"
-                variant="outline"
-                className="border-gray-600 hover:bg-gray-700 text-white bg-transparent"
-              >
-                <Link href={`/product-box/${purchase.productBoxId}/content`}>
-                  <Eye className="h-4 w-4 mr-2" />
-                  View
-                </Link>
-              </Button>
-              <Button asChild size="sm" className="bg-red-600 hover:bg-red-700 text-white">
-                <Link href={`/product-box/${purchase.productBoxId}/content`}>
-                  <Download className="h-4 w-4 mr-2" />
-                  Access
-                </Link>
-              </Button>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-    )
-  }
-
-  return (
-    <Card className="bg-gray-800/30 border-gray-700/50 backdrop-blur-sm hover:bg-gray-800/50 transition-all duration-200 group">
-      <div className="aspect-video relative overflow-hidden rounded-t-lg bg-gray-700/50">
-        {purchase.thumbnailUrl ? (
-          <img
-            src={purchase.thumbnailUrl || "/placeholder.svg"}
-            alt={purchase.itemTitle}
-            className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-200"
-          />
-        ) : (
-          <div className="w-full h-full flex items-center justify-center">
-            <Package className="h-12 w-12 text-gray-400" />
-          </div>
-        )}
-        <div className="absolute top-2 left-2">
-          <Badge variant="outline" className="border-gray-600 text-gray-300 bg-black/50 backdrop-blur-sm">
-            {getTypeIcon(purchase.type)}
-            <span className="ml-1 capitalize">{purchase.type.replace("_", " ")}</span>
-          </Badge>
-        </div>
-        <div className="absolute top-2 right-2">
-          <div className={`w-3 h-3 rounded-full ${getStatusColor(purchase.status)}`} />
-        </div>
-      </div>
-      <CardContent className="p-4">
-        <div className="space-y-3">
-          <div>
-            <h3 className="font-semibold text-white line-clamp-2 mb-1">{purchase.itemTitle}</h3>
-            <p className="text-sm text-gray-400">
-              by {purchase.creatorName || purchase.creatorUsername || "Unknown Creator"}
-            </p>
-          </div>
-          <div className="flex items-center justify-between text-sm text-gray-400">
-            <span className="flex items-center gap-1">
-              <Calendar className="h-3 w-3" />
-              {format(new Date(purchase.purchasedAt), "MMM d")}
-            </span>
-            <span className="flex items-center gap-1 font-medium text-white">
-              <DollarSign className="h-3 w-3" />${purchase.amount.toFixed(2)}
-            </span>
-          </div>
-          <div className="flex gap-2">
-            <Button
-              asChild
-              size="sm"
-              variant="outline"
-              className="flex-1 border-gray-600 hover:bg-gray-700 text-white bg-transparent"
-            >
-              <Link href={`/product-box/${purchase.productBoxId}/content`}>
-                <Eye className="h-4 w-4 mr-2" />
-                View
-              </Link>
-            </Button>
-            <Button asChild size="sm" className="flex-1 bg-red-600 hover:bg-red-700 text-white">
-              <Link href={`/product-box/${purchase.productBoxId}/content`}>
-                <Download className="h-4 w-4 mr-2" />
-                Access
-              </Link>
-            </Button>
-          </div>
-        </div>
-      </CardContent>
-    </Card>
   )
 }
