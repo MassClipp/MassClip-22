@@ -50,8 +50,11 @@ export default function ProductBoxDisplay({ productBox, showPurchaseButton = tru
       const idToken = await user.getIdToken()
       console.log("🔑 [Purchase] Got auth token")
 
-      console.log("📡 [Purchase] Creating checkout session...")
-      const response = await fetch(`/api/creator/product-boxes/${productBox.id}/checkout`, {
+      // Fix the API endpoint URL construction
+      const checkoutUrl = `/api/creator/product-boxes/${productBox.id}/checkout`
+      console.log("📡 [Purchase] Creating checkout session at:", checkoutUrl)
+
+      const response = await fetch(checkoutUrl, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -65,6 +68,7 @@ export default function ProductBoxDisplay({ productBox, showPurchaseButton = tru
       console.log("📡 [Purchase] Checkout response:", {
         status: response.status,
         ok: response.ok,
+        url: response.url,
       })
 
       if (!response.ok) {
