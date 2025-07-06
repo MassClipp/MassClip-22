@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { auth, db } from "@/lib/firebase-admin"
-import { getStripeClientForSession, validateSessionKeyCompatibility, getStripeDebugInfo } from "@/lib/stripe-dynamic"
+import { getStripeClientForSession } from "@/lib/stripe-client"
 
 export async function POST(request: NextRequest) {
   try {
@@ -15,44 +15,6 @@ export async function POST(request: NextRequest) {
 
     console.log("📋 [Purchase Verify] Session ID:", sessionId.substring(0, 20) + "...")
 
-    // Get debug information
-    const debugInfo = getStripeDebugInfo(sessionId)
-    console.log("🔧 [Purchase Verify] Debug info:", debugInfo)
-
-    // Get the appropriate Stripe client for this session
-    let stripeConfig
-    try {
-      stripeConfig = getStripeClientForSession(sessionId)
-      console.log(`✅ [Purchase Verify] Using ${stripeConfig.mode} Stripe client (${stripeConfig.keyPrefix})`)
-    } catch (stripeError: any) {
-      console.error("❌ [Purchase Verify] Stripe client configuration error:", stripeError.message)
-      return NextResponse.json(
-        {
-          error: "Stripe Configuration Error",
-          details: stripeError.message,
-          debugInfo,
-          recommendation: "Check your STRIPE_SECRET_KEY_TEST and STRIPE_SECRET_KEY_LIVE environment variables",
-        },
-        { status: 500 },
-      )
-    }
-
-    // Validate compatibility
-    if (!validateSessionKeyCompatibility(sessionId, stripeConfig)) {
-      console.error("❌ [Purchase Verify] Session/Key compatibility check failed")
-      return NextResponse.json(
-        {
-          error: "Configuration Error: Test/Live Mode Mismatch",
-          details: `Session type (${debugInfo.sessionType}) doesn't match available Stripe keys`,
-          sessionType: debugInfo.sessionType,
-          keyType: stripeConfig.mode,
-          debugInfo,
-          recommendation: `Use ${debugInfo.expectedKeyType} key for ${debugInfo.sessionType} sessions`,
-        },
-        { status: 400 },
-      )
-    }
-
     // Verify user if token is provided
     let userId: string | null = null
     if (idToken) {
@@ -66,7 +28,32 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Retrieve the Stripe session with the correct client
+    // Get the appropriate Stripe client for this session
+    let stripeConfig
+    try {
+      stripeConfig = getStripeClientForSession(sessionId)
+      console.log("✅ [Purchase Verify] Using Stripe client:", {
+        mode: stripeConfig.mode,
+        keyType: stripeConfig.keyType,
+      })
+    } catch (configError: any) {
+      console.error("❌ [Purchase Verify] Stripe configuration error:", configError.message)
+      return NextResponse.json(
+        {
+          error: "Configuration Error: Test/Live Mode Mismatch",
+          details: configError.message,
+          sessionType: sessionId.startsWith("cs_test_")
+            ? "test"
+            : sessionId.startsWith("cs_live_")
+              ? "live"
+              : "unknown",
+          recommendation: "Check your Stripe environment variables and ensure they match the session type",
+        },
+        { status: 400 },
+      )
+    }
+
+    // Retrieve the Stripe session with proper error handling
     let session
     try {
       console.log("🔄 [Purchase Verify] Retrieving Stripe session...")
@@ -87,15 +74,15 @@ export async function POST(request: NextRequest) {
         return NextResponse.json(
           {
             error: "Payment session not found",
-            details: "This session ID does not exist in your Stripe account or may have expired",
+            details: "This could mean the session has expired, is invalid, or there's still a test/live mode mismatch.",
             sessionId: sessionId.substring(0, 20) + "...",
+            stripeMode: stripeConfig.mode,
             stripeError: {
               type: stripeError.type,
               code: stripeError.code,
               message: stripeError.message,
             },
-            debugInfo,
-            recommendation: "Verify the session ID is correct and belongs to your Stripe account",
+            recommendation: `Verify the session exists in your Stripe ${stripeConfig.mode} dashboard`,
           },
           { status: 404 },
         )
@@ -106,8 +93,8 @@ export async function POST(request: NextRequest) {
           error: `Failed to retrieve payment session: ${stripeError.message}`,
           type: stripeError.type,
           code: stripeError.code,
-          details: "There was an error communicating with Stripe",
-          debugInfo,
+          details: "There was an error communicating with Stripe. Please try again or contact support.",
+          stripeMode: stripeConfig.mode,
           recommendation: "Check your Stripe configuration and try again",
         },
         { status: 500 },
@@ -126,6 +113,7 @@ export async function POST(request: NextRequest) {
       metadata: session.metadata,
       amount_total: session.amount_total,
       currency: session.currency,
+      mode: session.mode,
     })
 
     // Check if the session was paid
@@ -226,6 +214,7 @@ export async function POST(request: NextRequest) {
             creatorUsername,
             creatorName: creatorName || "Unknown Creator",
             type: "product_box",
+            stripeMode: stripeConfig.mode,
           },
         })
       }
@@ -279,6 +268,7 @@ export async function POST(request: NextRequest) {
           timestamp: db.FieldValue.serverTimestamp(),
           status: "completed",
           creatorId: productBoxData.creatorId,
+          stripeMode: stripeConfig.mode,
         })
 
       console.log("✅ [Purchase Verify] Created purchase record:", purchaseRef.id)
@@ -325,6 +315,7 @@ export async function POST(request: NextRequest) {
             netAmount: session.amount_total ? (session.amount_total * 0.95) / 100 : 0,
             purchasedAt: db.FieldValue.serverTimestamp(),
             status: "completed",
+            stripeMode: stripeConfig.mode,
           })
 
         // Increment the creator's total sales
@@ -376,6 +367,7 @@ export async function POST(request: NextRequest) {
         creatorUsername,
         creatorName: creatorName || "Unknown Creator",
         type: "product_box",
+        stripeMode: stripeConfig.mode,
       },
     }
 
