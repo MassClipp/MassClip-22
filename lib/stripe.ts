@@ -7,30 +7,24 @@ const isDevelopment = process.env.NODE_ENV === "development"
 // Use test keys for development and preview environments
 const shouldUseTestKeys = isDevelopment || process.env.VERCEL_ENV === "preview"
 
-// Select the appropriate secret key
-const secretKey = shouldUseTestKeys
+const stripeSecretKey = shouldUseTestKeys
   ? process.env.STRIPE_SECRET_KEY_TEST || process.env.STRIPE_SECRET_KEY
   : process.env.STRIPE_SECRET_KEY
 
-if (!secretKey) {
-  throw new Error("Missing Stripe secret key")
+const stripePublishableKey = shouldUseTestKeys
+  ? process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY_TEST || process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
+  : process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
+
+if (!stripeSecretKey) {
+  throw new Error(`Missing Stripe secret key for ${shouldUseTestKeys ? "test" : "live"} environment`)
 }
 
-// Initialize Stripe with the selected key
-export const stripe = new Stripe(secretKey, {
+console.log(`🔑 [Stripe] Using ${shouldUseTestKeys ? "TEST" : "LIVE"} keys`)
+console.log(`🔑 [Stripe] Environment: ${process.env.VERCEL_ENV || "development"}`)
+
+export const stripe = new Stripe(stripeSecretKey, {
   apiVersion: "2024-06-20",
 })
 
-// Helper functions
-export const isTestMode = () => secretKey?.startsWith("sk_test_") || false
-export const getKeyType = () => (secretKey?.startsWith("sk_test_") ? "test" : "live")
-
-// Log the configuration (without exposing the full key)
-console.log("🔧 Stripe Configuration:", {
-  environment: process.env.VERCEL_ENV || process.env.NODE_ENV,
-  keyType: getKeyType(),
-  isTestMode: isTestMode(),
-  keyPrefix: secretKey?.substring(0, 8) + "...",
-})
-
-export default stripe
+export const STRIPE_PUBLISHABLE_KEY = stripePublishableKey
+export const IS_TEST_MODE = shouldUseTestKeys

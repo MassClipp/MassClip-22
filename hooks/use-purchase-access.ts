@@ -30,12 +30,16 @@ export function usePurchaseAccess(productBoxId: string): PurchaseAccess {
         setLoading(true)
         setError(null)
 
+        console.log(`🔍 Checking access for user ${user.uid}, product ${productBoxId}`)
+
         // Check if user has purchased this product box
         const purchaseRef = doc(db, "users", user.uid, "purchases", productBoxId)
         const purchaseDoc = await getDoc(purchaseRef)
 
         if (purchaseDoc.exists()) {
           const data = purchaseDoc.data()
+          console.log("✅ Purchase found:", data)
+
           if (data.status === "complete") {
             setHasAccess(true)
             setPurchaseData(data)
@@ -44,10 +48,11 @@ export function usePurchaseAccess(productBoxId: string): PurchaseAccess {
             setError(`Purchase status: ${data.status}`)
           }
         } else {
+          console.log("❌ No purchase found")
           setHasAccess(false)
         }
       } catch (err) {
-        console.error("Error checking purchase access:", err)
+        console.error("❌ Error checking purchase access:", err)
         setError("Failed to check access")
         setHasAccess(false)
       } finally {

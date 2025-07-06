@@ -1,7 +1,20 @@
 import { type NextRequest, NextResponse } from "next/server"
 import Stripe from "stripe"
-import { db } from "@/lib/firebase-admin"
+import { getFirestore, FieldValue } from "firebase-admin/firestore"
+import { initializeApp, getApps, cert } from "firebase-admin/app"
 
+// Initialize Firebase Admin if not already initialized
+if (!getApps().length) {
+  initializeApp({
+    credential: cert({
+      projectId: process.env.FIREBASE_PROJECT_ID,
+      clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+      privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n"),
+    }),
+  })
+}
+
+const db = getFirestore()
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: "2024-06-20",
 })
@@ -98,8 +111,8 @@ export async function POST(request: NextRequest) {
           .collection("productBoxes")
           .doc(productBoxId)
           .update({
-            totalSales: db.FieldValue.increment(1),
-            totalRevenue: db.FieldValue.increment(purchaseAmount),
+            totalSales: FieldValue.increment(1),
+            totalRevenue: FieldValue.increment(purchaseAmount),
             lastSaleAt: new Date(),
           })
 
@@ -131,8 +144,8 @@ export async function POST(request: NextRequest) {
             .collection("users")
             .doc(creatorId)
             .update({
-              totalSales: db.FieldValue.increment(1),
-              totalRevenue: db.FieldValue.increment(netAmount),
+              totalSales: FieldValue.increment(1),
+              totalRevenue: FieldValue.increment(netAmount),
               lastSaleAt: new Date(),
             })
 

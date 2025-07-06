@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { CheckCircle, AlertCircle, RefreshCw, ArrowLeft, ExternalLink } from "lucide-react"
 import Link from "next/link"
 import { useAuth } from "@/contexts/auth-context"
+import { collection, query, where, getDocs, limit } from "firebase/firestore"
 import { db } from "@/lib/firebase"
 
 interface PurchaseData {
@@ -48,13 +49,15 @@ export default function PurchaseSuccessPage() {
       setLoading(true)
       setError(null)
 
-      // Extract product box ID from session ID if needed, or check all purchases
-      // For now, we'll check the user's recent purchases
-      const purchasesRef = db.collection("users").doc(user.uid).collection("purchases")
-      const purchasesSnapshot = await purchasesRef.where("sessionId", "==", sessionId).limit(1).get()
+      console.log("🔍 Checking purchase status for session:", sessionId)
+
+      // Query user's purchases collection for this session
+      const purchasesRef = collection(db, "users", user.uid, "purchases")
+      const q = query(purchasesRef, where("sessionId", "==", sessionId), limit(1))
+      const purchasesSnapshot = await getDocs(q)
 
       if (purchasesSnapshot.empty) {
-        // Purchase not found yet - webhook might still be processing
+        console.log("❌ Purchase not found for session:", sessionId)
         setError("Purchase not found. The payment may still be processing.")
         return
       }
@@ -62,9 +65,10 @@ export default function PurchaseSuccessPage() {
       const purchaseDoc = purchasesSnapshot.docs[0]
       const purchaseData = purchaseDoc.data() as PurchaseData
 
+      console.log("✅ Purchase found:", purchaseData)
+
       if (purchaseData.status === "complete") {
         setPurchase(purchaseData)
-        console.log("✅ Purchase found and completed:", purchaseData)
       } else {
         setError(`Purchase status: ${purchaseData.status}`)
       }
@@ -86,6 +90,7 @@ export default function PurchaseSuccessPage() {
         <div className="text-center space-y-4">
           <RefreshCw className="h-8 w-8 animate-spin text-white mx-auto" />
           <p className="text-gray-400">Checking your purchase...</p>
+          <p className="text-gray-500 text-sm">This may take a few seconds</p>
         </div>
       </div>
     )
@@ -155,7 +160,11 @@ export default function PurchaseSuccessPage() {
         <div className="space-y-2">
           <h1 className="text-3xl font-light text-white">Purchase Complete!</h1>
           <p className="text-gray-400 text-sm">Your payment has been processed successfully</p>
-          {purchase.isTestPurchase && <p className="text-amber-400 text-xs">🧪 Test Purchase</p>}
+          {purchase.isTestPurchase && (
+            <div className="inline-flex items-center gap-1 px-2 py-1 bg-amber-500/10 border border-amber-500/20 rounded text-amber-400 text-xs">
+              🧪 Test Purchase
+            </div>
+          )}
         </div>
 
         <div className="bg-gray-900/30 border border-gray-800 rounded-lg p-6 space-y-3 text-left">
