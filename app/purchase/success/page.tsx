@@ -3,32 +3,39 @@
 import { useEffect, useState } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
-import { CheckCircle, AlertCircle, Copy, RefreshCw, Bug } from "lucide-react"
-import { toast } from "sonner"
+import { CheckCircle, AlertCircle, Copy, RefreshCw, ArrowLeft, ExternalLink } from "lucide-react"
+import Link from "next/link"
+import { useToast } from "@/hooks/use-toast"
 
-interface PurchaseData {
-  sessionId: string
-  amount: number
-  currency: string
-  customerEmail: string
-  status: string
+interface PurchaseResult {
+  success: boolean
+  error?: string
+  sessionId?: string
+  purchaseDetails?: {
+    amount: number
+    currency: string
+    customerEmail: string
+    productName?: string
+  }
+  debugInfo?: any
 }
 
 export default function PurchaseSuccessPage() {
   const searchParams = useSearchParams()
   const router = useRouter()
-  const [isLoading, setIsLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [purchaseData, setPurchaseData] = useState<PurchaseData | null>(null)
-  const [debugInfo, setDebugInfo] = useState<any>(null)
-  const [showDebug, setShowDebug] = useState(false)
+  const { toast } = useToast()
+  const [result, setResult] = useState<PurchaseResult | null>(null)
+  const [loading, setLoading] = useState(true)
 
   const sessionId = searchParams.get("session_id")
 
   useEffect(() => {
     if (!sessionId) {
-      setError("No session ID provided")
-      setIsLoading(false)
+      setResult({
+        success: false,
+        error: "No session ID provided",
+      })
+      setLoading(false)
       return
     }
 
@@ -37,7 +44,7 @@ export default function PurchaseSuccessPage() {
 
   const verifyPurchase = async () => {
     try {
-      setIsLoading(true)
+      setLoading(true)
       const response = await fetch("/api/purchase/verify", {
         method: "POST",
         headers: {
@@ -47,137 +54,90 @@ export default function PurchaseSuccessPage() {
       })
 
       const data = await response.json()
-      setDebugInfo(data)
-
-      if (response.ok && data.success) {
-        setPurchaseData(data.purchase)
-        setError(null)
-      } else {
-        setError(data.error || "Purchase verification failed")
-      }
-    } catch (err) {
-      console.error("Verification error:", err)
-      setError("Failed to verify purchase")
+      setResult(data)
+    } catch (error) {
+      console.error("Error verifying purchase:", error)
+      setResult({
+        success: false,
+        error: "Failed to verify purchase",
+      })
     } finally {
-      setIsLoading(false)
+      setLoading(false)
     }
   }
 
   const copySessionId = () => {
     if (sessionId) {
       navigator.clipboard.writeText(sessionId)
-      toast.success("Session ID copied to clipboard")
+      toast({
+        title: "Copied!",
+        description: "Session ID copied to clipboard",
+      })
     }
   }
 
-  const copyDebugInfo = () => {
-    if (debugInfo) {
-      navigator.clipboard.writeText(JSON.stringify(debugInfo, null, 2))
-      toast.success("Debug info copied to clipboard")
-    }
+  const retryVerification = () => {
+    verifyPurchase()
   }
 
-  if (isLoading) {
+  if (loading) {
     return (
       <div className="min-h-screen bg-black flex items-center justify-center">
         <div className="text-center space-y-4">
-          <div className="w-8 h-8 border-2 border-white/20 border-t-white rounded-full animate-spin mx-auto" />
-          <p className="text-white/60">Verifying your purchase...</p>
+          <RefreshCw className="h-8 w-8 animate-spin text-white mx-auto" />
+          <p className="text-gray-400">Verifying your purchase...</p>
         </div>
       </div>
     )
   }
 
-  if (error) {
-    const isConfigError = error.includes("Test/Live Mode Mismatch") || error.includes("configuration")
+  if (!result) {
+    return (
+      <div className="min-h-screen bg-black flex items-center justify-center">
+        <div className="text-center space-y-4">
+          <AlertCircle className="h-12 w-12 text-red-500 mx-auto" />
+          <h1 className="text-2xl font-light text-white">Something went wrong</h1>
+          <p className="text-gray-400">Unable to load purchase information</p>
+        </div>
+      </div>
+    )
+  }
 
+  if (result.success) {
+    // SUCCESS STATE - Minimal & Sleek Design
     return (
       <div className="min-h-screen bg-black flex items-center justify-center p-4">
-        <div className="w-full max-w-2xl space-y-8">
-          {/* Error Header */}
-          <div className="text-center space-y-4">
-            <div className="w-16 h-16 bg-red-500/10 rounded-full flex items-center justify-center mx-auto">
-              <AlertCircle className="w-8 h-8 text-red-400" />
-            </div>
-            <div>
-              <h1 className="text-2xl font-light text-white mb-2">Purchase Verification Failed</h1>
-              <p className="text-white/60">{isConfigError ? "Configuration Error: Test/Live Mode Mismatch" : error}</p>
+        <div className="w-full max-w-md space-y-8 text-center">
+          {/* Success Icon */}
+          <div className="relative">
+            <div className="w-20 h-20 mx-auto rounded-full bg-green-500/10 border border-green-500/20 flex items-center justify-center">
+              <CheckCircle className="h-10 w-10 text-green-400" />
             </div>
           </div>
 
-          {/* Configuration Warning */}
-          {isConfigError && (
-            <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-6">
-              <div className="flex items-start space-x-3">
-                <AlertCircle className="w-5 h-5 text-amber-400 mt-0.5 flex-shrink-0" />
-                <div className="space-y-3">
-                  <h3 className="text-amber-400 font-medium">Configuration Issue Detected</h3>
-                  <p className="text-white/70 text-sm leading-relaxed">
-                    There's a mismatch between your Stripe configuration and the payment session. This typically happens
-                    when:
-                  </p>
-                  <ul className="text-white/60 text-sm space-y-1 ml-4">
-                    <li>• Using test Stripe keys with a live payment session</li>
-                    <li>• Using live Stripe keys with a test payment session</li>
-                  </ul>
-                  <Button
-                    onClick={() => router.push("/debug-stripe-config")}
-                    variant="outline"
-                    size="sm"
-                    className="bg-amber-500/10 border-amber-500/30 text-amber-400 hover:bg-amber-500/20"
-                  >
-                    <Bug className="w-4 h-4 mr-2" />
-                    Check Configuration
-                  </Button>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Reassurance */}
-          <div className="text-center">
-            <p className="text-white/60 text-sm">
-              Don't worry! Your payment was likely successful. You can try verifying again or check your purchases.
-            </p>
+          {/* Success Message */}
+          <div className="space-y-2">
+            <h1 className="text-3xl font-light text-white">Purchase Complete</h1>
+            <p className="text-gray-400 text-sm">Your payment has been processed successfully</p>
           </div>
 
-          {/* Session Info */}
-          {sessionId && (
-            <div className="bg-white/5 border border-white/10 rounded-lg p-4">
-              <div className="flex items-center justify-between">
-                <span className="text-white/60 text-sm font-mono">Session: {sessionId.substring(0, 20)}...</span>
-                <Button onClick={copySessionId} variant="ghost" size="sm" className="text-white/60 hover:text-white">
-                  <Copy className="w-4 h-4" />
-                </Button>
+          {/* Purchase Details */}
+          {result.purchaseDetails && (
+            <div className="bg-gray-900/30 border border-gray-800 rounded-lg p-6 space-y-3 text-left">
+              <div className="flex justify-between items-center">
+                <span className="text-gray-400 text-sm">Amount</span>
+                <span className="text-white font-medium">
+                  ${(result.purchaseDetails.amount / 100).toFixed(2)} {result.purchaseDetails.currency.toUpperCase()}
+                </span>
               </div>
-            </div>
-          )}
-
-          {/* Debug Info */}
-          {debugInfo && (
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <h3 className="text-amber-400 text-sm font-medium">Debug Information</h3>
-                <div className="flex space-x-2">
-                  <Button
-                    onClick={() => setShowDebug(!showDebug)}
-                    variant="ghost"
-                    size="sm"
-                    className="text-white/60 hover:text-white text-sm"
-                  >
-                    {showDebug ? "Hide" : "Show"}
-                  </Button>
-                  <Button onClick={copyDebugInfo} variant="ghost" size="sm" className="text-white/60 hover:text-white">
-                    <Copy className="w-4 h-4" />
-                  </Button>
-                </div>
+              <div className="flex justify-between items-center">
+                <span className="text-gray-400 text-sm">Email</span>
+                <span className="text-white text-sm">{result.purchaseDetails.customerEmail}</span>
               </div>
-
-              {showDebug && (
-                <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-4">
-                  <p className="text-blue-400 text-sm mb-2">
-                    <strong>Recommendation:</strong> Verify the session ID is correct and belongs to your Stripe account
-                  </p>
+              {result.purchaseDetails.productName && (
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-400 text-sm">Product</span>
+                  <span className="text-white text-sm">{result.purchaseDetails.productName}</span>
                 </div>
               )}
             </div>
@@ -185,88 +145,113 @@ export default function PurchaseSuccessPage() {
 
           {/* Actions */}
           <div className="space-y-3">
-            <Button
-              onClick={verifyPurchase}
-              className="w-full bg-white/10 hover:bg-white/20 text-white border-0"
-              disabled={isLoading}
-            >
-              <RefreshCw className="w-4 h-4 mr-2" />
-              Try Again
+            <Button asChild className="w-full bg-white text-black hover:bg-gray-100 font-medium">
+              <Link href="/dashboard">Continue to Dashboard</Link>
             </Button>
-            <Button
-              onClick={() => router.push("/debug-stripe-config")}
-              variant="outline"
-              className="w-full bg-amber-500/10 border-amber-500/30 text-amber-400 hover:bg-amber-500/20"
-            >
-              <Bug className="w-4 h-4 mr-2" />
-              Debug Session
+            <Button asChild variant="ghost" className="w-full text-gray-400 hover:text-white hover:bg-gray-900/50">
+              <Link href="/dashboard/purchases">View Purchases</Link>
             </Button>
+          </div>
+
+          {/* Footer */}
+          <div className="pt-8 border-t border-gray-800">
+            <p className="text-gray-500 text-xs">
+              Need help?{" "}
+              <Link href="/support" className="text-gray-400 hover:text-white underline">
+                Contact Support
+              </Link>
+            </p>
           </div>
         </div>
       </div>
     )
   }
 
-  // Success State - Minimal & Sleek Design
+  // ERROR STATE - Also minimal and dark
   return (
     <div className="min-h-screen bg-black flex items-center justify-center p-4">
-      <div className="w-full max-w-md space-y-8">
-        {/* Success Header */}
-        <div className="text-center space-y-6">
-          <div className="w-20 h-20 bg-green-500/10 rounded-full flex items-center justify-center mx-auto">
-            <CheckCircle className="w-10 h-10 text-green-400" />
-          </div>
-          <div>
-            <h1 className="text-3xl font-light text-white mb-2">Payment Successful</h1>
-            <p className="text-white/60">Your purchase has been completed</p>
-          </div>
+      <div className="w-full max-w-lg space-y-6 text-center">
+        {/* Error Icon */}
+        <div className="w-16 h-16 mx-auto rounded-full bg-red-500/10 border border-red-500/20 flex items-center justify-center">
+          <AlertCircle className="h-8 w-8 text-red-400" />
         </div>
 
-        {/* Purchase Details */}
-        {purchaseData && (
-          <div className="bg-white/5 border border-white/10 rounded-lg p-6 space-y-4">
-            <div className="flex justify-between items-center">
-              <span className="text-white/60">Amount</span>
-              <span className="text-white font-medium">
-                ${(purchaseData.amount / 100).toFixed(2)} {purchaseData.currency.toUpperCase()}
-              </span>
+        {/* Error Message */}
+        <div className="space-y-2">
+          <h1 className="text-2xl font-light text-white">Purchase Verification Failed</h1>
+          <p className="text-gray-400 text-sm">
+            {result.error === "Test/Live Mode Mismatch"
+              ? "Configuration Error: Test/Live Mode Mismatch"
+              : result.error || "Unable to verify your purchase"}
+          </p>
+        </div>
+
+        {/* Configuration Issue Alert */}
+        {result.error === "Test/Live Mode Mismatch" && (
+          <div className="bg-amber-900/20 border border-amber-500/30 rounded-lg p-4 text-left space-y-3">
+            <div className="flex items-center gap-2">
+              <AlertCircle className="h-4 w-4 text-amber-400" />
+              <span className="text-amber-400 font-medium text-sm">Configuration Issue Detected</span>
             </div>
-            <div className="flex justify-between items-center">
-              <span className="text-white/60">Email</span>
-              <span className="text-white font-medium">{purchaseData.customerEmail}</span>
-            </div>
-            <div className="flex justify-between items-center">
-              <span className="text-white/60">Status</span>
-              <span className="text-green-400 font-medium capitalize">{purchaseData.status}</span>
-            </div>
+            <p className="text-amber-300/80 text-sm">
+              There's a mismatch between your Stripe configuration and the payment session. This typically happens when:
+            </p>
+            <ul className="text-amber-300/70 text-sm space-y-1 ml-4 list-disc">
+              <li>Using test Stripe keys with a live payment session</li>
+              <li>Using live Stripe keys with a test payment session</li>
+            </ul>
+            <Button
+              asChild
+              variant="outline"
+              size="sm"
+              className="border-amber-500/50 text-amber-400 hover:bg-amber-500/10 bg-transparent"
+            >
+              <Link href="/debug-stripe-config">
+                <AlertCircle className="h-4 w-4 mr-2" />
+                Check Configuration
+              </Link>
+            </Button>
           </div>
         )}
 
+        {/* Session ID */}
+        {sessionId && (
+          <div className="bg-gray-900/30 border border-gray-800 rounded-lg p-4">
+            <div className="flex items-center justify-between">
+              <span className="text-gray-400 text-sm">Session ID:</span>
+              <Button onClick={copySessionId} variant="ghost" size="sm" className="text-gray-400 hover:text-white p-1">
+                <Copy className="h-4 w-4" />
+              </Button>
+            </div>
+            <code className="text-gray-300 text-xs break-all">{sessionId}</code>
+          </div>
+        )}
+
+        {/* Reassurance */}
+        <p className="text-gray-500 text-sm">
+          Don't worry! Your payment was likely successful. You can try verifying again or check your purchases.
+        </p>
+
         {/* Actions */}
         <div className="space-y-3">
-          <Button
-            onClick={() => router.push("/dashboard")}
-            className="w-full bg-white text-black hover:bg-white/90 font-medium"
-          >
-            Go to Dashboard
+          <Button onClick={retryVerification} className="w-full bg-gray-800 hover:bg-gray-700 text-white">
+            <RefreshCw className="h-4 w-4 mr-2" />
+            Try Again
           </Button>
-          <Button
-            onClick={() => router.push("/dashboard/purchases")}
-            variant="ghost"
-            className="w-full text-white/60 hover:text-white hover:bg-white/5"
-          >
-            View Purchases
-          </Button>
-        </div>
-
-        {/* Footer */}
-        <div className="text-center">
-          <p className="text-white/40 text-sm">
-            Need help?{" "}
-            <a href="mailto:support@massclip.pro" className="text-white/60 hover:text-white underline">
-              Contact Support
-            </a>
-          </p>
+          <div className="flex gap-3">
+            <Button asChild variant="ghost" className="flex-1 text-gray-400 hover:text-white hover:bg-gray-900/50">
+              <Link href="/dashboard">
+                <ArrowLeft className="h-4 w-4 mr-2" />
+                Dashboard
+              </Link>
+            </Button>
+            <Button asChild variant="ghost" className="flex-1 text-gray-400 hover:text-white hover:bg-gray-900/50">
+              <Link href="/debug-stripe-config">
+                <ExternalLink className="h-4 w-4 mr-2" />
+                Debug
+              </Link>
+            </Button>
+          </div>
         </div>
       </div>
     </div>
