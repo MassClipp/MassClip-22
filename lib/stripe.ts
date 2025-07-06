@@ -1,34 +1,37 @@
 import Stripe from "stripe"
 
+// Determine which Stripe key to use based on environment
 function getStripeKey(): string {
-  const vercelEnv = process.env.VERCEL_ENV || "development"
-  const isProduction = vercelEnv === "production"
+  const nodeEnv = process.env.NODE_ENV
+  const vercelEnv = process.env.VERCEL_ENV
+
+  // Use live key only in production
+  const isProduction = nodeEnv === "production" || vercelEnv === "production"
 
   let stripeKey: string | undefined
 
   if (isProduction) {
-    // Use live key for production
     stripeKey = process.env.STRIPE_SECRET_KEY
-    console.log("🔑 [Stripe] Using production key (STRIPE_SECRET_KEY)")
+    console.log("🔑 [Stripe] Using live key for production environment")
   } else {
-    // Use test key for preview/development, fallback to main key
-    stripeKey = process.env.STRIPE_SECRET_KEY_TEST || process.env.STRIPE_SECRET_KEY
-    const keySource = process.env.STRIPE_SECRET_KEY_TEST ? "STRIPE_SECRET_KEY_TEST" : "STRIPE_SECRET_KEY (fallback)"
-    console.log(`🔑 [Stripe] Using ${keySource} for ${vercelEnv} environment`)
+    stripeKey = process.env.STRIPE_SECRET_KEY_TEST
+    console.log("🔑 [Stripe] Using test key for development/preview environment")
   }
 
   if (!stripeKey) {
     const missingKey = isProduction ? "STRIPE_SECRET_KEY" : "STRIPE_SECRET_KEY_TEST"
-    throw new Error(`${missingKey} environment variable is not set for ${vercelEnv} environment`)
+    throw new Error(`${missingKey} environment variable is not set`)
   }
 
   // Validate key format
-  const keyPrefix = stripeKey.substring(0, 8)
-  if (!keyPrefix.startsWith("sk_test_") && !keyPrefix.startsWith("sk_live_")) {
-    throw new Error(`Invalid Stripe key format: ${keyPrefix}`)
+  const expectedPrefix = isProduction ? "sk_live_" : "sk_test_"
+  if (!stripeKey.startsWith(expectedPrefix)) {
+    throw new Error(
+      `Invalid Stripe key for ${isProduction ? "production" : "development"} environment. Expected ${expectedPrefix} but got ${stripeKey.substring(0, 8)}`,
+    )
   }
 
-  console.log(`✅ [Stripe] Initialized with ${keyPrefix.startsWith("sk_live_") ? "live" : "test"} key`)
+  console.log(`✅ [Stripe] Initialized with ${isProduction ? "live" : "test"} key`)
   return stripeKey
 }
 
@@ -36,5 +39,15 @@ export const stripe = new Stripe(getStripeKey(), {
   apiVersion: "2024-06-20",
   typescript: true,
 })
+
+// Helper function to check if we're using test mode
+export const isTestMode = (): boolean => {
+  return stripe._apiKey.startsWith("sk_test_")
+}
+
+// Helper function to get the key type for logging
+export const getKeyType = (): "test" | "live" => {
+  return stripe._apiKey.startsWith("sk_test_") ? "test" : "live"
+}
 
 export default stripe
