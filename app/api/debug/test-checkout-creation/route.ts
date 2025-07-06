@@ -5,7 +5,7 @@ export async function POST(request: NextRequest) {
   try {
     console.log("🧪 [Test Checkout] Starting test checkout creation")
 
-    const { productBoxId, testMode } = await request.json()
+    const { productBoxId, price = 9.99 } = await request.json()
 
     // Initialize Stripe
     const stripeKey = process.env.STRIPE_SECRET_KEY
@@ -14,34 +14,44 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Stripe configuration error" }, { status: 500 })
     }
 
+    console.log("🔑 [Test Checkout] Stripe config:", {
+      keyType: stripeKey.startsWith("sk_test_") ? "test" : "live",
+      hasKey: !!stripeKey,
+    })
+
     const stripe = new Stripe(stripeKey, { apiVersion: "2023-08-16" })
 
-    // Create a test product and price
+    // Create a test product
     const product = await stripe.products.create({
       name: "Test Product Box",
-      description: "Test product for debugging checkout flow",
+      description: "Test checkout creation",
       metadata: {
         productBoxId: productBoxId || "test-product-box",
-        type: "test_product",
+        type: "test_product_box",
       },
     })
 
-    const price = await stripe.prices.create({
+    console.log("✅ [Test Checkout] Test product created:", product.id)
+
+    // Create a test price
+    const priceObj = await stripe.prices.create({
       currency: "usd",
-      unit_amount: 500, // $5.00
+      unit_amount: Math.round(price * 100), // Convert to cents
       product: product.id,
       metadata: {
         productBoxId: productBoxId || "test-product-box",
-        type: "test_price",
+        type: "test_product_box_price",
       },
     })
 
-    // Create checkout session
+    console.log("✅ [Test Checkout] Test price created:", priceObj.id)
+
+    // Create test checkout session
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ["card"],
       line_items: [
         {
-          price: price.id,
+          price: priceObj.id,
           quantity: 1,
         },
       ],
@@ -50,16 +60,18 @@ export async function POST(request: NextRequest) {
       cancel_url: `${process.env.NEXT_PUBLIC_SITE_URL}/debug-stripe-session`,
       metadata: {
         productBoxId: productBoxId || "test-product-box",
-        type: "test_purchase",
-        testMode: "true",
+        buyerUid: "test-user",
+        type: "test_product_box_purchase",
+        priceId: priceObj.id,
       },
       expires_at: Math.floor(Date.now() / 1000) + 30 * 60, // 30 minutes
     })
 
     console.log("✅ [Test Checkout] Test session created:", {
       sessionId: session.id,
-      productId: product.id,
-      priceId: price.id,
+      url: session.url,
+      amount: session.amount_total,
+      currency: session.currency,
     })
 
     return NextResponse.json({
@@ -67,16 +79,17 @@ export async function POST(request: NextRequest) {
       sessionId: session.id,
       checkoutUrl: session.url,
       productId: product.id,
-      priceId: price.id,
+      priceId: priceObj.id,
       amount: session.amount_total,
       currency: session.currency,
+      expiresAt: session.expires_at,
     })
   } catch (error) {
     console.error("❌ [Test Checkout] Error:", error)
     return NextResponse.json(
       {
-        success: false,
-        error: error instanceof Error ? error.message : "Unknown error",
+        error: "Failed to create test checkout session",
+        details: error instanceof Error ? error.message : "Unknown error",
       },
       { status: 500 },
     )

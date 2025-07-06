@@ -1,86 +1,62 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { useToast } from "@/hooks/use-toast"
-import {
-  AlertCircle,
-  CheckCircle,
-  Loader2,
-  ExternalLink,
-  RefreshCw,
-  CreditCard,
-  Settings,
-  Bug,
-  Zap,
-} from "lucide-react"
+import { Loader2, Search, TestTube, Info, Settings } from "lucide-react"
 
-interface StripeConfig {
-  hasStripeKey: boolean
-  keyType: "test" | "live" | "unknown"
-  keyPrefix: string
-  environment: string
-}
-
-interface SessionDebugResult {
+interface SessionResult {
   success: boolean
   session?: any
-  error?: string
-  recommendations?: string[]
+  stripeConfig?: any
+  debug?: any
+  error?: any
 }
 
-interface CheckoutTestResult {
+interface TestCheckoutResult {
   success: boolean
   sessionId?: string
   checkoutUrl?: string
+  productId?: string
+  priceId?: string
+  amount?: number
+  currency?: string
   error?: string
-  details?: any
+}
+
+interface EnvironmentInfo {
+  success: boolean
+  environment?: any
+  error?: string
+}
+
+interface StripeConfig {
+  success: boolean
+  config?: any
+  connectionTest?: any
+  error?: string
 }
 
 export default function DebugStripeSessionPage() {
-  const { toast } = useToast()
-  const [loading, setLoading] = useState(false)
   const [sessionId, setSessionId] = useState("")
+  const [loading, setLoading] = useState(false)
+  const [testLoading, setTestLoading] = useState(false)
+  const [envLoading, setEnvLoading] = useState(false)
+  const [configLoading, setConfigLoading] = useState(false)
+  const [result, setResult] = useState<SessionResult | null>(null)
+  const [testResult, setTestResult] = useState<TestCheckoutResult | null>(null)
+  const [envInfo, setEnvInfo] = useState<EnvironmentInfo | null>(null)
   const [stripeConfig, setStripeConfig] = useState<StripeConfig | null>(null)
-  const [sessionDebugResult, setSessionDebugResult] = useState<SessionDebugResult | null>(null)
-  const [checkoutTestResult, setCheckoutTestResult] = useState<CheckoutTestResult | null>(null)
-  const [testProductBoxId, setTestProductBoxId] = useState("test-product-box-id")
+  const { toast } = useToast()
 
-  // Auto-populate session ID from URL if present
-  useEffect(() => {
-    const urlParams = new URLSearchParams(window.location.search)
-    const sessionIdFromUrl = urlParams.get("session_id")
-    if (sessionIdFromUrl) {
-      setSessionId(sessionIdFromUrl)
-    }
-  }, [])
-
-  // Load Stripe configuration on mount
-  useEffect(() => {
-    loadStripeConfig()
-  }, [])
-
-  const loadStripeConfig = async () => {
-    try {
-      const response = await fetch("/api/debug/environment-info")
-      if (response.ok) {
-        const data = await response.json()
-        setStripeConfig(data.stripe)
-      }
-    } catch (error) {
-      console.error("Failed to load Stripe config:", error)
-    }
-  }
-
-  const debugSession = async () => {
+  const validateSession = async () => {
     if (!sessionId.trim()) {
       toast({
-        title: "Session ID Required",
-        description: "Please enter a session ID to debug",
+        title: "Error",
+        description: "Please enter a session ID",
         variant: "destructive",
       })
       return
@@ -90,30 +66,32 @@ export default function DebugStripeSessionPage() {
     try {
       const response = await fetch("/api/debug/stripe-session", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+        },
         body: JSON.stringify({ sessionId: sessionId.trim() }),
       })
 
-      const result = await response.json()
-      setSessionDebugResult(result)
+      const data = await response.json()
+      setResult(data)
 
-      if (result.success) {
+      if (data.success) {
         toast({
-          title: "Session Found",
-          description: "Session details loaded successfully",
+          title: "Session Validated",
+          description: "Stripe session details retrieved successfully",
         })
       } else {
         toast({
-          title: "Session Debug Failed",
-          description: result.error || "Unknown error",
+          title: "Validation Failed",
+          description: data.error || "Failed to validate session",
           variant: "destructive",
         })
       }
     } catch (error) {
-      console.error("Debug session error:", error)
+      console.error("Session validation error:", error)
       toast({
-        title: "Debug Failed",
-        description: "Failed to debug session",
+        title: "Error",
+        description: "Failed to validate session",
         variant: "destructive",
       })
     } finally {
@@ -122,357 +100,302 @@ export default function DebugStripeSessionPage() {
   }
 
   const testCheckoutCreation = async () => {
-    setLoading(true)
+    setTestLoading(true)
     try {
       const response = await fetch("/api/debug/test-checkout-creation", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+        },
         body: JSON.stringify({
-          productBoxId: testProductBoxId,
-          testMode: true,
+          productBoxId: "test-product-box",
+          price: 9.99,
         }),
       })
 
-      const result = await response.json()
-      setCheckoutTestResult(result)
+      const data = await response.json()
+      setTestResult(data)
 
-      if (result.success) {
+      if (data.success) {
         toast({
-          title: "Checkout Test Successful",
-          description: "Test checkout session created successfully",
+          title: "Test Checkout Created",
+          description: "Test Stripe checkout session created successfully",
         })
-        // Auto-populate the session ID for debugging
-        if (result.sessionId) {
-          setSessionId(result.sessionId)
-        }
       } else {
         toast({
-          title: "Checkout Test Failed",
-          description: result.error || "Unknown error",
+          title: "Test Failed",
+          description: data.error || "Failed to create test checkout",
           variant: "destructive",
         })
       }
     } catch (error) {
-      console.error("Checkout test error:", error)
+      console.error("Test checkout error:", error)
       toast({
-        title: "Test Failed",
-        description: "Failed to test checkout creation",
+        title: "Error",
+        description: "Failed to create test checkout",
         variant: "destructive",
       })
     } finally {
-      setLoading(false)
+      setTestLoading(false)
     }
   }
 
-  const getStatusIcon = (success: boolean) => {
-    return success ? (
-      <CheckCircle className="h-5 w-5 text-green-500" />
-    ) : (
-      <AlertCircle className="h-5 w-5 text-red-500" />
-    )
+  const getEnvironmentInfo = async () => {
+    setEnvLoading(true)
+    try {
+      const response = await fetch("/api/debug/environment-info")
+      const data = await response.json()
+      setEnvInfo(data)
+
+      if (data.success) {
+        toast({
+          title: "Environment Info Retrieved",
+          description: "Environment configuration loaded successfully",
+        })
+      }
+    } catch (error) {
+      console.error("Environment info error:", error)
+      toast({
+        title: "Error",
+        description: "Failed to get environment info",
+        variant: "destructive",
+      })
+    } finally {
+      setEnvLoading(false)
+    }
   }
 
-  const getStatusColor = (success: boolean) => {
-    return success ? "text-green-600" : "text-red-600"
+  const getStripeConfig = async () => {
+    setConfigLoading(true)
+    try {
+      const response = await fetch("/api/debug/stripe-config")
+      const data = await response.json()
+      setStripeConfig(data)
+
+      if (data.success) {
+        toast({
+          title: "Stripe Config Retrieved",
+          description: "Stripe configuration loaded successfully",
+        })
+      }
+    } catch (error) {
+      console.error("Stripe config error:", error)
+      toast({
+        title: "Error",
+        description: "Failed to get Stripe config",
+        variant: "destructive",
+      })
+    } finally {
+      setConfigLoading(false)
+    }
   }
 
   return (
     <div className="min-h-screen bg-gray-900 text-white p-6">
-      <div className="max-w-6xl mx-auto space-y-6">
-        {/* Header */}
+      <div className="max-w-4xl mx-auto space-y-6">
         <div className="text-center space-y-2">
-          <h1 className="text-3xl font-bold flex items-center justify-center gap-2">
-            <Bug className="h-8 w-8 text-blue-400" />
-            Stripe Session Debugger
-          </h1>
-          <p className="text-gray-400">Debug Stripe checkout sessions and configuration issues</p>
+          <h1 className="text-3xl font-bold">Stripe Session Debug Tool</h1>
+          <p className="text-gray-400">Debug and test Stripe checkout sessions</p>
         </div>
 
-        {/* Stripe Configuration Panel */}
-        <Card className="bg-gray-800 border-gray-700">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Settings className="h-5 w-5 text-blue-400" />
-              Stripe Configuration
-              <Button variant="ghost" size="sm" onClick={loadStripeConfig} className="ml-auto">
-                <RefreshCw className="h-4 w-4" />
+        <div className="grid gap-6 md:grid-cols-2">
+          {/* Session Validation */}
+          <Card className="bg-gray-800 border-gray-700">
+            <CardHeader>
+              <CardTitle className="text-white flex items-center gap-2">
+                <Search className="h-5 w-5" />
+                Validate Session
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <Input
+                placeholder="Enter Stripe session ID (cs_test_... or cs_live_...)"
+                value={sessionId}
+                onChange={(e) => setSessionId(e.target.value)}
+                className="bg-gray-700 border-gray-600 text-white"
+              />
+              <Button onClick={validateSession} disabled={loading} className="w-full">
+                {loading ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Validating...
+                  </>
+                ) : (
+                  <>
+                    <Search className="h-4 w-4 mr-2" />
+                    Validate Session
+                  </>
+                )}
               </Button>
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {stripeConfig ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                <div className="space-y-2">
-                  <Label className="text-sm text-gray-400">Stripe Key Status</Label>
-                  <div className="flex items-center gap-2">
-                    {getStatusIcon(stripeConfig.hasStripeKey)}
-                    <span className={getStatusColor(stripeConfig.hasStripeKey)}>
-                      {stripeConfig.hasStripeKey ? "Configured" : "Missing"}
-                    </span>
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-sm text-gray-400">Key Type</Label>
-                  <Badge variant={stripeConfig.keyType === "test" ? "secondary" : "default"}>
-                    {stripeConfig.keyType.toUpperCase()}
-                  </Badge>
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-sm text-gray-400">Key Prefix</Label>
-                  <code className="text-sm bg-gray-700 px-2 py-1 rounded">{stripeConfig.keyPrefix}</code>
-                </div>
-                <div className="space-y-2">
-                  <Label className="text-sm text-gray-400">Environment</Label>
-                  <Badge variant="outline">{stripeConfig.environment}</Badge>
-                </div>
-              </div>
-            ) : (
-              <div className="flex items-center gap-2 text-gray-400">
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Loading configuration...
-              </div>
+            </CardContent>
+          </Card>
+
+          {/* Test Checkout Creation */}
+          <Card className="bg-gray-800 border-gray-700">
+            <CardHeader>
+              <CardTitle className="text-white flex items-center gap-2">
+                <TestTube className="h-5 w-5" />
+                Test Checkout
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <p className="text-sm text-gray-400">Create a test Stripe checkout session</p>
+              <Button onClick={testCheckoutCreation} disabled={testLoading} className="w-full">
+                {testLoading ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Creating...
+                  </>
+                ) : (
+                  <>
+                    <TestTube className="h-4 w-4 mr-2" />
+                    Create Test Checkout
+                  </>
+                )}
+              </Button>
+            </CardContent>
+          </Card>
+
+          {/* Environment Info */}
+          <Card className="bg-gray-800 border-gray-700">
+            <CardHeader>
+              <CardTitle className="text-white flex items-center gap-2">
+                <Info className="h-5 w-5" />
+                Environment Info
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <Button onClick={getEnvironmentInfo} disabled={envLoading} className="w-full">
+                {envLoading ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Loading...
+                  </>
+                ) : (
+                  <>
+                    <Info className="h-4 w-4 mr-2" />
+                    Get Environment Info
+                  </>
+                )}
+              </Button>
+            </CardContent>
+          </Card>
+
+          {/* Stripe Config */}
+          <Card className="bg-gray-800 border-gray-700">
+            <CardHeader>
+              <CardTitle className="text-white flex items-center gap-2">
+                <Settings className="h-5 w-5" />
+                Stripe Config
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <Button onClick={getStripeConfig} disabled={configLoading} className="w-full">
+                {configLoading ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Loading...
+                  </>
+                ) : (
+                  <>
+                    <Settings className="h-4 w-4 mr-2" />
+                    Get Stripe Config
+                  </>
+                )}
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Results */}
+        {(result || testResult || envInfo || stripeConfig) && (
+          <div className="space-y-6">
+            {/* Session Validation Result */}
+            {result && (
+              <Card className="bg-gray-800 border-gray-700">
+                <CardHeader>
+                  <CardTitle className="text-white flex items-center gap-2">
+                    Session Validation Result
+                    <Badge variant={result.success ? "default" : "destructive"}>
+                      {result.success ? "Success" : "Failed"}
+                    </Badge>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <pre className="bg-gray-900 p-4 rounded-lg text-sm overflow-auto text-gray-300">
+                    {JSON.stringify(result, null, 2)}
+                  </pre>
+                </CardContent>
+              </Card>
             )}
-          </CardContent>
-        </Card>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Checkout Creation Test */}
-          <Card className="bg-gray-800 border-gray-700">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Zap className="h-5 w-5 text-green-400" />
-                Checkout Creation Test
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="testProductBoxId">Test Product Box ID</Label>
-                <Input
-                  id="testProductBoxId"
-                  value={testProductBoxId}
-                  onChange={(e) => setTestProductBoxId(e.target.value)}
-                  placeholder="Enter product box ID to test"
-                  className="bg-gray-700 border-gray-600"
-                />
-              </div>
-
-              <Button
-                onClick={testCheckoutCreation}
-                disabled={loading}
-                className="w-full bg-green-600 hover:bg-green-700"
-              >
-                {loading ? (
-                  <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Testing...
-                  </>
-                ) : (
-                  <>
-                    <CreditCard className="h-4 w-4 mr-2" />
-                    Test Checkout Creation
-                  </>
-                )}
-              </Button>
-
-              {checkoutTestResult && (
-                <div className="mt-4 p-4 bg-gray-700 rounded-lg">
-                  <div className="flex items-center gap-2 mb-2">
-                    {getStatusIcon(checkoutTestResult.success)}
-                    <span className={`font-medium ${getStatusColor(checkoutTestResult.success)}`}>
-                      {checkoutTestResult.success ? "Test Successful" : "Test Failed"}
-                    </span>
-                  </div>
-
-                  {checkoutTestResult.success ? (
-                    <div className="space-y-2 text-sm">
-                      {checkoutTestResult.sessionId && (
-                        <div>
-                          <span className="text-gray-400">Session ID:</span>
-                          <code className="ml-2 bg-gray-600 px-2 py-1 rounded text-xs">
-                            {checkoutTestResult.sessionId}
-                          </code>
-                        </div>
-                      )}
-                      {checkoutTestResult.checkoutUrl && (
-                        <div>
-                          <span className="text-gray-400">Checkout URL:</span>
-                          <a
-                            href={checkoutTestResult.checkoutUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="ml-2 text-blue-400 hover:text-blue-300 inline-flex items-center gap-1"
-                          >
-                            Open Checkout <ExternalLink className="h-3 w-3" />
-                          </a>
-                        </div>
-                      )}
-                    </div>
-                  ) : (
-                    <div className="text-sm text-red-400">{checkoutTestResult.error}</div>
-                  )}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Session Debug Tool */}
-          <Card className="bg-gray-800 border-gray-700">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Bug className="h-5 w-5 text-orange-400" />
-                Session Debug Tool
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="sessionId">Stripe Session ID</Label>
-                <Input
-                  id="sessionId"
-                  value={sessionId}
-                  onChange={(e) => setSessionId(e.target.value)}
-                  placeholder="cs_test_... or cs_live_..."
-                  className="bg-gray-700 border-gray-600"
-                />
-              </div>
-
-              <Button
-                onClick={debugSession}
-                disabled={loading || !sessionId.trim()}
-                className="w-full bg-orange-600 hover:bg-orange-700"
-              >
-                {loading ? (
-                  <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Debugging...
-                  </>
-                ) : (
-                  <>
-                    <Bug className="h-4 w-4 mr-2" />
-                    Debug Session
-                  </>
-                )}
-              </Button>
-
-              {sessionDebugResult && (
-                <div className="mt-4 p-4 bg-gray-700 rounded-lg">
-                  <div className="flex items-center gap-2 mb-2">
-                    {getStatusIcon(sessionDebugResult.success)}
-                    <span className={`font-medium ${getStatusColor(sessionDebugResult.success)}`}>
-                      {sessionDebugResult.success ? "Session Found" : "Session Not Found"}
-                    </span>
-                  </div>
-
-                  {sessionDebugResult.success && sessionDebugResult.session ? (
-                    <div className="space-y-2 text-sm">
-                      <div>
-                        <span className="text-gray-400">Status:</span>
-                        <Badge
-                          className="ml-2"
-                          variant={sessionDebugResult.session.status === "complete" ? "default" : "secondary"}
-                        >
-                          {sessionDebugResult.session.status}
-                        </Badge>
-                      </div>
-                      <div>
-                        <span className="text-gray-400">Amount:</span>
-                        <span className="ml-2 text-green-400">
-                          ${(sessionDebugResult.session.amount_total / 100).toFixed(2)}
-                        </span>
-                      </div>
-                      <div>
-                        <span className="text-gray-400">Payment Status:</span>
-                        <span className="ml-2">{sessionDebugResult.session.payment_status}</span>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="space-y-2">
-                      <div className="text-sm text-red-400">{sessionDebugResult.error}</div>
-                      {sessionDebugResult.recommendations && (
-                        <div className="space-y-1">
-                          <span className="text-sm font-medium text-gray-300">Recommendations:</span>
-                          <ul className="text-sm text-gray-400 space-y-1">
-                            {sessionDebugResult.recommendations.map((rec, index) => (
-                              <li key={index} className="flex items-start gap-2">
-                                <span className="text-blue-400">•</span>
-                                {rec}
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                      )}
+            {/* Test Checkout Result */}
+            {testResult && (
+              <Card className="bg-gray-800 border-gray-700">
+                <CardHeader>
+                  <CardTitle className="text-white flex items-center gap-2">
+                    Test Checkout Result
+                    <Badge variant={testResult.success ? "default" : "destructive"}>
+                      {testResult.success ? "Success" : "Failed"}
+                    </Badge>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {testResult.success && testResult.checkoutUrl && (
+                    <div className="mb-4">
+                      <Button asChild className="w-full">
+                        <a href={testResult.checkoutUrl} target="_blank" rel="noopener noreferrer">
+                          Open Test Checkout
+                        </a>
+                      </Button>
                     </div>
                   )}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </div>
+                  <pre className="bg-gray-900 p-4 rounded-lg text-sm overflow-auto text-gray-300">
+                    {JSON.stringify(testResult, null, 2)}
+                  </pre>
+                </CardContent>
+              </Card>
+            )}
 
-        {/* Quick Actions */}
-        <Card className="bg-gray-800 border-gray-700">
-          <CardHeader>
-            <CardTitle>Quick Actions</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <Button variant="outline" asChild>
-                <a href="https://dashboard.stripe.com/test/payments" target="_blank" rel="noopener noreferrer">
-                  <ExternalLink className="h-4 w-4 mr-2" />
-                  Stripe Test Dashboard
-                </a>
-              </Button>
-              <Button variant="outline" asChild>
-                <a href="https://dashboard.stripe.com/test/logs" target="_blank" rel="noopener noreferrer">
-                  <ExternalLink className="h-4 w-4 mr-2" />
-                  Stripe Logs
-                </a>
-              </Button>
-              <Button variant="outline" asChild>
-                <a href="/dashboard/stripe-test" target="_blank" rel="noopener noreferrer">
-                  <ExternalLink className="h-4 w-4 mr-2" />
-                  Internal Stripe Test
-                </a>
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+            {/* Environment Info Result */}
+            {envInfo && (
+              <Card className="bg-gray-800 border-gray-700">
+                <CardHeader>
+                  <CardTitle className="text-white flex items-center gap-2">
+                    Environment Information
+                    <Badge variant={envInfo.success ? "default" : "destructive"}>
+                      {envInfo.success ? "Success" : "Failed"}
+                    </Badge>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <pre className="bg-gray-900 p-4 rounded-lg text-sm overflow-auto text-gray-300">
+                    {JSON.stringify(envInfo, null, 2)}
+                  </pre>
+                </CardContent>
+              </Card>
+            )}
 
-        {/* Common Issues Guide */}
-        <Card className="bg-gray-800 border-gray-700">
-          <CardHeader>
-            <CardTitle>Common Issues & Solutions</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div className="p-4 bg-red-900/20 border border-red-800 rounded-lg">
-                <h4 className="font-medium text-red-400 mb-2">404 Session Not Found</h4>
-                <ul className="text-sm text-gray-300 space-y-1">
-                  <li>• Check if you're using test keys with live session IDs (or vice versa)</li>
-                  <li>• Verify the session was created successfully</li>
-                  <li>• Sessions expire after 24 hours</li>
-                </ul>
-              </div>
-
-              <div className="p-4 bg-yellow-900/20 border border-yellow-800 rounded-lg">
-                <h4 className="font-medium text-yellow-400 mb-2">Checkout Creation Failed</h4>
-                <ul className="text-sm text-gray-300 space-y-1">
-                  <li>• Verify Stripe secret key is correctly set</li>
-                  <li>• Check product data and pricing</li>
-                  <li>• Ensure success/cancel URLs are valid</li>
-                </ul>
-              </div>
-
-              <div className="p-4 bg-blue-900/20 border border-blue-800 rounded-lg">
-                <h4 className="font-medium text-blue-400 mb-2">Test vs Live Mode</h4>
-                <ul className="text-sm text-gray-300 space-y-1">
-                  <li>• Test keys start with sk_test_</li>
-                  <li>• Live keys start with sk_live_</li>
-                  <li>• Test and live data are completely separate</li>
-                </ul>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+            {/* Stripe Config Result */}
+            {stripeConfig && (
+              <Card className="bg-gray-800 border-gray-700">
+                <CardHeader>
+                  <CardTitle className="text-white flex items-center gap-2">
+                    Stripe Configuration
+                    <Badge variant={stripeConfig.success ? "default" : "destructive"}>
+                      {stripeConfig.success ? "Success" : "Failed"}
+                    </Badge>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <pre className="bg-gray-900 p-4 rounded-lg text-sm overflow-auto text-gray-300">
+                    {JSON.stringify(stripeConfig, null, 2)}
+                  </pre>
+                </CardContent>
+              </Card>
+            )}
+          </div>
+        )}
       </div>
     </div>
   )
