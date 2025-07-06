@@ -134,20 +134,22 @@ export default function PurchaseSuccessPage() {
   // Loading state
   if (authLoading || loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-        <Card className="w-full max-w-md">
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-4">
+        <Card className="w-full max-w-md bg-white shadow-xl">
           <CardContent className="pt-6">
             <div className="text-center space-y-4">
               <Loader2 className="h-8 w-8 animate-spin mx-auto text-blue-600" />
               <div>
-                <h2 className="text-lg font-medium text-gray-900">
+                <h2 className="text-lg font-semibold text-slate-900">
                   {authLoading ? "Authenticating..." : "Verifying Purchase..."}
                 </h2>
-                <p className="text-sm text-gray-500 mt-1">Please wait a moment</p>
+                <p className="text-sm text-slate-600 mt-1">Please wait a moment</p>
               </div>
               {sessionId && (
-                <div className="text-xs text-gray-400 font-mono bg-gray-100 p-2 rounded">
-                  {sessionId.substring(0, 30)}...
+                <div className="text-xs text-slate-500 font-mono bg-slate-50 p-3 rounded-lg border">
+                  <div className="text-slate-700 font-medium mb-1">Session ID</div>
+                  <div className="break-all">{sessionId.substring(0, 30)}...</div>
+                  <div className="text-slate-500 mt-1">Type: {sessionId.startsWith("cs_test_") ? "Test" : "Live"}</div>
                 </div>
               )}
             </div>
@@ -160,32 +162,54 @@ export default function PurchaseSuccessPage() {
   // Error state
   if (error) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-        <Card className="w-full max-w-md">
-          <CardHeader className="text-center">
-            <div className="w-12 h-12 mx-auto mb-4 rounded-full bg-red-100 flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-4">
+        <Card className="w-full max-w-md bg-white shadow-xl">
+          <CardHeader className="text-center pb-4">
+            <div className="w-12 h-12 mx-auto mb-4 rounded-full bg-red-50 flex items-center justify-center border border-red-200">
               <AlertCircle className="h-6 w-6 text-red-600" />
             </div>
-            <CardTitle className="text-lg text-gray-900">Purchase Verification Failed</CardTitle>
-            <p className="text-sm text-gray-600">{error}</p>
+            <CardTitle className="text-xl font-semibold text-slate-900">Purchase Verification Failed</CardTitle>
+            <p className="text-slate-600 mt-2">{error}</p>
           </CardHeader>
           <CardContent className="space-y-4">
             {sessionId && (
-              <div className="bg-gray-50 p-3 rounded-lg">
-                <p className="text-xs text-gray-500 mb-1">Session ID</p>
-                <p className="text-xs font-mono text-gray-700 break-all">{sessionId}</p>
-                <p className="text-xs text-gray-500 mt-1">Type: {sessionId.startsWith("cs_test_") ? "Test" : "Live"}</p>
+              <div className="bg-slate-50 p-4 rounded-lg border">
+                <div className="text-sm font-medium text-slate-700 mb-2">Session Details</div>
+                <div className="space-y-2">
+                  <div>
+                    <div className="text-xs text-slate-500 uppercase tracking-wide">Session ID</div>
+                    <div className="text-xs font-mono text-slate-800 break-all bg-white p-2 rounded border mt-1">
+                      {sessionId}
+                    </div>
+                  </div>
+                  <div>
+                    <div className="text-xs text-slate-500 uppercase tracking-wide">Type</div>
+                    <div className="text-sm font-medium text-slate-700">
+                      {sessionId.startsWith("cs_test_") ? "Test Mode" : "Live Mode"}
+                    </div>
+                  </div>
+                </div>
               </div>
             )}
 
-            <div className="space-y-2">
-              <Button onClick={handleRetry} className="w-full bg-transparent" variant="outline">
+            <div className="space-y-3">
+              <Button
+                onClick={handleRetry}
+                variant="outline"
+                className="w-full border-slate-300 hover:bg-slate-50 bg-transparent"
+              >
                 <RefreshCw className="h-4 w-4 mr-2" />
                 Try Again
               </Button>
-              <Button asChild className="w-full">
+              <Button asChild className="w-full bg-slate-900 hover:bg-slate-800 text-white">
                 <Link href="/dashboard/purchases">View My Purchases</Link>
               </Button>
+            </div>
+
+            <div className="text-center pt-4 border-t border-slate-200">
+              <p className="text-xs text-slate-500">
+                Don't worry! Your payment was likely successful. Check your purchases or try again.
+              </p>
             </div>
           </CardContent>
         </Card>
@@ -195,56 +219,57 @@ export default function PurchaseSuccessPage() {
 
   // Success state
   return (
-    <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-      <Card className="w-full max-w-md">
-        <CardHeader className="text-center">
-          <div className="w-12 h-12 mx-auto mb-4 rounded-full bg-green-100 flex items-center justify-center">
+    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-4">
+      <Card className="w-full max-w-md bg-white shadow-xl">
+        <CardHeader className="text-center pb-4">
+          <div className="w-12 h-12 mx-auto mb-4 rounded-full bg-green-50 flex items-center justify-center border border-green-200">
             <CheckCircle className="h-6 w-6 text-green-600" />
           </div>
-          <CardTitle className="text-lg text-gray-900">Purchase Successful!</CardTitle>
-          <p className="text-sm text-gray-600">Your payment has been confirmed</p>
+          <CardTitle className="text-xl font-semibold text-slate-900">Purchase Successful!</CardTitle>
+          <p className="text-slate-600 mt-2">Your payment has been confirmed</p>
         </CardHeader>
         <CardContent className="space-y-4">
           {purchaseDetails && (
-            <div className="bg-gray-50 p-4 rounded-lg space-y-3">
+            <div className="bg-slate-50 p-4 rounded-lg border space-y-3">
+              <div className="text-sm font-medium text-slate-700 mb-3">Purchase Details</div>
               <div>
-                <p className="text-xs text-gray-500 uppercase tracking-wide">Product</p>
-                <p className="text-sm font-medium text-gray-900">{purchaseDetails.itemTitle}</p>
+                <div className="text-xs text-slate-500 uppercase tracking-wide">Product</div>
+                <div className="text-sm font-medium text-slate-900 mt-1">{purchaseDetails.itemTitle}</div>
               </div>
-              <div className="flex justify-between">
+              <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <p className="text-xs text-gray-500 uppercase tracking-wide">Amount</p>
-                  <p className="text-sm font-medium text-gray-900">
+                  <div className="text-xs text-slate-500 uppercase tracking-wide">Amount</div>
+                  <div className="text-sm font-medium text-slate-900 mt-1">
                     {new Intl.NumberFormat("en-US", {
                       style: "currency",
                       currency: purchaseDetails.currency.toUpperCase(),
                     }).format(purchaseDetails.amount)}
-                  </p>
+                  </div>
                 </div>
-                <div className="text-right">
-                  <p className="text-xs text-gray-500 uppercase tracking-wide">Date</p>
-                  <p className="text-sm font-medium text-gray-900">
+                <div>
+                  <div className="text-xs text-slate-500 uppercase tracking-wide">Date</div>
+                  <div className="text-sm font-medium text-slate-900 mt-1">
                     {new Date(purchaseDetails.purchasedAt).toLocaleDateString()}
-                  </p>
+                  </div>
                 </div>
               </div>
             </div>
           )}
 
-          <div className="space-y-2">
-            <Button asChild className="w-full">
+          <div className="space-y-3">
+            <Button asChild className="w-full bg-blue-600 hover:bg-blue-700 text-white">
               <Link href={`/product-box/${purchaseDetails?.productBoxId}/content`}>
                 Access Content
                 <ExternalLink className="h-4 w-4 ml-2" />
               </Link>
             </Button>
-            <Button asChild variant="outline" className="w-full bg-transparent">
+            <Button asChild variant="outline" className="w-full border-slate-300 hover:bg-slate-50 bg-transparent">
               <Link href="/dashboard/purchases">View All Purchases</Link>
             </Button>
           </div>
 
-          <div className="text-center pt-4 border-t">
-            <p className="text-xs text-gray-500">A receipt has been sent to your email address</p>
+          <div className="text-center pt-4 border-t border-slate-200">
+            <p className="text-xs text-slate-500">A receipt has been sent to your email address</p>
           </div>
         </CardContent>
       </Card>
