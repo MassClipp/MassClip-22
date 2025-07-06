@@ -50,7 +50,7 @@ export default function ProductBoxDisplay({ productBox, showPurchaseButton = tru
       const idToken = await user.getIdToken()
       console.log("🔑 [Purchase] Got auth token")
 
-      // Fix the API endpoint URL construction
+      // Create the checkout session
       const checkoutUrl = `/api/creator/product-boxes/${productBox.id}/checkout`
       console.log("📡 [Purchase] Creating checkout session at:", checkoutUrl)
 
@@ -74,7 +74,17 @@ export default function ProductBoxDisplay({ productBox, showPurchaseButton = tru
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ error: "Checkout failed" }))
         console.error("❌ [Purchase] Checkout error:", errorData)
-        throw new Error(errorData.error || "Failed to create checkout session")
+
+        // Handle specific error cases
+        if (response.status === 404) {
+          throw new Error("Checkout service not available. Please try again later.")
+        } else if (response.status === 401) {
+          throw new Error("Please log in again to continue.")
+        } else if (response.status === 400 && errorData.error?.includes("already own")) {
+          throw new Error("You already own this product box.")
+        } else {
+          throw new Error(errorData.error || `Checkout failed (${response.status})`)
+        }
       }
 
       const data = await response.json()

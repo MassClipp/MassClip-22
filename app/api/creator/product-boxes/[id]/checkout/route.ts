@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { auth, db } from "@/lib/firebase-admin"
-import Stripe from "stripe"
+import { stripe } from "@/lib/stripe"
 
 export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
   try {
@@ -38,6 +38,11 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       }
     }
 
+    if (!userId) {
+      console.error("❌ [Checkout API] User not authenticated")
+      return NextResponse.json({ error: "Authentication required" }, { status: 401 })
+    }
+
     // Get product box details
     console.log("📦 [Checkout API] Fetching product box:", productBoxId)
     const productBoxDoc = await db.collection("productBoxes").doc(productBoxId).get()
@@ -54,19 +59,19 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       creatorId: productBoxData.creatorId,
     })
 
-    // Initialize Stripe
-    const stripeKey = process.env.STRIPE_SECRET_KEY
-    if (!stripeKey) {
-      console.error("❌ [Checkout API] Missing Stripe key")
-      return NextResponse.json({ error: "Stripe configuration error" }, { status: 500 })
+    // Check if user already owns this product box
+    const existingPurchase = await db
+      .collection("purchases")
+      .where("buyerUid", "==", userId)
+      .where("productBoxId", "==", productBoxId)
+      .where("status", "==", "completed")
+      .limit(1)
+      .get()
+
+    if (!existingPurchase.empty) {
+      console.log("⚠️ [Checkout API] User already owns this product box")
+      return NextResponse.json({ error: "You already own this product box" }, { status: 400 })
     }
-
-    console.log("🔑 [Checkout API] Stripe config:", {
-      keyType: stripeKey.startsWith("sk_test_") ? "test" : "live",
-      hasKey: !!stripeKey,
-    })
-
-    const stripe = new Stripe(stripeKey, { apiVersion: "2023-08-16" })
 
     // Dynamic price creation - create or retrieve Stripe price
     let priceId: string
@@ -141,6 +146,14 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       }
     }
 
+    // Get site URL for redirects
+    const siteUrl =
+      process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_VERCEL_URL
+    if (!siteUrl) {
+      console.error("❌ [Checkout API] No site URL configured")
+      return NextResponse.json({ error: "Site configuration error" }, { status: 500 })
+    }
+
     // Create checkout session with dynamic price
     console.log("🔄 [Checkout API] Creating checkout session with price:", priceId)
 
@@ -153,11 +166,11 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
         },
       ],
       mode: "payment",
-      success_url: `${process.env.NEXT_PUBLIC_SITE_URL}/purchase/success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${process.env.NEXT_PUBLIC_SITE_URL}/product-box/${productBoxId}`,
+      success_url: `${siteUrl}/purchase/success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${siteUrl}/product-box/${productBoxId}`,
       metadata: {
         productBoxId,
-        buyerUid: userId || "anonymous",
+        buyerUid: userId,
         creatorUid: productBoxData.creatorId,
         type: "product_box_purchase",
         priceId,
