@@ -1,4 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
+import { verifyIdToken } from "@/lib/auth-utils"
 import { db } from "@/lib/firebase-admin"
 import { stripe } from "@/lib/stripe"
 
@@ -6,14 +7,21 @@ export async function POST(request: NextRequest) {
   try {
     console.log("🛒 [Create Checkout Session] Starting checkout session creation")
 
-    const { productBoxId, buyerUid, successUrl, cancelUrl } = await request.json()
+    // Verify authentication
+    const decodedToken = await verifyIdToken(request)
+    if (!decodedToken) {
+      console.error("❌ [Create Checkout Session] Authentication failed")
+      return NextResponse.json({ error: "Authentication required" }, { status: 401 })
+    }
 
-    if (!productBoxId || !buyerUid) {
-      console.error("❌ [Create Checkout Session] Missing required fields:", {
-        hasProductBoxId: !!productBoxId,
-        hasBuyerUid: !!buyerUid,
-      })
-      return NextResponse.json({ error: "Product box ID and buyer UID are required" }, { status: 400 })
+    const buyerUid = decodedToken.uid
+    console.log("👤 [Create Checkout Session] Authenticated buyer UID:", buyerUid)
+
+    const { productBoxId, successUrl, cancelUrl } = await request.json()
+
+    if (!productBoxId) {
+      console.error("❌ [Create Checkout Session] Missing product box ID")
+      return NextResponse.json({ error: "Product box ID is required" }, { status: 400 })
     }
 
     console.log("📋 [Create Checkout Session] Request details:", {
@@ -46,6 +54,20 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Invalid product price" }, { status: 400 })
     }
 
+    // Check if user already owns this product box
+    const existingPurchase = await db
+      .collection("users")
+      .doc(buyerUid)
+      .collection("purchases")
+      .where("productBoxId", "==", productBoxId)
+      .limit(1)
+      .get()
+
+    if (!existingPurchase.empty) {
+      console.log("ℹ️ [Create Checkout Session] User already owns this product box")
+      return NextResponse.json({ error: "You already own this product" }, { status: 400 })
+    }
+
     // Get buyer details for customer info
     let customerEmail = null
     let customerName = null
@@ -53,8 +75,8 @@ export async function POST(request: NextRequest) {
       const buyerDoc = await db.collection("users").doc(buyerUid).get()
       if (buyerDoc.exists) {
         const buyerData = buyerDoc.data()
-        customerEmail = buyerData?.email
-        customerName = buyerData?.displayName || buyerData?.name
+        customerEmail = buyerData?.email || decodedToken.email
+        customerName = buyerData?.displayName || buyerData?.name || decodedToken.name
         console.log("👤 [Create Checkout Session] Buyer details:", {
           hasEmail: !!customerEmail,
           hasName: !!customerName,
@@ -62,6 +84,8 @@ export async function POST(request: NextRequest) {
       }
     } catch (buyerError) {
       console.warn("⚠️ [Create Checkout Session] Could not fetch buyer details:", buyerError)
+      customerEmail = decodedToken.email
+      customerName = decodedToken.name
     }
 
     // Prepare checkout session data
@@ -115,6 +139,7 @@ export async function POST(request: NextRequest) {
     })
 
     return NextResponse.json({
+      success: true,
       sessionId: session.id,
       url: session.url,
       amount: productBoxData.price,
