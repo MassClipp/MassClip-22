@@ -2,39 +2,11 @@ import { NextResponse } from "next/server"
 import { db } from "@/lib/firebase-admin"
 import Stripe from "stripe"
 
-// --- Stripe helper ----------------------------------------------------------
-function getStripe() {
-  // Prefer live key in prod, otherwise test key.
-  const stripeKey = process.env.STRIPE_SECRET_KEY ?? process.env.STRIPE_SECRET_KEY_TEST
-
-  if (!stripeKey) {
-    console.error("❌ [cancel-subscription] STRIPE_SECRET_KEY(_TEST) is missing at runtime.")
-    return null
-  }
-
-  // Log a masked version of the key so we know which one is loaded.
-  const masked = stripeKey.slice(0, 8) + "…" + stripeKey.slice(-4)
-  console.log(`🔑 [cancel-subscription] Using Stripe key ${masked}`)
-
-  // Cache the instance between calls.
-  // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-  if (!(globalThis as any)._stripeInstance) {
-    // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-    ;(globalThis as any)._stripeInstance = new Stripe(stripeKey, {
-      apiVersion: "2023-10-16",
-      typescript: true,
-    })
-  }
-  // eslint-disable-next-line @typescript-eslint/consistent-type-assertions
-  return (globalThis as any)._stripeInstance as Stripe
-}
-// ---------------------------------------------------------------------------
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
+  apiVersion: "2023-10-16",
+})
 
 export async function POST(request: Request) {
-  const stripe = getStripe()
-  if (!stripe) {
-    return NextResponse.json({ error: "Stripe secret key not configured on the server" }, { status: 500 })
-  }
   try {
     const { userId } = await request.json()
 

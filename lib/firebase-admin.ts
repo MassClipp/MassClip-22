@@ -1,125 +1,53 @@
-/**
- * Build-safe Firebase Admin helper.
- *
- * - Restores the original public API (initializeFirebaseAdmin, db, auth, FieldValue,
- *   withRetry, verifyIdToken, getAuthenticatedUser) so existing imports work.
- * - Never crashes the Next.js build if service-account env-vars are missing.
- * - Falls back to applicationDefault() or a harmless stub in that situation.
- * - Lazily initialises on first real server request (when env-vars are present).
- */
-
-import { initializeApp, getApps, applicationDefault, cert, type App } from "firebase-admin/app"
-import { getFirestore as _getFirestore, FieldValue as _FieldValue } from "firebase-admin/firestore"
-import { getAuth as _getAuth, type DecodedIdToken } from "firebase-admin/auth"
-
-/* -------------------------------------------------------------------------- */
-/*                         Internal lazy-initialisation                       */
-/* -------------------------------------------------------------------------- */
-
-let adminApp: App | null = null
-let firestoreInstance: ReturnType<typeof _getFirestore> | null = null
-let authInstance: ReturnType<typeof _getAuth> | null = null
-let initialised = false
+import { initializeApp, getApps, cert } from "firebase-admin/app"
+import { getFirestore, FieldValue } from "firebase-admin/firestore"
+import { getAuth, type DecodedIdToken } from "firebase-admin/auth"
 
 /**
- * Attempt to initialise firebase-admin exactly once.
- * Falls back gracefully if credentials are missing during `next build`.
+ * Initialize the Firebase Admin SDK once (prevents double-init in serverless).
  */
-export function initializeFirebaseAdmin(): App | null {
-  if (initialised) return adminApp
-  initialised = true
+export function initializeFirebaseAdmin() {
+  if (getApps().length === 0) {
+    const projectId = process.env.FIREBASE_PROJECT_ID
+    const clientEmail = process.env.FIREBASE_CLIENT_EMAIL
+    const privateKeyRaw = process.env.FIREBASE_PRIVATE_KEY
 
-  try {
-    if (!getApps().length) {
-      const { FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, FIREBASE_PRIVATE_KEY } = process.env
-
-      if (FIREBASE_PROJECT_ID && FIREBASE_CLIENT_EMAIL && FIREBASE_PRIVATE_KEY) {
-        // Full service-account creds ➜ ideal path.
-        initializeApp({
-          credential: cert({
-            projectId: FIREBASE_PROJECT_ID,
-            clientEmail: FIREBASE_CLIENT_EMAIL,
-            privateKey: FIREBASE_PRIVATE_KEY.replace(/\\n/g, "\n"),
-          }),
-        })
-        console.log("✅ [firebase-admin] Initialised with service-account creds")
-      } else {
-        // Build or local env without secrets ➜ use ADC if it exists, else stub.
-        initializeApp({
-          credential: applicationDefault(),
-        })
-        console.log("⚠️  [firebase-admin] Falling back to applicationDefault() " + "(service-account env-vars missing)")
-      }
+    if (!projectId || !clientEmail || !privateKeyRaw) {
+      throw new Error(
+        "Missing Firebase Admin credentials. " +
+          "Ensure FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, FIREBASE_PRIVATE_KEY env vars are set.",
+      )
     }
 
-    adminApp = getApps()[0]!
-  } catch (err) {
-    // Even applicationDefault() failed – create a minimal stub so imports don’t
-    // crash the build. Any real use at runtime will throw loudly.
-    console.error("❌ [firebase-admin] Could not initialise – running in stub mode.", err)
-    adminApp = null
-  }
+    const privateKey = privateKeyRaw.replace(/\\n/g, "\n")
 
-  return adminApp
+    initializeApp({
+      credential: cert({ projectId, clientEmail, privateKey }),
+      projectId,
+    })
+    console.log("✅ Firebase Admin SDK initialised")
+  }
+  return getApps()[0]
 }
 
 /* -------------------------------------------------------------------------- */
-/*                       Firestore / Auth singletons                          */
+/*                               Lazy singletons                              */
 /* -------------------------------------------------------------------------- */
 
-function ensureFirestore() {
-  if (firestoreInstance) return firestoreInstance
+const adminApp = initializeFirebaseAdmin()
+export const db = getFirestore(adminApp)
+export const auth = getAuth(adminApp)
 
-  const app = initializeFirebaseAdmin()
-  if (app) {
-    firestoreInstance = _getFirestore(app)
-    firestoreInstance.settings({ ignoreUndefinedProperties: true })
-    return firestoreInstance
-  }
-
-  // Stub that throws on any property access – prevents silent failures.
-  return (firestoreInstance = new Proxy(
-    {},
-    {
-      get() {
-        throw new Error("firebase-admin Firestore is unavailable – credentials missing in this environment.")
-      },
-    },
-  ) as unknown as ReturnType<typeof _getFirestore>)
-}
-
-function ensureAuth() {
-  if (authInstance) return authInstance
-
-  const app = initializeFirebaseAdmin()
-  if (app) {
-    authInstance = _getAuth(app)
-    return authInstance
-  }
-
-  return (authInstance = new Proxy(
-    {},
-    {
-      get() {
-        throw new Error("firebase-admin Auth is unavailable – credentials missing in this environment.")
-      },
-    },
-  ) as unknown as ReturnType<typeof _getAuth>)
-}
+// Better reliability for Firestore
+db.settings({ ignoreUndefinedProperties: true })
 
 /* -------------------------------------------------------------------------- */
-/*                            Public named exports                            */
+/*                          Utility / helper functions                        */
 /* -------------------------------------------------------------------------- */
-
-// Restored constants (still lazy – only throw when actually used)
-export const db = ensureFirestore()
-export const auth = ensureAuth()
-export const FieldValue = _FieldValue
 
 /**
- * Generic retry helper (unchanged from original file).
+ * Generic retry helper with exponential back-off – useful for flaky Firestore ops.
  */
-export async function withRetry<T>(op: () => Promise<T>, maxRetries = 3, delay = 1_000): Promise<T> {
+export async function withRetry<T>(op: () => Promise<T>, maxRetries = 3, delay = 1000): Promise<T> {
   let lastError: unknown
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
@@ -137,19 +65,16 @@ export async function withRetry<T>(op: () => Promise<T>, maxRetries = 3, delay =
 }
 
 /**
- * Verify a Firebase ID token.
+ * Verify a Firebase ID token and return decoded data.
  */
 export async function verifyIdToken(idToken: string): Promise<DecodedIdToken> {
-  return ensureAuth().verifyIdToken(idToken)
+  return auth.verifyIdToken(idToken)
 }
 
 /**
- * Extract authenticated user info from request headers.
+ * Extract the authenticated user (uid/email) from request headers.
  */
-export async function getAuthenticatedUser(headers: Headers): Promise<{
-  uid: string
-  email?: string
-}> {
+export async function getAuthenticatedUser(headers: Headers): Promise<{ uid: string; email?: string }> {
   const authHeader = headers.get("authorization") ?? ""
   if (!authHeader.startsWith("Bearer ")) {
     throw new Error("Missing Bearer token")
@@ -158,3 +83,23 @@ export async function getAuthenticatedUser(headers: Headers): Promise<{
   const decoded = await verifyIdToken(token)
   return { uid: decoded.uid, email: decoded.email }
 }
+
+/* -------------------------------------------------------------------------- */
+/*          Example helper that callers elsewhere in the codebase use         */
+/* -------------------------------------------------------------------------- */
+
+export async function createOrUpdateUserProfile(userId: string, profileData: Record<string, unknown>) {
+  return withRetry(async () => {
+    const ref = db.collection("users").doc(userId)
+    const now = new Date()
+
+    if ((await ref.get()).exists) {
+      await ref.update({ ...profileData, updatedAt: now })
+    } else {
+      await ref.set({ ...profileData, createdAt: now, updatedAt: now })
+    }
+    return ref.id
+  })
+}
+
+export { FieldValue }
