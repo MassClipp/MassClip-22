@@ -19,8 +19,18 @@ export async function POST(request: NextRequest) {
 
     console.log("📋 [Purchase Verify] Session ID:", sessionId.substring(0, 20) + "...")
 
-    // Enhanced mode checking with better logging
+    // Log the actual Stripe key being used (masked for security)
     const stripeKey = process.env.STRIPE_SECRET_KEY
+    console.log("🔑 [Purchase Verify] Stripe key details:", {
+      keyExists: !!stripeKey,
+      keyLength: stripeKey?.length || 0,
+      keyPrefix: stripeKey?.substring(0, 8) || "none",
+      keySuffix: stripeKey ? "..." + stripeKey.substring(stripeKey.length - 4) : "none",
+      fullKeyMasked: stripeKey ? stripeKey.substring(0, 8) + "..." + stripeKey.substring(stripeKey.length - 4) : "none",
+      envVarName: "STRIPE_SECRET_KEY",
+    })
+
+    // Enhanced mode checking with better logging
     const isTestKey = stripeKey?.startsWith("sk_test_")
     const isLiveKey = stripeKey?.startsWith("sk_live_")
     const isTestSession = sessionId.startsWith("cs_test_")
@@ -79,6 +89,11 @@ export async function POST(request: NextRequest) {
     let session: Stripe.Checkout.Session
     try {
       console.log("🔄 [Purchase Verify] Retrieving Stripe session...")
+      console.log(
+        "🔄 [Purchase Verify] Using Stripe instance with key:",
+        stripeKey ? stripeKey.substring(0, 8) + "..." + stripeKey.substring(stripeKey.length - 4) : "none",
+      )
+
       session = await stripe.checkout.sessions.retrieve(sessionId, {
         expand: ["payment_intent", "line_items"],
       })
@@ -92,6 +107,9 @@ export async function POST(request: NextRequest) {
         requestId: stripeError.requestId,
         decline_code: stripeError.decline_code,
         param: stripeError.param,
+        stripeKeyUsed: stripeKey
+          ? stripeKey.substring(0, 8) + "..." + stripeKey.substring(stripeKey.length - 4)
+          : "none",
       })
 
       // Handle different types of Stripe errors more specifically
@@ -101,6 +119,9 @@ export async function POST(request: NextRequest) {
             error: "Payment session not found",
             details: "This session ID could not be found in your Stripe account.",
             sessionId: sessionId.substring(0, 20) + "...",
+            stripeKeyUsed: stripeKey
+              ? stripeKey.substring(0, 8) + "..." + stripeKey.substring(stripeKey.length - 4)
+              : "none",
             possibleCauses: [
               "Session ID is incorrect or incomplete",
               "Session has expired (sessions expire after 24 hours)",
@@ -122,6 +143,9 @@ export async function POST(request: NextRequest) {
           {
             error: "Stripe authentication failed",
             details: "The API key is invalid or doesn't have permission to access this resource.",
+            stripeKeyUsed: stripeKey
+              ? stripeKey.substring(0, 8) + "..." + stripeKey.substring(stripeKey.length - 4)
+              : "none",
             stripeError: {
               type: stripeError.type,
               code: stripeError.code,
@@ -137,6 +161,9 @@ export async function POST(request: NextRequest) {
           {
             error: "Stripe access forbidden",
             details: "The API key doesn't have permission to access this session.",
+            stripeKeyUsed: stripeKey
+              ? stripeKey.substring(0, 8) + "..." + stripeKey.substring(stripeKey.length - 4)
+              : "none",
             stripeError: {
               type: stripeError.type,
               code: stripeError.code,
@@ -155,6 +182,9 @@ export async function POST(request: NextRequest) {
           code: stripeError.code,
           statusCode: stripeError.statusCode,
           details: "There was an error communicating with Stripe.",
+          stripeKeyUsed: stripeKey
+            ? stripeKey.substring(0, 8) + "..." + stripeKey.substring(stripeKey.length - 4)
+            : "none",
           stripeError: {
             type: stripeError.type,
             code: stripeError.code,
