@@ -3,15 +3,16 @@ import { auth, db } from "@/lib/firebase-admin"
 
 export async function GET(request: NextRequest) {
   try {
-    console.log("🔍 [Unified Purchases] Starting fetch")
+    console.log("🔍 [Unified Purchases] Starting fetch...")
 
+    // Get auth token from header
     const authHeader = request.headers.get("authorization")
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
       console.error("❌ [Unified Purchases] Missing or invalid authorization header")
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const idToken = authHeader.split("Bearer ")[1]
+    const idToken = authHeader.replace("Bearer ", "")
     let userId: string
 
     try {
@@ -23,212 +24,122 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Invalid authentication token" }, { status: 401 })
     }
 
-    const purchases: any[] = []
-    let totalSpent = 0
-    let thisMonthCount = 0
-    const lastDownload: Date | null = null
-    const currentMonth = new Date().getMonth()
-    const currentYear = new Date().getFullYear()
+    // Fetch purchases from user's purchases subcollection
+    const purchasesSnapshot = await db
+      .collection("users")
+      .doc(userId)
+      .collection("purchases")
+      .orderBy("timestamp", "desc")
+      .get()
 
-    try {
-      // Get purchases from user's purchases subcollection
-      console.log("📥 [Unified Purchases] Fetching user purchases...")
-      const userPurchasesRef = db.collection("users").doc(userId).collection("purchases")
-      const userPurchasesSnapshot = await userPurchasesRef.orderBy("timestamp", "desc").get()
+    console.log(`📊 [Unified Purchases] Found ${purchasesSnapshot.docs.length} purchases`)
 
-      console.log(`📊 [Unified Purchases] Found ${userPurchasesSnapshot.size} user purchases`)
+    const purchases = []
+    const errors = []
 
-      for (const doc of userPurchasesSnapshot.docs) {
-        const purchaseData = doc.data()
-        console.log("🔍 Processing purchase:", doc.id, purchaseData)
+    for (const purchaseDoc of purchasesSnapshot.docs) {
+      try {
+        const purchaseData = purchaseDoc.data()
 
-        try {
-          let itemTitle = "Unknown Item"
-          let itemDescription = ""
-          let thumbnailUrl = ""
-          let creatorUsername = ""
-          let creatorName = ""
-          let type = "product_box"
-
-          // Get product box details
-          if (purchaseData.productBoxId) {
+        // Get product box details
+        let productBoxData = null
+        if (purchaseData.productBoxId) {
+          try {
             const productBoxDoc = await db.collection("productBoxes").doc(purchaseData.productBoxId).get()
             if (productBoxDoc.exists) {
-              const productBoxData = productBoxDoc.data()!
-              itemTitle = productBoxData.title || itemTitle
-              itemDescription = productBoxData.description || ""
-              thumbnailUrl = productBoxData.thumbnailUrl || ""
-              type = "product_box"
-
-              // Get creator details
-              if (productBoxData.creatorId) {
-                const creatorDoc = await db.collection("users").doc(productBoxData.creatorId).get()
-                if (creatorDoc.exists) {
-                  const creatorData = creatorDoc.data()!
-                  creatorUsername = creatorData.username || ""
-                  creatorName = creatorData.displayName || creatorData.name || ""
-                }
-              }
+              productBoxData = productBoxDoc.data()
             }
-          }
-
-          const purchaseDate = purchaseData.timestamp?.toDate() || new Date()
-          const amount = purchaseData.amount || 0
-
-          purchases.push({
-            id: doc.id,
-            type,
-            itemId: purchaseData.productBoxId || doc.id,
-            itemTitle,
-            itemDescription,
-            amount,
-            currency: purchaseData.currency || "usd",
-            purchasedAt: purchaseDate,
-            status: purchaseData.status || "completed",
-            thumbnailUrl,
-            creatorUsername,
-            creatorName,
-            sessionId: purchaseData.sessionId,
-            stripeMode: purchaseData.stripeMode,
-            downloadCount: 0, // TODO: Track downloads
-            tags: [], // TODO: Add tagging system
-          })
-
-          totalSpent += amount
-
-          // Count this month's purchases
-          if (purchaseDate.getMonth() === currentMonth && purchaseDate.getFullYear() === currentYear) {
-            thisMonthCount++
-          }
-        } catch (itemError) {
-          console.error(`⚠️ [Unified Purchases] Error processing purchase ${doc.id}:`, itemError)
-          // Continue with other purchases even if one fails
-        }
-      }
-
-      // Also check legacy purchases collection (if it exists)
-      try {
-        console.log("🔍 [Unified Purchases] Checking legacy purchases...")
-        const legacyPurchasesRef = db.collection("purchases").where("buyerUid", "==", userId)
-        const legacyPurchasesSnapshot = await legacyPurchasesRef.orderBy("purchasedAt", "desc").get()
-
-        console.log(`📦 [Unified Purchases] Found ${legacyPurchasesSnapshot.size} legacy purchases`)
-
-        for (const doc of legacyPurchasesSnapshot.docs) {
-          const purchaseData = doc.data()
-
-          // Check if we already have this purchase (avoid duplicates)
-          const existingPurchase = purchases.find(
-            (p) =>
-              p.sessionId === purchaseData.sessionId ||
-              (p.productBoxId === purchaseData.productBoxId &&
-                Math.abs(new Date(p.purchasedAt).getTime() - purchaseData.purchasedAt?.toDate()?.getTime()) < 60000),
-          )
-
-          if (!existingPurchase) {
-            try {
-              let itemTitle = "Unknown Item"
-              let itemDescription = ""
-              let thumbnailUrl = ""
-              let creatorUsername = ""
-              let creatorName = ""
-              let type = "product_box"
-
-              // Get product box details
-              if (purchaseData.productBoxId) {
-                const productBoxDoc = await db.collection("productBoxes").doc(purchaseData.productBoxId).get()
-                if (productBoxDoc.exists) {
-                  const productBoxData = productBoxDoc.data()!
-                  itemTitle = productBoxData.title || itemTitle
-                  itemDescription = productBoxData.description || ""
-                  thumbnailUrl = productBoxData.thumbnailUrl || ""
-                  type = "product_box"
-
-                  // Get creator details
-                  if (productBoxData.creatorId) {
-                    const creatorDoc = await db.collection("users").doc(productBoxData.creatorId).get()
-                    if (creatorDoc.exists) {
-                      const creatorData = creatorDoc.data()!
-                      creatorUsername = creatorData.username || ""
-                      creatorName = creatorData.displayName || creatorData.name || ""
-                    }
-                  }
-                }
-              }
-
-              const purchaseDate = purchaseData.purchasedAt?.toDate() || new Date()
-              const amount = purchaseData.amount || 0
-
-              purchases.push({
-                id: doc.id,
-                type,
-                itemId: purchaseData.productBoxId || doc.id,
-                itemTitle,
-                itemDescription,
-                amount,
-                currency: purchaseData.currency || "usd",
-                purchasedAt: purchaseDate,
-                status: purchaseData.status || "completed",
-                thumbnailUrl,
-                creatorUsername,
-                creatorName,
-                sessionId: purchaseData.sessionId,
-                stripeMode: purchaseData.stripeMode,
-                downloadCount: 0, // TODO: Track downloads
-                tags: [], // TODO: Add tagging system
-              })
-
-              totalSpent += amount
-
-              // Count this month's purchases
-              if (purchaseDate.getMonth() === currentMonth && purchaseDate.getFullYear() === currentYear) {
-                thisMonthCount++
-              }
-            } catch (itemError) {
-              console.error(`⚠️ [Unified Purchases] Error processing legacy purchase ${doc.id}:`, itemError)
-              // Continue with other purchases even if one fails
-            }
+          } catch (productBoxError) {
+            console.error(
+              `⚠️ [Unified Purchases] Error fetching product box ${purchaseData.productBoxId}:`,
+              productBoxError,
+            )
           }
         }
-      } catch (legacyError) {
-        console.warn("⚠️ [Unified Purchases] Could not fetch legacy purchases:", legacyError)
-        // Don't fail the entire request for legacy purchases
-      }
 
-      console.log(`✅ [Unified Purchases] Processed ${purchases.length} total purchases`)
-    } catch (error) {
-      console.error("❌ [Unified Purchases] Error fetching purchases:", error)
-      return NextResponse.json(
-        {
-          error: "Failed to fetch purchases",
-          details: error instanceof Error ? error.message : "Unknown error occurred",
-        },
-        { status: 500 },
-      )
+        // Get creator details
+        let creatorData = null
+        const creatorId = purchaseData.creatorId || productBoxData?.creatorId
+        if (creatorId) {
+          try {
+            const creatorDoc = await db.collection("users").doc(creatorId).get()
+            if (creatorDoc.exists) {
+              creatorData = creatorDoc.data()
+            }
+          } catch (creatorError) {
+            console.error(`⚠️ [Unified Purchases] Error fetching creator ${creatorId}:`, creatorError)
+          }
+        }
+
+        // Build purchase object
+        const purchase = {
+          id: purchaseDoc.id,
+          type: "product_box",
+          itemId: purchaseData.productBoxId || "",
+          itemTitle: productBoxData?.title || purchaseData.title || "Unknown Product",
+          itemDescription: productBoxData?.description || purchaseData.description || "",
+          amount: purchaseData.amount || 0,
+          currency: purchaseData.currency || "usd",
+          purchasedAt: purchaseData.timestamp?.toDate() || new Date(),
+          status: purchaseData.status || "completed",
+          thumbnailUrl: productBoxData?.thumbnailUrl || purchaseData.thumbnailUrl || "",
+          creatorUsername: creatorData?.username || purchaseData.creatorUsername || "",
+          creatorName: creatorData?.displayName || creatorData?.name || purchaseData.creatorName || "Unknown Creator",
+          sessionId: purchaseData.sessionId || "",
+          downloadCount: purchaseData.downloadCount || 0,
+          lastDownloaded: purchaseData.lastDownloaded?.toDate() || null,
+          tags: purchaseData.tags || [],
+          stripeMode: purchaseData.stripeMode || "unknown",
+          metadata: {
+            productBoxId: purchaseData.productBoxId,
+            creatorId: creatorId,
+            paymentIntentId: purchaseData.paymentIntentId,
+            sessionCreated: purchaseData.sessionCreated?.toDate() || null,
+            sessionExpires: purchaseData.sessionExpires?.toDate() || null,
+          },
+        }
+
+        purchases.push(purchase)
+      } catch (error) {
+        console.error(`⚠️ [Unified Purchases] Error processing purchase ${purchaseDoc.id}:`, error)
+        errors.push({
+          purchaseId: purchaseDoc.id,
+          error: error instanceof Error ? error.message : "Unknown error",
+        })
+      }
     }
+
+    // Calculate stats
+    const totalPurchases = purchases.length
+    const totalSpent = purchases.reduce((sum, p) => sum + p.amount, 0)
+    const currency = purchases.length > 0 ? purchases[0].currency : "usd"
+
+    const now = new Date()
+    const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1)
+    const thisMonth = purchases.filter((p) => p.purchasedAt >= thisMonthStart).length
+
+    const lastDownload = purchases
+      .filter((p) => p.lastDownloaded)
+      .sort((a, b) => (b.lastDownloaded?.getTime() || 0) - (a.lastDownloaded?.getTime() || 0))[0]?.lastDownloaded
 
     const stats = {
-      totalPurchases: purchases.length,
+      totalPurchases,
       totalSpent,
-      currency: "usd", // TODO: Handle multiple currencies
-      thisMonth: thisMonthCount,
-      lastDownload: lastDownload,
+      currency,
+      thisMonth,
+      lastDownload,
     }
 
-    console.log("📊 [Unified Purchases] Final stats:", stats)
+    console.log(`✅ [Unified Purchases] Returning ${purchases.length} purchases with ${errors.length} errors`)
 
     return NextResponse.json({
+      success: true,
       purchases,
       stats,
-      success: true,
+      errors: errors.length > 0 ? errors : undefined,
     })
   } catch (error) {
-    console.error("❌ [Unified Purchases] Unexpected error:", {
-      message: error instanceof Error ? error.message : "Unknown error",
-      stack: error instanceof Error ? error.stack : undefined,
-      error,
-    })
-
+    console.error("❌ [Unified Purchases] Unexpected error:", error)
     return NextResponse.json(
       {
         error: "Failed to fetch purchases",

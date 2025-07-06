@@ -6,7 +6,6 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import {
   Search,
@@ -384,22 +383,28 @@ export default function PurchasesPage() {
           </div>
 
           {/* Tabs */}
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="mb-6">
-            <TabsList className="bg-gray-800/50 border border-gray-700/50 backdrop-blur-sm">
-              <TabsTrigger value="all" className="data-[state=active]:bg-red-600 data-[state=active]:text-white">
-                All Items
-              </TabsTrigger>
-              <TabsTrigger value="downloads" className="data-[state=active]:bg-red-600 data-[state=active]:text-white">
-                Downloads
-              </TabsTrigger>
-              <TabsTrigger value="favorites" className="data-[state=active]:bg-red-600 data-[state=active]:text-white">
-                Favorites
-              </TabsTrigger>
-              <TabsTrigger value="recent" className="data-[state=active]:bg-red-600 data-[state=active]:text-white">
-                Recent
-              </TabsTrigger>
-            </TabsList>
-          </Tabs>
+          <div className="mb-6">
+            <div className="flex gap-1 bg-gray-800/50 rounded-lg p-1 border border-gray-700/50 backdrop-blur-sm">
+              {[
+                { value: "all", label: "All Items" },
+                { value: "downloads", label: "Downloads" },
+                { value: "favorites", label: "Favorites" },
+                { value: "recent", label: "Recent" },
+              ].map((tab) => (
+                <button
+                  key={tab.value}
+                  onClick={() => setActiveTab(tab.value)}
+                  className={`px-4 py-2 text-sm font-medium rounded-md transition-all duration-200 ${
+                    activeTab === tab.value
+                      ? "bg-red-600 text-white shadow-lg"
+                      : "text-gray-400 hover:text-white hover:bg-gray-700/50"
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+          </div>
 
           {/* Filters */}
           <div className="mb-6">
@@ -449,7 +454,7 @@ export default function PurchasesPage() {
           </div>
 
           {/* Content */}
-          <TabsContent value={activeTab} className="mt-0">
+          <div>
             {sortedPurchases.length === 0 ? (
               <div className="text-center py-16">
                 <div className="w-24 h-24 mx-auto mb-6 rounded-full bg-gray-800/30 flex items-center justify-center border border-gray-700/50">
@@ -620,7 +625,7 @@ export default function PurchasesPage() {
                 ))}
               </div>
             )}
-          </TabsContent>
+          </div>
         </div>
       </div>
     </div>

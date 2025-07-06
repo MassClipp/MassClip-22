@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { auth, db } from "@/lib/firebase-admin"
-import { getStripeClientForSession } from "@/lib/stripe-client"
+import { validateStripeSession } from "@/lib/stripe-client"
 
 export async function POST(request: NextRequest) {
   try {
@@ -28,93 +28,30 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Get the appropriate Stripe client for this session
-    let stripeConfig
-    try {
-      stripeConfig = getStripeClientForSession(sessionId)
-      console.log("✅ [Purchase Verify] Using Stripe client:", {
-        mode: stripeConfig.mode,
-        keyType: stripeConfig.keyType,
-      })
-    } catch (configError: any) {
-      console.error("❌ [Purchase Verify] Stripe configuration error:", configError.message)
-      return NextResponse.json(
-        {
-          error: "Configuration Error: Test/Live Mode Mismatch",
-          details: configError.message,
-          sessionType: sessionId.startsWith("cs_test_")
-            ? "test"
-            : sessionId.startsWith("cs_live_")
-              ? "live"
-              : "unknown",
-          recommendation: "Check your Stripe environment variables and ensure they match the session type",
-        },
-        { status: 400 },
-      )
-    }
+    // Validate the Stripe session with detailed debug info
+    const validation = await validateStripeSession(sessionId)
 
-    // Retrieve the Stripe session with proper error handling
-    let session
-    try {
-      console.log("🔄 [Purchase Verify] Retrieving Stripe session...")
-      session = await stripeConfig.client.checkout.sessions.retrieve(sessionId, {
-        expand: ["payment_intent", "line_items"],
-      })
-      console.log("✅ [Purchase Verify] Stripe session retrieved successfully")
-    } catch (stripeError: any) {
-      console.error("❌ [Purchase Verify] Stripe session retrieval failed:", {
-        error: stripeError.message,
-        type: stripeError.type,
-        code: stripeError.code,
-        statusCode: stripeError.statusCode,
-        requestId: stripeError.requestId,
-      })
-
-      if (stripeError.statusCode === 404) {
-        return NextResponse.json(
-          {
-            error: "Payment session not found",
-            details: "This could mean the session has expired, is invalid, or there's still a test/live mode mismatch.",
-            sessionId: sessionId.substring(0, 20) + "...",
-            stripeMode: stripeConfig.mode,
-            stripeError: {
-              type: stripeError.type,
-              code: stripeError.code,
-              message: stripeError.message,
-            },
-            recommendation: `Verify the session exists in your Stripe ${stripeConfig.mode} dashboard`,
-          },
-          { status: 404 },
-        )
-      }
+    if (!validation.success) {
+      console.error("❌ [Purchase Verify] Session validation failed:", validation.debug)
 
       return NextResponse.json(
         {
-          error: `Failed to retrieve payment session: ${stripeError.message}`,
-          type: stripeError.type,
-          code: stripeError.code,
-          details: "There was an error communicating with Stripe. Please try again or contact support.",
-          stripeMode: stripeConfig.mode,
-          recommendation: "Check your Stripe configuration and try again",
+          error: "Payment session not found",
+          details: validation.debug.isNotFound
+            ? "The session ID does not exist in your Stripe account"
+            : validation.debug.isExpired
+              ? "This session has expired"
+              : validation.error.message,
+          debug: validation.debug,
+          sessionType: sessionId.startsWith("cs_test_") ? "test" : "live",
+          recommendation: validation.debug.recommendation,
         },
-        { status: 500 },
+        { status: validation.debug.statusCode || 400 },
       )
     }
 
-    if (!session) {
-      console.error("❌ [Purchase Verify] Session is null")
-      return NextResponse.json({ error: "Session not found" }, { status: 404 })
-    }
-
-    console.log("📊 [Purchase Verify] Session details:", {
-      id: session.id,
-      payment_status: session.payment_status,
-      status: session.status,
-      metadata: session.metadata,
-      amount_total: session.amount_total,
-      currency: session.currency,
-      mode: session.mode,
-    })
+    const { session, stripeConfig } = validation
+    console.log("✅ [Purchase Verify] Session validated successfully:", validation.debug)
 
     // Check if the session was paid
     if (session.payment_status !== "paid") {
@@ -128,6 +65,7 @@ export async function POST(request: NextRequest) {
           status: session.payment_status,
           sessionStatus: session.status,
           details: "The payment for this session has not been completed successfully.",
+          debug: validation.debug,
         },
         { status: 400 },
       )
@@ -142,6 +80,7 @@ export async function POST(request: NextRequest) {
           error: "Product box ID not found in session metadata",
           availableMetadata: Object.keys(session.metadata || {}),
           details: "The purchase session is missing required product information.",
+          debug: validation.debug,
         },
         { status: 400 },
       )
@@ -157,6 +96,7 @@ export async function POST(request: NextRequest) {
         {
           error: "Buyer ID not found",
           details: "Unable to identify the purchaser for this transaction.",
+          debug: validation.debug,
         },
         { status: 400 },
       )
@@ -164,7 +104,7 @@ export async function POST(request: NextRequest) {
 
     console.log("👤 [Purchase Verify] Buyer UID:", buyerUid)
 
-    // Check if this purchase has already been recorded in the user's purchases subcollection
+    // Check if this purchase has already been recorded
     try {
       const existingPurchaseQuery = await db
         .collection("users")
@@ -176,7 +116,6 @@ export async function POST(request: NextRequest) {
 
       if (!existingPurchaseQuery.empty) {
         console.log("ℹ️ [Purchase Verify] Purchase already recorded")
-        // Purchase already recorded, return success with existing data
         const existingPurchase = existingPurchaseQuery.docs[0].data()
 
         // Get product box details
@@ -216,11 +155,11 @@ export async function POST(request: NextRequest) {
             type: "product_box",
             stripeMode: stripeConfig.mode,
           },
+          debug: validation.debug,
         })
       }
     } catch (firestoreError) {
       console.error("❌ [Purchase Verify] Error checking existing purchases:", firestoreError)
-      // Continue with creating new purchase record
     }
 
     // Get product box details
@@ -235,6 +174,7 @@ export async function POST(request: NextRequest) {
             error: "Product box not found",
             productBoxId,
             details: "The purchased product could not be found in our database.",
+            debug: validation.debug,
           },
           { status: 404 },
         )
@@ -247,12 +187,13 @@ export async function POST(request: NextRequest) {
         {
           error: "Failed to fetch product box details",
           details: "There was an error retrieving the product information.",
+          debug: validation.debug,
         },
         { status: 500 },
       )
     }
 
-    // Record the purchase in the user's purchases subcollection
+    // Record the purchase
     let purchaseRef
     try {
       purchaseRef = await db
@@ -269,6 +210,8 @@ export async function POST(request: NextRequest) {
           status: "completed",
           creatorId: productBoxData.creatorId,
           stripeMode: stripeConfig.mode,
+          sessionCreated: new Date(session.created * 1000),
+          sessionExpires: session.expires_at ? new Date(session.expires_at * 1000) : null,
         })
 
       console.log("✅ [Purchase Verify] Created purchase record:", purchaseRef.id)
@@ -278,12 +221,13 @@ export async function POST(request: NextRequest) {
         {
           error: "Failed to record purchase",
           details: "The purchase could not be saved to your account.",
+          debug: validation.debug,
         },
         { status: 500 },
       )
     }
 
-    // Increment sales counter on the product box
+    // Update product box sales
     try {
       await db
         .collection("productBoxes")
@@ -295,10 +239,9 @@ export async function POST(request: NextRequest) {
       console.log("✅ [Purchase Verify] Updated product box sales")
     } catch (updateError) {
       console.error("⚠️ [Purchase Verify] Error updating product box sales:", updateError)
-      // Don't fail the entire process for this
     }
 
-    // Record the sale for the creator
+    // Record creator sale
     const creatorId = productBoxData.creatorId || session.metadata?.creatorUid
     if (creatorId) {
       try {
@@ -318,7 +261,6 @@ export async function POST(request: NextRequest) {
             stripeMode: stripeConfig.mode,
           })
 
-        // Increment the creator's total sales
         await db
           .collection("users")
           .doc(creatorId)
@@ -330,11 +272,10 @@ export async function POST(request: NextRequest) {
         console.log("✅ [Purchase Verify] Recorded creator sale")
       } catch (creatorError) {
         console.error("⚠️ [Purchase Verify] Error recording creator sale:", creatorError)
-        // Don't fail the entire process for this
       }
     }
 
-    // Get creator details for the response
+    // Get creator details for response
     let creatorUsername = null
     let creatorName = null
 
@@ -369,6 +310,7 @@ export async function POST(request: NextRequest) {
         type: "product_box",
         stripeMode: stripeConfig.mode,
       },
+      debug: validation.debug,
     }
 
     console.log("✅ [Purchase Verify] Verification completed successfully")
