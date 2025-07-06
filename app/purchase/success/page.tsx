@@ -134,22 +134,22 @@ export default function PurchaseSuccessPage() {
   // Loading state
   if (authLoading || loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-4">
-        <Card className="w-full max-w-md bg-white shadow-xl">
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-black flex items-center justify-center p-4">
+        <Card className="w-full max-w-md bg-gray-800/90 border-gray-700 shadow-2xl backdrop-blur-sm">
           <CardContent className="pt-6">
             <div className="text-center space-y-4">
-              <Loader2 className="h-8 w-8 animate-spin mx-auto text-blue-600" />
+              <Loader2 className="h-8 w-8 animate-spin mx-auto text-blue-400" />
               <div>
-                <h2 className="text-lg font-semibold text-slate-900">
+                <h2 className="text-lg font-semibold text-white">
                   {authLoading ? "Authenticating..." : "Verifying Purchase..."}
                 </h2>
-                <p className="text-sm text-slate-600 mt-1">Please wait a moment</p>
+                <p className="text-sm text-gray-400 mt-1">Please wait a moment</p>
               </div>
               {sessionId && (
-                <div className="text-xs text-slate-500 font-mono bg-slate-50 p-3 rounded-lg border">
-                  <div className="text-slate-700 font-medium mb-1">Session ID</div>
-                  <div className="break-all">{sessionId.substring(0, 30)}...</div>
-                  <div className="text-slate-500 mt-1">Type: {sessionId.startsWith("cs_test_") ? "Test" : "Live"}</div>
+                <div className="text-xs text-gray-400 font-mono bg-gray-700/50 p-3 rounded-lg border border-gray-600">
+                  <div className="text-gray-300 font-medium mb-1">Session ID</div>
+                  <div className="break-all text-gray-400">{sessionId.substring(0, 30)}...</div>
+                  <div className="text-gray-500 mt-1">Type: {sessionId.startsWith("cs_test_") ? "Test" : "Live"}</div>
                 </div>
               )}
             </div>
@@ -162,29 +162,29 @@ export default function PurchaseSuccessPage() {
   // Error state
   if (error) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-4">
-        <Card className="w-full max-w-md bg-white shadow-xl">
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-black flex items-center justify-center p-4">
+        <Card className="w-full max-w-md bg-gray-800/90 border-gray-700 shadow-2xl backdrop-blur-sm">
           <CardHeader className="text-center pb-4">
-            <div className="w-12 h-12 mx-auto mb-4 rounded-full bg-red-50 flex items-center justify-center border border-red-200">
-              <AlertCircle className="h-6 w-6 text-red-600" />
+            <div className="w-12 h-12 mx-auto mb-4 rounded-full bg-red-500/20 flex items-center justify-center border border-red-500/30">
+              <AlertCircle className="h-6 w-6 text-red-400" />
             </div>
-            <CardTitle className="text-xl font-semibold text-slate-900">Purchase Verification Failed</CardTitle>
-            <p className="text-slate-600 mt-2">{error}</p>
+            <CardTitle className="text-xl font-semibold text-white">Purchase Verification Failed</CardTitle>
+            <p className="text-gray-400 mt-2">{error}</p>
           </CardHeader>
           <CardContent className="space-y-4">
             {sessionId && (
-              <div className="bg-slate-50 p-4 rounded-lg border">
-                <div className="text-sm font-medium text-slate-700 mb-2">Session Details</div>
+              <div className="bg-gray-700/50 p-4 rounded-lg border border-gray-600">
+                <div className="text-sm font-medium text-gray-300 mb-2">Session Details</div>
                 <div className="space-y-2">
                   <div>
-                    <div className="text-xs text-slate-500 uppercase tracking-wide">Session ID</div>
-                    <div className="text-xs font-mono text-slate-800 break-all bg-white p-2 rounded border mt-1">
+                    <div className="text-xs text-gray-500 uppercase tracking-wide">Session ID</div>
+                    <div className="text-xs font-mono text-gray-300 break-all bg-gray-800/50 p-2 rounded border border-gray-600 mt-1">
                       {sessionId}
                     </div>
                   </div>
                   <div>
-                    <div className="text-xs text-slate-500 uppercase tracking-wide">Type</div>
-                    <div className="text-sm font-medium text-slate-700">
+                    <div className="text-xs text-gray-500 uppercase tracking-wide">Type</div>
+                    <div className="text-sm font-medium text-gray-300">
                       {sessionId.startsWith("cs_test_") ? "Test Mode" : "Live Mode"}
                     </div>
                   </div>
@@ -196,18 +196,18 @@ export default function PurchaseSuccessPage() {
               <Button
                 onClick={handleRetry}
                 variant="outline"
-                className="w-full border-slate-300 hover:bg-slate-50 bg-transparent"
+                className="w-full border-gray-600 hover:bg-gray-700 bg-transparent text-gray-300 hover:text-white"
               >
                 <RefreshCw className="h-4 w-4 mr-2" />
                 Try Again
               </Button>
-              <Button asChild className="w-full bg-slate-900 hover:bg-slate-800 text-white">
+              <Button asChild className="w-full bg-gray-700 hover:bg-gray-600 text-white border-gray-600">
                 <Link href="/dashboard/purchases">View My Purchases</Link>
               </Button>
             </div>
 
-            <div className="text-center pt-4 border-t border-slate-200">
-              <p className="text-xs text-slate-500">
+            <div className="text-center pt-4 border-t border-gray-700">
+              <p className="text-xs text-gray-500">
                 Don't worry! Your payment was likely successful. Check your purchases or try again.
               </p>
             </div>
@@ -219,27 +219,27 @@ export default function PurchaseSuccessPage() {
 
   // Success state
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-4">
-      <Card className="w-full max-w-md bg-white shadow-xl">
+    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-black flex items-center justify-center p-4">
+      <Card className="w-full max-w-md bg-gray-800/90 border-gray-700 shadow-2xl backdrop-blur-sm">
         <CardHeader className="text-center pb-4">
-          <div className="w-12 h-12 mx-auto mb-4 rounded-full bg-green-50 flex items-center justify-center border border-green-200">
-            <CheckCircle className="h-6 w-6 text-green-600" />
+          <div className="w-12 h-12 mx-auto mb-4 rounded-full bg-green-500/20 flex items-center justify-center border border-green-500/30">
+            <CheckCircle className="h-6 w-6 text-green-400" />
           </div>
-          <CardTitle className="text-xl font-semibold text-slate-900">Purchase Successful!</CardTitle>
-          <p className="text-slate-600 mt-2">Your payment has been confirmed</p>
+          <CardTitle className="text-xl font-semibold text-white">Purchase Successful!</CardTitle>
+          <p className="text-gray-400 mt-2">Your payment has been confirmed</p>
         </CardHeader>
         <CardContent className="space-y-4">
           {purchaseDetails && (
-            <div className="bg-slate-50 p-4 rounded-lg border space-y-3">
-              <div className="text-sm font-medium text-slate-700 mb-3">Purchase Details</div>
+            <div className="bg-gray-700/50 p-4 rounded-lg border border-gray-600 space-y-3">
+              <div className="text-sm font-medium text-gray-300 mb-3">Purchase Details</div>
               <div>
-                <div className="text-xs text-slate-500 uppercase tracking-wide">Product</div>
-                <div className="text-sm font-medium text-slate-900 mt-1">{purchaseDetails.itemTitle}</div>
+                <div className="text-xs text-gray-500 uppercase tracking-wide">Product</div>
+                <div className="text-sm font-medium text-white mt-1">{purchaseDetails.itemTitle}</div>
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <div className="text-xs text-slate-500 uppercase tracking-wide">Amount</div>
-                  <div className="text-sm font-medium text-slate-900 mt-1">
+                  <div className="text-xs text-gray-500 uppercase tracking-wide">Amount</div>
+                  <div className="text-sm font-medium text-white mt-1">
                     {new Intl.NumberFormat("en-US", {
                       style: "currency",
                       currency: purchaseDetails.currency.toUpperCase(),
@@ -247,8 +247,8 @@ export default function PurchaseSuccessPage() {
                   </div>
                 </div>
                 <div>
-                  <div className="text-xs text-slate-500 uppercase tracking-wide">Date</div>
-                  <div className="text-sm font-medium text-slate-900 mt-1">
+                  <div className="text-xs text-gray-500 uppercase tracking-wide">Date</div>
+                  <div className="text-sm font-medium text-white mt-1">
                     {new Date(purchaseDetails.purchasedAt).toLocaleDateString()}
                   </div>
                 </div>
@@ -263,13 +263,17 @@ export default function PurchaseSuccessPage() {
                 <ExternalLink className="h-4 w-4 ml-2" />
               </Link>
             </Button>
-            <Button asChild variant="outline" className="w-full border-slate-300 hover:bg-slate-50 bg-transparent">
+            <Button
+              asChild
+              variant="outline"
+              className="w-full border-gray-600 hover:bg-gray-700 bg-transparent text-gray-300 hover:text-white"
+            >
               <Link href="/dashboard/purchases">View All Purchases</Link>
             </Button>
           </div>
 
-          <div className="text-center pt-4 border-t border-slate-200">
-            <p className="text-xs text-slate-500">A receipt has been sent to your email address</p>
+          <div className="text-center pt-4 border-t border-gray-700">
+            <p className="text-xs text-gray-500">A receipt has been sent to your email address</p>
           </div>
         </CardContent>
       </Card>
