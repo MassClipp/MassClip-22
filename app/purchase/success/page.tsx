@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react"
 import { useSearchParams } from "next/navigation"
 import { useAuth } from "@/contexts/auth-context"
-import { CheckCircle, Loader2, AlertCircle, ArrowRight, Download, RefreshCw, Bug, Copy, Settings } from "lucide-react"
+import { CheckCircle, Loader2, AlertCircle, Download, RefreshCw, Bug, Copy, Settings } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { useToast } from "@/hooks/use-toast"
@@ -335,81 +335,74 @@ export default function PurchaseSuccessPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-black via-gray-900 to-gray-800 flex items-center justify-center p-4">
-      <Card className="w-full max-w-2xl bg-gray-800/30 border-gray-700/50 backdrop-blur-sm shadow-2xl">
-        <CardHeader className="text-center pb-6">
-          <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-gradient-to-br from-green-500/20 to-emerald-600/20 flex items-center justify-center border border-green-500/30 shadow-lg">
-            <CheckCircle className="h-10 w-10 text-green-400" />
+    <div className="min-h-screen bg-black flex items-center justify-center p-4">
+      <div className="w-full max-w-lg">
+        {/* Success Icon */}
+        <div className="text-center mb-8">
+          <div className="w-16 h-16 mx-auto mb-6 rounded-full bg-green-500/10 flex items-center justify-center border border-green-500/20">
+            <CheckCircle className="h-8 w-8 text-green-400" />
           </div>
-          <CardTitle className="text-3xl font-light text-white mb-2">Purchase Successful!</CardTitle>
-          <CardDescription className="text-gray-400 text-lg">
-            Thank you for your purchase. You now have access to premium content.
-          </CardDescription>
-        </CardHeader>
+          <h1 className="text-2xl font-light text-white mb-2">Payment Successful</h1>
+          <p className="text-gray-400 text-sm">Your content is now available</p>
+        </div>
 
-        <CardContent className="space-y-6">
-          {purchaseDetails && (
-            <div className="bg-gray-800/30 rounded-lg p-6 space-y-4 border border-gray-700/30">
-              <h3 className="text-xl font-medium text-white">Purchase Details</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-                <div>
-                  <span className="text-gray-400">Product:</span>
-                  <p className="text-white font-medium">{purchaseDetails.itemTitle}</p>
-                </div>
-                <div>
-                  <span className="text-gray-400">Amount:</span>
-                  <p className="text-white font-medium">
-                    {new Intl.NumberFormat("en-US", {
-                      style: "currency",
-                      currency: purchaseDetails.currency.toUpperCase(),
-                    }).format(purchaseDetails.amount)}
-                  </p>
-                </div>
-                <div>
-                  <span className="text-gray-400">Transaction ID:</span>
-                  <p className="text-white font-mono text-xs">{purchaseDetails.sessionId}</p>
-                </div>
-                <div>
-                  <span className="text-gray-400">Purchase Date:</span>
-                  <p className="text-white font-medium">{new Date(purchaseDetails.purchasedAt).toLocaleDateString()}</p>
-                </div>
+        {/* Purchase Details */}
+        {purchaseDetails && (
+          <div className="bg-gray-900/50 border border-gray-800 rounded-lg p-6 mb-6">
+            <div className="space-y-3">
+              <div className="flex justify-between items-start">
+                <span className="text-gray-400 text-sm">Product</span>
+                <span className="text-white text-sm font-medium text-right max-w-[200px]">
+                  {purchaseDetails.itemTitle}
+                </span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-gray-400 text-sm">Amount</span>
+                <span className="text-white text-sm font-medium">
+                  {new Intl.NumberFormat("en-US", {
+                    style: "currency",
+                    currency: purchaseDetails.currency.toUpperCase(),
+                  }).format(purchaseDetails.amount)}
+                </span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-gray-400 text-sm">Date</span>
+                <span className="text-white text-sm font-medium">
+                  {new Date(purchaseDetails.purchasedAt).toLocaleDateString()}
+                </span>
               </div>
             </div>
-          )}
-
-          <div className="flex flex-col sm:flex-row gap-4">
-            <Button
-              asChild
-              className="flex-1 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-black font-medium"
-            >
-              <Link href={`/product-box/${purchaseDetails?.productBoxId}/content`}>
-                <Download className="h-4 w-4 mr-2" />
-                Access Content
-              </Link>
-            </Button>
-            <Button
-              asChild
-              variant="outline"
-              className="flex-1 border-gray-600 hover:bg-gray-700 text-white bg-transparent"
-            >
-              <Link href="/dashboard/purchases">
-                <ArrowRight className="h-4 w-4 mr-2" />
-                View All Purchases
-              </Link>
-            </Button>
           </div>
+        )}
 
-          <div className="text-center pt-4 border-t border-gray-700/50">
-            <p className="text-gray-400 text-sm">
-              A receipt has been sent to your email address. If you have any issues accessing your content,{" "}
-              <Link href="/support" className="text-amber-400 hover:text-amber-300 underline">
-                contact support
-              </Link>
-              .
-            </p>
-          </div>
-        </CardContent>
-      </Card>
+        {/* Action Buttons */}
+        <div className="space-y-3">
+          <Button asChild className="w-full bg-white hover:bg-gray-100 text-black font-medium h-12 rounded-lg">
+            <Link href={`/product-box/${purchaseDetails?.productBoxId}/content`}>
+              <Download className="h-4 w-4 mr-2" />
+              Access Content
+            </Link>
+          </Button>
+
+          <Button
+            asChild
+            variant="ghost"
+            className="w-full text-gray-400 hover:text-white hover:bg-gray-800/50 h-10 rounded-lg"
+          >
+            <Link href="/dashboard/purchases">View All Purchases</Link>
+          </Button>
+        </div>
+
+        {/* Footer */}
+        <div className="text-center mt-8 pt-6 border-t border-gray-800">
+          <p className="text-gray-500 text-xs">
+            Receipt sent to your email • Need help?{" "}
+            <Link href="/support" className="text-gray-400 hover:text-white underline">
+              Contact support
+            </Link>
+          </p>
+        </div>
+      </div>
     </div>
   )
 }
