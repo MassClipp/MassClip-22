@@ -3,91 +3,81 @@
 import { useEffect, useState } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
-import { CheckCircle, AlertCircle, Copy, RefreshCw, ArrowLeft, ExternalLink } from "lucide-react"
+import { CheckCircle, AlertCircle, RefreshCw, ArrowLeft, ExternalLink } from "lucide-react"
 import Link from "next/link"
-import { useToast } from "@/hooks/use-toast"
+import { useAuth } from "@/contexts/auth-context"
+import { db } from "@/lib/firebase"
 
-interface PurchaseResult {
-  success: boolean
-  error?: string
-  sessionId?: string
-  details?: string
-  possibleCauses?: string[]
-  possibleReasons?: string[]
-  stripeError?: {
-    type: string
-    code: string
-    message: string
-    statusCode?: number
-  }
-  purchaseDetails?: {
-    amount: number
-    currency: string
-    customerEmail: string
-    productName?: string
-  }
-  debugInfo?: any
+interface PurchaseData {
+  productBoxId: string
+  sessionId: string
+  amount: number
+  currency: string
+  status: string
+  itemTitle: string
+  itemDescription?: string
+  thumbnailUrl?: string
+  purchasedAt: any
+  isTestPurchase?: boolean
 }
 
 export default function PurchaseSuccessPage() {
   const searchParams = useSearchParams()
   const router = useRouter()
-  const { toast } = useToast()
-  const [result, setResult] = useState<PurchaseResult | null>(null)
+  const { user } = useAuth()
+  const [purchase, setPurchase] = useState<PurchaseData | null>(null)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
   const sessionId = searchParams.get("session_id")
 
   useEffect(() => {
-    if (!sessionId) {
-      setResult({
-        success: false,
-        error: "No session ID provided",
-      })
+    if (!user || !sessionId) {
+      setError("Missing user authentication or session ID")
       setLoading(false)
       return
     }
 
-    verifyPurchase()
-  }, [sessionId])
+    checkPurchaseStatus()
+  }, [user, sessionId])
 
-  const verifyPurchase = async () => {
+  const checkPurchaseStatus = async () => {
+    if (!user || !sessionId) return
+
     try {
       setLoading(true)
-      const response = await fetch("/api/purchase/verify", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ sessionId }),
-      })
+      setError(null)
 
-      const data = await response.json()
-      setResult(data)
-    } catch (error) {
-      console.error("Error verifying purchase:", error)
-      setResult({
-        success: false,
-        error: "Failed to verify purchase",
-        details: "Network error or server unavailable",
-      })
+      // Extract product box ID from session ID if needed, or check all purchases
+      // For now, we'll check the user's recent purchases
+      const purchasesRef = db.collection("users").doc(user.uid).collection("purchases")
+      const purchasesSnapshot = await purchasesRef.where("sessionId", "==", sessionId).limit(1).get()
+
+      if (purchasesSnapshot.empty) {
+        // Purchase not found yet - webhook might still be processing
+        setError("Purchase not found. The payment may still be processing.")
+        return
+      }
+
+      const purchaseDoc = purchasesSnapshot.docs[0]
+      const purchaseData = purchaseDoc.data() as PurchaseData
+
+      if (purchaseData.status === "complete") {
+        setPurchase(purchaseData)
+        console.log("✅ Purchase found and completed:", purchaseData)
+      } else {
+        setError(`Purchase status: ${purchaseData.status}`)
+      }
+    } catch (err) {
+      console.error("❌ Error checking purchase status:", err)
+      setError("Failed to check purchase status")
     } finally {
       setLoading(false)
     }
   }
 
-  const copySessionId = () => {
-    if (sessionId) {
-      navigator.clipboard.writeText(sessionId)
-      toast({
-        title: "Copied!",
-        description: "Session ID copied to clipboard",
-      })
-    }
-  }
-
-  const retryVerification = () => {
-    verifyPurchase()
+  const retryCheck = () => {
+    checkPurchaseStatus()
   }
 
   if (loading) {
@@ -95,234 +85,112 @@ export default function PurchaseSuccessPage() {
       <div className="min-h-screen bg-black flex items-center justify-center">
         <div className="text-center space-y-4">
           <RefreshCw className="h-8 w-8 animate-spin text-white mx-auto" />
-          <p className="text-gray-400">Verifying your purchase...</p>
+          <p className="text-gray-400">Checking your purchase...</p>
         </div>
       </div>
     )
   }
 
-  if (!result) {
-    return (
-      <div className="min-h-screen bg-black flex items-center justify-center">
-        <div className="text-center space-y-4">
-          <AlertCircle className="h-12 w-12 text-red-500 mx-auto" />
-          <h1 className="text-2xl font-light text-white">Something went wrong</h1>
-          <p className="text-gray-400">Unable to load purchase information</p>
-        </div>
-      </div>
-    )
-  }
-
-  if (result.success) {
-    // SUCCESS STATE - Minimal & Sleek Design
+  if (error || !purchase) {
     return (
       <div className="min-h-screen bg-black flex items-center justify-center p-4">
-        <div className="w-full max-w-md space-y-8 text-center">
-          {/* Success Icon */}
-          <div className="relative">
-            <div className="w-20 h-20 mx-auto rounded-full bg-green-500/10 border border-green-500/20 flex items-center justify-center">
-              <CheckCircle className="h-10 w-10 text-green-400" />
-            </div>
+        <div className="w-full max-w-lg space-y-6 text-center">
+          <div className="w-16 h-16 mx-auto rounded-full bg-amber-500/10 border border-amber-500/20 flex items-center justify-center">
+            <AlertCircle className="h-8 w-8 text-amber-400" />
           </div>
 
-          {/* Success Message */}
           <div className="space-y-2">
-            <h1 className="text-3xl font-light text-white">Purchase Complete</h1>
-            <p className="text-gray-400 text-sm">Your payment has been processed successfully</p>
+            <h1 className="text-2xl font-light text-white">Purchase Processing</h1>
+            <p className="text-gray-400 text-sm">
+              {error || "We're still processing your purchase. This usually takes a few seconds."}
+            </p>
           </div>
 
-          {/* Purchase Details */}
-          {result.purchaseDetails && (
-            <div className="bg-gray-900/30 border border-gray-800 rounded-lg p-6 space-y-3 text-left">
-              <div className="flex justify-between items-center">
-                <span className="text-gray-400 text-sm">Amount</span>
-                <span className="text-white font-medium">
-                  ${(result.purchaseDetails.amount / 100).toFixed(2)} {result.purchaseDetails.currency.toUpperCase()}
-                </span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-gray-400 text-sm">Email</span>
-                <span className="text-white text-sm">{result.purchaseDetails.customerEmail}</span>
-              </div>
-              {result.purchaseDetails.productName && (
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-400 text-sm">Product</span>
-                  <span className="text-white text-sm">{result.purchaseDetails.productName}</span>
-                </div>
-              )}
+          {sessionId && (
+            <div className="bg-gray-900/30 border border-gray-800 rounded-lg p-4">
+              <div className="text-gray-400 text-sm mb-1">Session ID:</div>
+              <code className="text-gray-300 text-xs break-all">{sessionId}</code>
             </div>
           )}
 
-          {/* Actions */}
           <div className="space-y-3">
-            <Button asChild className="w-full bg-white text-black hover:bg-gray-100 font-medium">
-              <Link href="/dashboard">Continue to Dashboard</Link>
+            <Button onClick={retryCheck} className="w-full bg-gray-800 hover:bg-gray-700 text-white">
+              <RefreshCw className="h-4 w-4 mr-2" />
+              Check Again
             </Button>
-            <Button asChild variant="ghost" className="w-full text-gray-400 hover:text-white hover:bg-gray-900/50">
-              <Link href="/dashboard/purchases">View Purchases</Link>
-            </Button>
+            <div className="flex gap-3">
+              <Button asChild variant="ghost" className="flex-1 text-gray-400 hover:text-white hover:bg-gray-900/50">
+                <Link href="/dashboard">
+                  <ArrowLeft className="h-4 w-4 mr-2" />
+                  Dashboard
+                </Link>
+              </Button>
+              <Button asChild variant="ghost" className="flex-1 text-gray-400 hover:text-white hover:bg-gray-900/50">
+                <Link href="/dashboard/purchases">
+                  <ExternalLink className="h-4 w-4 mr-2" />
+                  My Purchases
+                </Link>
+              </Button>
+            </div>
           </div>
 
-          {/* Footer */}
-          <div className="pt-8 border-t border-gray-800">
-            <p className="text-gray-500 text-xs">
-              Need help?{" "}
-              <Link href="/support" className="text-gray-400 hover:text-white underline">
-                Contact Support
-              </Link>
-            </p>
-          </div>
+          <p className="text-gray-500 text-xs">
+            If this persists, your payment was likely successful. Check your purchases or contact support.
+          </p>
         </div>
       </div>
     )
   }
 
-  // ERROR STATE - Enhanced with better error categorization
+  // SUCCESS STATE
   return (
     <div className="min-h-screen bg-black flex items-center justify-center p-4">
-      <div className="w-full max-w-lg space-y-6 text-center">
-        {/* Error Icon */}
-        <div className="w-16 h-16 mx-auto rounded-full bg-red-500/10 border border-red-500/20 flex items-center justify-center">
-          <AlertCircle className="h-8 w-8 text-red-400" />
+      <div className="w-full max-w-md space-y-8 text-center">
+        <div className="relative">
+          <div className="w-20 h-20 mx-auto rounded-full bg-green-500/10 border border-green-500/20 flex items-center justify-center">
+            <CheckCircle className="h-10 w-10 text-green-400" />
+          </div>
         </div>
 
-        {/* Error Message */}
         <div className="space-y-2">
-          <h1 className="text-2xl font-light text-white">Purchase Verification Failed</h1>
-          <p className="text-gray-400 text-sm">
-            {result.error?.includes("not found")
-              ? "Payment Session Not Found"
-              : result.error?.includes("Configuration Error")
-                ? "Configuration Issue"
-                : result.error?.includes("Payment not completed")
-                  ? "Payment Incomplete"
-                  : result.error || "Unable to verify your purchase"}
-          </p>
+          <h1 className="text-3xl font-light text-white">Purchase Complete!</h1>
+          <p className="text-gray-400 text-sm">Your payment has been processed successfully</p>
+          {purchase.isTestPurchase && <p className="text-amber-400 text-xs">🧪 Test Purchase</p>}
         </div>
 
-        {/* Specific Error Details */}
-        {result.error?.includes("not found") && (
-          <div className="bg-blue-900/20 border border-blue-500/30 rounded-lg p-4 text-left space-y-3">
-            <div className="flex items-center gap-2">
-              <AlertCircle className="h-4 w-4 text-blue-400" />
-              <span className="text-blue-400 font-medium text-sm">Session Not Found</span>
-            </div>
-            <p className="text-blue-300/80 text-sm">{result.details}</p>
-            {result.possibleCauses && (
-              <ul className="text-blue-300/70 text-sm space-y-1 ml-4 list-disc">
-                {result.possibleCauses.map((cause, index) => (
-                  <li key={index}>{cause}</li>
-                ))}
-              </ul>
-            )}
+        <div className="bg-gray-900/30 border border-gray-800 rounded-lg p-6 space-y-3 text-left">
+          <div className="flex justify-between items-center">
+            <span className="text-gray-400 text-sm">Item</span>
+            <span className="text-white font-medium text-sm">{purchase.itemTitle}</span>
           </div>
-        )}
-
-        {/* Payment Status Issues */}
-        {result.error?.includes("Payment not completed") && (
-          <div className="bg-amber-900/20 border border-amber-500/30 rounded-lg p-4 text-left space-y-3">
-            <div className="flex items-center gap-2">
-              <AlertCircle className="h-4 w-4 text-amber-400" />
-              <span className="text-amber-400 font-medium text-sm">Payment Incomplete</span>
-            </div>
-            <p className="text-amber-300/80 text-sm">{result.details}</p>
-            {result.possibleReasons && (
-              <ul className="text-amber-300/70 text-sm space-y-1 ml-4 list-disc">
-                {result.possibleReasons.map((reason, index) => (
-                  <li key={index}>{reason}</li>
-                ))}
-              </ul>
-            )}
+          <div className="flex justify-between items-center">
+            <span className="text-gray-400 text-sm">Amount</span>
+            <span className="text-white font-medium">
+              ${purchase.amount.toFixed(2)} {purchase.currency.toUpperCase()}
+            </span>
           </div>
-        )}
-
-        {/* Configuration Issue Alert */}
-        {result.error?.includes("Configuration Error") && (
-          <div className="bg-amber-900/20 border border-amber-500/30 rounded-lg p-4 text-left space-y-3">
-            <div className="flex items-center gap-2">
-              <AlertCircle className="h-4 w-4 text-amber-400" />
-              <span className="text-amber-400 font-medium text-sm">Configuration Issue</span>
-            </div>
-            <p className="text-amber-300/80 text-sm">{result.details}</p>
-            <Button
-              asChild
-              variant="outline"
-              size="sm"
-              className="border-amber-500/50 text-amber-400 hover:bg-amber-500/10 bg-transparent"
-            >
-              <Link href="/debug-stripe-config">
-                <AlertCircle className="h-4 w-4 mr-2" />
-                Debug Configuration
-              </Link>
-            </Button>
+          <div className="flex justify-between items-center">
+            <span className="text-gray-400 text-sm">Status</span>
+            <span className="text-green-400 text-sm font-medium">Complete</span>
           </div>
-        )}
+        </div>
 
-        {/* Stripe API Errors */}
-        {result.stripeError && (
-          <div className="bg-red-900/20 border border-red-500/30 rounded-lg p-4 text-left space-y-3">
-            <div className="flex items-center gap-2">
-              <AlertCircle className="h-4 w-4 text-red-400" />
-              <span className="text-red-400 font-medium text-sm">Stripe API Error</span>
-            </div>
-            <div className="space-y-2 text-sm">
-              <div className="flex justify-between">
-                <span className="text-red-300/70">Type:</span>
-                <span className="text-red-300">{result.stripeError.type}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-red-300/70">Code:</span>
-                <span className="text-red-300">{result.stripeError.code}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-red-300/70">Status:</span>
-                <span className="text-red-300">{result.stripeError.statusCode || "Unknown"}</span>
-              </div>
-            </div>
-            <p className="text-red-300/80 text-sm">{result.stripeError.message}</p>
-          </div>
-        )}
-
-        {/* Session ID */}
-        {sessionId && (
-          <div className="bg-gray-900/30 border border-gray-800 rounded-lg p-4">
-            <div className="flex items-center justify-between">
-              <span className="text-gray-400 text-sm">Session ID:</span>
-              <Button onClick={copySessionId} variant="ghost" size="sm" className="text-gray-400 hover:text-white p-1">
-                <Copy className="h-4 w-4" />
-              </Button>
-            </div>
-            <code className="text-gray-300 text-xs break-all">{sessionId}</code>
-          </div>
-        )}
-
-        {/* Reassurance */}
-        <p className="text-gray-500 text-sm">
-          {result.error?.includes("not found")
-            ? "Your payment may have been processed successfully even if we can't verify it right now."
-            : "Don't worry! Your payment was likely successful. You can try verifying again or check your purchases."}
-        </p>
-
-        {/* Actions */}
         <div className="space-y-3">
-          <Button onClick={retryVerification} className="w-full bg-gray-800 hover:bg-gray-700 text-white">
-            <RefreshCw className="h-4 w-4 mr-2" />
-            Try Again
+          <Button asChild className="w-full bg-white text-black hover:bg-gray-100 font-medium">
+            <Link href={`/product-box/${purchase.productBoxId}/content`}>Access Content</Link>
           </Button>
-          <div className="flex gap-3">
-            <Button asChild variant="ghost" className="flex-1 text-gray-400 hover:text-white hover:bg-gray-900/50">
-              <Link href="/dashboard">
-                <ArrowLeft className="h-4 w-4 mr-2" />
-                Dashboard
-              </Link>
-            </Button>
-            <Button asChild variant="ghost" className="flex-1 text-gray-400 hover:text-white hover:bg-gray-900/50">
-              <Link href="/debug-stripe-config">
-                <ExternalLink className="h-4 w-4 mr-2" />
-                Debug
-              </Link>
-            </Button>
-          </div>
+          <Button asChild variant="ghost" className="w-full text-gray-400 hover:text-white hover:bg-gray-900/50">
+            <Link href="/dashboard/purchases">View All Purchases</Link>
+          </Button>
+        </div>
+
+        <div className="pt-8 border-t border-gray-800">
+          <p className="text-gray-500 text-xs">
+            Need help?{" "}
+            <Link href="/support" className="text-gray-400 hover:text-white underline">
+              Contact Support
+            </Link>
+          </p>
         </div>
       </div>
     </div>

@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
 import Stripe from "stripe"
+import { db } from "@/lib/firebase-admin"
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: "2024-06-20",
@@ -49,20 +50,105 @@ export async function POST(request: NextRequest) {
         currency: session.currency,
         paymentStatus: session.payment_status,
         metadata: session.metadata,
-        mode: session.mode,
       })
 
-      // TODO: Add your business logic here
-      // - Update database with purchase record
-      // - Grant access to purchased content
-      // - Send confirmation email
-      // - Update user subscription status
+      // Extract required data from metadata
+      const { productBoxId, buyerUid, creatorUid } = session.metadata || {}
 
-      return NextResponse.json({
-        received: true,
-        mode: isTestMode ? "test" : "live",
-        sessionId: session.id,
-      })
+      if (!productBoxId || !buyerUid) {
+        console.error("❌ [Webhook] Missing required metadata:", { productBoxId, buyerUid })
+        return NextResponse.json({ error: "Missing required metadata" }, { status: 400 })
+      }
+
+      try {
+        // Get product box details
+        const productBoxDoc = await db.collection("productBoxes").doc(productBoxId).get()
+        if (!productBoxDoc.exists) {
+          console.error("❌ [Webhook] Product box not found:", productBoxId)
+          return NextResponse.json({ error: "Product box not found" }, { status: 404 })
+        }
+
+        const productBoxData = productBoxDoc.data()!
+        const purchaseAmount = session.amount_total ? session.amount_total / 100 : 0
+
+        // Create purchase record in user's purchases collection
+        const purchaseData = {
+          productBoxId,
+          sessionId: session.id,
+          paymentIntentId: session.payment_intent,
+          amount: purchaseAmount,
+          currency: session.currency || "usd",
+          status: "complete",
+          creatorId: creatorUid || productBoxData.creatorId,
+          itemTitle: productBoxData.title,
+          itemDescription: productBoxData.description,
+          thumbnailUrl: productBoxData.thumbnailUrl,
+          purchasedAt: new Date(),
+          isTestPurchase: isTestMode,
+          customerEmail: session.customer_details?.email,
+        }
+
+        // Store purchase in user's purchases subcollection
+        await db.collection("users").doc(buyerUid).collection("purchases").doc(productBoxId).set(purchaseData)
+
+        console.log(`✅ [Webhook] Purchase recorded for user ${buyerUid}, product ${productBoxId}`)
+
+        // Update product box sales stats
+        await db
+          .collection("productBoxes")
+          .doc(productBoxId)
+          .update({
+            totalSales: db.FieldValue.increment(1),
+            totalRevenue: db.FieldValue.increment(purchaseAmount),
+            lastSaleAt: new Date(),
+          })
+
+        // Record sale for creator
+        if (creatorUid || productBoxData.creatorId) {
+          const creatorId = creatorUid || productBoxData.creatorId
+          const platformFee = purchaseAmount * 0.05 // 5% platform fee
+          const netAmount = purchaseAmount - platformFee
+
+          await db
+            .collection("users")
+            .doc(creatorId)
+            .collection("sales")
+            .add({
+              productBoxId,
+              buyerUid,
+              sessionId: session.id,
+              amount: purchaseAmount,
+              platformFee,
+              netAmount,
+              currency: session.currency || "usd",
+              status: "complete",
+              isTestSale: isTestMode,
+              soldAt: new Date(),
+            })
+
+          // Update creator's total stats
+          await db
+            .collection("users")
+            .doc(creatorId)
+            .update({
+              totalSales: db.FieldValue.increment(1),
+              totalRevenue: db.FieldValue.increment(netAmount),
+              lastSaleAt: new Date(),
+            })
+
+          console.log(`✅ [Webhook] Sale recorded for creator ${creatorId}`)
+        }
+
+        return NextResponse.json({
+          received: true,
+          mode: isTestMode ? "test" : "live",
+          sessionId: session.id,
+          purchaseRecorded: true,
+        })
+      } catch (dbError) {
+        console.error("❌ [Webhook] Database error:", dbError)
+        return NextResponse.json({ error: "Failed to record purchase" }, { status: 500 })
+      }
     }
 
     // Log other events but don't process them
