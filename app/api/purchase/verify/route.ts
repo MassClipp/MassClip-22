@@ -4,42 +4,102 @@ import { auth, db } from "@/lib/firebase-admin"
 import { stripe } from "@/lib/stripe"
 
 export async function POST(request: NextRequest) {
+  let rawBody = ""
+
   try {
     console.log("🔍 [Purchase Verify] Starting verification process")
+    console.log("🔍 [Purchase Verify] Request headers:", Object.fromEntries(request.headers.entries()))
 
-    const { sessionId, idToken } = await request.json()
-
-    if (!sessionId) {
-      console.error("❌ [Purchase Verify] Missing session ID")
-      return NextResponse.json({ error: "Missing session ID" }, { status: 400 })
+    // Step 1: Parse and validate request body
+    let requestData: any
+    try {
+      rawBody = await request.text()
+      console.log("📋 [Purchase Verify] Raw request body:", rawBody)
+      requestData = JSON.parse(rawBody)
+    } catch (parseError) {
+      console.error("❌ [Purchase Verify] JSON parsing failed:", {
+        error: parseError instanceof Error ? parseError.message : "Unknown parse error",
+        rawBody: rawBody.substring(0, 500) + (rawBody.length > 500 ? "..." : ""),
+        contentType: request.headers.get("content-type"),
+      })
+      return NextResponse.json(
+        {
+          error: "Invalid JSON in request body",
+          details: parseError instanceof Error ? parseError.message : "Failed to parse JSON",
+          rawBody: rawBody.substring(0, 200),
+          expectedContentType: "application/json",
+          receivedContentType: request.headers.get("content-type"),
+        },
+        { status: 400 },
+      )
     }
 
-    console.log("📋 [Purchase Verify] Session ID:", sessionId.substring(0, 20) + "...")
+    const { sessionId, idToken } = requestData
 
-    // Enhanced mode checking with better logging
-    const stripeKey = process.env.STRIPE_SECRET_KEY
-    const isTestKey = stripeKey?.startsWith("sk_test_")
-    const isLiveKey = stripeKey?.startsWith("sk_live_")
+    // Step 2: Validate required inputs
+    if (!sessionId) {
+      console.error("❌ [Purchase Verify] Missing session ID:", {
+        requestData,
+        hasSessionId: !!sessionId,
+        sessionIdType: typeof sessionId,
+        requestKeys: Object.keys(requestData || {}),
+      })
+      return NextResponse.json(
+        {
+          error: "Missing session ID",
+          details: "sessionId is required in request body",
+          receivedData: Object.keys(requestData || {}),
+          expectedFields: ["sessionId", "idToken (optional)"],
+        },
+        { status: 400 },
+      )
+    }
+
+    console.log("📋 [Purchase Verify] Session ID received:", sessionId.substring(0, 20) + "...")
+
+    // Step 3: Environment Mode Check - Get actual Stripe key being used
+    const vercelEnv = process.env.VERCEL_ENV || "development"
+    const isProduction = vercelEnv === "production"
+
+    let actualStripeKey: string | undefined
+    if (isProduction) {
+      actualStripeKey = process.env.STRIPE_SECRET_KEY
+    } else {
+      actualStripeKey = process.env.STRIPE_SECRET_KEY_TEST || process.env.STRIPE_SECRET_KEY
+    }
+
+    const isTestKey = actualStripeKey?.startsWith("sk_test_")
+    const isLiveKey = actualStripeKey?.startsWith("sk_live_")
     const isTestSession = sessionId.startsWith("cs_test_")
     const isLiveSession = sessionId.startsWith("cs_live_")
 
-    console.log("🔧 [Purchase Verify] Detailed mode check:", {
-      stripeKeyExists: !!stripeKey,
-      stripeKeyLength: stripeKey?.length || 0,
+    console.log("🔧 [Purchase Verify] Environment and key analysis:", {
+      vercelEnv,
+      isProduction,
+      stripeKeyExists: !!actualStripeKey,
+      stripeKeyLength: actualStripeKey?.length || 0,
       keyType: isTestKey ? "test" : isLiveKey ? "live" : "unknown",
-      keyPrefix: stripeKey?.substring(0, 8) || "none",
+      keyPrefix: actualStripeKey?.substring(0, 8) || "none",
       sessionType: isTestSession ? "test" : isLiveSession ? "live" : "unknown",
       sessionPrefix: sessionId.substring(0, 8),
-      shouldMatch: (isTestKey && isTestSession) || (isLiveKey && isLiveSession),
+      hasTestKey: !!process.env.STRIPE_SECRET_KEY_TEST,
+      hasLiveKey: !!process.env.STRIPE_SECRET_KEY,
+      expectedMatch: (isTestKey && isTestSession) || (isLiveKey && isLiveSession),
     })
 
-    // Only trigger mismatch error if there's an ACTUAL mismatch
+    // Check for test/live mismatch
     const hasMismatch = (isTestKey && isLiveSession) || (isLiveKey && isTestSession)
 
     if (hasMismatch) {
       console.error("❌ [Purchase Verify] CONFIRMED Test/Live mode mismatch:", {
-        keyType: isTestKey ? "test" : "live",
+        actualKeyType: isTestKey ? "test" : "live",
         sessionType: isTestSession ? "test" : "live",
+        keyPrefix: actualStripeKey?.substring(0, 8),
+        sessionPrefix: sessionId.substring(0, 8),
+        environment: vercelEnv,
+        recommendation: isTestKey
+          ? "Use a test session (cs_test_...) or switch to live key"
+          : "Use a live session (cs_live_...) or switch to test key",
       })
       return NextResponse.json(
         {
@@ -47,8 +107,11 @@ export async function POST(request: NextRequest) {
           details: isTestKey
             ? "You're using a test Stripe key but trying to access a live session."
             : "You're using a live Stripe key but trying to access a test session.",
+          actualKeyType: isTestKey ? "test" : "live",
           sessionType: isTestSession ? "test" : "live",
-          keyType: isTestKey ? "test" : "live",
+          environment: vercelEnv,
+          keyPrefix: actualStripeKey?.substring(0, 8),
+          sessionPrefix: sessionId.substring(0, 8),
           recommendation: isTestKey
             ? "Either use a live Stripe key or use a test session ID (cs_test_...)"
             : "Either use a test Stripe key or use a live session ID (cs_live_...)",
@@ -59,25 +122,37 @@ export async function POST(request: NextRequest) {
 
     console.log("✅ [Purchase Verify] Mode check passed - no mismatch detected")
 
-    // Verify user if token is provided
+    // Step 4: Verify user authentication if token provided
     let userId: string | null = null
     if (idToken) {
       try {
         const decodedToken = await auth.verifyIdToken(idToken)
         userId = decodedToken.uid
         console.log("✅ [Purchase Verify] User authenticated:", userId)
-      } catch (error) {
-        console.error("❌ [Purchase Verify] Error verifying ID token:", error)
-        return NextResponse.json({ error: "Invalid authentication token" }, { status: 401 })
+      } catch (authError) {
+        console.error("❌ [Purchase Verify] Error verifying ID token:", {
+          error: authError instanceof Error ? authError.message : "Unknown auth error",
+          tokenLength: idToken?.length || 0,
+          tokenPrefix: idToken?.substring(0, 20) || "none",
+        })
+        return NextResponse.json(
+          {
+            error: "Invalid authentication token",
+            details: authError instanceof Error ? authError.message : "Token verification failed",
+          },
+          { status: 401 },
+        )
       }
+    } else {
+      console.log("ℹ️ [Purchase Verify] No ID token provided, proceeding without user verification")
     }
 
-    // Retrieve the Stripe session with enhanced error handling
+    // Step 5: Retrieve Stripe session with comprehensive error handling
     let session: Stripe.Checkout.Session
     try {
-      console.log("🔄 [Purchase Verify] Retrieving Stripe session...")
+      console.log("🔄 [Purchase Verify] Retrieving Stripe session with expand options...")
       session = await stripe.checkout.sessions.retrieve(sessionId, {
-        expand: ["payment_intent", "line_items"],
+        expand: ["payment_intent", "line_items", "customer"],
       })
       console.log("✅ [Purchase Verify] Stripe session retrieved successfully")
     } catch (stripeError: any) {
@@ -89,20 +164,24 @@ export async function POST(request: NextRequest) {
         requestId: stripeError.requestId,
         decline_code: stripeError.decline_code,
         param: stripeError.param,
+        sessionId: sessionId.substring(0, 20) + "...",
+        keyType: isTestKey ? "test" : "live",
       })
 
-      // Handle different types of Stripe errors more specifically
+      // Handle specific Stripe error types
       if (stripeError.statusCode === 404) {
         return NextResponse.json(
           {
             error: "Payment session not found",
             details: "This session ID could not be found in your Stripe account.",
             sessionId: sessionId.substring(0, 20) + "...",
+            keyType: isTestKey ? "test" : "live",
             possibleCauses: [
               "Session ID is incorrect or incomplete",
               "Session has expired (sessions expire after 24 hours)",
               "Session belongs to a different Stripe account",
-              "Session was created with different API keys",
+              "Session was created with different API keys (test vs live)",
+              "Session was created in a different environment",
             ],
             stripeError: {
               type: stripeError.type,
@@ -119,6 +198,7 @@ export async function POST(request: NextRequest) {
           {
             error: "Stripe authentication failed",
             details: "The API key is invalid or doesn't have permission to access this resource.",
+            keyType: isTestKey ? "test" : "live",
             stripeError: {
               type: stripeError.type,
               code: stripeError.code,
@@ -134,6 +214,7 @@ export async function POST(request: NextRequest) {
           {
             error: "Stripe access forbidden",
             details: "The API key doesn't have permission to access this session.",
+            keyType: isTestKey ? "test" : "live",
             stripeError: {
               type: stripeError.type,
               code: stripeError.code,
@@ -152,6 +233,7 @@ export async function POST(request: NextRequest) {
           code: stripeError.code,
           statusCode: stripeError.statusCode,
           details: "There was an error communicating with Stripe.",
+          keyType: isTestKey ? "test" : "live",
           stripeError: {
             type: stripeError.type,
             code: stripeError.code,
@@ -168,7 +250,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Session not found" }, { status: 404 })
     }
 
-    console.log("📊 [Purchase Verify] Session details:", {
+    // Step 6: Log comprehensive session details
+    console.log("📊 [Purchase Verify] Complete session analysis:", {
       id: session.id,
       payment_status: session.payment_status,
       status: session.status,
@@ -176,17 +259,24 @@ export async function POST(request: NextRequest) {
       amount_total: session.amount_total,
       currency: session.currency,
       customer: session.customer,
+      customer_email: session.customer_details?.email,
+      payment_intent: typeof session.payment_intent === "string" ? session.payment_intent : session.payment_intent?.id,
+      created: new Date(session.created * 1000).toISOString(),
+      expires_at: session.expires_at ? new Date(session.expires_at * 1000).toISOString() : null,
       metadata: session.metadata,
-      created: session.created,
-      expires_at: session.expires_at,
+      metadataKeys: Object.keys(session.metadata || {}),
+      line_items: session.line_items?.data?.length || 0,
     })
 
-    // Check if the session was paid
+    // Step 7: Validate payment completion
     if (session.payment_status !== "paid") {
       console.error("❌ [Purchase Verify] Payment not completed:", {
         payment_status: session.payment_status,
         status: session.status,
         mode: session.mode,
+        amount_total: session.amount_total,
+        expires_at: session.expires_at ? new Date(session.expires_at * 1000).toISOString() : null,
+        isExpired: session.expires_at ? Date.now() > session.expires_at * 1000 : false,
       })
       return NextResponse.json(
         {
@@ -195,23 +285,46 @@ export async function POST(request: NextRequest) {
           sessionStatus: session.status,
           mode: session.mode,
           details: `The payment for this session has status: ${session.payment_status}`,
+          isExpired: session.expires_at ? Date.now() > session.expires_at * 1000 : false,
+          expiresAt: session.expires_at ? new Date(session.expires_at * 1000).toISOString() : null,
           possibleReasons: [
             session.payment_status === "unpaid" ? "Payment was not completed" : null,
             session.payment_status === "no_payment_required" ? "No payment was required" : null,
-            "Session may have expired",
+            session.expires_at && Date.now() > session.expires_at * 1000 ? "Session has expired" : null,
             "Payment method was declined",
+            "Customer abandoned checkout",
           ].filter(Boolean),
         },
         { status: 400 },
       )
     }
 
-    // Extract product box ID from metadata
+    // Step 8: Extract and validate metadata
     const productBoxId = session.metadata?.productBoxId
+    const buyerUid = session.metadata?.buyerUid || userId
+    const creatorUid = session.metadata?.creatorUid
+
+    console.log("🔍 [Purchase Verify] Metadata extraction:", {
+      productBoxId,
+      buyerUid,
+      creatorUid,
+      allMetadata: session.metadata,
+      metadataKeys: Object.keys(session.metadata || {}),
+      hasIdToken: !!idToken,
+      verifiedUserId: userId,
+    })
+
     if (!productBoxId) {
       console.error("❌ [Purchase Verify] Product box ID not found in metadata:", {
         metadata: session.metadata,
         availableKeys: Object.keys(session.metadata || {}),
+        sessionId: session.id,
+        lineItems:
+          session.line_items?.data?.map((item) => ({
+            price: item.price?.id,
+            product: typeof item.price?.product === "string" ? item.price.product : item.price?.product?.id,
+            quantity: item.quantity,
+          })) || [],
       })
       return NextResponse.json(
         {
@@ -219,20 +332,24 @@ export async function POST(request: NextRequest) {
           availableMetadata: Object.keys(session.metadata || {}),
           metadata: session.metadata,
           details: "The purchase session is missing required product information.",
+          sessionId: session.id,
+          troubleshooting: [
+            "Check if productBoxId was included when creating the checkout session",
+            "Verify metadata is being passed correctly in the frontend",
+            "Ensure the session was created with the correct parameters",
+          ],
         },
         { status: 400 },
       )
     }
 
-    console.log("📦 [Purchase Verify] Product box ID found:", productBoxId)
-
-    // Get buyer ID from metadata or use the verified user ID
-    const buyerUid = session.metadata?.buyerUid || userId
     if (!buyerUid) {
       console.error("❌ [Purchase Verify] Buyer ID not found:", {
         metadataBuyerUid: session.metadata?.buyerUid,
         verifiedUserId: userId,
         hasIdToken: !!idToken,
+        customerEmail: session.customer_details?.email,
+        customer: session.customer,
       })
       return NextResponse.json(
         {
@@ -242,16 +359,27 @@ export async function POST(request: NextRequest) {
             hasIdToken: !!idToken,
             metadataBuyerUid: session.metadata?.buyerUid,
             verifiedUserId: userId,
+            customerEmail: session.customer_details?.email,
           },
+          troubleshooting: [
+            "Ensure buyerUid is included in session metadata",
+            "Provide idToken in the request for user verification",
+            "Check if user is properly authenticated",
+          ],
         },
         { status: 400 },
       )
     }
 
-    console.log("👤 [Purchase Verify] Buyer UID found:", buyerUid)
+    console.log("✅ [Purchase Verify] All required IDs found:", {
+      productBoxId,
+      buyerUid,
+      creatorUid,
+    })
 
-    // Check if this purchase has already been recorded
+    // Step 9: Check for existing purchase
     try {
+      console.log("🔍 [Purchase Verify] Checking for existing purchase...")
       const existingPurchaseQuery = await db
         .collection("users")
         .doc(buyerUid)
@@ -264,12 +392,12 @@ export async function POST(request: NextRequest) {
         console.log("ℹ️ [Purchase Verify] Purchase already recorded, returning existing data")
         const existingPurchase = existingPurchaseQuery.docs[0].data()
 
-        // Get product box details
+        // Get product box details for response
         const productBoxDoc = await db.collection("productBoxes").doc(productBoxId).get()
         const productBoxData = productBoxDoc.exists ? productBoxDoc.data() : null
 
         // Get creator details
-        const creatorId = productBoxData?.creatorId || session.metadata?.creatorUid
+        const creatorId = productBoxData?.creatorId || creatorUid
         let creatorUsername = null
         let creatorName = null
 
@@ -303,124 +431,185 @@ export async function POST(request: NextRequest) {
         })
       }
     } catch (firestoreError) {
-      console.error("❌ [Purchase Verify] Error checking existing purchases:", firestoreError)
+      console.error("❌ [Purchase Verify] Error checking existing purchases:", {
+        error: firestoreError instanceof Error ? firestoreError.message : "Unknown Firestore error",
+        buyerUid,
+        sessionId,
+      })
       // Continue with creating new purchase record
     }
 
-    // Get product box details
+    // Step 10: Validate product box exists
     let productBoxDoc
     let productBoxData
     try {
+      console.log("🔍 [Purchase Verify] Fetching product box details...")
       productBoxDoc = await db.collection("productBoxes").doc(productBoxId).get()
       if (!productBoxDoc.exists) {
-        console.error("❌ [Purchase Verify] Product box not found:", productBoxId)
+        console.error("❌ [Purchase Verify] Product box not found:", {
+          productBoxId,
+          sessionId,
+          metadata: session.metadata,
+        })
         return NextResponse.json(
           {
             error: "Product box not found",
             productBoxId,
             details: "The purchased product could not be found in our database.",
+            sessionId,
+            troubleshooting: [
+              "Verify the productBoxId in the session metadata is correct",
+              "Check if the product box was deleted after checkout creation",
+              "Ensure the product box exists in the correct Firestore collection",
+            ],
           },
           { status: 404 },
         )
       }
       productBoxData = productBoxDoc.data()!
-      console.log("📦 [Purchase Verify] Product box found:", {
+      console.log("✅ [Purchase Verify] Product box found:", {
         title: productBoxData.title,
         creatorId: productBoxData.creatorId,
+        price: productBoxData.price,
+        totalSales: productBoxData.totalSales || 0,
       })
     } catch (productBoxError) {
-      console.error("❌ [Purchase Verify] Error fetching product box:", productBoxError)
+      console.error("❌ [Purchase Verify] Error fetching product box:", {
+        error: productBoxError instanceof Error ? productBoxError.message : "Unknown error",
+        productBoxId,
+      })
       return NextResponse.json(
         {
           error: "Failed to fetch product box details",
           details: "There was an error retrieving the product information.",
+          productBoxId,
+          firestoreError: productBoxError instanceof Error ? productBoxError.message : "Unknown error",
         },
         { status: 500 },
       )
     }
 
-    // Record the purchase in the user's purchases subcollection
+    // Step 11: Create purchase record
     let purchaseRef
     try {
-      purchaseRef = await db
-        .collection("users")
-        .doc(buyerUid)
-        .collection("purchases")
-        .add({
-          productBoxId,
-          sessionId,
-          paymentIntentId: session.payment_intent,
-          amount: session.amount_total ? session.amount_total / 100 : 0,
-          currency: session.currency || "usd",
-          timestamp: db.FieldValue.serverTimestamp(),
-          status: "completed",
-          creatorId: productBoxData.creatorId,
-        })
+      console.log("💾 [Purchase Verify] Creating purchase record...")
+      const purchaseData = {
+        productBoxId,
+        sessionId,
+        paymentIntentId:
+          typeof session.payment_intent === "string" ? session.payment_intent : session.payment_intent?.id || null,
+        amount: session.amount_total ? session.amount_total / 100 : 0,
+        currency: session.currency || "usd",
+        timestamp: db.FieldValue.serverTimestamp(),
+        status: "completed",
+        creatorId: productBoxData.creatorId,
+        customerEmail: session.customer_details?.email || null,
+      }
 
-      console.log("✅ [Purchase Verify] Created purchase record:", purchaseRef.id)
+      purchaseRef = await db.collection("users").doc(buyerUid).collection("purchases").add(purchaseData)
+
+      console.log("✅ [Purchase Verify] Created purchase record:", {
+        purchaseId: purchaseRef.id,
+        buyerUid,
+        productBoxId,
+        amount: purchaseData.amount,
+      })
     } catch (purchaseError) {
-      console.error("❌ [Purchase Verify] Error creating purchase record:", purchaseError)
+      console.error("❌ [Purchase Verify] Error creating purchase record:", {
+        error: purchaseError instanceof Error ? purchaseError.message : "Unknown error",
+        buyerUid,
+        productBoxId,
+        sessionId,
+      })
       return NextResponse.json(
         {
           error: "Failed to record purchase",
           details: "The purchase could not be saved to your account.",
           firestoreError: purchaseError instanceof Error ? purchaseError.message : "Unknown error",
+          buyerUid,
+          productBoxId,
         },
         { status: 500 },
       )
     }
 
-    // Increment sales counter on the product box
+    // Step 12: Update product box sales counters
     try {
+      console.log("📈 [Purchase Verify] Updating product box sales counters...")
+      const saleAmount = session.amount_total ? session.amount_total / 100 : 0
       await db
         .collection("productBoxes")
         .doc(productBoxId)
         .update({
           totalSales: db.FieldValue.increment(1),
-          totalRevenue: db.FieldValue.increment(session.amount_total ? session.amount_total / 100 : 0),
+          totalRevenue: db.FieldValue.increment(saleAmount),
+          lastSaleAt: db.FieldValue.serverTimestamp(),
         })
-      console.log("✅ [Purchase Verify] Updated product box sales")
+      console.log("✅ [Purchase Verify] Updated product box sales:", {
+        productBoxId,
+        incrementedSales: 1,
+        incrementedRevenue: saleAmount,
+      })
     } catch (updateError) {
-      console.error("⚠️ [Purchase Verify] Error updating product box sales:", updateError)
+      console.error("⚠️ [Purchase Verify] Error updating product box sales:", {
+        error: updateError instanceof Error ? updateError.message : "Unknown error",
+        productBoxId,
+      })
       // Don't fail the entire process for this
     }
 
-    // Record the sale for the creator
-    const creatorId = productBoxData.creatorId || session.metadata?.creatorUid
+    // Step 13: Record creator sale
+    const creatorId = productBoxData.creatorId || creatorUid
     if (creatorId) {
       try {
-        await db
-          .collection("users")
-          .doc(creatorId)
-          .collection("sales")
-          .add({
-            productBoxId,
-            buyerUid,
-            sessionId,
-            amount: session.amount_total ? session.amount_total / 100 : 0,
-            platformFee: session.amount_total ? (session.amount_total * 0.05) / 100 : 0,
-            netAmount: session.amount_total ? (session.amount_total * 0.95) / 100 : 0,
-            purchasedAt: db.FieldValue.serverTimestamp(),
-            status: "completed",
-          })
+        console.log("💰 [Purchase Verify] Recording creator sale...")
+        const saleAmount = session.amount_total ? session.amount_total / 100 : 0
+        const platformFee = saleAmount * 0.05 // 5% platform fee
+        const netAmount = saleAmount - platformFee
 
-        // Increment the creator's total sales
+        const saleData = {
+          productBoxId,
+          buyerUid,
+          sessionId,
+          amount: saleAmount,
+          platformFee,
+          netAmount,
+          purchasedAt: db.FieldValue.serverTimestamp(),
+          status: "completed",
+          customerEmail: session.customer_details?.email || null,
+        }
+
+        await db.collection("users").doc(creatorId).collection("sales").add(saleData)
+
+        // Update creator's total sales
         await db
           .collection("users")
           .doc(creatorId)
           .update({
             totalSales: db.FieldValue.increment(1),
-            totalRevenue: db.FieldValue.increment(session.amount_total ? session.amount_total / 100 : 0),
+            totalRevenue: db.FieldValue.increment(saleAmount),
+            totalNetRevenue: db.FieldValue.increment(netAmount),
+            lastSaleAt: db.FieldValue.serverTimestamp(),
           })
 
-        console.log("✅ [Purchase Verify] Recorded creator sale")
+        console.log("✅ [Purchase Verify] Recorded creator sale:", {
+          creatorId,
+          saleAmount,
+          platformFee,
+          netAmount,
+        })
       } catch (creatorError) {
-        console.error("⚠️ [Purchase Verify] Error recording creator sale:", creatorError)
+        console.error("⚠️ [Purchase Verify] Error recording creator sale:", {
+          error: creatorError instanceof Error ? creatorError.message : "Unknown error",
+          creatorId,
+        })
         // Don't fail the entire process for this
       }
+    } else {
+      console.warn("⚠️ [Purchase Verify] No creator ID found, skipping creator sale record")
     }
 
-    // Get creator details for the response
+    // Step 14: Get creator details for response
     let creatorUsername = null
     let creatorName = null
 
@@ -433,10 +622,14 @@ export async function POST(request: NextRequest) {
           creatorName = creatorData?.displayName || creatorData?.name
         }
       } catch (creatorError) {
-        console.error("⚠️ [Purchase Verify] Error fetching creator details:", creatorError)
+        console.error("⚠️ [Purchase Verify] Error fetching creator details:", {
+          error: creatorError instanceof Error ? creatorError.message : "Unknown error",
+          creatorId,
+        })
       }
     }
 
+    // Step 15: Build and return success response
     const purchaseResponse = {
       success: true,
       purchase: {
@@ -453,16 +646,25 @@ export async function POST(request: NextRequest) {
         creatorUsername,
         creatorName: creatorName || "Unknown Creator",
         type: "product_box",
+        customerEmail: session.customer_details?.email,
       },
     }
 
-    console.log("✅ [Purchase Verify] Verification completed successfully")
+    console.log("✅ [Purchase Verify] Verification completed successfully:", {
+      purchaseId: purchaseRef.id,
+      productBoxTitle: productBoxData.title,
+      amount: session.amount_total ? session.amount_total / 100 : 0,
+      buyerUid,
+      creatorId,
+    })
+
     return NextResponse.json(purchaseResponse)
   } catch (error) {
     console.error("❌ [Purchase Verify] Unexpected error:", {
       message: error instanceof Error ? error.message : "Unknown error",
       stack: error instanceof Error ? error.stack : undefined,
       name: error instanceof Error ? error.name : "Unknown",
+      rawBody: rawBody.substring(0, 500),
       error,
     })
 
@@ -471,6 +673,7 @@ export async function POST(request: NextRequest) {
         error: "Failed to verify purchase",
         details: error instanceof Error ? error.message : "An unexpected error occurred",
         errorType: error instanceof Error ? error.name : "Unknown",
+        timestamp: new Date().toISOString(),
       },
       { status: 500 },
     )
