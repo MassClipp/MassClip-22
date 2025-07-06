@@ -19,7 +19,7 @@ export async function POST(request: NextRequest) {
 
     console.log("📋 [Purchase Verify] Session ID:", sessionId.substring(0, 20) + "...")
 
-    // Check for test/live mode mismatch early
+    // Check for test/live mode mismatch early with better detection
     const isTestKey = process.env.STRIPE_SECRET_KEY?.startsWith("sk_test_")
     const isLiveKey = process.env.STRIPE_SECRET_KEY?.startsWith("sk_live_")
     const isTestSession = sessionId.startsWith("cs_test_")
@@ -28,33 +28,27 @@ export async function POST(request: NextRequest) {
     console.log("🔧 [Purchase Verify] Mode check:", {
       keyType: isTestKey ? "test" : isLiveKey ? "live" : "unknown",
       sessionType: isTestSession ? "test" : isLiveSession ? "live" : "unknown",
+      sessionIdPrefix: sessionId.substring(0, 8),
+      keyPrefix: process.env.STRIPE_SECRET_KEY?.substring(0, 7),
     })
 
-    if (isTestKey && isLiveSession) {
-      console.error("❌ [Purchase Verify] Test/Live mode mismatch: Test key with live session")
-      return NextResponse.json(
-        {
-          error: "Configuration Error: Test/Live Mode Mismatch",
-          details:
-            "You're using a test Stripe key but trying to access a live session. Please check your Stripe configuration.",
-          sessionType: "live",
-          keyType: "test",
-          recommendation: "Either use a live Stripe key or use a test session ID (cs_test_...)",
-        },
-        { status: 400 },
-      )
-    }
+    // Only show mismatch error if there's an actual mismatch
+    if ((isTestKey && isLiveSession) || (isLiveKey && isTestSession)) {
+      const mismatchType = isTestKey ? "test-key-live-session" : "live-key-test-session"
+      console.error(`❌ [Purchase Verify] Test/Live mode mismatch: ${mismatchType}`)
 
-    if (isLiveKey && isTestSession) {
-      console.error("❌ [Purchase Verify] Test/Live mode mismatch: Live key with test session")
       return NextResponse.json(
         {
           error: "Configuration Error: Test/Live Mode Mismatch",
-          details:
-            "You're using a live Stripe key but trying to access a test session. Please check your Stripe configuration.",
-          sessionType: "test",
-          keyType: "live",
-          recommendation: "Either use a test Stripe key or use a live session ID (cs_live_...)",
+          details: isTestKey
+            ? "You're using a test Stripe key but trying to access a live session. Please check your Stripe configuration."
+            : "You're using a live Stripe key but trying to access a test session. Please check your Stripe configuration.",
+          sessionType: isTestSession ? "test" : "live",
+          keyType: isTestKey ? "test" : "live",
+          mismatchType,
+          recommendation: isTestKey
+            ? "Either use a live Stripe key or use a test session ID (cs_test_...)"
+            : "Either use a test Stripe key or use a live session ID (cs_live_...)",
         },
         { status: 400 },
       )
@@ -81,6 +75,11 @@ export async function POST(request: NextRequest) {
         expand: ["payment_intent", "line_items"],
       })
       console.log("✅ [Purchase Verify] Stripe session retrieved successfully")
+      console.log("📊 [Purchase Verify] Session status:", {
+        id: session.id,
+        payment_status: session.payment_status,
+        status: session.status,
+      })
     } catch (stripeError: any) {
       console.error("❌ [Purchase Verify] Stripe session retrieval failed:", {
         error: stripeError.message,
@@ -93,29 +92,49 @@ export async function POST(request: NextRequest) {
       if (stripeError.statusCode === 404) {
         return NextResponse.json(
           {
-            error: "Payment session not found. Please check your session ID.",
-            details: "This could mean the session has expired, is invalid, or there's a test/live mode mismatch.",
+            error: "Payment session not found",
+            details:
+              "This session ID could not be found. This may happen if the session has expired, is invalid, or belongs to a different Stripe account.",
             sessionId: sessionId.substring(0, 20) + "...",
+            possibleCauses: [
+              "Session ID is incorrect or incomplete",
+              "Session has expired (sessions expire after 24 hours)",
+              "Session belongs to a different Stripe account",
+              "Session was created in a different environment (test vs live)",
+            ],
             stripeError: {
               type: stripeError.type,
               code: stripeError.code,
               message: stripeError.message,
             },
-            recommendation: "Check if the session ID is correct and matches your Stripe account mode (test/live)",
+            recommendation: "Please verify the session ID is correct and was created in the current environment",
           },
           { status: 404 },
         )
       }
 
+      // For other Stripe errors, provide more helpful context
       return NextResponse.json(
         {
-          error: `Failed to retrieve payment session: ${stripeError.message}`,
+          error: `Stripe API Error: ${stripeError.message}`,
           type: stripeError.type,
           code: stripeError.code,
-          details: "There was an error communicating with Stripe. Please try again or contact support.",
-          recommendation: "Check your Stripe configuration and try again",
+          details:
+            "There was an error communicating with Stripe. This could be due to network issues, API key problems, or Stripe service issues.",
+          stripeError: {
+            type: stripeError.type,
+            code: stripeError.code,
+            message: stripeError.message,
+            statusCode: stripeError.statusCode,
+          },
+          troubleshooting: [
+            "Check your internet connection",
+            "Verify your Stripe API key is valid and active",
+            "Check Stripe's status page for service outages",
+            "Ensure the API key has the necessary permissions",
+          ],
         },
-        { status: 500 },
+        { status: stripeError.statusCode || 500 },
       )
     }
 
