@@ -3,28 +3,44 @@ import Stripe from "stripe"
 // Determine environment and select appropriate keys
 const isProduction = process.env.VERCEL_ENV === "production"
 const isDevelopment = process.env.NODE_ENV === "development"
+const isPreview = process.env.VERCEL_ENV === "preview"
 
 // Use test keys for development and preview environments
-const shouldUseTestKeys = isDevelopment || process.env.VERCEL_ENV === "preview"
+const useTestKeys = isDevelopment || isPreview || !isProduction
 
-const stripeSecretKey = shouldUseTestKeys
-  ? process.env.STRIPE_SECRET_KEY_TEST || process.env.STRIPE_SECRET_KEY
-  : process.env.STRIPE_SECRET_KEY
+// Select the appropriate Stripe secret key
+const stripeSecretKey = useTestKeys ? process.env.STRIPE_SECRET_KEY_TEST : process.env.STRIPE_SECRET_KEY
 
-const stripePublishableKey = shouldUseTestKeys
-  ? process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY_TEST || process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
+// Select the appropriate publishable key
+const stripePublishableKey = useTestKeys
+  ? process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY_TEST
   : process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
 
 if (!stripeSecretKey) {
-  throw new Error(`Missing Stripe secret key for ${shouldUseTestKeys ? "test" : "live"} environment`)
+  const missingKey = useTestKeys ? "STRIPE_SECRET_KEY_TEST" : "STRIPE_SECRET_KEY"
+  throw new Error(`Missing ${missingKey} environment variable`)
 }
 
-console.log(`🔑 [Stripe] Using ${shouldUseTestKeys ? "TEST" : "LIVE"} keys`)
-console.log(`🔑 [Stripe] Environment: ${process.env.VERCEL_ENV || "development"}`)
+if (!stripePublishableKey) {
+  const missingKey = useTestKeys ? "NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY_TEST" : "NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY"
+  console.warn(`Missing ${missingKey} environment variable`)
+}
 
+console.log(`🔑 Stripe initialized in ${useTestKeys ? "TEST" : "LIVE"} mode`)
+console.log(`Environment: ${process.env.VERCEL_ENV || process.env.NODE_ENV}`)
+
+// Initialize Stripe with the selected key
 export const stripe = new Stripe(stripeSecretKey, {
   apiVersion: "2024-06-20",
+  typescript: true,
 })
 
+// Export the publishable key for client-side usage
 export const STRIPE_PUBLISHABLE_KEY = stripePublishableKey
-export const IS_TEST_MODE = shouldUseTestKeys
+
+// Export environment info
+export const STRIPE_CONFIG = {
+  isTestMode: useTestKeys,
+  environment: process.env.VERCEL_ENV || process.env.NODE_ENV,
+  hasPublishableKey: !!stripePublishableKey,
+}

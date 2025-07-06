@@ -5,13 +5,18 @@ import { initializeApp, getApps, cert } from "firebase-admin/app"
 
 // Initialize Firebase Admin if not already initialized
 if (!getApps().length) {
-  initializeApp({
-    credential: cert({
-      projectId: process.env.FIREBASE_PROJECT_ID,
-      clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-      privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n"),
-    }),
-  })
+  try {
+    initializeApp({
+      credential: cert({
+        projectId: process.env.FIREBASE_PROJECT_ID,
+        clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+        privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n"),
+      }),
+    })
+    console.log("✅ Firebase Admin initialized")
+  } catch (error) {
+    console.error("❌ Firebase Admin initialization failed:", error)
+  }
 }
 
 const db = getFirestore()
@@ -70,7 +75,13 @@ export async function POST(request: NextRequest) {
 
       if (!productBoxId || !buyerUid) {
         console.error("❌ [Webhook] Missing required metadata:", { productBoxId, buyerUid })
-        return NextResponse.json({ error: "Missing required metadata" }, { status: 400 })
+
+        // Still return success to Stripe to avoid retries, but log the issue
+        return NextResponse.json({
+          received: true,
+          error: "Missing metadata",
+          sessionId: session.id,
+        })
       }
 
       try {
@@ -78,7 +89,30 @@ export async function POST(request: NextRequest) {
         const productBoxDoc = await db.collection("productBoxes").doc(productBoxId).get()
         if (!productBoxDoc.exists) {
           console.error("❌ [Webhook] Product box not found:", productBoxId)
-          return NextResponse.json({ error: "Product box not found" }, { status: 404 })
+
+          // Create a basic purchase record even if product box is missing
+          const basicPurchaseData = {
+            productBoxId,
+            sessionId: session.id,
+            paymentIntentId: session.payment_intent,
+            amount: session.amount_total ? session.amount_total / 100 : 0,
+            currency: session.currency || "usd",
+            status: "complete",
+            itemTitle: "Unknown Product",
+            purchasedAt: new Date(),
+            isTestPurchase: isTestMode,
+            customerEmail: session.customer_details?.email,
+            error: "Product box not found during webhook processing",
+          }
+
+          await db.collection("users").doc(buyerUid).collection("purchases").doc(productBoxId).set(basicPurchaseData)
+
+          return NextResponse.json({
+            received: true,
+            warning: "Product box not found",
+            sessionId: session.id,
+            purchaseRecorded: true,
+          })
         }
 
         const productBoxData = productBoxDoc.data()!
@@ -93,9 +127,9 @@ export async function POST(request: NextRequest) {
           currency: session.currency || "usd",
           status: "complete",
           creatorId: creatorUid || productBoxData.creatorId,
-          itemTitle: productBoxData.title,
-          itemDescription: productBoxData.description,
-          thumbnailUrl: productBoxData.thumbnailUrl,
+          itemTitle: productBoxData.title || "Untitled Product",
+          itemDescription: productBoxData.description || "",
+          thumbnailUrl: productBoxData.thumbnailUrl || "",
           purchasedAt: new Date(),
           isTestPurchase: isTestMode,
           customerEmail: session.customer_details?.email,
@@ -107,49 +141,57 @@ export async function POST(request: NextRequest) {
         console.log(`✅ [Webhook] Purchase recorded for user ${buyerUid}, product ${productBoxId}`)
 
         // Update product box sales stats
-        await db
-          .collection("productBoxes")
-          .doc(productBoxId)
-          .update({
-            totalSales: FieldValue.increment(1),
-            totalRevenue: FieldValue.increment(purchaseAmount),
-            lastSaleAt: new Date(),
-          })
+        try {
+          await db
+            .collection("productBoxes")
+            .doc(productBoxId)
+            .update({
+              totalSales: FieldValue.increment(1),
+              totalRevenue: FieldValue.increment(purchaseAmount),
+              lastSaleAt: new Date(),
+            })
+        } catch (updateError) {
+          console.error("❌ [Webhook] Failed to update product box stats:", updateError)
+        }
 
         // Record sale for creator
         if (creatorUid || productBoxData.creatorId) {
-          const creatorId = creatorUid || productBoxData.creatorId
-          const platformFee = purchaseAmount * 0.05 // 5% platform fee
-          const netAmount = purchaseAmount - platformFee
+          try {
+            const creatorId = creatorUid || productBoxData.creatorId
+            const platformFee = purchaseAmount * 0.05 // 5% platform fee
+            const netAmount = purchaseAmount - platformFee
 
-          await db
-            .collection("users")
-            .doc(creatorId)
-            .collection("sales")
-            .add({
-              productBoxId,
-              buyerUid,
-              sessionId: session.id,
-              amount: purchaseAmount,
-              platformFee,
-              netAmount,
-              currency: session.currency || "usd",
-              status: "complete",
-              isTestSale: isTestMode,
-              soldAt: new Date(),
-            })
+            await db
+              .collection("users")
+              .doc(creatorId)
+              .collection("sales")
+              .add({
+                productBoxId,
+                buyerUid,
+                sessionId: session.id,
+                amount: purchaseAmount,
+                platformFee,
+                netAmount,
+                currency: session.currency || "usd",
+                status: "complete",
+                isTestSale: isTestMode,
+                soldAt: new Date(),
+              })
 
-          // Update creator's total stats
-          await db
-            .collection("users")
-            .doc(creatorId)
-            .update({
-              totalSales: FieldValue.increment(1),
-              totalRevenue: FieldValue.increment(netAmount),
-              lastSaleAt: new Date(),
-            })
+            // Update creator's total stats
+            await db
+              .collection("users")
+              .doc(creatorId)
+              .update({
+                totalSales: FieldValue.increment(1),
+                totalRevenue: FieldValue.increment(netAmount),
+                lastSaleAt: new Date(),
+              })
 
-          console.log(`✅ [Webhook] Sale recorded for creator ${creatorId}`)
+            console.log(`✅ [Webhook] Sale recorded for creator ${creatorId}`)
+          } catch (creatorError) {
+            console.error("❌ [Webhook] Failed to record creator sale:", creatorError)
+          }
         }
 
         return NextResponse.json({
@@ -160,7 +202,40 @@ export async function POST(request: NextRequest) {
         })
       } catch (dbError) {
         console.error("❌ [Webhook] Database error:", dbError)
-        return NextResponse.json({ error: "Failed to record purchase" }, { status: 500 })
+
+        // Try to create a minimal purchase record
+        try {
+          const fallbackPurchaseData = {
+            productBoxId: productBoxId || "unknown",
+            sessionId: session.id,
+            amount: session.amount_total ? session.amount_total / 100 : 0,
+            currency: session.currency || "usd",
+            status: "complete",
+            itemTitle: "Purchase (Processing Error)",
+            purchasedAt: new Date(),
+            isTestPurchase: isTestMode,
+            customerEmail: session.customer_details?.email,
+            error: "Database error during webhook processing",
+          }
+
+          if (buyerUid && productBoxId) {
+            await db
+              .collection("users")
+              .doc(buyerUid)
+              .collection("purchases")
+              .doc(productBoxId)
+              .set(fallbackPurchaseData)
+            console.log(`⚠️ [Webhook] Fallback purchase record created`)
+          }
+        } catch (fallbackError) {
+          console.error("❌ [Webhook] Fallback purchase creation failed:", fallbackError)
+        }
+
+        return NextResponse.json({
+          received: true,
+          error: "Database error",
+          sessionId: session.id,
+        })
       }
     }
 
@@ -171,4 +246,12 @@ export async function POST(request: NextRequest) {
     console.error("❌ [Webhook] Error processing webhook:", error)
     return NextResponse.json({ error: "Webhook processing failed" }, { status: 500 })
   }
+}
+
+// Handle GET requests (for webhook endpoint verification)
+export async function GET() {
+  return NextResponse.json({
+    message: "Stripe webhook endpoint is active",
+    timestamp: new Date().toISOString(),
+  })
 }

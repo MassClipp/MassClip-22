@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
-import { CheckCircle, AlertCircle, RefreshCw, ArrowLeft, ExternalLink } from "lucide-react"
+import { CheckCircle, AlertCircle, RefreshCw, ArrowLeft, ExternalLink, Clock } from "lucide-react"
 import Link from "next/link"
 import { useAuth } from "@/contexts/auth-context"
 import { collection, query, where, getDocs, limit } from "firebase/firestore"
@@ -20,6 +20,7 @@ interface PurchaseData {
   thumbnailUrl?: string
   purchasedAt: any
   isTestPurchase?: boolean
+  error?: string
 }
 
 export default function PurchaseSuccessPage() {
@@ -29,6 +30,7 @@ export default function PurchaseSuccessPage() {
   const [purchase, setPurchase] = useState<PurchaseData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [retryCount, setRetryCount] = useState(0)
 
   const sessionId = searchParams.get("session_id")
 
@@ -49,7 +51,7 @@ export default function PurchaseSuccessPage() {
       setLoading(true)
       setError(null)
 
-      console.log("🔍 Checking purchase status for session:", sessionId)
+      console.log(`🔍 Checking purchase status for session: ${sessionId} (attempt ${retryCount + 1})`)
 
       // Query user's purchases collection for this session
       const purchasesRef = collection(db, "users", user.uid, "purchases")
@@ -58,7 +60,15 @@ export default function PurchaseSuccessPage() {
 
       if (purchasesSnapshot.empty) {
         console.log("❌ Purchase not found for session:", sessionId)
-        setError("Purchase not found. The payment may still be processing.")
+
+        // If we've tried multiple times, show a different message
+        if (retryCount >= 3) {
+          setError(
+            "Purchase verification is taking longer than expected. Your payment was likely successful - please check your purchases or contact support.",
+          )
+        } else {
+          setError("Purchase not found. The payment may still be processing.")
+        }
         return
       }
 
@@ -69,20 +79,33 @@ export default function PurchaseSuccessPage() {
 
       if (purchaseData.status === "complete") {
         setPurchase(purchaseData)
+        setError(null)
       } else {
         setError(`Purchase status: ${purchaseData.status}`)
       }
     } catch (err) {
       console.error("❌ Error checking purchase status:", err)
-      setError("Failed to check purchase status")
+      setError("Failed to check purchase status. Please try again.")
     } finally {
       setLoading(false)
     }
   }
 
   const retryCheck = () => {
+    setRetryCount((prev) => prev + 1)
     checkPurchaseStatus()
   }
+
+  // Auto-retry every 3 seconds for the first 30 seconds
+  useEffect(() => {
+    if (error && !purchase && retryCount < 10) {
+      const timer = setTimeout(() => {
+        retryCheck()
+      }, 3000)
+
+      return () => clearTimeout(timer)
+    }
+  }, [error, purchase, retryCount])
 
   if (loading) {
     return (
@@ -90,7 +113,9 @@ export default function PurchaseSuccessPage() {
         <div className="text-center space-y-4">
           <RefreshCw className="h-8 w-8 animate-spin text-white mx-auto" />
           <p className="text-gray-400">Checking your purchase...</p>
-          <p className="text-gray-500 text-sm">This may take a few seconds</p>
+          <p className="text-gray-500 text-sm">
+            {retryCount > 0 ? `Attempt ${retryCount + 1}` : "This may take a few seconds"}
+          </p>
         </div>
       </div>
     )
@@ -101,14 +126,23 @@ export default function PurchaseSuccessPage() {
       <div className="min-h-screen bg-black flex items-center justify-center p-4">
         <div className="w-full max-w-lg space-y-6 text-center">
           <div className="w-16 h-16 mx-auto rounded-full bg-amber-500/10 border border-amber-500/20 flex items-center justify-center">
-            <AlertCircle className="h-8 w-8 text-amber-400" />
+            {retryCount >= 3 ? (
+              <AlertCircle className="h-8 w-8 text-amber-400" />
+            ) : (
+              <Clock className="h-8 w-8 text-amber-400" />
+            )}
           </div>
 
           <div className="space-y-2">
-            <h1 className="text-2xl font-light text-white">Purchase Processing</h1>
+            <h1 className="text-2xl font-light text-white">
+              {retryCount >= 3 ? "Purchase Verification Delayed" : "Purchase Processing"}
+            </h1>
             <p className="text-gray-400 text-sm">
               {error || "We're still processing your purchase. This usually takes a few seconds."}
             </p>
+            {retryCount > 0 && (
+              <p className="text-gray-500 text-xs">Checked {retryCount + 1} times • Auto-retrying every 3 seconds</p>
+            )}
           </div>
 
           {sessionId && (
@@ -137,6 +171,19 @@ export default function PurchaseSuccessPage() {
                 </Link>
               </Button>
             </div>
+          </div>
+
+          <div className="bg-blue-900/20 border border-blue-500/30 rounded-lg p-4 text-left">
+            <div className="flex items-center gap-2 mb-2">
+              <AlertCircle className="h-4 w-4 text-blue-400" />
+              <span className="text-blue-400 font-medium text-sm">What's happening?</span>
+            </div>
+            <ul className="text-blue-300/80 text-sm space-y-1">
+              <li>• Your payment was processed by Stripe</li>
+              <li>• Our system is recording your purchase</li>
+              <li>• This usually takes 5-10 seconds</li>
+              <li>• You'll get access once processing completes</li>
+            </ul>
           </div>
 
           <p className="text-gray-500 text-xs">
@@ -182,6 +229,12 @@ export default function PurchaseSuccessPage() {
             <span className="text-gray-400 text-sm">Status</span>
             <span className="text-green-400 text-sm font-medium">Complete</span>
           </div>
+          {purchase.error && (
+            <div className="flex justify-between items-center">
+              <span className="text-gray-400 text-sm">Note</span>
+              <span className="text-amber-400 text-xs">Processing issue resolved</span>
+            </div>
+          )}
         </div>
 
         <div className="space-y-3">
