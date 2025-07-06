@@ -5,7 +5,6 @@ import { useSearchParams } from "next/navigation"
 import { useAuth } from "@/contexts/auth-context"
 import { CheckCircle, Loader2, AlertCircle, Download, RefreshCw, Bug, Copy, Settings } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { useToast } from "@/hooks/use-toast"
 import Link from "next/link"
 
@@ -70,7 +69,6 @@ export default function PurchaseSuccessPage() {
           environment: data.environment,
         })
 
-        // Check for test/live mismatch
         if (data.error?.includes("Test/Live mode mismatch")) {
           setIsTestLiveMismatch(true)
         }
@@ -89,7 +87,6 @@ export default function PurchaseSuccessPage() {
     }
 
     if (authLoading || !user) {
-      // Wait for auth to complete
       return
     }
 
@@ -120,12 +117,10 @@ export default function PurchaseSuccessPage() {
         const errorData = await response.json().catch(() => ({ error: "Verification failed" }))
         console.error("❌ [Purchase Success] Error response:", errorData)
 
-        // Check for test/live mismatch
         if (errorData.error?.includes("Test/Live Mode Mismatch")) {
           setIsTestLiveMismatch(true)
         }
 
-        // Automatically fetch debug info on error
         await debugSession()
 
         throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`)
@@ -137,7 +132,6 @@ export default function PurchaseSuccessPage() {
       setPurchaseDetails(data.purchase)
       setError(null)
 
-      // Show success toast
       toast({
         title: "Purchase Verified!",
         description: "Your payment has been confirmed and content is now available.",
@@ -147,7 +141,6 @@ export default function PurchaseSuccessPage() {
       const errorMessage = error instanceof Error ? error.message : "Failed to verify purchase"
       setError(errorMessage)
 
-      // Show error toast
       toast({
         title: "Verification Failed",
         description: errorMessage,
@@ -197,17 +190,14 @@ export default function PurchaseSuccessPage() {
 
   if (authLoading || (loading && !purchaseDetails)) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-black via-gray-900 to-gray-800 flex items-center justify-center">
+      <div className="min-h-screen bg-black flex items-center justify-center">
         <div className="text-center">
-          <Loader2 className="h-12 w-12 text-amber-500 animate-spin mx-auto mb-4" />
-          <h2 className="text-2xl font-light text-white mb-2">
-            {authLoading ? "Authenticating..." : "Verifying your purchase..."}
+          <Loader2 className="h-8 w-8 text-white animate-spin mx-auto mb-4" />
+          <h2 className="text-xl font-light text-white mb-2">
+            {authLoading ? "Authenticating..." : "Verifying purchase..."}
           </h2>
-          <p className="text-gray-400">Please wait while we confirm your payment</p>
-          {retryCount > 0 && <p className="text-gray-500 text-sm mt-2">Attempt {retryCount + 1}</p>}
-          {sessionId && (
-            <p className="text-gray-600 text-xs mt-2 font-mono">Session: {sessionId.substring(0, 20)}...</p>
-          )}
+          <p className="text-gray-400 text-sm">Please wait</p>
+          {retryCount > 0 && <p className="text-gray-500 text-xs mt-2">Attempt {retryCount + 1}</p>}
         </div>
       </div>
     )
@@ -215,125 +205,87 @@ export default function PurchaseSuccessPage() {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-black via-gray-900 to-gray-800 flex items-center justify-center p-4">
-        <Card className="w-full max-w-4xl bg-gray-800/30 border-gray-700/50 backdrop-blur-sm">
-          <CardHeader className="text-center">
-            <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gradient-to-br from-red-500/20 to-red-600/20 flex items-center justify-center border border-red-500/30">
+      <div className="min-h-screen bg-black flex items-center justify-center p-4">
+        <div className="w-full max-w-lg">
+          <div className="text-center mb-8">
+            <div className="w-16 h-16 mx-auto mb-6 rounded-full bg-red-500/10 flex items-center justify-center border border-red-500/20">
               <AlertCircle className="h-8 w-8 text-red-400" />
             </div>
-            <CardTitle className="text-white text-2xl">Purchase Verification Failed</CardTitle>
-            <CardDescription className="text-gray-400 text-lg">{error}</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            {/* Test/Live Mode Mismatch Warning */}
-            {isTestLiveMismatch && (
-              <div className="bg-amber-900/20 border border-amber-500/30 rounded-lg p-4">
-                <div className="flex items-center gap-2 mb-2">
-                  <Settings className="h-4 w-4 text-amber-400" />
-                  <span className="text-amber-400 font-medium">Configuration Issue Detected</span>
-                </div>
-                <p className="text-amber-300 text-sm mb-3">
-                  There's a mismatch between your Stripe configuration and the payment session. This typically happens
-                  when:
-                </p>
-                <ul className="text-amber-300/80 text-sm space-y-1 ml-4 list-disc">
-                  <li>Using test Stripe keys with a live payment session</li>
-                  <li>Using live Stripe keys with a test payment session</li>
-                </ul>
-                <div className="mt-3">
-                  <Button asChild size="sm" className="bg-amber-600 hover:bg-amber-700 text-black">
-                    <Link href="/debug-stripe-config">
-                      <Settings className="h-3 w-3 mr-1" />
-                      Check Configuration
-                    </Link>
-                  </Button>
-                </div>
-              </div>
-            )}
+            <h1 className="text-2xl font-light text-white mb-2">Verification Failed</h1>
+            <p className="text-gray-400 text-sm">{error}</p>
+          </div>
 
-            <div className="text-center">
-              <p className="text-gray-400 text-sm mb-4">
-                Don't worry! Your payment was likely successful. You can try verifying again or check your purchases.
+          {isTestLiveMismatch && (
+            <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-4 mb-6">
+              <div className="flex items-center gap-2 mb-2">
+                <Settings className="h-4 w-4 text-amber-400" />
+                <span className="text-amber-400 text-sm font-medium">Configuration Issue</span>
+              </div>
+              <p className="text-amber-300/80 text-sm mb-3">
+                Stripe test/live mode mismatch detected. Check your configuration.
               </p>
-              {sessionId && (
-                <div className="bg-gray-800/50 rounded-lg p-3 mb-4 flex items-center justify-between">
-                  <p className="text-gray-500 text-xs font-mono">Session: {sessionId.substring(0, 30)}...</p>
-                  <Button onClick={copySessionId} size="sm" variant="ghost" className="h-6 w-6 p-0">
-                    <Copy className="h-3 w-3" />
-                  </Button>
-                </div>
-              )}
-            </div>
-
-            {debugInfo && (
-              <div className="bg-gray-800/50 rounded-lg p-4 border border-gray-700/50">
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-2">
-                    <Bug className="h-4 w-4 text-amber-400" />
-                    <span className="text-amber-400 text-sm font-medium">Debug Information</span>
-                  </div>
-                  <div className="flex gap-2">
-                    <Button onClick={() => setShowDebug(!showDebug)} size="sm" variant="ghost" className="text-xs">
-                      {showDebug ? "Hide" : "Show"}
-                    </Button>
-                    <Button onClick={copyDebugInfo} size="sm" variant="ghost" className="h-6 w-6 p-0">
-                      <Copy className="h-3 w-3" />
-                    </Button>
-                  </div>
-                </div>
-
-                {debugInfo.recommendation && (
-                  <div className="mb-3 p-3 bg-blue-900/20 border border-blue-500/30 rounded">
-                    <p className="text-blue-300 text-sm">
-                      <strong>Recommendation:</strong> {debugInfo.recommendation}
-                    </p>
-                  </div>
-                )}
-
-                {showDebug && (
-                  <pre className="text-xs text-gray-300 overflow-auto max-h-60 bg-gray-900/50 p-3 rounded">
-                    {JSON.stringify(debugInfo, null, 2)}
-                  </pre>
-                )}
-              </div>
-            )}
-
-            <div className="flex flex-col gap-3">
-              <Button
-                onClick={handleRetry}
-                className="w-full bg-gray-700 hover:bg-gray-600 text-white border-gray-600"
-                variant="outline"
-              >
-                <RefreshCw className="h-4 w-4 mr-2" />
-                Try Again
-              </Button>
-              <Button
-                onClick={debugSession}
-                className="w-full bg-amber-600 hover:bg-amber-700 text-black"
-                variant="outline"
-              >
-                <Bug className="h-4 w-4 mr-2" />
-                Debug Session
-              </Button>
-              <Button asChild className="w-full bg-blue-600 hover:bg-blue-700 text-white">
+              <Button asChild size="sm" className="bg-amber-500 hover:bg-amber-600 text-black text-xs">
                 <Link href="/debug-stripe-config">
-                  <Settings className="h-4 w-4 mr-2" />
-                  Check Stripe Config
+                  <Settings className="h-3 w-3 mr-1" />
+                  Check Config
                 </Link>
               </Button>
-              <Button
-                asChild
-                className="w-full bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white"
-              >
-                <Link href="/dashboard/purchases">View My Purchases</Link>
-              </Button>
             </div>
-          </CardContent>
-        </Card>
+          )}
+
+          {sessionId && (
+            <div className="bg-gray-900/50 border border-gray-800 rounded-lg p-4 mb-6">
+              <div className="flex items-center justify-between">
+                <span className="text-gray-400 text-xs">Session ID</span>
+                <Button onClick={copySessionId} size="sm" variant="ghost" className="h-6 w-6 p-0">
+                  <Copy className="h-3 w-3" />
+                </Button>
+              </div>
+              <p className="text-gray-300 text-xs font-mono mt-1">{sessionId.substring(0, 40)}...</p>
+            </div>
+          )}
+
+          <div className="space-y-3">
+            <Button onClick={handleRetry} className="w-full bg-white hover:bg-gray-100 text-black h-12 rounded-lg">
+              <RefreshCw className="h-4 w-4 mr-2" />
+              Try Again
+            </Button>
+            <Button
+              onClick={debugSession}
+              variant="ghost"
+              className="w-full text-gray-400 hover:text-white hover:bg-gray-800/50 h-10 rounded-lg"
+            >
+              <Bug className="h-4 w-4 mr-2" />
+              Debug Session
+            </Button>
+            <Button
+              asChild
+              variant="ghost"
+              className="w-full text-gray-400 hover:text-white hover:bg-gray-800/50 h-10 rounded-lg"
+            >
+              <Link href="/dashboard/purchases">View Purchases</Link>
+            </Button>
+          </div>
+
+          {debugInfo && showDebug && (
+            <div className="mt-6 bg-gray-900/50 border border-gray-800 rounded-lg p-4">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-amber-400 text-sm">Debug Info</span>
+                <Button onClick={copyDebugInfo} size="sm" variant="ghost" className="h-6 w-6 p-0">
+                  <Copy className="h-3 w-3" />
+                </Button>
+              </div>
+              <pre className="text-xs text-gray-300 overflow-auto max-h-40 bg-black/50 p-3 rounded">
+                {JSON.stringify(debugInfo, null, 2)}
+              </pre>
+            </div>
+          )}
+        </div>
       </div>
     )
   }
 
+  // SUCCESS STATE - New minimal design
   return (
     <div className="min-h-screen bg-black flex items-center justify-center p-4">
       <div className="w-full max-w-lg">
