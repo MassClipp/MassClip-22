@@ -4,9 +4,22 @@ import { useEffect, useState } from "react"
 import { useAuth } from "@/contexts/auth-context"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useToast } from "@/hooks/use-toast"
-import { DollarSign, Package, AlertCircle, RefreshCw, Eye, TestTube } from "lucide-react"
+import {
+  Download,
+  Calendar,
+  DollarSign,
+  Package,
+  AlertCircle,
+  RefreshCw,
+  Eye,
+  ExternalLink,
+  TestTube,
+} from "lucide-react"
+import Link from "next/link"
+import { format } from "date-fns"
 
 interface Purchase {
   id: string
@@ -47,7 +60,7 @@ export default function PurchasesPage() {
 
     try {
       console.log("🔍 [Purchases Page] Fetching user purchases...")
-      
+
       const idToken = await user.getIdToken()
       const response = await fetch("/api/user/unified-purchases", {
         headers: {
@@ -96,7 +109,7 @@ export default function PurchasesPage() {
     fetchPurchases()
   }
 
-  const filteredPurchases = purchases.filter(purchase => {
+  const filteredPurchases = purchases.filter((purchase) => {
     if (activeTab === "all") return true
     if (activeTab === "test") return purchase.stripeMode === "test"
     if (activeTab === "live") return purchase.stripeMode === "live"
@@ -118,7 +131,7 @@ export default function PurchasesPage() {
             <Skeleton className="h-8 w-48 mb-2" />
             <Skeleton className="h-4 w-96" />
           </div>
-          
+
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
             {[1, 2, 3].map((i) => (
               <Card key={i} className="bg-gray-800/30 border-gray-700/50">
@@ -199,9 +212,7 @@ export default function PurchasesPage() {
                 <DollarSign className="h-4 w-4 text-gray-400" />
               </CardHeader>
               <CardContent>
-                <div className="text-2xl font-bold text-white">
-                  {formatCurrency(stats.totalSpent, stats.currency)}
-                </div>
+                <div className="text-2xl font-bold text-white">{formatCurrency(stats.totalSpent, stats.currency)}</div>
               </CardContent>
             </Card>
 
@@ -232,9 +243,7 @@ export default function PurchasesPage() {
           <button
             onClick={() => setActiveTab("all")}
             className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-              activeTab === "all"
-                ? "bg-white text-black"
-                : "text-gray-400 hover:text-white hover:bg-gray-700/50"
+              activeTab === "all" ? "bg-white text-black" : "text-gray-400 hover:text-white hover:bg-gray-700/50"
             }`}
           >
             All ({purchases.length})
@@ -242,4 +251,131 @@ export default function PurchasesPage() {
           <button
             onClick={() => setActiveTab("test")}
             className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
-              activeTab ===
+              activeTab === "test" ? "bg-amber-500 text-black" : "text-gray-400 hover:text-white hover:bg-gray-700/50"
+            }`}
+          >
+            Test ({purchases.filter((p) => p.stripeMode === "test").length})
+          </button>
+          <button
+            onClick={() => setActiveTab("live")}
+            className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
+              activeTab === "live" ? "bg-green-500 text-black" : "text-gray-400 hover:text-white hover:bg-gray-700/50"
+            }`}
+          >
+            Live ({purchases.filter((p) => p.stripeMode === "live").length})
+          </button>
+        </div>
+
+        {/* Purchases List */}
+        {filteredPurchases.length === 0 ? (
+          <Card className="bg-gray-800/30 border-gray-700/50 backdrop-blur-sm">
+            <CardContent className="text-center py-12">
+              <Package className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-white mb-2">
+                {activeTab === "all" ? "No purchases yet" : `No ${activeTab} purchases`}
+              </h3>
+              <p className="text-gray-400 mb-6">
+                {activeTab === "all"
+                  ? "Start exploring our content to make your first purchase"
+                  : `You haven't made any ${activeTab} purchases yet`}
+              </p>
+              <Button
+                asChild
+                className="bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-black"
+              >
+                <Link href="/dashboard/explore">Browse Content</Link>
+              </Button>
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="space-y-4">
+            {filteredPurchases.map((purchase) => (
+              <Card
+                key={purchase.id}
+                className="bg-gray-800/30 border-gray-700/50 backdrop-blur-sm hover:bg-gray-800/40 transition-colors"
+              >
+                <CardContent className="p-6">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center space-x-4">
+                      {/* Thumbnail */}
+                      <div className="relative">
+                        {purchase.thumbnailUrl ? (
+                          <img
+                            src={purchase.thumbnailUrl || "/placeholder.svg"}
+                            alt={purchase.itemTitle}
+                            className="h-16 w-16 rounded-lg object-cover"
+                          />
+                        ) : (
+                          <div className="h-16 w-16 rounded-lg bg-gray-700 flex items-center justify-center">
+                            <Package className="h-6 w-6 text-gray-400" />
+                          </div>
+                        )}
+                        {purchase.stripeMode === "test" && (
+                          <Badge className="absolute -top-2 -right-2 bg-amber-500 text-black text-xs px-1 py-0">
+                            Test
+                          </Badge>
+                        )}
+                      </div>
+
+                      {/* Content Info */}
+                      <div className="flex-1">
+                        <h3 className="text-lg font-medium text-white mb-1">{purchase.itemTitle}</h3>
+                        <div className="flex items-center space-x-4 text-sm text-gray-400">
+                          <span className="flex items-center">
+                            <Calendar className="h-3 w-3 mr-1" />
+                            {format(new Date(purchase.purchasedAt), "MMM d, yyyy")}
+                          </span>
+                          {purchase.creatorUsername && <span>by @{purchase.creatorUsername}</span>}
+                          <Badge variant="outline" className="text-xs">
+                            {purchase.type.replace("_", " ")}
+                          </Badge>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Actions */}
+                    <div className="flex items-center space-x-4">
+                      <div className="text-right">
+                        <div className="text-lg font-semibold text-white">
+                          {formatCurrency(purchase.amount, purchase.currency)}
+                        </div>
+                        <div className="text-xs text-gray-400 capitalize">{purchase.status}</div>
+                      </div>
+
+                      <div className="flex space-x-2">
+                        <Button
+                          asChild
+                          size="sm"
+                          className="bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-black"
+                        >
+                          <Link href={`/product-box/${purchase.productBoxId}/content`}>
+                            <Download className="h-3 w-3 mr-1" />
+                            Access
+                          </Link>
+                        </Button>
+
+                        {purchase.creatorUsername && (
+                          <Button
+                            asChild
+                            size="sm"
+                            variant="outline"
+                            className="border-gray-600 hover:bg-gray-700 bg-transparent"
+                          >
+                            <Link href={`/creator/${purchase.creatorUsername}`}>
+                              <ExternalLink className="h-3 w-3 mr-1" />
+                              Creator
+                            </Link>
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
