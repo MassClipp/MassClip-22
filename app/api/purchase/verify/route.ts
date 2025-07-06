@@ -1,25 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
-import Stripe from "stripe"
+import type Stripe from "stripe"
 import { auth, db } from "@/lib/firebase-admin"
-
-function maskStripeKey(key?: string): string {
-  if (!key) return "undefined"
-  if (key.length < 12) return "invalid_key_format"
-  return `${key.slice(0, 8)}...${key.slice(-4)}`
-}
-
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: "2024-06-20",
-})
-
-console.log("🔑 [Purchase Verify] Stripe key details:", {
-  keyExists: !!process.env.STRIPE_SECRET_KEY,
-  keyLength: process.env.STRIPE_SECRET_KEY?.length || 0,
-  maskedKey: maskStripeKey(process.env.STRIPE_SECRET_KEY),
-  keyPrefix: process.env.STRIPE_SECRET_KEY?.substring(0, 8) || "none",
-  isTestKey: process.env.STRIPE_SECRET_KEY?.startsWith("sk_test_"),
-  isLiveKey: process.env.STRIPE_SECRET_KEY?.startsWith("sk_live_"),
-})
+import { stripe } from "@/lib/stripe"
 
 export async function POST(request: NextRequest) {
   try {
