@@ -331,6 +331,36 @@ export default function DebugStripeConfigPage() {
           </CardContent>
         </Card>
 
+        {environmentInfo && environmentInfo.isPreview && (
+          <Alert className="border-blue-500/30 bg-blue-500/10">
+            <Info className="h-4 w-4 text-blue-400" />
+            <AlertTitle className="text-blue-400">Preview Environment Detected</AlertTitle>
+            <AlertDescription className="text-blue-300">
+              You're testing in a preview environment. Here are some important considerations:
+              <br />
+              <br />
+              <strong>Current URLs:</strong>
+              <ul className="list-disc ml-4 mt-2 space-y-1">
+                <li>Preview URL: {environmentInfo.currentSiteUrl}</li>
+                <li>Webhook URL: {environmentInfo.webhookUrl}</li>
+                <li>Expected for testing: Use test Stripe keys and test session IDs (cs_test_...)</li>
+              </ul>
+              <br />
+              <strong>For webhook testing:</strong>
+              <ul className="list-disc ml-4 mt-2 space-y-1">
+                <li>Webhooks won't reach preview URLs automatically</li>
+                <li>
+                  Use Stripe CLI for local webhook testing:{" "}
+                  <code className="bg-gray-700 px-1 rounded">
+                    stripe listen --forward-to {environmentInfo.currentSiteUrl}/api/stripe/webhook
+                  </code>
+                </li>
+                <li>Or update webhook endpoints in Stripe dashboard temporarily</li>
+              </ul>
+            </AlertDescription>
+          </Alert>
+        )}
+
         {/* Session Debug */}
         <Card className="bg-gray-800/30 border-gray-700/50 backdrop-blur-sm">
           <CardHeader>

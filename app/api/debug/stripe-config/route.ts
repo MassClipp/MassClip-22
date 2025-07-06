@@ -1,71 +1,58 @@
 import { NextResponse } from "next/server"
-import Stripe from "stripe"
 
 export async function GET() {
   try {
+    const vercelEnv = process.env.VERCEL_ENV || "development"
+    const nodeEnv = process.env.NODE_ENV || "development"
+
+    // Check for Stripe keys
     const stripeKey = process.env.STRIPE_SECRET_KEY
     const stripeTestKey = process.env.STRIPE_SECRET_KEY_TEST
 
-    if (!stripeKey && !stripeTestKey) {
-      return NextResponse.json(
-        {
-          error: "No Stripe keys configured",
-          config: {
-            hasMainKey: false,
-            hasTestKey: false,
-          },
-        },
-        { status: 500 },
-      )
-    }
+    // Determine which key is being used
+    const isProduction = vercelEnv === "production"
+    const activeKey = isProduction ? stripeKey : stripeTestKey || stripeKey
+
+    const stripeKeyExists = !!activeKey
+    const stripeKeyPrefix = activeKey ? activeKey.substring(0, 8) : "none"
+    const isTestMode = stripeKeyPrefix.startsWith("sk_test_")
+    const isLiveMode = stripeKeyPrefix.startsWith("sk_live_")
+
+    console.log(`🔍 [Stripe Config] Environment: ${vercelEnv}`)
+    console.log(`🔍 [Stripe Config] Key type: ${isLiveMode ? "live" : isTestMode ? "test" : "unknown"}`)
+    console.log(`🔍 [Stripe Config] Has main key: ${!!stripeKey}`)
+    console.log(`🔍 [Stripe Config] Has test key: ${!!stripeTestKey}`)
 
     const config = {
-      hasMainKey: !!stripeKey,
-      hasTestKey: !!stripeTestKey,
-      mainKeyType: stripeKey?.startsWith("sk_test_") ? "test" : stripeKey?.startsWith("sk_live_") ? "live" : "unknown",
-      testKeyType: stripeTestKey?.startsWith("sk_test_")
-        ? "test"
-        : stripeTestKey?.startsWith("sk_live_")
-          ? "live"
-          : "unknown",
-      environment: process.env.NODE_ENV,
-      vercelEnv: process.env.VERCEL_ENV,
+      stripeKeyExists,
+      stripeKeyPrefix,
+      isTestMode,
+      isLiveMode,
+      environment: vercelEnv,
+      nodeEnvironment: nodeEnv,
+      timestamp: new Date().toISOString(),
+      keyConfiguration: {
+        hasMainKey: !!stripeKey,
+        hasTestKey: !!stripeTestKey,
+        activeKeySource: isProduction
+          ? "STRIPE_SECRET_KEY"
+          : stripeTestKey
+            ? "STRIPE_SECRET_KEY_TEST"
+            : "STRIPE_SECRET_KEY (fallback)",
+        recommendedSetup: isProduction
+          ? "Use STRIPE_SECRET_KEY with live keys"
+          : "Use STRIPE_SECRET_KEY_TEST with test keys",
+      },
     }
 
-    // Test Stripe connection
-    let connectionTest = null
-    try {
-      const testKey = stripeTestKey || stripeKey
-      if (testKey) {
-        const stripe = new Stripe(testKey, { apiVersion: "2023-08-16" })
-        const account = await stripe.accounts.retrieve()
-        connectionTest = {
-          success: true,
-          accountId: account.id,
-          country: account.country,
-          currency: account.default_currency,
-        }
-      }
-    } catch (error) {
-      connectionTest = {
-        success: false,
-        error: error instanceof Error ? error.message : "Unknown error",
-      }
-    }
-
-    console.log("🔧 [Stripe Config]:", { config, connectionTest })
-
-    return NextResponse.json({
-      success: true,
-      config,
-      connectionTest,
-    })
-  } catch (error) {
-    console.error("❌ [Stripe Config] Error:", error)
+    return NextResponse.json(config)
+  } catch (error: any) {
+    console.error(`❌ [Stripe Config] Error:`, error)
     return NextResponse.json(
       {
-        error: "Failed to get Stripe config",
-        details: error instanceof Error ? error.message : "Unknown error",
+        error: "Failed to check Stripe configuration",
+        details: error.message,
+        timestamp: new Date().toISOString(),
       },
       { status: 500 },
     )

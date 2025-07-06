@@ -1,209 +1,279 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { auth, db } from "@/lib/firebase-admin"
+import { verifyIdToken } from "@/lib/auth-utils"
+import { db } from "@/lib/firebase-admin"
 import { stripe } from "@/lib/stripe"
 
 export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
   try {
-    console.log("🛒 [Checkout API] Starting checkout session creation")
+    console.log(`🔍 [Checkout API] Starting checkout for bundle: ${params.id}`)
 
-    const { idToken } = await request.json()
-    const productBoxId = params.id
-
-    console.log("📋 [Checkout API] Request details:", {
-      productBoxId,
-      hasIdToken: !!idToken,
-      url: request.url,
-    })
-
-    if (!productBoxId) {
-      console.error("❌ [Checkout API] Missing product box ID")
-      return NextResponse.json({ error: "Missing product box ID" }, { status: 400 })
-    }
-
-    // Verify user authentication
-    let userId: string | null = null
-    let userEmail: string | null = null
-    if (idToken) {
-      try {
-        const decodedToken = await auth.verifyIdToken(idToken)
-        userId = decodedToken.uid
-        userEmail = decodedToken.email || null
-        console.log("✅ [Checkout API] User authenticated:", {
-          userId,
-          userEmail,
-        })
-      } catch (error) {
-        console.error("❌ [Checkout API] Auth failed:", error)
-        return NextResponse.json({ error: "Invalid authentication" }, { status: 401 })
-      }
-    }
-
-    if (!userId) {
-      console.error("❌ [Checkout API] User not authenticated")
-      return NextResponse.json({ error: "Authentication required" }, { status: 401 })
-    }
-
-    // Get product box details
-    console.log("📦 [Checkout API] Fetching product box:", productBoxId)
-    const productBoxDoc = await db.collection("productBoxes").doc(productBoxId).get()
-
-    if (!productBoxDoc.exists) {
-      console.error("❌ [Checkout API] Product box not found:", productBoxId)
-      return NextResponse.json({ error: "Product box not found" }, { status: 404 })
-    }
-
-    const productBoxData = productBoxDoc.data()!
-    console.log("📦 [Checkout API] Product box found:", {
-      title: productBoxData.title,
-      price: productBoxData.price,
-      creatorId: productBoxData.creatorId,
-    })
-
-    // Check if user already owns this product box
-    const existingPurchase = await db
-      .collection("purchases")
-      .where("buyerUid", "==", userId)
-      .where("productBoxId", "==", productBoxId)
-      .where("status", "==", "completed")
-      .limit(1)
-      .get()
-
-    if (!existingPurchase.empty) {
-      console.log("⚠️ [Checkout API] User already owns this product box")
-      return NextResponse.json({ error: "You already own this product box" }, { status: 400 })
-    }
-
-    // Dynamic price creation - create or retrieve Stripe price
-    let priceId: string
-
-    try {
-      // Check if we already have a Stripe price ID stored
-      if (productBoxData.stripePriceId) {
-        console.log("💰 [Checkout API] Using existing price ID:", productBoxData.stripePriceId)
-        priceId = productBoxData.stripePriceId
-
-        // Verify the price still exists
-        try {
-          await stripe.prices.retrieve(priceId)
-          console.log("✅ [Checkout API] Existing price validated")
-        } catch (priceError) {
-          console.warn("⚠️ [Checkout API] Stored price ID invalid, creating new one")
-          throw new Error("Price not found")
-        }
-      } else {
-        throw new Error("No price ID stored")
-      }
-    } catch (error) {
-      console.log("🔄 [Checkout API] Creating new Stripe product and price")
-
-      try {
-        // Create Stripe product
-        const product = await stripe.products.create({
-          name: productBoxData.title || "Product Box",
-          description: productBoxData.description || "Premium content",
-          images: productBoxData.thumbnailUrl ? [productBoxData.thumbnailUrl] : [],
-          metadata: {
-            productBoxId,
-            creatorId: productBoxData.creatorId,
-            type: "product_box",
-          },
-        })
-
-        console.log("✅ [Checkout API] Product created:", product.id)
-
-        // Create Stripe price
-        const price = await stripe.prices.create({
-          currency: "usd",
-          unit_amount: Math.round((productBoxData.price || 0) * 100), // Convert to cents
-          product: product.id,
-          metadata: {
-            productBoxId,
-            creatorId: productBoxData.creatorId,
-            type: "product_box_price",
-          },
-        })
-
-        priceId = price.id
-        console.log("✅ [Checkout API] Price created:", priceId)
-
-        // Store the price ID in Firestore for future use
-        await db.collection("productBoxes").doc(productBoxId).update({
-          stripeProductId: product.id,
-          stripePriceId: priceId,
-          updatedAt: new Date(),
-        })
-
-        console.log("💾 [Checkout API] Price ID saved to database")
-      } catch (stripeError) {
-        console.error("❌ [Checkout API] Failed to create Stripe product/price:", stripeError)
-        return NextResponse.json(
-          {
-            error: "Failed to create payment configuration",
-            details: stripeError instanceof Error ? stripeError.message : "Unknown error",
-          },
-          { status: 500 },
-        )
-      }
-    }
-
-    // Get site URL for redirects
-    const siteUrl =
-      process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_APP_URL || process.env.NEXT_PUBLIC_VERCEL_URL
-    if (!siteUrl) {
-      console.error("❌ [Checkout API] No site URL configured")
-      return NextResponse.json({ error: "Site configuration error" }, { status: 500 })
-    }
-
-    // Create checkout session with dynamic price
-    console.log("🔄 [Checkout API] Creating checkout session with price:", priceId)
-
-    const session = await stripe.checkout.sessions.create({
-      payment_method_types: ["card"],
-      line_items: [
+    // Verify authentication
+    const decodedToken = await verifyIdToken(request)
+    if (!decodedToken) {
+      console.error("❌ [Checkout API] Authentication failed")
+      return NextResponse.json(
         {
-          price: priceId,
-          quantity: 1,
+          error: "Authentication required",
+          code: "UNAUTHORIZED",
         },
-      ],
-      mode: "payment",
-      success_url: `${siteUrl}/purchase/success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${siteUrl}/product-box/${productBoxId}`,
-      metadata: {
-        productBoxId,
-        buyerUid: userId,
-        creatorUid: productBoxData.creatorId,
-        type: "product_box_purchase",
-        priceId,
-      },
-      customer_email: userEmail || undefined,
-      expires_at: Math.floor(Date.now() / 1000) + 30 * 60, // 30 minutes
+        { status: 401 },
+      )
+    }
+
+    const userId = decodedToken.uid
+    console.log(`✅ [Checkout API] User authenticated: ${userId}`)
+
+    // Parse request body
+    let body
+    try {
+      body = await request.json()
+    } catch (parseError) {
+      console.error("❌ [Checkout API] Failed to parse request body:", parseError)
+      return NextResponse.json(
+        {
+          error: "Invalid request body",
+          code: "INVALID_REQUEST_BODY",
+        },
+        { status: 400 },
+      )
+    }
+
+    const { successUrl, cancelUrl } = body
+
+    // Get bundle data - try productBoxes collection first
+    let bundleDoc = await db.collection("productBoxes").doc(params.id).get()
+
+    if (!bundleDoc.exists) {
+      // Fallback to bundles collection
+      bundleDoc = await db.collection("bundles").doc(params.id).get()
+    }
+
+    if (!bundleDoc.exists) {
+      console.error(`❌ [Checkout API] Bundle not found: ${params.id}`)
+      return NextResponse.json(
+        {
+          error: "Bundle not found",
+          code: "BUNDLE_NOT_FOUND",
+        },
+        { status: 404 },
+      )
+    }
+
+    const bundleData = bundleDoc.data()
+    console.log(`✅ [Checkout API] Bundle found:`, {
+      title: bundleData?.title,
+      price: bundleData?.price,
+      creatorId: bundleData?.creatorId,
     })
 
-    console.log("✅ [Checkout API] Stripe session created:", {
-      sessionId: session.id,
-      url: session.url,
-      amount: session.amount_total,
-      currency: session.currency,
-      expires_at: session.expires_at ? new Date(session.expires_at * 1000) : null,
-      metadata: session.metadata,
-      priceId,
+    // Validate bundle data
+    if (!bundleData?.active) {
+      console.error(`❌ [Checkout API] Bundle is inactive: ${params.id}`)
+      return NextResponse.json(
+        {
+          error: "This bundle is currently unavailable",
+          code: "BUNDLE_INACTIVE",
+        },
+        { status: 400 },
+      )
+    }
+
+    if (!bundleData?.price || bundleData.price <= 0) {
+      console.error(`❌ [Checkout API] Invalid bundle price: ${bundleData?.price}`)
+      return NextResponse.json(
+        {
+          error: "Invalid bundle pricing",
+          code: "INVALID_PRICE",
+        },
+        { status: 400 },
+      )
+    }
+
+    // Get creator data
+    const creatorDoc = await db.collection("users").doc(bundleData.creatorId).get()
+    if (!creatorDoc.exists) {
+      console.error(`❌ [Checkout API] Creator not found: ${bundleData.creatorId}`)
+      return NextResponse.json(
+        {
+          error: "Creator not found",
+          code: "CREATOR_NOT_FOUND",
+        },
+        { status: 404 },
+      )
+    }
+
+    const creatorData = creatorDoc.data()
+    console.log(`✅ [Checkout API] Creator found:`, {
+      username: creatorData?.username,
+      hasStripeAccount: !!creatorData?.stripeAccountId,
     })
+
+    // Check if creator has Stripe account
+    if (!creatorData?.stripeAccountId) {
+      console.error(`❌ [Checkout API] Creator has no Stripe account: ${bundleData.creatorId}`)
+      return NextResponse.json(
+        {
+          error: "Payment processing not available for this creator",
+          code: "NO_STRIPE_ACCOUNT",
+        },
+        { status: 400 },
+      )
+    }
+
+    // Create Stripe checkout session
+    try {
+      console.log(`🔄 [Checkout API] Creating Stripe checkout session`)
+
+      const session = await stripe.checkout.sessions.create(
+        {
+          payment_method_types: ["card"],
+          line_items: [
+            {
+              price_data: {
+                currency: bundleData.currency || "usd",
+                product_data: {
+                  name: bundleData.title,
+                  description: bundleData.description || `Premium content by ${creatorData.username}`,
+                  metadata: {
+                    bundleId: params.id,
+                    creatorId: bundleData.creatorId,
+                  },
+                },
+                unit_amount: Math.round(bundleData.price * 100), // Convert to cents
+              },
+              quantity: 1,
+            },
+          ],
+          mode: "payment",
+          success_url:
+            successUrl || `${process.env.NEXT_PUBLIC_SITE_URL}/purchase/success?session_id={CHECKOUT_SESSION_ID}`,
+          cancel_url: cancelUrl || `${process.env.NEXT_PUBLIC_SITE_URL}/creator/${creatorData.username}`,
+          metadata: {
+            bundleId: params.id,
+            buyerId: userId,
+            creatorId: bundleData.creatorId,
+          },
+          payment_intent_data: {
+            application_fee_amount: Math.round(bundleData.price * 100 * 0.05), // 5% platform fee
+            metadata: {
+              bundleId: params.id,
+              buyerId: userId,
+              creatorId: bundleData.creatorId,
+            },
+          },
+        },
+        {
+          stripeAccount: creatorData.stripeAccountId,
+        },
+      )
+
+      console.log(`✅ [Checkout API] Stripe session created: ${session.id}`)
+
+      // Log the checkout attempt
+      await db.collection("checkoutAttempts").add({
+        bundleId: params.id,
+        buyerId: userId,
+        creatorId: bundleData.creatorId,
+        sessionId: session.id,
+        amount: bundleData.price,
+        currency: bundleData.currency || "usd",
+        status: "created",
+        createdAt: new Date(),
+      })
+
+      return NextResponse.json({
+        success: true,
+        sessionId: session.id,
+        url: session.url,
+        bundle: {
+          id: params.id,
+          title: bundleData.title,
+          price: bundleData.price,
+          currency: bundleData.currency || "usd",
+        },
+        creator: {
+          id: bundleData.creatorId,
+          username: creatorData.username,
+        },
+      })
+    } catch (stripeError: any) {
+      console.error(`❌ [Checkout API] Stripe checkout session creation failed:`, stripeError)
+      return NextResponse.json(
+        {
+          error: "Failed to create checkout session",
+          code: "CHECKOUT_CREATION_FAILED",
+          details: stripeError.message || "Unknown error",
+        },
+        { status: 500 },
+      )
+    }
+  } catch (error: any) {
+    console.error(`❌ [Checkout API] Unexpected error:`, error)
+    return NextResponse.json(
+      {
+        error: "Internal server error",
+        code: "INTERNAL_ERROR",
+        details: error.message || "Unknown error",
+      },
+      { status: 500 },
+    )
+  }
+}
+
+export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
+  try {
+    console.log(`🔍 [Checkout API] GET request for bundle: ${params.id}`)
+
+    // Verify authentication
+    const decodedToken = await verifyIdToken(request)
+    if (!decodedToken) {
+      return NextResponse.json(
+        {
+          error: "Authentication required",
+          code: "UNAUTHORIZED",
+        },
+        { status: 401 },
+      )
+    }
+
+    // Get bundle data
+    let bundleDoc = await db.collection("productBoxes").doc(params.id).get()
+
+    if (!bundleDoc.exists) {
+      bundleDoc = await db.collection("bundles").doc(params.id).get()
+    }
+
+    if (!bundleDoc.exists) {
+      return NextResponse.json(
+        {
+          error: "Bundle not found",
+          code: "BUNDLE_NOT_FOUND",
+        },
+        { status: 404 },
+      )
+    }
+
+    const bundleData = bundleDoc.data()
 
     return NextResponse.json({
       success: true,
-      sessionId: session.id,
-      checkoutUrl: session.url,
-      expiresAt: session.expires_at,
-      priceId,
-      amount: session.amount_total,
-      currency: session.currency,
+      bundle: {
+        id: params.id,
+        title: bundleData?.title,
+        description: bundleData?.description,
+        price: bundleData?.price,
+        currency: bundleData?.currency || "usd",
+        active: bundleData?.active,
+        creatorId: bundleData?.creatorId,
+        hasStripeIntegration: !!(bundleData?.priceId && bundleData?.productId),
+      },
     })
-  } catch (error) {
-    console.error("❌ [Checkout API] Error creating checkout session:", error)
+  } catch (error: any) {
+    console.error(`❌ [Checkout API] GET error:`, error)
     return NextResponse.json(
       {
-        error: "Failed to create checkout session",
-        details: error instanceof Error ? error.message : "Unknown error",
+        error: "Internal server error",
+        code: "INTERNAL_ERROR",
       },
       { status: 500 },
     )

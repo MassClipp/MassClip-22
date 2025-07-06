@@ -3,138 +3,177 @@ import { auth, db } from "@/lib/firebase-admin"
 
 export async function GET(request: NextRequest) {
   try {
-    console.log("🔍 [Unified Purchases API] Starting request")
+    console.log("🔍 [Unified Purchases] Starting fetch")
 
+    // Get the authorization header
     const authHeader = request.headers.get("authorization")
-    if (!authHeader?.startsWith("Bearer ")) {
-      console.error("❌ [Unified Purchases API] Missing or invalid authorization header")
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      console.error("❌ [Unified Purchases] Missing or invalid authorization header")
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
     const idToken = authHeader.split("Bearer ")[1]
+
+    // Verify the ID token
     let decodedToken
     try {
       decodedToken = await auth.verifyIdToken(idToken)
-      console.log("✅ [Unified Purchases API] User authenticated:", {
-        userId: decodedToken.uid,
-        email: decodedToken.email,
-      })
+      console.log("✅ [Unified Purchases] User authenticated:", decodedToken.uid)
     } catch (error) {
-      console.error("❌ [Unified Purchases API] Error verifying ID token:", error)
+      console.error("❌ [Unified Purchases] Error verifying ID token:", error)
       return NextResponse.json({ error: "Invalid authentication token" }, { status: 401 })
     }
 
     const userId = decodedToken.uid
+    const purchases: any[] = []
 
-    // Fetch all purchases for the user
-    console.log("📋 [Unified Purchases API] Fetching purchases for user:", userId)
-    const purchasesSnapshot = await db
-      .collection("users")
-      .doc(userId)
-      .collection("purchases")
-      .orderBy("timestamp", "desc")
-      .get()
+    try {
+      // Fetch from user's purchases subcollection
+      console.log("📦 [Unified Purchases] Fetching user purchases...")
+      const userPurchasesRef = db.collection("users").doc(userId).collection("purchases")
+      const userPurchasesSnapshot = await userPurchasesRef.orderBy("timestamp", "desc").get()
 
-    console.log("📊 [Unified Purchases API] Found purchases:", purchasesSnapshot.size)
+      console.log(`📦 [Unified Purchases] Found ${userPurchasesSnapshot.size} user purchases`)
 
-    const purchases = []
-    let totalSpent = 0
-    let testPurchases = 0
-    let livePurchases = 0
-
-    for (const doc of purchasesSnapshot.docs) {
-      try {
+      for (const doc of userPurchasesSnapshot.docs) {
         const purchaseData = doc.data()
-        console.log("🔍 [Unified Purchases API] Processing purchase:", {
-          id: doc.id,
-          productBoxId: purchaseData.productBoxId,
-          amount: purchaseData.amount,
-          stripeMode: purchaseData.stripeMode,
-        })
 
         // Get product box details
         let productBoxData = null
-        let creatorData = null
-
         if (purchaseData.productBoxId) {
           try {
             const productBoxDoc = await db.collection("productBoxes").doc(purchaseData.productBoxId).get()
             if (productBoxDoc.exists) {
               productBoxData = productBoxDoc.data()
-
-              // Get creator details
-              if (productBoxData?.creatorId) {
-                const creatorDoc = await db.collection("users").doc(productBoxData.creatorId).get()
-                if (creatorDoc.exists) {
-                  creatorData = creatorDoc.data()
-                }
-              }
             }
-          } catch (productError) {
-            console.error("⚠️ [Unified Purchases API] Error fetching product box:", productError)
+          } catch (error) {
+            console.warn(`⚠️ [Unified Purchases] Could not fetch product box ${purchaseData.productBoxId}:`, error)
           }
         }
 
-        const purchase = {
+        // Get creator details
+        let creatorData = null
+        const creatorId = purchaseData.creatorId || productBoxData?.creatorId
+        if (creatorId) {
+          try {
+            const creatorDoc = await db.collection("users").doc(creatorId).get()
+            if (creatorDoc.exists) {
+              creatorData = creatorDoc.data()
+            }
+          } catch (error) {
+            console.warn(`⚠️ [Unified Purchases] Could not fetch creator ${creatorId}:`, error)
+          }
+        }
+
+        purchases.push({
           id: doc.id,
           productBoxId: purchaseData.productBoxId,
-          itemTitle: productBoxData?.title || "Product Box",
-          itemDescription: productBoxData?.description,
+          itemTitle: productBoxData?.title || purchaseData.itemTitle || "Unknown Item",
+          itemDescription: productBoxData?.description || purchaseData.itemDescription,
           amount: purchaseData.amount || 0,
           currency: purchaseData.currency || "usd",
           purchasedAt: purchaseData.timestamp?.toDate() || new Date(),
           status: purchaseData.status || "completed",
           thumbnailUrl: productBoxData?.thumbnailUrl,
           creatorUsername: creatorData?.username,
-          creatorName: creatorData?.displayName || creatorData?.name || "Unknown Creator",
+          creatorName: creatorData?.displayName || creatorData?.name,
           type: "product_box",
-          stripeMode: purchaseData.stripeMode || "unknown",
           sessionId: purchaseData.sessionId,
-        }
-
-        purchases.push(purchase)
-
-        // Update statistics
-        totalSpent += purchase.amount
-        if (purchase.stripeMode === "test") {
-          testPurchases++
-        } else if (purchase.stripeMode === "live") {
-          livePurchases++
-        }
-      } catch (itemError) {
-        console.error("⚠️ [Unified Purchases API] Error processing purchase item:", {
-          purchaseId: doc.id,
-          error: itemError,
         })
-        // Continue processing other items
       }
+
+      // Also check legacy purchases collection (if it exists)
+      try {
+        console.log("🔍 [Unified Purchases] Checking legacy purchases...")
+        const legacyPurchasesRef = db.collection("purchases").where("buyerUid", "==", userId)
+        const legacyPurchasesSnapshot = await legacyPurchasesRef.orderBy("purchasedAt", "desc").get()
+
+        console.log(`📦 [Unified Purchases] Found ${legacyPurchasesSnapshot.size} legacy purchases`)
+
+        for (const doc of legacyPurchasesSnapshot.docs) {
+          const purchaseData = doc.data()
+
+          // Check if we already have this purchase (avoid duplicates)
+          const existingPurchase = purchases.find(
+            (p) =>
+              p.sessionId === purchaseData.sessionId ||
+              (p.productBoxId === purchaseData.productBoxId &&
+                Math.abs(new Date(p.purchasedAt).getTime() - purchaseData.purchasedAt?.toDate()?.getTime()) < 60000),
+          )
+
+          if (!existingPurchase) {
+            // Get product box details
+            let productBoxData = null
+            if (purchaseData.productBoxId) {
+              try {
+                const productBoxDoc = await db.collection("productBoxes").doc(purchaseData.productBoxId).get()
+                if (productBoxDoc.exists) {
+                  productBoxData = productBoxDoc.data()
+                }
+              } catch (error) {
+                console.warn(`⚠️ [Unified Purchases] Could not fetch product box ${purchaseData.productBoxId}:`, error)
+              }
+            }
+
+            // Get creator details
+            let creatorData = null
+            const creatorId = purchaseData.creatorId || productBoxData?.creatorId
+            if (creatorId) {
+              try {
+                const creatorDoc = await db.collection("users").doc(creatorId).get()
+                if (creatorDoc.exists) {
+                  creatorData = creatorDoc.data()
+                }
+              } catch (error) {
+                console.warn(`⚠️ [Unified Purchases] Could not fetch creator ${creatorId}:`, error)
+              }
+            }
+
+            purchases.push({
+              id: doc.id,
+              productBoxId: purchaseData.productBoxId,
+              itemTitle: productBoxData?.title || purchaseData.itemTitle || "Unknown Item",
+              itemDescription: productBoxData?.description || purchaseData.itemDescription,
+              amount: purchaseData.amount || 0,
+              currency: purchaseData.currency || "usd",
+              purchasedAt: purchaseData.purchasedAt?.toDate() || new Date(),
+              status: purchaseData.status || "completed",
+              thumbnailUrl: productBoxData?.thumbnailUrl,
+              creatorUsername: creatorData?.username,
+              creatorName: creatorData?.displayName || creatorData?.name,
+              type: "product_box",
+              sessionId: purchaseData.sessionId,
+            })
+          }
+        }
+      } catch (legacyError) {
+        console.warn("⚠️ [Unified Purchases] Could not fetch legacy purchases:", legacyError)
+        // Don't fail the entire request for legacy purchases
+      }
+
+      // Sort by purchase date (newest first)
+      purchases.sort((a, b) => new Date(b.purchasedAt).getTime() - new Date(a.purchasedAt).getTime())
+
+      console.log(`✅ [Unified Purchases] Successfully fetched ${purchases.length} total purchases`)
+
+      return NextResponse.json({
+        success: true,
+        purchases,
+        total: purchases.length,
+        totalValue: purchases.reduce((sum, p) => sum + p.amount, 0),
+      })
+    } catch (firestoreError) {
+      console.error("❌ [Unified Purchases] Firestore error:", firestoreError)
+      return NextResponse.json(
+        {
+          error: "Failed to fetch purchases from database",
+          details: firestoreError instanceof Error ? firestoreError.message : "Unknown database error",
+        },
+        { status: 500 },
+      )
     }
-
-    const stats = {
-      totalPurchases: purchases.length,
-      totalSpent,
-      currency: "usd",
-      testPurchases,
-      livePurchases,
-    }
-
-    console.log("✅ [Unified Purchases API] Response prepared:", {
-      purchaseCount: purchases.length,
-      stats,
-    })
-
-    return NextResponse.json({
-      success: true,
-      purchases,
-      stats,
-    })
   } catch (error) {
-    console.error("❌ [Unified Purchases API] Unexpected error:", {
-      message: error instanceof Error ? error.message : "Unknown error",
-      stack: error instanceof Error ? error.stack : undefined,
-      error,
-    })
-
+    console.error("❌ [Unified Purchases] Unexpected error:", error)
     return NextResponse.json(
       {
         error: "Failed to fetch purchases",

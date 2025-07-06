@@ -1,262 +1,143 @@
 "use client"
 
 import { useState } from "react"
-import { useAuth } from "@/contexts/auth-context"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { useToast } from "@/hooks/use-toast"
-import { ShoppingCart, Loader2, Play, Download, Clock, User, DollarSign } from "lucide-react"
-import Image from "next/image"
-import Link from "next/link"
+import { Button } from "@/components/ui/button"
+import { Settings, Trash2, Eye, EyeOff } from "lucide-react"
+import { Switch } from "@/components/ui/switch"
+import ProductBoxContentDisplay from "./product-box-content-display"
 
-interface ProductBoxDisplayProps {
-  productBox: {
-    id: string
-    title: string
-    description?: string
-    price: number
-    thumbnailUrl?: string
-    creatorId: string
-    creatorUsername?: string
-    creatorName?: string
-    contentCount?: number
-    totalDuration?: number
-    tags?: string[]
-    createdAt?: Date
-  }
-  showPurchaseButton?: boolean
+interface ProductBox {
+  id: string
+  title: string
+  description: string | null
+  price: number
+  currency: string
+  type: string
+  coverImage: string | null
+  contentItems: string[]
+  productId: string | null
+  priceId: string | null
+  active: boolean
+  createdAt: any
+  updatedAt: any
+  customPreviewThumbnail?: string | null
+  customPreviewDescription?: string | null
 }
 
-export default function ProductBoxDisplay({ productBox, showPurchaseButton = true }: ProductBoxDisplayProps) {
-  const { user } = useAuth()
-  const { toast } = useToast()
-  const [loading, setLoading] = useState(false)
+interface ProductBoxDisplayProps {
+  productBox: ProductBox
+  onToggleActive: (productBox: ProductBox) => void
+  onDelete: (productBox: ProductBox) => void
+  onEditPreview: (productBox: ProductBox) => void
+  onAddContent: (productBox: ProductBox) => void
+  className?: string
+}
 
-  const handlePurchase = async () => {
-    if (!user) {
-      toast({
-        title: "Authentication Required",
-        description: "Please log in to make a purchase.",
-        variant: "destructive",
-      })
-      return
-    }
+export default function ProductBoxDisplay({
+  productBox,
+  onToggleActive,
+  onDelete,
+  onEditPreview,
+  onAddContent,
+  className = "",
+}: ProductBoxDisplayProps) {
+  const [showContent, setShowContent] = useState(true)
 
-    try {
-      setLoading(true)
-      console.log("🛒 [Purchase] Starting checkout for product box:", productBox.id)
-
-      const idToken = await user.getIdToken()
-      console.log("🔑 [Purchase] Got auth token")
-
-      // Create the checkout session
-      const checkoutUrl = `/api/creator/product-boxes/${productBox.id}/checkout`
-      console.log("📡 [Purchase] Creating checkout session at:", checkoutUrl)
-
-      const response = await fetch(checkoutUrl, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${idToken}`,
-        },
-        body: JSON.stringify({
-          idToken,
-        }),
-      })
-
-      console.log("📡 [Purchase] Checkout response:", {
-        status: response.status,
-        ok: response.ok,
-        url: response.url,
-      })
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: "Checkout failed" }))
-        console.error("❌ [Purchase] Checkout error:", errorData)
-
-        // Handle specific error cases
-        if (response.status === 404) {
-          throw new Error("Checkout service not available. Please try again later.")
-        } else if (response.status === 401) {
-          throw new Error("Please log in again to continue.")
-        } else if (response.status === 400 && errorData.error?.includes("already own")) {
-          throw new Error("You already own this product box.")
-        } else {
-          throw new Error(errorData.error || `Checkout failed (${response.status})`)
-        }
-      }
-
-      const data = await response.json()
-      console.log("✅ [Purchase] Checkout session created:", {
-        sessionId: data.sessionId,
-        hasCheckoutUrl: !!data.checkoutUrl,
-      })
-
-      if (data.checkoutUrl) {
-        console.log("🔄 [Purchase] Redirecting to Stripe checkout...")
-        window.location.href = data.checkoutUrl
-      } else {
-        throw new Error("No checkout URL received")
-      }
-    } catch (error) {
-      console.error("❌ [Purchase] Error:", error)
-      const errorMessage = error instanceof Error ? error.message : "Purchase failed"
-
-      toast({
-        title: "Purchase Failed",
-        description: errorMessage,
-        variant: "destructive",
-      })
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const formatPrice = (price: number) => {
+  const formatPrice = (amount: number, currency: string) => {
     return new Intl.NumberFormat("en-US", {
       style: "currency",
-      currency: "USD",
-    }).format(price)
-  }
-
-  const formatDuration = (seconds: number) => {
-    const hours = Math.floor(seconds / 3600)
-    const minutes = Math.floor((seconds % 3600) / 60)
-    if (hours > 0) {
-      return `${hours}h ${minutes}m`
-    }
-    return `${minutes}m`
+      currency: currency.toUpperCase(),
+    }).format(amount)
   }
 
   return (
-    <Card className="w-full max-w-2xl bg-gray-800/90 border-gray-700 shadow-xl">
-      <CardHeader className="pb-4">
-        <div className="flex items-start justify-between">
-          <div className="flex-1">
-            <CardTitle className="text-xl font-semibold text-white mb-2">{productBox.title}</CardTitle>
-            {productBox.description && (
-              <p className="text-gray-400 text-sm leading-relaxed">{productBox.description}</p>
-            )}
-          </div>
-          {productBox.thumbnailUrl && (
-            <div className="ml-4 flex-shrink-0">
-              <Image
-                src={productBox.thumbnailUrl || "/placeholder.svg"}
-                alt={productBox.title}
-                width={120}
-                height={80}
-                className="rounded-lg object-cover border border-gray-600"
-              />
-            </div>
-          )}
+    <Card
+      className={`bg-zinc-900/60 border-zinc-800/50 backdrop-blur-sm hover:border-zinc-700/50 transition-all duration-300 ${className}`}
+    >
+      {/* Cover Image - Now in 9:16 aspect ratio */}
+      {productBox.coverImage && (
+        <div className="aspect-[9/16] bg-zinc-800 rounded-t-lg overflow-hidden">
+          <img
+            src={productBox.coverImage || "/placeholder.svg"}
+            alt={productBox.title}
+            className="w-full h-full object-cover"
+          />
         </div>
+      )}
 
-        {/* Creator Info */}
-        {(productBox.creatorUsername || productBox.creatorName) && (
-          <div className="flex items-center gap-2 pt-2">
-            <User className="h-4 w-4 text-gray-500" />
-            <span className="text-sm text-gray-400">
-              by{" "}
-              {productBox.creatorUsername ? (
-                <Link
-                  href={`/creator/${productBox.creatorUsername}`}
-                  className="text-blue-400 hover:text-blue-300 hover:underline"
-                >
-                  {productBox.creatorName || productBox.creatorUsername}
-                </Link>
-              ) : (
-                <span className="text-gray-300">{productBox.creatorName}</span>
-              )}
-            </span>
+      <CardContent className="p-4">
+        <div className="space-y-4">
+          {/* Header */}
+          <div className="flex items-start justify-between">
+            <div className="flex-1">
+              <h3 className="text-lg font-semibold text-white">{productBox.title}</h3>
+              {productBox.description && <p className="mt-1 text-sm text-zinc-400">{productBox.description}</p>}
+            </div>
+            <Badge variant={productBox.active ? "default" : "secondary"} className="text-xs">
+              {productBox.active ? "Active" : "Inactive"}
+            </Badge>
           </div>
-        )}
 
-        {/* Tags */}
-        {productBox.tags && productBox.tags.length > 0 && (
-          <div className="flex flex-wrap gap-2 pt-2">
-            {productBox.tags.slice(0, 3).map((tag) => (
-              <Badge key={tag} variant="secondary" className="text-xs bg-gray-700 text-gray-300 hover:bg-gray-600">
-                {tag}
-              </Badge>
-            ))}
-            {productBox.tags.length > 3 && (
-              <Badge variant="secondary" className="text-xs bg-gray-700 text-gray-300">
-                +{productBox.tags.length - 3} more
+          {/* Price */}
+          <div className="flex items-center justify-between">
+            <div className="text-2xl font-bold text-white">{formatPrice(productBox.price, productBox.currency)}</div>
+            {productBox.type === "subscription" && (
+              <Badge variant="outline" className="text-xs border-zinc-700">
+                /month
               </Badge>
             )}
           </div>
-        )}
-      </CardHeader>
 
-      <CardContent className="space-y-4">
-        {/* Stats */}
-        <div className="grid grid-cols-3 gap-4 p-3 bg-gray-700/50 rounded-lg border border-gray-600">
-          <div className="text-center">
-            <div className="flex items-center justify-center gap-1 mb-1">
-              <DollarSign className="h-4 w-4 text-green-400" />
-              <span className="text-lg font-semibold text-white">{formatPrice(productBox.price)}</span>
-            </div>
-            <div className="text-xs text-gray-500 uppercase tracking-wide">Price</div>
-          </div>
+          {/* Content Display - Now using the updated 9:16 grid layout */}
+          <ProductBoxContentDisplay productBoxId={productBox.id} contentCount={productBox.contentItems?.length || 0} />
 
-          {productBox.contentCount && (
-            <div className="text-center">
-              <div className="flex items-center justify-center gap-1 mb-1">
-                <Play className="h-4 w-4 text-blue-400" />
-                <span className="text-lg font-semibold text-white">{productBox.contentCount}</span>
-              </div>
-              <div className="text-xs text-gray-500 uppercase tracking-wide">Items</div>
-            </div>
-          )}
-
-          {productBox.totalDuration && (
-            <div className="text-center">
-              <div className="flex items-center justify-center gap-1 mb-1">
-                <Clock className="h-4 w-4 text-amber-400" />
-                <span className="text-lg font-semibold text-white">{formatDuration(productBox.totalDuration)}</span>
-              </div>
-              <div className="text-xs text-gray-500 uppercase tracking-wide">Duration</div>
-            </div>
-          )}
-        </div>
-
-        {/* Purchase Button */}
-        {showPurchaseButton && (
-          <div className="space-y-3">
+          {/* Add Content Button */}
+          <div className="flex justify-center pt-2">
             <Button
-              onClick={handlePurchase}
-              disabled={loading}
-              className="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-3"
+              size="sm"
+              variant="outline"
+              onClick={() => onAddContent(productBox)}
+              className="text-xs border-zinc-700 hover:bg-zinc-800 bg-zinc-800/50"
             >
-              {loading ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Creating Checkout...
-                </>
-              ) : (
-                <>
-                  <ShoppingCart className="h-4 w-4 mr-2" />
-                  Purchase for {formatPrice(productBox.price)}
-                </>
-              )}
+              + Add Content
             </Button>
+          </div>
 
-            <div className="text-center">
-              <p className="text-xs text-gray-500">Secure payment powered by Stripe • Instant access after purchase</p>
+          {/* Controls */}
+          <div className="flex items-center justify-between pt-4 border-t border-zinc-800">
+            <div className="flex items-center gap-2">
+              <Switch
+                checked={productBox.active}
+                onCheckedChange={() => onToggleActive(productBox)}
+                className="data-[state=checked]:bg-green-600"
+              />
+              <span className="text-sm text-zinc-400">
+                {productBox.active ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+              </span>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => onEditPreview(productBox)}
+                className="text-blue-400 hover:text-blue-300 hover:bg-blue-900/20"
+              >
+                <Settings className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => onDelete(productBox)}
+                className="text-red-400 hover:text-red-300 hover:bg-red-900/20"
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
             </div>
           </div>
-        )}
-
-        {/* Preview/Access Button for owned content */}
-        {!showPurchaseButton && (
-          <Button asChild className="w-full bg-green-600 hover:bg-green-700 text-white">
-            <Link href={`/product-box/${productBox.id}/content`}>
-              <Download className="h-4 w-4 mr-2" />
-              Access Content
-            </Link>
-          </Button>
-        )}
+        </div>
       </CardContent>
     </Card>
   )
