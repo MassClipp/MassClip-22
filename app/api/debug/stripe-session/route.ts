@@ -1,101 +1,117 @@
-import { NextResponse } from "next/server"
-import { validateStripeSession } from "@/lib/stripe-client"
+import { type NextRequest, NextResponse } from "next/server"
+import Stripe from "stripe"
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
     const { sessionId } = await request.json()
 
-    console.log(`🔍 [Debug API] Starting session debug for: ${sessionId?.substring(0, 20)}...`)
-
     if (!sessionId) {
-      console.error("❌ [Debug API] Missing session ID")
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Session ID is required",
-          recommendation: "Please provide a valid Stripe session ID (cs_test_... or cs_live_...)",
-        },
-        { status: 400 },
-      )
+      return NextResponse.json({
+        success: false,
+        error: "Session ID is required",
+      })
     }
 
-    // Validate session ID format
-    if (!sessionId.startsWith("cs_test_") && !sessionId.startsWith("cs_live_")) {
-      console.error("❌ [Debug API] Invalid session ID format:", sessionId.substring(0, 20))
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Invalid session ID format",
-          recommendation: "Session ID must start with 'cs_test_' or 'cs_live_'",
-          debug: {
-            providedSessionId: sessionId.substring(0, 20) + "...",
-            expectedFormat: "cs_test_... or cs_live_...",
-          },
-        },
-        { status: 400 },
-      )
+    console.log("🔍 [Session Debug] Debugging session:", sessionId)
+
+    // Initialize Stripe
+    const stripeKey = process.env.STRIPE_SECRET_KEY
+    if (!stripeKey) {
+      return NextResponse.json({
+        success: false,
+        error: "Stripe configuration error: Missing secret key",
+        recommendations: [
+          "Check that STRIPE_SECRET_KEY is set in environment variables",
+          "Verify the key is not empty or malformed",
+        ],
+      })
     }
 
-    console.log(`✅ [Debug API] Session ID format valid: ${sessionId.startsWith("cs_test_") ? "test" : "live"}`)
+    const stripe = new Stripe(stripeKey, { apiVersion: "2023-08-16" })
+    const keyType = stripeKey.startsWith("sk_test_") ? "test" : "live"
 
-    // Use the stripe client utility to validate the session
-    const result = await validateStripeSession(sessionId)
+    console.log("🔑 [Session Debug] Using Stripe key type:", keyType)
 
-    if (result.success) {
-      console.log("✅ [Debug API] Session validation successful")
+    try {
+      // Retrieve the session
+      const session = await stripe.checkout.sessions.retrieve(sessionId, {
+        expand: ["line_items", "payment_intent"],
+      })
+
+      console.log("✅ [Session Debug] Session found:", {
+        id: session.id,
+        status: session.status,
+        payment_status: session.payment_status,
+        amount_total: session.amount_total,
+      })
+
       return NextResponse.json({
         success: true,
-        session: result.session,
-        stripeConfig: result.stripeConfig,
-        debug: result.debug,
-        recommendation: "Session found and valid. You can proceed with purchase verification.",
+        session: {
+          id: session.id,
+          status: session.status,
+          payment_status: session.payment_status,
+          amount_total: session.amount_total,
+          currency: session.currency,
+          customer_email: session.customer_email,
+          created: session.created,
+          expires_at: session.expires_at,
+          metadata: session.metadata,
+          url: session.url,
+          success_url: session.success_url,
+          cancel_url: session.cancel_url,
+          line_items: session.line_items?.data,
+          payment_intent: session.payment_intent,
+        },
+        keyType,
       })
-    } else {
-      console.error("❌ [Debug API] Session validation failed:", result.debug)
+    } catch (stripeError: any) {
+      console.error("❌ [Session Debug] Stripe error:", stripeError)
 
-      let recommendation = "Check your Stripe configuration and try again."
-      let configurationSteps: string[] = []
+      let recommendations: string[] = []
+      let errorMessage = "Unknown Stripe error"
 
-      // Provide specific recommendations based on the error
-      if (result.debug?.statusCode === 404) {
-        recommendation =
-          "Session not found. This could mean the session was never created, has expired, or exists in a different Stripe account."
-        configurationSteps = [
-          "Check if the session exists in your Stripe dashboard",
-          "Verify you're using the correct Stripe account",
-          "Ensure test/live mode consistency",
-          "Check if the session has expired (24 hour limit)",
+      if (stripeError.code === "resource_missing") {
+        errorMessage = "Session not found"
+        recommendations = [
+          "Verify the session ID is correct and complete",
+          `Check if you're using ${keyType} keys with the correct session type`,
+          "Sessions expire after 24 hours - check if the session is still valid",
+          "Ensure the session was created successfully in the first place",
         ]
-      } else if (result.debug?.errorCode === "testmode_charges_only") {
-        recommendation = "You're trying to access a live session with test keys, or vice versa."
-        configurationSteps = [
-          "Use test keys (sk_test_...) for test sessions (cs_test_...)",
-          "Use live keys (sk_live_...) for live sessions (cs_live_...)",
-          "Check your STRIPE_SECRET_KEY environment variable",
+      } else if (stripeError.code === "invalid_request_error") {
+        errorMessage = "Invalid session ID format"
+        recommendations = [
+          "Session IDs should start with 'cs_test_' or 'cs_live_'",
+          "Check for any extra characters or truncation",
+        ]
+      } else {
+        errorMessage = stripeError.message || "Stripe API error"
+        recommendations = [
+          "Check Stripe dashboard for more details",
+          "Verify API key permissions",
+          "Check Stripe service status",
         ]
       }
 
-      return NextResponse.json(
-        {
-          success: false,
-          error: result.error?.message || "Session validation failed",
-          debug: result.debug,
-          recommendation,
-          configurationSteps,
-        },
-        { status: result.debug?.statusCode || 500 },
-      )
-    }
-  } catch (error: any) {
-    console.error("❌ [Debug API] Unexpected error:", error)
-    return NextResponse.json(
-      {
+      return NextResponse.json({
         success: false,
-        error: "Internal server error during session debug",
-        details: error.message,
-        recommendation: "Check server logs for more details. This might be a configuration or network issue.",
-      },
-      { status: 500 },
-    )
+        error: errorMessage,
+        stripeError: {
+          code: stripeError.code,
+          type: stripeError.type,
+          message: stripeError.message,
+        },
+        recommendations,
+        keyType,
+      })
+    }
+  } catch (error) {
+    console.error("❌ [Session Debug] Unexpected error:", error)
+    return NextResponse.json({
+      success: false,
+      error: "Unexpected error during session debug",
+      details: error instanceof Error ? error.message : "Unknown error",
+    })
   }
 }

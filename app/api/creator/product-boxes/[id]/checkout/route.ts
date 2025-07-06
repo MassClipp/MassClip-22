@@ -65,20 +65,84 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
 
     const stripe = new Stripe(stripeKey, { apiVersion: "2023-08-16" })
 
-    // Create checkout session
+    // Dynamic price creation - create or retrieve Stripe price
+    let priceId: string
+
+    try {
+      // Check if we already have a Stripe price ID stored
+      if (productBoxData.stripePriceId) {
+        console.log("💰 [Checkout API] Using existing price ID:", productBoxData.stripePriceId)
+        priceId = productBoxData.stripePriceId
+
+        // Verify the price still exists
+        try {
+          await stripe.prices.retrieve(priceId)
+        } catch (priceError) {
+          console.warn("⚠️ [Checkout API] Stored price ID invalid, creating new one")
+          throw new Error("Price not found")
+        }
+      } else {
+        throw new Error("No price ID stored")
+      }
+    } catch (error) {
+      console.log("🔄 [Checkout API] Creating new Stripe product and price")
+
+      try {
+        // Create Stripe product
+        const product = await stripe.products.create({
+          name: productBoxData.title || "Product Box",
+          description: productBoxData.description || "Premium content",
+          images: productBoxData.thumbnailUrl ? [productBoxData.thumbnailUrl] : [],
+          metadata: {
+            productBoxId,
+            creatorId: productBoxData.creatorId,
+            type: "product_box",
+          },
+        })
+
+        console.log("✅ [Checkout API] Product created:", product.id)
+
+        // Create Stripe price
+        const price = await stripe.prices.create({
+          currency: "usd",
+          unit_amount: Math.round((productBoxData.price || 0) * 100), // Convert to cents
+          product: product.id,
+          metadata: {
+            productBoxId,
+            creatorId: productBoxData.creatorId,
+            type: "product_box_price",
+          },
+        })
+
+        priceId = price.id
+        console.log("✅ [Checkout API] Price created:", priceId)
+
+        // Store the price ID in Firestore for future use
+        await db.collection("productBoxes").doc(productBoxId).update({
+          stripeProductId: product.id,
+          stripePriceId: priceId,
+          updatedAt: new Date(),
+        })
+
+        console.log("💾 [Checkout API] Price ID saved to database")
+      } catch (stripeError) {
+        console.error("❌ [Checkout API] Failed to create Stripe product/price:", stripeError)
+        return NextResponse.json(
+          {
+            error: "Failed to create payment configuration",
+            details: stripeError instanceof Error ? stripeError.message : "Unknown error",
+          },
+          { status: 500 },
+        )
+      }
+    }
+
+    // Create checkout session with dynamic price
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ["card"],
       line_items: [
         {
-          price_data: {
-            currency: "usd",
-            product_data: {
-              name: productBoxData.title || "Product Box",
-              description: productBoxData.description || "Premium content",
-              images: productBoxData.thumbnailUrl ? [productBoxData.thumbnailUrl] : [],
-            },
-            unit_amount: Math.round((productBoxData.price || 0) * 100), // Convert to cents
-          },
+          price: priceId,
           quantity: 1,
         },
       ],
@@ -90,6 +154,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
         buyerUid: userId || "anonymous",
         creatorUid: productBoxData.creatorId,
         type: "product_box_purchase",
+        priceId,
       },
       customer_email: userEmail || undefined,
       expires_at: Math.floor(Date.now() / 1000) + 30 * 60, // 30 minutes
@@ -102,6 +167,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       currency: session.currency,
       expires_at: session.expires_at ? new Date(session.expires_at * 1000) : null,
       metadata: session.metadata,
+      priceId,
     })
 
     return NextResponse.json({
@@ -109,6 +175,9 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       sessionId: session.id,
       checkoutUrl: session.url,
       expiresAt: session.expires_at,
+      priceId,
+      amount: session.amount_total,
+      currency: session.currency,
     })
   } catch (error) {
     console.error("❌ [Checkout API] Error creating checkout session:", error)
