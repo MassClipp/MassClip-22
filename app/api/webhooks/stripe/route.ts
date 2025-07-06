@@ -18,11 +18,15 @@ export async function POST(request: NextRequest) {
     const body = await request.text()
     const signature = request.headers.get("stripe-signature")
 
-    // Verify webhook signature
-    const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET
+    // Determine which webhook secret to use based on environment
+    const isTestMode = process.env.STRIPE_SECRET_KEY?.includes("sk_test_")
+    const webhookSecret = isTestMode ? process.env.STRIPE_WEBHOOK_SECRET_TEST : process.env.STRIPE_WEBHOOK_SECRET_LIVE
+
     if (!webhookSecret) {
-      console.error("❌ STRIPE_WEBHOOK_SECRET is not set in environment variables")
-      console.error("Please add STRIPE_WEBHOOK_SECRET to your Vercel environment variables")
+      const missingSecret = isTestMode ? "STRIPE_WEBHOOK_SECRET_TEST" : "STRIPE_WEBHOOK_SECRET_LIVE"
+      console.error(`❌ ${missingSecret} is not set in environment variables`)
+      console.error(`Current mode: ${isTestMode ? "TEST" : "LIVE"}`)
+      console.error("Please add the appropriate webhook secret to your Vercel environment variables")
       return NextResponse.json({ error: "Webhook secret not configured" }, { status: 500 })
     }
 
@@ -36,9 +40,10 @@ export async function POST(request: NextRequest) {
     try {
       // Verify the webhook signature
       event = stripe.webhooks.constructEvent(body, signature, webhookSecret)
-      console.log("✅ Webhook signature verified successfully")
+      console.log(`✅ Webhook signature verified successfully (${isTestMode ? "TEST" : "LIVE"} mode)`)
     } catch (err) {
       console.error("❌ Webhook signature verification failed:", err)
+      console.error(`Mode: ${isTestMode ? "TEST" : "LIVE"}`)
       return NextResponse.json({ error: "Invalid signature" }, { status: 400 })
     }
 
@@ -46,7 +51,7 @@ export async function POST(request: NextRequest) {
     if (event.type === "checkout.session.completed") {
       const session = event.data.object as Stripe.Checkout.Session
 
-      console.log("🎉 Checkout session completed:", {
+      console.log(`🎉 Checkout session completed (${isTestMode ? "TEST" : "LIVE"} mode):`, {
         sessionId: session.id,
         customerId: session.customer,
         customerEmail: session.customer_details?.email,
@@ -54,6 +59,8 @@ export async function POST(request: NextRequest) {
         currency: session.currency,
         paymentStatus: session.payment_status,
         metadata: session.metadata,
+        mode: session.mode,
+        isTestMode,
       })
 
       // TODO: Add your business logic here
@@ -63,12 +70,33 @@ export async function POST(request: NextRequest) {
       // - Send confirmation email
       // - Update user's subscription status
 
-      return NextResponse.json({ received: true, sessionId: session.id }, { status: 200 })
+      // You might want to handle test vs live purchases differently
+      if (isTestMode) {
+        console.log("🧪 This is a test purchase - consider adding test-specific logic")
+      } else {
+        console.log("💰 This is a live purchase - processing real transaction")
+      }
+
+      return NextResponse.json(
+        {
+          received: true,
+          sessionId: session.id,
+          mode: isTestMode ? "test" : "live",
+        },
+        { status: 200 },
+      )
     }
 
     // Handle other event types if needed
-    console.log(`ℹ️ Unhandled event type: ${event.type}`)
-    return NextResponse.json({ received: true, message: `Unhandled event type: ${event.type}` }, { status: 200 })
+    console.log(`ℹ️ Unhandled event type: ${event.type} (${isTestMode ? "TEST" : "LIVE"} mode)`)
+    return NextResponse.json(
+      {
+        received: true,
+        message: `Unhandled event type: ${event.type}`,
+        mode: isTestMode ? "test" : "live",
+      },
+      { status: 200 },
+    )
   } catch (error) {
     console.error("❌ Webhook handler error:", error)
     return NextResponse.json({ error: "Webhook handler failed" }, { status: 500 })
@@ -83,20 +111,33 @@ export async function GET() {
 /*
 IMPORTANT SETUP NOTES:
 
-1. Environment Variables:
-   Make sure to add STRIPE_WEBHOOK_SECRET to your Vercel environment variables.
-   You can get this from your Stripe Dashboard > Webhooks > [Your Webhook] > Signing secret
+1. Environment Variables (✅ Already configured):
+   - STRIPE_WEBHOOK_SECRET_LIVE: For production webhooks
+   - STRIPE_WEBHOOK_SECRET_TEST: For test webhooks
+   - STRIPE_SECRET_KEY: Your main Stripe secret key
+   - STRIPE_SECRET_KEY_TEST: Your test Stripe secret key
 
-2. Webhook Endpoint URL:
-   Configure this URL in your Stripe Dashboard:
+2. Webhook Endpoint URLs:
+   Configure these URLs in your Stripe Dashboard:
+   
+   TEST MODE:
    https://your-domain.com/api/webhooks/stripe
+   
+   LIVE MODE:
+   https://your-domain.com/api/webhooks/stripe
+   
+   (Same URL, but different webhook secrets will be used automatically)
 
 3. Events to Listen For:
-   In your Stripe webhook configuration, make sure to select:
+   In both your test and live Stripe webhook configurations, select:
    - checkout.session.completed
 
 4. Testing:
    You can test this webhook using Stripe CLI:
    stripe listen --forward-to localhost:3000/api/webhooks/stripe
    stripe trigger checkout.session.completed
+
+5. Mode Detection:
+   The webhook automatically detects if you're in test or live mode based on your
+   STRIPE_SECRET_KEY and uses the appropriate webhook secret accordingly.
 */
