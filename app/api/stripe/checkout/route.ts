@@ -1,165 +1,133 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { verifyIdToken } from "@/lib/auth-utils"
+import Stripe from "stripe"
+import { auth } from "@/lib/firebase-admin"
 import { db } from "@/lib/firebase-admin"
-import { stripe } from "@/lib/stripe"
+
+// Initialize Stripe with the secret key
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
+  apiVersion: "2024-06-20",
+})
 
 export async function POST(request: NextRequest) {
   try {
-    console.log("🛒 [Stripe Checkout] Starting checkout process")
+    // Get the request data
+    const { idToken, videoId } = await request.json()
 
-    // Verify authentication
-    const decodedToken = await verifyIdToken(request)
-    if (!decodedToken) {
-      console.error("❌ [Stripe Checkout] Authentication failed")
-      return NextResponse.json({ error: "Authentication required" }, { status: 401 })
+    if (!idToken || !videoId) {
+      return NextResponse.json({ error: "Missing required parameters" }, { status: 400 })
     }
 
-    const userId = decodedToken.uid
-    console.log("👤 [Stripe Checkout] Authenticated user:", userId)
+    // Verify the Firebase ID token
+    const decodedToken = await auth.verifyIdToken(idToken)
+    const buyerUid = decodedToken.uid
 
-    const { productBoxId, priceId, successUrl, cancelUrl } = await request.json()
+    // Get the video document from Firestore
+    const videoDoc = await db.collection("videos").doc(videoId).get()
 
-    if (!productBoxId) {
-      console.error("❌ [Stripe Checkout] Missing product box ID")
-      return NextResponse.json({ error: "Product box ID is required" }, { status: 400 })
+    if (!videoDoc.exists) {
+      return NextResponse.json({ error: "Video not found" }, { status: 404 })
     }
 
-    console.log("📋 [Stripe Checkout] Request details:", {
-      productBoxId,
-      priceId,
-      hasSuccessUrl: !!successUrl,
-      hasCancelUrl: !!cancelUrl,
-    })
+    const videoData = videoDoc.data()!
 
-    // Get product box details
-    const productBoxDoc = await db.collection("productBoxes").doc(productBoxId).get()
-
-    if (!productBoxDoc.exists) {
-      console.error("❌ [Stripe Checkout] Product box not found:", productBoxId)
-      return NextResponse.json({ error: "Product box not found" }, { status: 404 })
+    // Check if the video is premium
+    if (!videoData.isPremium) {
+      return NextResponse.json({ error: "Video is not premium" }, { status: 400 })
     }
 
-    const productBoxData = productBoxDoc.data()!
-    console.log("📦 [Stripe Checkout] Product box found:", {
-      title: productBoxData.title,
-      price: productBoxData.price,
-      creatorId: productBoxData.creatorId,
-    })
+    // Check if the user already has access to this video
+    const accessDoc = await db.collection("userAccess").doc(buyerUid).collection("videos").doc(videoId).get()
 
-    // Check if user already owns this product
-    const existingPurchase = await db
-      .collection("users")
-      .doc(userId)
-      .collection("purchases")
-      .where("productBoxId", "==", productBoxId)
-      .limit(1)
-      .get()
-
-    if (!existingPurchase.empty) {
-      console.log("ℹ️ [Stripe Checkout] User already owns this product")
-      return NextResponse.json({ error: "You already own this product" }, { status: 400 })
+    if (accessDoc.exists) {
+      return NextResponse.json({ error: "You already have access to this video" }, { status: 400 })
     }
 
-    // Get user details for customer info
-    let customerEmail = decodedToken.email
-    let customerName = decodedToken.name
+    // Get the creator's user document to get their Stripe account ID
+    const creatorDoc = await db.collection("users").doc(videoData.uid).get()
+    const creatorData = creatorDoc.data()
 
-    try {
-      const userDoc = await db.collection("users").doc(userId).get()
-      if (userDoc.exists) {
-        const userData = userDoc.data()
-        customerEmail = userData?.email || customerEmail
-        customerName = userData?.displayName || userData?.name || customerName
-      }
-    } catch (userError) {
-      console.warn("⚠️ [Stripe Checkout] Could not fetch user details:", userError)
+    if (!creatorData?.stripeAccountId || !creatorData.stripeOnboarded) {
+      return NextResponse.json({ error: "Creator is not set up to receive payments" }, { status: 400 })
     }
 
-    // Create checkout session
-    const sessionData: any = {
+    // Get the price from the video document (stored in cents, e.g. 499 for $4.99)
+    const price = videoData.price || 499 // Default to $4.99 if not set
+
+    // Calculate the application fee (25% of the price)
+    const applicationFee = Math.round(price * 0.25)
+
+    // Create a product for the video if it doesn't exist
+    let productId = videoData.stripeProductId
+    let priceId = videoData.stripePriceId
+
+    if (!productId) {
+      // Create a new product
+      const product = await stripe.products.create({
+        name: videoData.title || "Premium Video",
+        description: videoData.description || `Premium video by ${videoData.username}`,
+        metadata: {
+          videoId,
+          creatorUid: videoData.uid,
+        },
+      })
+
+      productId = product.id
+
+      // Create a price for the product
+      const priceObj = await stripe.prices.create({
+        product: productId,
+        unit_amount: price,
+        currency: "usd",
+      })
+
+      priceId = priceObj.id
+
+      // Update the video document with the Stripe product and price IDs
+      await db.collection("videos").doc(videoId).update({
+        stripeProductId: productId,
+        stripePriceId: priceId,
+      })
+    }
+
+    // Create a Checkout session
+    const session = await stripe.checkout.sessions.create({
       payment_method_types: ["card"],
-      mode: "payment",
-      success_url:
-        successUrl || `${process.env.NEXT_PUBLIC_SITE_URL}/purchase/success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: cancelUrl || `${process.env.NEXT_PUBLIC_SITE_URL}/product-box/${productBoxId}`,
-      customer_email: customerEmail || undefined,
-      metadata: {
-        productBoxId,
-        buyerUid: userId,
-        creatorUid: productBoxData.creatorId,
-        type: "product_box_checkout",
-      },
-    }
-
-    // Use price ID if provided, otherwise create price data
-    if (priceId) {
-      sessionData.line_items = [
+      line_items: [
         {
           price: priceId,
           quantity: 1,
         },
-      ]
-      console.log("💰 [Stripe Checkout] Using existing price ID:", priceId)
-    } else {
-      // Validate price
-      if (!productBoxData.price || productBoxData.price <= 0) {
-        console.error("❌ [Stripe Checkout] Invalid price:", productBoxData.price)
-        return NextResponse.json({ error: "Invalid product price" }, { status: 400 })
-      }
-
-      sessionData.line_items = [
-        {
-          price_data: {
-            currency: "usd",
-            product_data: {
-              name: productBoxData.title || "Product Box",
-              description: productBoxData.description || "Digital content package",
-              images: productBoxData.thumbnailUrl ? [productBoxData.thumbnailUrl] : [],
-            },
-            unit_amount: Math.round(productBoxData.price * 100),
-          },
-          quantity: 1,
+      ],
+      mode: "payment",
+      success_url: `${process.env.NEXT_PUBLIC_SITE_URL}/purchase/success?session_id={CHECKOUT_SESSION_ID}&video_id=${videoId}`,
+      cancel_url: `${process.env.NEXT_PUBLIC_SITE_URL}/creator/${videoData.username}`,
+      payment_intent_data: {
+        application_fee_amount: applicationFee, // 25% platform fee
+        transfer_data: {
+          destination: creatorData.stripeAccountId,
         },
-      ]
-      console.log("💰 [Stripe Checkout] Creating price data for amount:", productBoxData.price)
-    }
-
-    console.log("🔧 [Stripe Checkout] Creating session with configuration:", {
-      hasCustomerEmail: !!sessionData.customer_email,
-      metadataKeys: Object.keys(sessionData.metadata),
-      lineItemsCount: sessionData.line_items.length,
-    })
-
-    const session = await stripe.checkout.sessions.create(sessionData)
-
-    console.log("✅ [Stripe Checkout] Session created successfully:", {
-      sessionId: session.id,
-      sessionType: session.id.startsWith("cs_test_") ? "test" : "live",
-      amount: session.amount_total,
-      currency: session.currency,
-      url: session.url,
+        metadata: {
+          videoId,
+          buyerUid,
+          creatorUid: videoData.uid,
+          platformFeeAmount: applicationFee.toString(),
+          creatorAmount: (price - applicationFee).toString(),
+        },
+      },
+      metadata: {
+        videoId,
+        buyerUid,
+        creatorUid: videoData.uid,
+      },
     })
 
     return NextResponse.json({
       success: true,
       sessionId: session.id,
       url: session.url,
-      amount: session.amount_total ? session.amount_total / 100 : productBoxData.price,
-      currency: session.currency || "usd",
-      productTitle: productBoxData.title,
     })
   } catch (error) {
-    console.error("❌ [Stripe Checkout] Error creating session:", {
-      error: error instanceof Error ? error.message : "Unknown error",
-      stack: error instanceof Error ? error.stack : undefined,
-    })
-
-    return NextResponse.json(
-      {
-        error: "Failed to create checkout session",
-        details: error instanceof Error ? error.message : "An unexpected error occurred",
-      },
-      { status: 500 },
-    )
+    console.error("Error creating checkout session:", error)
+    return NextResponse.json({ error: "Failed to create checkout session" }, { status: 500 })
   }
 }

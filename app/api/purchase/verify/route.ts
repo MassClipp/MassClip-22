@@ -1,43 +1,13 @@
 import { type NextRequest, NextResponse } from "next/server"
 import type Stripe from "stripe"
 import { auth, db } from "@/lib/firebase-admin"
+import { stripe, isTestMode, getKeyType } from "@/lib/stripe"
 
 export async function POST(request: NextRequest) {
-  let rawBody = ""
-
   try {
     console.log("🔍 [Purchase Verify] Starting verification process")
 
-    // Parse request body with error handling
-    try {
-      rawBody = await request.text()
-      console.log("📋 [Purchase Verify] Raw body length:", rawBody.length)
-    } catch (parseError) {
-      console.error("❌ [Purchase Verify] Failed to read request body:", parseError)
-      return NextResponse.json(
-        {
-          error: "Failed to read request body",
-          details: parseError instanceof Error ? parseError.message : "Unknown error",
-        },
-        { status: 400 },
-      )
-    }
-
-    let requestData: any
-    try {
-      requestData = JSON.parse(rawBody)
-    } catch (jsonError) {
-      console.error("❌ [Purchase Verify] Failed to parse JSON:", jsonError)
-      return NextResponse.json(
-        {
-          error: "Invalid JSON in request body",
-          details: jsonError instanceof Error ? jsonError.message : "Unknown error",
-        },
-        { status: 400 },
-      )
-    }
-
-    const { sessionId, idToken } = requestData
+    const { sessionId, idToken } = await request.json()
 
     if (!sessionId) {
       console.error("❌ [Purchase Verify] Missing session ID")
@@ -46,43 +16,8 @@ export async function POST(request: NextRequest) {
 
     console.log("📋 [Purchase Verify] Session ID:", sessionId.substring(0, 20) + "...")
 
-    // Import Stripe dynamically to catch initialization errors
-    let stripe: Stripe
-    let getKeyType: () => "test" | "live"
-    let isTestMode: () => boolean
-
-    try {
-      const stripeModule = await import("@/lib/stripe")
-      stripe = stripeModule.stripe
-      getKeyType = stripeModule.getKeyType
-      isTestMode = stripeModule.isTestMode
-      console.log("✅ [Purchase Verify] Stripe module imported successfully")
-    } catch (stripeImportError) {
-      console.error("❌ [Purchase Verify] Failed to import Stripe:", stripeImportError)
-      return NextResponse.json(
-        {
-          error: "Stripe configuration error",
-          details: stripeImportError instanceof Error ? stripeImportError.message : "Failed to initialize Stripe",
-        },
-        { status: 500 },
-      )
-    }
-
     // Enhanced mode checking using actual Stripe instance
-    let actualKeyType: "test" | "live"
-    try {
-      actualKeyType = getKeyType()
-    } catch (keyTypeError) {
-      console.error("❌ [Purchase Verify] Failed to get key type:", keyTypeError)
-      return NextResponse.json(
-        {
-          error: "Stripe key type detection failed",
-          details: keyTypeError instanceof Error ? keyTypeError.message : "Unknown error",
-        },
-        { status: 500 },
-      )
-    }
-
+    const actualKeyType = getKeyType()
     const isTestSession = sessionId.startsWith("cs_test_")
     const isLiveSession = sessionId.startsWith("cs_live_")
 
@@ -132,15 +67,9 @@ export async function POST(request: NextRequest) {
         const decodedToken = await auth.verifyIdToken(idToken)
         userId = decodedToken.uid
         console.log("✅ [Purchase Verify] User authenticated:", userId)
-      } catch (authError) {
-        console.error("❌ [Purchase Verify] Error verifying ID token:", authError)
-        return NextResponse.json(
-          {
-            error: "Invalid authentication token",
-            details: authError instanceof Error ? authError.message : "Token verification failed",
-          },
-          { status: 401 },
-        )
+      } catch (error) {
+        console.error("❌ [Purchase Verify] Error verifying ID token:", error)
+        return NextResponse.json({ error: "Invalid authentication token" }, { status: 401 })
       }
     }
 
@@ -414,7 +343,6 @@ export async function POST(request: NextRequest) {
         {
           error: "Failed to fetch product box details",
           details: "There was an error retrieving the product information.",
-          firestoreError: productBoxError instanceof Error ? productBoxError.message : "Unknown error",
         },
         { status: 500 },
       )
@@ -430,14 +358,12 @@ export async function POST(request: NextRequest) {
         .add({
           productBoxId,
           sessionId,
-          paymentIntentId:
-            typeof session.payment_intent === "string" ? session.payment_intent : session.payment_intent?.id || null,
+          paymentIntentId: session.payment_intent,
           amount: session.amount_total ? session.amount_total / 100 : 0,
           currency: session.currency || "usd",
           timestamp: db.FieldValue.serverTimestamp(),
           status: "completed",
           creatorId: productBoxData.creatorId,
-          customerEmail: session.customer_details?.email || null,
         })
 
       console.log("✅ [Purchase Verify] Created purchase record:", purchaseRef.id)
@@ -461,7 +387,6 @@ export async function POST(request: NextRequest) {
         .update({
           totalSales: db.FieldValue.increment(1),
           totalRevenue: db.FieldValue.increment(session.amount_total ? session.amount_total / 100 : 0),
-          lastSaleAt: db.FieldValue.serverTimestamp(),
         })
       console.log("✅ [Purchase Verify] Updated product box sales")
     } catch (updateError) {
@@ -473,10 +398,6 @@ export async function POST(request: NextRequest) {
     const creatorId = productBoxData.creatorId || session.metadata?.creatorUid
     if (creatorId) {
       try {
-        const saleAmount = session.amount_total ? session.amount_total / 100 : 0
-        const platformFee = saleAmount * 0.05 // 5% platform fee
-        const netAmount = saleAmount - platformFee
-
         await db
           .collection("users")
           .doc(creatorId)
@@ -485,12 +406,11 @@ export async function POST(request: NextRequest) {
             productBoxId,
             buyerUid,
             sessionId,
-            amount: saleAmount,
-            platformFee,
-            netAmount,
+            amount: session.amount_total ? session.amount_total / 100 : 0,
+            platformFee: session.amount_total ? (session.amount_total * 0.05) / 100 : 0,
+            netAmount: session.amount_total ? (session.amount_total * 0.95) / 100 : 0,
             purchasedAt: db.FieldValue.serverTimestamp(),
             status: "completed",
-            customerEmail: session.customer_details?.email || null,
           })
 
         // Increment the creator's total sales
@@ -499,9 +419,7 @@ export async function POST(request: NextRequest) {
           .doc(creatorId)
           .update({
             totalSales: db.FieldValue.increment(1),
-            totalRevenue: db.FieldValue.increment(saleAmount),
-            totalNetRevenue: db.FieldValue.increment(netAmount),
-            lastSaleAt: db.FieldValue.serverTimestamp(),
+            totalRevenue: db.FieldValue.increment(session.amount_total ? session.amount_total / 100 : 0),
           })
 
         console.log("✅ [Purchase Verify] Recorded creator sale")
@@ -544,7 +462,6 @@ export async function POST(request: NextRequest) {
         creatorUsername,
         creatorName: creatorName || "Unknown Creator",
         type: "product_box",
-        customerEmail: session.customer_details?.email,
       },
     }
 
@@ -555,7 +472,6 @@ export async function POST(request: NextRequest) {
       message: error instanceof Error ? error.message : "Unknown error",
       stack: error instanceof Error ? error.stack : undefined,
       name: error instanceof Error ? error.name : "Unknown",
-      rawBodyLength: rawBody.length,
       error,
     })
 
@@ -564,7 +480,6 @@ export async function POST(request: NextRequest) {
         error: "Failed to verify purchase",
         details: error instanceof Error ? error.message : "An unexpected error occurred",
         errorType: error instanceof Error ? error.name : "Unknown",
-        timestamp: new Date().toISOString(),
       },
       { status: 500 },
     )

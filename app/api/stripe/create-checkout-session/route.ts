@@ -1,58 +1,32 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { verifyIdToken } from "@/lib/auth-utils"
-import { db } from "@/lib/firebase-admin"
-import { stripe } from "@/lib/stripe"
+import Stripe from "stripe"
+import { auth, db } from "@/lib/firebase-admin"
+
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
+  apiVersion: "2023-10-16",
+})
 
 export async function POST(request: NextRequest) {
   try {
-    console.log("🛒 [Create Checkout Session] Starting checkout session creation")
+    const { idToken, productBoxId, price } = await request.json()
 
-    // Verify authentication
-    const decodedToken = await verifyIdToken(request)
-    if (!decodedToken) {
-      console.error("❌ [Create Checkout Session] Authentication failed")
-      return NextResponse.json({ error: "Authentication required" }, { status: 401 })
+    console.log("🔍 [Checkout] Creating session for:", { productBoxId, price })
+
+    if (!idToken || !productBoxId) {
+      return NextResponse.json({ error: "Missing required parameters" }, { status: 400 })
     }
 
+    // Verify the Firebase ID token
+    const decodedToken = await auth.verifyIdToken(idToken)
     const buyerUid = decodedToken.uid
-    console.log("👤 [Create Checkout Session] Authenticated buyer UID:", buyerUid)
 
-    const { productBoxId, successUrl, cancelUrl } = await request.json()
-
-    if (!productBoxId) {
-      console.error("❌ [Create Checkout Session] Missing product box ID")
-      return NextResponse.json({ error: "Product box ID is required" }, { status: 400 })
-    }
-
-    console.log("📋 [Create Checkout Session] Request details:", {
-      productBoxId,
-      buyerUid,
-      hasSuccessUrl: !!successUrl,
-      hasCancelUrl: !!cancelUrl,
-    })
-
-    // Get the product box details
+    // Get product box details
     const productBoxDoc = await db.collection("productBoxes").doc(productBoxId).get()
-
     if (!productBoxDoc.exists) {
-      console.error("❌ [Create Checkout Session] Product box not found:", productBoxId)
       return NextResponse.json({ error: "Product box not found" }, { status: 404 })
     }
 
     const productBoxData = productBoxDoc.data()!
-    console.log("📦 [Create Checkout Session] Product box details:", {
-      title: productBoxData.title,
-      price: productBoxData.price,
-      creatorId: productBoxData.creatorId,
-      hasDescription: !!productBoxData.description,
-      hasThumbnail: !!productBoxData.thumbnailUrl,
-    })
-
-    // Validate price
-    if (!productBoxData.price || productBoxData.price <= 0) {
-      console.error("❌ [Create Checkout Session] Invalid price:", productBoxData.price)
-      return NextResponse.json({ error: "Invalid product price" }, { status: 400 })
-    }
 
     // Check if user already owns this product box
     const existingPurchase = await db
@@ -64,33 +38,28 @@ export async function POST(request: NextRequest) {
       .get()
 
     if (!existingPurchase.empty) {
-      console.log("ℹ️ [Create Checkout Session] User already owns this product box")
       return NextResponse.json({ error: "You already own this product" }, { status: 400 })
     }
 
-    // Get buyer details for customer info
-    let customerEmail = null
-    let customerName = null
-    try {
-      const buyerDoc = await db.collection("users").doc(buyerUid).get()
-      if (buyerDoc.exists) {
-        const buyerData = buyerDoc.data()
-        customerEmail = buyerData?.email || decodedToken.email
-        customerName = buyerData?.displayName || buyerData?.name || decodedToken.name
-        console.log("👤 [Create Checkout Session] Buyer details:", {
-          hasEmail: !!customerEmail,
-          hasName: !!customerName,
-        })
-      }
-    } catch (buyerError) {
-      console.warn("⚠️ [Create Checkout Session] Could not fetch buyer details:", buyerError)
-      customerEmail = decodedToken.email
-      customerName = decodedToken.name
+    // Get creator's Stripe account
+    const creatorDoc = await db.collection("users").doc(productBoxData.creatorId).get()
+    const creatorData = creatorDoc.data()
+
+    if (!creatorData?.stripeAccountId || !creatorData?.stripeOnboardingComplete) {
+      return NextResponse.json({ error: "Creator is not set up to receive payments" }, { status: 400 })
     }
 
-    // Prepare checkout session data
-    const sessionData = {
-      payment_method_types: ["card"] as const,
+    // Get the price from the product box or use the provided price
+    const priceInCents = Math.round((price || productBoxData.price || 9.99) * 100)
+
+    // Calculate platform fee (25%)
+    const platformFee = Math.round(priceInCents * 0.25)
+
+    console.log("💰 [Checkout] Price details:", { priceInCents, platformFee })
+
+    // Create Stripe checkout session with EXPLICIT metadata
+    const sessionParams: Stripe.Checkout.SessionCreateParams = {
+      payment_method_types: ["card"],
       line_items: [
         {
           price_data: {
@@ -98,67 +67,59 @@ export async function POST(request: NextRequest) {
             product_data: {
               name: productBoxData.title || "Product Box",
               description: productBoxData.description || "Digital content package",
-              images: productBoxData.thumbnailUrl ? [productBoxData.thumbnailUrl] : [],
+              images: productBoxData.thumbnailUrl ? [productBoxData.thumbnailUrl] : undefined,
             },
-            unit_amount: Math.round(productBoxData.price * 100), // Convert to cents
+            unit_amount: priceInCents,
           },
           quantity: 1,
         },
       ],
-      mode: "payment" as const,
-      success_url:
-        successUrl || `${process.env.NEXT_PUBLIC_SITE_URL}/purchase/success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: cancelUrl || `${process.env.NEXT_PUBLIC_SITE_URL}/product-box/${productBoxId}`,
-      customer_email: customerEmail || undefined,
+      mode: "payment",
+      success_url: `${process.env.NEXT_PUBLIC_SITE_URL}/purchase/success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${process.env.NEXT_PUBLIC_SITE_URL}/product-box/${productBoxId}`,
+      client_reference_id: buyerUid,
+      // CRITICAL: Ensure metadata is set at the session level
       metadata: {
-        productBoxId,
-        buyerUid,
+        productBoxId: productBoxId,
+        buyerUid: buyerUid,
         creatorUid: productBoxData.creatorId,
-        type: "product_box",
-        timestamp: new Date().toISOString(),
+        productTitle: productBoxData.title || "Product Box",
+      },
+      payment_intent_data: {
+        application_fee_amount: platformFee,
+        transfer_data: {
+          destination: creatorData.stripeAccountId,
+        },
+        metadata: {
+          productBoxId: productBoxId,
+          buyerUid: buyerUid,
+          creatorUid: productBoxData.creatorId,
+        },
       },
     }
 
-    console.log("🔧 [Create Checkout Session] Session configuration:", {
-      amount: sessionData.line_items[0].price_data.unit_amount,
-      currency: sessionData.line_items[0].price_data.currency,
-      hasCustomerEmail: !!sessionData.customer_email,
-      metadataKeys: Object.keys(sessionData.metadata),
-    })
+    console.log("📝 [Checkout] Session params metadata:", sessionParams.metadata)
 
-    // Create Stripe checkout session
-    const session = await stripe.checkout.sessions.create(sessionData)
+    // Create session on the platform account (not connected account)
+    const session = await stripe.checkout.sessions.create(sessionParams)
 
-    console.log("✅ [Create Checkout Session] Stripe session created successfully:", {
-      sessionId: session.id,
-      sessionType: session.id.startsWith("cs_test_") ? "test" : "live",
-      amount: session.amount_total,
-      currency: session.currency,
+    console.log("✅ [Checkout] Session created:", {
+      id: session.id,
+      metadata: session.metadata,
       url: session.url,
-      expiresAt: session.expires_at ? new Date(session.expires_at * 1000).toISOString() : null,
     })
 
     return NextResponse.json({
       success: true,
       sessionId: session.id,
       url: session.url,
-      amount: productBoxData.price,
-      currency: "usd",
-      productTitle: productBoxData.title,
-      expiresAt: session.expires_at,
     })
   } catch (error) {
-    console.error("❌ [Create Checkout Session] Error creating checkout session:", {
-      error: error instanceof Error ? error.message : "Unknown error",
-      stack: error instanceof Error ? error.stack : undefined,
-      name: error instanceof Error ? error.name : "Unknown",
-    })
-
+    console.error("❌ [Checkout] Error creating session:", error)
     return NextResponse.json(
       {
         error: "Failed to create checkout session",
-        details: error instanceof Error ? error.message : "An unexpected error occurred",
-        errorType: error instanceof Error ? error.name : "Unknown",
+        details: error instanceof Error ? error.message : "Unknown error",
       },
       { status: 500 },
     )
