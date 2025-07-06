@@ -12,6 +12,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     console.log("📋 [Checkout API] Request details:", {
       productBoxId,
       hasIdToken: !!idToken,
+      url: request.url,
     })
 
     if (!productBoxId) {
@@ -38,7 +39,9 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     }
 
     // Get product box details
+    console.log("📦 [Checkout API] Fetching product box:", productBoxId)
     const productBoxDoc = await db.collection("productBoxes").doc(productBoxId).get()
+
     if (!productBoxDoc.exists) {
       console.error("❌ [Checkout API] Product box not found:", productBoxId)
       return NextResponse.json({ error: "Product box not found" }, { status: 404 })
@@ -77,6 +80,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
         // Verify the price still exists
         try {
           await stripe.prices.retrieve(priceId)
+          console.log("✅ [Checkout API] Existing price validated")
         } catch (priceError) {
           console.warn("⚠️ [Checkout API] Stored price ID invalid, creating new one")
           throw new Error("Price not found")
@@ -138,6 +142,8 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     }
 
     // Create checkout session with dynamic price
+    console.log("🔄 [Checkout API] Creating checkout session with price:", priceId)
+
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ["card"],
       line_items: [
