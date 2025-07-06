@@ -1,54 +1,44 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { useSearchParams } from "next/navigation"
-import { useAuth } from "@/contexts/auth-context"
-import { CheckCircle, Loader2, AlertCircle, Download, RefreshCw, Bug, Copy, Settings } from "lucide-react"
+import { useSearchParams, useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
-import { useToast } from "@/hooks/use-toast"
-import Link from "next/link"
+import { CheckCircle, AlertCircle, Copy, RefreshCw, Bug } from "lucide-react"
+import { toast } from "sonner"
 
-interface PurchaseDetails {
-  id: string
-  productBoxId: string
-  itemTitle: string
-  itemDescription?: string
+interface PurchaseData {
+  sessionId: string
   amount: number
   currency: string
-  sessionId: string
-  thumbnailUrl?: string
-  purchasedAt: Date
+  customerEmail: string
   status: string
 }
 
-interface DebugInfo {
-  session?: any
-  error?: string
-  environment?: any
-  stripeError?: any
-  recommendation?: string
-}
-
 export default function PurchaseSuccessPage() {
-  const { user, loading: authLoading } = useAuth()
   const searchParams = useSearchParams()
-  const { toast } = useToast()
-  const [loading, setLoading] = useState(true)
+  const router = useRouter()
+  const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [debugInfo, setDebugInfo] = useState<DebugInfo | null>(null)
-  const [purchaseDetails, setPurchaseDetails] = useState<PurchaseDetails | null>(null)
-  const [retryCount, setRetryCount] = useState(0)
+  const [purchaseData, setPurchaseData] = useState<PurchaseData | null>(null)
+  const [debugInfo, setDebugInfo] = useState<any>(null)
   const [showDebug, setShowDebug] = useState(false)
-  const [isTestLiveMismatch, setIsTestLiveMismatch] = useState(false)
 
   const sessionId = searchParams.get("session_id")
 
-  const debugSession = async () => {
-    if (!sessionId) return
+  useEffect(() => {
+    if (!sessionId) {
+      setError("No session ID provided")
+      setIsLoading(false)
+      return
+    }
 
+    verifyPurchase()
+  }, [sessionId])
+
+  const verifyPurchase = async () => {
     try {
-      console.log("🔍 [Debug] Fetching session debug info...")
-      const response = await fetch("/api/debug/stripe-session", {
+      setIsLoading(true)
+      const response = await fetch("/api/purchase/verify", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -57,301 +47,225 @@ export default function PurchaseSuccessPage() {
       })
 
       const data = await response.json()
+      setDebugInfo(data)
 
-      if (response.ok) {
-        console.log("✅ [Debug] Session debug info retrieved:", data)
-        setDebugInfo(data)
+      if (response.ok && data.success) {
+        setPurchaseData(data.purchase)
+        setError(null)
       } else {
-        console.error("❌ [Debug] Session debug failed:", data)
-        setDebugInfo({
-          error: data.error || "Debug failed",
-          recommendation: data.recommendation,
-          environment: data.environment,
-        })
-
-        if (data.error?.includes("Test/Live mode mismatch")) {
-          setIsTestLiveMismatch(true)
-        }
+        setError(data.error || "Purchase verification failed")
       }
-    } catch (error) {
-      console.error("❌ [Debug] Debug session failed:", error)
-      setDebugInfo({ error: "Failed to fetch debug info" })
-    }
-  }
-
-  const verifyPurchase = async () => {
-    if (!sessionId) {
-      setError("Missing session ID in URL")
-      setLoading(false)
-      return
-    }
-
-    if (authLoading || !user) {
-      return
-    }
-
-    try {
-      console.log("🔍 [Purchase Success] Verifying purchase:", {
-        sessionId: sessionId.substring(0, 20) + "...",
-        attempt: retryCount + 1,
-        userId: user.uid,
-      })
-
-      const idToken = await user.getIdToken()
-
-      const response = await fetch("/api/purchase/verify", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${idToken}`,
-        },
-        body: JSON.stringify({
-          sessionId,
-          idToken,
-        }),
-      })
-
-      console.log("📡 [Purchase Success] Response status:", response.status)
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: "Verification failed" }))
-        console.error("❌ [Purchase Success] Error response:", errorData)
-
-        if (errorData.error?.includes("Test/Live Mode Mismatch")) {
-          setIsTestLiveMismatch(true)
-        }
-
-        await debugSession()
-
-        throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`)
-      }
-
-      const data = await response.json()
-      console.log("✅ [Purchase Success] Purchase verified:", data)
-
-      setPurchaseDetails(data.purchase)
-      setError(null)
-
-      toast({
-        title: "Purchase Verified!",
-        description: "Your payment has been confirmed and content is now available.",
-      })
-    } catch (error) {
-      console.error("❌ [Purchase Success] Error:", error)
-      const errorMessage = error instanceof Error ? error.message : "Failed to verify purchase"
-      setError(errorMessage)
-
-      toast({
-        title: "Verification Failed",
-        description: errorMessage,
-        variant: "destructive",
-      })
+    } catch (err) {
+      console.error("Verification error:", err)
+      setError("Failed to verify purchase")
     } finally {
-      setLoading(false)
+      setIsLoading(false)
     }
-  }
-
-  useEffect(() => {
-    if (!authLoading && user) {
-      verifyPurchase()
-    } else if (!authLoading && !user) {
-      setError("Please log in to verify your purchase")
-      setLoading(false)
-    }
-  }, [sessionId, authLoading, user, retryCount])
-
-  const handleRetry = () => {
-    setLoading(true)
-    setError(null)
-    setDebugInfo(null)
-    setIsTestLiveMismatch(false)
-    setRetryCount((prev) => prev + 1)
   }
 
   const copySessionId = () => {
     if (sessionId) {
       navigator.clipboard.writeText(sessionId)
-      toast({
-        title: "Copied!",
-        description: "Session ID copied to clipboard",
-      })
+      toast.success("Session ID copied to clipboard")
     }
   }
 
   const copyDebugInfo = () => {
     if (debugInfo) {
       navigator.clipboard.writeText(JSON.stringify(debugInfo, null, 2))
-      toast({
-        title: "Copied!",
-        description: "Debug info copied to clipboard",
-      })
+      toast.success("Debug info copied to clipboard")
     }
   }
 
-  if (authLoading || (loading && !purchaseDetails)) {
+  if (isLoading) {
     return (
       <div className="min-h-screen bg-black flex items-center justify-center">
-        <div className="text-center">
-          <Loader2 className="h-8 w-8 text-white animate-spin mx-auto mb-4" />
-          <h2 className="text-xl font-light text-white mb-2">
-            {authLoading ? "Authenticating..." : "Verifying purchase..."}
-          </h2>
-          <p className="text-gray-400 text-sm">Please wait</p>
-          {retryCount > 0 && <p className="text-gray-500 text-xs mt-2">Attempt {retryCount + 1}</p>}
+        <div className="text-center space-y-4">
+          <div className="w-8 h-8 border-2 border-white/20 border-t-white rounded-full animate-spin mx-auto" />
+          <p className="text-white/60">Verifying your purchase...</p>
         </div>
       </div>
     )
   }
 
   if (error) {
+    const isConfigError = error.includes("Test/Live Mode Mismatch") || error.includes("configuration")
+
     return (
       <div className="min-h-screen bg-black flex items-center justify-center p-4">
-        <div className="w-full max-w-lg">
-          <div className="text-center mb-8">
-            <div className="w-16 h-16 mx-auto mb-6 rounded-full bg-red-500/10 flex items-center justify-center border border-red-500/20">
-              <AlertCircle className="h-8 w-8 text-red-400" />
+        <div className="w-full max-w-2xl space-y-8">
+          {/* Error Header */}
+          <div className="text-center space-y-4">
+            <div className="w-16 h-16 bg-red-500/10 rounded-full flex items-center justify-center mx-auto">
+              <AlertCircle className="w-8 h-8 text-red-400" />
             </div>
-            <h1 className="text-2xl font-light text-white mb-2">Verification Failed</h1>
-            <p className="text-gray-400 text-sm">{error}</p>
+            <div>
+              <h1 className="text-2xl font-light text-white mb-2">Purchase Verification Failed</h1>
+              <p className="text-white/60">{isConfigError ? "Configuration Error: Test/Live Mode Mismatch" : error}</p>
+            </div>
           </div>
 
-          {isTestLiveMismatch && (
-            <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-4 mb-6">
-              <div className="flex items-center gap-2 mb-2">
-                <Settings className="h-4 w-4 text-amber-400" />
-                <span className="text-amber-400 text-sm font-medium">Configuration Issue</span>
+          {/* Configuration Warning */}
+          {isConfigError && (
+            <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-6">
+              <div className="flex items-start space-x-3">
+                <AlertCircle className="w-5 h-5 text-amber-400 mt-0.5 flex-shrink-0" />
+                <div className="space-y-3">
+                  <h3 className="text-amber-400 font-medium">Configuration Issue Detected</h3>
+                  <p className="text-white/70 text-sm leading-relaxed">
+                    There's a mismatch between your Stripe configuration and the payment session. This typically happens
+                    when:
+                  </p>
+                  <ul className="text-white/60 text-sm space-y-1 ml-4">
+                    <li>• Using test Stripe keys with a live payment session</li>
+                    <li>• Using live Stripe keys with a test payment session</li>
+                  </ul>
+                  <Button
+                    onClick={() => router.push("/debug-stripe-config")}
+                    variant="outline"
+                    size="sm"
+                    className="bg-amber-500/10 border-amber-500/30 text-amber-400 hover:bg-amber-500/20"
+                  >
+                    <Bug className="w-4 h-4 mr-2" />
+                    Check Configuration
+                  </Button>
+                </div>
               </div>
-              <p className="text-amber-300/80 text-sm mb-3">
-                Stripe test/live mode mismatch detected. Check your configuration.
-              </p>
-              <Button asChild size="sm" className="bg-amber-500 hover:bg-amber-600 text-black text-xs">
-                <Link href="/debug-stripe-config">
-                  <Settings className="h-3 w-3 mr-1" />
-                  Check Config
-                </Link>
-              </Button>
             </div>
           )}
 
+          {/* Reassurance */}
+          <div className="text-center">
+            <p className="text-white/60 text-sm">
+              Don't worry! Your payment was likely successful. You can try verifying again or check your purchases.
+            </p>
+          </div>
+
+          {/* Session Info */}
           {sessionId && (
-            <div className="bg-gray-900/50 border border-gray-800 rounded-lg p-4 mb-6">
+            <div className="bg-white/5 border border-white/10 rounded-lg p-4">
               <div className="flex items-center justify-between">
-                <span className="text-gray-400 text-xs">Session ID</span>
-                <Button onClick={copySessionId} size="sm" variant="ghost" className="h-6 w-6 p-0">
-                  <Copy className="h-3 w-3" />
+                <span className="text-white/60 text-sm font-mono">Session: {sessionId.substring(0, 20)}...</span>
+                <Button onClick={copySessionId} variant="ghost" size="sm" className="text-white/60 hover:text-white">
+                  <Copy className="w-4 h-4" />
                 </Button>
               </div>
-              <p className="text-gray-300 text-xs font-mono mt-1">{sessionId.substring(0, 40)}...</p>
             </div>
           )}
 
+          {/* Debug Info */}
+          {debugInfo && (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <h3 className="text-amber-400 text-sm font-medium">Debug Information</h3>
+                <div className="flex space-x-2">
+                  <Button
+                    onClick={() => setShowDebug(!showDebug)}
+                    variant="ghost"
+                    size="sm"
+                    className="text-white/60 hover:text-white text-sm"
+                  >
+                    {showDebug ? "Hide" : "Show"}
+                  </Button>
+                  <Button onClick={copyDebugInfo} variant="ghost" size="sm" className="text-white/60 hover:text-white">
+                    <Copy className="w-4 h-4" />
+                  </Button>
+                </div>
+              </div>
+
+              {showDebug && (
+                <div className="bg-blue-500/10 border border-blue-500/20 rounded-lg p-4">
+                  <p className="text-blue-400 text-sm mb-2">
+                    <strong>Recommendation:</strong> Verify the session ID is correct and belongs to your Stripe account
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Actions */}
           <div className="space-y-3">
-            <Button onClick={handleRetry} className="w-full bg-white hover:bg-gray-100 text-black h-12 rounded-lg">
-              <RefreshCw className="h-4 w-4 mr-2" />
+            <Button
+              onClick={verifyPurchase}
+              className="w-full bg-white/10 hover:bg-white/20 text-white border-0"
+              disabled={isLoading}
+            >
+              <RefreshCw className="w-4 h-4 mr-2" />
               Try Again
             </Button>
             <Button
-              onClick={debugSession}
-              variant="ghost"
-              className="w-full text-gray-400 hover:text-white hover:bg-gray-800/50 h-10 rounded-lg"
+              onClick={() => router.push("/debug-stripe-config")}
+              variant="outline"
+              className="w-full bg-amber-500/10 border-amber-500/30 text-amber-400 hover:bg-amber-500/20"
             >
-              <Bug className="h-4 w-4 mr-2" />
+              <Bug className="w-4 h-4 mr-2" />
               Debug Session
             </Button>
-            <Button
-              asChild
-              variant="ghost"
-              className="w-full text-gray-400 hover:text-white hover:bg-gray-800/50 h-10 rounded-lg"
-            >
-              <Link href="/dashboard/purchases">View Purchases</Link>
-            </Button>
           </div>
-
-          {debugInfo && showDebug && (
-            <div className="mt-6 bg-gray-900/50 border border-gray-800 rounded-lg p-4">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-amber-400 text-sm">Debug Info</span>
-                <Button onClick={copyDebugInfo} size="sm" variant="ghost" className="h-6 w-6 p-0">
-                  <Copy className="h-3 w-3" />
-                </Button>
-              </div>
-              <pre className="text-xs text-gray-300 overflow-auto max-h-40 bg-black/50 p-3 rounded">
-                {JSON.stringify(debugInfo, null, 2)}
-              </pre>
-            </div>
-          )}
         </div>
       </div>
     )
   }
 
-  // SUCCESS STATE - New minimal design
+  // Success State - Minimal & Sleek Design
   return (
     <div className="min-h-screen bg-black flex items-center justify-center p-4">
-      <div className="w-full max-w-lg">
-        {/* Success Icon */}
-        <div className="text-center mb-8">
-          <div className="w-16 h-16 mx-auto mb-6 rounded-full bg-green-500/10 flex items-center justify-center border border-green-500/20">
-            <CheckCircle className="h-8 w-8 text-green-400" />
+      <div className="w-full max-w-md space-y-8">
+        {/* Success Header */}
+        <div className="text-center space-y-6">
+          <div className="w-20 h-20 bg-green-500/10 rounded-full flex items-center justify-center mx-auto">
+            <CheckCircle className="w-10 h-10 text-green-400" />
           </div>
-          <h1 className="text-2xl font-light text-white mb-2">Payment Successful</h1>
-          <p className="text-gray-400 text-sm">Your content is now available</p>
+          <div>
+            <h1 className="text-3xl font-light text-white mb-2">Payment Successful</h1>
+            <p className="text-white/60">Your purchase has been completed</p>
+          </div>
         </div>
 
         {/* Purchase Details */}
-        {purchaseDetails && (
-          <div className="bg-gray-900/50 border border-gray-800 rounded-lg p-6 mb-6">
-            <div className="space-y-3">
-              <div className="flex justify-between items-start">
-                <span className="text-gray-400 text-sm">Product</span>
-                <span className="text-white text-sm font-medium text-right max-w-[200px]">
-                  {purchaseDetails.itemTitle}
-                </span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-gray-400 text-sm">Amount</span>
-                <span className="text-white text-sm font-medium">
-                  {new Intl.NumberFormat("en-US", {
-                    style: "currency",
-                    currency: purchaseDetails.currency.toUpperCase(),
-                  }).format(purchaseDetails.amount)}
-                </span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-gray-400 text-sm">Date</span>
-                <span className="text-white text-sm font-medium">
-                  {new Date(purchaseDetails.purchasedAt).toLocaleDateString()}
-                </span>
-              </div>
+        {purchaseData && (
+          <div className="bg-white/5 border border-white/10 rounded-lg p-6 space-y-4">
+            <div className="flex justify-between items-center">
+              <span className="text-white/60">Amount</span>
+              <span className="text-white font-medium">
+                ${(purchaseData.amount / 100).toFixed(2)} {purchaseData.currency.toUpperCase()}
+              </span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-white/60">Email</span>
+              <span className="text-white font-medium">{purchaseData.customerEmail}</span>
+            </div>
+            <div className="flex justify-between items-center">
+              <span className="text-white/60">Status</span>
+              <span className="text-green-400 font-medium capitalize">{purchaseData.status}</span>
             </div>
           </div>
         )}
 
-        {/* Action Buttons */}
+        {/* Actions */}
         <div className="space-y-3">
-          <Button asChild className="w-full bg-white hover:bg-gray-100 text-black font-medium h-12 rounded-lg">
-            <Link href={`/product-box/${purchaseDetails?.productBoxId}/content`}>
-              <Download className="h-4 w-4 mr-2" />
-              Access Content
-            </Link>
-          </Button>
-
           <Button
-            asChild
-            variant="ghost"
-            className="w-full text-gray-400 hover:text-white hover:bg-gray-800/50 h-10 rounded-lg"
+            onClick={() => router.push("/dashboard")}
+            className="w-full bg-white text-black hover:bg-white/90 font-medium"
           >
-            <Link href="/dashboard/purchases">View All Purchases</Link>
+            Go to Dashboard
+          </Button>
+          <Button
+            onClick={() => router.push("/dashboard/purchases")}
+            variant="ghost"
+            className="w-full text-white/60 hover:text-white hover:bg-white/5"
+          >
+            View Purchases
           </Button>
         </div>
 
         {/* Footer */}
-        <div className="text-center mt-8 pt-6 border-t border-gray-800">
-          <p className="text-gray-500 text-xs">
-            Receipt sent to your email • Need help?{" "}
-            <Link href="/support" className="text-gray-400 hover:text-white underline">
-              Contact support
-            </Link>
+        <div className="text-center">
+          <p className="text-white/40 text-sm">
+            Need help?{" "}
+            <a href="mailto:support@massclip.pro" className="text-white/60 hover:text-white underline">
+              Contact Support
+            </a>
           </p>
         </div>
       </div>

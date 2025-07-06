@@ -1,11 +1,11 @@
 import { NextResponse } from "next/server"
 import Stripe from "stripe"
 import { initializeFirebaseAdmin } from "@/lib/firebase-admin"
-import { getFirestore } from "firebase-admin/firestore"
+import { getFirestore, type FirebaseFirestore } from "firebase-admin/firestore"
 
 // Initialize Firebase Admin outside the handler for better performance
 let firebaseInitialized = false
-let db: FirebaseFirestore.Firestore | null = null
+let db: FirebaseFirestore | null = null
 
 function initFirebase() {
   if (!firebaseInitialized) {
