@@ -11,6 +11,15 @@ interface PurchaseResult {
   success: boolean
   error?: string
   sessionId?: string
+  details?: string
+  possibleCauses?: string[]
+  possibleReasons?: string[]
+  stripeError?: {
+    type: string
+    code: string
+    message: string
+    statusCode?: number
+  }
   purchaseDetails?: {
     amount: number
     currency: string
@@ -60,6 +69,7 @@ export default function PurchaseSuccessPage() {
       setResult({
         success: false,
         error: "Failed to verify purchase",
+        details: "Network error or server unavailable",
       })
     } finally {
       setLoading(false)
@@ -167,7 +177,7 @@ export default function PurchaseSuccessPage() {
     )
   }
 
-  // ERROR STATE - Also minimal and dark
+  // ERROR STATE - Enhanced with better error categorization
   return (
     <div className="min-h-screen bg-black flex items-center justify-center p-4">
       <div className="w-full max-w-lg space-y-6 text-center">
@@ -180,11 +190,13 @@ export default function PurchaseSuccessPage() {
         <div className="space-y-2">
           <h1 className="text-2xl font-light text-white">Purchase Verification Failed</h1>
           <p className="text-gray-400 text-sm">
-            {result.error?.includes("Configuration Error")
-              ? "Stripe Configuration Issue"
-              : result.error?.includes("not found")
-                ? "Payment Session Not Found"
-                : result.error || "Unable to verify your purchase"}
+            {result.error?.includes("not found")
+              ? "Payment Session Not Found"
+              : result.error?.includes("Configuration Error")
+                ? "Configuration Issue"
+                : result.error?.includes("Payment not completed")
+                  ? "Payment Incomplete"
+                  : result.error || "Unable to verify your purchase"}
           </p>
         </div>
 
@@ -195,12 +207,32 @@ export default function PurchaseSuccessPage() {
               <AlertCircle className="h-4 w-4 text-blue-400" />
               <span className="text-blue-400 font-medium text-sm">Session Not Found</span>
             </div>
-            <p className="text-blue-300/80 text-sm">The payment session could not be found. This can happen if:</p>
-            <ul className="text-blue-300/70 text-sm space-y-1 ml-4 list-disc">
-              <li>The session ID is incorrect or incomplete</li>
-              <li>The session has expired (sessions expire after 24 hours)</li>
-              <li>The session belongs to a different Stripe account or environment</li>
-            </ul>
+            <p className="text-blue-300/80 text-sm">{result.details}</p>
+            {result.possibleCauses && (
+              <ul className="text-blue-300/70 text-sm space-y-1 ml-4 list-disc">
+                {result.possibleCauses.map((cause, index) => (
+                  <li key={index}>{cause}</li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
+
+        {/* Payment Status Issues */}
+        {result.error?.includes("Payment not completed") && (
+          <div className="bg-amber-900/20 border border-amber-500/30 rounded-lg p-4 text-left space-y-3">
+            <div className="flex items-center gap-2">
+              <AlertCircle className="h-4 w-4 text-amber-400" />
+              <span className="text-amber-400 font-medium text-sm">Payment Incomplete</span>
+            </div>
+            <p className="text-amber-300/80 text-sm">{result.details}</p>
+            {result.possibleReasons && (
+              <ul className="text-amber-300/70 text-sm space-y-1 ml-4 list-disc">
+                {result.possibleReasons.map((reason, index) => (
+                  <li key={index}>{reason}</li>
+                ))}
+              </ul>
+            )}
           </div>
         )}
 
@@ -211,11 +243,7 @@ export default function PurchaseSuccessPage() {
               <AlertCircle className="h-4 w-4 text-amber-400" />
               <span className="text-amber-400 font-medium text-sm">Configuration Issue</span>
             </div>
-            <p className="text-amber-300/80 text-sm">
-              {result.error?.includes("Mismatch")
-                ? "There's a mismatch between your Stripe configuration and the payment session."
-                : "There's an issue with your Stripe configuration."}
-            </p>
+            <p className="text-amber-300/80 text-sm">{result.details}</p>
             <Button
               asChild
               variant="outline"
@@ -227,6 +255,31 @@ export default function PurchaseSuccessPage() {
                 Debug Configuration
               </Link>
             </Button>
+          </div>
+        )}
+
+        {/* Stripe API Errors */}
+        {result.stripeError && (
+          <div className="bg-red-900/20 border border-red-500/30 rounded-lg p-4 text-left space-y-3">
+            <div className="flex items-center gap-2">
+              <AlertCircle className="h-4 w-4 text-red-400" />
+              <span className="text-red-400 font-medium text-sm">Stripe API Error</span>
+            </div>
+            <div className="space-y-2 text-sm">
+              <div className="flex justify-between">
+                <span className="text-red-300/70">Type:</span>
+                <span className="text-red-300">{result.stripeError.type}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-red-300/70">Code:</span>
+                <span className="text-red-300">{result.stripeError.code}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-red-300/70">Status:</span>
+                <span className="text-red-300">{result.stripeError.statusCode || "Unknown"}</span>
+              </div>
+            </div>
+            <p className="text-red-300/80 text-sm">{result.stripeError.message}</p>
           </div>
         )}
 
