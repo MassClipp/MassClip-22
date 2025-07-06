@@ -29,7 +29,7 @@ export function getStripeClientForSession(sessionId: string): StripeClientConfig
       }
       console.log("✅ [Stripe] Using STRIPE_SECRET_KEY_TEST for test session")
       return {
-        client: new Stripe(testKey, { apiVersion: "2024-06-20" }),
+        client: new Stripe(testKey, { apiVersion: "2023-08-16" }),
         mode: "test",
         keyType: "STRIPE_SECRET_KEY_TEST",
       }
@@ -49,7 +49,7 @@ export function getStripeClientForSession(sessionId: string): StripeClientConfig
 
     console.warn("⚠️ [Stripe] STRIPE_SECRET_KEY_TEST not found, using STRIPE_SECRET_KEY as fallback for test session")
     return {
-      client: new Stripe(fallbackKey, { apiVersion: "2024-06-20" }),
+      client: new Stripe(fallbackKey, { apiVersion: "2023-08-16" }),
       mode: "test",
       keyType: "STRIPE_SECRET_KEY (fallback)",
     }
@@ -68,7 +68,7 @@ export function getStripeClientForSession(sessionId: string): StripeClientConfig
 
     console.log("✅ [Stripe] Using STRIPE_SECRET_KEY for live session")
     return {
-      client: new Stripe(liveKey, { apiVersion: "2024-06-20" }),
+      client: new Stripe(liveKey, { apiVersion: "2023-08-16" }),
       mode: "live",
       keyType: "STRIPE_SECRET_KEY",
     }
@@ -103,7 +103,7 @@ export function getEnvironmentStripeClient(): Stripe {
   const keyType = stripeKey.startsWith("sk_live_") ? "live" : "test"
   console.log(`🔑 [Stripe] Environment client: ${keySource} (${keyType}) for ${vercelEnv}`)
 
-  return new Stripe(stripeKey, { apiVersion: "2024-06-20" })
+  return new Stripe(stripeKey, { apiVersion: "2023-08-16" })
 }
 
 /**

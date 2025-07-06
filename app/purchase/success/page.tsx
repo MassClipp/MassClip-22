@@ -44,6 +44,28 @@ export default function PurchaseSuccessPage() {
 
   const sessionId = searchParams.get("session_id")
 
+  // STEP 1: Parse and log session ID from URL
+  useEffect(() => {
+    console.log("🔍 [Success Page] URL Search Params:", {
+      fullUrl: window.location.href,
+      searchParams: Object.fromEntries(searchParams.entries()),
+      sessionId: sessionId,
+      sessionIdLength: sessionId?.length,
+      sessionIdPrefix: sessionId?.substring(0, 10),
+    })
+
+    if (sessionId) {
+      console.log("✅ [Success Page] Session ID parsed from URL:", {
+        sessionId: sessionId,
+        isTestSession: sessionId.startsWith("cs_test_"),
+        isLiveSession: sessionId.startsWith("cs_live_"),
+        fullSessionId: sessionId,
+      })
+    } else {
+      console.error("❌ [Success Page] No session_id found in URL query parameters")
+    }
+  }, [sessionId, searchParams])
+
   const debugSession = async () => {
     if (!sessionId) return
 
@@ -83,24 +105,42 @@ export default function PurchaseSuccessPage() {
 
   const verifyPurchase = async () => {
     if (!sessionId) {
+      console.error("❌ [Purchase Verify] Missing session ID in URL")
       setError("Missing session ID in URL")
       setLoading(false)
       return
     }
 
     if (authLoading || !user) {
-      // Wait for auth to complete
+      console.log("⏳ [Purchase Verify] Waiting for auth to complete...")
       return
     }
 
     try {
-      console.log("🔍 [Purchase Success] Verifying purchase:", {
+      console.log("🔍 [Purchase Verify] Starting verification process:", {
         sessionId: sessionId.substring(0, 20) + "...",
+        fullSessionId: sessionId,
         attempt: retryCount + 1,
         userId: user.uid,
+        userEmail: user.email,
       })
 
       const idToken = await user.getIdToken()
+      console.log("🔑 [Purchase Verify] Got ID token:", {
+        tokenLength: idToken.length,
+        tokenPrefix: idToken.substring(0, 20) + "...",
+      })
+
+      // STEP 2: Send session ID to backend with full logging
+      console.log("📡 [Purchase Verify] Sending request to /api/purchase/verify:", {
+        sessionId: sessionId,
+        sessionIdType: sessionId.startsWith("cs_test_") ? "test" : "live",
+        userId: user.uid,
+        requestBody: {
+          sessionId,
+          idToken: idToken.substring(0, 20) + "...",
+        },
+      })
 
       const response = await fetch("/api/purchase/verify", {
         method: "POST",
@@ -114,11 +154,20 @@ export default function PurchaseSuccessPage() {
         }),
       })
 
-      console.log("📡 [Purchase Success] Response status:", response.status)
+      console.log("📡 [Purchase Verify] Response received:", {
+        status: response.status,
+        statusText: response.statusText,
+        ok: response.ok,
+        headers: Object.fromEntries(response.headers.entries()),
+      })
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({ error: "Verification failed" }))
-        console.error("❌ [Purchase Success] Error response:", errorData)
+        console.error("❌ [Purchase Verify] Error response:", {
+          status: response.status,
+          statusText: response.statusText,
+          errorData,
+        })
 
         // Check for test/live mismatch
         if (errorData.error?.includes("Test/Live Mode Mismatch")) {
@@ -132,7 +181,15 @@ export default function PurchaseSuccessPage() {
       }
 
       const data = await response.json()
-      console.log("✅ [Purchase Success] Purchase verified:", data)
+      console.log("✅ [Purchase Verify] Purchase verified successfully:", {
+        success: data.success,
+        purchaseId: data.purchase?.id,
+        productBoxId: data.purchase?.productBoxId,
+        amount: data.purchase?.amount,
+        currency: data.purchase?.currency,
+        stripeMode: data.purchase?.stripeMode,
+        debug: data.debug,
+      })
 
       setPurchaseDetails(data.purchase)
       setError(null)
@@ -143,7 +200,11 @@ export default function PurchaseSuccessPage() {
         description: "Your payment has been confirmed and content is now available.",
       })
     } catch (error) {
-      console.error("❌ [Purchase Success] Error:", error)
+      console.error("❌ [Purchase Verify] Error:", {
+        error,
+        message: error instanceof Error ? error.message : "Unknown error",
+        stack: error instanceof Error ? error.stack : undefined,
+      })
       const errorMessage = error instanceof Error ? error.message : "Failed to verify purchase"
       setError(errorMessage)
 
@@ -162,12 +223,14 @@ export default function PurchaseSuccessPage() {
     if (!authLoading && user) {
       verifyPurchase()
     } else if (!authLoading && !user) {
+      console.error("❌ [Purchase Verify] User not authenticated")
       setError("Please log in to verify your purchase")
       setLoading(false)
     }
   }, [sessionId, authLoading, user, retryCount])
 
   const handleRetry = () => {
+    console.log("🔄 [Purchase Verify] Retrying verification...")
     setLoading(true)
     setError(null)
     setDebugInfo(null)
@@ -206,7 +269,10 @@ export default function PurchaseSuccessPage() {
           <p className="text-gray-400">Please wait while we confirm your payment</p>
           {retryCount > 0 && <p className="text-gray-500 text-sm mt-2">Attempt {retryCount + 1}</p>}
           {sessionId && (
-            <p className="text-gray-600 text-xs mt-2 font-mono">Session: {sessionId.substring(0, 20)}...</p>
+            <div className="mt-4 p-3 bg-gray-800/50 rounded-lg">
+              <p className="text-gray-600 text-xs font-mono">Session: {sessionId.substring(0, 30)}...</p>
+              <p className="text-gray-500 text-xs mt-1">Type: {sessionId.startsWith("cs_test_") ? "Test" : "Live"}</p>
+            </div>
           )}
         </div>
       </div>
@@ -257,7 +323,12 @@ export default function PurchaseSuccessPage() {
               </p>
               {sessionId && (
                 <div className="bg-gray-800/50 rounded-lg p-3 mb-4 flex items-center justify-between">
-                  <p className="text-gray-500 text-xs font-mono">Session: {sessionId.substring(0, 30)}...</p>
+                  <div className="text-left">
+                    <p className="text-gray-500 text-xs font-mono">Session: {sessionId.substring(0, 30)}...</p>
+                    <p className="text-gray-600 text-xs mt-1">
+                      Type: {sessionId.startsWith("cs_test_") ? "Test" : "Live"}
+                    </p>
+                  </div>
                   <Button onClick={copySessionId} size="sm" variant="ghost" className="h-6 w-6 p-0">
                     <Copy className="h-3 w-3" />
                   </Button>
