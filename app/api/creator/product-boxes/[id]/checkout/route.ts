@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server"
 import { verifyIdToken } from "@/lib/auth-utils"
 import { db } from "@/lib/firebase-admin"
 import { stripe } from "@/lib/stripe"
+import type Stripe from "stripe"
 
 export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
   try {
@@ -106,11 +107,12 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     console.log(`✅ [Checkout API] Creator found:`, {
       username: creatorData?.username,
       hasStripeAccount: !!creatorData?.stripeAccountId,
+      onboardingComplete: creatorData?.stripeOnboardingComplete,
     })
 
-    // Check if creator has Stripe account
-    if (!creatorData?.stripeAccountId) {
-      console.error(`❌ [Checkout API] Creator has no Stripe account: ${bundleData.creatorId}`)
+    // Check if creator has Stripe account and is onboarded
+    if (!creatorData?.stripeAccountId || !creatorData?.stripeOnboardingComplete) {
+      console.error(`❌ [Checkout API] Creator not ready for payments: ${bundleData.creatorId}`)
       return NextResponse.json(
         {
           error: "Payment processing not available for this creator",
@@ -120,54 +122,83 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       )
     }
 
+    // Check if user already owns this bundle
+    const existingPurchase = await db
+      .collection("users")
+      .doc(userId)
+      .collection("purchases")
+      .where("productBoxId", "==", params.id)
+      .limit(1)
+      .get()
+
+    if (!existingPurchase.empty) {
+      console.error(`❌ [Checkout API] User already owns bundle: ${params.id}`)
+      return NextResponse.json(
+        {
+          error: "You already own this bundle",
+          code: "ALREADY_PURCHASED",
+        },
+        { status: 400 },
+      )
+    }
+
     // Create Stripe checkout session
     try {
-      console.log(`🔄 [Checkout API] Creating Stripe checkout session`)
+      console.log(`🔄 [Checkout API] Creating Stripe checkout session on connected account`)
 
-      const session = await stripe.checkout.sessions.create(
-        {
-          payment_method_types: ["card"],
-          line_items: [
-            {
-              price_data: {
-                currency: bundleData.currency || "usd",
-                product_data: {
-                  name: bundleData.title,
-                  description: bundleData.description || `Premium content by ${creatorData.username}`,
-                  metadata: {
-                    bundleId: params.id,
-                    creatorId: bundleData.creatorId,
-                  },
+      const priceInCents = Math.round(bundleData.price * 100) // Convert to cents
+      const platformFeeAmount = Math.round(priceInCents * 0.05) // 5% platform fee
+
+      const sessionParams: Stripe.Checkout.SessionCreateParams = {
+        payment_method_types: ["card"],
+        line_items: [
+          {
+            price_data: {
+              currency: bundleData.currency || "usd",
+              product_data: {
+                name: bundleData.title,
+                description: bundleData.description || `Premium content by ${creatorData.username}`,
+                images: bundleData.thumbnailUrl ? [bundleData.thumbnailUrl] : undefined,
+                metadata: {
+                  bundleId: params.id,
+                  creatorId: bundleData.creatorId,
                 },
-                unit_amount: Math.round(bundleData.price * 100), // Convert to cents
               },
-              quantity: 1,
+              unit_amount: priceInCents,
             },
-          ],
-          mode: "payment",
-          success_url:
-            successUrl || `${process.env.NEXT_PUBLIC_SITE_URL}/purchase/success?session_id={CHECKOUT_SESSION_ID}`,
-          cancel_url: cancelUrl || `${process.env.NEXT_PUBLIC_SITE_URL}/creator/${creatorData.username}`,
+            quantity: 1,
+          },
+        ],
+        mode: "payment",
+        success_url:
+          successUrl || `${process.env.NEXT_PUBLIC_SITE_URL}/purchase/success?session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: cancelUrl || `${process.env.NEXT_PUBLIC_SITE_URL}/creator/${creatorData.username}`,
+        client_reference_id: userId,
+        metadata: {
+          productBoxId: params.id,
+          buyerUid: userId,
+          creatorUid: bundleData.creatorId,
+          bundleTitle: bundleData.title,
+        },
+        payment_intent_data: {
+          application_fee_amount: platformFeeAmount,
           metadata: {
-            bundleId: params.id,
-            buyerId: userId,
-            creatorId: bundleData.creatorId,
-          },
-          payment_intent_data: {
-            application_fee_amount: Math.round(bundleData.price * 100 * 0.05), // 5% platform fee
-            metadata: {
-              bundleId: params.id,
-              buyerId: userId,
-              creatorId: bundleData.creatorId,
-            },
+            productBoxId: params.id,
+            buyerUid: userId,
+            creatorUid: bundleData.creatorId,
           },
         },
-        {
-          stripeAccount: creatorData.stripeAccountId,
-        },
-      )
+      }
 
-      console.log(`✅ [Checkout API] Stripe session created: ${session.id}`)
+      console.log("📝 [Checkout API] Session metadata:", sessionParams.metadata)
+      console.log("🔗 [Checkout API] Connected account:", creatorData.stripeAccountId)
+
+      // FIXED: Create session on the connected account
+      const session = await stripe.checkout.sessions.create(sessionParams, {
+        stripeAccount: creatorData.stripeAccountId,
+      })
+
+      console.log(`✅ [Checkout API] Stripe session created on connected account: ${session.id}`)
 
       // Log the checkout attempt
       await db.collection("checkoutAttempts").add({
@@ -178,6 +209,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
         amount: bundleData.price,
         currency: bundleData.currency || "usd",
         status: "created",
+        stripeAccount: creatorData.stripeAccountId,
         createdAt: new Date(),
       })
 
@@ -255,6 +287,10 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
 
     const bundleData = bundleDoc.data()
 
+    // Get creator data to check Stripe status
+    const creatorDoc = await db.collection("users").doc(bundleData?.creatorId).get()
+    const creatorData = creatorDoc.data()
+
     return NextResponse.json({
       success: true,
       bundle: {
@@ -265,7 +301,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
         currency: bundleData?.currency || "usd",
         active: bundleData?.active,
         creatorId: bundleData?.creatorId,
-        hasStripeIntegration: !!(bundleData?.priceId && bundleData?.productId),
+        hasStripeIntegration: !!(creatorData?.stripeAccountId && creatorData?.stripeOnboardingComplete),
       },
     })
   } catch (error: any) {

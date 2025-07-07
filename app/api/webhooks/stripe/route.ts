@@ -28,6 +28,7 @@ export async function POST(request: NextRequest) {
   try {
     const body = await request.text()
     const signature = request.headers.get("stripe-signature")
+    const stripeAccount = request.headers.get("stripe-account")
 
     if (!signature) {
       console.error("❌ [Webhook] No Stripe signature found")
@@ -45,6 +46,7 @@ export async function POST(request: NextRequest) {
     }
 
     console.log(`🔍 [Webhook] Processing ${isTestMode ? "TEST" : "LIVE"} mode webhook`)
+    console.log(`🔗 [Webhook] Stripe Account: ${stripeAccount || "platform"}`)
 
     // Verify the webhook signature
     let event: Stripe.Event
@@ -68,6 +70,7 @@ export async function POST(request: NextRequest) {
         currency: session.currency,
         paymentStatus: session.payment_status,
         metadata: session.metadata,
+        stripeAccount: stripeAccount,
       })
 
       // Extract required data from metadata
@@ -102,6 +105,7 @@ export async function POST(request: NextRequest) {
             purchasedAt: new Date(),
             isTestPurchase: isTestMode,
             customerEmail: session.customer_details?.email,
+            stripeAccount: stripeAccount,
             error: "Product box not found during webhook processing",
           }
 
@@ -133,6 +137,8 @@ export async function POST(request: NextRequest) {
           purchasedAt: new Date(),
           isTestPurchase: isTestMode,
           customerEmail: session.customer_details?.email,
+          stripeAccount: stripeAccount,
+          webhookProcessedAt: new Date(),
         }
 
         // Store purchase in user's purchases subcollection
@@ -175,6 +181,7 @@ export async function POST(request: NextRequest) {
                 currency: session.currency || "usd",
                 status: "complete",
                 isTestSale: isTestMode,
+                stripeAccount: stripeAccount,
                 soldAt: new Date(),
               })
 
@@ -199,6 +206,7 @@ export async function POST(request: NextRequest) {
           mode: isTestMode ? "test" : "live",
           sessionId: session.id,
           purchaseRecorded: true,
+          stripeAccount: stripeAccount,
         })
       } catch (dbError) {
         console.error("❌ [Webhook] Database error:", dbError)
@@ -215,6 +223,7 @@ export async function POST(request: NextRequest) {
             purchasedAt: new Date(),
             isTestPurchase: isTestMode,
             customerEmail: session.customer_details?.email,
+            stripeAccount: stripeAccount,
             error: "Database error during webhook processing",
           }
 
