@@ -7,7 +7,7 @@ import { db } from "@/lib/firebase"
 import { collection, query, where, getDocs, limit, doc, getDoc } from "firebase/firestore"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { CheckCircle, Clock, AlertCircle, RefreshCw } from "lucide-react"
+import { CheckCircle, Clock, AlertCircle, RefreshCw, ExternalLink } from "lucide-react"
 
 interface PurchaseData {
   productBoxId: string
@@ -22,6 +22,7 @@ interface PurchaseData {
   isTestPurchase?: boolean
   stripeAccount?: string
   connectedAccountId?: string
+  webhookProcessedAt?: any
 }
 
 export default function PurchaseSuccessPage() {
@@ -32,7 +33,9 @@ export default function PurchaseSuccessPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [retryCount, setRetryCount] = useState(0)
-  const maxRetries = 15 // 15 attempts over ~75 seconds
+  const [lastCheckTime, setLastCheckTime] = useState<Date | null>(null)
+  const maxRetries = 20 // 20 attempts over ~2 minutes
+  const retryIntervals = [2000, 3000, 5000, 5000, 10000] // Progressive backoff
 
   const sessionId = searchParams.get("session_id")
 
@@ -44,7 +47,10 @@ export default function PurchaseSuccessPage() {
 
     const checkPurchaseStatus = async () => {
       try {
-        console.log(`🔍 [Purchase Success] Checking purchase status for session: ${sessionId}`)
+        setLastCheckTime(new Date())
+        console.log(
+          `🔍 [Purchase Success] Checking purchase status for session: ${sessionId} (attempt ${retryCount + 1})`,
+        )
 
         // Method 1: Check unified purchases collection by session ID (fastest)
         try {
@@ -86,7 +92,6 @@ export default function PurchaseSuccessPage() {
         return false
       } catch (err) {
         console.error("❌ [Purchase Success] Error checking purchase:", err)
-        setError("Failed to verify purchase")
         return false
       }
     }
@@ -97,7 +102,12 @@ export default function PurchaseSuccessPage() {
       if (!found && retryCount < maxRetries) {
         console.log(`🔄 [Purchase Success] Retrying... (${retryCount + 1}/${maxRetries})`)
         setRetryCount((prev) => prev + 1)
-        setTimeout(pollForPurchase, 5000) // Retry every 5 seconds
+
+        // Use progressive backoff intervals
+        const intervalIndex = Math.min(retryCount, retryIntervals.length - 1)
+        const delay = retryIntervals[intervalIndex]
+
+        setTimeout(pollForPurchase, delay)
       } else if (!found) {
         console.log("⏰ [Purchase Success] Max retries reached")
         setError(
@@ -114,6 +124,7 @@ export default function PurchaseSuccessPage() {
     setRetryCount(0)
     setError(null)
     setLoading(true)
+    setLastCheckTime(null)
   }
 
   const handleViewPurchases = () => {
@@ -124,6 +135,11 @@ export default function PurchaseSuccessPage() {
     if (purchaseData?.productBoxId) {
       router.push(`/product-box/${purchaseData.productBoxId}/content`)
     }
+  }
+
+  const handleDebugWebhook = () => {
+    const debugUrl = `/debug-webhook-verification?sessionId=${sessionId}&userId=${user?.uid}`
+    window.open(debugUrl, "_blank")
   }
 
   if (!user) {
@@ -157,6 +173,9 @@ export default function PurchaseSuccessPage() {
   }
 
   if (loading) {
+    const nextRetryIn =
+      retryCount < retryIntervals.length ? retryIntervals[retryCount] : retryIntervals[retryIntervals.length - 1]
+
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <Card className="w-full max-w-md">
@@ -166,16 +185,26 @@ export default function PurchaseSuccessPage() {
             <p className="text-gray-600 mb-4">
               We're confirming your purchase was processed successfully. This usually takes just a few seconds.
             </p>
-            <p className="text-sm text-gray-500 mb-4">
-              Attempt {retryCount + 1} of {maxRetries}
-            </p>
+            <div className="space-y-2 mb-4">
+              <p className="text-sm text-gray-500">
+                Attempt {retryCount + 1} of {maxRetries}
+              </p>
+              {lastCheckTime && (
+                <p className="text-xs text-gray-400">Last checked: {lastCheckTime.toLocaleTimeString()}</p>
+              )}
+              <p className="text-xs text-gray-400">Next check in {Math.round(nextRetryIn / 1000)} seconds</p>
+            </div>
             <div className="space-y-2">
               <Button onClick={handleRetry} variant="outline" className="w-full bg-transparent">
                 <RefreshCw className="h-4 w-4 mr-2" />
-                Check Again
+                Check Again Now
               </Button>
               <Button onClick={handleViewPurchases} className="w-full">
                 View My Purchases
+              </Button>
+              <Button onClick={handleDebugWebhook} variant="outline" size="sm" className="w-full bg-transparent">
+                <ExternalLink className="h-4 w-4 mr-2" />
+                Debug Webhook Processing
               </Button>
             </div>
             <div className="mt-4 p-3 bg-blue-50 rounded-lg">
@@ -183,7 +212,7 @@ export default function PurchaseSuccessPage() {
               <ul className="text-sm text-blue-800 space-y-1">
                 <li>• Your payment was processed by Stripe</li>
                 <li>• We're recording your purchase in our system</li>
-                <li>• This process usually completes within 10 seconds</li>
+                <li>• This process usually completes within 30 seconds</li>
                 <li>• You'll get access once verification completes</li>
               </ul>
             </div>
@@ -210,6 +239,10 @@ export default function PurchaseSuccessPage() {
               <Button onClick={handleViewPurchases} variant="outline" className="w-full bg-transparent">
                 View My Purchases
               </Button>
+              <Button onClick={handleDebugWebhook} variant="outline" size="sm" className="w-full bg-transparent">
+                <ExternalLink className="h-4 w-4 mr-2" />
+                Debug Webhook Processing
+              </Button>
             </div>
             <div className="mt-4 p-3 bg-yellow-50 rounded-lg">
               <h3 className="font-medium text-yellow-900 mb-1">Don't worry!</h3>
@@ -217,7 +250,7 @@ export default function PurchaseSuccessPage() {
                 <li>• Your payment was likely successful</li>
                 <li>• Check your email for a Stripe receipt</li>
                 <li>• Your purchase should appear in "My Purchases"</li>
-                <li>• Contact support if issues persist</li>
+                <li>• Use the debug tool to investigate</li>
               </ul>
             </div>
             <p className="text-xs text-gray-400 mt-4">Session ID: {sessionId.slice(-8)}</p>
@@ -259,6 +292,12 @@ export default function PurchaseSuccessPage() {
                 <span className="text-gray-600">Purchased:</span>
                 <span>{new Date(purchaseData.purchasedAt.toDate()).toLocaleDateString()}</span>
               </div>
+              {purchaseData.webhookProcessedAt && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-600">Processed:</span>
+                  <span>{new Date(purchaseData.webhookProcessedAt.toDate()).toLocaleTimeString()}</span>
+                </div>
+              )}
             </div>
 
             <div className="space-y-2">
