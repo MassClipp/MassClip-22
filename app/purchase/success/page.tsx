@@ -4,7 +4,7 @@ import { useEffect, useState } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
 import { useAuth } from "@/contexts/auth-context"
 import { db } from "@/lib/firebase"
-import { collection, query, where, getDocs, limit } from "firebase/firestore"
+import { collection, query, where, getDocs, limit, doc, getDoc } from "firebase/firestore"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { CheckCircle, Clock, AlertCircle, RefreshCw } from "lucide-react"
@@ -32,7 +32,7 @@ export default function PurchaseSuccessPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [retryCount, setRetryCount] = useState(0)
-  const maxRetries = 12 // 12 attempts over ~60 seconds
+  const maxRetries = 15 // 15 attempts over ~75 seconds
 
   const sessionId = searchParams.get("session_id")
 
@@ -46,39 +46,44 @@ export default function PurchaseSuccessPage() {
       try {
         console.log(`🔍 [Purchase Success] Checking purchase status for session: ${sessionId}`)
 
-        // Use Firebase v9 syntax - collection() and query() functions
-        const userPurchasesRef = collection(db, "users", user.uid, "purchases")
-        const purchasesQuery = query(userPurchasesRef, where("sessionId", "==", sessionId), limit(1))
-        const purchasesSnapshot = await getDocs(purchasesQuery)
+        // Method 1: Check unified purchases collection by session ID (fastest)
+        try {
+          console.log(`🔍 [Purchase Success] Checking unified purchases collection...`)
+          const unifiedPurchaseDoc = await getDoc(doc(db, "userPurchases", user.uid, "purchases", sessionId))
 
-        if (!purchasesSnapshot.empty) {
-          const purchaseDoc = purchasesSnapshot.docs[0]
-          const data = purchaseDoc.data() as PurchaseData
-
-          console.log("✅ [Purchase Success] Purchase found:", data)
-          setPurchaseData(data)
-          setLoading(false)
-          return true
-        } else {
-          console.log(`❌ [Purchase Success] Purchase not found for session: ${sessionId}`)
-
-          // Also check unified purchases collection
-          const unifiedPurchasesRef = collection(db, "userPurchases", user.uid, "purchases")
-          const unifiedQuery = query(unifiedPurchasesRef, where("sessionId", "==", sessionId), limit(1))
-          const unifiedSnapshot = await getDocs(unifiedQuery)
-
-          if (!unifiedSnapshot.empty) {
-            const purchaseDoc = unifiedSnapshot.docs[0]
-            const data = purchaseDoc.data() as PurchaseData
-
+          if (unifiedPurchaseDoc.exists()) {
+            const data = unifiedPurchaseDoc.data() as PurchaseData
             console.log("✅ [Purchase Success] Unified purchase found:", data)
             setPurchaseData(data)
             setLoading(false)
             return true
           }
-
-          return false
+        } catch (unifiedError) {
+          console.log("⚠️ [Purchase Success] Unified collection check failed:", unifiedError)
         }
+
+        // Method 2: Query user purchases by session ID
+        try {
+          console.log(`🔍 [Purchase Success] Querying user purchases by session ID...`)
+          const userPurchasesRef = collection(db, "users", user.uid, "purchases")
+          const purchasesQuery = query(userPurchasesRef, where("sessionId", "==", sessionId), limit(1))
+          const purchasesSnapshot = await getDocs(purchasesQuery)
+
+          if (!purchasesSnapshot.empty) {
+            const purchaseDoc = purchasesSnapshot.docs[0]
+            const data = purchaseDoc.data() as PurchaseData
+
+            console.log("✅ [Purchase Success] User purchase found:", data)
+            setPurchaseData(data)
+            setLoading(false)
+            return true
+          }
+        } catch (queryError) {
+          console.log("⚠️ [Purchase Success] User purchases query failed:", queryError)
+        }
+
+        console.log(`❌ [Purchase Success] Purchase not found for session: ${sessionId}`)
+        return false
       } catch (err) {
         console.error("❌ [Purchase Success] Error checking purchase:", err)
         setError("Failed to verify purchase")

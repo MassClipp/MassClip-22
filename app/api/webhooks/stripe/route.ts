@@ -13,9 +13,9 @@ if (!getApps().length) {
         privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n"),
       }),
     })
-    console.log("✅ Firebase Admin initialized")
+    console.log("✅ [Webhook] Firebase Admin initialized")
   } catch (error) {
-    console.error("❌ Firebase Admin initialization failed:", error)
+    console.error("❌ [Webhook] Firebase Admin initialization failed:", error)
   }
 }
 
@@ -29,6 +29,12 @@ export async function POST(request: NextRequest) {
     const body = await request.text()
     const signature = request.headers.get("stripe-signature")
     const stripeAccount = request.headers.get("stripe-account")
+
+    console.log("🔍 [Webhook] Incoming webhook request:", {
+      hasSignature: !!signature,
+      stripeAccount: stripeAccount || "platform",
+      bodyLength: body.length,
+    })
 
     if (!signature) {
       console.error("❌ [Webhook] No Stripe signature found")
@@ -46,13 +52,13 @@ export async function POST(request: NextRequest) {
     }
 
     console.log(`🔍 [Webhook] Processing ${isTestMode ? "TEST" : "LIVE"} mode webhook`)
-    console.log(`🔗 [Webhook] Stripe Account: ${stripeAccount || "platform"}`)
 
     // Verify the webhook signature
     let event: Stripe.Event
     try {
       event = stripe.webhooks.constructEvent(body, signature, webhookSecret)
       console.log(`✅ [Webhook] Signature verified for ${isTestMode ? "TEST" : "LIVE"} mode`)
+      console.log(`📋 [Webhook] Event type: ${event.type}, Event ID: ${event.id}`)
     } catch (err) {
       console.error(`❌ [Webhook] Signature verification failed:`, err)
       return NextResponse.json({ error: "Invalid signature" }, { status: 400 })
@@ -76,10 +82,15 @@ export async function POST(request: NextRequest) {
       // Extract required data from metadata
       const { productBoxId, buyerUid, creatorUid, connectedAccountId } = session.metadata || {}
 
+      console.log(`🔍 [Webhook] Extracted metadata:`, {
+        productBoxId,
+        buyerUid,
+        creatorUid,
+        connectedAccountId,
+      })
+
       if (!productBoxId || !buyerUid) {
         console.error("❌ [Webhook] Missing required metadata:", { productBoxId, buyerUid })
-
-        // Still return success to Stripe to avoid retries, but log the issue
         return NextResponse.json({
           received: true,
           error: "Missing metadata",
@@ -97,7 +108,9 @@ export async function POST(request: NextRequest) {
 
       try {
         // Get product box details
+        console.log(`🔍 [Webhook] Fetching product box: ${productBoxId}`)
         const productBoxDoc = await db.collection("productBoxes").doc(productBoxId).get()
+
         if (!productBoxDoc.exists) {
           console.error("❌ [Webhook] Product box not found:", productBoxId)
 
@@ -116,9 +129,12 @@ export async function POST(request: NextRequest) {
             stripeAccount: stripeAccount,
             connectedAccountId: connectedAccountId,
             error: "Product box not found during webhook processing",
+            webhookProcessedAt: new Date(),
           }
 
+          console.log(`💾 [Webhook] Saving basic purchase record:`, basicPurchaseData)
           await db.collection("users").doc(buyerUid).collection("purchases").doc(productBoxId).set(basicPurchaseData)
+          console.log(`✅ [Webhook] Basic purchase record saved for user ${buyerUid}`)
 
           return NextResponse.json({
             received: true,
@@ -130,6 +146,12 @@ export async function POST(request: NextRequest) {
 
         const productBoxData = productBoxDoc.data()!
         const purchaseAmount = session.amount_total ? session.amount_total / 100 : 0
+
+        console.log(`📦 [Webhook] Product box data:`, {
+          title: productBoxData.title,
+          creatorId: productBoxData.creatorId,
+          price: productBoxData.price,
+        })
 
         // Create purchase record in user's purchases collection
         const purchaseData = {
@@ -151,13 +173,25 @@ export async function POST(request: NextRequest) {
           webhookProcessedAt: new Date(),
         }
 
-        // Store purchase in user's purchases subcollection
-        await db.collection("users").doc(buyerUid).collection("purchases").doc(productBoxId).set(purchaseData)
+        console.log(`💾 [Webhook] Saving purchase record:`, {
+          userId: buyerUid,
+          productBoxId,
+          sessionId: session.id,
+          amount: purchaseAmount,
+          title: purchaseData.itemTitle,
+        })
 
-        console.log(`✅ [Webhook] Purchase recorded for user ${buyerUid}, product ${productBoxId}`)
+        // Store purchase in user's purchases subcollection using productBoxId as doc ID
+        await db.collection("users").doc(buyerUid).collection("purchases").doc(productBoxId).set(purchaseData)
+        console.log(`✅ [Webhook] Purchase record saved: users/${buyerUid}/purchases/${productBoxId}`)
+
+        // ALSO store in a unified purchases collection for easier querying by session ID
+        await db.collection("userPurchases").doc(buyerUid).collection("purchases").doc(session.id).set(purchaseData)
+        console.log(`✅ [Webhook] Unified purchase record saved: userPurchases/${buyerUid}/purchases/${session.id}`)
 
         // Update product box sales stats
         try {
+          console.log(`📊 [Webhook] Updating product box stats for: ${productBoxId}`)
           await db
             .collection("productBoxes")
             .doc(productBoxId)
@@ -166,6 +200,7 @@ export async function POST(request: NextRequest) {
               totalRevenue: FieldValue.increment(purchaseAmount),
               lastSaleAt: new Date(),
             })
+          console.log(`✅ [Webhook] Product box stats updated`)
         } catch (updateError) {
           console.error("❌ [Webhook] Failed to update product box stats:", updateError)
         }
@@ -177,6 +212,7 @@ export async function POST(request: NextRequest) {
             const platformFee = purchaseAmount * 0.05 // 5% platform fee
             const netAmount = purchaseAmount - platformFee
 
+            console.log(`💰 [Webhook] Recording sale for creator: ${creatorId}`)
             await db
               .collection("users")
               .doc(creatorId)
@@ -212,6 +248,7 @@ export async function POST(request: NextRequest) {
           }
         }
 
+        console.log(`🎉 [Webhook] Purchase processing completed successfully!`)
         return NextResponse.json({
           received: true,
           mode: isTestMode ? "test" : "live",
@@ -219,6 +256,8 @@ export async function POST(request: NextRequest) {
           purchaseRecorded: true,
           stripeAccount: stripeAccount,
           connectedAccountId: connectedAccountId,
+          purchaseDocId: productBoxId,
+          unifiedDocId: session.id,
         })
       } catch (dbError) {
         console.error("❌ [Webhook] Database error:", dbError)
@@ -238,6 +277,7 @@ export async function POST(request: NextRequest) {
             stripeAccount: stripeAccount,
             connectedAccountId: connectedAccountId,
             error: "Database error during webhook processing",
+            webhookProcessedAt: new Date(),
           }
 
           if (buyerUid && productBoxId) {
@@ -247,7 +287,16 @@ export async function POST(request: NextRequest) {
               .collection("purchases")
               .doc(productBoxId)
               .set(fallbackPurchaseData)
-            console.log(`⚠️ [Webhook] Fallback purchase record created`)
+
+            // Also save to unified collection
+            await db
+              .collection("userPurchases")
+              .doc(buyerUid)
+              .collection("purchases")
+              .doc(session.id)
+              .set(fallbackPurchaseData)
+
+            console.log(`⚠️ [Webhook] Fallback purchase records created`)
           }
         } catch (fallbackError) {
           console.error("❌ [Webhook] Fallback purchase creation failed:", fallbackError)
