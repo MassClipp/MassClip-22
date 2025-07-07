@@ -1117,11 +1117,6 @@ export default function BundlesPage() {
                         <div className="flex items-center gap-4">
                           <span className="text-2xl font-bold text-green-400">${productBox.price.toFixed(2)}</span>
                         </div>
-                        <div className="mt-2">
-                          <span className="text-sm text-zinc-500">
-                            {boxContent.length} content item{boxContent.length !== 1 ? "s" : ""}
-                          </span>
-                        </div>
                       </div>
                     </div>
                   </CardHeader>
@@ -1262,32 +1257,38 @@ export default function BundlesPage() {
                       )}
                     </AnimatePresence>
 
-                    {/* Mobile Controls Section - Moved to bottom with border */}
-                    <div className="border-t border-zinc-800 mt-6 pt-4">
-                      <div className="flex items-center justify-center gap-6">
-                        <div className="flex items-center gap-2">
+                    {/* Mobile Controls Section - Separated by border */}
+                    <div className="mt-6 pt-4 border-t border-zinc-800">
+                      <div className="flex items-center justify-between gap-4">
+                        {/* Toggle Switch */}
+                        <div className="flex items-center gap-3">
                           <Switch
                             checked={productBox.active}
                             onCheckedChange={() => handleToggleActive(productBox.id)}
+                            className="data-[state=checked]:bg-red-600"
                           />
                           <span className="text-sm text-zinc-400">{productBox.active ? "Active" : "Inactive"}</span>
                         </div>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="hover:bg-zinc-800"
-                          onClick={() => openEditModal(productBox)}
-                        >
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="hover:bg-red-900/50 text-red-400 hover:text-red-300"
-                          onClick={() => handleDelete(productBox.id)}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
+
+                        {/* Action Buttons */}
+                        <div className="flex items-center gap-2">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="hover:bg-zinc-800 text-zinc-400 hover:text-white"
+                            onClick={() => openEditModal(productBox)}
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="hover:bg-red-900/50 text-red-400 hover:text-red-300"
+                            onClick={() => handleDelete(productBox.id)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
                       </div>
                     </div>
                   </CardContent>
