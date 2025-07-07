@@ -4,6 +4,7 @@ import { useEffect, useState } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
 import { useAuth } from "@/contexts/auth-context"
 import { db } from "@/lib/firebase"
+import { collection, query, where, getDocs, limit } from "firebase/firestore"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { CheckCircle, Clock, AlertCircle, RefreshCw } from "lucide-react"
@@ -45,9 +46,10 @@ export default function PurchaseSuccessPage() {
       try {
         console.log(`🔍 [Purchase Success] Checking purchase status for session: ${sessionId}`)
 
-        // Query all purchases to find the one with this session ID
-        const userPurchasesRef = db.collection("users").doc(user.uid).collection("purchases")
-        const purchasesSnapshot = await userPurchasesRef.where("sessionId", "==", sessionId).limit(1).get()
+        // Use Firebase v9 syntax - collection() and query() functions
+        const userPurchasesRef = collection(db, "users", user.uid, "purchases")
+        const purchasesQuery = query(userPurchasesRef, where("sessionId", "==", sessionId), limit(1))
+        const purchasesSnapshot = await getDocs(purchasesQuery)
 
         if (!purchasesSnapshot.empty) {
           const purchaseDoc = purchasesSnapshot.docs[0]
@@ -59,6 +61,22 @@ export default function PurchaseSuccessPage() {
           return true
         } else {
           console.log(`❌ [Purchase Success] Purchase not found for session: ${sessionId}`)
+
+          // Also check unified purchases collection
+          const unifiedPurchasesRef = collection(db, "userPurchases", user.uid, "purchases")
+          const unifiedQuery = query(unifiedPurchasesRef, where("sessionId", "==", sessionId), limit(1))
+          const unifiedSnapshot = await getDocs(unifiedQuery)
+
+          if (!unifiedSnapshot.empty) {
+            const purchaseDoc = unifiedSnapshot.docs[0]
+            const data = purchaseDoc.data() as PurchaseData
+
+            console.log("✅ [Purchase Success] Unified purchase found:", data)
+            setPurchaseData(data)
+            setLoading(false)
+            return true
+          }
+
           return false
         }
       } catch (err) {
@@ -78,7 +96,7 @@ export default function PurchaseSuccessPage() {
       } else if (!found) {
         console.log("⏰ [Purchase Success] Max retries reached")
         setError(
-          "Purchase verification is taking longer than expected. Please check your purchases or contact support.",
+          "Purchase verification is taking longer than expected. Your payment was likely successful - please check your purchases or contact support.",
         )
         setLoading(false)
       }
@@ -139,33 +157,32 @@ export default function PurchaseSuccessPage() {
         <Card className="w-full max-w-md">
           <CardContent className="p-6 text-center">
             <Clock className="h-12 w-12 text-blue-500 mx-auto mb-4 animate-spin" />
-            <h2 className="text-xl font-semibold mb-2">Purchase Verification Delayed</h2>
+            <h2 className="text-xl font-semibold mb-2">Verifying Purchase</h2>
             <p className="text-gray-600 mb-4">
-              Purchase verification is taking longer than expected. Your payment was likely successful - please check
-              your purchases or contact support.
+              We're confirming your purchase was processed successfully. This usually takes just a few seconds.
             </p>
-            <p className="text-sm text-gray-500 mb-4">Checked {retryCount} times • Auto-retrying every 5 seconds</p>
+            <p className="text-sm text-gray-500 mb-4">
+              Attempt {retryCount + 1} of {maxRetries}
+            </p>
             <div className="space-y-2">
               <Button onClick={handleRetry} variant="outline" className="w-full bg-transparent">
                 <RefreshCw className="h-4 w-4 mr-2" />
                 Check Again
               </Button>
               <Button onClick={handleViewPurchases} className="w-full">
-                My Purchases
+                View My Purchases
               </Button>
             </div>
             <div className="mt-4 p-3 bg-blue-50 rounded-lg">
               <h3 className="font-medium text-blue-900 mb-1">What's happening?</h3>
               <ul className="text-sm text-blue-800 space-y-1">
                 <li>• Your payment was processed by Stripe</li>
-                <li>• Our system is recording your purchase</li>
-                <li>• This usually takes 5-10 seconds</li>
-                <li>• You'll get access once processing completes</li>
+                <li>• We're recording your purchase in our system</li>
+                <li>• This process usually completes within 10 seconds</li>
+                <li>• You'll get access once verification completes</li>
               </ul>
             </div>
-            <p className="text-xs text-gray-400 mt-4">
-              If this persists, your payment was likely successful. Check your purchases or contact support.
-            </p>
+            <p className="text-xs text-gray-400 mt-4">Session ID: {sessionId.slice(-8)}</p>
           </CardContent>
         </Card>
       </div>
@@ -178,7 +195,7 @@ export default function PurchaseSuccessPage() {
         <Card className="w-full max-w-md">
           <CardContent className="p-6 text-center">
             <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
-            <h2 className="text-xl font-semibold mb-2">Verification Error</h2>
+            <h2 className="text-xl font-semibold mb-2">Verification Taking Longer</h2>
             <p className="text-gray-600 mb-4">{error}</p>
             <div className="space-y-2">
               <Button onClick={handleRetry} className="w-full">
@@ -189,6 +206,16 @@ export default function PurchaseSuccessPage() {
                 View My Purchases
               </Button>
             </div>
+            <div className="mt-4 p-3 bg-yellow-50 rounded-lg">
+              <h3 className="font-medium text-yellow-900 mb-1">Don't worry!</h3>
+              <ul className="text-sm text-yellow-800 space-y-1">
+                <li>• Your payment was likely successful</li>
+                <li>• Check your email for a Stripe receipt</li>
+                <li>• Your purchase should appear in "My Purchases"</li>
+                <li>• Contact support if issues persist</li>
+              </ul>
+            </div>
+            <p className="text-xs text-gray-400 mt-4">Session ID: {sessionId.slice(-8)}</p>
           </CardContent>
         </Card>
       </div>
