@@ -111,9 +111,9 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       onboardingComplete: creatorData?.stripeOnboardingComplete,
     })
 
-    // Check if creator has Stripe account and is onboarded
-    if (!creatorData?.stripeAccountId || !creatorData?.stripeOnboardingComplete) {
-      console.error(`❌ [Checkout API] Creator not ready for payments: ${bundleData.creatorId}`)
+    // Check if creator has Stripe account and can accept payments
+    if (!creatorData?.stripeAccountId) {
+      console.error(`❌ [Checkout API] Creator has no Stripe account: ${bundleData.creatorId}`)
       return NextResponse.json(
         {
           error: "Payment processing not available for this creator",
@@ -122,6 +122,58 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
         { status: 400 },
       )
     }
+
+    // Verify the Stripe account is actually accessible and can accept payments
+    let stripeAccountValid = false
+    try {
+      console.log(`🔍 [Checkout API] Verifying Stripe account: ${creatorData.stripeAccountId}`)
+      const account = await stripe.accounts.retrieve(creatorData.stripeAccountId)
+
+      console.log(`📊 [Checkout API] Account status:`, {
+        chargesEnabled: account.charges_enabled,
+        payoutsEnabled: account.payouts_enabled,
+        detailsSubmitted: account.details_submitted,
+        currentlyDue: account.requirements?.currently_due?.length || 0,
+        pastDue: account.requirements?.past_due?.length || 0,
+      })
+
+      // Account is valid if it can accept charges and details are submitted
+      stripeAccountValid = account.charges_enabled && account.details_submitted
+
+      if (!stripeAccountValid) {
+        const issues = []
+        if (!account.charges_enabled) issues.push("charges disabled")
+        if (!account.details_submitted) issues.push("details not submitted")
+        if (account.requirements?.past_due?.length > 0) issues.push("past due requirements")
+
+        console.error(`❌ [Checkout API] Stripe account issues: ${issues.join(", ")}`)
+        return NextResponse.json(
+          {
+            error: `Creator's payment account needs attention: ${issues.join(", ")}`,
+            code: "STRIPE_ACCOUNT_INCOMPLETE",
+            details: {
+              chargesEnabled: account.charges_enabled,
+              detailsSubmitted: account.details_submitted,
+              requirementsPastDue: account.requirements?.past_due || [],
+              requirementsCurrentlyDue: account.requirements?.currently_due || [],
+            },
+          },
+          { status: 400 },
+        )
+      }
+    } catch (stripeError: any) {
+      console.error(`❌ [Checkout API] Failed to verify Stripe account:`, stripeError)
+      return NextResponse.json(
+        {
+          error: "Unable to verify creator's payment setup",
+          code: "STRIPE_VERIFICATION_FAILED",
+          details: stripeError.message,
+        },
+        { status: 400 },
+      )
+    }
+
+    console.log(`✅ [Checkout API] Stripe account verified and ready for payments`)
 
     // Check if user already owns this bundle
     const existingPurchase = await db

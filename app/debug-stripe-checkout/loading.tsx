@@ -1,6 +1,6 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
-import { CreditCard, Settings, User, Package } from "lucide-react"
+import { CreditCard, Settings, Package, User } from "lucide-react"
 
 export default function DebugStripeCheckoutLoading() {
   return (
@@ -24,10 +24,7 @@ export default function DebugStripeCheckoutLoading() {
             </div>
           </CardHeader>
           <CardContent>
-            <div className="flex items-center gap-2">
-              <Skeleton className="h-4 w-4 rounded-full bg-gray-600" />
-              <Skeleton className="h-4 w-48 bg-gray-600" />
-            </div>
+            <Skeleton className="h-4 w-48 bg-gray-700" />
           </CardContent>
         </Card>
 
@@ -38,6 +35,7 @@ export default function DebugStripeCheckoutLoading() {
               <CreditCard className="h-5 w-5 text-green-400" />
               <CardTitle className="text-white">Debug Stripe Checkout</CardTitle>
             </div>
+            <Skeleton className="h-4 w-64 bg-gray-600 mt-2" />
           </CardHeader>
           <CardContent className="space-y-4">
             <Skeleton className="h-10 w-full bg-gray-700" />
@@ -53,29 +51,31 @@ export default function DebugStripeCheckoutLoading() {
           <Card className="bg-gray-800/30 border-gray-700/50 backdrop-blur-sm">
             <CardHeader>
               <div className="flex items-center gap-2">
-                <Settings className="h-5 w-5 text-purple-400" />
-                <CardTitle className="text-white">Loading Debug Results...</CardTitle>
+                <Settings className="h-5 w-5 text-green-400" />
+                <CardTitle className="text-white">Debug Results</CardTitle>
               </div>
             </CardHeader>
             <CardContent className="space-y-4">
-              <Skeleton className="h-6 w-3/4 bg-gray-700" />
+              <Skeleton className="h-6 w-32 bg-gray-700" />
               <Skeleton className="h-20 w-full bg-gray-700" />
-              <Skeleton className="h-4 w-1/2 bg-gray-600" />
-              <Skeleton className="h-4 w-2/3 bg-gray-600" />
+              <Skeleton className="h-16 w-full bg-gray-700" />
             </CardContent>
           </Card>
 
           <Card className="bg-gray-800/30 border-gray-700/50 backdrop-blur-sm">
             <CardHeader>
               <div className="flex items-center gap-2">
-                <Package className="h-5 w-5 text-orange-400" />
+                <Package className="h-4 w-4 text-purple-400" />
                 <CardTitle className="text-white">Bundle Information</CardTitle>
               </div>
             </CardHeader>
             <CardContent className="space-y-3">
+              <Skeleton className="h-6 w-48 bg-gray-700" />
               <Skeleton className="h-4 w-full bg-gray-700" />
-              <Skeleton className="h-4 w-3/4 bg-gray-600" />
-              <Skeleton className="h-4 w-1/2 bg-gray-600" />
+              <div className="grid grid-cols-2 gap-4">
+                <Skeleton className="h-4 w-full bg-gray-700" />
+                <Skeleton className="h-4 w-full bg-gray-700" />
+              </div>
             </CardContent>
           </Card>
         </div>
@@ -84,11 +84,12 @@ export default function DebugStripeCheckoutLoading() {
         <Card className="bg-gray-800/30 border-gray-700/50 backdrop-blur-sm">
           <CardHeader>
             <CardTitle className="text-white">Quick Actions</CardTitle>
+            <Skeleton className="h-4 w-48 bg-gray-600" />
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               {[1, 2, 3, 4].map((i) => (
-                <Skeleton key={i} className="h-10 bg-gray-700" />
+                <Skeleton key={i} className="h-10 w-full bg-gray-700" />
               ))}
             </div>
           </CardContent>

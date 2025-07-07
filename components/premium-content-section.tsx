@@ -143,13 +143,17 @@ export default function PremiumContentSection({
         let errorMessage = errorData.error || "Failed to create checkout session"
 
         if (errorData.code === "NO_STRIPE_ACCOUNT") {
-          errorMessage = "This creator hasn't set up payments yet. Please try again later."
+          errorMessage = "This creator hasn't connected their payment account yet."
+        } else if (errorData.code === "STRIPE_ACCOUNT_INCOMPLETE") {
+          errorMessage = "This creator needs to complete their payment setup."
+        } else if (errorData.code === "STRIPE_VERIFICATION_FAILED") {
+          errorMessage = "Unable to verify creator's payment setup. Please try again later."
         } else if (errorData.code === "ALREADY_PURCHASED") {
           errorMessage = "You already own this content!"
         } else if (errorData.code === "BUNDLE_INACTIVE") {
           errorMessage = "This content is currently unavailable."
-        } else if (errorData.code === "AMOUNT_TOO_SMALL") {
-          errorMessage = errorData.error // Use the specific minimum amount message
+        } else if (errorData.stripeCode === "amount_too_small") {
+          errorMessage = `Minimum charge amount is $${(errorData.details?.minimum_amount || 50) / 100} ${bundle.currency.toUpperCase()}`
         }
 
         throw new Error(errorMessage)
