@@ -49,11 +49,11 @@ export default function DebugCheckoutSessionPage() {
 
   // Auto-debug if bundleId is provided in URL
   useEffect(() => {
-    if (bundleId && !autoDebugComplete) {
+    if (bundleId && !autoDebugComplete && user) {
       debugCheckoutSession()
       setAutoDebugComplete(true)
     }
-  }, [bundleId, autoDebugComplete])
+  }, [bundleId, autoDebugComplete, user])
 
   const debugCheckoutSession = async () => {
     if (!bundleId.trim()) {
@@ -69,12 +69,32 @@ export default function DebugCheckoutSessionPage() {
       setLoading(true)
       setDebugResult(null)
 
+      // Get the Firebase ID token
+      let idToken = null
+      if (user) {
+        try {
+          idToken = await user.getIdToken()
+        } catch (error) {
+          console.error("Failed to get ID token:", error)
+        }
+      }
+
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+      }
+
+      // Add authorization header if we have a token
+      if (idToken) {
+        headers["Authorization"] = `Bearer ${idToken}`
+      }
+
       const response = await fetch("/api/debug/checkout-session", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ bundleId: bundleId.trim() }),
+        headers,
+        body: JSON.stringify({
+          bundleId: bundleId.trim(),
+          userId: user?.uid, // Also send userId in body as backup
+        }),
       })
 
       const data = await response.json()

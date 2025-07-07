@@ -7,25 +7,29 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
 import { useToast } from "@/hooks/use-toast"
-import { ShoppingBag, ExternalLink, AlertCircle } from "lucide-react"
+import { Play, User, Calendar, DollarSign } from "lucide-react"
 import Link from "next/link"
 import Image from "next/image"
 
 interface Purchase {
   id: string
   productBoxId: string
-  bundleTitle: string
-  creatorUsername: string
-  creatorId: string
+  bundleId?: string
+  title: string
+  description?: string
   thumbnailUrl?: string
+  creatorId: string
+  creatorUsername: string
+  creatorDisplayName?: string
   purchaseDate: string
   amount: number
   currency: string
   status: string
+  type: "product-box" | "bundle"
 }
 
 export default function PurchasesPage() {
-  const { user } = useFirebaseAuth()
+  const { user, loading: authLoading } = useFirebaseAuth()
   const { toast } = useToast()
   const [purchases, setPurchases] = useState<Purchase[]>([])
   const [loading, setLoading] = useState(true)
@@ -34,34 +38,32 @@ export default function PurchasesPage() {
   useEffect(() => {
     if (user) {
       fetchPurchases()
+    } else if (!authLoading) {
+      setLoading(false)
     }
-  }, [user])
+  }, [user, authLoading])
 
   const fetchPurchases = async () => {
     try {
       setLoading(true)
       setError(null)
 
-      const token = await user?.getIdToken()
-      if (!token) {
-        throw new Error("No authentication token")
-      }
-
       const response = await fetch("/api/user/unified-purchases", {
+        method: "GET",
         headers: {
-          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
         },
       })
 
       if (!response.ok) {
-        throw new Error("Failed to fetch purchases")
+        throw new Error(`Failed to fetch purchases: ${response.status}`)
       }
 
       const data = await response.json()
       setPurchases(data.purchases || [])
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error fetching purchases:", error)
-      setError("Failed to load purchases")
+      setError(error.message || "Failed to load purchases")
       toast({
         title: "Error",
         description: "Failed to load your purchases",
@@ -73,34 +75,65 @@ export default function PurchasesPage() {
   }
 
   const handleOpenContent = (purchase: Purchase) => {
-    // Navigate to the content
-    window.location.href = `/product-box/${purchase.productBoxId}/content`
+    const contentId = purchase.productBoxId || purchase.bundleId
+    if (contentId) {
+      window.location.href = `/product-box/${contentId}/content`
+    }
   }
 
-  const handleCreatorClick = (creatorUsername: string) => {
-    // Navigate to creator profile
-    window.location.href = `/creator/${creatorUsername}`
+  const formatDate = (dateString: string) => {
+    try {
+      return new Date(dateString).toLocaleDateString("en-US", {
+        year: "numeric",
+        month: "short",
+        day: "numeric",
+      })
+    } catch {
+      return "Unknown date"
+    }
   }
 
-  if (loading) {
+  const formatPrice = (amount: number, currency: string) => {
+    try {
+      return new Intl.NumberFormat("en-US", {
+        style: "currency",
+        currency: currency.toUpperCase(),
+      }).format(amount)
+    } catch {
+      return `$${amount}`
+    }
+  }
+
+  if (authLoading || loading) {
     return (
       <div className="min-h-screen bg-black">
-        {/* Title */}
         <div className="p-6">
           <h1 className="text-3xl font-bold text-white mb-8">My Purchases</h1>
-        </div>
-
-        {/* Loading Grid */}
-        <div className="px-6">
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             {Array.from({ length: 8 }).map((_, i) => (
               <div key={i} className="space-y-3">
                 <Skeleton className="aspect-square w-full bg-gray-800" />
-                <Skeleton className="h-4 w-20 bg-gray-800" />
-                <Skeleton className="h-10 w-full bg-gray-800" />
+                <div className="space-y-2">
+                  <Skeleton className="h-4 w-20 bg-gray-800" />
+                  <Skeleton className="h-10 w-full bg-gray-800" />
+                </div>
               </div>
             ))}
           </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-black flex items-center justify-center">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold text-white mb-4">Authentication Required</h1>
+          <p className="text-gray-400 mb-6">Please log in to view your purchases</p>
+          <Button asChild>
+            <Link href="/login">Log In</Link>
+          </Button>
         </div>
       </div>
     )
@@ -111,10 +144,9 @@ export default function PurchasesPage() {
       <div className="min-h-screen bg-black">
         <div className="p-6">
           <h1 className="text-3xl font-bold text-white mb-8">My Purchases</h1>
-          <div className="flex flex-col items-center justify-center py-12">
-            <AlertCircle className="h-12 w-12 text-red-400 mb-4" />
-            <p className="text-red-400 text-lg mb-4">{error}</p>
-            <Button onClick={fetchPurchases} variant="outline" className="border-gray-600 bg-transparent text-white">
+          <div className="text-center py-12">
+            <p className="text-red-400 mb-4">{error}</p>
+            <Button onClick={fetchPurchases} variant="outline">
               Try Again
             </Button>
           </div>
@@ -125,21 +157,21 @@ export default function PurchasesPage() {
 
   return (
     <div className="min-h-screen bg-black">
-      {/* Title */}
       <div className="p-6">
         <h1 className="text-3xl font-bold text-white mb-8">My Purchases</h1>
-      </div>
 
-      {/* Content */}
-      <div className="px-6 pb-6">
         {purchases.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-12">
-            <ShoppingBag className="h-16 w-16 text-gray-600 mb-4" />
-            <h2 className="text-xl font-semibold text-gray-400 mb-2">No purchases yet</h2>
-            <p className="text-gray-500 text-center mb-6">When you purchase premium content, it will appear here.</p>
-            <Button asChild className="bg-white text-black hover:bg-gray-200">
-              <Link href="/dashboard/explore">Explore Content</Link>
-            </Button>
+          <div className="text-center py-12">
+            <div className="mb-6">
+              <DollarSign className="h-16 w-16 text-gray-600 mx-auto mb-4" />
+              <h2 className="text-xl font-semibold text-white mb-2">No Purchases Yet</h2>
+              <p className="text-gray-400 mb-6">
+                You haven't purchased any content yet. Explore creators and find content you love!
+              </p>
+              <Button asChild>
+                <Link href="/dashboard/explore">Explore Content</Link>
+              </Button>
+            </div>
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
@@ -153,55 +185,74 @@ export default function PurchasesPage() {
                 }}
               >
                 <CardContent className="p-0">
-                  {/* Creator Username - Top Left */}
-                  <div className="absolute top-3 left-3 z-10">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => handleCreatorClick(purchase.creatorUsername)}
-                      className="bg-black/60 backdrop-blur-sm text-white hover:bg-black/80 text-xs px-2 py-1 h-auto"
-                    >
-                      @{purchase.creatorUsername}
-                    </Button>
-                  </div>
-
                   {/* Thumbnail */}
-                  <div className="relative aspect-square overflow-hidden">
+                  <div className="aspect-square relative overflow-hidden bg-gray-800">
                     {purchase.thumbnailUrl ? (
                       <Image
                         src={purchase.thumbnailUrl || "/placeholder.svg"}
-                        alt={purchase.bundleTitle}
+                        alt={purchase.title}
                         fill
                         className="object-cover group-hover:scale-105 transition-transform duration-300"
                         sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, (max-width: 1280px) 33vw, 25vw"
                       />
                     ) : (
-                      <div className="w-full h-full bg-gradient-to-br from-gray-800 to-gray-900 flex items-center justify-center">
-                        <ShoppingBag className="h-12 w-12 text-gray-600" />
+                      <div className="w-full h-full flex items-center justify-center">
+                        <Play className="h-12 w-12 text-gray-600" />
                       </div>
                     )}
 
-                    {/* Status Badge */}
-                    {purchase.status && (
-                      <div className="absolute top-3 right-3">
-                        <Badge
-                          variant={purchase.status === "completed" ? "default" : "secondary"}
-                          className="bg-green-600 text-white text-xs"
-                        >
-                          {purchase.status}
+                    {/* Creator Username - Top Left */}
+                    <div className="absolute top-3 left-3">
+                      <Button
+                        asChild
+                        variant="secondary"
+                        size="sm"
+                        className="bg-black/70 hover:bg-black/90 text-white border-0 text-xs px-2 py-1 h-auto backdrop-blur-sm"
+                      >
+                        <Link href={`/creator/${purchase.creatorUsername}`}>
+                          <User className="h-3 w-3 mr-1" />
+                          {purchase.creatorUsername}
+                        </Link>
+                      </Button>
+                    </div>
+
+                    {/* Purchase Info - Top Right */}
+                    <div className="absolute top-3 right-3 flex flex-col gap-1">
+                      <Badge variant="secondary" className="bg-green-600/80 text-white text-xs">
+                        Owned
+                      </Badge>
+                      {purchase.type && (
+                        <Badge variant="outline" className="border-gray-600 text-gray-300 text-xs">
+                          {purchase.type === "product-box" ? "Bundle" : "Collection"}
                         </Badge>
-                      </div>
-                    )}
+                      )}
+                    </div>
                   </div>
 
-                  {/* Open Button */}
-                  <div className="p-4">
+                  {/* Content Info */}
+                  <div className="p-4 space-y-3">
+                    {/* Title */}
+                    <h3 className="font-medium text-white text-sm line-clamp-2 min-h-[2.5rem]">{purchase.title}</h3>
+
+                    {/* Purchase Details */}
+                    <div className="flex items-center justify-between text-xs text-gray-400">
+                      <div className="flex items-center gap-1">
+                        <Calendar className="h-3 w-3" />
+                        {formatDate(purchase.purchaseDate)}
+                      </div>
+                      <div className="font-medium text-green-400">
+                        {formatPrice(purchase.amount, purchase.currency)}
+                      </div>
+                    </div>
+
+                    {/* Open Button */}
                     <Button
                       onClick={() => handleOpenContent(purchase)}
-                      className="w-full bg-white text-black hover:bg-gray-200 font-medium"
+                      className="w-full bg-white hover:bg-gray-100 text-black font-medium"
+                      size="sm"
                     >
+                      <Play className="h-4 w-4 mr-2" />
                       Open
-                      <ExternalLink className="h-4 w-4 ml-2" />
                     </Button>
                   </div>
                 </CardContent>
