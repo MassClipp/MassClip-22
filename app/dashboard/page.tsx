@@ -1,302 +1,317 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useAuth } from "@/contexts/auth-context"
-import { useProfileInitialization } from "@/hooks/use-profile-initialization"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Skeleton } from "@/components/ui/skeleton"
-import { DollarSign, Upload, TrendingUp, Video, RefreshCw, Activity, Calendar, Link2, Unlink } from "lucide-react"
-import { useRouter } from "next/navigation"
-import { useToast } from "@/components/ui/use-toast"
-import { useVideoStatsAPI } from "@/hooks/use-video-stats-api"
-import { useStripeDashboardSales } from "@/hooks/use-stripe-dashboard-sales"
-import { SalesForecastCard } from "@/components/sales-forecast-card"
-import ProfileViewStats from "@/components/profile-view-stats"
-import { useStripeConnectionCheck } from "@/hooks/use-stripe-connection-check"
+import { Badge } from "@/components/ui/badge"
+import { Separator } from "@/components/ui/separator"
+import { Upload, ExternalLink, TrendingUp, DollarSign, Users, BarChart3, Link2, Loader2 } from "lucide-react"
+import Link from "next/link"
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts"
+
+interface DashboardStats {
+  totalEarnings: number
+  totalSales: number
+  averageTransactionValue: number
+  last30DaysSales: number
+  last30DaysEarnings: number
+}
+
+interface StripeConnectionStatus {
+  isConnected: boolean
+  accountId?: string
+  canReceivePayments: boolean
+  detailedStatus: string
+}
 
 export default function DashboardPage() {
   const { user } = useAuth()
-  const { isInitializing, isComplete, username, error } = useProfileInitialization()
-  const router = useRouter()
-  const { toast } = useToast()
+  const [stats, setStats] = useState<DashboardStats>({
+    totalEarnings: 0,
+    totalSales: 0,
+    averageTransactionValue: 0,
+    last30DaysSales: 0,
+    last30DaysEarnings: 0,
+  })
+  const [stripeStatus, setStripeStatus] = useState<StripeConnectionStatus | null>(null)
+  const [isLoadingStats, setIsLoadingStats] = useState(true)
+  const [isLoadingStripe, setIsLoadingStripe] = useState(true)
 
-  const [refreshing, setRefreshing] = useState(false)
+  // Mock data for the chart
+  const chartData = [
+    { name: "Oct", value: 0 },
+    { name: "Nov", value: 0 },
+    { name: "Dec", value: 0 },
+    { name: "Jan", value: 0 },
+    { name: "Feb", value: 0 },
+    { name: "Mar", value: 0 },
+  ]
 
-  // Use API-based video statistics (avoids Firestore index issues)
-  const videoStats = useVideoStatsAPI()
+  useEffect(() => {
+    if (user) {
+      fetchDashboardStats()
+      fetchStripeStatus()
+    }
+  }, [user])
 
-  // Use live dashboard sales data
-  const salesData = useStripeDashboardSales()
+  const fetchDashboardStats = async () => {
+    if (!user) return
 
-  // Check Stripe connection status
-  const stripeConnection = useStripeConnectionCheck()
-
-  // Manual refresh function
-  const handleRefresh = async () => {
-    setRefreshing(true)
     try {
-      await videoStats.refetch()
-      // Force refresh sales data by reloading the page
-      window.location.reload()
-    } catch (error) {
-      console.error("Error refreshing data:", error)
-      toast({
-        title: "Error",
-        description: "Failed to refresh data",
-        variant: "destructive",
+      setIsLoadingStats(true)
+      const token = await user.getIdToken()
+      const response = await fetch("/api/dashboard/statistics", {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "x-user-id": user.uid,
+        },
       })
+
+      if (response.ok) {
+        const data = await response.json()
+        setStats(data)
+      }
+    } catch (error) {
+      console.error("Error fetching dashboard stats:", error)
     } finally {
-      setRefreshing(false)
+      setIsLoadingStats(false)
     }
   }
 
-  // Show loading state while profile is being initialized or stats are loading
-  if (isInitializing || videoStats.loading || salesData.loading) {
-    return (
-      <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <Skeleton className="h-8 w-48 mb-2" />
-            <Skeleton className="h-4 w-32" />
-          </div>
-          <div className="flex gap-3">
-            <Skeleton className="h-10 w-32" />
-            <Skeleton className="h-10 w-32" />
-          </div>
-        </div>
+  const fetchStripeStatus = async () => {
+    if (!user) return
 
-        <div className="grid gap-4 md:grid-cols-3">
-          {Array.from({ length: 3 }).map((_, i) => (
-            <Card key={i} className="bg-zinc-900/50 border-zinc-800/50">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <Skeleton className="h-4 w-24" />
-                <Skeleton className="h-4 w-4" />
-              </CardHeader>
-              <CardContent>
-                <Skeleton className="h-8 w-16 mb-1" />
-                <Skeleton className="h-3 w-20" />
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      </div>
+    try {
+      setIsLoadingStripe(true)
+      const token = await user.getIdToken()
+      const response = await fetch("/api/stripe/connect/status", {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "x-user-id": user.uid,
+        },
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        setStripeStatus({
+          isConnected: !!data.accountId,
+          accountId: data.accountId,
+          canReceivePayments: data.canReceivePayments || false,
+          detailedStatus: data.detailedStatus || "unknown",
+        })
+      }
+    } catch (error) {
+      console.error("Error fetching Stripe status:", error)
+      setStripeStatus({
+        isConnected: false,
+        canReceivePayments: false,
+        detailedStatus: "error",
+      })
+    } finally {
+      setIsLoadingStripe(false)
+    }
+  }
+
+  const openStripeDashboard = () => {
+    if (!stripeStatus?.accountId) {
+      console.error("No Stripe account ID available")
+      return
+    }
+
+    // Use the Express Dashboard URL with the specific account ID
+    const dashboardUrl = `https://dashboard.stripe.com/connect/accounts/${stripeStatus.accountId}`
+    console.log(`Opening Stripe dashboard for account: ${stripeStatus.accountId}`)
+    window.open(dashboardUrl, "_blank")
+  }
+
+  const getStripeButtonContent = () => {
+    if (isLoadingStripe) {
+      return (
+        <>
+          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+          Checking Connection...
+        </>
+      )
+    }
+
+    if (!stripeStatus?.isConnected) {
+      return (
+        <>
+          <Link2 className="h-4 w-4 mr-2" />
+          Link Stripe Account
+        </>
+      )
+    }
+
+    return (
+      <>
+        <ExternalLink className="h-4 w-4 mr-2" />
+        Stripe Dashboard
+      </>
     )
   }
 
-  // Show error state if profile initialization failed
-  if (error || videoStats.error) {
-    return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <Card className="w-full max-w-md bg-zinc-900/50 border-zinc-800/50">
-          <CardHeader>
-            <CardTitle className="text-red-400">Dashboard Error</CardTitle>
-            <CardDescription>There was an issue loading your dashboard</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <p className="text-sm text-zinc-400 mb-4">{error || videoStats.error}</p>
-            <Button onClick={() => window.location.reload()} className="w-full">
-              Try Again
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
-    )
+  const handleStripeAction = () => {
+    if (!stripeStatus?.isConnected) {
+      // Navigate to connect page
+      window.location.href = "/dashboard/connect-stripe"
+    } else {
+      // Open the specific account's dashboard
+      openStripeDashboard()
+    }
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Creator Dashboard</h1>
-          <p className="text-zinc-400">Welcome back, {user?.displayName || username || "Creator"}</p>
-          <div className="flex items-center gap-2 mt-1">
-            <Activity className="h-3 w-3 text-green-500" />
-            <span className="text-xs text-green-500">Live Data</span>
-          </div>
-        </div>
-        <div className="flex gap-3">
-          <Button
-            onClick={handleRefresh}
-            variant="outline"
-            disabled={refreshing}
-            className="border-zinc-700 hover:bg-zinc-800 bg-transparent"
-          >
-            {refreshing ? (
-              <>
-                <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                Refreshing...
-              </>
-            ) : (
-              <>
-                <RefreshCw className="h-4 w-4 mr-2" />
-                Refresh
-              </>
-            )}
-          </Button>
-        </div>
+      <div>
+        <h1 className="text-3xl font-bold">Dashboard</h1>
+        <p className="text-muted-foreground">Overview of your content and earnings</p>
       </div>
 
-      {/* Stats Grid */}
-      <div className="grid gap-4 md:grid-cols-3">
-        <Card className="bg-zinc-900/50 border-zinc-800/50">
+      {/* Stats Cards */}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+        <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-zinc-200">Sales (30 Days)</CardTitle>
-            <Calendar className="h-4 w-4 text-zinc-400" />
+            <CardTitle className="text-sm font-medium">Total Revenue</CardTitle>
+            <DollarSign className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">${salesData.totalRevenueLast30Days.toFixed(2)}</div>
-            <p className="text-xs text-zinc-500">{salesData.totalSalesLast30Days} sales in last 30 days</p>
-            {salesData.averageOrderValue > 0 && (
-              <p className="text-xs text-zinc-400 mt-1">Avg: ${salesData.averageOrderValue.toFixed(2)} per sale</p>
-            )}
-            {salesData.error && <p className="text-xs text-red-400 mt-1">Data may be outdated</p>}
+            <div className="text-2xl font-bold">${isLoadingStats ? "0.00" : stats.totalEarnings.toFixed(2)}</div>
+            <p className="text-xs text-muted-foreground">{stats.totalSales} total sales</p>
           </CardContent>
         </Card>
 
-        <Card className="bg-zinc-900/50 border-zinc-800/50">
+        <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium text-zinc-200">Free Videos</CardTitle>
-            <Video className="h-4 w-4 text-zinc-400" />
+            <CardTitle className="text-sm font-medium">This Month</CardTitle>
+            <TrendingUp className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{videoStats.totalFreeVideos}</div>
-            <p className="text-xs text-zinc-500">Free content available</p>
-            {videoStats.totalUploads > 0 && (
-              <p className="text-xs text-zinc-400 mt-1">
-                {videoStats.freeVideoPercentage.toFixed(1)}% of {videoStats.totalUploads} total uploads
-              </p>
-            )}
-            {videoStats.totalFreeVideos === 0 && videoStats.totalUploads > 0 && (
-              <p className="text-xs text-yellow-500 mt-1">Consider adding free content</p>
-            )}
+            <div className="text-2xl font-bold">${isLoadingStats ? "0.00" : stats.last30DaysEarnings.toFixed(2)}</div>
+            <p className="text-xs text-muted-foreground">Ready to be paid out</p>
           </CardContent>
         </Card>
 
-        <div className="bg-zinc-900/50 border-zinc-800/50 rounded-lg">
-          <ProfileViewStats userId={user?.uid || ""} />
-        </div>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Average Transaction Value</CardTitle>
+            <BarChart3 className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">
+              ${isLoadingStats ? "0.00" : stats.averageTransactionValue.toFixed(2)}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Last 30 Days Sales</CardTitle>
+            <Users className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{isLoadingStats ? "0" : stats.last30DaysSales}</div>
+          </CardContent>
+        </Card>
       </div>
 
-      {/* Main Content Grid */}
-      <div className="grid gap-6 lg:grid-cols-3">
-        {/* Financial Forecast - Replaces Sales Performance */}
-        <div className="lg:col-span-2">
-          <SalesForecastCard />
-        </div>
+      {/* Charts Section */}
+      <div className="grid gap-4 md:grid-cols-2">
+        {/* Financial Performance Chart */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Financial Performance</CardTitle>
+            <CardDescription>Revenue trends and projections</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <ResponsiveContainer width="100%" height={300}>
+              <LineChart data={chartData}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="name" />
+                <YAxis />
+                <Tooltip />
+                <Line type="monotone" dataKey="value" stroke="#10b981" strokeWidth={2} dot={{ fill: "#10b981" }} />
+              </LineChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
 
-        {/* Quick Actions & Video Stats */}
-        <div className="space-y-6">
-          {/* Quick Actions */}
-          <Card className="bg-zinc-900/50 border-zinc-800/50">
-            <CardHeader>
-              <CardTitle>Quick Actions</CardTitle>
-              <CardDescription>Common tasks and shortcuts</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <Button
-                onClick={() => router.push("/dashboard/uploads")}
-                className="w-full justify-start bg-zinc-900 hover:bg-zinc-800 border border-zinc-700"
-              >
-                <Upload className="h-4 w-4 mr-2" />
-                Upload Content
-              </Button>
-
-              <Button
-                onClick={() => router.push("/dashboard/earnings")}
-                variant="outline"
-                className="w-full justify-start border-zinc-700 hover:bg-zinc-800"
-              >
-                <DollarSign className="h-4 w-4 mr-2" />
-                View Earnings
-              </Button>
-
-              <Button
-                onClick={() => router.push("/dashboard/profile")}
-                variant="outline"
-                className="w-full justify-start border-zinc-700 hover:bg-zinc-800"
-              >
-                <TrendingUp className="h-4 w-4 mr-2" />
-                Edit Profile
-              </Button>
-
-              {/* Stripe Account Management */}
-              {stripeConnection.loading ? (
-                <Button
-                  variant="outline"
-                  className="w-full justify-start border-zinc-700 hover:bg-zinc-800 bg-transparent"
-                  disabled
-                >
-                  <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                  Checking Stripe...
-                </Button>
-              ) : stripeConnection.isConnected ? (
-                <Button
-                  onClick={() => router.push("/dashboard/connect-stripe")}
-                  variant="outline"
-                  className="w-full justify-start border-zinc-700 hover:bg-zinc-800"
-                >
-                  <Unlink className="h-4 w-4 mr-2" />
-                  Manage Stripe Account
-                </Button>
-              ) : (
-                <Button
-                  onClick={() => router.push("/dashboard/connect-stripe")}
-                  className="w-full justify-start bg-blue-600 hover:bg-blue-700"
-                >
-                  <Link2 className="h-4 w-4 mr-2" />
-                  Link Stripe Account
-                </Button>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Video Statistics - Enhanced with API-based data */}
-          <Card className="bg-gradient-to-br from-zinc-900/50 to-zinc-800/30 border-zinc-700/50">
-            <CardContent className="pt-6">
-              <div className="flex items-start gap-3">
-                <div className="w-8 h-8 rounded-full bg-gradient-to-r from-blue-600 to-blue-700 flex items-center justify-center flex-shrink-0">
-                  <Video className="h-4 w-4 text-white" />
-                </div>
-                <div className="flex-1">
-                  <div className="text-sm font-medium text-zinc-200 mb-1">Content Library</div>
-                  <div className="text-2xl font-bold text-white">{videoStats.totalUploads}</div>
-                  <div className="text-xs text-zinc-500 mt-1">total uploads</div>
-
-                  {/* Enhanced breakdown */}
-                  <div className="mt-2 space-y-1">
-                    <div className="flex items-center justify-between text-xs">
-                      <span className="text-green-400">Free videos:</span>
-                      <span className="text-white font-medium">{videoStats.totalFreeVideos}</span>
-                    </div>
-                    {videoStats.totalUploads > videoStats.totalFreeVideos && (
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="text-yellow-400">Premium videos:</span>
-                        <span className="text-white font-medium">
-                          {videoStats.totalUploads - videoStats.totalFreeVideos}
-                        </span>
-                      </div>
-                    )}
-                    {videoStats.totalUploads > 0 && (
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="text-blue-400">Free ratio:</span>
-                        <span className="text-white font-medium">{videoStats.freeVideoPercentage.toFixed(1)}%</span>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Auto-refresh indicator */}
-                  <div className="flex items-center gap-1 mt-2">
-                    <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
-                    <span className="text-xs text-blue-500">Auto-refresh (60s)</span>
-                  </div>
-                </div>
+        {/* Sales Metrics */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Sales Metrics</CardTitle>
+            <CardDescription>Performance indicators</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex justify-between items-center">
+              <span className="text-sm font-medium">Average Transaction Value</span>
+              <span className="text-2xl font-bold">${stats.averageTransactionValue.toFixed(2)}</span>
+            </div>
+            <Separator />
+            <div className="flex justify-between items-center">
+              <span className="text-sm font-medium">Last 30 Days Sales</span>
+              <span className="text-2xl font-bold">{stats.last30DaysSales}</span>
+            </div>
+            <Separator />
+            <div className="text-center space-y-2">
+              <div className="text-3xl font-bold text-green-500">${stats.last30DaysEarnings.toFixed(2)}</div>
+              <div className="text-sm text-muted-foreground">Last 30 Days</div>
+              <div className="text-right">
+                <div className="text-2xl font-bold text-blue-500">{stats.totalSales}</div>
+                <div className="text-sm text-muted-foreground">Total Sales</div>
               </div>
-            </CardContent>
-          </Card>
-        </div>
+            </div>
+          </CardContent>
+        </Card>
       </div>
+
+      {/* Quick Actions */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Quick Actions</CardTitle>
+          <CardDescription>Manage your content and earnings</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <Link href="/dashboard/upload">
+            <Button className="w-full justify-start bg-transparent" variant="outline">
+              <Upload className="h-4 w-4 mr-2" />
+              Upload Content
+            </Button>
+          </Link>
+
+          <Button
+            className={`w-full justify-start ${
+              !stripeStatus?.isConnected ? "bg-blue-600 hover:bg-blue-700 text-white" : "bg-transparent"
+            }`}
+            variant={!stripeStatus?.isConnected ? "default" : "outline"}
+            onClick={handleStripeAction}
+            disabled={isLoadingStripe}
+          >
+            {getStripeButtonContent()}
+          </Button>
+
+          {/* Show account ID if connected */}
+          {stripeStatus?.isConnected && stripeStatus.accountId && (
+            <div className="text-xs text-muted-foreground bg-muted p-2 rounded">
+              Connected Account: {stripeStatus.accountId}
+            </div>
+          )}
+
+          {/* Show connection status */}
+          {stripeStatus && (
+            <div className="flex items-center gap-2">
+              <Badge variant={stripeStatus.canReceivePayments ? "default" : "secondary"} className="text-xs">
+                {stripeStatus.canReceivePayments ? "Ready for Payments" : "Setup Required"}
+              </Badge>
+              {stripeStatus.detailedStatus && (
+                <span className="text-xs text-muted-foreground">Status: {stripeStatus.detailedStatus}</span>
+              )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   )
 }

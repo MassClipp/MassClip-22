@@ -127,12 +127,14 @@ export default function StripeStatus({ className }: StripeStatusProps) {
 
   // Open Stripe Express Dashboard
   const openStripeDashboard = () => {
-    if (!status?.accountId) return
+    if (!status?.accountId) {
+      console.error("No Stripe account ID available")
+      return
+    }
 
-    // For Stripe Connect Express accounts, use the login link
-    const dashboardUrl = `https://connect.stripe.com/express/oauth/authorize?redirect_uri=${encodeURIComponent(window.location.origin)}&client_id=ca_32D88BD1qLklliziD7gYQvctJIhWBSQ7&state=${status.accountId}&stripe_user[email]=${encodeURIComponent(user?.email || "")}&stripe_user[business_type]=individual`
+    console.log(`Opening Stripe dashboard for account: ${status.accountId}`)
 
-    // Alternative: Use Stripe's Express Dashboard direct link
+    // Use the Express Dashboard URL with the specific account ID
     const expressUrl = `https://dashboard.stripe.com/connect/accounts/${status.accountId}`
 
     window.open(expressUrl, "_blank")
