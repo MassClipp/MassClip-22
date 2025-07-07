@@ -1,91 +1,83 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { useAuth } from "@/contexts/auth-context"
+import { useRouter } from "next/navigation"
+import { useFirebaseAuth } from "@/hooks/use-firebase-auth"
+import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent } from "@/components/ui/card"
-import { Loader2, AlertCircle, Package } from "lucide-react"
+import { Skeleton } from "@/components/ui/skeleton"
+import { AlertCircle } from "lucide-react"
+import { Alert, AlertDescription } from "@/components/ui/alert"
 import Link from "next/link"
-import { motion } from "framer-motion"
+import Image from "next/image"
 
 interface Purchase {
   id: string
   productBoxId: string
-  itemTitle: string
-  itemDescription?: string
+  bundleTitle: string
+  thumbnailUrl?: string
+  creatorUsername: string
+  creatorId: string
+  purchaseDate: string
   amount: number
   currency: string
-  purchasedAt: Date
-  status: string
-  thumbnailUrl?: string
-  creatorUsername?: string
-  creatorName?: string
-  type: "product_box" | "bundle" | "subscription"
-  sessionId?: string
 }
 
 export default function PurchasesPage() {
-  const { user, loading: authLoading } = useAuth()
+  const { user, loading: authLoading } = useFirebaseAuth()
+  const router = useRouter()
   const [purchases, setPurchases] = useState<Purchase[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  const fetchPurchases = async () => {
-    if (!user) return
+  useEffect(() => {
+    if (authLoading) return
 
+    if (!user) {
+      router.push("/login")
+      return
+    }
+
+    fetchPurchases()
+  }, [user, authLoading, router])
+
+  const fetchPurchases = async () => {
     try {
       setLoading(true)
       setError(null)
 
-      const idToken = await user.getIdToken()
-      const response = await fetch("/api/user/unified-purchases", {
-        headers: {
-          Authorization: `Bearer ${idToken}`,
-        },
-      })
-
+      const response = await fetch("/api/user/unified-purchases")
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ error: "Failed to fetch purchases" }))
-        throw new Error(errorData.error || `HTTP ${response.status}`)
+        throw new Error("Failed to fetch purchases")
       }
 
       const data = await response.json()
       setPurchases(data.purchases || [])
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error fetching purchases:", error)
-      const errorMessage = error instanceof Error ? error.message : "Failed to load purchases"
-      setError(errorMessage)
+      setError(error.message || "Failed to load purchases")
     } finally {
       setLoading(false)
     }
   }
 
-  const handleOpen = async (purchase: Purchase) => {
-    // Navigate to the product box content page
-    window.location.href = `/product-box/${purchase.productBoxId}/content`
+  const handleOpenContent = (purchase: Purchase) => {
+    router.push(`/product-box/${purchase.productBoxId}/content`)
   }
-
-  const getBundleThumbnail = (purchase: Purchase): string => {
-    return purchase.thumbnailUrl || "/placeholder.svg?height=400&width=400&text=Bundle"
-  }
-
-  useEffect(() => {
-    if (!authLoading && user) {
-      fetchPurchases()
-    } else if (!authLoading && !user) {
-      setError("Please log in to view your purchases")
-      setLoading(false)
-    }
-  }, [user, authLoading])
 
   if (authLoading || loading) {
     return (
-      <div className="min-h-screen bg-black text-white">
+      <div className="min-h-screen bg-black">
         <div className="p-6">
-          <h1 className="text-3xl font-bold mb-8">My Purchases</h1>
-          <div className="flex items-center justify-center py-12">
-            <Loader2 className="h-6 w-6 text-zinc-500 animate-spin" />
-            <span className="ml-3 text-zinc-400">Loading your purchases...</span>
+          <h1 className="text-3xl font-bold text-white mb-8">My Purchases</h1>
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+            {Array.from({ length: 8 }).map((_, i) => (
+              <div key={i} className="space-y-3">
+                <Skeleton className="aspect-square w-full bg-gray-800" />
+                <Skeleton className="h-4 w-20 bg-gray-800" />
+                <Skeleton className="h-10 w-full bg-gray-800" />
+              </div>
+            ))}
           </div>
         </div>
       </div>
@@ -94,116 +86,95 @@ export default function PurchasesPage() {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-black text-white">
+      <div className="min-h-screen bg-black">
         <div className="p-6">
-          <h1 className="text-3xl font-bold mb-8">My Purchases</h1>
-          <div className="text-center py-12">
-            <AlertCircle className="h-8 w-8 text-red-500 mx-auto mb-3" />
-            <p className="text-zinc-400 mb-4">{error}</p>
-            <Button
-              onClick={fetchPurchases}
-              variant="outline"
-              size="sm"
-              className="border-zinc-700 hover:bg-zinc-800 bg-transparent"
-            >
-              Try Again
-            </Button>
-          </div>
+          <h1 className="text-3xl font-bold text-white mb-8">My Purchases</h1>
+          <Alert variant="destructive" className="max-w-md">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="min-h-screen bg-black text-white">
+    <div className="min-h-screen bg-black">
       <div className="p-6">
-        <h1 className="text-3xl font-bold mb-8">My Purchases</h1>
+        <h1 className="text-3xl font-bold text-white mb-8">My Purchases</h1>
 
         {purchases.length === 0 ? (
           <div className="text-center py-12">
-            <Package className="h-12 w-12 text-zinc-600 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-white mb-2">No Purchases Yet</h3>
-            <p className="text-zinc-400">Start exploring premium content to build your collection.</p>
+            <div className="text-gray-400 text-lg mb-4">No purchases yet</div>
+            <div className="text-gray-500 text-sm">Browse creators to find premium content to purchase</div>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
             {purchases.map((purchase, index) => (
-              <motion.div
+              <Card
                 key={purchase.id}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.3, delay: index * 0.1 }}
+                className="bg-gray-900/50 border-gray-800 overflow-hidden group hover:bg-gray-900/70 transition-all duration-300"
+                style={{
+                  animationDelay: `${index * 100}ms`,
+                  animation: "fadeInUp 0.6s ease-out forwards",
+                }}
               >
-                <Card className="bg-zinc-900/50 border-zinc-800 overflow-hidden hover:border-zinc-700 transition-all duration-300 group">
-                  <div className="relative">
-                    {/* Creator Username - Top Left */}
-                    {purchase.creatorUsername && (
-                      <div className="absolute top-3 left-3 z-10">
-                        <Link
-                          href={`/creator/${purchase.creatorUsername}`}
-                          className="text-xs text-white/80 hover:text-white transition-colors bg-black/50 px-2 py-1 rounded backdrop-blur-sm"
-                        >
-                          @{purchase.creatorUsername}
-                        </Link>
-                      </div>
-                    )}
-
-                    {/* Bundle Thumbnail */}
-                    <div className="aspect-square bg-zinc-800 overflow-hidden">
-                      <img
-                        src={getBundleThumbnail(purchase) || "/placeholder.svg"}
-                        alt={purchase.itemTitle}
-                        className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-300"
-                        style={{ objectFit: "cover" }}
-                        onError={(e) => {
-                          const target = e.target as HTMLImageElement
-                          target.style.display = "none"
-                          const parent = target.parentElement
-                          if (parent) {
-                            parent.innerHTML = `
-                              <div class="w-full h-full flex items-center justify-center bg-zinc-800">
-                                <div class="text-center">
-                                  <div class="w-16 h-16 mx-auto mb-3 text-zinc-600">
-                                    <svg viewBox="0 0 24 24" fill="currentColor" class="w-full h-full">
-                                      <path d="M12 2L2 7L12 12L22 7L12 2Z" />
-                                      <path d="M2 17L12 22L22 17" />
-                                      <path d="M2 12L12 17L22 12" />
-                                    </svg>
-                                  </div>
-                                  <p class="text-xs text-zinc-500">Bundle</p>
-                                </div>
-                              </div>
-                            `
-                          }
-                        }}
-                      />
-                    </div>
+                <div className="relative">
+                  {/* Creator Username - Top Left */}
+                  <div className="absolute top-3 left-3 z-10">
+                    <Link
+                      href={`/creator/${purchase.creatorUsername}`}
+                      className="text-xs text-white/80 hover:text-white bg-black/50 px-2 py-1 rounded-full backdrop-blur-sm transition-colors"
+                    >
+                      {purchase.creatorUsername}
+                    </Link>
                   </div>
 
-                  <CardContent className="p-4 bg-gradient-to-br from-zinc-900/90 via-zinc-900/95 to-black/90 border-t border-zinc-800/50 backdrop-blur-sm">
-                    <div className="space-y-3">
-                      {/* Title */}
-                      <div>
-                        <h3 className="font-semibold text-white text-base mb-1 line-clamp-1 tracking-tight">
-                          {purchase.itemTitle}
-                        </h3>
+                  {/* Thumbnail */}
+                  <div className="aspect-square relative bg-gray-800">
+                    {purchase.thumbnailUrl ? (
+                      <Image
+                        src={purchase.thumbnailUrl || "/placeholder.svg"}
+                        alt={purchase.bundleTitle}
+                        fill
+                        className="object-cover"
+                        sizes="(max-width: 640px) 100vw, (max-width: 768px) 50vw, (max-width: 1024px) 33vw, 25vw"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center">
+                        <div className="text-gray-500 text-4xl">📦</div>
                       </div>
+                    )}
+                  </div>
 
-                      {/* Open Button */}
-                      <Button
-                        onClick={() => handleOpen(purchase)}
-                        className="w-full bg-white text-black hover:bg-gray-200 font-medium text-sm py-2"
-                      >
-                        Open
-                      </Button>
-                    </div>
-                  </CardContent>
-                </Card>
-              </motion.div>
+                  {/* Open Button */}
+                  <div className="p-4">
+                    <Button
+                      onClick={() => handleOpenContent(purchase)}
+                      className="w-full bg-white text-black hover:bg-gray-100 font-medium"
+                    >
+                      Open
+                    </Button>
+                  </div>
+                </div>
+              </Card>
             ))}
           </div>
         )}
       </div>
+
+      <style jsx>{`
+        @keyframes fadeInUp {
+          from {
+            opacity: 0;
+            transform: translateY(20px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+      `}</style>
     </div>
   )
 }
