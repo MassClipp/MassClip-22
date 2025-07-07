@@ -1,136 +1,91 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { useFirebaseAuth } from "@/hooks/use-firebase-auth"
+import { useAuth } from "@/contexts/auth-context"
 import { Button } from "@/components/ui/button"
-import { Skeleton } from "@/components/ui/skeleton"
-import { AlertCircle } from "lucide-react"
+import { Card, CardContent } from "@/components/ui/card"
+import { Loader2, AlertCircle, Package } from "lucide-react"
 import Link from "next/link"
-import { toast } from "@/hooks/use-toast"
+import { motion } from "framer-motion"
 
 interface Purchase {
   id: string
-  title?: string
-  price: number
+  productBoxId: string
+  itemTitle: string
+  itemDescription?: string
+  amount: number
   currency: string
+  purchasedAt: Date
   status: string
-  createdAt: any
-  productBoxId?: string
-  bundleId?: string
-  creatorId?: string
-  creatorUsername?: string
-  type?: "product_box" | "bundle" | "subscription"
   thumbnailUrl?: string
-  metadata?: {
-    title?: string
-    thumbnailUrl?: string
-    [key: string]: any
-  }
+  creatorUsername?: string
+  creatorName?: string
+  type: "product_box" | "bundle" | "subscription"
+  sessionId?: string
 }
 
 export default function PurchasesPage() {
-  const { user, loading: authLoading } = useFirebaseAuth()
+  const { user, loading: authLoading } = useAuth()
   const [purchases, setPurchases] = useState<Purchase[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  useEffect(() => {
-    if (user) {
-      fetchPurchases()
-    }
-  }, [user])
-
   const fetchPurchases = async () => {
+    if (!user) return
+
     try {
       setLoading(true)
       setError(null)
 
-      const token = await user.getIdToken()
+      const idToken = await user.getIdToken()
       const response = await fetch("/api/user/unified-purchases", {
         headers: {
-          Authorization: `Bearer ${token}`,
+          Authorization: `Bearer ${idToken}`,
         },
       })
 
       if (!response.ok) {
-        throw new Error(`Failed to fetch purchases: ${response.status}`)
+        const errorData = await response.json().catch(() => ({ error: "Failed to fetch purchases" }))
+        throw new Error(errorData.error || `HTTP ${response.status}`)
       }
 
       const data = await response.json()
       setPurchases(data.purchases || [])
-    } catch (err) {
-      console.error("Error fetching purchases:", err)
-      setError(err instanceof Error ? err.message : "Failed to fetch purchases")
+    } catch (error) {
+      console.error("Error fetching purchases:", error)
+      const errorMessage = error instanceof Error ? error.message : "Failed to load purchases"
+      setError(errorMessage)
     } finally {
       setLoading(false)
     }
   }
 
   const handleOpen = async (purchase: Purchase) => {
-    try {
-      const token = await user.getIdToken()
-      const endpoint =
-        purchase.type === "bundle"
-          ? `/api/bundles/${purchase.bundleId}/download`
-          : `/api/product-box/${purchase.productBoxId}/direct-content`
+    // Navigate to the product box content page
+    window.location.href = `/product-box/${purchase.productBoxId}/content`
+  }
 
-      const response = await fetch(endpoint, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      })
+  const getBundleThumbnail = (purchase: Purchase): string => {
+    return purchase.thumbnailUrl || "/placeholder.svg?height=400&width=400&text=Bundle"
+  }
 
-      if (!response.ok) {
-        throw new Error("Failed to access content")
-      }
-
-      const blob = await response.blob()
-      const url = window.URL.createObjectURL(blob)
-      const a = document.createElement("a")
-      a.href = url
-      a.download = `${purchase.title || "content"}.zip`
-      document.body.appendChild(a)
-      a.click()
-      window.URL.revokeObjectURL(url)
-      document.body.removeChild(a)
-
-      toast({
-        title: "Download started",
-        description: `${purchase.title} is being downloaded.`,
-      })
-    } catch (err) {
-      console.error("Download error:", err)
-      toast({
-        title: "Download failed",
-        description: "Failed to access the content. Please try again.",
-        variant: "destructive",
-      })
+  useEffect(() => {
+    if (!authLoading && user) {
+      fetchPurchases()
+    } else if (!authLoading && !user) {
+      setError("Please log in to view your purchases")
+      setLoading(false)
     }
-  }
-
-  const getThumbnailUrl = (purchase: Purchase) => {
-    return (
-      purchase.thumbnailUrl ||
-      purchase.metadata?.thumbnailUrl ||
-      (purchase.type === "bundle" ? `/api/bundles/${purchase.bundleId}/thumbnail` : null) ||
-      (purchase.productBoxId ? `/api/product-box/${purchase.productBoxId}/thumbnail` : null) ||
-      "/placeholder.svg?height=200&width=200&text=No+Image"
-    )
-  }
+  }, [user, authLoading])
 
   if (authLoading || loading) {
     return (
       <div className="min-h-screen bg-black text-white">
         <div className="p-6">
           <h1 className="text-3xl font-bold mb-8">My Purchases</h1>
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
-            {[...Array(6)].map((_, i) => (
-              <div key={i} className="space-y-3">
-                <Skeleton className="aspect-square w-full bg-gray-800" />
-                <Skeleton className="h-4 w-16 bg-gray-800" />
-                <Skeleton className="h-8 w-full bg-gray-800" />
-              </div>
-            ))}
+          <div className="flex items-center justify-center py-12">
+            <Loader2 className="h-6 w-6 text-zinc-500 animate-spin" />
+            <span className="ml-3 text-zinc-400">Loading your purchases...</span>
           </div>
         </div>
       </div>
@@ -139,14 +94,21 @@ export default function PurchasesPage() {
 
   if (error) {
     return (
-      <div className="min-h-screen bg-black text-white flex items-center justify-center">
-        <div className="text-center">
-          <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
-          <h2 className="text-xl font-semibold mb-2">Error Loading Purchases</h2>
-          <p className="text-gray-400 mb-4">{error}</p>
-          <Button onClick={fetchPurchases} className="bg-red-600 hover:bg-red-700">
-            Try Again
-          </Button>
+      <div className="min-h-screen bg-black text-white">
+        <div className="p-6">
+          <h1 className="text-3xl font-bold mb-8">My Purchases</h1>
+          <div className="text-center py-12">
+            <AlertCircle className="h-8 w-8 text-red-500 mx-auto mb-3" />
+            <p className="text-zinc-400 mb-4">{error}</p>
+            <Button
+              onClick={fetchPurchases}
+              variant="outline"
+              size="sm"
+              className="border-zinc-700 hover:bg-zinc-800 bg-transparent"
+            >
+              Try Again
+            </Button>
+          </div>
         </div>
       </div>
     )
@@ -158,48 +120,86 @@ export default function PurchasesPage() {
         <h1 className="text-3xl font-bold mb-8">My Purchases</h1>
 
         {purchases.length === 0 ? (
-          <div className="text-center py-16">
-            <h3 className="text-xl font-semibold mb-3">No purchases yet</h3>
-            <p className="text-gray-400 mb-8">Start exploring premium content to build your collection.</p>
-            <Button asChild className="bg-red-600 hover:bg-red-700">
-              <Link href="/dashboard/explore">Explore Content</Link>
-            </Button>
+          <div className="text-center py-12">
+            <Package className="h-12 w-12 text-zinc-600 mx-auto mb-4" />
+            <h3 className="text-lg font-medium text-white mb-2">No Purchases Yet</h3>
+            <p className="text-zinc-400">Start exploring premium content to build your collection.</p>
           </div>
         ) : (
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
-            {purchases.map((purchase) => (
-              <div key={purchase.id} className="space-y-3">
-                {/* Creator Username - Top Left, Clickable */}
-                {purchase.creatorUsername && (
-                  <Link
-                    href={`/creator/${purchase.creatorUsername}`}
-                    className="text-sm text-gray-400 hover:text-white transition-colors block"
-                  >
-                    @{purchase.creatorUsername}
-                  </Link>
-                )}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            {purchases.map((purchase, index) => (
+              <motion.div
+                key={purchase.id}
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.3, delay: index * 0.1 }}
+              >
+                <Card className="bg-zinc-900/50 border-zinc-800 overflow-hidden hover:border-zinc-700 transition-all duration-300 group">
+                  <div className="relative">
+                    {/* Creator Username - Top Left */}
+                    {purchase.creatorUsername && (
+                      <div className="absolute top-3 left-3 z-10">
+                        <Link
+                          href={`/creator/${purchase.creatorUsername}`}
+                          className="text-xs text-white/80 hover:text-white transition-colors bg-black/50 px-2 py-1 rounded backdrop-blur-sm"
+                        >
+                          @{purchase.creatorUsername}
+                        </Link>
+                      </div>
+                    )}
 
-                {/* Thumbnail */}
-                <div className="aspect-square w-full bg-gray-800 rounded-lg overflow-hidden">
-                  <img
-                    src={getThumbnailUrl(purchase) || "/placeholder.svg"}
-                    alt={purchase.title || "Purchase"}
-                    className="w-full h-full object-cover"
-                    onError={(e) => {
-                      const target = e.target as HTMLImageElement
-                      target.src = "/placeholder.svg?height=200&width=200&text=No+Image"
-                    }}
-                  />
-                </div>
+                    {/* Bundle Thumbnail */}
+                    <div className="aspect-square bg-zinc-800 overflow-hidden">
+                      <img
+                        src={getBundleThumbnail(purchase) || "/placeholder.svg"}
+                        alt={purchase.itemTitle}
+                        className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-300"
+                        style={{ objectFit: "cover" }}
+                        onError={(e) => {
+                          const target = e.target as HTMLImageElement
+                          target.style.display = "none"
+                          const parent = target.parentElement
+                          if (parent) {
+                            parent.innerHTML = `
+                              <div class="w-full h-full flex items-center justify-center bg-zinc-800">
+                                <div class="text-center">
+                                  <div class="w-16 h-16 mx-auto mb-3 text-zinc-600">
+                                    <svg viewBox="0 0 24 24" fill="currentColor" class="w-full h-full">
+                                      <path d="M12 2L2 7L12 12L22 7L12 2Z" />
+                                      <path d="M2 17L12 22L22 17" />
+                                      <path d="M2 12L12 17L22 12" />
+                                    </svg>
+                                  </div>
+                                  <p class="text-xs text-zinc-500">Bundle</p>
+                                </div>
+                              </div>
+                            `
+                          }
+                        }}
+                      />
+                    </div>
+                  </div>
 
-                {/* Open Button */}
-                <Button
-                  onClick={() => handleOpen(purchase)}
-                  className="w-full bg-white text-black hover:bg-gray-200 font-medium"
-                >
-                  Open
-                </Button>
-              </div>
+                  <CardContent className="p-4 bg-gradient-to-br from-zinc-900/90 via-zinc-900/95 to-black/90 border-t border-zinc-800/50 backdrop-blur-sm">
+                    <div className="space-y-3">
+                      {/* Title */}
+                      <div>
+                        <h3 className="font-semibold text-white text-base mb-1 line-clamp-1 tracking-tight">
+                          {purchase.itemTitle}
+                        </h3>
+                      </div>
+
+                      {/* Open Button */}
+                      <Button
+                        onClick={() => handleOpen(purchase)}
+                        className="w-full bg-white text-black hover:bg-gray-200 font-medium text-sm py-2"
+                      >
+                        Open
+                      </Button>
+                    </div>
+                  </CardContent>
+                </Card>
+              </motion.div>
             ))}
           </div>
         )}
