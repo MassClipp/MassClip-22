@@ -28,22 +28,15 @@ export interface DecodedToken {
 export async function verifyIdToken(request: NextRequest) {
   try {
     const authHeader = request.headers.get("authorization")
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      console.error("❌ [Auth] No valid authorization header")
+    if (!authHeader?.startsWith("Bearer ")) {
       return null
     }
 
-    const idToken = authHeader.split("Bearer ")[1]
-    if (!idToken) {
-      console.error("❌ [Auth] No ID token found")
-      return null
-    }
-
-    const decodedToken = await auth.verifyIdToken(idToken)
-    console.log(`✅ [Auth] Token verified for user: ${decodedToken.uid}`)
+    const token = authHeader.substring(7)
+    const decodedToken = await auth.verifyIdToken(token)
     return decodedToken
   } catch (error) {
-    console.error("❌ [Auth] Token verification failed:", error)
+    console.error("❌ [Auth Utils] Token verification failed:", error)
     return null
   }
 }
@@ -152,4 +145,17 @@ export class AuthorizationError extends Error {
 export async function getAuthenticatedUser(request: NextRequest) {
   const decodedToken = await verifyIdToken(request)
   return decodedToken ? { uid: decodedToken.uid, email: decodedToken.email } : null
+}
+
+/**
+ * Verify Firebase ID token from request body
+ */
+export async function verifyIdTokenFromBody(token: string) {
+  try {
+    const decodedToken = await auth.verifyIdToken(token)
+    return decodedToken
+  } catch (error) {
+    console.error("❌ [Auth Utils] Body token verification failed:", error)
+    return null
+  }
 }

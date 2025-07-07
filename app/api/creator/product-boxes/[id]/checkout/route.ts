@@ -1,30 +1,31 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { verifyIdToken } from "@/lib/auth-utils"
 import { db } from "@/lib/firebase-admin"
 import { stripe } from "@/lib/stripe"
 import type Stripe from "stripe"
+
+// Helper function to verify auth token from headers
+async function verifyAuthToken(request: NextRequest) {
+  try {
+    const authHeader = request.headers.get("authorization")
+    if (!authHeader?.startsWith("Bearer ")) {
+      return null
+    }
+
+    const token = authHeader.substring(7)
+    const { auth } = await import("@/lib/firebase-admin")
+    const decodedToken = await auth.verifyIdToken(token)
+    return decodedToken
+  } catch (error) {
+    console.error("❌ [Auth] Token verification failed:", error)
+    return null
+  }
+}
 
 export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
   try {
     console.log(`🔍 [Checkout API] Starting checkout for bundle: ${params.id}`)
 
-    // Verify authentication
-    const decodedToken = await verifyIdToken(request)
-    if (!decodedToken) {
-      console.error("❌ [Checkout API] Authentication failed")
-      return NextResponse.json(
-        {
-          error: "Authentication required",
-          code: "UNAUTHORIZED",
-        },
-        { status: 401 },
-      )
-    }
-
-    const userId = decodedToken.uid
-    console.log(`✅ [Checkout API] User authenticated: ${userId}`)
-
-    // Parse request body
+    // Parse request body first
     let body
     try {
       body = await request.json()
@@ -39,7 +40,37 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       )
     }
 
-    const { successUrl, cancelUrl } = body
+    const { successUrl, cancelUrl, userToken } = body
+
+    // Verify authentication - try multiple methods
+    let decodedToken = null
+
+    // Method 1: From Authorization header
+    decodedToken = await verifyAuthToken(request)
+
+    // Method 2: From request body token
+    if (!decodedToken && userToken) {
+      try {
+        const { auth } = await import("@/lib/firebase-admin")
+        decodedToken = await auth.verifyIdToken(userToken)
+      } catch (error) {
+        console.error("❌ [Checkout API] Body token verification failed:", error)
+      }
+    }
+
+    if (!decodedToken) {
+      console.error("❌ [Checkout API] Authentication failed - no valid token found")
+      return NextResponse.json(
+        {
+          error: "Authentication required",
+          code: "UNAUTHORIZED",
+        },
+        { status: 401 },
+      )
+    }
+
+    const userId = decodedToken.uid
+    console.log(`✅ [Checkout API] User authenticated: ${userId}`)
 
     // Get bundle data - try productBoxes collection first
     let bundleDoc = await db.collection("productBoxes").doc(params.id).get()
@@ -65,6 +96,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       title: bundleData?.title,
       price: bundleData?.price,
       creatorId: bundleData?.creatorId,
+      active: bundleData?.active,
     })
 
     // Validate bundle data
@@ -144,10 +176,15 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
 
     // Create Stripe checkout session
     try {
-      console.log(`🔄 [Checkout API] Creating Stripe checkout session on connected account`)
+      console.log(`🔄 [Checkout API] Creating Stripe checkout session`)
 
       const priceInCents = Math.round(bundleData.price * 100) // Convert to cents
       const platformFeeAmount = Math.round(priceInCents * 0.05) // 5% platform fee
+
+      // Use environment-appropriate URLs
+      const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || process.env.VERCEL_URL || "http://localhost:3000"
+      const defaultSuccessUrl = `${baseUrl}/purchase/success?session_id={CHECKOUT_SESSION_ID}`
+      const defaultCancelUrl = `${baseUrl}/creator/${creatorData.username}`
 
       const sessionParams: Stripe.Checkout.SessionCreateParams = {
         payment_method_types: ["card"],
@@ -170,9 +207,8 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
           },
         ],
         mode: "payment",
-        success_url:
-          successUrl || `${process.env.NEXT_PUBLIC_SITE_URL}/purchase/success?session_id={CHECKOUT_SESSION_ID}`,
-        cancel_url: cancelUrl || `${process.env.NEXT_PUBLIC_SITE_URL}/creator/${creatorData.username}`,
+        success_url: successUrl || defaultSuccessUrl,
+        cancel_url: cancelUrl || defaultCancelUrl,
         client_reference_id: userId,
         metadata: {
           productBoxId: params.id,
@@ -193,12 +229,12 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       console.log("📝 [Checkout API] Session metadata:", sessionParams.metadata)
       console.log("🔗 [Checkout API] Connected account:", creatorData.stripeAccountId)
 
-      // FIXED: Create session on the connected account
+      // Create session on the connected account
       const session = await stripe.checkout.sessions.create(sessionParams, {
         stripeAccount: creatorData.stripeAccountId,
       })
 
-      console.log(`✅ [Checkout API] Stripe session created on connected account: ${session.id}`)
+      console.log(`✅ [Checkout API] Stripe session created: ${session.id}`)
 
       // Log the checkout attempt
       await db.collection("checkoutAttempts").add({
@@ -255,18 +291,6 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
 export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
   try {
     console.log(`🔍 [Checkout API] GET request for bundle: ${params.id}`)
-
-    // Verify authentication
-    const decodedToken = await verifyIdToken(request)
-    if (!decodedToken) {
-      return NextResponse.json(
-        {
-          error: "Authentication required",
-          code: "UNAUTHORIZED",
-        },
-        { status: 401 },
-      )
-    }
 
     // Get bundle data
     let bundleDoc = await db.collection("productBoxes").doc(params.id).get()
