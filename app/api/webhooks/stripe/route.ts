@@ -25,15 +25,21 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
 })
 
 export async function POST(request: NextRequest) {
+  const startTime = Date.now()
+
   try {
     const body = await request.text()
     const signature = request.headers.get("stripe-signature")
     const stripeAccount = request.headers.get("stripe-account")
+    const userAgent = request.headers.get("user-agent")
 
-    console.log("🔍 [Webhook] Incoming webhook request:", {
+    console.log("🔍 [Webhook] === INCOMING WEBHOOK REQUEST ===")
+    console.log("🔍 [Webhook] Headers:", {
       hasSignature: !!signature,
       stripeAccount: stripeAccount || "platform",
+      userAgent: userAgent?.substring(0, 50) + "...",
       bodyLength: body.length,
+      timestamp: new Date().toISOString(),
     })
 
     if (!signature) {
@@ -45,13 +51,14 @@ export async function POST(request: NextRequest) {
     const isTestMode = process.env.STRIPE_SECRET_KEY?.startsWith("sk_test_")
     const webhookSecret = isTestMode ? process.env.STRIPE_WEBHOOK_SECRET_TEST : process.env.STRIPE_WEBHOOK_SECRET_LIVE
 
+    console.log(`🔍 [Webhook] Environment: ${isTestMode ? "TEST" : "LIVE"}`)
+    console.log(`🔍 [Webhook] Webhook secret available: ${!!webhookSecret}`)
+
     if (!webhookSecret) {
       const missingSecret = isTestMode ? "STRIPE_WEBHOOK_SECRET_TEST" : "STRIPE_WEBHOOK_SECRET_LIVE"
       console.error(`❌ [Webhook] Missing ${missingSecret} environment variable`)
       return NextResponse.json({ error: "Webhook secret not configured" }, { status: 500 })
     }
-
-    console.log(`🔍 [Webhook] Processing ${isTestMode ? "TEST" : "LIVE"} mode webhook`)
 
     // Verify the webhook signature
     let event: Stripe.Event
@@ -59,6 +66,7 @@ export async function POST(request: NextRequest) {
       event = stripe.webhooks.constructEvent(body, signature, webhookSecret)
       console.log(`✅ [Webhook] Signature verified for ${isTestMode ? "TEST" : "LIVE"} mode`)
       console.log(`📋 [Webhook] Event type: ${event.type}, Event ID: ${event.id}`)
+      console.log(`📋 [Webhook] Event created: ${new Date(event.created * 1000).toISOString()}`)
     } catch (err) {
       console.error(`❌ [Webhook] Signature verification failed:`, err)
       return NextResponse.json({ error: "Invalid signature" }, { status: 400 })
@@ -68,16 +76,13 @@ export async function POST(request: NextRequest) {
     if (event.type === "checkout.session.completed") {
       const session = event.data.object as Stripe.Checkout.Session
 
-      console.log(`🎉 [Webhook] ${isTestMode ? "TEST" : "LIVE"} Checkout session completed:`, {
-        sessionId: session.id,
-        customerId: session.customer,
-        customerEmail: session.customer_details?.email,
-        amountTotal: session.amount_total,
-        currency: session.currency,
-        paymentStatus: session.payment_status,
-        metadata: session.metadata,
-        stripeAccount: stripeAccount,
-      })
+      console.log(`🎉 [Webhook] === CHECKOUT SESSION COMPLETED ===`)
+      console.log(`🎉 [Webhook] Session ID: ${session.id}`)
+      console.log(`🎉 [Webhook] Payment Status: ${session.payment_status}`)
+      console.log(`🎉 [Webhook] Amount: ${session.amount_total} ${session.currency}`)
+      console.log(`🎉 [Webhook] Customer Email: ${session.customer_details?.email}`)
+      console.log(`🎉 [Webhook] Connected Account: ${stripeAccount || "platform"}`)
+      console.log(`🎉 [Webhook] Metadata:`, session.metadata)
 
       // Extract required data from metadata
       const { productBoxId, buyerUid, creatorUid, connectedAccountId } = session.metadata || {}
@@ -91,10 +96,14 @@ export async function POST(request: NextRequest) {
 
       if (!productBoxId || !buyerUid) {
         console.error("❌ [Webhook] Missing required metadata:", { productBoxId, buyerUid })
+        console.error("❌ [Webhook] Full session metadata:", session.metadata)
+
+        // Still return success to Stripe to avoid retries, but log the issue
         return NextResponse.json({
           received: true,
           error: "Missing metadata",
           sessionId: session.id,
+          timestamp: new Date().toISOString(),
         })
       }
 
@@ -130,17 +139,28 @@ export async function POST(request: NextRequest) {
             connectedAccountId: connectedAccountId,
             error: "Product box not found during webhook processing",
             webhookProcessedAt: new Date(),
+            webhookEventId: event.id,
           }
 
-          console.log(`💾 [Webhook] Saving basic purchase record:`, basicPurchaseData)
+          console.log(`💾 [Webhook] Saving basic purchase record to users/${buyerUid}/purchases/${productBoxId}`)
           await db.collection("users").doc(buyerUid).collection("purchases").doc(productBoxId).set(basicPurchaseData)
-          console.log(`✅ [Webhook] Basic purchase record saved for user ${buyerUid}`)
+
+          console.log(`💾 [Webhook] Saving basic purchase record to userPurchases/${buyerUid}/purchases/${session.id}`)
+          await db
+            .collection("userPurchases")
+            .doc(buyerUid)
+            .collection("purchases")
+            .doc(session.id)
+            .set(basicPurchaseData)
+
+          console.log(`✅ [Webhook] Basic purchase records saved for user ${buyerUid}`)
 
           return NextResponse.json({
             received: true,
             warning: "Product box not found",
             sessionId: session.id,
             purchaseRecorded: true,
+            processingTime: Date.now() - startTime,
           })
         }
 
@@ -171,9 +191,11 @@ export async function POST(request: NextRequest) {
           stripeAccount: stripeAccount,
           connectedAccountId: connectedAccountId,
           webhookProcessedAt: new Date(),
+          webhookEventId: event.id,
         }
 
-        console.log(`💾 [Webhook] Saving purchase record:`, {
+        console.log(`💾 [Webhook] === SAVING PURCHASE RECORDS ===`)
+        console.log(`💾 [Webhook] Purchase data:`, {
           userId: buyerUid,
           productBoxId,
           sessionId: session.id,
@@ -182,10 +204,12 @@ export async function POST(request: NextRequest) {
         })
 
         // Store purchase in user's purchases subcollection using productBoxId as doc ID
+        console.log(`💾 [Webhook] Saving to users/${buyerUid}/purchases/${productBoxId}`)
         await db.collection("users").doc(buyerUid).collection("purchases").doc(productBoxId).set(purchaseData)
         console.log(`✅ [Webhook] Purchase record saved: users/${buyerUid}/purchases/${productBoxId}`)
 
         // ALSO store in a unified purchases collection for easier querying by session ID
+        console.log(`💾 [Webhook] Saving to userPurchases/${buyerUid}/purchases/${session.id}`)
         await db.collection("userPurchases").doc(buyerUid).collection("purchases").doc(session.id).set(purchaseData)
         console.log(`✅ [Webhook] Unified purchase record saved: userPurchases/${buyerUid}/purchases/${session.id}`)
 
@@ -230,6 +254,7 @@ export async function POST(request: NextRequest) {
                 stripeAccount: stripeAccount,
                 connectedAccountId: connectedAccountId,
                 soldAt: new Date(),
+                webhookEventId: event.id,
               })
 
             // Update creator's total stats
@@ -248,7 +273,9 @@ export async function POST(request: NextRequest) {
           }
         }
 
-        console.log(`🎉 [Webhook] Purchase processing completed successfully!`)
+        console.log(`🎉 [Webhook] === PURCHASE PROCESSING COMPLETED SUCCESSFULLY ===`)
+        console.log(`🎉 [Webhook] Processing time: ${Date.now() - startTime}ms`)
+
         return NextResponse.json({
           received: true,
           mode: isTestMode ? "test" : "live",
@@ -258,6 +285,8 @@ export async function POST(request: NextRequest) {
           connectedAccountId: connectedAccountId,
           purchaseDocId: productBoxId,
           unifiedDocId: session.id,
+          processingTime: Date.now() - startTime,
+          timestamp: new Date().toISOString(),
         })
       } catch (dbError) {
         console.error("❌ [Webhook] Database error:", dbError)
@@ -278,6 +307,7 @@ export async function POST(request: NextRequest) {
             connectedAccountId: connectedAccountId,
             error: "Database error during webhook processing",
             webhookProcessedAt: new Date(),
+            webhookEventId: event.id,
           }
 
           if (buyerUid && productBoxId) {
@@ -306,16 +336,28 @@ export async function POST(request: NextRequest) {
           received: true,
           error: "Database error",
           sessionId: session.id,
+          processingTime: Date.now() - startTime,
         })
       }
     }
 
     // Log other events but don't process them
     console.log(`ℹ️ [Webhook] ${isTestMode ? "TEST" : "LIVE"} Received unhandled event type: ${event.type}`)
-    return NextResponse.json({ received: true })
+    return NextResponse.json({
+      received: true,
+      eventType: event.type,
+      processingTime: Date.now() - startTime,
+    })
   } catch (error) {
     console.error("❌ [Webhook] Error processing webhook:", error)
-    return NextResponse.json({ error: "Webhook processing failed" }, { status: 500 })
+    return NextResponse.json(
+      {
+        error: "Webhook processing failed",
+        details: (error as Error).message,
+        processingTime: Date.now() - startTime,
+      },
+      { status: 500 },
+    )
   }
 }
 
@@ -324,5 +366,6 @@ export async function GET() {
   return NextResponse.json({
     message: "Stripe webhook endpoint is active",
     timestamp: new Date().toISOString(),
+    environment: process.env.STRIPE_SECRET_KEY?.startsWith("sk_test_") ? "test" : "live",
   })
 }

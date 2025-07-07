@@ -6,7 +6,7 @@ import type Stripe from "stripe"
 
 export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
   try {
-    console.log(`🔍 [Checkout API] Starting checkout for bundle: ${params.id}`)
+    console.log(`🔍 [Checkout API] === STARTING CHECKOUT FOR BUNDLE: ${params.id} ===`)
 
     // Verify authentication
     const decodedToken = await verifyIdToken(request)
@@ -197,9 +197,10 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
 
     // Create Stripe checkout session
     try {
-      console.log(`🔄 [Checkout API] Creating Stripe checkout session`)
+      console.log(`🔄 [Checkout API] === CREATING STRIPE CHECKOUT SESSION ===`)
       console.log(`💰 [Checkout API] Price: $${bundleData.price} (${Math.round(bundleData.price * 100)} cents)`)
       console.log(`🏦 [Checkout API] Connected account: ${creatorData.stripeAccountId}`)
+
       const priceInCents = Math.round(bundleData.price * 100) // Convert to cents
       const platformFeeAmount = Math.round(priceInCents * 0.05) // 5% platform fee
       console.log(`💸 [Checkout API] Platform fee: ${platformFeeAmount} cents`)
@@ -247,19 +248,18 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
         },
       }
 
-      console.log("📝 [Checkout API] Session params:", {
-        amount: priceInCents,
-        currency: bundleData.currency || "usd",
-        applicationFee: platformFeeAmount,
-        connectedAccount: creatorData.stripeAccountId,
-      })
+      console.log("📝 [Checkout API] Session metadata:", sessionParams.metadata)
+      console.log("📝 [Checkout API] Payment intent metadata:", sessionParams.payment_intent_data?.metadata)
 
+      // CRITICAL: Create session on the connected account
+      console.log(`🔗 [Checkout API] Creating session on connected account: ${creatorData.stripeAccountId}`)
       const session = await stripe.checkout.sessions.create(sessionParams, {
         stripeAccount: creatorData.stripeAccountId,
       })
 
       console.log(`✅ [Checkout API] Stripe session created: ${session.id}`)
       console.log(`🔗 [Checkout API] Session URL: ${session.url}`)
+      console.log(`🔗 [Checkout API] Session created on account: ${creatorData.stripeAccountId}`)
 
       // Log the checkout attempt
       await db.collection("checkoutAttempts").add({
@@ -287,6 +287,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
         creator: {
           id: bundleData.creatorId,
           username: creatorData.username,
+          stripeAccountId: creatorData.stripeAccountId,
         },
       })
     } catch (stripeError: any) {
