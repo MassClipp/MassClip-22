@@ -1,7 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
+import Stripe from "stripe"
 import { getFirestore } from "firebase-admin/firestore"
 import { initializeApp, getApps, cert } from "firebase-admin/app"
-import Stripe from "stripe"
 
 // Initialize Firebase Admin if not already initialized
 if (!getApps().length) {
@@ -19,66 +19,73 @@ if (!getApps().length) {
 }
 
 const db = getFirestore()
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: "2024-06-20",
-})
+
+// Initialize Stripe
+let stripe: Stripe | null = null
+try {
+  if (process.env.STRIPE_SECRET_KEY) {
+    stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
+      apiVersion: "2024-06-20",
+    })
+  }
+} catch (error) {
+  console.error("Failed to initialize Stripe:", error)
+}
 
 export async function POST(request: NextRequest) {
   try {
     const { sessionId, userId } = await request.json()
 
     if (!sessionId || !userId) {
-      return NextResponse.json({ error: "Missing sessionId or userId" }, { status: 400 })
+      return NextResponse.json({
+        error: "Missing sessionId or userId",
+        sessionId: sessionId || "not provided",
+        userId: userId || "not provided",
+        success: false,
+      })
     }
 
-    console.log(`🔍 [Webhook Debug] Debugging session: ${sessionId}, user: ${userId}`)
+    console.log(`🔍 [Debug] Starting webhook verification debug for session: ${sessionId}, user: ${userId}`)
 
     const result = {
       sessionId,
       userId,
       timestamp: new Date().toISOString(),
-      webhookLogs: [] as any[],
       purchaseChecks: [] as any[],
       stripeSessionData: null as any,
       recommendations: [] as string[],
       success: false,
     }
 
-    // Check 1: User purchases collection (by productBoxId)
+    // Check 1: users/{userId}/purchases collection (by sessionId query)
     try {
-      const userPurchasesSnapshot = await db
-        .collection("users")
-        .doc(userId)
-        .collection("purchases")
-        .where("sessionId", "==", sessionId)
-        .get()
+      console.log(`🔍 [Debug] Checking users/${userId}/purchases collection...`)
+      const userPurchasesRef = db.collection("users").doc(userId).collection("purchases")
+      const userPurchasesSnapshot = await userPurchasesRef.where("sessionId", "==", sessionId).get()
 
       result.purchaseChecks.push({
-        collection: "users/{userId}/purchases",
+        collection: `users/${userId}/purchases`,
         found: !userPurchasesSnapshot.empty,
         count: userPurchasesSnapshot.size,
-        data: userPurchasesSnapshot.docs.map((doc) => ({
-          id: doc.id,
-          sessionId: doc.data().sessionId,
-          itemTitle: doc.data().itemTitle,
-          amount: doc.data().amount,
-          webhookProcessedAt: doc.data().webhookProcessedAt,
-        })),
+        data: userPurchasesSnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })),
       })
 
       if (!userPurchasesSnapshot.empty) {
         result.success = true
+        console.log(`✅ [Debug] Found purchase in users collection`)
       }
     } catch (error) {
+      console.error(`❌ [Debug] Error checking users purchases:`, error)
       result.purchaseChecks.push({
-        collection: "users/{userId}/purchases",
-        error: (error as Error).message,
+        collection: `users/${userId}/purchases`,
         found: false,
+        error: (error as Error).message,
       })
     }
 
-    // Check 2: Unified purchases collection (by sessionId)
+    // Check 2: userPurchases/{userId}/purchases/{sessionId} direct lookup
     try {
+      console.log(`🔍 [Debug] Checking userPurchases/${userId}/purchases/${sessionId}...`)
       const unifiedPurchaseDoc = await db
         .collection("userPurchases")
         .doc(userId)
@@ -87,122 +94,91 @@ export async function POST(request: NextRequest) {
         .get()
 
       result.purchaseChecks.push({
-        collection: "userPurchases/{userId}/purchases/{sessionId}",
+        collection: `userPurchases/${userId}/purchases/${sessionId}`,
         found: unifiedPurchaseDoc.exists,
-        data: unifiedPurchaseDoc.exists
-          ? {
-              sessionId: unifiedPurchaseDoc.data()?.sessionId,
-              itemTitle: unifiedPurchaseDoc.data()?.itemTitle,
-              amount: unifiedPurchaseDoc.data()?.amount,
-              webhookProcessedAt: unifiedPurchaseDoc.data()?.webhookProcessedAt,
-            }
-          : null,
+        count: unifiedPurchaseDoc.exists ? 1 : 0,
+        data: unifiedPurchaseDoc.exists ? [{ id: unifiedPurchaseDoc.id, ...unifiedPurchaseDoc.data() }] : [],
       })
 
       if (unifiedPurchaseDoc.exists) {
         result.success = true
+        console.log(`✅ [Debug] Found purchase in unified collection`)
       }
     } catch (error) {
+      console.error(`❌ [Debug] Error checking unified purchases:`, error)
       result.purchaseChecks.push({
-        collection: "userPurchases/{userId}/purchases/{sessionId}",
-        error: (error as Error).message,
+        collection: `userPurchases/${userId}/purchases/${sessionId}`,
         found: false,
+        error: (error as Error).message,
       })
     }
 
-    // Check 3: Get Stripe session data
-    try {
-      console.log(`🔍 [Webhook Debug] Fetching Stripe session: ${sessionId}`)
-
-      // Try to retrieve the session from the platform account first
-      let session = null
+    // Check 3: Stripe session data
+    if (stripe) {
       try {
-        session = await stripe.checkout.sessions.retrieve(sessionId)
-        console.log(`✅ [Webhook Debug] Session found on platform account`)
-      } catch (platformError) {
-        console.log(`⚠️ [Webhook Debug] Session not found on platform account, trying connected accounts...`)
-
-        // If not found on platform, we need to check connected accounts
-        // But we need the connected account ID from metadata or database
-        const allPurchases = await db
-          .collection("users")
-          .doc(userId)
-          .collection("purchases")
-          .where("sessionId", "==", sessionId)
-          .limit(1)
-          .get()
-
-        if (!allPurchases.empty) {
-          const purchaseData = allPurchases.docs[0].data()
-          const connectedAccountId = purchaseData.connectedAccountId || purchaseData.stripeAccount
-
-          if (connectedAccountId) {
-            try {
-              session = await stripe.checkout.sessions.retrieve(sessionId, {
-                stripeAccount: connectedAccountId,
-              })
-              console.log(`✅ [Webhook Debug] Session found on connected account: ${connectedAccountId}`)
-            } catch (connectedError) {
-              console.log(`❌ [Webhook Debug] Session not found on connected account: ${connectedAccountId}`)
-            }
-          }
-        }
-      }
-
-      if (session) {
+        console.log(`🔍 [Debug] Fetching Stripe session data...`)
+        const session = await stripe.checkout.sessions.retrieve(sessionId)
         result.stripeSessionData = {
           id: session.id,
           payment_status: session.payment_status,
           amount_total: session.amount_total,
           currency: session.currency,
-          mode: session.mode,
+          customer_email: session.customer_details?.email,
           metadata: session.metadata,
-          customer_details: session.customer_details,
           created: session.created,
+          mode: session.mode,
+        }
+        console.log(`✅ [Debug] Retrieved Stripe session data`)
+      } catch (error: any) {
+        console.error(`❌ [Debug] Error fetching Stripe session:`, error)
+        result.recommendations.push(`Failed to fetch Stripe session: ${error.message}`)
+
+        if (error.code === "resource_missing") {
+          result.recommendations.push("Stripe session not found - session ID may be incorrect")
         }
       }
-    } catch (error) {
-      console.error(`❌ [Webhook Debug] Error fetching Stripe session:`, error)
-      result.recommendations.push(`Failed to fetch Stripe session: ${(error as Error).message}`)
+    } else {
+      result.recommendations.push("Stripe not initialized - check STRIPE_SECRET_KEY")
     }
 
-    // Generate recommendations
+    // Generate recommendations based on findings
     if (!result.success) {
       result.recommendations.push("Purchase not found in database - webhook may not have processed")
 
       if (result.stripeSessionData) {
         if (result.stripeSessionData.payment_status === "paid") {
-          result.recommendations.push("Stripe session shows payment was successful - webhook processing failed")
-          result.recommendations.push("Check webhook endpoint logs in Vercel for errors")
+          result.recommendations.push("Stripe session shows payment was successful")
+          result.recommendations.push("Check webhook endpoint is receiving events")
           result.recommendations.push("Verify webhook secret configuration")
-          result.recommendations.push("Ensure webhook is configured for connected accounts")
         } else {
-          result.recommendations.push(
-            `Payment status is '${result.stripeSessionData.payment_status}' - payment may not have completed`,
-          )
+          result.recommendations.push(`Stripe payment status: ${result.stripeSessionData.payment_status}`)
+        }
+
+        if (result.stripeSessionData.metadata) {
+          const { productBoxId, buyerUid, creatorUid } = result.stripeSessionData.metadata
+          if (!productBoxId) result.recommendations.push("Missing productBoxId in session metadata")
+          if (!buyerUid) result.recommendations.push("Missing buyerUid in session metadata")
+          if (!creatorUid) result.recommendations.push("Missing creatorUid in session metadata")
+        } else {
+          result.recommendations.push("No metadata found in Stripe session")
         }
       } else {
         result.recommendations.push("Stripe session not found - session ID may be incorrect")
       }
     } else {
-      result.recommendations.push("Purchase found successfully!")
+      result.recommendations.push("✅ Purchase found successfully!")
     }
 
-    // Check webhook configuration
-    const isTestMode = process.env.STRIPE_SECRET_KEY?.startsWith("sk_test_")
-    const webhookSecret = isTestMode ? process.env.STRIPE_WEBHOOK_SECRET_TEST : process.env.STRIPE_WEBHOOK_SECRET_LIVE
-
-    if (!webhookSecret) {
-      result.recommendations.push(`Missing webhook secret for ${isTestMode ? "test" : "live"} mode`)
-    }
-
+    console.log(`🔍 [Debug] Webhook verification debug completed. Success: ${result.success}`)
     return NextResponse.json(result)
   } catch (error) {
-    console.error("Webhook verification debug error:", error)
+    console.error("Error in webhook verification debug:", error)
     return NextResponse.json(
       {
-        error: "Debug failed",
+        error: "Debug request failed",
         details: (error as Error).message,
+        timestamp: new Date().toISOString(),
+        success: false,
       },
       { status: 500 },
     )

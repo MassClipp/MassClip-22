@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useAuth } from "@/contexts/auth-context"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -8,7 +8,8 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
-import { AlertCircle, CheckCircle, Clock, RefreshCw, Bug, Settings, Activity } from "lucide-react"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { AlertCircle, CheckCircle, Clock, RefreshCw, Bug, Settings, Activity, AlertTriangle } from "lucide-react"
 
 interface DebugResult {
   sessionId: string
@@ -31,17 +32,22 @@ interface WebhookConfig {
     isTestMode: boolean
     isLiveMode: boolean
     currentMode: string
+    detected: string
   }
   webhookSecrets: {
     testSecretSet: boolean
     liveSecretSet: boolean
     correctSecretAvailable: boolean
+    testSecretLength: number
+    liveSecretLength: number
   }
   stripeKeys: {
     secretKeySet: boolean
     keyType: string
+    keyLength: number
   }
   configurationIssues: string[]
+  recommendations: string[]
 }
 
 export default function WebhookVerificationDebug() {
@@ -52,6 +58,16 @@ export default function WebhookVerificationDebug() {
   const [webhookConfig, setWebhookConfig] = useState<WebhookConfig | null>(null)
   const [loading, setLoading] = useState(false)
   const [configLoading, setConfigLoading] = useState(false)
+
+  useEffect(() => {
+    if (user?.uid) {
+      setUserId(user.uid)
+    }
+  }, [user])
+
+  useEffect(() => {
+    checkWebhookConfig()
+  }, [])
 
   const debugWebhookProcessing = async () => {
     if (!sessionId || !userId) {
@@ -93,6 +109,12 @@ export default function WebhookVerificationDebug() {
     }
   }
 
+  const StatusIcon = ({ status }: { status: boolean | undefined }) => {
+    if (status === true) return <CheckCircle className="h-4 w-4 text-green-500" />
+    if (status === false) return <AlertCircle className="h-4 w-4 text-red-500" />
+    return <Clock className="h-4 w-4 text-gray-400" />
+  }
+
   return (
     <div className="min-h-screen bg-gray-50 p-4">
       <div className="max-w-6xl mx-auto">
@@ -101,21 +123,172 @@ export default function WebhookVerificationDebug() {
           <p className="text-gray-600">Diagnose webhook processing and purchase verification issues</p>
         </div>
 
-        <Tabs defaultValue="debug" className="space-y-6">
+        <Tabs defaultValue="config" className="space-y-6">
           <TabsList className="grid w-full grid-cols-3">
-            <TabsTrigger value="debug" className="flex items-center gap-2">
-              <Bug className="h-4 w-4" />
-              Debug Session
-            </TabsTrigger>
             <TabsTrigger value="config" className="flex items-center gap-2">
               <Settings className="h-4 w-4" />
               Webhook Config
+            </TabsTrigger>
+            <TabsTrigger value="debug" className="flex items-center gap-2">
+              <Bug className="h-4 w-4" />
+              Debug Session
             </TabsTrigger>
             <TabsTrigger value="logs" className="flex items-center gap-2">
               <Activity className="h-4 w-4" />
               Recent Webhooks
             </TabsTrigger>
           </TabsList>
+
+          <TabsContent value="config">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Settings className="h-5 w-5" />
+                  Webhook Configuration
+                  <Button onClick={checkWebhookConfig} disabled={configLoading} size="sm" variant="outline">
+                    {configLoading ? <RefreshCw className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+                  </Button>
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {webhookConfig ? (
+                  <div className="space-y-6">
+                    {/* Environment Detection Alert */}
+                    <Alert
+                      className={
+                        webhookConfig.environment.isLiveMode ? "border-red-200 bg-red-50" : "border-blue-200 bg-blue-50"
+                      }
+                    >
+                      {webhookConfig.environment.isLiveMode ? (
+                        <AlertTriangle className="h-4 w-4 text-red-600" />
+                      ) : (
+                        <CheckCircle className="h-4 w-4 text-blue-600" />
+                      )}
+                      <AlertDescription
+                        className={webhookConfig.environment.isLiveMode ? "text-red-800" : "text-blue-800"}
+                      >
+                        <strong>{webhookConfig.environment.detected}</strong>
+                        {webhookConfig.environment.isLiveMode && <span> - Real payments will be processed!</span>}
+                        {webhookConfig.environment.isTestMode && <span> - Safe for development and testing</span>}
+                      </AlertDescription>
+                    </Alert>
+
+                    <div className="grid md:grid-cols-3 gap-6">
+                      <div>
+                        <h3 className="font-semibold mb-3">Environment</h3>
+                        <div className="space-y-2">
+                          <div className="flex items-center gap-2">
+                            <StatusIcon status={webhookConfig.environment.isTestMode} />
+                            <span className="text-sm">Test Mode</span>
+                            {webhookConfig.environment.isTestMode && <Badge variant="secondary">Active</Badge>}
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <StatusIcon status={webhookConfig.environment.isLiveMode} />
+                            <span className="text-sm">Live Mode</span>
+                            {webhookConfig.environment.isLiveMode && <Badge variant="destructive">Active</Badge>}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div>
+                        <h3 className="font-semibold mb-3">Webhook Secrets</h3>
+                        <div className="space-y-2">
+                          <div className="flex items-center gap-2">
+                            <StatusIcon status={webhookConfig.webhookSecrets.testSecretSet} />
+                            <span className="text-sm">Test Secret Set</span>
+                            {webhookConfig.webhookSecrets.testSecretLength > 0 && (
+                              <Badge variant="outline" className="text-xs">
+                                {webhookConfig.webhookSecrets.testSecretLength} chars
+                              </Badge>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <StatusIcon status={webhookConfig.webhookSecrets.liveSecretSet} />
+                            <span className="text-sm">Live Secret Set</span>
+                            {webhookConfig.webhookSecrets.liveSecretLength > 0 && (
+                              <Badge variant="outline" className="text-xs">
+                                {webhookConfig.webhookSecrets.liveSecretLength} chars
+                              </Badge>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <StatusIcon status={webhookConfig.webhookSecrets.correctSecretAvailable} />
+                            <span className="text-sm">Correct Secret Available</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div>
+                        <h3 className="font-semibold mb-3">Stripe Keys</h3>
+                        <div className="space-y-2">
+                          <div className="flex items-center gap-2">
+                            <StatusIcon status={webhookConfig.stripeKeys.secretKeySet} />
+                            <span className="text-sm">Stripe Secret Key Set</span>
+                          </div>
+                          <div className="text-xs text-gray-500 font-mono bg-gray-100 p-2 rounded">
+                            {webhookConfig.stripeKeys.keyType}
+                          </div>
+                          <div className="text-xs text-gray-500">
+                            Length: {webhookConfig.stripeKeys.keyLength} characters
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {webhookConfig.recommendations.length > 0 && (
+                      <div>
+                        <h3 className="font-semibold mb-3">Recommendations</h3>
+                        <div className="space-y-2">
+                          {webhookConfig.recommendations.map((rec, index) => (
+                            <Alert
+                              key={index}
+                              className={
+                                rec.includes("⚠️") ? "border-orange-200 bg-orange-50" : "border-blue-200 bg-blue-50"
+                              }
+                            >
+                              <AlertDescription className={rec.includes("⚠️") ? "text-orange-800" : "text-blue-800"}>
+                                {rec}
+                              </AlertDescription>
+                            </Alert>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {webhookConfig.configurationIssues.length > 0 && (
+                      <div>
+                        <h3 className="font-semibold mb-3 text-red-600">Configuration Issues</h3>
+                        <div className="space-y-2">
+                          {webhookConfig.configurationIssues.map((issue, index) => (
+                            <Alert key={index} className="border-red-200 bg-red-50">
+                              <AlertTriangle className="h-4 w-4 text-red-600" />
+                              <AlertDescription className="text-red-800">{issue}</AlertDescription>
+                            </Alert>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div className="text-center py-8">
+                    <Button onClick={checkWebhookConfig} disabled={configLoading}>
+                      {configLoading ? (
+                        <>
+                          <Clock className="h-4 w-4 mr-2 animate-spin" />
+                          Checking Configuration...
+                        </>
+                      ) : (
+                        <>
+                          <Settings className="h-4 w-4 mr-2" />
+                          Check Webhook Configuration
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
 
           <TabsContent value="debug">
             <div className="grid gap-6">
@@ -171,11 +344,7 @@ export default function WebhookVerificationDebug() {
                 <Card>
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2">
-                      {debugResult.success ? (
-                        <CheckCircle className="h-5 w-5 text-green-500" />
-                      ) : (
-                        <AlertCircle className="h-5 w-5 text-red-500" />
-                      )}
+                      <StatusIcon status={debugResult.success} />
                       Debug Results
                       <Badge variant={debugResult.success ? "default" : "destructive"}>
                         {debugResult.success ? "FOUND" : "NOT FOUND"}
@@ -188,17 +357,15 @@ export default function WebhookVerificationDebug() {
                         <h3 className="font-semibold mb-3">Purchase Checks</h3>
                         <div className="space-y-2">
                           {debugResult.purchaseChecks.map((check, index) => (
-                            <div key={index} className="flex items-center gap-2 text-sm">
-                              {check.found ? (
-                                <CheckCircle className="h-4 w-4 text-green-500" />
-                              ) : (
-                                <AlertCircle className="h-4 w-4 text-red-500" />
-                              )}
-                              <span className="font-mono text-xs">{check.collection}</span>
-                              {check.found && check.count !== undefined && (
-                                <Badge variant="secondary">({check.count} records)</Badge>
-                              )}
-                              {check.error && <span className="text-red-500">({check.error})</span>}
+                            <div key={index} className="text-sm">
+                              <div className="flex items-center gap-2">
+                                <StatusIcon status={check.found} />
+                                <span className="font-mono text-xs">{check.collection}</span>
+                                {check.found && check.count !== undefined && (
+                                  <Badge variant="secondary">({check.count} records)</Badge>
+                                )}
+                              </div>
+                              {check.error && <div className="ml-6 text-red-500 text-xs">Error: {check.error}</div>}
                             </div>
                           ))}
                         </div>
@@ -212,10 +379,11 @@ export default function WebhookVerificationDebug() {
                               <CheckCircle className="h-4 w-4 text-green-500" />
                               <span>Session found</span>
                             </div>
-                            <div className="bg-gray-50 p-3 rounded text-xs font-mono">
+                            <div className="bg-gray-50 p-3 rounded text-xs font-mono space-y-1">
                               <div>Status: {debugResult.stripeSessionData.payment_status}</div>
                               <div>Amount: {debugResult.stripeSessionData.amount_total}</div>
                               <div>Currency: {debugResult.stripeSessionData.currency}</div>
+                              <div>Mode: {debugResult.stripeSessionData.mode}</div>
                             </div>
                           </div>
                         ) : (
@@ -229,134 +397,25 @@ export default function WebhookVerificationDebug() {
 
                     <div>
                       <h3 className="font-semibold mb-3">Recommendations</h3>
-                      <ul className="space-y-2">
+                      <div className="space-y-2">
                         {debugResult.recommendations.map((rec, index) => (
-                          <li key={index} className="flex items-start gap-2 text-sm">
-                            <div className="h-2 w-2 bg-blue-500 rounded-full mt-2 flex-shrink-0" />
-                            <span>{rec}</span>
-                          </li>
+                          <Alert
+                            key={index}
+                            className={
+                              rec.includes("✅") ? "border-green-200 bg-green-50" : "border-blue-200 bg-blue-50"
+                            }
+                          >
+                            <AlertDescription className={rec.includes("✅") ? "text-green-800" : "text-blue-800"}>
+                              {rec}
+                            </AlertDescription>
+                          </Alert>
                         ))}
-                      </ul>
+                      </div>
                     </div>
                   </CardContent>
                 </Card>
               )}
             </div>
-          </TabsContent>
-
-          <TabsContent value="config">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Settings className="h-5 w-5" />
-                  Webhook Configuration
-                  <Button onClick={checkWebhookConfig} disabled={configLoading} size="sm" variant="outline">
-                    {configLoading ? <RefreshCw className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-                  </Button>
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                {webhookConfig ? (
-                  <div className="grid md:grid-cols-2 gap-6">
-                    <div>
-                      <h3 className="font-semibold mb-3">Environment</h3>
-                      <div className="space-y-2">
-                        <div className="flex items-center gap-2">
-                          {webhookConfig.environment.isTestMode ? (
-                            <AlertCircle className="h-4 w-4 text-orange-500" />
-                          ) : (
-                            <CheckCircle className="h-4 w-4 text-gray-400" />
-                          )}
-                          <span className="text-sm">Test Mode</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          {webhookConfig.environment.isLiveMode ? (
-                            <CheckCircle className="h-4 w-4 text-green-500" />
-                          ) : (
-                            <AlertCircle className="h-4 w-4 text-gray-400" />
-                          )}
-                          <span className="text-sm">Live Mode</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div>
-                      <h3 className="font-semibold mb-3">Webhook Secrets</h3>
-                      <div className="space-y-2">
-                        <div className="flex items-center gap-2">
-                          {webhookConfig.webhookSecrets.testSecretSet ? (
-                            <CheckCircle className="h-4 w-4 text-green-500" />
-                          ) : (
-                            <AlertCircle className="h-4 w-4 text-red-500" />
-                          )}
-                          <span className="text-sm">Test Secret Set</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          {webhookConfig.webhookSecrets.liveSecretSet ? (
-                            <CheckCircle className="h-4 w-4 text-green-500" />
-                          ) : (
-                            <AlertCircle className="h-4 w-4 text-red-500" />
-                          )}
-                          <span className="text-sm">Live Secret Set</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          {webhookConfig.webhookSecrets.correctSecretAvailable ? (
-                            <CheckCircle className="h-4 w-4 text-green-500" />
-                          ) : (
-                            <AlertCircle className="h-4 w-4 text-red-500" />
-                          )}
-                          <span className="text-sm">Correct Secret Available</span>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div>
-                      <h3 className="font-semibold mb-3">Stripe Keys</h3>
-                      <div className="space-y-2">
-                        <div className="flex items-center gap-2">
-                          {webhookConfig.stripeKeys.secretKeySet ? (
-                            <CheckCircle className="h-4 w-4 text-green-500" />
-                          ) : (
-                            <AlertCircle className="h-4 w-4 text-red-500" />
-                          )}
-                          <span className="text-sm">Stripe Secret Key Set</span>
-                        </div>
-                        <div className="text-xs text-gray-500">Key Type: {webhookConfig.stripeKeys.keyType}</div>
-                      </div>
-                    </div>
-
-                    {webhookConfig.configurationIssues.length > 0 && (
-                      <div>
-                        <h3 className="font-semibold mb-3 text-red-600">Configuration Issues</h3>
-                        <ul className="space-y-1">
-                          {webhookConfig.configurationIssues.map((issue, index) => (
-                            <li key={index} className="text-sm text-red-600">
-                              • {issue}
-                            </li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
-                  </div>
-                ) : (
-                  <div className="text-center py-8">
-                    <Button onClick={checkWebhookConfig} disabled={configLoading}>
-                      {configLoading ? (
-                        <>
-                          <Clock className="h-4 w-4 mr-2 animate-spin" />
-                          Checking Configuration...
-                        </>
-                      ) : (
-                        <>
-                          <Settings className="h-4 w-4 mr-2" />
-                          Check Webhook Configuration
-                        </>
-                      )}
-                    </Button>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
           </TabsContent>
 
           <TabsContent value="logs">
