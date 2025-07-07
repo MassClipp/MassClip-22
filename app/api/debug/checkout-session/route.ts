@@ -73,11 +73,40 @@ export async function POST(request: NextRequest) {
     }
 
     if (!bundleDoc.exists) {
+      // Try to find similar bundle IDs
+      const productBoxesSnapshot = await db.collection("productBoxes").limit(10).get()
+      const bundlesSnapshot = await db.collection("bundles").limit(10).get()
+
+      const allBundles = [
+        ...productBoxesSnapshot.docs.map((doc) => ({ id: doc.id, collection: "productBoxes", data: doc.data() })),
+        ...bundlesSnapshot.docs.map((doc) => ({ id: doc.id, collection: "bundles", data: doc.data() })),
+      ]
+
+      // Find bundles with similar titles or IDs
+      const similarBundles = allBundles.filter(
+        (bundle) =>
+          bundle.id.includes(bundleId.replace("product-", "")) ||
+          bundle.data.title?.toLowerCase().includes("viral") ||
+          bundle.data.title?.toLowerCase().includes("clips"),
+      )
+
       debugResult.error = "Bundle not found in database"
       debugResult.code = "BUNDLE_NOT_FOUND"
       debugResult.recommendations.push("Verify the bundle ID is correct")
       debugResult.recommendations.push("Check if the bundle was deleted")
-      debugResult.recommendations.push("Ensure you're using the correct bundle ID format")
+      debugResult.recommendations.push(
+        "Use the Bundle Finder tool at /debug-bundle-finder to see all available bundles",
+      )
+
+      if (similarBundles.length > 0) {
+        debugResult.recommendations.push("Found similar bundles - check the Bundle Finder for correct IDs")
+        debugResult.similarBundles = similarBundles.map((b) => ({
+          id: b.id,
+          title: b.data.title,
+          collection: b.collection,
+          active: b.data.active,
+        }))
+      }
 
       return NextResponse.json(debugResult, { status: 404 })
     }

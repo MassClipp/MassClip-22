@@ -1,94 +1,88 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { useToast } from "@/hooks/use-toast"
-import { useFirebaseAuth } from "@/hooks/use-firebase-auth"
 import {
   Search,
   Package,
-  User,
-  RefreshCw,
   ArrowLeft,
   Copy,
   ExternalLink,
-  AlertCircle,
   CheckCircle,
   XCircle,
+  DollarSign,
+  User,
+  Calendar,
 } from "lucide-react"
 import Link from "next/link"
 
 interface Bundle {
   id: string
   title: string
-  description?: string
   price: number
   currency: string
   active: boolean
   creatorId: string
-  collection: string
-  thumbnailUrl?: string
   createdAt?: string
+  thumbnailUrl?: string
 }
 
-interface SearchResult {
-  success: boolean
-  searchTerm?: string
-  creatorId?: string
+interface BundleListResult {
   productBoxes: Bundle[]
   bundles: Bundle[]
-  totalFound: number
+  summary: {
+    totalProductBoxes: number
+    totalBundles: number
+    activeProductBoxes: number
+    activeBundles: number
+  }
   timestamp: string
 }
 
 export default function DebugBundleFinderPage() {
   const { toast } = useToast()
-  const { user } = useFirebaseAuth()
-  const [searchTerm, setSearchTerm] = useState("")
-  const [creatorId, setCreatorId] = useState("")
-  const [searchResult, setSearchResult] = useState<SearchResult | null>(null)
+  const [result, setResult] = useState<BundleListResult | null>(null)
   const [loading, setLoading] = useState(false)
+  const [creatorId, setCreatorId] = useState("")
+  const [searchTerm, setSearchTerm] = useState("")
 
-  const searchBundles = async () => {
+  useEffect(() => {
+    fetchBundles()
+  }, [])
+
+  const fetchBundles = async (filterCreatorId?: string) => {
     try {
       setLoading(true)
-      setSearchResult(null)
+      const params = new URLSearchParams()
+      if (filterCreatorId) {
+        params.append("creatorId", filterCreatorId)
+      }
 
-      const response = await fetch("/api/debug/find-bundle", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          searchTerm: searchTerm.trim() || undefined,
-          creatorId: creatorId.trim() || undefined,
-        }),
-      })
-
+      const response = await fetch(`/api/debug/list-bundles?${params}`)
       const data = await response.json()
-      setSearchResult(data)
 
       if (response.ok) {
+        setResult(data)
         toast({
-          title: "Search Complete",
-          description: `Found ${data.totalFound} bundles`,
+          title: "Bundles Loaded",
+          description: `Found ${data.summary.totalProductBoxes + data.summary.totalBundles} total bundles`,
         })
       } else {
         toast({
-          title: "Search Failed",
-          description: data.error || "Failed to search bundles",
+          title: "Error",
+          description: data.error || "Failed to fetch bundles",
           variant: "destructive",
         })
       }
     } catch (error) {
-      console.error("Error searching bundles:", error)
+      console.error("Error fetching bundles:", error)
       toast({
         title: "Error",
-        description: "Failed to search bundles",
+        description: "Failed to fetch bundles",
         variant: "destructive",
       })
     } finally {
@@ -96,11 +90,15 @@ export default function DebugBundleFinderPage() {
     }
   }
 
+  const handleSearch = () => {
+    fetchBundles(creatorId.trim() || undefined)
+  }
+
   const copyBundleId = (bundleId: string) => {
     navigator.clipboard.writeText(bundleId)
     toast({
       title: "Copied!",
-      description: "Bundle ID copied to clipboard",
+      description: `Bundle ID ${bundleId} copied to clipboard`,
     })
   }
 
@@ -108,56 +106,78 @@ export default function DebugBundleFinderPage() {
     window.open(`/debug-checkout-session?bundleId=${bundleId}`, "_blank")
   }
 
-  const BundleCard = ({ bundle }: { bundle: Bundle }) => (
-    <div className="bg-gray-700/50 rounded-lg p-4 space-y-3">
-      <div className="flex items-start justify-between">
-        <div className="flex-1">
-          <div className="flex items-center gap-2 mb-2">
-            <h4 className="text-white font-medium">{bundle.title}</h4>
+  const filteredProductBoxes = result?.productBoxes.filter((bundle) =>
+    searchTerm ? bundle.title.toLowerCase().includes(searchTerm.toLowerCase()) || bundle.id.includes(searchTerm) : true,
+  )
+
+  const filteredBundles = result?.bundles.filter((bundle) =>
+    searchTerm ? bundle.title.toLowerCase().includes(searchTerm.toLowerCase()) || bundle.id.includes(searchTerm) : true,
+  )
+
+  const BundleCard = ({ bundle, collection }: { bundle: Bundle; collection: string }) => (
+    <Card className="bg-gray-800/30 border-gray-700/50">
+      <CardHeader className="pb-3">
+        <div className="flex items-start justify-between">
+          <div className="flex-1">
+            <CardTitle className="text-white text-sm font-medium truncate">{bundle.title}</CardTitle>
+            <CardDescription className="text-xs text-gray-400 mt-1">
+              {collection} • {bundle.id}
+            </CardDescription>
+          </div>
+          <div className="flex items-center gap-1 ml-2">
+            {bundle.active ? (
+              <CheckCircle className="h-4 w-4 text-green-500" />
+            ) : (
+              <XCircle className="h-4 w-4 text-red-500" />
+            )}
             <Badge variant={bundle.active ? "default" : "secondary"} className="text-xs">
               {bundle.active ? "Active" : "Inactive"}
             </Badge>
-            <Badge variant="outline" className="text-xs">
-              {bundle.collection}
-            </Badge>
-          </div>
-          {bundle.description && <p className="text-gray-400 text-sm mb-2 line-clamp-2">{bundle.description}</p>}
-          <div className="flex items-center gap-4 text-sm text-gray-400">
-            <span>
-              ${bundle.price} {bundle.currency.toUpperCase()}
-            </span>
-            <span>Creator: {bundle.creatorId.slice(0, 8)}...</span>
-            {bundle.createdAt && <span>{new Date(bundle.createdAt).toLocaleDateString()}</span>}
           </div>
         </div>
-        {bundle.thumbnailUrl && (
-          <img
-            src={bundle.thumbnailUrl || "/placeholder.svg"}
-            alt={bundle.title}
-            className="w-16 h-16 object-cover rounded-lg ml-4"
-          />
-        )}
-      </div>
-      <div className="flex items-center gap-2">
-        <code className="bg-gray-600 px-2 py-1 rounded text-xs text-white flex-1">{bundle.id}</code>
-        <Button
-          onClick={() => copyBundleId(bundle.id)}
-          variant="outline"
-          size="sm"
-          className="border-gray-600 bg-transparent"
-        >
-          <Copy className="h-3 w-3" />
-        </Button>
-        <Button
-          onClick={() => debugBundle(bundle.id)}
-          variant="outline"
-          size="sm"
-          className="border-gray-600 bg-transparent"
-        >
-          <ExternalLink className="h-3 w-3" />
-        </Button>
-      </div>
-    </div>
+      </CardHeader>
+      <CardContent className="pt-0 space-y-3">
+        <div className="grid grid-cols-2 gap-2 text-xs">
+          <div className="flex items-center gap-1">
+            <DollarSign className="h-3 w-3 text-green-400" />
+            <span className="text-white">
+              ${bundle.price} {bundle.currency.toUpperCase()}
+            </span>
+          </div>
+          <div className="flex items-center gap-1">
+            <User className="h-3 w-3 text-blue-400" />
+            <span className="text-gray-300 truncate">{bundle.creatorId.slice(0, 8)}...</span>
+          </div>
+          {bundle.createdAt && (
+            <div className="flex items-center gap-1 col-span-2">
+              <Calendar className="h-3 w-3 text-purple-400" />
+              <span className="text-gray-300">{new Date(bundle.createdAt).toLocaleDateString()}</span>
+            </div>
+          )}
+        </div>
+
+        <div className="flex gap-2">
+          <Button
+            onClick={() => copyBundleId(bundle.id)}
+            variant="outline"
+            size="sm"
+            className="flex-1 h-8 text-xs border-gray-600 bg-transparent"
+          >
+            <Copy className="h-3 w-3 mr-1" />
+            Copy ID
+          </Button>
+          <Button
+            onClick={() => debugBundle(bundle.id)}
+            variant="outline"
+            size="sm"
+            className="flex-1 h-8 text-xs border-gray-600 bg-transparent"
+          >
+            <ExternalLink className="h-3 w-3 mr-1" />
+            Debug
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
   )
 
   return (
@@ -173,203 +193,130 @@ export default function DebugBundleFinderPage() {
           </Button>
           <div>
             <h1 className="text-3xl font-bold text-white">Bundle Finder</h1>
-            <p className="text-gray-400">Find and debug bundles in your database</p>
+            <p className="text-gray-400">Find and debug bundle IDs in your database</p>
           </div>
         </div>
 
-        {/* User Status */}
+        {/* Search Controls */}
         <Card className="bg-gray-800/30 border-gray-700/50 backdrop-blur-sm">
           <CardHeader>
             <div className="flex items-center gap-2">
-              <User className="h-5 w-5 text-blue-400" />
-              <CardTitle className="text-white">Authentication Status</CardTitle>
-            </div>
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-center gap-2">
-              {user ? <CheckCircle className="h-4 w-4 text-green-500" /> : <XCircle className="h-4 w-4 text-red-500" />}
-              <span className="text-white">{user ? `Authenticated as ${user.email}` : "Not authenticated"}</span>
-            </div>
-            {user && (
-              <div className="mt-2 text-sm text-gray-400">
-                User ID: <code className="bg-gray-700 px-1 rounded">{user.uid}</code>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Search Form */}
-        <Card className="bg-gray-800/30 border-gray-700/50 backdrop-blur-sm">
-          <CardHeader>
-            <div className="flex items-center gap-2">
-              <Search className="h-5 w-5 text-green-400" />
+              <Search className="h-5 w-5 text-amber-400" />
               <CardTitle className="text-white">Search Bundles</CardTitle>
             </div>
-            <CardDescription>Search for bundles by title, ID, or creator</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="text-sm text-gray-400 mb-2 block">Search Term (Title or ID)</label>
+                <label className="text-sm text-gray-400 mb-2 block">Filter by Creator ID (optional)</label>
                 <Input
-                  placeholder="Enter bundle title or ID..."
-                  value={searchTerm}
-                  onChange={(e) => setSearchTerm(e.target.value)}
+                  placeholder="Enter creator ID to filter..."
+                  value={creatorId}
+                  onChange={(e) => setCreatorId(e.target.value)}
                   className="bg-gray-700 border-gray-600 text-white placeholder-gray-400"
                 />
               </div>
               <div>
-                <label className="text-sm text-gray-400 mb-2 block">Creator ID (Optional)</label>
+                <label className="text-sm text-gray-400 mb-2 block">Search by title or ID</label>
                 <Input
-                  placeholder="Enter creator ID..."
-                  value={creatorId}
-                  onChange={(e) => setCreatorId(e.target.value)}
+                  placeholder="Search bundles..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
                   className="bg-gray-700 border-gray-600 text-white placeholder-gray-400"
                 />
               </div>
             </div>
 
             <Button
-              onClick={searchBundles}
-              disabled={loading || !user}
-              className="w-full bg-green-600 hover:bg-green-700 text-white"
+              onClick={handleSearch}
+              disabled={loading}
+              className="w-full bg-amber-600 hover:bg-amber-700 text-black"
             >
-              {loading ? (
-                <>
-                  <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                  Searching...
-                </>
-              ) : (
-                <>
-                  <Search className="h-4 w-4 mr-2" />
-                  Search Bundles
-                </>
-              )}
+              {loading ? "Loading..." : "Search Bundles"}
             </Button>
-
-            {!user && (
-              <Alert className="border-yellow-500/30 bg-yellow-500/10">
-                <AlertCircle className="h-4 w-4 text-yellow-400" />
-                <AlertTitle className="text-yellow-400">Authentication Required</AlertTitle>
-                <AlertDescription className="text-yellow-300">
-                  You need to be logged in to search bundles.{" "}
-                  <Link href="/login" className="underline">
-                    Login here
-                  </Link>
-                </AlertDescription>
-              </Alert>
-            )}
           </CardContent>
         </Card>
 
-        {/* Search Results */}
-        {searchResult && (
-          <div className="space-y-6">
-            {/* Summary */}
-            <Card className="bg-gray-800/30 border-gray-700/50 backdrop-blur-sm">
-              <CardHeader>
-                <div className="flex items-center gap-2">
-                  <Package className="h-5 w-5 text-purple-400" />
-                  <CardTitle className="text-white">Search Results</CardTitle>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-center">
-                  <div className="bg-blue-900/20 border border-blue-500/30 rounded-lg p-4">
-                    <div className="text-2xl font-bold text-blue-400">{searchResult.productBoxes.length}</div>
-                    <div className="text-blue-300 text-sm">Product Boxes</div>
-                  </div>
-                  <div className="bg-green-900/20 border border-green-500/30 rounded-lg p-4">
-                    <div className="text-2xl font-bold text-green-400">{searchResult.bundles.length}</div>
-                    <div className="text-green-300 text-sm">Bundles</div>
-                  </div>
-                  <div className="bg-purple-900/20 border border-purple-500/30 rounded-lg p-4">
-                    <div className="text-2xl font-bold text-purple-400">{searchResult.totalFound}</div>
-                    <div className="text-purple-300 text-sm">Total Found</div>
-                  </div>
-                </div>
+        {/* Summary */}
+        {result && (
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <Card className="bg-gray-800/30 border-gray-700/50">
+              <CardContent className="p-4 text-center">
+                <div className="text-2xl font-bold text-blue-400">{result.summary.totalProductBoxes}</div>
+                <div className="text-sm text-gray-400">Product Boxes</div>
               </CardContent>
             </Card>
-
-            {/* Product Boxes */}
-            {searchResult.productBoxes.length > 0 && (
-              <Card className="bg-gray-800/30 border-gray-700/50 backdrop-blur-sm">
-                <CardHeader>
-                  <CardTitle className="text-white">Product Boxes ({searchResult.productBoxes.length})</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  {searchResult.productBoxes.map((bundle) => (
-                    <BundleCard key={bundle.id} bundle={bundle} />
-                  ))}
-                </CardContent>
-              </Card>
-            )}
-
-            {/* Bundles */}
-            {searchResult.bundles.length > 0 && (
-              <Card className="bg-gray-800/30 border-gray-700/50 backdrop-blur-sm">
-                <CardHeader>
-                  <CardTitle className="text-white">Bundles ({searchResult.bundles.length})</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  {searchResult.bundles.map((bundle) => (
-                    <BundleCard key={bundle.id} bundle={bundle} />
-                  ))}
-                </CardContent>
-              </Card>
-            )}
-
-            {/* No Results */}
-            {searchResult.totalFound === 0 && (
-              <Card className="bg-gray-800/30 border-gray-700/50 backdrop-blur-sm">
-                <CardContent className="text-center py-8">
-                  <Package className="h-12 w-12 text-gray-500 mx-auto mb-4" />
-                  <h3 className="text-white font-medium mb-2">No Bundles Found</h3>
-                  <p className="text-gray-400 text-sm">
-                    Try adjusting your search terms or check if bundles exist in the database.
-                  </p>
-                </CardContent>
-              </Card>
-            )}
+            <Card className="bg-gray-800/30 border-gray-700/50">
+              <CardContent className="p-4 text-center">
+                <div className="text-2xl font-bold text-purple-400">{result.summary.totalBundles}</div>
+                <div className="text-sm text-gray-400">Bundles</div>
+              </CardContent>
+            </Card>
+            <Card className="bg-gray-800/30 border-gray-700/50">
+              <CardContent className="p-4 text-center">
+                <div className="text-2xl font-bold text-green-400">{result.summary.activeProductBoxes}</div>
+                <div className="text-sm text-gray-400">Active Product Boxes</div>
+              </CardContent>
+            </Card>
+            <Card className="bg-gray-800/30 border-gray-700/50">
+              <CardContent className="p-4 text-center">
+                <div className="text-2xl font-bold text-green-400">{result.summary.activeBundles}</div>
+                <div className="text-sm text-gray-400">Active Bundles</div>
+              </CardContent>
+            </Card>
           </div>
         )}
 
-        {/* Quick Actions */}
-        <Card className="bg-gray-800/30 border-gray-700/50 backdrop-blur-sm">
-          <CardHeader>
-            <CardTitle className="text-white">Quick Actions</CardTitle>
-            <CardDescription>Common debugging tasks</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <Button
-                onClick={() => {
-                  setSearchTerm("")
-                  setCreatorId("")
-                  searchBundles()
-                }}
-                variant="outline"
-                className="border-gray-600 bg-transparent text-white"
-                disabled={loading || !user}
-              >
-                <Package className="h-4 w-4 mr-2" />
-                Show All Bundles
-              </Button>
-              <Button
-                onClick={() => {
-                  setSearchTerm("product-")
-                  searchBundles()
-                }}
-                variant="outline"
-                className="border-gray-600 bg-transparent text-white"
-                disabled={loading || !user}
-              >
-                <Search className="h-4 w-4 mr-2" />
-                Find Product-* IDs
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+        {/* Product Boxes */}
+        {filteredProductBoxes && filteredProductBoxes.length > 0 && (
+          <Card className="bg-gray-800/30 border-gray-700/50 backdrop-blur-sm">
+            <CardHeader>
+              <div className="flex items-center gap-2">
+                <Package className="h-5 w-5 text-blue-400" />
+                <CardTitle className="text-white">Product Boxes ({filteredProductBoxes.length})</CardTitle>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {filteredProductBoxes.map((bundle) => (
+                  <BundleCard key={bundle.id} bundle={bundle} collection="productBoxes" />
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Bundles */}
+        {filteredBundles && filteredBundles.length > 0 && (
+          <Card className="bg-gray-800/30 border-gray-700/50 backdrop-blur-sm">
+            <CardHeader>
+              <div className="flex items-center gap-2">
+                <Package className="h-5 w-5 text-purple-400" />
+                <CardTitle className="text-white">Bundles ({filteredBundles.length})</CardTitle>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {filteredBundles.map((bundle) => (
+                  <BundleCard key={bundle.id} bundle={bundle} collection="bundles" />
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* No Results */}
+        {result && filteredProductBoxes?.length === 0 && filteredBundles?.length === 0 && (
+          <Card className="bg-gray-800/30 border-gray-700/50 backdrop-blur-sm">
+            <CardContent className="p-8 text-center">
+              <Package className="h-12 w-12 text-gray-500 mx-auto mb-4" />
+              <h3 className="text-white font-medium mb-2">No bundles found</h3>
+              <p className="text-gray-400 text-sm">
+                {searchTerm || creatorId ? "Try adjusting your search criteria" : "No bundles exist in the database"}
+              </p>
+            </CardContent>
+          </Card>
+        )}
       </div>
     </div>
   )
