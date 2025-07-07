@@ -21,13 +21,27 @@ if (!getApps().length) {
 
 const db = getFirestore()
 
+// Determine environment and select appropriate keys (same logic as lib/stripe.ts)
+const isProduction = process.env.VERCEL_ENV === "production"
+const isDevelopment = process.env.NODE_ENV === "development"
+const isPreview = process.env.VERCEL_ENV === "preview"
+
+// Use test keys for development and preview environments, live keys only for production
+const useTestKeys = isDevelopment || isPreview || !isProduction
+
+// Select the appropriate Stripe secret key
+const stripeSecretKey = useTestKeys ? process.env.STRIPE_SECRET_KEY_TEST : process.env.STRIPE_SECRET_KEY
+
+// Fallback to regular key if test key is not available
+const finalSecretKey = stripeSecretKey || process.env.STRIPE_SECRET_KEY
+
 // Initialize Stripe with proper error handling
 let stripe: Stripe
 try {
-  if (!process.env.STRIPE_SECRET_KEY) {
-    throw new Error("STRIPE_SECRET_KEY environment variable is not set")
+  if (!finalSecretKey) {
+    throw new Error("No Stripe secret key available")
   }
-  stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
+  stripe = new Stripe(finalSecretKey, {
     apiVersion: "2024-06-20",
   })
 } catch (error) {
@@ -47,11 +61,19 @@ export async function POST(request: NextRequest) {
     const stripeAccount = request.headers.get("stripe-account")
     const userAgent = request.headers.get("user-agent")
 
-    console.log(`🔍 [Webhook ${requestId}] Headers:`, {
+    // Determine actual mode based on the key we're using
+    const actuallyUsingTestMode = finalSecretKey?.startsWith("sk_test_")
+    const actuallyUsingLiveMode = finalSecretKey?.startsWith("sk_live_")
+
+    console.log(`🔍 [Webhook ${requestId}] Environment & Key Info:`, {
+      NODE_ENV: process.env.NODE_ENV,
+      VERCEL_ENV: process.env.VERCEL_ENV,
+      intendedMode: useTestKeys ? "TEST" : "LIVE",
+      actualMode: actuallyUsingTestMode ? "TEST" : actuallyUsingLiveMode ? "LIVE" : "UNKNOWN",
+      keyPrefix: finalSecretKey?.substring(0, 7),
       hasSignature: !!signature,
       signatureLength: signature?.length || 0,
       stripeAccount: stripeAccount || "platform",
-      userAgent: userAgent?.substring(0, 50) + "...",
       bodyLength: body.length,
       timestamp: new Date().toISOString(),
     })
@@ -61,34 +83,24 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "No signature provided" }, { status: 400 })
     }
 
-    // Determine environment and select appropriate webhook secret
-    const isTestMode = process.env.STRIPE_SECRET_KEY?.startsWith("sk_test_")
-    const isLiveMode = process.env.STRIPE_SECRET_KEY?.startsWith("sk_live_")
-
-    console.log(`🔍 [Webhook ${requestId}] Environment detection:`, {
-      isTestMode,
-      isLiveMode,
-      stripeKeyPrefix: process.env.STRIPE_SECRET_KEY?.substring(0, 7),
-    })
-
-    // Select the correct webhook secret based on environment
+    // Select the correct webhook secret based on actual key mode (not intended mode)
     let webhookSecret: string | undefined
-    if (isTestMode) {
+    if (actuallyUsingTestMode) {
       webhookSecret = process.env.STRIPE_WEBHOOK_SECRET_TEST
       console.log(`🔍 [Webhook ${requestId}] Using TEST webhook secret: ${!!webhookSecret}`)
-    } else if (isLiveMode) {
+    } else if (actuallyUsingLiveMode) {
       webhookSecret = process.env.STRIPE_WEBHOOK_SECRET_LIVE
       console.log(`🔍 [Webhook ${requestId}] Using LIVE webhook secret: ${!!webhookSecret}`)
     } else {
-      console.error(`❌ [Webhook ${requestId}] Unable to determine environment from Stripe key`)
-      return NextResponse.json({ error: "Unable to determine Stripe environment" }, { status: 500 })
+      console.error(`❌ [Webhook ${requestId}] Unable to determine key mode from: ${finalSecretKey?.substring(0, 7)}`)
+      return NextResponse.json({ error: "Unable to determine Stripe key mode" }, { status: 500 })
     }
 
     if (!webhookSecret) {
-      const missingSecret = isTestMode ? "STRIPE_WEBHOOK_SECRET_TEST" : "STRIPE_WEBHOOK_SECRET_LIVE"
+      const missingSecret = actuallyUsingTestMode ? "STRIPE_WEBHOOK_SECRET_TEST" : "STRIPE_WEBHOOK_SECRET_LIVE"
       console.error(`❌ [Webhook ${requestId}] Missing ${missingSecret} environment variable`)
       return NextResponse.json(
-        { error: `Webhook secret not configured for ${isTestMode ? "test" : "live"} mode` },
+        { error: `Webhook secret not configured for ${actuallyUsingTestMode ? "test" : "live"} mode` },
         { status: 500 },
       )
     }
@@ -96,7 +108,9 @@ export async function POST(request: NextRequest) {
     // Verify the webhook signature
     let event: Stripe.Event
     try {
-      console.log(`🔍 [Webhook ${requestId}] Verifying signature with ${isTestMode ? "TEST" : "LIVE"} secret`)
+      console.log(
+        `🔍 [Webhook ${requestId}] Verifying signature with ${actuallyUsingTestMode ? "TEST" : "LIVE"} secret`,
+      )
       event = stripe.webhooks.constructEvent(body, signature, webhookSecret)
       console.log(`✅ [Webhook ${requestId}] Signature verified successfully`)
       console.log(`📋 [Webhook ${requestId}] Event type: ${event.type}, Event ID: ${event.id}`)
@@ -106,6 +120,8 @@ export async function POST(request: NextRequest) {
         error: err.message,
         type: err.type,
         statusCode: err.statusCode,
+        webhookSecretLength: webhookSecret?.length,
+        actualMode: actuallyUsingTestMode ? "TEST" : "LIVE",
       })
       return NextResponse.json({ error: "Invalid signature" }, { status: 400 })
     }
@@ -120,7 +136,7 @@ export async function POST(request: NextRequest) {
       console.log(`🎉 [Webhook ${requestId}] Amount: ${session.amount_total} ${session.currency}`)
       console.log(`🎉 [Webhook ${requestId}] Customer Email: ${session.customer_details?.email}`)
       console.log(`🎉 [Webhook ${requestId}] Connected Account: ${stripeAccount || "platform"}`)
-      console.log(`🎉 [Webhook ${requestId}] Mode: ${isTestMode ? "TEST" : "LIVE"}`)
+      console.log(`🎉 [Webhook ${requestId}] Mode: ${actuallyUsingTestMode ? "TEST" : "LIVE"}`)
 
       // Log all metadata for debugging
       console.log(`🔍 [Webhook ${requestId}] Full session metadata:`, JSON.stringify(session.metadata, null, 2))
@@ -178,7 +194,7 @@ export async function POST(request: NextRequest) {
             status: "complete",
             itemTitle: "Unknown Product",
             purchasedAt: new Date(),
-            isTestPurchase: isTestMode,
+            isTestPurchase: actuallyUsingTestMode,
             customerEmail: session.customer_details?.email,
             stripeAccount: stripeAccount,
             connectedAccountId: connectedAccountId,
@@ -237,7 +253,7 @@ export async function POST(request: NextRequest) {
           itemDescription: productBoxData.description || "",
           thumbnailUrl: productBoxData.thumbnailUrl || "",
           purchasedAt: new Date(),
-          isTestPurchase: isTestMode,
+          isTestPurchase: actuallyUsingTestMode,
           customerEmail: session.customer_details?.email,
           stripeAccount: stripeAccount,
           connectedAccountId: connectedAccountId,
@@ -254,7 +270,7 @@ export async function POST(request: NextRequest) {
           sessionId: session.id,
           amount: purchaseAmount,
           title: purchaseData.itemTitle,
-          isTestPurchase: isTestMode,
+          isTestPurchase: actuallyUsingTestMode,
         })
 
         // Store purchase in user's purchases subcollection using productBoxId as doc ID
@@ -306,7 +322,7 @@ export async function POST(request: NextRequest) {
                 netAmount,
                 currency: session.currency || "usd",
                 status: "complete",
-                isTestSale: isTestMode,
+                isTestSale: actuallyUsingTestMode,
                 stripeAccount: stripeAccount,
                 connectedAccountId: connectedAccountId,
                 soldAt: new Date(),
@@ -336,7 +352,7 @@ export async function POST(request: NextRequest) {
         // Return success response to Stripe
         return NextResponse.json({
           received: true,
-          mode: isTestMode ? "test" : "live",
+          mode: actuallyUsingTestMode ? "test" : "live",
           sessionId: session.id,
           purchaseRecorded: true,
           stripeAccount: stripeAccount,
@@ -360,7 +376,7 @@ export async function POST(request: NextRequest) {
             status: "complete",
             itemTitle: "Purchase (Processing Error)",
             purchasedAt: new Date(),
-            isTestPurchase: isTestMode,
+            isTestPurchase: actuallyUsingTestMode,
             customerEmail: session.customer_details?.email,
             stripeAccount: stripeAccount,
             connectedAccountId: connectedAccountId,
@@ -404,7 +420,9 @@ export async function POST(request: NextRequest) {
     }
 
     // Log other events but don't process them
-    console.log(`ℹ️ [Webhook ${requestId}] ${isTestMode ? "TEST" : "LIVE"} Received unhandled event type: ${event.type}`)
+    console.log(
+      `ℹ️ [Webhook ${requestId}] ${actuallyUsingTestMode ? "TEST" : "LIVE"} Received unhandled event type: ${event.type}`,
+    )
     return NextResponse.json({
       received: true,
       eventType: event.type,
@@ -433,12 +451,14 @@ export async function POST(request: NextRequest) {
 
 // Handle GET requests (for webhook endpoint verification)
 export async function GET() {
-  const isTestMode = process.env.STRIPE_SECRET_KEY?.startsWith("sk_test_")
+  const finalSecretKey = process.env.STRIPE_SECRET_KEY_TEST || process.env.STRIPE_SECRET_KEY
+  const actuallyUsingTestMode = finalSecretKey?.startsWith("sk_test_")
+
   return NextResponse.json({
     message: "Stripe webhook endpoint is active",
     timestamp: new Date().toISOString(),
-    environment: isTestMode ? "test" : "live",
-    webhookSecretConfigured: isTestMode
+    environment: actuallyUsingTestMode ? "test" : "live",
+    webhookSecretConfigured: actuallyUsingTestMode
       ? !!process.env.STRIPE_WEBHOOK_SECRET_TEST
       : !!process.env.STRIPE_WEBHOOK_SECRET_LIVE,
   })
