@@ -5,26 +5,26 @@ import { useAuth } from "@/contexts/auth-context"
 
 interface StripeConnectionStatus {
   isConnected: boolean
-  accountId?: string
-  canReceivePayments: boolean
   loading: boolean
-  error?: string
+  error: string | null
+  accountId?: string
+  needsOnboarding?: boolean
 }
 
 export function useStripeConnectionCheck() {
   const { user } = useAuth()
   const [status, setStatus] = useState<StripeConnectionStatus>({
     isConnected: false,
-    canReceivePayments: false,
     loading: true,
+    error: null,
   })
 
   useEffect(() => {
     if (!user) {
       setStatus({
         isConnected: false,
-        canReceivePayments: false,
         loading: false,
+        error: "User not authenticated",
       })
       return
     }
@@ -34,41 +34,50 @@ export function useStripeConnectionCheck() {
 
   const checkStripeConnection = async () => {
     try {
-      setStatus((prev) => ({ ...prev, loading: true }))
+      setStatus((prev) => ({ ...prev, loading: true, error: null }))
 
-      const response = await fetch("/api/stripe/connect/status", {
-        method: "GET",
+      const idToken = await user!.getIdToken()
+
+      const response = await fetch("/api/stripe/connection-status", {
+        method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        credentials: "include",
+        body: JSON.stringify({ idToken }),
       })
 
       if (!response.ok) {
-        throw new Error("Failed to check Stripe status")
+        const errorData = await response.json().catch(() => ({}))
+        throw new Error(errorData.error || "Failed to check Stripe connection")
       }
 
       const data = await response.json()
 
       setStatus({
-        isConnected: !!data.accountId,
-        accountId: data.accountId,
-        canReceivePayments: data.canReceivePayments || false,
+        isConnected: data.isConnected || false,
         loading: false,
+        error: null,
+        accountId: data.accountId,
+        needsOnboarding: data.needsOnboarding,
       })
     } catch (error) {
       console.error("Error checking Stripe connection:", error)
       setStatus({
         isConnected: false,
-        canReceivePayments: false,
         loading: false,
         error: error instanceof Error ? error.message : "Unknown error",
       })
     }
   }
 
+  const refreshStatus = () => {
+    if (user) {
+      checkStripeConnection()
+    }
+  }
+
   return {
     ...status,
-    refetch: checkStripeConnection,
+    refreshStatus,
   }
 }
