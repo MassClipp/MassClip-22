@@ -1,40 +1,56 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { verifyIdToken } from "@/lib/auth-utils"
 import { db } from "@/lib/firebase-admin"
+import { stripe } from "@/lib/stripe"
+
+interface CheckoutDebugResult {
+  success: boolean
+  error?: string
+  code?: string
+  details?: any
+  bundle?: any
+  creator?: any
+  user?: any
+  stripeStatus?: any
+  recommendations?: string[]
+  timestamp: string
+}
 
 export async function POST(request: NextRequest) {
   try {
-    console.log(`🔍 [Checkout Debug] Starting debug session`)
+    console.log("🔍 [Debug API] Starting checkout session debug")
 
     // Verify authentication
     const decodedToken = await verifyIdToken(request)
     if (!decodedToken) {
+      console.error("❌ [Debug API] Authentication failed")
       return NextResponse.json(
         {
           success: false,
           error: "Authentication required to debug checkout sessions",
           code: "UNAUTHORIZED",
           timestamp: new Date().toISOString(),
-        },
+        } as CheckoutDebugResult,
         { status: 401 },
       )
     }
 
     const userId = decodedToken.uid
-    console.log(`✅ [Checkout Debug] User authenticated: ${userId}`)
+    console.log(`✅ [Debug API] User authenticated: ${userId}`)
 
     // Parse request body
     let body
     try {
       body = await request.json()
     } catch (parseError) {
+      console.error("❌ [Debug API] Failed to parse request body:", parseError)
       return NextResponse.json(
         {
           success: false,
           error: "Invalid request body",
           code: "INVALID_REQUEST_BODY",
           timestamp: new Date().toISOString(),
-        },
+        } as CheckoutDebugResult,
         { status: 400 },
       )
     }
@@ -48,42 +64,41 @@ export async function POST(request: NextRequest) {
           error: "Bundle ID is required",
           code: "MISSING_BUNDLE_ID",
           timestamp: new Date().toISOString(),
-        },
+        } as CheckoutDebugResult,
         { status: 400 },
       )
     }
 
-    console.log(`🔍 [Checkout Debug] Debugging bundle: ${bundleId}`)
+    console.log(`🔍 [Debug API] Debugging bundle: ${bundleId}`)
 
-    const debugResult: any = {
+    const result: CheckoutDebugResult = {
       success: false,
-      bundleId,
-      userId,
       timestamp: new Date().toISOString(),
       recommendations: [],
     }
 
     // Step 1: Check if bundle exists
     let bundleDoc = await db.collection("productBoxes").doc(bundleId).get()
-    let collection = "productBoxes"
+    let bundleCollection = "productBoxes"
 
     if (!bundleDoc.exists) {
       bundleDoc = await db.collection("bundles").doc(bundleId).get()
-      collection = "bundles"
+      bundleCollection = "bundles"
     }
 
     if (!bundleDoc.exists) {
-      debugResult.error = "Bundle not found in database"
-      debugResult.code = "BUNDLE_NOT_FOUND"
-      debugResult.recommendations.push("Verify the bundle ID is correct")
-      debugResult.recommendations.push("Check if the bundle was deleted")
-      debugResult.recommendations.push("Ensure you're using the correct bundle ID format")
+      result.error = "Bundle not found in database"
+      result.code = "BUNDLE_NOT_FOUND"
+      result.recommendations?.push("Verify the bundle ID is correct")
+      result.recommendations?.push("Check if the bundle was deleted")
+      result.recommendations?.push("Ensure you're using the right collection (productBoxes vs bundles)")
 
-      return NextResponse.json(debugResult, { status: 404 })
+      console.error(`❌ [Debug API] Bundle not found: ${bundleId}`)
+      return NextResponse.json(result, { status: 404 })
     }
 
     const bundleData = bundleDoc.data()
-    debugResult.bundle = {
+    result.bundle = {
       id: bundleId,
       title: bundleData?.title,
       description: bundleData?.description,
@@ -91,84 +106,83 @@ export async function POST(request: NextRequest) {
       currency: bundleData?.currency || "usd",
       active: bundleData?.active,
       creatorId: bundleData?.creatorId,
-      collection,
-      thumbnailUrl: bundleData?.thumbnailUrl,
+      collection: bundleCollection,
     }
 
-    console.log(`✅ [Checkout Debug] Bundle found in ${collection}:`, {
-      title: bundleData?.title,
-      price: bundleData?.price,
-      active: bundleData?.active,
-    })
+    console.log(`✅ [Debug API] Bundle found in ${bundleCollection}:`, result.bundle.title)
 
-    // Step 2: Validate bundle data
+    // Step 2: Check bundle status
     if (!bundleData?.active) {
-      debugResult.error = "Bundle is inactive and cannot be purchased"
-      debugResult.code = "BUNDLE_INACTIVE"
-      debugResult.recommendations.push("Enable the bundle in the creator dashboard")
-      debugResult.recommendations.push("Check if the bundle has content added")
-      debugResult.recommendations.push("Verify bundle pricing is set")
+      result.error = "Bundle is inactive"
+      result.code = "BUNDLE_INACTIVE"
+      result.recommendations?.push("Enable the bundle in the creator dashboard")
+      result.recommendations?.push("Check the 'active' field in bundle data")
+      result.recommendations?.push("Verify bundle has content")
 
-      return NextResponse.json(debugResult, { status: 400 })
+      console.error(`❌ [Debug API] Bundle is inactive: ${bundleId}`)
+      return NextResponse.json(result, { status: 400 })
     }
 
+    // Step 3: Check pricing
     if (!bundleData?.price || bundleData.price <= 0) {
-      debugResult.error = "Bundle has invalid pricing"
-      debugResult.code = "INVALID_PRICE"
-      debugResult.recommendations.push("Set a valid price greater than $0")
-      debugResult.recommendations.push("Check currency settings")
-      debugResult.recommendations.push("Verify Stripe minimum amount requirements")
+      result.error = "Invalid bundle pricing"
+      result.code = "INVALID_PRICE"
+      result.recommendations?.push("Set a valid price greater than $0")
+      result.recommendations?.push("Check the pricing configuration")
+      result.recommendations?.push("Ensure currency is set correctly")
 
-      return NextResponse.json(debugResult, { status: 400 })
+      console.error(`❌ [Debug API] Invalid bundle price: ${bundleData?.price}`)
+      return NextResponse.json(result, { status: 400 })
     }
 
-    // Step 3: Check creator
+    // Step 4: Check creator
     if (!bundleData?.creatorId) {
-      debugResult.error = "Bundle has no creator assigned"
-      debugResult.code = "NO_CREATOR"
-      debugResult.recommendations.push("Assign a creator to this bundle")
+      result.error = "Bundle has no creator assigned"
+      result.code = "NO_CREATOR"
+      result.recommendations?.push("Assign a creator to this bundle")
+      result.recommendations?.push("Check the creatorId field")
 
-      return NextResponse.json(debugResult, { status: 400 })
+      console.error(`❌ [Debug API] Bundle has no creator: ${bundleId}`)
+      return NextResponse.json(result, { status: 400 })
     }
 
     const creatorDoc = await db.collection("users").doc(bundleData.creatorId).get()
     if (!creatorDoc.exists) {
-      debugResult.error = "Creator not found in database"
-      debugResult.code = "CREATOR_NOT_FOUND"
-      debugResult.recommendations.push("Verify the creator ID is correct")
-      debugResult.recommendations.push("Check if the creator account was deleted")
+      result.error = "Creator not found"
+      result.code = "CREATOR_NOT_FOUND"
+      result.recommendations?.push("Verify the creator ID is correct")
+      result.recommendations?.push("Check if the creator account was deleted")
 
-      return NextResponse.json(debugResult, { status: 404 })
+      console.error(`❌ [Debug API] Creator not found: ${bundleData.creatorId}`)
+      return NextResponse.json(result, { status: 404 })
     }
 
     const creatorData = creatorDoc.data()
-    debugResult.creator = {
+    result.creator = {
       id: bundleData.creatorId,
       username: creatorData?.username,
       email: creatorData?.email,
       hasStripeAccount: !!creatorData?.stripeAccountId,
+      onboardingComplete: creatorData?.stripeOnboardingComplete,
       stripeAccountId: creatorData?.stripeAccountId,
-      onboardingComplete: creatorData?.stripeOnboardingComplete,
     }
 
-    console.log(`✅ [Checkout Debug] Creator found:`, {
-      username: creatorData?.username,
-      hasStripeAccount: !!creatorData?.stripeAccountId,
-      onboardingComplete: creatorData?.stripeOnboardingComplete,
-    })
+    console.log(`✅ [Debug API] Creator found:`, result.creator.username)
 
-    // Step 4: Check Stripe integration
+    // Step 5: Check Stripe integration
     if (!creatorData?.stripeAccountId || !creatorData?.stripeOnboardingComplete) {
-      debugResult.error = "Creator has not completed Stripe setup"
-      debugResult.code = "NO_STRIPE_ACCOUNT"
-      debugResult.recommendations.push("Creator needs to complete Stripe Connect onboarding")
-      debugResult.recommendations.push("Check /dashboard/connect-stripe page")
-      debugResult.recommendations.push("Verify Stripe webhook configuration")
+      result.error = "Creator hasn't completed Stripe setup"
+      result.code = "NO_STRIPE_ACCOUNT"
+      result.recommendations?.push("Creator needs to complete Stripe Connect onboarding")
+      result.recommendations?.push("Check stripeAccountId and stripeOnboardingComplete fields")
+      result.recommendations?.push("Verify Stripe Connect integration")
+      result.recommendations?.push("Guide creator through /dashboard/connect-stripe")
 
-      return NextResponse.json(debugResult, { status: 400 })
+      console.error(`❌ [Debug API] Creator not ready for payments: ${bundleData.creatorId}`)
+      return NextResponse.json(result, { status: 400 })
     }
 
-    // Step 5: Check if user already purchased
+    // Step 6: Check if user already purchased
     const existingPurchase = await db
       .collection("users")
       .doc(userId)
@@ -178,40 +192,76 @@ export async function POST(request: NextRequest) {
       .get()
 
     if (!existingPurchase.empty) {
-      debugResult.error = "User already owns this bundle"
-      debugResult.code = "ALREADY_PURCHASED"
-      debugResult.recommendations.push("Redirect user to content instead of checkout")
-      debugResult.recommendations.push("Check user's purchases collection")
-      debugResult.recommendations.push("Consider offering different bundles")
+      result.error = "User already owns this bundle"
+      result.code = "ALREADY_PURCHASED"
+      result.recommendations?.push("Redirect user to content instead of checkout")
+      result.recommendations?.push("Check user's purchases collection")
+      result.recommendations?.push("Consider offering different bundles")
 
-      return NextResponse.json(debugResult, { status: 400 })
+      console.error(`❌ [Debug API] User already owns bundle: ${bundleId}`)
+      return NextResponse.json(result, { status: 400 })
     }
 
-    // Step 6: Check environment and Stripe configuration
-    const stripeKey = process.env.STRIPE_SECRET_KEY
-    const stripeTestKey = process.env.STRIPE_SECRET_KEY_TEST
-    const vercelEnv = process.env.VERCEL_ENV || "development"
+    // Step 7: Test Stripe account status
+    try {
+      const account = await stripe.accounts.retrieve(creatorData.stripeAccountId)
+      result.stripeStatus = {
+        id: account.id,
+        chargesEnabled: account.charges_enabled,
+        payoutsEnabled: account.payouts_enabled,
+        detailsSubmitted: account.details_submitted,
+        requirementsCurrentlyDue: account.requirements?.currently_due || [],
+        requirementsEventuallyDue: account.requirements?.eventually_due || [],
+      }
 
-    debugResult.stripeStatus = {
-      hasMainKey: !!stripeKey,
-      hasTestKey: !!stripeTestKey,
-      environment: vercelEnv,
-      isProduction: vercelEnv === "production",
-      keyType: stripeKey?.startsWith("sk_live_") ? "live" : stripeKey?.startsWith("sk_test_") ? "test" : "unknown",
+      if (!account.charges_enabled) {
+        result.error = "Creator's Stripe account cannot accept charges"
+        result.code = "STRIPE_CHARGES_DISABLED"
+        result.recommendations?.push("Creator needs to complete Stripe verification")
+        result.recommendations?.push("Check Stripe account requirements")
+        result.recommendations?.push("Complete any pending verification steps")
+
+        console.error(`❌ [Debug API] Stripe charges disabled for: ${creatorData.stripeAccountId}`)
+        return NextResponse.json(result, { status: 400 })
+      }
+
+      console.log(`✅ [Debug API] Stripe account verified:`, account.id)
+    } catch (stripeError: any) {
+      result.error = `Stripe account error: ${stripeError.message}`
+      result.code = "STRIPE_ACCOUNT_ERROR"
+      result.recommendations?.push("Check Stripe account configuration")
+      result.recommendations?.push("Verify Stripe API keys")
+      result.recommendations?.push("Re-connect Stripe account")
+
+      console.error(`❌ [Debug API] Stripe error:`, stripeError)
+      return NextResponse.json(result, { status: 400 })
     }
 
-    // Step 7: All checks passed
-    debugResult.success = true
-    debugResult.error = null
-    debugResult.recommendations.push("All checks passed - checkout should work")
-    debugResult.recommendations.push("If still failing, check Stripe dashboard for account issues")
-    debugResult.recommendations.push("Verify webhook endpoints are configured correctly")
+    // Step 8: Check environment variables
+    const envIssues = []
+    if (!process.env.STRIPE_SECRET_KEY) envIssues.push("STRIPE_SECRET_KEY missing")
+    if (!process.env.NEXT_PUBLIC_SITE_URL) envIssues.push("NEXT_PUBLIC_SITE_URL missing")
 
-    console.log(`✅ [Checkout Debug] All checks passed for bundle: ${bundleId}`)
+    if (envIssues.length > 0) {
+      result.error = `Environment configuration issues: ${envIssues.join(", ")}`
+      result.code = "ENV_CONFIG_ERROR"
+      result.recommendations?.push("Check environment variables")
+      result.recommendations?.push("Verify Stripe configuration")
 
-    return NextResponse.json(debugResult)
+      console.error(`❌ [Debug API] Environment issues:`, envIssues)
+      return NextResponse.json(result, { status: 500 })
+    }
+
+    // All checks passed!
+    result.success = true
+    result.recommendations?.push("All checks passed - checkout should work")
+    result.recommendations?.push("Try creating a checkout session")
+    result.recommendations?.push("Monitor Stripe dashboard for any issues")
+
+    console.log(`✅ [Debug API] All checks passed for bundle: ${bundleId}`)
+    return NextResponse.json(result)
   } catch (error: any) {
-    console.error(`❌ [Checkout Debug] Unexpected error:`, error)
+    console.error(`❌ [Debug API] Unexpected error:`, error)
     return NextResponse.json(
       {
         success: false,
@@ -219,19 +269,20 @@ export async function POST(request: NextRequest) {
         code: "INTERNAL_ERROR",
         details: error.message || "Unknown error",
         timestamp: new Date().toISOString(),
-      },
+      } as CheckoutDebugResult,
       { status: 500 },
     )
   }
 }
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   return NextResponse.json(
     {
-      message: "Checkout Session Debug API",
-      usage: "POST with { bundleId: 'your-bundle-id' }",
+      success: false,
+      error: "Use POST method with bundleId in body",
+      code: "METHOD_NOT_ALLOWED",
       timestamp: new Date().toISOString(),
-    },
-    { status: 200 },
+    } as CheckoutDebugResult,
+    { status: 405 },
   )
 }
