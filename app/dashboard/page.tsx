@@ -6,13 +6,14 @@ import { useProfileInitialization } from "@/hooks/use-profile-initialization"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
-import { DollarSign, Upload, TrendingUp, Video, RefreshCw, Activity, Calendar } from "lucide-react"
+import { DollarSign, Upload, TrendingUp, Video, RefreshCw, Activity, Calendar, Link2, Unlink } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useToast } from "@/components/ui/use-toast"
 import { useVideoStatsAPI } from "@/hooks/use-video-stats-api"
 import { useStripeDashboardSales } from "@/hooks/use-stripe-dashboard-sales"
 import { SalesForecastCard } from "@/components/sales-forecast-card"
 import ProfileViewStats from "@/components/profile-view-stats"
+import { useStripeConnectionCheck } from "@/hooks/use-stripe-connection-check"
 
 export default function DashboardPage() {
   const { user } = useAuth()
@@ -27,6 +28,9 @@ export default function DashboardPage() {
 
   // Use live dashboard sales data
   const salesData = useStripeDashboardSales()
+
+  // Check Stripe connection status
+  const stripeConnection = useStripeConnectionCheck()
 
   // Manual refresh function
   const handleRefresh = async () => {
@@ -117,7 +121,7 @@ export default function DashboardPage() {
             onClick={handleRefresh}
             variant="outline"
             disabled={refreshing}
-            className="border-zinc-700 hover:bg-zinc-800"
+            className="border-zinc-700 hover:bg-zinc-800 bg-transparent"
           >
             {refreshing ? (
               <>
@@ -216,6 +220,35 @@ export default function DashboardPage() {
                 <TrendingUp className="h-4 w-4 mr-2" />
                 Edit Profile
               </Button>
+
+              {/* Stripe Account Management */}
+              {stripeConnection.loading ? (
+                <Button
+                  variant="outline"
+                  className="w-full justify-start border-zinc-700 hover:bg-zinc-800 bg-transparent"
+                  disabled
+                >
+                  <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                  Checking Stripe...
+                </Button>
+              ) : stripeConnection.isConnected ? (
+                <Button
+                  onClick={() => router.push("/dashboard/connect-stripe")}
+                  variant="outline"
+                  className="w-full justify-start border-zinc-700 hover:bg-zinc-800"
+                >
+                  <Unlink className="h-4 w-4 mr-2" />
+                  Manage Stripe Account
+                </Button>
+              ) : (
+                <Button
+                  onClick={() => router.push("/dashboard/connect-stripe")}
+                  className="w-full justify-start bg-blue-600 hover:bg-blue-700"
+                >
+                  <Link2 className="h-4 w-4 mr-2" />
+                  Link Stripe Account
+                </Button>
+              )}
             </CardContent>
           </Card>
 
