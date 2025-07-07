@@ -1,101 +1,26 @@
 import { type NextRequest, NextResponse } from "next/server"
+import { verifyIdToken } from "@/lib/auth-utils"
 import { db } from "@/lib/firebase-admin"
-import { getAuth } from "firebase-admin/auth"
-
-async function verifyAuthToken(request: NextRequest): Promise<string | null> {
-  try {
-    // Try to get token from Authorization header
-    const authHeader = request.headers.get("authorization")
-    let token = null
-
-    if (authHeader && authHeader.startsWith("Bearer ")) {
-      token = authHeader.substring(7)
-    }
-
-    // If no Authorization header, try to get from cookies
-    if (!token) {
-      const cookies = request.headers.get("cookie")
-      if (cookies) {
-        const tokenMatch = cookies.match(/session=([^;]+)/)
-        if (tokenMatch) {
-          token = tokenMatch[1]
-        }
-      }
-    }
-
-    // If still no token, try to get from request body or query params
-    if (!token) {
-      const url = new URL(request.url)
-      token = url.searchParams.get("token")
-    }
-
-    if (!token) {
-      console.log("❌ [Auth] No token found in request")
-      return null
-    }
-
-    // Verify the token with Firebase Admin
-    const decodedToken = await getAuth().verifyIdToken(token)
-    console.log("✅ [Auth] Token verified for user:", decodedToken.uid)
-    return decodedToken.uid
-  } catch (error: any) {
-    console.error("❌ [Auth] Token verification failed:", error.message)
-    return null
-  }
-}
 
 export async function POST(request: NextRequest) {
   try {
     console.log(`🔍 [Checkout Debug] Starting debug session`)
 
-    // For debugging purposes, let's be more lenient with auth
-    // We'll try multiple methods to get the user ID
-    let userId: string | null = null
-
-    // Method 1: Try Firebase Admin auth verification
-    userId = await verifyAuthToken(request)
-
-    // Method 2: If that fails, try to get user info from request body
-    if (!userId) {
-      try {
-        const body = await request.json()
-        if (body.userId) {
-          userId = body.userId
-          console.log("✅ [Checkout Debug] Using userId from request body:", userId)
-        }
-      } catch (e) {
-        // Body might not be JSON, that's okay
-      }
-    }
-
-    // Method 3: For debugging, we can also accept a debug mode
-    if (!userId) {
-      const url = new URL(request.url)
-      const debugMode = url.searchParams.get("debug")
-      if (debugMode === "true") {
-        // In debug mode, we'll use a placeholder user ID
-        userId = "debug-user"
-        console.log("⚠️ [Checkout Debug] Running in debug mode without authentication")
-      }
-    }
-
-    if (!userId) {
+    // Verify authentication
+    const decodedToken = await verifyIdToken(request)
+    if (!decodedToken) {
       return NextResponse.json(
         {
           success: false,
           error: "Authentication required to debug checkout sessions",
           code: "UNAUTHORIZED",
           timestamp: new Date().toISOString(),
-          debug: {
-            hasAuthHeader: !!request.headers.get("authorization"),
-            hasCookies: !!request.headers.get("cookie"),
-            headers: Object.fromEntries(request.headers.entries()),
-          },
         },
         { status: 401 },
       )
     }
 
+    const userId = decodedToken.uid
     console.log(`✅ [Checkout Debug] User authenticated: ${userId}`)
 
     // Parse request body
@@ -243,25 +168,23 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(debugResult, { status: 400 })
     }
 
-    // Step 5: Check if user already purchased (skip if debug user)
-    if (userId !== "debug-user") {
-      const existingPurchase = await db
-        .collection("users")
-        .doc(userId)
-        .collection("purchases")
-        .where("productBoxId", "==", bundleId)
-        .limit(1)
-        .get()
+    // Step 5: Check if user already purchased
+    const existingPurchase = await db
+      .collection("users")
+      .doc(userId)
+      .collection("purchases")
+      .where("productBoxId", "==", bundleId)
+      .limit(1)
+      .get()
 
-      if (!existingPurchase.empty) {
-        debugResult.error = "User already owns this bundle"
-        debugResult.code = "ALREADY_PURCHASED"
-        debugResult.recommendations.push("Redirect user to content instead of checkout")
-        debugResult.recommendations.push("Check user's purchases collection")
-        debugResult.recommendations.push("Consider offering different bundles")
+    if (!existingPurchase.empty) {
+      debugResult.error = "User already owns this bundle"
+      debugResult.code = "ALREADY_PURCHASED"
+      debugResult.recommendations.push("Redirect user to content instead of checkout")
+      debugResult.recommendations.push("Check user's purchases collection")
+      debugResult.recommendations.push("Consider offering different bundles")
 
-        return NextResponse.json(debugResult, { status: 400 })
-      }
+      return NextResponse.json(debugResult, { status: 400 })
     }
 
     // Step 6: Check environment and Stripe configuration

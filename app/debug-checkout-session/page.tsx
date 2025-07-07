@@ -22,6 +22,7 @@ import {
   CreditCard,
   User,
   Package,
+  Search,
 } from "lucide-react"
 import Link from "next/link"
 
@@ -49,11 +50,11 @@ export default function DebugCheckoutSessionPage() {
 
   // Auto-debug if bundleId is provided in URL
   useEffect(() => {
-    if (bundleId && !autoDebugComplete && user) {
+    if (bundleId && !autoDebugComplete) {
       debugCheckoutSession()
       setAutoDebugComplete(true)
     }
-  }, [bundleId, autoDebugComplete, user])
+  }, [bundleId, autoDebugComplete])
 
   const debugCheckoutSession = async () => {
     if (!bundleId.trim()) {
@@ -69,32 +70,12 @@ export default function DebugCheckoutSessionPage() {
       setLoading(true)
       setDebugResult(null)
 
-      // Get the Firebase ID token
-      let idToken = null
-      if (user) {
-        try {
-          idToken = await user.getIdToken()
-        } catch (error) {
-          console.error("Failed to get ID token:", error)
-        }
-      }
-
-      const headers: Record<string, string> = {
-        "Content-Type": "application/json",
-      }
-
-      // Add authorization header if we have a token
-      if (idToken) {
-        headers["Authorization"] = `Bearer ${idToken}`
-      }
-
       const response = await fetch("/api/debug/checkout-session", {
         method: "POST",
-        headers,
-        body: JSON.stringify({
-          bundleId: bundleId.trim(),
-          userId: user?.uid, // Also send userId in body as backup
-        }),
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ bundleId: bundleId.trim() }),
       })
 
       const data = await response.json()
@@ -231,23 +212,31 @@ export default function DebugCheckoutSessionPage() {
               </Button>
             </div>
 
-            <Button
-              onClick={debugCheckoutSession}
-              disabled={loading || !bundleId.trim() || !user}
-              className="w-full bg-amber-600 hover:bg-amber-700 text-black"
-            >
-              {loading ? (
-                <>
-                  <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                  Debugging...
-                </>
-              ) : (
-                <>
-                  <Bug className="h-4 w-4 mr-2" />
-                  Debug Checkout Session
-                </>
-              )}
-            </Button>
+            <div className="flex gap-2">
+              <Button
+                onClick={debugCheckoutSession}
+                disabled={loading || !bundleId.trim() || !user}
+                className="flex-1 bg-amber-600 hover:bg-amber-700 text-black"
+              >
+                {loading ? (
+                  <>
+                    <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                    Debugging...
+                  </>
+                ) : (
+                  <>
+                    <Bug className="h-4 w-4 mr-2" />
+                    Debug Checkout Session
+                  </>
+                )}
+              </Button>
+              <Button asChild variant="outline" className="border-gray-600 bg-transparent text-white">
+                <Link href="/debug-bundle-finder">
+                  <Search className="h-4 w-4 mr-2" />
+                  Find Bundles
+                </Link>
+              </Button>
+            </div>
 
             {!user && (
               <Alert className="border-yellow-500/30 bg-yellow-500/10">
@@ -263,6 +252,46 @@ export default function DebugCheckoutSessionPage() {
             )}
           </CardContent>
         </Card>
+
+        {/* Bundle Not Found Helper */}
+        {debugResult?.code === "BUNDLE_NOT_FOUND" && (
+          <Card className="bg-red-900/20 border-red-500/30 backdrop-blur-sm">
+            <CardHeader>
+              <div className="flex items-center gap-2">
+                <AlertCircle className="h-5 w-5 text-red-400" />
+                <CardTitle className="text-red-400">Bundle Not Found</CardTitle>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <p className="text-red-300">
+                The bundle ID <code className="bg-red-800/50 px-1 rounded">{bundleId}</code> was not found in either the{" "}
+                <code>productBoxes</code> or <code>bundles</code> collections.
+              </p>
+              <div className="flex gap-2">
+                <Button
+                  asChild
+                  variant="outline"
+                  className="border-red-500 bg-red-900/20 text-red-300 hover:bg-red-900/40"
+                >
+                  <Link href="/debug-bundle-finder">
+                    <Search className="h-4 w-4 mr-2" />
+                    Search for Correct Bundle ID
+                  </Link>
+                </Button>
+                <Button
+                  asChild
+                  variant="outline"
+                  className="border-red-500 bg-red-900/20 text-red-300 hover:bg-red-900/40"
+                >
+                  <Link href="/dashboard/product-boxes">
+                    <Package className="h-4 w-4 mr-2" />
+                    Create New Bundle
+                  </Link>
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         {/* Debug Results */}
         {debugResult && (
