@@ -95,6 +95,49 @@ export default function StripeStatus({ className }: StripeStatusProps) {
     }
   }
 
+  // Create account link for onboarding
+  const createAccountLink = async () => {
+    if (!user || !status?.accountId) return
+
+    try {
+      const token = await user.getIdToken()
+      const response = await fetch("/api/stripe/create-account-link", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          accountId: status.accountId,
+          returnUrl: `${window.location.origin}/dashboard/stripe/success`,
+          refreshUrl: `${window.location.origin}/dashboard/connect-stripe`,
+        }),
+      })
+
+      const data = await response.json()
+      if (data.success && data.url) {
+        window.location.href = data.url
+      } else {
+        console.error("Failed to create account link:", data.error)
+      }
+    } catch (error) {
+      console.error("Error creating account link:", error)
+    }
+  }
+
+  // Open Stripe Express Dashboard
+  const openStripeDashboard = () => {
+    if (!status?.accountId) return
+
+    // For Stripe Connect Express accounts, use the login link
+    const dashboardUrl = `https://connect.stripe.com/express/oauth/authorize?redirect_uri=${encodeURIComponent(window.location.origin)}&client_id=ca_32D88BD1qLklliziD7gYQvctJIhWBSQ7&state=${status.accountId}&stripe_user[email]=${encodeURIComponent(user?.email || "")}&stripe_user[business_type]=individual`
+
+    // Alternative: Use Stripe's Express Dashboard direct link
+    const expressUrl = `https://dashboard.stripe.com/connect/accounts/${status.accountId}`
+
+    window.open(expressUrl, "_blank")
+  }
+
   const getStatusIcon = (detailedStatus: string, requirementsSummary?: any) => {
     // If only eventually_due requirements and no current/past due, show as active
     if (
@@ -160,30 +203,23 @@ export default function StripeStatus({ className }: StripeStatusProps) {
 
     switch (status.detailedStatus) {
       case "no_account":
-      case "onboarding_incomplete":
         return <StripeConnectButton className="w-full" />
 
+      case "onboarding_incomplete":
       case "past_due_requirements":
       case "current_requirements":
       case "charges_disabled":
       case "payouts_disabled":
         return (
-          <Button
-            onClick={() => {
-              if (status.accountId) {
-                window.open(`https://dashboard.stripe.com/connect/accounts/${status.accountId}`, "_blank")
-              }
-            }}
-            className="w-full bg-blue-600 hover:bg-blue-700"
-          >
+          <Button onClick={createAccountLink} className="w-full bg-blue-600 hover:bg-blue-700">
             <ExternalLink className="h-4 w-4 mr-2" />
-            Resolve in Stripe Dashboard
+            Complete Stripe Setup
           </Button>
         )
 
       case "pending_verification":
         return (
-          <Button variant="outline" className="w-full" disabled>
+          <Button variant="outline" className="w-full bg-transparent" disabled>
             <Clock className="h-4 w-4 mr-2" />
             Waiting for Verification
           </Button>
@@ -191,15 +227,7 @@ export default function StripeStatus({ className }: StripeStatusProps) {
 
       case "fully_enabled":
         return (
-          <Button
-            variant="outline"
-            onClick={() => {
-              if (status.accountId) {
-                window.open(`https://dashboard.stripe.com/connect/accounts/${status.accountId}`, "_blank")
-              }
-            }}
-            className="w-full"
-          >
+          <Button variant="outline" onClick={openStripeDashboard} className="w-full bg-transparent">
             <ExternalLink className="h-4 w-4 mr-2" />
             View Stripe Dashboard
           </Button>
@@ -207,7 +235,7 @@ export default function StripeStatus({ className }: StripeStatusProps) {
 
       default:
         return (
-          <Button onClick={refreshStatus} variant="outline" className="w-full">
+          <Button onClick={refreshStatus} variant="outline" className="w-full bg-transparent">
             <RefreshCw className="h-4 w-4 mr-2" />
             Check Status
           </Button>
@@ -233,7 +261,7 @@ export default function StripeStatus({ className }: StripeStatusProps) {
         <CardContent className="pt-6 text-center">
           <AlertCircle className="h-8 w-8 text-red-500 mx-auto mb-2" />
           <p className="text-sm text-muted-foreground">Failed to check payment status</p>
-          <Button onClick={refreshStatus} variant="outline" size="sm" className="mt-2">
+          <Button onClick={refreshStatus} variant="outline" size="sm" className="mt-2 bg-transparent">
             <RefreshCw className="h-4 w-4 mr-2" />
             Retry
           </Button>
@@ -261,6 +289,13 @@ export default function StripeStatus({ className }: StripeStatusProps) {
               {status.message}
             </AlertDescription>
           </Alert>
+
+          {/* Account ID Display */}
+          {status.accountId && (
+            <div className="text-xs font-mono text-muted-foreground bg-muted p-2 rounded">
+              Account ID: {status.accountId}
+            </div>
+          )}
 
           {/* Capabilities Overview */}
           {status.capabilities && (
@@ -323,7 +358,7 @@ export default function StripeStatus({ className }: StripeStatusProps) {
               size="sm"
               onClick={refreshStatus}
               disabled={isRefreshing}
-              className="flex-shrink-0"
+              className="flex-shrink-0 bg-transparent"
             >
               {isRefreshing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
             </Button>

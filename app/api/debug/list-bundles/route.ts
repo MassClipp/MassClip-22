@@ -4,7 +4,7 @@ import { db } from "@/lib/firebase-admin"
 
 export async function GET(request: NextRequest) {
   try {
-    console.log(`🔍 [Bundle Finder] Starting bundle search`)
+    console.log(`🔍 [List Bundles] Starting bundle listing`)
 
     // Verify authentication
     const decodedToken = await verifyIdToken(request)
@@ -21,49 +21,123 @@ export async function GET(request: NextRequest) {
     }
 
     const userId = decodedToken.uid
-    console.log(`✅ [Bundle Finder] User authenticated: ${userId}`)
+    console.log(`✅ [List Bundles] User authenticated: ${userId}`)
 
-    // Get all product boxes
-    const productBoxesSnapshot = await db.collection("productBoxes").get()
-    const productBoxes = productBoxesSnapshot.docs.map((doc) => ({
-      id: doc.id,
-      collection: "productBoxes",
-      ...doc.data(),
-      createdAt: doc.data().createdAt?.toDate?.()?.toISOString() || null,
-      updatedAt: doc.data().updatedAt?.toDate?.()?.toISOString() || null,
-    }))
+    // Get query parameters
+    const { searchParams } = new URL(request.url)
+    const creatorId = searchParams.get("creatorId")
+    const activeOnly = searchParams.get("activeOnly") === "true"
 
-    // Get all bundles
-    const bundlesSnapshot = await db.collection("bundles").get()
-    const bundles = bundlesSnapshot.docs.map((doc) => ({
-      id: doc.id,
-      collection: "bundles",
-      ...doc.data(),
-      createdAt: doc.data().createdAt?.toDate?.()?.toISOString() || null,
-      updatedAt: doc.data().updatedAt?.toDate?.()?.toISOString() || null,
-    }))
+    const allBundles: any[] = []
 
-    const allBundles = [...productBoxes, ...bundles]
+    try {
+      // Fetch from productBoxes collection
+      let productBoxesQuery = db.collection("productBoxes")
+      if (creatorId) {
+        productBoxesQuery = productBoxesQuery.where("creatorId", "==", creatorId)
+      }
+      if (activeOnly) {
+        productBoxesQuery = productBoxesQuery.where("active", "==", true)
+      }
 
-    console.log(`✅ [Bundle Finder] Found ${allBundles.length} total bundles`)
+      const productBoxesSnapshot = await productBoxesQuery.limit(100).get()
 
-    return NextResponse.json({
+      productBoxesSnapshot.docs.forEach((doc) => {
+        const data = doc.data()
+        allBundles.push({
+          id: doc.id,
+          collection: "productBoxes",
+          title: data.title || "Untitled",
+          description: data.description || "",
+          price: data.price || 0,
+          currency: data.currency || "usd",
+          active: data.active || false,
+          creatorId: data.creatorId || "",
+          thumbnailUrl: data.thumbnailUrl || "",
+          createdAt: data.createdAt?.toDate?.()?.toISOString() || data.createdAt || null,
+          updatedAt: data.updatedAt?.toDate?.()?.toISOString() || data.updatedAt || null,
+        })
+      })
+
+      console.log(`✅ [List Bundles] Found ${productBoxesSnapshot.docs.length} product boxes`)
+
+      // Fetch from bundles collection
+      let bundlesQuery = db.collection("bundles")
+      if (creatorId) {
+        bundlesQuery = bundlesQuery.where("creatorId", "==", creatorId)
+      }
+      if (activeOnly) {
+        bundlesQuery = bundlesQuery.where("active", "==", true)
+      }
+
+      const bundlesSnapshot = await bundlesQuery.limit(100).get()
+
+      bundlesSnapshot.docs.forEach((doc) => {
+        const data = doc.data()
+        allBundles.push({
+          id: doc.id,
+          collection: "bundles",
+          title: data.title || "Untitled",
+          description: data.description || "",
+          price: data.price || 0,
+          currency: data.currency || "usd",
+          active: data.active || false,
+          creatorId: data.creatorId || "",
+          thumbnailUrl: data.thumbnailUrl || "",
+          createdAt: data.createdAt?.toDate?.()?.toISOString() || data.createdAt || null,
+          updatedAt: data.updatedAt?.toDate?.()?.toISOString() || data.updatedAt || null,
+        })
+      })
+
+      console.log(`✅ [List Bundles] Found ${bundlesSnapshot.docs.length} bundles`)
+    } catch (firestoreError) {
+      console.error(`❌ [List Bundles] Firestore error:`, firestoreError)
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Database query failed",
+          code: "FIRESTORE_ERROR",
+          details: firestoreError instanceof Error ? firestoreError.message : "Unknown error",
+          timestamp: new Date().toISOString(),
+        },
+        { status: 500 },
+      )
+    }
+
+    // Sort bundles by creation date (newest first)
+    allBundles.sort((a, b) => {
+      const dateA = new Date(a.createdAt || 0).getTime()
+      const dateB = new Date(b.createdAt || 0).getTime()
+      return dateB - dateA
+    })
+
+    const result = {
       success: true,
       bundles: allBundles,
-      counts: {
-        productBoxes: productBoxes.length,
-        bundles: bundles.length,
+      summary: {
         total: allBundles.length,
+        productBoxes: allBundles.filter((b) => b.collection === "productBoxes").length,
+        bundles: allBundles.filter((b) => b.collection === "bundles").length,
+        active: allBundles.filter((b) => b.active).length,
+        inactive: allBundles.filter((b) => !b.active).length,
+      },
+      filters: {
+        creatorId: creatorId || null,
+        activeOnly,
       },
       timestamp: new Date().toISOString(),
-    })
+    }
+
+    console.log(`✅ [List Bundles] Returning ${allBundles.length} bundles`)
+    return NextResponse.json(result)
   } catch (error: any) {
-    console.error(`❌ [Bundle Finder] Error:`, error)
+    console.error(`❌ [List Bundles] Unexpected error:`, error)
     return NextResponse.json(
       {
         success: false,
-        error: "Failed to fetch bundles",
-        details: error.message,
+        error: "Internal server error",
+        code: "INTERNAL_ERROR",
+        details: error.message || "Unknown error",
         timestamp: new Date().toISOString(),
       },
       { status: 500 },
