@@ -1,248 +1,368 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { Skeleton } from "@/components/ui/skeleton"
-import { useAuth } from "@/contexts/auth-context"
-import { useToast } from "@/components/ui/use-toast"
-import { Package, DollarSign, Users, Calendar } from "lucide-react"
-import PremiumContentPurchaseButton from "./premium-content-purchase-button"
 import { motion } from "framer-motion"
+import { Play, Download, Settings, Trash2, Eye, EyeOff } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
+import { Card, CardContent } from "@/components/ui/card"
+import { Switch } from "@/components/ui/switch"
+import { useToast } from "@/hooks/use-toast"
+import { collection, query, where, getDocs } from "firebase/firestore"
+import { db } from "@/lib/firebase"
+
+interface ContentItem {
+  id: string
+  title: string
+  fileUrl: string
+  thumbnailUrl?: string
+  mimeType: string
+  fileSize: number
+  contentType: "video" | "audio" | "image" | "document"
+  duration?: number
+  filename: string
+  createdAt?: any
+}
 
 interface ProductBox {
   id: string
   title: string
   description: string
   price: number
-  currency: string
-  thumbnailUrl?: string
-  customPreviewThumbnail?: string
-  contentItems: string[]
-  totalSales?: number
+  coverImageUrl?: string
+  isActive: boolean
+  contentItems?: string[]
   createdAt?: any
-  active: boolean
-  creatorId: string
 }
 
 interface EnhancedProductBoxDisplayProps {
-  creatorId: string
-  creatorUsername?: string
+  productBox: ProductBox
+  onEdit?: (productBox: ProductBox) => void
+  onDelete?: (productBoxId: string) => void
+  onToggleActive?: (productBoxId: string, isActive: boolean) => void
   className?: string
 }
 
 export default function EnhancedProductBoxDisplay({
-  creatorId,
-  creatorUsername,
+  productBox,
+  onEdit,
+  onDelete,
+  onToggleActive,
   className = "",
 }: EnhancedProductBoxDisplayProps) {
-  const { user } = useAuth()
+  const [contentItems, setContentItems] = useState<ContentItem[]>([])
+  const [loading, setLoading] = useState(false)
+  const [showContent, setShowContent] = useState(true)
   const { toast } = useToast()
-  const [productBoxes, setProductBoxes] = useState<ProductBox[]>([])
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
 
+  // Fetch content items immediately when component mounts
   useEffect(() => {
-    const fetchProductBoxes = async () => {
-      try {
-        setLoading(true)
-        setError(null)
+    fetchContentItems()
+  }, [productBox.id])
 
-        console.log(`🔍 [Product Box Display] Fetching bundles for creator: ${creatorId}`)
+  const fetchContentItems = async () => {
+    try {
+      setLoading(true)
 
-        const response = await fetch(`/api/creator/${creatorId}/product-boxes`)
+      console.log(`🔍 [Enhanced Display] Fetching content for product box: ${productBox.id}`)
 
-        if (!response.ok) {
-          if (response.status === 404) {
-            console.log(`ℹ️ [Product Box Display] No bundles found for creator: ${creatorId}`)
-            setProductBoxes([])
-            return
+      // Method 1: Try to fetch from productBoxContent collection first
+      const contentQuery = query(collection(db, "productBoxContent"), where("productBoxId", "==", productBox.id))
+      const contentSnapshot = await getDocs(contentQuery)
+
+      const items: ContentItem[] = []
+
+      if (!contentSnapshot.empty) {
+        // Found productBoxContent entries
+        contentSnapshot.forEach((doc) => {
+          const data = doc.data()
+          const item: ContentItem = {
+            id: doc.id,
+            title: data.title || data.filename || "Untitled",
+            fileUrl: data.fileUrl || "",
+            thumbnailUrl: data.thumbnailUrl || "",
+            mimeType: data.mimeType || "application/octet-stream",
+            fileSize: data.fileSize || 0,
+            contentType: getContentType(data.mimeType || ""),
+            duration: data.duration || undefined,
+            filename: data.filename || `${doc.id}.file`,
+            createdAt: data.createdAt,
           }
-          throw new Error(`Failed to fetch product boxes: ${response.status}`)
+
+          if (item.fileUrl && item.fileUrl.startsWith("http")) {
+            items.push(item)
+          }
+        })
+      } else {
+        // Method 2: Fallback to fetching from uploads via contentItems array
+        console.log("🔄 [Enhanced Display] No productBoxContent found, trying contentItems fallback")
+
+        const contentItemIds = productBox.contentItems || []
+
+        if (contentItemIds.length > 0) {
+          // Fetch each upload
+          for (const uploadId of contentItemIds) {
+            try {
+              const uploadDoc = await getDocs(query(collection(db, "uploads"), where("__name__", "==", uploadId)))
+
+              if (!uploadDoc.empty) {
+                const uploadData = uploadDoc.docs[0].data()
+                const item: ContentItem = {
+                  id: uploadId,
+                  title: uploadData.title || uploadData.filename || uploadData.originalFileName || "Untitled",
+                  fileUrl: uploadData.fileUrl || uploadData.publicUrl || uploadData.downloadUrl || "",
+                  thumbnailUrl: uploadData.thumbnailUrl || "",
+                  mimeType: uploadData.mimeType || uploadData.fileType || "application/octet-stream",
+                  fileSize: uploadData.fileSize || uploadData.size || 0,
+                  contentType: getContentType(uploadData.mimeType || uploadData.fileType || ""),
+                  duration: uploadData.duration || undefined,
+                  filename: uploadData.filename || uploadData.originalFileName || `${uploadId}.file`,
+                  createdAt: uploadData.createdAt || uploadData.uploadedAt,
+                }
+
+                if (item.fileUrl && item.fileUrl.startsWith("http")) {
+                  items.push(item)
+                }
+              }
+            } catch (uploadError) {
+              console.error(`❌ [Enhanced Display] Error fetching upload ${uploadId}:`, uploadError)
+            }
+          }
         }
-
-        const data = await response.json()
-        const boxes = Array.isArray(data.productBoxes) ? data.productBoxes : []
-
-        // Filter only active product boxes
-        const activeBoxes = boxes.filter((box: ProductBox) => box.active)
-
-        console.log(`✅ [Product Box Display] Loaded ${activeBoxes.length} active bundles`)
-        setProductBoxes(activeBoxes)
-      } catch (error) {
-        console.error("❌ [Product Box Display] Error fetching product boxes:", error)
-        setError(error instanceof Error ? error.message : "Failed to load bundles")
-      } finally {
-        setLoading(false)
       }
+
+      // Sort by creation date (newest first)
+      items.sort((a, b) => {
+        if (!a.createdAt || !b.createdAt) return 0
+        const aTime = a.createdAt.seconds || a.createdAt.getTime?.() / 1000 || 0
+        const bTime = b.createdAt.seconds || b.createdAt.getTime?.() / 1000 || 0
+        return bTime - aTime
+      })
+
+      setContentItems(items)
+      console.log(`✅ [Enhanced Display] Loaded ${items.length} content items`)
+    } catch (err) {
+      console.error("❌ [Enhanced Display] Error fetching content:", err)
+    } finally {
+      setLoading(false)
     }
+  }
 
-    if (creatorId) {
-      fetchProductBoxes()
+  // Determine content type from MIME type
+  const getContentType = (mimeType: string): "video" | "audio" | "image" | "document" => {
+    if (mimeType.startsWith("video/")) return "video"
+    if (mimeType.startsWith("audio/")) return "audio"
+    if (mimeType.startsWith("image/")) return "image"
+    return "document"
+  }
+
+  // Format file size
+  const formatFileSize = (bytes: number): string => {
+    if (bytes === 0) return "0 Bytes"
+    const k = 1024
+    const sizes = ["Bytes", "KB", "MB", "GB"]
+    const i = Math.floor(Math.log(bytes) / Math.log(k))
+    return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + " " + sizes[i]
+  }
+
+  // Handle toggle active
+  const handleToggleActive = async () => {
+    if (onToggleActive) {
+      await onToggleActive(productBox.id, !productBox.isActive)
     }
-  }, [creatorId])
-
-  const formatPrice = (amount: number, currency: string) => {
-    return new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency: currency.toUpperCase(),
-    }).format(amount)
   }
 
-  const formatDate = (timestamp: any) => {
-    if (!timestamp) return "Unknown"
-    const date = timestamp.toDate ? timestamp.toDate() : new Date(timestamp)
-    return date.toLocaleDateString()
-  }
-
-  if (loading) {
-    return (
-      <div className={`space-y-6 ${className}`}>
-        <div className="flex items-center gap-2 mb-4">
-          <Package className="h-5 w-5 text-red-400" />
-          <h3 className="text-xl font-semibold text-white">Premium Content</h3>
-        </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {[1, 2].map((i) => (
-            <Card key={i} className="bg-zinc-900/60 border-zinc-800/50">
-              <CardHeader>
-                <Skeleton className="h-4 w-3/4 bg-zinc-700" />
-                <Skeleton className="h-3 w-1/2 bg-zinc-700" />
-              </CardHeader>
-              <CardContent>
-                <Skeleton className="h-32 w-full bg-zinc-700 mb-4" />
-                <Skeleton className="h-10 w-full bg-zinc-700" />
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      </div>
-    )
-  }
-
-  if (error) {
-    return (
-      <div className={`space-y-6 ${className}`}>
-        <div className="flex items-center gap-2 mb-4">
-          <Package className="h-5 w-5 text-red-400" />
-          <h3 className="text-xl font-semibold text-white">Premium Content</h3>
-        </div>
-        <Card className="bg-red-900/20 border-red-800/50">
-          <CardContent className="p-6 text-center">
-            <p className="text-red-400">Failed to load premium content</p>
-            <p className="text-red-300 text-sm mt-1">{error}</p>
-          </CardContent>
-        </Card>
-      </div>
-    )
-  }
-
-  if (productBoxes.length === 0) {
-    return (
-      <div className={`space-y-6 ${className}`}>
-        <div className="flex items-center gap-2 mb-4">
-          <Package className="h-5 w-5 text-red-400" />
-          <h3 className="text-xl font-semibold text-white">Premium Content</h3>
-        </div>
-        <Card className="bg-zinc-900/60 border-zinc-800/50">
-          <CardContent className="p-8 text-center">
-            <Package className="h-12 w-12 text-zinc-600 mx-auto mb-4" />
-            <p className="text-zinc-400">No premium content available yet</p>
-          </CardContent>
-        </Card>
-      </div>
-    )
-  }
+  // Get the first video item for prominent display
+  const firstVideoItem = contentItems.find((item) => item.contentType === "video")
 
   return (
-    <div className={`space-y-6 ${className}`}>
-      <div className="flex items-center gap-2 mb-4">
-        <Package className="h-5 w-5 text-red-400" />
-        <h3 className="text-xl font-semibold text-white">Premium Content</h3>
-        <Badge variant="secondary" className="ml-2">
-          {productBoxes.length} {productBoxes.length === 1 ? "item" : "items"}
-        </Badge>
-      </div>
+    <Card className={`bg-zinc-900/50 border-zinc-800 overflow-hidden ${className}`}>
+      <CardContent className="p-0">
+        {/* Header */}
+        <div className="p-4 border-b border-zinc-800">
+          <div className="flex items-start justify-between">
+            <div className="flex-1">
+              <div className="flex items-center gap-2 mb-2">
+                <h3 className="text-lg font-semibold text-white">{productBox.title}</h3>
+                <Badge variant={productBox.isActive ? "default" : "secondary"}>
+                  {productBox.isActive ? "Active" : "Inactive"}
+                </Badge>
+              </div>
+              <p className="text-sm text-zinc-400 mb-2">{productBox.description}</p>
+              <p className="text-xl font-bold text-green-400">${productBox.price.toFixed(2)}</p>
+            </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {productBoxes.map((productBox, index) => (
-          <motion.div
-            key={productBox.id}
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3, delay: index * 0.1 }}
-          >
-            <Card className="bg-zinc-900/60 border-zinc-800/50 backdrop-blur-sm hover:border-zinc-700/50 transition-all duration-300 h-full">
-              {/* Thumbnail */}
-              {(productBox.thumbnailUrl || productBox.customPreviewThumbnail) && (
-                <div className="aspect-video bg-zinc-800 rounded-t-lg overflow-hidden">
-                  <img
-                    src={productBox.customPreviewThumbnail || productBox.thumbnailUrl || "/placeholder.svg"}
-                    alt={productBox.title}
-                    className="w-full h-full object-cover"
-                    onError={(e) => {
-                      const target = e.target as HTMLImageElement
-                      target.src = "/placeholder.svg"
+            <div className="flex items-center gap-2">
+              <Switch checked={productBox.isActive} onCheckedChange={handleToggleActive} />
+              <Button variant="ghost" size="icon" onClick={() => onEdit?.(productBox)}>
+                <Settings className="h-4 w-4" />
+              </Button>
+              <Button variant="ghost" size="icon" onClick={() => onDelete?.(productBox.id)}>
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+        </div>
+
+        {/* Featured Video Content */}
+        {firstVideoItem && (
+          <div className="relative">
+            <div className="aspect-[9/16] bg-black">
+              <video
+                src={firstVideoItem.fileUrl}
+                className="w-full h-full object-cover"
+                autoPlay
+                muted
+                loop
+                playsInline
+                preload="auto"
+                poster={firstVideoItem.thumbnailUrl}
+                onError={(e) => {
+                  console.error("Video error:", e)
+                }}
+              />
+            </div>
+
+            {/* Video overlay info */}
+            <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h4 className="text-white font-medium">{firstVideoItem.title}</h4>
+                  <div className="flex items-center gap-2 text-xs text-white/70 mt-1">
+                    <Badge variant="secondary" className="bg-red-600/80 text-white border-0">
+                      VIDEO
+                    </Badge>
+                    <span>{formatFileSize(firstVideoItem.fileSize)}</span>
+                  </div>
+                </div>
+
+                <div className="flex gap-2">
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => window.open(firstVideoItem.fileUrl, "_blank")}
+                    className="bg-white/20 hover:bg-white/30 text-white border-0"
+                  >
+                    <Play className="h-3 w-3 mr-1" />
+                    Play
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={() => {
+                      const link = document.createElement("a")
+                      link.href = firstVideoItem.fileUrl
+                      link.download = firstVideoItem.filename
+                      link.click()
                     }}
-                  />
+                    className="bg-white/20 hover:bg-white/30 text-white border-0"
+                  >
+                    <Download className="h-3 w-3" />
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Content Summary */}
+        <div className="p-4">
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-sm text-zinc-400">Content ({contentItems.length})</span>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setShowContent(!showContent)}
+              className="text-xs text-zinc-400 hover:text-white hover:bg-zinc-800 p-1 h-auto"
+            >
+              {showContent ? (
+                <>
+                  <EyeOff className="h-3 w-3 mr-1" />
+                  Hide
+                </>
+              ) : (
+                <>
+                  <Eye className="h-3 w-3 mr-1" />
+                  Show All
+                </>
+              )}
+            </Button>
+          </div>
+
+          {/* Content Grid */}
+          {showContent && contentItems.length > 0 && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+              exit={{ opacity: 0, height: 0 }}
+              className="grid grid-cols-2 sm:grid-cols-3 gap-2"
+            >
+              {contentItems.slice(0, 6).map((item) => (
+                <div
+                  key={item.id}
+                  className="relative aspect-[9/16] bg-zinc-800 rounded overflow-hidden group cursor-pointer"
+                  onClick={() => window.open(item.fileUrl, "_blank")}
+                >
+                  {item.contentType === "video" ? (
+                    <video
+                      src={item.fileUrl}
+                      className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                      muted
+                      preload="metadata"
+                      poster={item.thumbnailUrl}
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center">
+                      <div className="text-center">
+                        <div className="text-zinc-400 mb-1">
+                          {item.contentType === "audio" ? "🎵" : item.contentType === "image" ? "🖼️" : "📄"}
+                        </div>
+                        <p className="text-xs text-zinc-500 truncate px-1">{item.title}</p>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Content type badge */}
+                  <div className="absolute top-1 left-1">
+                    <Badge
+                      variant="secondary"
+                      className={`text-xs border-0 ${
+                        item.contentType === "video"
+                          ? "bg-red-600/80 text-white"
+                          : item.contentType === "audio"
+                            ? "bg-purple-600/80 text-white"
+                            : "bg-black/60 text-white"
+                      }`}
+                    >
+                      {item.contentType.toUpperCase()}
+                    </Badge>
+                  </div>
+
+                  {/* Play overlay */}
+                  <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                    <Play className="w-6 h-6 text-white" />
+                  </div>
+                </div>
+              ))}
+
+              {contentItems.length > 6 && (
+                <div className="aspect-[9/16] bg-zinc-800/50 rounded flex items-center justify-center border-2 border-dashed border-zinc-700">
+                  <div className="text-center">
+                    <p className="text-xs text-zinc-500">+{contentItems.length - 6} more</p>
+                  </div>
                 </div>
               )}
+            </motion.div>
+          )}
 
-              <CardHeader>
-                <div className="flex items-start justify-between">
-                  <div className="flex-1">
-                    <CardTitle className="text-lg text-white line-clamp-2">{productBox.title}</CardTitle>
-                    {productBox.description && (
-                      <CardDescription className="mt-2 text-zinc-400 line-clamp-3">
-                        {productBox.description}
-                      </CardDescription>
-                    )}
-                  </div>
-                </div>
-              </CardHeader>
-
-              <CardContent className="space-y-4">
-                {/* Price */}
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <DollarSign className="h-5 w-5 text-green-500" />
-                    <span className="text-2xl font-bold text-white">
-                      {formatPrice(productBox.price, productBox.currency)}
-                    </span>
-                  </div>
-                  <Badge variant="outline" className="border-zinc-700">
-                    {productBox.contentItems?.length || 0} items
-                  </Badge>
-                </div>
-
-                {/* Stats */}
-                <div className="flex items-center justify-between text-sm text-zinc-400">
-                  <div className="flex items-center gap-1">
-                    <Users className="h-4 w-4" />
-                    <span>{productBox.totalSales || 0} sales</span>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <Calendar className="h-4 w-4" />
-                    <span>{formatDate(productBox.createdAt)}</span>
-                  </div>
-                </div>
-
-                {/* Purchase Button */}
-                <div className="pt-2">
-                  <PremiumContentPurchaseButton
-                    productBoxId={productBox.id}
-                    productName={productBox.title}
-                    price={productBox.price}
-                    currency={productBox.currency}
-                    creatorUsername={creatorUsername}
-                    className="w-full"
-                  />
-                </div>
-              </CardContent>
-            </Card>
-          </motion.div>
-        ))}
-      </div>
-    </div>
+          {/* Add Content Button */}
+          <div className="mt-4">
+            <Button variant="outline" size="sm" className="w-full border-zinc-700 text-zinc-300 hover:bg-zinc-800">
+              + Add Content
+            </Button>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
   )
 }

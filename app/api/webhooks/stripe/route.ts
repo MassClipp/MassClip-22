@@ -74,7 +74,7 @@ export async function POST(request: NextRequest) {
       })
 
       // Extract required data from metadata
-      const { productBoxId, buyerUid, creatorUid } = session.metadata || {}
+      const { productBoxId, buyerUid, creatorUid, connectedAccountId } = session.metadata || {}
 
       if (!productBoxId || !buyerUid) {
         console.error("❌ [Webhook] Missing required metadata:", { productBoxId, buyerUid })
@@ -84,6 +84,14 @@ export async function POST(request: NextRequest) {
           received: true,
           error: "Missing metadata",
           sessionId: session.id,
+        })
+      }
+
+      // Verify the connected account matches
+      if (stripeAccount && connectedAccountId && stripeAccount !== connectedAccountId) {
+        console.warn("⚠️ [Webhook] Connected account mismatch:", {
+          headerAccount: stripeAccount,
+          metadataAccount: connectedAccountId,
         })
       }
 
@@ -106,6 +114,7 @@ export async function POST(request: NextRequest) {
             isTestPurchase: isTestMode,
             customerEmail: session.customer_details?.email,
             stripeAccount: stripeAccount,
+            connectedAccountId: connectedAccountId,
             error: "Product box not found during webhook processing",
           }
 
@@ -138,6 +147,7 @@ export async function POST(request: NextRequest) {
           isTestPurchase: isTestMode,
           customerEmail: session.customer_details?.email,
           stripeAccount: stripeAccount,
+          connectedAccountId: connectedAccountId,
           webhookProcessedAt: new Date(),
         }
 
@@ -182,6 +192,7 @@ export async function POST(request: NextRequest) {
                 status: "complete",
                 isTestSale: isTestMode,
                 stripeAccount: stripeAccount,
+                connectedAccountId: connectedAccountId,
                 soldAt: new Date(),
               })
 
@@ -207,6 +218,7 @@ export async function POST(request: NextRequest) {
           sessionId: session.id,
           purchaseRecorded: true,
           stripeAccount: stripeAccount,
+          connectedAccountId: connectedAccountId,
         })
       } catch (dbError) {
         console.error("❌ [Webhook] Database error:", dbError)
@@ -224,6 +236,7 @@ export async function POST(request: NextRequest) {
             isTestPurchase: isTestMode,
             customerEmail: session.customer_details?.email,
             stripeAccount: stripeAccount,
+            connectedAccountId: connectedAccountId,
             error: "Database error during webhook processing",
           }
 

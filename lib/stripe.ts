@@ -9,24 +9,25 @@ const isPreview = process.env.VERCEL_ENV === "preview"
 const useTestKeys = isDevelopment || isPreview || !isProduction
 
 // Select the appropriate Stripe secret key
-const stripeSecretKey = useTestKeys
-  ? process.env.STRIPE_SECRET_KEY_TEST || process.env.STRIPE_SECRET_KEY
-  : process.env.STRIPE_SECRET_KEY
+const stripeSecretKey = useTestKeys ? process.env.STRIPE_SECRET_KEY_TEST : process.env.STRIPE_SECRET_KEY
 
 // Select the appropriate publishable key
 const stripePublishableKey = useTestKeys
-  ? process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY_TEST || process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
+  ? process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY_TEST
   : process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
 
 if (!stripeSecretKey) {
-  const missingKey = useTestKeys ? "STRIPE_SECRET_KEY_TEST or STRIPE_SECRET_KEY" : "STRIPE_SECRET_KEY"
-  console.error(`❌ Missing ${missingKey} environment variable`)
+  const missingKey = useTestKeys ? "STRIPE_SECRET_KEY_TEST" : "STRIPE_SECRET_KEY"
   throw new Error(`Missing ${missingKey} environment variable`)
 }
 
+if (!stripePublishableKey) {
+  const missingKey = useTestKeys ? "NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY_TEST" : "NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY"
+  console.warn(`Missing ${missingKey} environment variable`)
+}
+
 console.log(`🔑 Stripe initialized in ${useTestKeys ? "TEST" : "LIVE"} mode`)
-console.log(`📍 Environment: ${process.env.VERCEL_ENV || process.env.NODE_ENV}`)
-console.log(`🔐 Using key prefix: ${stripeSecretKey.substring(0, 8)}...`)
+console.log(`Environment: ${process.env.VERCEL_ENV || process.env.NODE_ENV}`)
 
 // Initialize Stripe with the selected key
 export const stripe = new Stripe(stripeSecretKey, {
@@ -42,5 +43,4 @@ export const STRIPE_CONFIG = {
   isTestMode: useTestKeys,
   environment: process.env.VERCEL_ENV || process.env.NODE_ENV,
   hasPublishableKey: !!stripePublishableKey,
-  keyPrefix: stripeSecretKey.substring(0, 8),
 }

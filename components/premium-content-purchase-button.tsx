@@ -3,11 +3,11 @@
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { useToast } from "@/components/ui/use-toast"
-import { useAuth } from "@/contexts/auth-context"
 import { Loader2, ShoppingCart, Lock } from "lucide-react"
 
 interface PremiumContentPurchaseButtonProps {
-  productBoxId: string
+  creatorId: string
+  priceId: string
   productName: string
   price: number
   currency: string
@@ -17,7 +17,8 @@ interface PremiumContentPurchaseButtonProps {
 }
 
 export default function PremiumContentPurchaseButton({
-  productBoxId,
+  creatorId,
+  priceId,
   productName,
   price,
   currency,
@@ -27,85 +28,46 @@ export default function PremiumContentPurchaseButton({
 }: PremiumContentPurchaseButtonProps) {
   const [loading, setLoading] = useState(false)
   const { toast } = useToast()
-  const { user } = useAuth()
 
   const formatPrice = (amount: number, currency: string) => {
     return new Intl.NumberFormat("en-US", {
       style: "currency",
       currency: currency.toUpperCase(),
-    }).format(amount)
+    }).format(amount / 100)
   }
 
   const handlePurchase = async () => {
-    if (!user) {
-      toast({
-        title: "Authentication Required",
-        description: "Please log in to purchase this content",
-        variant: "destructive",
-      })
-      return
-    }
-
     try {
       setLoading(true)
-      console.log(`🔄 [Purchase] Starting checkout for product: ${productBoxId}`)
 
-      // Get user token
-      const token = await user.getIdToken()
-
-      const response = await fetch(`/api/creator/product-boxes/${productBoxId}/checkout`, {
+      const response = await fetch("/api/stripe/checkout/premium", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
         },
         body: JSON.stringify({
-          userToken: token,
-          successUrl: `${window.location.origin}/purchase/success?session_id={CHECKOUT_SESSION_ID}`,
+          priceId,
+          creatorId,
+          successUrl: `${window.location.origin}/purchase/success?creator=${creatorUsername || creatorId}`,
           cancelUrl: window.location.href,
         }),
       })
 
-      console.log(`📡 [Purchase] Checkout API response status: ${response.status}`)
-
       if (!response.ok) {
         const error = await response.json()
-        console.error(`❌ [Purchase] Checkout failed:`, error)
-
-        // Handle specific error cases
-        if (error.code === "ALREADY_PURCHASED") {
-          toast({
-            title: "Already Purchased",
-            description: "You already own this content",
-            variant: "destructive",
-          })
-          return
-        }
-
-        if (error.code === "NO_STRIPE_ACCOUNT") {
-          toast({
-            title: "Payment Unavailable",
-            description: "This creator hasn't set up payment processing yet",
-            variant: "destructive",
-          })
-          return
-        }
-
         throw new Error(error.error || "Failed to create checkout session")
       }
 
       const data = await response.json()
-      console.log(`✅ [Purchase] Checkout session created:`, data.sessionId)
 
       if (data.url) {
         // Redirect to Stripe checkout
-        console.log(`🔄 [Purchase] Redirecting to checkout: ${data.url}`)
         window.location.href = data.url
       } else {
         throw new Error("No checkout URL received")
       }
     } catch (error) {
-      console.error("❌ [Purchase] Error creating checkout session:", error)
+      console.error("Error creating checkout session:", error)
       toast({
         title: "Purchase Failed",
         description: error instanceof Error ? error.message : "Failed to start checkout process",
@@ -114,20 +76,6 @@ export default function PremiumContentPurchaseButton({
     } finally {
       setLoading(false)
     }
-  }
-
-  if (!user) {
-    return (
-      <Button
-        disabled
-        size={size}
-        variant="outline"
-        className={`border-zinc-700 text-zinc-500 cursor-not-allowed ${className}`}
-      >
-        <Lock className="h-4 w-4 mr-2" />
-        Login Required
-      </Button>
-    )
   }
 
   return (
@@ -145,7 +93,7 @@ export default function PremiumContentPurchaseButton({
       ) : (
         <>
           <ShoppingCart className="h-4 w-4 mr-2" />
-          {formatPrice(price, currency)}
+          Buy {formatPrice(price, currency)}
         </>
       )}
     </Button>

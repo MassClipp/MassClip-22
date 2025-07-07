@@ -56,6 +56,7 @@ export async function POST(request: NextRequest) {
     const platformFee = Math.round(priceInCents * 0.25)
 
     console.log("💰 [Checkout] Price details:", { priceInCents, platformFee })
+    console.log("🔗 [Checkout] Using connected account:", creatorData.stripeAccountId)
 
     // Create Stripe checkout session with EXPLICIT metadata and stripeAccount
     const sessionParams: Stripe.Checkout.SessionCreateParams = {
@@ -84,6 +85,7 @@ export async function POST(request: NextRequest) {
         buyerUid: buyerUid,
         creatorUid: productBoxData.creatorId,
         productTitle: productBoxData.title || "Product Box",
+        connectedAccountId: creatorData.stripeAccountId,
       },
       payment_intent_data: {
         application_fee_amount: platformFee,
@@ -94,12 +96,12 @@ export async function POST(request: NextRequest) {
           productBoxId: productBoxId,
           buyerUid: buyerUid,
           creatorUid: productBoxData.creatorId,
+          connectedAccountId: creatorData.stripeAccountId,
         },
       },
     }
 
     console.log("📝 [Checkout] Session params metadata:", sessionParams.metadata)
-    console.log("🔗 [Checkout] Using connected account:", creatorData.stripeAccountId)
 
     // FIXED: Create session on the connected account (not platform account)
     const session = await stripe.checkout.sessions.create(sessionParams, {
