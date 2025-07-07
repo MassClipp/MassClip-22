@@ -1,11 +1,11 @@
 "use client"
 
 import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
 
 import { useState, useEffect } from "react"
 import { motion } from "framer-motion"
 import { Package, Loader2, AlertCircle, ShoppingCart } from "lucide-react"
-import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { useAuth } from "@/contexts/auth-context"
 import { useToast } from "@/components/ui/use-toast"
@@ -116,8 +116,11 @@ export default function PremiumContentSection({
 
     try {
       setPurchaseLoading(bundle.id)
+      console.log(`🛒 [Premium Content] Starting purchase for bundle: ${bundle.id}`)
 
       const idToken = await user.getIdToken()
+      console.log(`🔑 [Premium Content] Got ID token for user: ${user.uid}`)
+
       const response = await fetch(`/api/creator/product-boxes/${bundle.id}/checkout`, {
         method: "POST",
         headers: {
@@ -130,24 +133,58 @@ export default function PremiumContentSection({
         }),
       })
 
+      console.log(`📡 [Premium Content] Checkout response status: ${response.status}`)
+
       if (!response.ok) {
         const errorData = await response.json()
-        throw new Error(errorData.message || "Failed to create checkout session")
+        console.error(`❌ [Premium Content] Checkout failed:`, errorData)
+
+        // Provide more specific error messages
+        let errorMessage = errorData.error || "Failed to create checkout session"
+
+        if (errorData.code === "NO_STRIPE_ACCOUNT") {
+          errorMessage = "This creator hasn't set up payments yet. Please try again later."
+        } else if (errorData.code === "ALREADY_PURCHASED") {
+          errorMessage = "You already own this content!"
+        } else if (errorData.code === "BUNDLE_INACTIVE") {
+          errorMessage = "This content is currently unavailable."
+        } else if (errorData.code === "AMOUNT_TOO_SMALL") {
+          errorMessage = errorData.error // Use the specific minimum amount message
+        }
+
+        throw new Error(errorMessage)
       }
 
       const data = await response.json()
+      console.log(`✅ [Premium Content] Checkout session created:`, data.sessionId)
 
       if (data.url) {
+        console.log(`🔗 [Premium Content] Redirecting to checkout: ${data.url}`)
         window.location.href = data.url
       } else {
         throw new Error("No checkout URL received")
       }
     } catch (error) {
       console.error("❌ [Premium Content] Purchase error:", error)
+
+      const errorMessage = error instanceof Error ? error.message : "Failed to start checkout process"
+
       toast({
         title: "Purchase Failed",
-        description: error instanceof Error ? error.message : "Failed to start checkout process",
+        description: errorMessage,
         variant: "destructive",
+        action: bundle.id ? (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              const debugUrl = `/debug-stripe-checkout?bundleId=${bundle.id}`
+              window.open(debugUrl, "_blank")
+            }}
+          >
+            Debug Issue
+          </Button>
+        ) : undefined,
       })
     } finally {
       setPurchaseLoading(null)

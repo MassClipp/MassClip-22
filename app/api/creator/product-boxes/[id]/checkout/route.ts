@@ -65,6 +65,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       title: bundleData?.title,
       price: bundleData?.price,
       creatorId: bundleData?.creatorId,
+      active: bundleData?.active,
     })
 
     // Validate bundle data
@@ -144,10 +145,12 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
 
     // Create Stripe checkout session
     try {
-      console.log(`🔄 [Checkout API] Creating Stripe checkout session on connected account`)
-
+      console.log(`🔄 [Checkout API] Creating Stripe checkout session`)
+      console.log(`💰 [Checkout API] Price: $${bundleData.price} (${Math.round(bundleData.price * 100)} cents)`)
+      console.log(`🏦 [Checkout API] Connected account: ${creatorData.stripeAccountId}`)
       const priceInCents = Math.round(bundleData.price * 100) // Convert to cents
       const platformFeeAmount = Math.round(priceInCents * 0.05) // 5% platform fee
+      console.log(`💸 [Checkout API] Platform fee: ${platformFeeAmount} cents`)
 
       const sessionParams: Stripe.Checkout.SessionCreateParams = {
         payment_method_types: ["card"],
@@ -192,15 +195,19 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
         },
       }
 
-      console.log("📝 [Checkout API] Session metadata:", sessionParams.metadata)
-      console.log("🔗 [Checkout API] Connected account:", creatorData.stripeAccountId)
+      console.log("📝 [Checkout API] Session params:", {
+        amount: priceInCents,
+        currency: bundleData.currency || "usd",
+        applicationFee: platformFeeAmount,
+        connectedAccount: creatorData.stripeAccountId,
+      })
 
-      // FIXED: Create session on the connected account
       const session = await stripe.checkout.sessions.create(sessionParams, {
         stripeAccount: creatorData.stripeAccountId,
       })
 
-      console.log(`✅ [Checkout API] Stripe session created on connected account: ${session.id}`)
+      console.log(`✅ [Checkout API] Stripe session created: ${session.id}`)
+      console.log(`🔗 [Checkout API] Session URL: ${session.url}`)
 
       // Log the checkout attempt
       await db.collection("checkoutAttempts").add({
@@ -231,12 +238,33 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
         },
       })
     } catch (stripeError: any) {
-      console.error(`❌ [Checkout API] Stripe checkout session creation failed:`, stripeError)
+      console.error(`❌ [Checkout API] Stripe error details:`, {
+        message: stripeError.message,
+        type: stripeError.type,
+        code: stripeError.code,
+        param: stripeError.param,
+        statusCode: stripeError.statusCode,
+        requestId: stripeError.requestId,
+      })
+
+      // More specific error messages based on Stripe error types
+      let userFriendlyMessage = "Failed to create checkout session"
+
+      if (stripeError.code === "account_invalid") {
+        userFriendlyMessage = "Creator's payment account needs attention"
+      } else if (stripeError.code === "amount_too_small") {
+        userFriendlyMessage = "Purchase amount is too small for this currency"
+      } else if (stripeError.code === "application_fee_too_large") {
+        userFriendlyMessage = "Platform fee configuration error"
+      }
+
       return NextResponse.json(
         {
-          error: "Failed to create checkout session",
+          error: userFriendlyMessage,
           code: "CHECKOUT_CREATION_FAILED",
-          details: stripeError.message || "Unknown error",
+          details: stripeError.message || "Unknown Stripe error",
+          stripeCode: stripeError.code,
+          stripeType: stripeError.type,
         },
         { status: 500 },
       )
