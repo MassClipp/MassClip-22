@@ -55,6 +55,7 @@ export async function POST(request: NextRequest) {
         environment: "test",
         createdBy: "preview-test-flow",
         accountType: "test",
+        createdAt: new Date().toISOString(),
       },
       capabilities: {
         card_payments: { requested: true },

@@ -18,25 +18,32 @@ export async function POST(request: NextRequest) {
     const decodedToken = await auth.verifyIdToken(idToken)
     const uid = decodedToken.uid
 
-    console.log("🧹 [Test Cleanup] Removing test account data for user:", uid)
+    console.log("🧹 [Test Cleanup] Cleaning up test account for user:", uid)
 
-    // Remove test account data from Firestore (but keep live account data)
+    // Remove test account references from Firestore
+    // Note: We don't delete the actual Stripe account, just unlink it
     await db.collection("users").doc(uid).update({
       stripeTestAccountId: null,
       stripeTestAccountCreated: null,
-      // Reset primary account ID in preview (will need to recreate)
+      stripeTestAccountLinked: null,
+      // Reset primary account ID in preview (you might want to restore live account ID here)
       stripeAccountId: null,
-      stripeAccountCreated: null,
     })
 
-    console.log("✅ [Test Cleanup] Removed test account data from Firestore")
+    console.log("✅ [Test Cleanup] Removed test account references from Firestore")
 
     return NextResponse.json({
       success: true,
-      message: "Test account data removed. You can create a new test account.",
+      message: "Test account references removed",
     })
   } catch (error) {
-    console.error("❌ [Test Cleanup] Error during cleanup:", error)
-    return NextResponse.json({ error: "Failed to cleanup test account" }, { status: 500 })
+    console.error("❌ [Test Cleanup] Error cleaning up:", error)
+    return NextResponse.json(
+      {
+        error: "Failed to cleanup test account",
+        details: error instanceof Error ? error.message : "Unknown error",
+      },
+      { status: 500 },
+    )
   }
 }

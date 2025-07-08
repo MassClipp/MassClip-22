@@ -6,7 +6,21 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
-import { Loader2, TestTube, CheckCircle, AlertCircle, ExternalLink, Zap, Settings, Trash2, Plus } from "lucide-react"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import {
+  Loader2,
+  TestTube,
+  CheckCircle,
+  AlertCircle,
+  ExternalLink,
+  Zap,
+  Settings,
+  Trash2,
+  Plus,
+  Link,
+} from "lucide-react"
 
 interface TestConnectStatus {
   hasTestAccount: boolean
@@ -23,8 +37,10 @@ export default function StripeTestConnect() {
   const [status, setStatus] = useState<TestConnectStatus | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [isCreating, setIsCreating] = useState(false)
+  const [isLinking, setIsLinking] = useState(false)
   const [isOnboarding, setIsOnboarding] = useState(false)
   const [isResetting, setIsResetting] = useState(false)
+  const [accountIdInput, setAccountIdInput] = useState("")
 
   // Only show in preview environment
   const isPreview =
@@ -83,11 +99,48 @@ export default function StripeTestConnect() {
         await checkTestStatus() // Refresh status
       } else {
         console.error("Failed to create test account:", data.error)
+        alert(`Failed to create test account: ${data.error}`)
       }
     } catch (error) {
       console.error("Error creating test account:", error)
+      alert("Error creating test account")
     } finally {
       setIsCreating(false)
+    }
+  }
+
+  const linkTestAccount = async () => {
+    if (!user || !accountIdInput.trim()) return
+
+    try {
+      setIsLinking(true)
+      const token = await user.getIdToken()
+
+      const response = await fetch("/api/stripe/test-connect/link-account", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          idToken: token,
+          accountId: accountIdInput.trim(),
+        }),
+      })
+
+      const data = await response.json()
+
+      if (data.success) {
+        setAccountIdInput("")
+        await checkTestStatus() // Refresh status
+      } else {
+        console.error("Failed to link test account:", data.error)
+        alert(`Failed to link test account: ${data.error}`)
+      }
+    } catch (error) {
+      console.error("Error linking test account:", error)
+      alert("Error linking test account")
+    } finally {
+      setIsLinking(false)
     }
   }
 
@@ -165,7 +218,7 @@ export default function StripeTestConnect() {
           </Badge>
         </CardTitle>
         <CardDescription className="text-orange-700">
-          Create and test Stripe Connect accounts in preview environment
+          Create or link test Stripe Connect accounts in preview environment
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -215,77 +268,120 @@ export default function StripeTestConnect() {
               </div>
             )}
 
-            <div className="flex gap-2 flex-wrap">
-              {!status.hasTestAccount ? (
-                <Button
-                  onClick={createTestAccount}
-                  disabled={isCreating}
-                  className="bg-orange-600 hover:bg-orange-700 text-white"
-                >
-                  {isCreating ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Creating...
-                    </>
-                  ) : (
-                    <>
-                      <Plus className="h-4 w-4 mr-2" />
-                      Create Test Account
-                    </>
-                  )}
-                </Button>
-              ) : (
-                <>
-                  {status.status !== "active" && (
-                    <Button
-                      onClick={startOnboarding}
-                      disabled={isOnboarding}
-                      className="bg-orange-600 hover:bg-orange-700 text-white"
-                    >
-                      {isOnboarding ? (
-                        <>
-                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                          Starting...
-                        </>
-                      ) : (
-                        <>
-                          <ExternalLink className="h-4 w-4 mr-2" />
-                          Complete Setup
-                        </>
-                      )}
-                    </Button>
-                  )}
+            {!status.hasTestAccount ? (
+              <Tabs defaultValue="create" className="w-full">
+                <TabsList className="grid w-full grid-cols-2">
+                  <TabsTrigger value="create">Create New</TabsTrigger>
+                  <TabsTrigger value="link">Link Existing</TabsTrigger>
+                </TabsList>
 
+                <TabsContent value="create" className="space-y-3">
+                  <p className="text-sm text-orange-700">Create a new test Stripe Connect account</p>
                   <Button
-                    onClick={checkTestStatus}
-                    variant="outline"
-                    className="border-orange-300 text-orange-700 hover:bg-orange-100 bg-transparent"
+                    onClick={createTestAccount}
+                    disabled={isCreating}
+                    className="w-full bg-orange-600 hover:bg-orange-700 text-white"
                   >
-                    <Settings className="h-4 w-4 mr-2" />
-                    Refresh Status
-                  </Button>
-
-                  <Button
-                    onClick={resetTestAccount}
-                    disabled={isResetting}
-                    variant="outline"
-                    className="border-red-300 text-red-700 hover:bg-red-50 bg-transparent"
-                  >
-                    {isResetting ? (
+                    {isCreating ? (
                       <>
                         <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                        Resetting...
+                        Creating...
                       </>
                     ) : (
                       <>
-                        <Trash2 className="h-4 w-4 mr-2" />
-                        Reset Account
+                        <Plus className="h-4 w-4 mr-2" />
+                        Create Test Account
                       </>
                     )}
                   </Button>
-                </>
-              )}
-            </div>
+                </TabsContent>
+
+                <TabsContent value="link" className="space-y-3">
+                  <div className="space-y-2">
+                    <Label htmlFor="accountId" className="text-sm text-orange-700">
+                      Stripe Test Account ID
+                    </Label>
+                    <Input
+                      id="accountId"
+                      placeholder="acct_1234567890"
+                      value={accountIdInput}
+                      onChange={(e) => setAccountIdInput(e.target.value)}
+                      className="border-orange-300 focus:border-orange-500"
+                    />
+                    <p className="text-xs text-orange-600">
+                      Enter an existing test account ID from your Stripe dashboard
+                    </p>
+                  </div>
+                  <Button
+                    onClick={linkTestAccount}
+                    disabled={isLinking || !accountIdInput.trim()}
+                    className="w-full bg-orange-600 hover:bg-orange-700 text-white"
+                  >
+                    {isLinking ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Linking...
+                      </>
+                    ) : (
+                      <>
+                        <Link className="h-4 w-4 mr-2" />
+                        Link Test Account
+                      </>
+                    )}
+                  </Button>
+                </TabsContent>
+              </Tabs>
+            ) : (
+              <div className="flex gap-2 flex-wrap">
+                {status.status !== "active" && (
+                  <Button
+                    onClick={startOnboarding}
+                    disabled={isOnboarding}
+                    className="bg-orange-600 hover:bg-orange-700 text-white"
+                  >
+                    {isOnboarding ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Starting...
+                      </>
+                    ) : (
+                      <>
+                        <ExternalLink className="h-4 w-4 mr-2" />
+                        Complete Setup
+                      </>
+                    )}
+                  </Button>
+                )}
+
+                <Button
+                  onClick={checkTestStatus}
+                  variant="outline"
+                  className="border-orange-300 text-orange-700 hover:bg-orange-100 bg-transparent"
+                >
+                  <Settings className="h-4 w-4 mr-2" />
+                  Refresh Status
+                </Button>
+
+                <Button
+                  onClick={resetTestAccount}
+                  disabled={isResetting}
+                  variant="outline"
+                  className="border-red-300 text-red-700 hover:bg-red-50 bg-transparent"
+                >
+                  {isResetting ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Resetting...
+                    </>
+                  ) : (
+                    <>
+                      <Trash2 className="h-4 w-4 mr-2" />
+                      Reset Account
+                    </>
+                  )}
+                </Button>
+              </div>
+            )}
 
             {status.hasTestAccount && status.status === "active" && (
               <Alert className="border-green-200 bg-green-50">

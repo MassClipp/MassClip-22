@@ -26,29 +26,22 @@ export async function POST(request: NextRequest) {
     }
 
     const userData = userDoc.data()!
-    const testAccountId = userData.stripeTestAccountId
 
-    if (!testAccountId) {
-      return NextResponse.json({ error: "No test account found. Create one first." }, { status: 400 })
+    if (!userData.stripeTestAccountId) {
+      return NextResponse.json({ error: "No test account found" }, { status: 400 })
     }
 
-    console.log("🧪 [Test Onboard] Creating onboarding link for test account:", testAccountId)
+    console.log("🔗 [Test Onboard] Creating onboarding link for:", userData.stripeTestAccountId)
 
-    // Check if account is already onboarded
-    const account = await stripe.accounts.retrieve(testAccountId)
-    if (account.details_submitted && account.charges_enabled) {
-      return NextResponse.json({
-        success: true,
-        onboardingComplete: true,
-        message: "Test account is already onboarded",
-      })
-    }
+    // Get current site URL for return/refresh URLs
+    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_VERCEL_URL || "http://localhost:3000"
+    const baseUrl = siteUrl.startsWith("http") ? siteUrl : `https://${siteUrl}`
 
-    // Create onboarding link for test account
+    // Create account link for onboarding
     const accountLink = await stripe.accountLinks.create({
-      account: testAccountId,
-      refresh_url: `${process.env.NEXT_PUBLIC_SITE_URL}/dashboard/stripe/test-refresh`,
-      return_url: `${process.env.NEXT_PUBLIC_SITE_URL}/dashboard/stripe/test-success`,
+      account: userData.stripeTestAccountId,
+      refresh_url: `${baseUrl}/dashboard/stripe/test-refresh`,
+      return_url: `${baseUrl}/dashboard/stripe/test-success`,
       type: "account_onboarding",
     })
 
@@ -61,6 +54,12 @@ export async function POST(request: NextRequest) {
     })
   } catch (error) {
     console.error("❌ [Test Onboard] Error creating onboarding link:", error)
-    return NextResponse.json({ error: "Failed to create onboarding link" }, { status: 500 })
+    return NextResponse.json(
+      {
+        error: "Failed to create onboarding link",
+        details: error instanceof Error ? error.message : "Unknown error",
+      },
+      { status: 500 },
+    )
   }
 }
