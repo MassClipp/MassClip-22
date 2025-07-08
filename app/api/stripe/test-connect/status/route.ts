@@ -28,42 +28,55 @@ export async function GET(request: NextRequest) {
 
     const userData = userDoc.data()!
 
+    // Check for TEST account specifically (not live account)
     if (!userData.stripeTestAccountId) {
+      console.log("🧪 [Test Status] No test account found for user:", uid)
       return NextResponse.json({
         hasTestAccount: false,
         accountId: null,
         status: "none",
-        message: "No test account found",
+        message: "No test account found - create one to start testing",
       })
     }
 
-    console.log("📊 [Test Connect] Checking status for account:", userData.stripeTestAccountId)
+    console.log("📊 [Test Status] Checking status for TEST account:", userData.stripeTestAccountId)
 
-    // Get account details from Stripe
-    const account = await stripe.accounts.retrieve(userData.stripeTestAccountId)
+    try {
+      // Get account details from Stripe
+      const account = await stripe.accounts.retrieve(userData.stripeTestAccountId)
 
-    let status = "pending"
-    let message = "Test account created, setup required"
+      let status = "pending"
+      let message = "Test account created, setup required"
 
-    if (account.details_submitted && account.charges_enabled && account.payouts_enabled) {
-      status = "active"
-      message = "Test account is active and ready"
-    } else if (account.details_submitted) {
-      status = "submitted"
-      message = "Details submitted, pending review"
+      if (account.details_submitted && account.charges_enabled && account.payouts_enabled) {
+        status = "active"
+        message = "Test account is active and ready for testing"
+      } else if (account.details_submitted) {
+        status = "submitted"
+        message = "Details submitted, pending review"
+      }
+
+      return NextResponse.json({
+        hasTestAccount: true,
+        accountId: userData.stripeTestAccountId,
+        status,
+        chargesEnabled: account.charges_enabled,
+        payoutsEnabled: account.payouts_enabled,
+        detailsSubmitted: account.details_submitted,
+        message,
+      })
+    } catch (stripeError) {
+      console.error("❌ [Test Status] Stripe error:", stripeError)
+      // Account might not exist in Stripe anymore
+      return NextResponse.json({
+        hasTestAccount: false,
+        accountId: null,
+        status: "error",
+        message: "Test account not found in Stripe - may need to recreate",
+      })
     }
-
-    return NextResponse.json({
-      hasTestAccount: true,
-      accountId: userData.stripeTestAccountId,
-      status,
-      chargesEnabled: account.charges_enabled,
-      payoutsEnabled: account.payouts_enabled,
-      detailsSubmitted: account.details_submitted,
-      message,
-    })
   } catch (error) {
-    console.error("❌ [Test Connect] Error checking status:", error)
+    console.error("❌ [Test Status] Error checking status:", error)
     return NextResponse.json({ error: "Failed to check status" }, { status: 500 })
   }
 }

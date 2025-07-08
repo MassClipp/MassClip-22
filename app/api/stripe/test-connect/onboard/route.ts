@@ -26,33 +26,33 @@ export async function POST(request: NextRequest) {
     }
 
     const userData = userDoc.data()!
+    const testAccountId = userData.stripeTestAccountId
 
-    if (!userData.stripeTestAccountId) {
-      return NextResponse.json({ error: "No test account found" }, { status: 404 })
+    if (!testAccountId) {
+      return NextResponse.json({ error: "No test account found. Create one first." }, { status: 400 })
     }
 
-    console.log("🔗 [Test Connect] Creating onboarding link for account:", userData.stripeTestAccountId)
+    console.log("🧪 [Test Onboard] Creating onboarding link for test account:", testAccountId)
 
-    // Check if account is already fully onboarded
-    const account = await stripe.accounts.retrieve(userData.stripeTestAccountId)
-
-    if (account.details_submitted && account.charges_enabled && account.payouts_enabled) {
+    // Check if account is already onboarded
+    const account = await stripe.accounts.retrieve(testAccountId)
+    if (account.details_submitted && account.charges_enabled) {
       return NextResponse.json({
         success: true,
         onboardingComplete: true,
-        message: "Account is already fully onboarded",
+        message: "Test account is already onboarded",
       })
     }
 
-    // Create account link for onboarding
+    // Create onboarding link for test account
     const accountLink = await stripe.accountLinks.create({
-      account: userData.stripeTestAccountId,
+      account: testAccountId,
       refresh_url: `${process.env.NEXT_PUBLIC_SITE_URL}/dashboard/stripe/test-refresh`,
       return_url: `${process.env.NEXT_PUBLIC_SITE_URL}/dashboard/stripe/test-success`,
       type: "account_onboarding",
     })
 
-    console.log("✅ [Test Connect] Created onboarding link")
+    console.log("✅ [Test Onboard] Created onboarding link")
 
     return NextResponse.json({
       success: true,
@@ -60,7 +60,7 @@ export async function POST(request: NextRequest) {
       message: "Onboarding link created",
     })
   } catch (error) {
-    console.error("❌ [Test Connect] Error creating onboarding link:", error)
+    console.error("❌ [Test Onboard] Error creating onboarding link:", error)
     return NextResponse.json({ error: "Failed to create onboarding link" }, { status: 500 })
   }
 }

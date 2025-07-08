@@ -30,8 +30,9 @@ export async function POST(request: NextRequest) {
 
     const userData = userDoc.data()!
 
-    // Check if user already has a test account
+    // Check if user already has a test account (separate from live account)
     if (userData.stripeTestAccountId) {
+      console.log("🧪 [Test Connect] User already has test account:", userData.stripeTestAccountId)
       return NextResponse.json({
         success: true,
         accountId: userData.stripeTestAccountId,
@@ -40,9 +41,10 @@ export async function POST(request: NextRequest) {
       })
     }
 
-    console.log("🧪 [Test Connect] Creating test Stripe Express account for user:", uid)
+    console.log("🧪 [Test Connect] Creating NEW test Stripe Express account for user:", uid)
+    console.log("🔑 [Test Connect] Using test mode keys")
 
-    // Create test Stripe Connect account
+    // Create test Stripe Connect account (this will be a test account since we're using test keys)
     const account = await stripe.accounts.create({
       type: "express",
       country: "US",
@@ -52,6 +54,7 @@ export async function POST(request: NextRequest) {
         username: userData.username || "",
         environment: "test",
         createdBy: "preview-test-flow",
+        accountType: "test",
       },
       capabilities: {
         card_payments: { requested: true },
@@ -62,11 +65,12 @@ export async function POST(request: NextRequest) {
 
     console.log("✅ [Test Connect] Created test account:", account.id)
 
-    // Store test account ID in Firestore
+    // Store ONLY the test account ID (don't overwrite live account)
     await db.collection("users").doc(uid).update({
       stripeTestAccountId: account.id,
       stripeTestAccountCreated: new Date(),
-      stripeAccountId: account.id, // Use as primary account ID in preview
+      // In preview, use test account as primary
+      stripeAccountId: account.id,
       stripeAccountCreated: new Date(),
     })
 
@@ -80,6 +84,12 @@ export async function POST(request: NextRequest) {
     })
   } catch (error) {
     console.error("❌ [Test Connect] Error creating test account:", error)
-    return NextResponse.json({ error: "Failed to create test account" }, { status: 500 })
+    return NextResponse.json(
+      {
+        error: "Failed to create test account",
+        details: error instanceof Error ? error.message : "Unknown error",
+      },
+      { status: 500 },
+    )
   }
 }
