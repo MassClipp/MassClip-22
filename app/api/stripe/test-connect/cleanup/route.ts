@@ -5,7 +5,7 @@ export async function POST(request: NextRequest) {
   try {
     // Only allow in preview environment
     if (process.env.VERCEL_ENV !== "preview") {
-      return NextResponse.json({ error: "Test cleanup only available in preview environment" }, { status: 403 })
+      return NextResponse.json({ error: "Test account cleanup only available in preview environment" }, { status: 403 })
     }
 
     const { idToken } = await request.json()
@@ -25,35 +25,46 @@ export async function POST(request: NextRequest) {
     }
 
     const userData = userDoc.data()!
+    const testAccountId = userData.stripeTestAccountId
+    const liveAccountId = userData.stripeAccountId !== testAccountId ? userData.stripeAccountId : null
 
-    console.log("🧹 [Test Cleanup] Cleaning up test account for user:", uid)
+    console.log("🧹 [Test Connect] Cleaning up test account for user:", uid)
+    console.log("🧹 [Test Connect] Test account:", testAccountId)
+    console.log("🧹 [Test Connect] Live account:", liveAccountId)
 
-    // Remove test account references from Firestore
+    // Update Firestore to remove test account references
     const updateData: any = {
       stripeTestAccountId: null,
       stripeTestAccountCreated: null,
       stripeTestAccountLinked: null,
     }
 
-    // If the current stripeAccountId is the test account, remove it too
-    if (userData.stripeAccountId === userData.stripeTestAccountId) {
-      updateData.stripeAccountId = null
-      updateData.stripeAccountCreated = null
+    // If we were using the test account as primary, restore live account or clear
+    if (userData.stripeAccountId === testAccountId) {
+      if (liveAccountId) {
+        updateData.stripeAccountId = liveAccountId
+        console.log("🔄 [Test Connect] Restoring live account as primary:", liveAccountId)
+      } else {
+        updateData.stripeAccountId = null
+        updateData.stripeAccountCreated = null
+        console.log("🔄 [Test Connect] No live account found, clearing primary account")
+      }
     }
 
     await db.collection("users").doc(uid).update(updateData)
 
-    console.log("✅ [Test Cleanup] Removed test account references from Firestore")
+    console.log("✅ [Test Connect] Cleaned up test account references")
 
     return NextResponse.json({
       success: true,
-      message: "Test account references cleaned up successfully",
+      message: "Test account references removed",
+      restoredLiveAccount: !!liveAccountId,
     })
   } catch (error) {
-    console.error("❌ [Test Cleanup] Error cleaning up test account:", error)
+    console.error("❌ [Test Connect] Error cleaning up test account:", error)
     return NextResponse.json(
       {
-        error: "Failed to cleanup test account",
+        error: "Failed to clean up test account",
         details: error instanceof Error ? error.message : "Unknown error",
       },
       { status: 500 },

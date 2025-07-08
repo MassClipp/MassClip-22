@@ -30,59 +30,58 @@ export async function POST(request: NextRequest) {
 
     const userData = userDoc.data()!
 
-    // Check if user already has a test account (separate from live account)
-    if (userData.stripeTestAccountId) {
-      console.log("🧪 [Test Connect] User already has test account:", userData.stripeTestAccountId)
+    console.log("🔧 [Test Connect] Creating test account for user:", uid)
+
+    try {
+      // Create a new Stripe Express account in test mode
+      const account = await stripe.accounts.create({
+        type: "express",
+        country: "US", // Default to US for testing
+        email: userData.email || `${userData.username}@test.example.com`,
+        metadata: {
+          firebaseUid: uid,
+          username: userData.username || "",
+          environment: "test",
+          createdBy: "preview-test-flow",
+          createdAt: new Date().toISOString(),
+        },
+      })
+
+      console.log("✅ [Test Connect] Created test account:", {
+        id: account.id,
+        type: account.type,
+        country: account.country,
+        email: account.email,
+      })
+
+      // Store the test account ID in Firestore
+      await db.collection("users").doc(uid).update({
+        stripeTestAccountId: account.id,
+        stripeTestAccountCreated: new Date(),
+        // In preview, use test account as primary
+        stripeAccountId: account.id,
+        stripeAccountCreated: new Date(),
+      })
+
+      console.log("✅ [Test Connect] Stored test account ID in Firestore")
+
       return NextResponse.json({
         success: true,
-        accountId: userData.stripeTestAccountId,
-        message: "Test account already exists",
-        existing: true,
+        accountId: account.id,
+        message: "Test account created successfully",
+        created: true,
       })
+    } catch (stripeError: any) {
+      console.error("❌ [Test Connect] Stripe error:", stripeError)
+      return NextResponse.json(
+        {
+          error: "Failed to create account with Stripe",
+          details: stripeError.message || "Unknown Stripe error",
+          code: stripeError.code,
+        },
+        { status: 400 },
+      )
     }
-
-    console.log("🧪 [Test Connect] Creating NEW test Stripe Express account for user:", uid)
-    console.log("🔑 [Test Connect] Using test mode keys")
-
-    // Create test Stripe Connect account (this will be a test account since we're using test keys)
-    const account = await stripe.accounts.create({
-      type: "express",
-      country: "US",
-      email: userData.email,
-      metadata: {
-        firebaseUid: uid,
-        username: userData.username || "",
-        environment: "test",
-        createdBy: "preview-test-flow",
-        accountType: "test",
-        createdAt: new Date().toISOString(),
-      },
-      capabilities: {
-        card_payments: { requested: true },
-        transfers: { requested: true },
-      },
-      business_type: "individual",
-    })
-
-    console.log("✅ [Test Connect] Created test account:", account.id)
-
-    // Store ONLY the test account ID (don't overwrite live account)
-    await db.collection("users").doc(uid).update({
-      stripeTestAccountId: account.id,
-      stripeTestAccountCreated: new Date(),
-      // In preview, use test account as primary
-      stripeAccountId: account.id,
-      stripeAccountCreated: new Date(),
-    })
-
-    console.log("✅ [Test Connect] Stored test account ID in Firestore")
-
-    return NextResponse.json({
-      success: true,
-      accountId: account.id,
-      message: "Test Stripe Connect account created successfully",
-      existing: false,
-    })
   } catch (error) {
     console.error("❌ [Test Connect] Error creating test account:", error)
     return NextResponse.json(
