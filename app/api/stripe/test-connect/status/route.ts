@@ -6,7 +6,7 @@ export async function GET(request: NextRequest) {
   try {
     // Only allow in preview environment
     if (process.env.VERCEL_ENV !== "preview") {
-      return NextResponse.json({ error: "Test status check only available in preview environment" }, { status: 403 })
+      return NextResponse.json({ error: "Test status only available in preview environment" }, { status: 403 })
     }
 
     const authHeader = request.headers.get("authorization")
@@ -14,7 +14,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Authorization header required" }, { status: 401 })
     }
 
-    const idToken = authHeader.substring(7)
+    const idToken = authHeader.replace("Bearer ", "")
 
     // Verify the Firebase ID token
     const decodedToken = await auth.verifyIdToken(idToken)
@@ -28,9 +28,7 @@ export async function GET(request: NextRequest) {
 
     const userData = userDoc.data()!
 
-    // Check for TEST account specifically (not live account)
     if (!userData.stripeTestAccountId) {
-      console.log("🧪 [Test Status] No test account found for user:", uid)
       return NextResponse.json({
         hasTestAccount: false,
         accountId: null,
@@ -39,44 +37,78 @@ export async function GET(request: NextRequest) {
       })
     }
 
-    console.log("📊 [Test Status] Checking status for TEST account:", userData.stripeTestAccountId)
+    console.log("🔍 [Test Status] Checking status for account:", userData.stripeTestAccountId)
 
     try {
       // Get account details from Stripe
       const account = await stripe.accounts.retrieve(userData.stripeTestAccountId)
 
-      let status = "pending"
-      let message = "Test account created, setup required"
+      const isActive = account.details_submitted && account.charges_enabled && account.payouts_enabled
+      const status = isActive ? "active" : account.details_submitted ? "pending" : "restricted"
 
-      if (account.details_submitted && account.charges_enabled && account.payouts_enabled) {
-        status = "active"
-        message = "Test account is active and ready for testing"
+      let message = "Test account found"
+      if (isActive) {
+        message = "Test account is active and ready"
       } else if (account.details_submitted) {
-        status = "submitted"
-        message = "Details submitted, pending review"
+        message = "Test account pending review"
+      } else {
+        message = "Test account needs setup"
       }
+
+      console.log("✅ [Test Status] Account status:", {
+        id: account.id,
+        status,
+        charges_enabled: account.charges_enabled,
+        payouts_enabled: account.payouts_enabled,
+        details_submitted: account.details_submitted,
+      })
 
       return NextResponse.json({
         hasTestAccount: true,
-        accountId: userData.stripeTestAccountId,
+        accountId: account.id,
         status,
         chargesEnabled: account.charges_enabled,
         payoutsEnabled: account.payouts_enabled,
         detailsSubmitted: account.details_submitted,
         message,
       })
-    } catch (stripeError) {
+    } catch (stripeError: any) {
       console.error("❌ [Test Status] Stripe error:", stripeError)
-      // Account might not exist in Stripe anymore
-      return NextResponse.json({
-        hasTestAccount: false,
-        accountId: null,
-        status: "error",
-        message: "Test account not found in Stripe - may need to recreate",
-      })
+
+      // If account not found, clean up the reference
+      if (stripeError.code === "resource_missing") {
+        await db.collection("users").doc(uid).update({
+          stripeTestAccountId: null,
+          stripeTestAccountCreated: null,
+          stripeTestAccountLinked: null,
+        })
+
+        return NextResponse.json({
+          hasTestAccount: false,
+          accountId: null,
+          status: "none",
+          message: "Test account not found - create one to start testing",
+        })
+      }
+
+      return NextResponse.json(
+        {
+          hasTestAccount: true,
+          accountId: userData.stripeTestAccountId,
+          status: "error",
+          message: `Error checking account: ${stripeError.message}`,
+        },
+        { status: 400 },
+      )
     }
   } catch (error) {
-    console.error("❌ [Test Status] Error checking status:", error)
-    return NextResponse.json({ error: "Failed to check status" }, { status: 500 })
+    console.error("❌ [Test Status] Error checking test status:", error)
+    return NextResponse.json(
+      {
+        error: "Failed to check test status",
+        details: error instanceof Error ? error.message : "Unknown error",
+      },
+      { status: 500 },
+    )
   }
 }

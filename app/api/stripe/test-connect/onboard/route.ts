@@ -28,30 +28,49 @@ export async function POST(request: NextRequest) {
     const userData = userDoc.data()!
 
     if (!userData.stripeTestAccountId) {
-      return NextResponse.json({ error: "No test account found" }, { status: 400 })
+      return NextResponse.json({ error: "No test account found" }, { status: 404 })
     }
 
-    console.log("🔗 [Test Onboard] Creating onboarding link for:", userData.stripeTestAccountId)
+    console.log("🚀 [Test Onboard] Creating onboarding link for account:", userData.stripeTestAccountId)
 
-    // Get current site URL for return/refresh URLs
-    const siteUrl = process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_VERCEL_URL || "http://localhost:3000"
-    const baseUrl = siteUrl.startsWith("http") ? siteUrl : `https://${siteUrl}`
+    try {
+      // Check if account is already fully onboarded
+      const account = await stripe.accounts.retrieve(userData.stripeTestAccountId)
 
-    // Create account link for onboarding
-    const accountLink = await stripe.accountLinks.create({
-      account: userData.stripeTestAccountId,
-      refresh_url: `${baseUrl}/dashboard/stripe/test-refresh`,
-      return_url: `${baseUrl}/dashboard/stripe/test-success`,
-      type: "account_onboarding",
-    })
+      if (account.details_submitted && account.charges_enabled && account.payouts_enabled) {
+        console.log("✅ [Test Onboard] Account already fully onboarded")
+        return NextResponse.json({
+          success: true,
+          onboardingComplete: true,
+          message: "Account is already fully set up",
+        })
+      }
 
-    console.log("✅ [Test Onboard] Created onboarding link")
+      // Create onboarding link
+      const accountLink = await stripe.accountLinks.create({
+        account: userData.stripeTestAccountId,
+        refresh_url: `${process.env.NEXT_PUBLIC_SITE_URL}/dashboard/stripe/test-refresh`,
+        return_url: `${process.env.NEXT_PUBLIC_SITE_URL}/dashboard/stripe/test-success`,
+        type: "account_onboarding",
+      })
 
-    return NextResponse.json({
-      success: true,
-      onboardingUrl: accountLink.url,
-      message: "Onboarding link created",
-    })
+      console.log("✅ [Test Onboard] Created onboarding link")
+
+      return NextResponse.json({
+        success: true,
+        onboardingUrl: accountLink.url,
+        message: "Onboarding link created",
+      })
+    } catch (stripeError: any) {
+      console.error("❌ [Test Onboard] Stripe error:", stripeError)
+      return NextResponse.json(
+        {
+          error: "Failed to create onboarding link",
+          details: stripeError.message || "Unknown Stripe error",
+        },
+        { status: 400 },
+      )
+    }
   } catch (error) {
     console.error("❌ [Test Onboard] Error creating onboarding link:", error)
     return NextResponse.json(
