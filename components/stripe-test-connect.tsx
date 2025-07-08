@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
-import { Loader2, TestTube, CheckCircle, AlertCircle, ExternalLink, Zap, Settings } from "lucide-react"
+import { Loader2, TestTube, CheckCircle, AlertCircle, ExternalLink, Zap, Settings, Trash2, Plus } from "lucide-react"
 
 interface TestConnectStatus {
   hasTestAccount: boolean
@@ -24,6 +24,7 @@ export default function StripeTestConnect() {
   const [isLoading, setIsLoading] = useState(false)
   const [isCreating, setIsCreating] = useState(false)
   const [isOnboarding, setIsOnboarding] = useState(false)
+  const [isResetting, setIsResetting] = useState(false)
 
   // Only show in preview environment
   const isPreview =
@@ -87,6 +88,35 @@ export default function StripeTestConnect() {
       console.error("Error creating test account:", error)
     } finally {
       setIsCreating(false)
+    }
+  }
+
+  const resetTestAccount = async () => {
+    if (!user) return
+
+    try {
+      setIsResetting(true)
+      const token = await user.getIdToken()
+
+      const response = await fetch("/api/stripe/test-connect/cleanup", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ idToken: token }),
+      })
+
+      const data = await response.json()
+
+      if (data.success) {
+        await checkTestStatus() // Refresh status
+      } else {
+        console.error("Failed to reset test account:", data.error)
+      }
+    } catch (error) {
+      console.error("Error resetting test account:", error)
+    } finally {
+      setIsResetting(false)
     }
   }
 
@@ -185,7 +215,7 @@ export default function StripeTestConnect() {
               </div>
             )}
 
-            <div className="flex gap-2">
+            <div className="flex gap-2 flex-wrap">
               {!status.hasTestAccount ? (
                 <Button
                   onClick={createTestAccount}
@@ -199,40 +229,72 @@ export default function StripeTestConnect() {
                     </>
                   ) : (
                     <>
-                      <TestTube className="h-4 w-4 mr-2" />
+                      <Plus className="h-4 w-4 mr-2" />
                       Create Test Account
                     </>
                   )}
                 </Button>
-              ) : status.status !== "active" ? (
-                <Button
-                  onClick={startOnboarding}
-                  disabled={isOnboarding}
-                  className="bg-orange-600 hover:bg-orange-700 text-white"
-                >
-                  {isOnboarding ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Starting...
-                    </>
-                  ) : (
-                    <>
-                      <ExternalLink className="h-4 w-4 mr-2" />
-                      Complete Setup
-                    </>
-                  )}
-                </Button>
               ) : (
-                <Button
-                  onClick={checkTestStatus}
-                  variant="outline"
-                  className="border-orange-300 text-orange-700 hover:bg-orange-100 bg-transparent"
-                >
-                  <Settings className="h-4 w-4 mr-2" />
-                  Refresh Status
-                </Button>
+                <>
+                  {status.status !== "active" && (
+                    <Button
+                      onClick={startOnboarding}
+                      disabled={isOnboarding}
+                      className="bg-orange-600 hover:bg-orange-700 text-white"
+                    >
+                      {isOnboarding ? (
+                        <>
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          Starting...
+                        </>
+                      ) : (
+                        <>
+                          <ExternalLink className="h-4 w-4 mr-2" />
+                          Complete Setup
+                        </>
+                      )}
+                    </Button>
+                  )}
+
+                  <Button
+                    onClick={checkTestStatus}
+                    variant="outline"
+                    className="border-orange-300 text-orange-700 hover:bg-orange-100 bg-transparent"
+                  >
+                    <Settings className="h-4 w-4 mr-2" />
+                    Refresh Status
+                  </Button>
+
+                  <Button
+                    onClick={resetTestAccount}
+                    disabled={isResetting}
+                    variant="outline"
+                    className="border-red-300 text-red-700 hover:bg-red-50 bg-transparent"
+                  >
+                    {isResetting ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Resetting...
+                      </>
+                    ) : (
+                      <>
+                        <Trash2 className="h-4 w-4 mr-2" />
+                        Reset Account
+                      </>
+                    )}
+                  </Button>
+                </>
               )}
             </div>
+
+            {status.hasTestAccount && status.status === "active" && (
+              <Alert className="border-green-200 bg-green-50">
+                <CheckCircle className="h-4 w-4 text-green-600" />
+                <AlertDescription className="text-green-800">
+                  ✅ Test account is ready! You can now test end-to-end purchases with real webhook data.
+                </AlertDescription>
+              </Alert>
+            )}
           </div>
         ) : (
           <Button

@@ -1,12 +1,11 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { auth, db } from "@/lib/firebase-admin"
-import { stripe } from "@/lib/stripe"
 
 export async function POST(request: NextRequest) {
   try {
     // Only allow in preview environment
     if (process.env.VERCEL_ENV !== "preview") {
-      return NextResponse.json({ error: "Test cleanup only available in preview environment" }, { status: 403 })
+      return NextResponse.json({ error: "Test account cleanup only available in preview environment" }, { status: 403 })
     }
 
     const { idToken } = await request.json()
@@ -26,46 +25,31 @@ export async function POST(request: NextRequest) {
     }
 
     const userData = userDoc.data()!
-    const testAccountId = userData.stripeTestAccountId
 
-    if (!testAccountId) {
-      return NextResponse.json({ error: "No test account to cleanup" }, { status: 400 })
+    console.log("🧹 [Test Connect] Cleaning up test account for user:", uid)
+
+    // Remove test account references from Firestore
+    const updateData: any = {
+      stripeTestAccountId: null,
+      stripeTestAccountCreated: null,
     }
 
-    console.log("🧹 [Test Connect] Cleaning up test account:", testAccountId)
-
-    try {
-      // Delete the Stripe account (this will fail if it has been used for payments)
-      await stripe.accounts.del(testAccountId)
-      console.log("✅ [Test Connect] Deleted Stripe account")
-    } catch (stripeError) {
-      console.warn("⚠️ [Test Connect] Could not delete Stripe account (may have transactions):", stripeError)
+    // If the primary stripeAccountId is the same as test account, remove it too
+    if (userData.stripeAccountId === userData.stripeTestAccountId) {
+      updateData.stripeAccountId = null
+      updateData.stripeAccountCreated = null
     }
 
-    // Clean up Firestore data
-    await db
-      .collection("users")
-      .doc(uid)
-      .update({
-        stripeTestAccountId: null,
-        stripeTestAccountCreated: null,
-        // Reset primary account ID if it was the test account
-        ...(userData.stripeAccountId === testAccountId && {
-          stripeAccountId: null,
-          stripeAccountCreated: null,
-          stripeOnboardingComplete: false,
-          stripeOnboarded: false,
-          chargesEnabled: false,
-          payoutsEnabled: false,
-          stripeCanReceivePayments: false,
-        }),
-      })
+    await db.collection("users").doc(uid).update(updateData)
 
-    console.log("✅ [Test Connect] Cleaned up Firestore data")
+    console.log("✅ [Test Connect] Cleaned up Firestore references")
+
+    // Note: We don't delete the Stripe account itself as it might have been used for testing
+    // and Stripe keeps records for compliance. The account will just become inactive.
 
     return NextResponse.json({
       success: true,
-      message: "Test account cleaned up successfully",
+      message: "Test account references cleaned up successfully",
     })
   } catch (error) {
     console.error("❌ [Test Connect] Error cleaning up test account:", error)

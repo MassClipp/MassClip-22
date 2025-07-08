@@ -9,13 +9,14 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Test status check only available in preview environment" }, { status: 403 })
     }
 
-    // Get user from session/cookies (simplified for preview)
     const authHeader = request.headers.get("authorization")
-    if (!authHeader?.startsWith("Bearer ")) {
-      return NextResponse.json({ error: "Missing authorization" }, { status: 401 })
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return NextResponse.json({ error: "Authorization header required" }, { status: 401 })
     }
 
-    const idToken = authHeader.slice(7)
+    const idToken = authHeader.substring(7)
+
+    // Verify the Firebase ID token
     const decodedToken = await auth.verifyIdToken(idToken)
     const uid = decodedToken.uid
 
@@ -26,34 +27,43 @@ export async function GET(request: NextRequest) {
     }
 
     const userData = userDoc.data()!
-    const accountId = userData.stripeTestAccountId || userData.stripeAccountId
 
-    if (!accountId) {
+    if (!userData.stripeTestAccountId) {
       return NextResponse.json({
         hasTestAccount: false,
         accountId: null,
-        status: "no_account",
+        status: "none",
         message: "No test account found",
       })
     }
 
-    // Get account status from Stripe
-    const account = await stripe.accounts.retrieve(accountId)
+    console.log("📊 [Test Connect] Checking status for account:", userData.stripeTestAccountId)
+
+    // Get account details from Stripe
+    const account = await stripe.accounts.retrieve(userData.stripeTestAccountId)
+
+    let status = "pending"
+    let message = "Test account created, setup required"
+
+    if (account.details_submitted && account.charges_enabled && account.payouts_enabled) {
+      status = "active"
+      message = "Test account is active and ready"
+    } else if (account.details_submitted) {
+      status = "submitted"
+      message = "Details submitted, pending review"
+    }
 
     return NextResponse.json({
       hasTestAccount: true,
-      accountId: accountId,
-      status: account.details_submitted && account.charges_enabled ? "active" : "pending",
+      accountId: userData.stripeTestAccountId,
+      status,
       chargesEnabled: account.charges_enabled,
       payoutsEnabled: account.payouts_enabled,
       detailsSubmitted: account.details_submitted,
-      message:
-        account.details_submitted && account.charges_enabled
-          ? "Test account is active and ready"
-          : "Test account needs onboarding",
+      message,
     })
   } catch (error) {
     console.error("❌ [Test Connect] Error checking status:", error)
-    return NextResponse.json({ error: "Failed to check test account status" }, { status: 500 })
+    return NextResponse.json({ error: "Failed to check status" }, { status: 500 })
   }
 }
