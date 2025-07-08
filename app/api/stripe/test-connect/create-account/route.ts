@@ -30,14 +30,19 @@ export async function POST(request: NextRequest) {
 
     const userData = userDoc.data()!
 
-    console.log("🔧 [Test Connect] Creating test account for user:", uid)
+    console.log("🆕 [Test Connect] Creating test account for user:", uid)
 
     try {
-      // Create a new Stripe Express account in test mode
+      // Create a new Stripe Express account
       const account = await stripe.accounts.create({
         type: "express",
-        country: "US", // Default to US for testing
-        email: userData.email || `${userData.username}@test.example.com`,
+        country: "US", // Default to US, can be changed during onboarding
+        email: userData.email || decodedToken.email,
+        capabilities: {
+          card_payments: { requested: true },
+          transfers: { requested: true },
+        },
+        business_type: "individual",
         metadata: {
           firebaseUid: uid,
           username: userData.username || "",
@@ -70,14 +75,31 @@ export async function POST(request: NextRequest) {
         accountId: account.id,
         message: "Test account created successfully",
         created: true,
+        accountDetails: {
+          type: account.type,
+          country: account.country,
+          email: account.email,
+          charges_enabled: account.charges_enabled,
+          payouts_enabled: account.payouts_enabled,
+          details_submitted: account.details_submitted,
+        },
       })
     } catch (stripeError: any) {
-      console.error("❌ [Test Connect] Stripe error:", stripeError)
+      console.error("❌ [Test Connect] Stripe error creating account:", {
+        message: stripeError.message,
+        type: stripeError.type,
+        code: stripeError.code,
+      })
+
       return NextResponse.json(
         {
-          error: "Failed to create account with Stripe",
+          error: "Failed to create test account",
           details: stripeError.message || "Unknown Stripe error",
-          code: stripeError.code,
+          stripeError: {
+            type: stripeError.type,
+            code: stripeError.code,
+            message: stripeError.message,
+          },
         },
         { status: 400 },
       )

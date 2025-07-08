@@ -1,15 +1,14 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { auth, db } from "@/lib/firebase-admin"
-import { STRIPE_CONFIG } from "@/lib/stripe"
 
 export async function GET(request: NextRequest) {
   try {
     const authHeader = request.headers.get("authorization")
     if (!authHeader?.startsWith("Bearer ")) {
-      return NextResponse.json({ error: "Missing authorization header" }, { status: 401 })
+      return NextResponse.json({ error: "Authorization required" }, { status: 401 })
     }
 
-    const idToken = authHeader.replace("Bearer ", "")
+    const idToken = authHeader.split("Bearer ")[1]
     const decodedToken = await auth.verifyIdToken(idToken)
     const uid = decodedToken.uid
 
@@ -24,31 +23,30 @@ export async function GET(request: NextRequest) {
       isPreview: process.env.VERCEL_ENV === "preview",
     }
 
-    // Stripe configuration info
+    // Stripe configuration
+    const stripeSecretKey = process.env.STRIPE_SECRET_KEY_TEST || process.env.STRIPE_SECRET_KEY
     const stripe = {
-      hasSecretKey: !!process.env.STRIPE_SECRET_KEY || !!process.env.STRIPE_SECRET_KEY_TEST,
-      hasTestKey: !!process.env.STRIPE_SECRET_KEY_TEST,
-      hasLiveKey: !!process.env.STRIPE_SECRET_KEY,
-      keyPrefix: (process.env.STRIPE_SECRET_KEY_TEST || process.env.STRIPE_SECRET_KEY)?.substring(0, 7) || "none",
-      isTestMode: STRIPE_CONFIG.isTestMode,
-      isLiveMode: STRIPE_CONFIG.isLiveMode,
-      intendedTestMode: STRIPE_CONFIG.intendedTestMode,
-      keyMismatch: STRIPE_CONFIG.keyMismatch,
+      hasSecretKey: !!stripeSecretKey,
+      keyPrefix: stripeSecretKey?.substring(0, 8) + "..." || "none",
+      isTestMode: stripeSecretKey?.startsWith("sk_test_") || false,
+      isLiveMode: stripeSecretKey?.startsWith("sk_live_") || false,
     }
 
-    // Firebase info
+    // Firebase configuration
     const firebase = {
-      hasConfig: !!process.env.FIREBASE_PROJECT_ID,
+      hasConfig: !!(
+        process.env.FIREBASE_PROJECT_ID &&
+        process.env.FIREBASE_CLIENT_EMAIL &&
+        process.env.FIREBASE_PRIVATE_KEY
+      ),
       projectId: process.env.FIREBASE_PROJECT_ID || "unknown",
     }
 
-    // User info
+    // User information
     const user = {
-      uid: uid,
+      uid: decodedToken.uid,
       email: decodedToken.email || "unknown",
       hasProfile: !!userData,
-      stripeAccountId: userData?.stripeAccountId || null,
-      stripeTestAccountId: userData?.stripeTestAccountId || null,
     }
 
     return NextResponse.json({
@@ -56,7 +54,6 @@ export async function GET(request: NextRequest) {
       stripe,
       firebase,
       user,
-      timestamp: new Date().toISOString(),
     })
   } catch (error) {
     console.error("Debug info error:", error)
