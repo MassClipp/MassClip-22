@@ -11,191 +11,301 @@ interface TestResult {
 }
 
 export async function POST(request: NextRequest) {
+  const results: TestResult[] = []
+
   try {
-    const { idToken, accountId } = await request.json()
-    const results: TestResult[] = []
-
-    // Step 1: Environment Check
-    results.push({
-      step: "Environment Check",
-      success: process.env.VERCEL_ENV === "preview",
-      message: process.env.VERCEL_ENV === "preview" ? "Running in preview environment" : "Not in preview environment",
-      details: {
-        vercelEnv: process.env.VERCEL_ENV,
-        nodeEnv: process.env.NODE_ENV,
-      },
-    })
-
-    // Step 2: Stripe Key Check
-    const hasTestKey = !!process.env.STRIPE_SECRET_KEY_TEST
-    const currentKey = process.env.STRIPE_SECRET_KEY_TEST || process.env.STRIPE_SECRET_KEY
-    const isUsingTestKey = currentKey?.startsWith("sk_test_")
-
-    results.push({
-      step: "Stripe Key Configuration",
-      success: hasTestKey && isUsingTestKey,
-      message: hasTestKey
-        ? isUsingTestKey
-          ? "Using test Stripe keys"
-          : "Has test key but using live key"
-        : "Missing test Stripe keys",
-      details: {
-        hasTestKey,
-        hasLiveKey: !!process.env.STRIPE_SECRET_KEY,
-        currentKeyPrefix: currentKey?.substring(0, 7),
-        isUsingTestKey,
-      },
-    })
-
-    if (!idToken) {
+    // Only allow in preview environment
+    if (process.env.VERCEL_ENV !== "preview") {
       results.push({
-        step: "Authentication",
+        step: "Environment Check",
         success: false,
-        message: "No ID token provided",
+        message: "Not in preview environment",
+        details: { vercelEnv: process.env.VERCEL_ENV },
       })
-      return NextResponse.json({ results })
+      return NextResponse.json({ results }, { status: 403 })
     }
 
-    // Step 3: Firebase Auth
+    results.push({
+      step: "Environment Check",
+      success: true,
+      message: "Preview environment confirmed",
+      details: { vercelEnv: process.env.VERCEL_ENV },
+    })
+
+    const { idToken, accountId } = await request.json()
+
+    // Step 1: Validate inputs
+    if (!idToken || !accountId) {
+      results.push({
+        step: "Input Validation",
+        success: false,
+        message: "Missing required parameters",
+        details: { hasIdToken: !!idToken, hasAccountId: !!accountId },
+      })
+      return NextResponse.json({ results }, { status: 400 })
+    }
+
+    if (!accountId.startsWith("acct_")) {
+      results.push({
+        step: "Input Validation",
+        success: false,
+        message: "Invalid account ID format",
+        details: { accountId, expectedPrefix: "acct_" },
+      })
+      return NextResponse.json({ results }, { status: 400 })
+    }
+
+    results.push({
+      step: "Input Validation",
+      success: true,
+      message: "All inputs valid",
+      details: { accountId: accountId.substring(0, 12) + "..." },
+    })
+
+    // Step 2: Verify Firebase token
+    let decodedToken
     try {
-      const decodedToken = await auth.verifyIdToken(idToken)
+      decodedToken = await auth.verifyIdToken(idToken)
       results.push({
-        step: "Firebase Authentication",
+        step: "Firebase Auth",
         success: true,
-        message: "Successfully verified ID token",
-        details: {
-          uid: decodedToken.uid,
-          email: decodedToken.email,
-        },
+        message: "Token verified successfully",
+        details: { uid: decodedToken.uid, email: decodedToken.email },
       })
-
-      // Step 4: User Profile Check
-      const userDoc = await db.collection("users").doc(decodedToken.uid).get()
-      results.push({
-        step: "User Profile Check",
-        success: userDoc.exists,
-        message: userDoc.exists ? "User profile found" : "User profile not found",
-        details: userDoc.exists
-          ? {
-              hasStripeAccount: !!userDoc.data()?.stripeAccountId,
-              hasTestAccount: !!userDoc.data()?.stripeTestAccountId,
-            }
-          : null,
-      })
-
-      if (!accountId) {
-        results.push({
-          step: "Account ID Validation",
-          success: false,
-          message: "No account ID provided for testing",
-        })
-        return NextResponse.json({ results })
-      }
-
-      // Step 5: Account ID Format
-      const isValidFormat = accountId.startsWith("acct_")
-      results.push({
-        step: "Account ID Format",
-        success: isValidFormat,
-        message: isValidFormat ? "Valid account ID format" : "Invalid account ID format",
-        details: {
-          accountId,
-          expectedPrefix: "acct_",
-        },
-      })
-
-      if (!isValidFormat) {
-        return NextResponse.json({ results })
-      }
-
-      // Step 6: Stripe Account Retrieval
-      try {
-        const account = await stripe.accounts.retrieve(accountId)
-        results.push({
-          step: "Stripe Account Retrieval",
-          success: true,
-          message: "Successfully retrieved account from Stripe",
-          details: {
-            accountId: account.id,
-            type: account.type,
-            country: account.country,
-            email: account.email,
-            livemode: account.livemode,
-            charges_enabled: account.charges_enabled,
-            payouts_enabled: account.payouts_enabled,
-            details_submitted: account.details_submitted,
-          },
-        })
-
-        // Step 7: Account Mode Check
-        const isTestAccount = !account.livemode
-        results.push({
-          step: "Account Mode Verification",
-          success: isTestAccount,
-          message: isTestAccount ? "Account is in test mode" : "Account is in live mode",
-          details: {
-            livemode: account.livemode,
-            expectedTestMode: true,
-          },
-        })
-
-        // Step 8: Account Update Test
-        if (isTestAccount) {
-          try {
-            await stripe.accounts.update(accountId, {
-              metadata: {
-                testUpdate: new Date().toISOString(),
-              },
-            })
-            results.push({
-              step: "Account Update Test",
-              success: true,
-              message: "Successfully updated account metadata",
-            })
-          } catch (updateError: any) {
-            results.push({
-              step: "Account Update Test",
-              success: false,
-              message: "Failed to update account metadata",
-              error: updateError.message,
-              details: {
-                type: updateError.type,
-                code: updateError.code,
-              },
-            })
-          }
-        }
-      } catch (stripeError: any) {
-        results.push({
-          step: "Stripe Account Retrieval",
-          success: false,
-          message: "Failed to retrieve account from Stripe",
-          error: stripeError.message,
-          details: {
-            type: stripeError.type,
-            code: stripeError.code,
-            statusCode: stripeError.statusCode,
-          },
-        })
-      }
     } catch (authError: any) {
       results.push({
-        step: "Firebase Authentication",
+        step: "Firebase Auth",
         success: false,
-        message: "Failed to verify ID token",
+        message: "Token verification failed",
         error: authError.message,
+      })
+      return NextResponse.json({ results }, { status: 401 })
+    }
+
+    // Step 3: Check user exists in Firestore
+    const userDoc = await db.collection("users").doc(decodedToken.uid).get()
+    if (!userDoc.exists) {
+      results.push({
+        step: "User Lookup",
+        success: false,
+        message: "User not found in Firestore",
+        details: { uid: decodedToken.uid },
+      })
+      return NextResponse.json({ results }, { status: 404 })
+    }
+
+    const userData = userDoc.data()!
+    results.push({
+      step: "User Lookup",
+      success: true,
+      message: "User found in Firestore",
+      details: {
+        uid: decodedToken.uid,
+        username: userData.username,
+        hasStripeAccount: !!userData.stripeAccountId,
+        hasTestAccount: !!userData.stripeTestAccountId,
+      },
+    })
+
+    // Step 4: Check Stripe configuration
+    const stripeSecretKey = process.env.STRIPE_SECRET_KEY_TEST || process.env.STRIPE_SECRET_KEY
+    const isTestMode = stripeSecretKey?.startsWith("sk_test_")
+    const isLiveMode = stripeSecretKey?.startsWith("sk_live_")
+
+    results.push({
+      step: "Stripe Configuration",
+      success: !!stripeSecretKey,
+      message: stripeSecretKey ? "Stripe key available" : "No Stripe key found",
+      details: {
+        hasSecretKey: !!stripeSecretKey,
+        keyPrefix: stripeSecretKey?.substring(0, 7),
+        isTestMode,
+        isLiveMode,
+        hasTestKey: !!process.env.STRIPE_SECRET_KEY_TEST,
+        hasLiveKey: !!process.env.STRIPE_SECRET_KEY,
+      },
+    })
+
+    if (!stripeSecretKey) {
+      return NextResponse.json({ results }, { status: 500 })
+    }
+
+    // Step 5: Test Stripe API connection
+    try {
+      const balance = await stripe.balance.retrieve()
+      results.push({
+        step: "Stripe API Connection",
+        success: true,
+        message: "Stripe API accessible",
+        details: {
+          available: balance.available.length,
+          pending: balance.pending.length,
+          livemode: balance.livemode,
+        },
+      })
+    } catch (stripeError: any) {
+      results.push({
+        step: "Stripe API Connection",
+        success: false,
+        message: "Stripe API connection failed",
+        error: stripeError.message,
+        details: {
+          type: stripeError.type,
+          code: stripeError.code,
+        },
+      })
+      return NextResponse.json({ results }, { status: 500 })
+    }
+
+    // Step 6: Try to retrieve the account
+    try {
+      const account = await stripe.accounts.retrieve(accountId)
+      results.push({
+        step: "Account Retrieval",
+        success: true,
+        message: "Account retrieved successfully",
+        details: {
+          id: account.id,
+          type: account.type,
+          country: account.country,
+          email: account.email,
+          livemode: account.livemode,
+          charges_enabled: account.charges_enabled,
+          payouts_enabled: account.payouts_enabled,
+          details_submitted: account.details_submitted,
+          metadata: account.metadata,
+        },
+      })
+
+      // Step 7: Check account mode compatibility
+      if (account.livemode && isTestMode) {
+        results.push({
+          step: "Mode Compatibility",
+          success: false,
+          message: "Live account cannot be accessed with test keys",
+          details: {
+            accountMode: "live",
+            apiMode: "test",
+            compatible: false,
+          },
+        })
+        return NextResponse.json({ results }, { status: 400 })
+      }
+
+      if (!account.livemode && isLiveMode) {
+        results.push({
+          step: "Mode Compatibility",
+          success: false,
+          message: "Test account cannot be accessed with live keys",
+          details: {
+            accountMode: "test",
+            apiMode: "live",
+            compatible: false,
+          },
+        })
+        return NextResponse.json({ results }, { status: 400 })
+      }
+
+      results.push({
+        step: "Mode Compatibility",
+        success: true,
+        message: "Account mode compatible with API keys",
+        details: {
+          accountMode: account.livemode ? "live" : "test",
+          apiMode: isTestMode ? "test" : "live",
+          compatible: true,
+        },
+      })
+
+      // Step 8: Try to update account metadata
+      try {
+        const updatedAccount = await stripe.accounts.update(accountId, {
+          metadata: {
+            firebaseUid: decodedToken.uid,
+            username: userData.username || "",
+            environment: "test",
+            linkedBy: "diagnostic-test",
+            linkedAt: new Date().toISOString(),
+          },
+        })
+
+        results.push({
+          step: "Account Update",
+          success: true,
+          message: "Account metadata updated successfully",
+          details: {
+            updatedMetadata: updatedAccount.metadata,
+          },
+        })
+
+        // Step 9: Try to update Firestore
+        try {
+          await db.collection("users").doc(decodedToken.uid).update({
+            stripeTestAccountId: accountId,
+            stripeTestAccountLinked: new Date(),
+            stripeAccountId: accountId, // Use as primary in preview
+            diagnosticTest: new Date(),
+          })
+
+          results.push({
+            step: "Firestore Update",
+            success: true,
+            message: "User profile updated successfully",
+            details: {
+              uid: decodedToken.uid,
+              accountId,
+            },
+          })
+
+          results.push({
+            step: "Overall Result",
+            success: true,
+            message: "All tests passed - account linking should work",
+          })
+        } catch (firestoreError: any) {
+          results.push({
+            step: "Firestore Update",
+            success: false,
+            message: "Failed to update user profile",
+            error: firestoreError.message,
+          })
+        }
+      } catch (updateError: any) {
+        results.push({
+          step: "Account Update",
+          success: false,
+          message: "Failed to update account metadata",
+          error: updateError.message,
+          details: {
+            type: updateError.type,
+            code: updateError.code,
+          },
+        })
+      }
+    } catch (retrieveError: any) {
+      results.push({
+        step: "Account Retrieval",
+        success: false,
+        message: "Failed to retrieve account",
+        error: retrieveError.message,
+        details: {
+          type: retrieveError.type,
+          code: retrieveError.code,
+          statusCode: retrieveError.statusCode,
+          requestId: retrieveError.requestId,
+        },
       })
     }
 
     return NextResponse.json({ results })
   } catch (error) {
-    console.error("Diagnostic error:", error)
-    return NextResponse.json(
-      {
-        error: "Failed to run diagnostic",
-        details: error instanceof Error ? error.message : "Unknown error",
-      },
-      { status: 500 },
-    )
+    results.push({
+      step: "Diagnostic Error",
+      success: false,
+      message: "Diagnostic failed with unexpected error",
+      error: error instanceof Error ? error.message : "Unknown error",
+    })
+
+    return NextResponse.json({ results }, { status: 500 })
   }
 }

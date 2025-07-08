@@ -36,13 +36,8 @@ export async function POST(request: NextRequest) {
       // Create a new Stripe Express account
       const account = await stripe.accounts.create({
         type: "express",
-        country: "US", // Default to US, can be changed during onboarding
-        email: userData.email || decodedToken.email,
-        capabilities: {
-          card_payments: { requested: true },
-          transfers: { requested: true },
-        },
-        business_type: "individual",
+        country: "US",
+        email: decodedToken.email || undefined,
         metadata: {
           firebaseUid: uid,
           username: userData.username || "",
@@ -75,14 +70,6 @@ export async function POST(request: NextRequest) {
         accountId: account.id,
         message: "Test account created successfully",
         created: true,
-        accountDetails: {
-          type: account.type,
-          country: account.country,
-          email: account.email,
-          charges_enabled: account.charges_enabled,
-          payouts_enabled: account.payouts_enabled,
-          details_submitted: account.details_submitted,
-        },
       })
     } catch (stripeError: any) {
       console.error("❌ [Test Connect] Stripe error creating account:", {
@@ -94,12 +81,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         {
           error: "Failed to create test account",
-          details: stripeError.message || "Unknown Stripe error",
-          stripeError: {
-            type: stripeError.type,
-            code: stripeError.code,
-            message: stripeError.message,
-          },
+          details: stripeError.message,
         },
         { status: 400 },
       )
