@@ -5,7 +5,7 @@ const isProduction = process.env.VERCEL_ENV === "production"
 const isDevelopment = process.env.NODE_ENV === "development"
 const isPreview = process.env.VERCEL_ENV === "preview"
 
-// Use test keys for development and preview environments, live keys only for production
+// Force test keys for development and preview environments
 const useTestKeys = isDevelopment || isPreview || !isProduction
 
 console.log("🔍 [Stripe Config] Environment detection:", {
@@ -17,47 +17,71 @@ console.log("🔍 [Stripe Config] Environment detection:", {
   useTestKeys,
 })
 
-// Select the appropriate Stripe secret key
-const stripeSecretKey = useTestKeys ? process.env.STRIPE_SECRET_KEY_TEST : process.env.STRIPE_SECRET_KEY
+// Select the appropriate Stripe secret key - FORCE test keys in preview
+let stripeSecretKey: string | undefined
+
+if (useTestKeys) {
+  // For test environments, prioritize test keys
+  stripeSecretKey = process.env.STRIPE_SECRET_KEY_TEST || process.env.STRIPE_SECRET_KEY
+  console.log("🧪 [Stripe Config] Using test environment - prioritizing test keys")
+} else {
+  // For production, use live keys
+  stripeSecretKey = process.env.STRIPE_SECRET_KEY
+  console.log("🔴 [Stripe Config] Using production environment - using live keys")
+}
 
 // Select the appropriate publishable key
-const stripePublishableKey = useTestKeys
-  ? process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY_TEST
-  : process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
+let stripePublishableKey: string | undefined
 
-// Fallback to regular keys if test keys are not available
-const finalSecretKey = stripeSecretKey || process.env.STRIPE_SECRET_KEY
-const finalPublishableKey = stripePublishableKey || process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
+if (useTestKeys) {
+  stripePublishableKey =
+    process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY_TEST || process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
+} else {
+  stripePublishableKey = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
+}
 
-if (!finalSecretKey) {
+// Validate we have the required keys
+if (!stripeSecretKey) {
   const missingKey = useTestKeys ? "STRIPE_SECRET_KEY_TEST" : "STRIPE_SECRET_KEY"
   throw new Error(`Missing ${missingKey} environment variable`)
 }
 
-if (!finalPublishableKey) {
+if (!stripePublishableKey) {
   const missingKey = useTestKeys ? "NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY_TEST" : "NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY"
   console.warn(`Missing ${missingKey} environment variable`)
 }
 
 // Determine actual mode based on the key we're using
-const actuallyUsingTestMode = finalSecretKey?.startsWith("sk_test_")
-const actuallyUsingLiveMode = finalSecretKey?.startsWith("sk_live_")
+const actuallyUsingTestMode = stripeSecretKey?.startsWith("sk_test_")
+const actuallyUsingLiveMode = stripeSecretKey?.startsWith("sk_live_")
+
+// FORCE test mode in preview - if we don't have test keys, throw error
+if (isPreview && !actuallyUsingTestMode) {
+  console.error("❌ [Stripe Config] CRITICAL: Preview environment must use test keys!")
+  console.error("❌ [Stripe Config] Current key:", stripeSecretKey?.substring(0, 7))
+  console.error("❌ [Stripe Config] Available env vars:", {
+    STRIPE_SECRET_KEY_TEST: !!process.env.STRIPE_SECRET_KEY_TEST,
+    STRIPE_SECRET_KEY: !!process.env.STRIPE_SECRET_KEY,
+  })
+  throw new Error("Preview environment requires STRIPE_SECRET_KEY_TEST environment variable")
+}
 
 console.log(`🔑 [Stripe Config] Key selection:`, {
   intendedMode: useTestKeys ? "TEST" : "LIVE",
   actualMode: actuallyUsingTestMode ? "TEST" : actuallyUsingLiveMode ? "LIVE" : "UNKNOWN",
-  keyPrefix: finalSecretKey?.substring(0, 7),
-  hasPublishableKey: !!finalPublishableKey,
+  keyPrefix: stripeSecretKey?.substring(0, 7),
+  hasPublishableKey: !!stripePublishableKey,
+  environment: process.env.VERCEL_ENV || process.env.NODE_ENV,
 })
 
 // Initialize Stripe with the selected key
-export const stripe = new Stripe(finalSecretKey, {
+export const stripe = new Stripe(stripeSecretKey, {
   apiVersion: "2024-06-20",
   typescript: true,
 })
 
 // Export the publishable key for client-side usage
-export const STRIPE_PUBLISHABLE_KEY = finalPublishableKey
+export const STRIPE_PUBLISHABLE_KEY = stripePublishableKey
 
 // Export environment info
 export const STRIPE_CONFIG = {
@@ -65,7 +89,7 @@ export const STRIPE_CONFIG = {
   isLiveMode: actuallyUsingLiveMode,
   intendedTestMode: useTestKeys,
   environment: process.env.VERCEL_ENV || process.env.NODE_ENV,
-  hasPublishableKey: !!finalPublishableKey,
+  hasPublishableKey: !!stripePublishableKey,
   keyMismatch: useTestKeys !== actuallyUsingTestMode,
 }
 
@@ -74,10 +98,17 @@ console.log(`✅ [Stripe Config] Final configuration:`, {
   mode: actuallyUsingTestMode ? "TEST" : actuallyUsingLiveMode ? "LIVE" : "UNKNOWN",
   environment: STRIPE_CONFIG.environment,
   keyMismatch: STRIPE_CONFIG.keyMismatch,
+  isPreview,
+  forcedTestMode: isPreview && actuallyUsingTestMode,
 })
 
 if (STRIPE_CONFIG.keyMismatch) {
   console.warn(
     `⚠️ [Stripe Config] Key mismatch detected! Intended ${useTestKeys ? "TEST" : "LIVE"} but using ${actuallyUsingTestMode ? "TEST" : "LIVE"} keys`,
   )
+}
+
+// Success confirmation for preview
+if (isPreview && actuallyUsingTestMode) {
+  console.log("🎉 [Stripe Config] Preview environment successfully configured with test keys!")
 }

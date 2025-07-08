@@ -1,40 +1,21 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { auth } from "firebase-admin"
-import { initializeApp, getApps, cert } from "firebase-admin/app"
-import { getFirestore } from "firebase-admin/firestore"
-
-// Initialize Firebase Admin if not already initialized
-if (!getApps().length) {
-  initializeApp({
-    credential: cert({
-      projectId: process.env.FIREBASE_PROJECT_ID,
-      clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-      privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n"),
-    }),
-  })
-}
-
-const db = getFirestore()
+import { auth, db } from "@/lib/firebase-admin"
+import { STRIPE_CONFIG } from "@/lib/stripe"
 
 export async function GET(request: NextRequest) {
   try {
-    // Only allow in preview environment
-    if (process.env.VERCEL_ENV !== "preview") {
-      return NextResponse.json({ error: "Preview only" }, { status: 403 })
-    }
-
     const authHeader = request.headers.get("authorization")
     if (!authHeader?.startsWith("Bearer ")) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+      return NextResponse.json({ error: "Missing authorization header" }, { status: 401 })
     }
 
-    const idToken = authHeader.split("Bearer ")[1]
-    const decodedToken = await auth().verifyIdToken(idToken)
-    const userId = decodedToken.uid
+    const idToken = authHeader.replace("Bearer ", "")
+    const decodedToken = await auth.verifyIdToken(idToken)
+    const uid = decodedToken.uid
 
-    // Get user profile
-    const userDoc = await db.collection("users").doc(userId).get()
-    const userData = userDoc.data()
+    // Get user data
+    const userDoc = await db.collection("users").doc(uid).get()
+    const userData = userDoc.exists ? userDoc.data() : null
 
     // Environment info
     const environment = {
@@ -43,30 +24,29 @@ export async function GET(request: NextRequest) {
       isPreview: process.env.VERCEL_ENV === "preview",
     }
 
-    // Stripe configuration
-    const stripeSecretKey = process.env.STRIPE_SECRET_KEY || ""
+    // Stripe configuration info
     const stripe = {
-      hasSecretKey: !!stripeSecretKey,
-      keyPrefix: stripeSecretKey ? stripeSecretKey.substring(0, 8) + "..." : "none",
-      isTestMode: stripeSecretKey.startsWith("sk_test_"),
-      isLiveMode: stripeSecretKey.startsWith("sk_live_"),
+      hasSecretKey: !!process.env.STRIPE_SECRET_KEY || !!process.env.STRIPE_SECRET_KEY_TEST,
+      hasTestKey: !!process.env.STRIPE_SECRET_KEY_TEST,
+      hasLiveKey: !!process.env.STRIPE_SECRET_KEY,
+      keyPrefix: (process.env.STRIPE_SECRET_KEY_TEST || process.env.STRIPE_SECRET_KEY)?.substring(0, 7) || "none",
+      isTestMode: STRIPE_CONFIG.isTestMode,
+      isLiveMode: STRIPE_CONFIG.isLiveMode,
+      intendedTestMode: STRIPE_CONFIG.intendedTestMode,
+      keyMismatch: STRIPE_CONFIG.keyMismatch,
     }
 
     // Firebase info
     const firebase = {
-      hasConfig: !!(
-        process.env.FIREBASE_PROJECT_ID &&
-        process.env.FIREBASE_CLIENT_EMAIL &&
-        process.env.FIREBASE_PRIVATE_KEY
-      ),
+      hasConfig: !!process.env.FIREBASE_PROJECT_ID,
       projectId: process.env.FIREBASE_PROJECT_ID || "unknown",
     }
 
     // User info
     const user = {
-      uid: userId,
+      uid: uid,
       email: decodedToken.email || "unknown",
-      hasProfile: userDoc.exists,
+      hasProfile: !!userData,
       stripeAccountId: userData?.stripeAccountId || null,
       stripeTestAccountId: userData?.stripeTestAccountId || null,
     }
@@ -76,6 +56,7 @@ export async function GET(request: NextRequest) {
       stripe,
       firebase,
       user,
+      timestamp: new Date().toISOString(),
     })
   } catch (error) {
     console.error("Debug info error:", error)
