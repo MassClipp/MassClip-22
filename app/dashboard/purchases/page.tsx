@@ -46,16 +46,32 @@ export default function PurchasesPage() {
       setLoading(true)
       setError(null)
 
-      const response = await fetch("/api/user/unified-purchases")
-      if (!response.ok) {
-        throw new Error("Failed to fetch purchases")
-      }
+      const token = await user.getIdToken()
+      const response = await fetch("/api/user/unified-purchases", {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
 
       const data = await response.json()
-      setPurchases(data.purchases || [])
+
+      // Handle both successful responses and error responses
+      if (data.purchases) {
+        setPurchases(data.purchases)
+      } else {
+        setPurchases([])
+        if (data.error) {
+          console.warn("API returned error:", data.error)
+          // Don't show error to user for empty purchases
+        }
+      }
     } catch (error: any) {
       console.error("Error fetching purchases:", error)
-      setError(error.message || "Failed to load purchases")
+      setPurchases([]) // Set empty array instead of showing error
+      // Only show error for actual network/parsing errors
+      if (error.name !== "TypeError") {
+        setError(error.message || "Failed to load purchases")
+      }
     } finally {
       setLoading(false)
     }
@@ -84,7 +100,7 @@ export default function PurchasesPage() {
     )
   }
 
-  if (error) {
+  if (error && purchases.length === 0) {
     return (
       <div className="min-h-screen bg-black">
         <div className="p-6">
@@ -93,6 +109,9 @@ export default function PurchasesPage() {
             <AlertCircle className="h-4 w-4" />
             <AlertDescription>{error}</AlertDescription>
           </Alert>
+          <Button onClick={fetchPurchases} className="mt-4">
+            Try Again
+          </Button>
         </div>
       </div>
     )

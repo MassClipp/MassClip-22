@@ -13,7 +13,6 @@ import { useVideoStatsAPI } from "@/hooks/use-video-stats-api"
 import { useStripeDashboardSales } from "@/hooks/use-stripe-dashboard-sales"
 import { SalesForecastCard } from "@/components/sales-forecast-card"
 import ProfileViewStats from "@/components/profile-view-stats"
-import StripeTestConnect from "@/components/stripe-test-connect"
 
 export default function DashboardPage() {
   const { user } = useAuth()
@@ -134,9 +133,6 @@ export default function DashboardPage() {
           </Button>
         </div>
       </div>
-
-      {/* Test Connect Component - Only shows in preview */}
-      <StripeTestConnect />
 
       {/* Stats Grid */}
       <div className="grid gap-4 md:grid-cols-3">

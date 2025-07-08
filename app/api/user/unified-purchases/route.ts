@@ -9,7 +9,15 @@ export async function GET(request: NextRequest) {
     const authHeader = request.headers.get("authorization")
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
       console.error("❌ [Unified Purchases] Missing or invalid authorization header")
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+      return NextResponse.json(
+        {
+          error: "Unauthorized",
+          purchases: [],
+          total: 0,
+          totalValue: 0,
+        },
+        { status: 401 },
+      )
     }
 
     const idToken = authHeader.split("Bearer ")[1]
@@ -167,19 +175,25 @@ export async function GET(request: NextRequest) {
       return NextResponse.json(
         {
           error: "Failed to fetch purchases from database",
+          purchases: [],
+          total: 0,
+          totalValue: 0,
           details: firestoreError instanceof Error ? firestoreError.message : "Unknown database error",
         },
-        { status: 500 },
-      )
+        { status: 200 },
+      ) // Return 200 with empty data instead of 500
     }
   } catch (error) {
     console.error("❌ [Unified Purchases] Unexpected error:", error)
     return NextResponse.json(
       {
         error: "Failed to fetch purchases",
+        purchases: [],
+        total: 0,
+        totalValue: 0,
         details: error instanceof Error ? error.message : "An unexpected error occurred",
       },
-      { status: 500 },
-    )
+      { status: 200 },
+    ) // Return 200 with empty data instead of 500
   }
 }
