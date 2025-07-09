@@ -1,141 +1,79 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { db } from "@/lib/firebase-admin"
-import { getAuth } from "firebase-admin/auth"
+import { getFirestore } from "firebase-admin/firestore"
+import { initializeApp, getApps, cert } from "firebase-admin/app"
+
+// Initialize Firebase Admin if not already initialized
+if (!getApps().length) {
+  try {
+    initializeApp({
+      credential: cert({
+        projectId: process.env.FIREBASE_PROJECT_ID,
+        clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+        privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n"),
+      }),
+    })
+  } catch (error) {
+    console.error("Firebase Admin initialization failed:", error)
+  }
+}
+
+const db = getFirestore()
 
 export async function POST(request: NextRequest) {
   try {
-    console.log(`🔍 [Create Test Purchase] Starting test purchase creation`)
+    const { userId } = await request.json()
 
-    // Get Firebase auth token from Authorization header
-    const authHeader = request.headers.get("Authorization")
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      console.log("❌ [Create Test Purchase] No auth token provided")
-      return NextResponse.json({ error: "Unauthorized - no token" }, { status: 401 })
+    if (!userId) {
+      return NextResponse.json({ error: "Missing userId" }, { status: 400 })
     }
 
-    const token = authHeader.split("Bearer ")[1]
-    let decodedToken
+    // Generate a test session ID
+    const testSessionId = `cs_test_debug_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
 
-    try {
-      decodedToken = await getAuth().verifyIdToken(token)
-      console.log(`✅ [Create Test Purchase] Token verified for user: ${decodedToken.uid}`)
-    } catch (error) {
-      console.log("❌ [Create Test Purchase] Invalid token:", error)
-      return NextResponse.json({ error: "Unauthorized - invalid token" }, { status: 401 })
-    }
-
-    const { productBoxId, price = 9.99 } = await request.json()
-
-    if (!productBoxId) {
-      return NextResponse.json({ error: "Product box ID is required" }, { status: 400 })
-    }
-
-    const userId = decodedToken.uid
-
-    // Get user profile for additional data
-    const userDoc = await db.collection("users").doc(userId).get()
-    const userData = userDoc.data()
-
-    // Get product box data
-    const productBoxDoc = await db.collection("productBoxes").doc(productBoxId).get()
-    const productBoxData = productBoxDoc.data()
-
-    if (!productBoxDoc.exists) {
-      return NextResponse.json({ error: "Product box not found" }, { status: 404 })
-    }
-
-    const purchaseId = `test_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
-    const now = new Date()
-
-    // Create comprehensive purchase record
-    const purchaseData = {
-      // Core purchase info
-      id: purchaseId,
+    const testPurchaseData = {
+      sessionId: testSessionId,
       userId: userId,
-      type: "product_box",
-      status: "completed",
-
-      // Product info
-      itemId: productBoxId,
-      productBoxId: productBoxId,
-      itemTitle: productBoxData?.title || "Test Product Box",
-      itemDescription: productBoxData?.description || "Test purchase for debugging",
-
-      // Creator info
-      creatorId: productBoxData?.creatorId || "unknown",
-      creatorName: productBoxData?.creatorName || "Test Creator",
-      creatorUsername: productBoxData?.creatorUsername || "testcreator",
-
-      // Payment info
-      price: price,
+      amount: 999, // $9.99
       currency: "usd",
-
-      // Timestamps
-      createdAt: now,
-      updatedAt: now,
-      purchasedAt: now,
-
-      // Test metadata
-      isTestPurchase: true,
-      testCreatedBy: userId,
-      testCreatedAt: now.toISOString(),
-
-      // Stripe simulation
-      stripeSessionId: `cs_test_${Math.random().toString(36).substr(2, 20)}`,
-      paymentIntentId: `pi_test_${Math.random().toString(36).substr(2, 20)}`,
-
-      // Additional metadata
+      status: "paid",
+      mode: "payment",
+      environment: "test_debug",
+      purchasedAt: new Date(),
+      type: "test_purchase",
+      itemTitle: "Debug Test Purchase",
       metadata: {
-        productBoxId: productBoxId,
-        testPurchase: true,
-        debugInfo: {
-          userEmail: userData?.email || decodedToken.email,
-          userName: userData?.displayName || decodedToken.name,
-          createdVia: "debug-api",
-        },
+        type: "debug_test",
+        created_by: "debug_tool",
       },
     }
 
-    console.log(`🔍 [Create Test Purchase] Creating purchase record:`, purchaseData)
+    // Create purchase record in user's purchases collection
+    await db.collection("users").doc(userId).collection("purchases").doc(testSessionId).set(testPurchaseData)
 
-    // Create purchase in main collection
-    await db.collection("purchases").doc(purchaseId).set(purchaseData)
-    console.log(`✅ [Create Test Purchase] Created in main purchases collection`)
+    // Also create in unified purchases collection
+    await db.collection("userPurchases").doc(userId).collection("purchases").doc(testSessionId).set(testPurchaseData)
 
-    // Also create in user subcollection
-    await db.collection("users").doc(userId).collection("purchases").doc(purchaseId).set(purchaseData)
-    console.log(`✅ [Create Test Purchase] Created in user subcollection`)
-
-    // Log the purchase for tracking
-    await db.collection("purchaseLogs").add({
-      purchaseId: purchaseId,
+    // Create checkout session log
+    await db.collection("checkoutSessions").doc(testSessionId).set({
+      sessionId: testSessionId,
       userId: userId,
-      productBoxId: productBoxId,
-      action: "test_purchase_created",
-      timestamp: now,
-      metadata: {
-        createdVia: "debug-api",
-        userAgent: request.headers.get("user-agent"),
-        ip: request.headers.get("x-forwarded-for") || "unknown",
-      },
+      type: "debug_test",
+      status: "completed",
+      environment: "test_debug",
+      createdAt: new Date(),
+      completedAt: new Date(),
+      webhookProcessedAt: new Date(),
     })
 
-    console.log(`✅ [Create Test Purchase] Test purchase created successfully`)
+    console.log(`✅ [DEBUG] Created test purchase for user: ${userId}, session: ${testSessionId}`)
 
     return NextResponse.json({
       success: true,
+      sessionId: testSessionId,
       message: "Test purchase created successfully",
-      purchaseId: purchaseId,
-      data: purchaseData,
     })
   } catch (error) {
-    console.error(`❌ [Create Test Purchase] Error:`, error)
-    return NextResponse.json(
-      {
-        error: "Failed to create test purchase",
-        details: error instanceof Error ? error.message : "Unknown error",
-      },
-      { status: 500 },
-    )
+    console.error("Test purchase creation error:", error)
+    return NextResponse.json({ error: "Failed to create test purchase" }, { status: 500 })
   }
 }

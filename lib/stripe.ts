@@ -1,45 +1,42 @@
 import Stripe from "stripe"
 
-// Force live keys for all environments - no test key logic
-const stripeSecretKey = process.env.STRIPE_SECRET_KEY
-const stripePublishableKey = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
+// Force live mode - ensure we're using live keys
+const isLiveMode = true
 
-console.log("🔍 [Stripe Config] Initializing Stripe with live keys")
-
-// Validate we have the required keys
-if (!stripeSecretKey) {
-  throw new Error("Missing STRIPE_SECRET_KEY environment variable")
+// Get the appropriate Stripe secret key
+const getStripeSecretKey = () => {
+  if (isLiveMode) {
+    const liveKey = process.env.STRIPE_SECRET_KEY
+    if (!liveKey) {
+      throw new Error("STRIPE_SECRET_KEY (live) is not set")
+    }
+    if (!liveKey.startsWith("sk_live_")) {
+      throw new Error("STRIPE_SECRET_KEY must be a live key (sk_live_...)")
+    }
+    return liveKey
+  } else {
+    const testKey = process.env.STRIPE_SECRET_KEY_TEST
+    if (!testKey) {
+      throw new Error("STRIPE_SECRET_KEY_TEST is not set")
+    }
+    if (!testKey.startsWith("sk_test_")) {
+      throw new Error("STRIPE_SECRET_KEY_TEST must be a test key (sk_test_...)")
+    }
+    return testKey
+  }
 }
 
-if (!stripePublishableKey) {
-  console.warn("Missing NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY environment variable")
-}
-
-// Determine actual mode based on the key we're using
-const actuallyUsingTestMode = stripeSecretKey?.startsWith("sk_test_")
-const actuallyUsingLiveMode = stripeSecretKey?.startsWith("sk_live_")
-
-console.log(`🔑 [Stripe Config] Key configuration:`, {
-  mode: actuallyUsingTestMode ? "TEST" : actuallyUsingLiveMode ? "LIVE" : "UNKNOWN",
-  keyPrefix: stripeSecretKey?.substring(0, 7),
-  hasPublishableKey: !!stripePublishableKey,
-})
-
-// Initialize Stripe with the selected key
-export const stripe = new Stripe(stripeSecretKey, {
+// Initialize Stripe with live configuration
+export const stripe = new Stripe(getStripeSecretKey(), {
   apiVersion: "2024-06-20",
   typescript: true,
 })
 
-// Export the publishable key for client-side usage
-export const STRIPE_PUBLISHABLE_KEY = stripePublishableKey
-
-// Export environment info
-export const STRIPE_CONFIG = {
-  isTestMode: actuallyUsingTestMode,
-  isLiveMode: actuallyUsingLiveMode,
-  environment: process.env.VERCEL_ENV || process.env.NODE_ENV,
-  hasPublishableKey: !!stripePublishableKey,
+// Export mode information for debugging
+export const stripeConfig = {
+  isLiveMode,
+  keyType: isLiveMode ? "live" : "test",
+  environment: isLiveMode ? "production" : "development",
 }
 
-console.log(`✅ [Stripe Config] Stripe initialized successfully`)
+console.log(`🔥 Stripe initialized in ${stripeConfig.environment} mode (${stripeConfig.keyType})`)
