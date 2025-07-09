@@ -2,234 +2,303 @@ import { type NextRequest, NextResponse } from "next/server"
 import { stripe } from "@/lib/stripe"
 import { db } from "@/lib/firebase-admin"
 import { requireAuth } from "@/lib/auth-utils"
+import { UnifiedPurchaseService } from "@/lib/unified-purchase-service"
 
 export async function POST(request: NextRequest) {
   try {
-    console.log("🔍 [Payment Intent Verification] Starting verification process")
+    console.log(`🔍 [Payment Intent Verification] === STARTING VERIFICATION ===`)
 
     const decodedToken = await requireAuth(request)
     const { paymentIntentId, accountId } = await request.json()
 
     if (!paymentIntentId) {
-      console.error("❌ [Payment Intent Verification] Missing payment intent ID")
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Payment intent ID is required",
-        },
-        { status: 400 },
-      )
+      return NextResponse.json({ error: "Missing paymentIntentId" }, { status: 400 })
     }
 
-    console.log(`🔍 [Payment Intent Verification] Verifying payment intent: ${paymentIntentId}`)
-    console.log(`👤 [Payment Intent Verification] User: ${decodedToken.uid}`)
-    console.log(`🏦 [Payment Intent Verification] Account ID: ${accountId || "none"}`)
+    const userId = decodedToken.uid
+    console.log(`✅ [Payment Intent Verification] User authenticated: ${userId}`)
+    console.log(`🔍 [Payment Intent Verification] Payment Intent: ${paymentIntentId}`)
+    console.log(`🔍 [Payment Intent Verification] Account ID: ${accountId || "none"}`)
+
+    // Check if this purchase has already been processed
+    const existingPurchase = await UnifiedPurchaseService.getUserPurchaseByPaymentIntent(userId, paymentIntentId)
+    if (existingPurchase) {
+      console.log(`⚠️ [Payment Intent Verification] Purchase already processed`)
+
+      // Get additional details for response
+      const productBoxDoc = await db.collection("productBoxes").doc(existingPurchase.productBoxId).get()
+      const productBoxData = productBoxDoc.exists ? productBoxDoc.data() : null
+
+      let creatorData = null
+      if (existingPurchase.creatorId) {
+        const creatorDoc = await db.collection("users").doc(existingPurchase.creatorId).get()
+        creatorData = creatorDoc.exists ? creatorDoc.data() : null
+      }
+
+      return NextResponse.json({
+        success: true,
+        alreadyProcessed: true,
+        message: "This purchase was already verified and processed",
+        purchase: existingPurchase,
+        productBox: productBoxData
+          ? {
+              id: existingPurchase.productBoxId,
+              title: productBoxData.title,
+              description: productBoxData.description,
+              thumbnailUrl: productBoxData.thumbnailUrl,
+              price: productBoxData.price,
+            }
+          : null,
+        creator: creatorData
+          ? {
+              id: existingPurchase.creatorId,
+              name: creatorData.displayName || creatorData.name,
+              username: creatorData.username,
+            }
+          : null,
+        verificationDetails: {
+          method: "payment_intent_direct",
+          verifiedAt: new Date().toISOString(),
+          connectedAccount: accountId,
+          duplicateCheck: true,
+        },
+      })
+    }
 
     // Retrieve payment intent from Stripe
     let paymentIntent
     try {
-      const stripeOptions = accountId ? { stripeAccount: accountId } : {}
-      paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId, stripeOptions)
-
-      console.log(`✅ [Payment Intent Verification] Payment intent retrieved:`, {
-        id: paymentIntent.id,
-        status: paymentIntent.status,
-        amount: paymentIntent.amount,
-        currency: paymentIntent.currency,
-        customer: paymentIntent.customer,
-        metadata: paymentIntent.metadata,
-      })
+      if (accountId) {
+        console.log(`🔍 [Payment Intent Verification] Retrieving from connected account: ${accountId}`)
+        paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId, {
+          stripeAccount: accountId,
+        })
+      } else {
+        console.log(`🔍 [Payment Intent Verification] Retrieving from platform account`)
+        paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId)
+      }
     } catch (stripeError: any) {
-      console.error("❌ [Payment Intent Verification] Stripe error:", stripeError)
+      console.error(`❌ [Payment Intent Verification] Stripe error:`, stripeError)
       return NextResponse.json(
         {
-          success: false,
-          error: "Failed to retrieve payment information from Stripe",
+          error: "Failed to retrieve payment intent from Stripe",
           details: stripeError.message,
+          code: stripeError.code,
         },
         { status: 400 },
       )
     }
 
-    // Verify payment was successful
+    console.log(`📊 [Payment Intent Verification] Payment Intent Status: ${paymentIntent.status}`)
+    console.log(`💰 [Payment Intent Verification] Amount: ${paymentIntent.amount} ${paymentIntent.currency}`)
+
+    // Verify payment is successful
     if (paymentIntent.status !== "succeeded") {
       console.error(`❌ [Payment Intent Verification] Payment not successful: ${paymentIntent.status}`)
       return NextResponse.json(
         {
-          success: false,
-          error: `Payment status is ${paymentIntent.status}, expected succeeded`,
+          error: `Payment not completed. Status: ${paymentIntent.status}`,
+          paymentStatus: paymentIntent.status,
         },
         { status: 400 },
       )
     }
 
-    // Extract product information from metadata
-    const productBoxId = paymentIntent.metadata.productBoxId || paymentIntent.metadata.vaultId
-    const creatorId = paymentIntent.metadata.creatorId || paymentIntent.metadata.creatorUid
+    // Extract metadata
+    const metadata = paymentIntent.metadata || {}
+    const { productBoxId, buyerUid, creatorUid, creatorId } = metadata
+
+    console.log(`📝 [Payment Intent Verification] Metadata:`, metadata)
+
+    // Validate that the buyer matches the authenticated user
+    if (buyerUid && buyerUid !== userId) {
+      console.error(`❌ [Payment Intent Verification] User mismatch: ${userId} vs ${buyerUid}`)
+      return NextResponse.json({ error: "Payment intent does not belong to authenticated user" }, { status: 403 })
+    }
 
     if (!productBoxId) {
-      console.error("❌ [Payment Intent Verification] No product ID in payment metadata")
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Product information not found in payment",
-        },
-        { status: 400 },
-      )
+      console.error(`❌ [Payment Intent Verification] No productBoxId in metadata`)
+      return NextResponse.json({ error: "Invalid payment intent: missing product information" }, { status: 400 })
     }
 
-    console.log(`📦 [Payment Intent Verification] Product: ${productBoxId}`)
-    console.log(`👨‍💼 [Payment Intent Verification] Creator: ${creatorId}`)
-
-    // Get product details
-    let productDoc = await db.collection("productBoxes").doc(productBoxId).get()
-    if (!productDoc.exists) {
-      productDoc = await db.collection("bundles").doc(productBoxId).get()
+    // Get product box details
+    const productBoxDoc = await db.collection("productBoxes").doc(productBoxId).get()
+    if (!productBoxDoc.exists) {
+      console.error(`❌ [Payment Intent Verification] Product box not found: ${productBoxId}`)
+      return NextResponse.json({ error: "Product not found" }, { status: 404 })
     }
 
-    if (!productDoc.exists) {
-      console.error(`❌ [Payment Intent Verification] Product not found: ${productBoxId}`)
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Product not found",
-        },
-        { status: 404 },
-      )
+    const productBoxData = productBoxDoc.data()!
+    console.log(`✅ [Payment Intent Verification] Product found: ${productBoxData.title}`)
+
+    // Get creator details
+    const finalCreatorId = creatorUid || creatorId || productBoxData.creatorId
+    let creatorData = null
+    if (finalCreatorId) {
+      const creatorDoc = await db.collection("users").doc(finalCreatorId).get()
+      creatorData = creatorDoc.exists ? creatorDoc.data() : null
+      console.log(`✅ [Payment Intent Verification] Creator found: ${creatorData?.username || finalCreatorId}`)
     }
 
-    const productData = productDoc.data()!
-    console.log(`✅ [Payment Intent Verification] Product found: ${productData.title}`)
-
-    // Check if user already has this purchase
-    const existingPurchase = await db
+    // Check if user already owns this product (additional safety check)
+    const existingAccess = await db
       .collection("users")
-      .doc(decodedToken.uid)
+      .doc(userId)
       .collection("purchases")
       .where("productBoxId", "==", productBoxId)
       .limit(1)
       .get()
 
-    if (!existingPurchase.empty) {
-      console.log(`ℹ️ [Payment Intent Verification] User already owns this product`)
+    if (!existingAccess.empty) {
+      console.log(`⚠️ [Payment Intent Verification] User already owns this product`)
       return NextResponse.json({
         success: true,
         alreadyOwned: true,
-        message: "You already own this product",
-        product: {
+        message: "You already own this content",
+        productBox: {
           id: productBoxId,
-          title: productData.title,
-          price: productData.price,
+          title: productBoxData.title,
+          description: productBoxData.description,
+          thumbnailUrl: productBoxData.thumbnailUrl,
+          price: productBoxData.price,
         },
+        creator: creatorData
+          ? {
+              id: finalCreatorId,
+              name: creatorData.displayName || creatorData.name,
+              username: creatorData.username,
+            }
+          : null,
       })
     }
 
-    // Calculate amounts
-    const totalAmount = paymentIntent.amount / 100 // Convert from cents
-    const platformFeeAmount = paymentIntent.application_fee_amount ? paymentIntent.application_fee_amount / 100 : 0
-    const creatorAmount = totalAmount - platformFeeAmount
-
-    console.log(`💰 [Payment Intent Verification] Payment breakdown:`, {
-      total: totalAmount,
-      platformFee: platformFeeAmount,
-      creatorAmount: creatorAmount,
+    // Create unified purchase record
+    console.log(`🔄 [Payment Intent Verification] Creating unified purchase record`)
+    await UnifiedPurchaseService.createUnifiedPurchase(userId, {
+      productBoxId,
+      paymentIntentId,
+      amount: paymentIntent.amount / 100, // Convert from cents
+      currency: paymentIntent.currency,
+      creatorId: finalCreatorId || "",
     })
 
-    // Create purchase record
+    // Create main purchase record
     const purchaseData = {
+      userId,
+      buyerUid: userId,
       productBoxId,
-      vaultId: productBoxId, // For backward compatibility
-      userId: decodedToken.uid,
-      creatorId: creatorId || productData.creatorId,
-      paymentIntentId: paymentIntent.id,
-      stripeAccountId: accountId || null,
-      amount: totalAmount,
+      itemId: productBoxId,
+      paymentIntentId,
+      amount: paymentIntent.amount / 100,
+      amountReceived: (paymentIntent.amount_received || paymentIntent.amount) / 100,
       currency: paymentIntent.currency,
-      platformFee: platformFeeAmount,
-      creatorAmount: creatorAmount,
-      productTitle: productData.title,
-      productType: "product_box",
-      status: "completed",
-      purchaseDate: new Date(),
+      timestamp: new Date(),
       createdAt: new Date(),
-      metadata: {
-        stripePaymentIntentId: paymentIntent.id,
-        stripeCustomer: paymentIntent.customer,
-        paymentMethod: paymentIntent.payment_method,
-        receiptUrl: paymentIntent.charges?.data?.[0]?.receipt_url,
-      },
+      purchasedAt: new Date(),
+      status: "completed",
+      type: "product_box",
+      itemTitle: productBoxData.title || "Untitled Product Box",
+      itemDescription: productBoxData.description || "",
+      thumbnailUrl: productBoxData.thumbnailUrl || "",
+      customPreviewThumbnail: productBoxData.customPreviewThumbnail || "",
+      creatorId: finalCreatorId,
+      creatorName: creatorData?.displayName || creatorData?.name || "",
+      creatorUsername: creatorData?.username || "",
+      accessUrl: `/product-box/${productBoxId}/content`,
+      verificationMethod: "payment_intent_direct",
+      verifiedAt: new Date(),
+      connectedAccount: accountId || null,
     }
 
-    // Store purchase in multiple locations for redundancy
-    const batch = db.batch()
+    // Write to main purchases collection with payment intent ID as document ID
+    await db.collection("purchases").doc(paymentIntentId).set(purchaseData)
 
-    // 1. User's purchases subcollection
-    const userPurchaseRef = db.collection("users").doc(decodedToken.uid).collection("purchases").doc(paymentIntent.id)
-    batch.set(userPurchaseRef, purchaseData)
+    // Also write to user's purchases subcollection
+    await db.collection("users").doc(userId).collection("purchases").add(purchaseData)
 
-    // 2. Global purchases collection
-    const globalPurchaseRef = db.collection("purchases").doc(paymentIntent.id)
-    batch.set(globalPurchaseRef, purchaseData)
-
-    // 3. Creator's sales subcollection (if creator exists)
-    if (creatorId) {
-      const creatorSaleRef = db.collection("users").doc(creatorId).collection("sales").doc(paymentIntent.id)
-      batch.set(creatorSaleRef, {
-        ...purchaseData,
-        buyerId: decodedToken.uid,
-        saleDate: new Date(),
+    // Update product box sales counter
+    await db
+      .collection("productBoxes")
+      .doc(productBoxId)
+      .update({
+        totalSales: db.FieldValue.increment(1),
+        totalRevenue: db.FieldValue.increment(paymentIntent.amount / 100),
+        lastPurchaseAt: new Date(),
       })
-    }
 
-    // 4. Product sales tracking
-    const productSaleRef = db.collection("productBoxes").doc(productBoxId).collection("sales").doc(paymentIntent.id)
-    batch.set(productSaleRef, purchaseData)
+    // Record the sale for the creator
+    if (finalCreatorId) {
+      const platformFee = (paymentIntent.amount * 0.05) / 100 // 5% platform fee
+      const netAmount = paymentIntent.amount / 100 - platformFee
 
-    // Commit all writes
-    await batch.commit()
-
-    console.log(`✅ [Payment Intent Verification] Purchase recorded successfully`)
-
-    // Update product analytics
-    try {
       await db
-        .collection("productBoxes")
-        .doc(productBoxId)
+        .collection("users")
+        .doc(finalCreatorId)
+        .collection("sales")
+        .add({
+          productBoxId,
+          buyerUid: userId,
+          paymentIntentId,
+          amount: paymentIntent.amount / 100,
+          platformFee,
+          netAmount,
+          purchasedAt: new Date(),
+          status: "completed",
+          productTitle: productBoxData.title || "Untitled Product Box",
+          buyerEmail: decodedToken.email || "",
+          verificationMethod: "payment_intent_direct",
+        })
+
+      // Increment the creator's total sales
+      await db
+        .collection("users")
+        .doc(finalCreatorId)
         .update({
           totalSales: db.FieldValue.increment(1),
-          totalRevenue: db.FieldValue.increment(totalAmount),
-          lastSaleDate: new Date(),
+          totalRevenue: db.FieldValue.increment(paymentIntent.amount / 100),
+          lastSaleAt: new Date(),
         })
-      console.log(`✅ [Payment Intent Verification] Product analytics updated`)
-    } catch (analyticsError) {
-      console.error("⚠️ [Payment Intent Verification] Failed to update analytics:", analyticsError)
-      // Don't fail the whole request for analytics
     }
+
+    console.log(`✅ [Payment Intent Verification] Purchase verification completed successfully`)
 
     return NextResponse.json({
       success: true,
-      message: "Purchase verified and recorded successfully",
-      purchase: {
+      purchase: purchaseData,
+      paymentIntent: {
         id: paymentIntent.id,
-        productId: productBoxId,
-        productTitle: productData.title,
-        amount: totalAmount,
+        amount: paymentIntent.amount / 100,
+        amountReceived: (paymentIntent.amount_received || paymentIntent.amount) / 100,
         currency: paymentIntent.currency,
-        purchaseDate: new Date().toISOString(),
+        status: paymentIntent.status,
+        receiptEmail: paymentIntent.receipt_email,
       },
-      product: {
+      productBox: {
         id: productBoxId,
-        title: productData.title,
-        description: productData.description,
-        thumbnailUrl: productData.thumbnailUrl,
+        title: productBoxData.title,
+        description: productBoxData.description,
+        thumbnailUrl: productBoxData.thumbnailUrl,
+        price: productBoxData.price,
+      },
+      creator: creatorData
+        ? {
+            id: finalCreatorId,
+            name: creatorData.displayName || creatorData.name,
+            username: creatorData.username,
+          }
+        : null,
+      verificationDetails: {
+        method: "payment_intent_direct",
+        verifiedAt: new Date().toISOString(),
+        connectedAccount: accountId,
+        duplicateCheck: false,
       },
     })
   } catch (error: any) {
-    console.error("❌ [Payment Intent Verification] Unexpected error:", error)
+    console.error(`❌ [Payment Intent Verification] Error:`, error)
     return NextResponse.json(
       {
-        success: false,
-        error: "Internal server error",
+        error: "Payment verification failed",
         details: error.message,
       },
       { status: 500 },

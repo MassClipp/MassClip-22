@@ -8,7 +8,10 @@ export default function PaymentSuccessLoading() {
         <CardContent className="p-6 text-center">
           <Loader2 className="h-12 w-12 text-blue-500 mx-auto mb-4 animate-spin" />
           <h2 className="text-xl font-semibold mb-2">Loading Payment Verification</h2>
-          <p className="text-gray-600">Please wait while we verify your purchase...</p>
+          <p className="text-gray-600 mb-4">Please wait while we prepare your payment verification page...</p>
+          <div className="mt-4 p-3 bg-blue-50 rounded-lg">
+            <p className="text-sm text-blue-800">We're setting up the verification process for your purchase.</p>
+          </div>
         </CardContent>
       </Card>
     </div>

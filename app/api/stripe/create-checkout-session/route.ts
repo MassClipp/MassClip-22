@@ -59,7 +59,9 @@ export async function POST(request: NextRequest) {
         productBoxId,
         vaultId: productBoxId, // For backward compatibility
         userId: decodedToken.uid,
+        buyerUid: decodedToken.uid,
         creatorId: creatorId || "",
+        creatorUid: creatorId || "",
         creatorName: creatorData?.displayName || creatorData?.name || "",
       },
       customer_email: decodedToken.email,

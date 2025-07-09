@@ -65,6 +65,8 @@ export default function PaymentSuccessPage() {
   const paymentIntentId = searchParams.get("payment_intent")
   const sessionId = searchParams.get("session_id")
   const connectedAccountId = searchParams.get("account_id")
+  const videoId = searchParams.get("video_id")
+  const productBoxId = searchParams.get("product_box_id")
 
   useEffect(() => {
     if (!user) {
@@ -172,6 +174,10 @@ export default function PaymentSuccessPage() {
       router.push(`/product-box/${verificationResult.purchase.productBoxId}/content`)
     } else if (verificationResult?.productBox?.id) {
       router.push(`/product-box/${verificationResult.productBox.id}/content`)
+    } else if (videoId) {
+      router.push(`/video/${videoId}`)
+    } else if (productBoxId) {
+      router.push(`/product-box/${productBoxId}/content`)
     }
   }
 
