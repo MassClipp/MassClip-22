@@ -1,10 +1,15 @@
 import Stripe from "stripe"
 
-// Force live keys for all environments - no test key logic
-const stripeSecretKey = process.env.STRIPE_SECRET_KEY
+// Prioritize live keys for production, fall back to test keys for development
+const isProduction = process.env.VERCEL_ENV === "production" || process.env.NODE_ENV === "production"
+const stripeSecretKey = process.env.STRIPE_SECRET_KEY || process.env.STRIPE_SECRET_KEY_TEST
 const stripePublishableKey = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
 
-console.log("🔍 [Stripe Config] Initializing Stripe with live keys")
+console.log("🔍 [Stripe Config] Environment check:", {
+  VERCEL_ENV: process.env.VERCEL_ENV,
+  NODE_ENV: process.env.NODE_ENV,
+  isProduction,
+})
 
 // Validate we have the required keys
 if (!stripeSecretKey) {
@@ -21,9 +26,15 @@ const actuallyUsingLiveMode = stripeSecretKey?.startsWith("sk_live_")
 
 console.log(`🔑 [Stripe Config] Key configuration:`, {
   mode: actuallyUsingTestMode ? "TEST" : actuallyUsingLiveMode ? "LIVE" : "UNKNOWN",
-  keyPrefix: stripeSecretKey?.substring(0, 7),
+  keyPrefix: stripeSecretKey?.substring(0, 12) + "...",
   hasPublishableKey: !!stripePublishableKey,
+  keyLength: stripeSecretKey?.length,
 })
+
+// Warn if using test keys in production
+if (isProduction && actuallyUsingTestMode) {
+  console.warn("⚠️ [Stripe Config] WARNING: Using test keys in production environment!")
+}
 
 // Initialize Stripe with the selected key
 export const stripe = new Stripe(stripeSecretKey, {
@@ -40,6 +51,7 @@ export const STRIPE_CONFIG = {
   isLiveMode: actuallyUsingLiveMode,
   environment: process.env.VERCEL_ENV || process.env.NODE_ENV,
   hasPublishableKey: !!stripePublishableKey,
+  isProduction,
 }
 
-console.log(`✅ [Stripe Config] Stripe initialized successfully`)
+console.log(`✅ [Stripe Config] Stripe initialized successfully in ${actuallyUsingLiveMode ? "LIVE" : "TEST"} mode`)
