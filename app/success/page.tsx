@@ -5,7 +5,7 @@ import { useSearchParams, useRouter } from "next/navigation"
 import { useAuth } from "@/contexts/auth-context"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { CheckCircle, Clock, AlertCircle, RefreshCw, ExternalLink, ShoppingBag, CreditCard } from "lucide-react"
+import { CheckCircle, Clock, AlertCircle, RefreshCw, ExternalLink, ShoppingBag } from "lucide-react"
 
 interface PaymentVerificationResult {
   success: boolean
@@ -60,6 +60,9 @@ export default function SuccessPage() {
       setError(null)
 
       console.log(`🔍 [Success Page] Verifying payment intent: ${paymentIntentId}`)
+      if (connectedAccountId) {
+        console.log(`🔍 [Success Page] Using connected account: ${connectedAccountId}`)
+      }
 
       const response = await fetch("/api/purchase/verify-payment-intent", {
         method: "POST",
@@ -76,13 +79,13 @@ export default function SuccessPage() {
       const result: PaymentVerificationResult = await response.json()
 
       if (!response.ok) {
-        throw new Error(result.error || "Verification failed")
+        throw new Error(result.error || "Payment verification failed")
       }
 
-      console.log(`✅ [Success Page] Verification successful:`, result)
+      console.log(`✅ [Success Page] Payment verification successful:`, result)
       setVerificationResult(result)
     } catch (err: any) {
-      console.error(`❌ [Success Page] Verification error:`, err)
+      console.error(`❌ [Success Page] Payment verification error:`, err)
       setError(err.message || "Failed to verify payment")
     } finally {
       setLoading(false)
@@ -102,7 +105,7 @@ export default function SuccessPage() {
   const handleContactSupport = () => {
     const subject = encodeURIComponent("Payment Verification Issue")
     const body = encodeURIComponent(
-      `Payment Intent ID: ${paymentIntentId}\nConnected Account: ${connectedAccountId || "N/A"}\nUser ID: ${user?.uid}`,
+      `Payment Intent ID: ${paymentIntentId}\nConnected Account: ${connectedAccountId || "N/A"}\nUser ID: ${user?.uid || "N/A"}`,
     )
     window.open(`mailto:support@massclip.com?subject=${subject}&body=${body}`, "_blank")
   }
@@ -114,7 +117,7 @@ export default function SuccessPage() {
           <CardContent className="p-6 text-center">
             <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
             <h2 className="text-xl font-semibold mb-2">Authentication Required</h2>
-            <p className="text-gray-600 mb-4">Please log in to verify your payment.</p>
+            <p className="text-gray-600 mb-4">Please log in to verify your purchase.</p>
             <Button onClick={() => router.push("/login")}>Log In</Button>
           </CardContent>
         </Card>
@@ -135,6 +138,10 @@ export default function SuccessPage() {
               <Button onClick={handleViewPurchases} variant="outline" className="w-full bg-transparent">
                 View My Purchases
               </Button>
+            </div>
+            <div className="mt-4 p-3 bg-yellow-50 rounded-lg">
+              <h3 className="font-medium text-yellow-900 mb-1">Expected URL format:</h3>
+              <p className="text-sm text-yellow-800">/success?payment_intent=pi_xxx&account_id=acct_yyy</p>
             </div>
           </CardContent>
         </Card>
@@ -162,14 +169,14 @@ export default function SuccessPage() {
               <ul className="text-sm text-blue-800 space-y-1">
                 <li>• Retrieving payment details directly from Stripe</li>
                 <li>• Validating payment completion status</li>
-                <li>• Setting up your content access</li>
+                <li>• Setting up your content access instantly</li>
                 <li>• No webhook delays - direct verification!</li>
               </ul>
             </div>
-            <div className="mt-4 space-y-1">
-              <p className="text-xs text-gray-400">Payment Intent: {paymentIntentId.slice(-8)}</p>
+            <div className="mt-4 p-3 bg-gray-100 rounded-lg">
+              <p className="text-xs text-gray-600">Payment Intent: {paymentIntentId.slice(-8)}</p>
               {connectedAccountId && (
-                <p className="text-xs text-gray-400">Connected Account: {connectedAccountId.slice(-8)}</p>
+                <p className="text-xs text-gray-600">Connected Account: {connectedAccountId.slice(-8)}</p>
               )}
             </div>
           </CardContent>
@@ -203,15 +210,15 @@ export default function SuccessPage() {
               <h3 className="font-medium text-red-900 mb-1">What to do:</h3>
               <ul className="text-sm text-red-800 space-y-1">
                 <li>• Check your email for a Stripe receipt</li>
-                <li>• If you were charged, your payment is valid</li>
+                <li>• If you were charged, your purchase is valid</li>
                 <li>• Try refreshing or contact support</li>
                 <li>• We'll resolve this quickly!</li>
               </ul>
             </div>
-            <div className="mt-4 space-y-1">
-              <p className="text-xs text-gray-400">Payment Intent: {paymentIntentId.slice(-8)}</p>
+            <div className="mt-4 p-3 bg-gray-100 rounded-lg">
+              <p className="text-xs text-gray-600">Payment Intent: {paymentIntentId.slice(-8)}</p>
               {connectedAccountId && (
-                <p className="text-xs text-gray-400">Connected Account: {connectedAccountId.slice(-8)}</p>
+                <p className="text-xs text-gray-600">Connected Account: {connectedAccountId.slice(-8)}</p>
               )}
             </div>
           </CardContent>
@@ -229,23 +236,15 @@ export default function SuccessPage() {
           <CardHeader className="text-center">
             <CheckCircle className="h-16 w-16 text-green-500 mx-auto mb-4" />
             <CardTitle className="text-2xl text-green-700">
-              {alreadyProcessed ? "Payment Confirmed!" : "Payment Successful!"}
+              {alreadyProcessed ? "Purchase Confirmed!" : "Payment Successful!"}
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="text-center">
               <h3 className="font-semibold text-lg">{productBox?.title || "Your Purchase"}</h3>
-              <div className="flex items-center justify-center gap-2 text-gray-600">
-                <CreditCard className="h-4 w-4" />
-                <span>
-                  ${paymentIntent?.amount?.toFixed(2) || "0.00"} {paymentIntent?.currency?.toUpperCase() || "USD"}
-                </span>
-              </div>
-              {paymentIntent?.amountReceived !== paymentIntent?.amount && (
-                <p className="text-sm text-gray-500">
-                  (Received: ${paymentIntent?.amountReceived?.toFixed(2) || "0.00"})
-                </p>
-              )}
+              <p className="text-gray-600">
+                ${paymentIntent?.amount?.toFixed(2) || "0.00"} {paymentIntent?.currency?.toUpperCase() || "USD"}
+              </p>
               {creator && (
                 <p className="text-sm text-gray-500 mt-1">
                   by {creator.name} (@{creator.username})
@@ -259,6 +258,9 @@ export default function SuccessPage() {
                   src={productBox.thumbnailUrl || "/placeholder.svg"}
                   alt={productBox.title}
                   className="w-24 h-24 object-cover rounded-lg"
+                  onError={(e) => {
+                    e.currentTarget.src = "/placeholder.svg?height=96&width=96"
+                  }}
                 />
               </div>
             )}
@@ -268,12 +270,6 @@ export default function SuccessPage() {
                 <span className="text-gray-600">Payment Intent:</span>
                 <span className="font-mono text-xs">{paymentIntentId.slice(-8)}</span>
               </div>
-              {connectedAccountId && (
-                <div className="flex justify-between text-sm">
-                  <span className="text-gray-600">Connected Account:</span>
-                  <span className="font-mono text-xs">{connectedAccountId.slice(-8)}</span>
-                </div>
-              )}
               <div className="flex justify-between text-sm">
                 <span className="text-gray-600">Payment Status:</span>
                 <span className="text-green-600 font-medium">{paymentIntent?.status || "Succeeded"}</span>
@@ -281,13 +277,19 @@ export default function SuccessPage() {
               <div className="flex justify-between text-sm">
                 <span className="text-gray-600">Verification:</span>
                 <span className="text-green-600 font-medium">
-                  {alreadyProcessed ? "Previously Verified" : "Direct API Verified"}
+                  {alreadyProcessed ? "Previously Verified" : "Instantly Verified"}
                 </span>
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-gray-600">Access:</span>
                 <span className="text-green-600 font-medium">Lifetime</span>
               </div>
+              {connectedAccountId && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-600">Creator Account:</span>
+                  <span className="font-mono text-xs">{connectedAccountId.slice(-8)}</span>
+                </div>
+              )}
             </div>
 
             <div className="space-y-2">
@@ -303,16 +305,15 @@ export default function SuccessPage() {
             <div className="mt-4 p-3 bg-green-50 rounded-lg">
               <h3 className="font-medium text-green-900 mb-1">✅ All Set!</h3>
               <ul className="text-sm text-green-800 space-y-1">
-                <li>• Payment verified directly with Stripe API</li>
+                <li>• Payment verified instantly via Payment Intent</li>
                 <li>• Content access activated immediately</li>
                 <li>• Receipt sent to your email</li>
-                <li>• No webhook dependencies!</li>
+                <li>• No webhook delays - direct verification!</li>
               </ul>
             </div>
 
             <p className="text-xs text-gray-500 text-center">
-              Your payment has been verified using the Payment Intent and recorded. You now have lifetime access to this
-              content.
+              Your payment has been verified and recorded. You now have lifetime access to this content.
             </p>
           </CardContent>
         </Card>
