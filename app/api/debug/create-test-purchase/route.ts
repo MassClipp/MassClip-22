@@ -12,10 +12,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const { productBoxId, price = 9.99, userId } = await request.json()
+    const { bundleId, price = 9.99, userId } = await request.json()
 
-    if (!productBoxId) {
-      return NextResponse.json({ error: "Product box ID is required" }, { status: 400 })
+    if (!bundleId) {
+      return NextResponse.json({ error: "Bundle ID is required" }, { status: 400 })
     }
 
     const actualUserId = userId || decodedToken.uid
@@ -24,12 +24,12 @@ export async function POST(request: NextRequest) {
     const userDoc = await db.collection("users").doc(actualUserId).get()
     const userData = userDoc.data()
 
-    // Get product box data
-    const productBoxDoc = await db.collection("productBoxes").doc(productBoxId).get()
-    const productBoxData = productBoxDoc.data()
+    // Get bundle data
+    const bundleDoc = await db.collection("bundles").doc(bundleId).get()
+    const bundleData = bundleDoc.data()
 
-    if (!productBoxDoc.exists) {
-      return NextResponse.json({ error: "Product box not found" }, { status: 404 })
+    if (!bundleDoc.exists) {
+      return NextResponse.json({ error: "Bundle not found" }, { status: 404 })
     }
 
     const purchaseId = `test_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
@@ -42,19 +42,19 @@ export async function POST(request: NextRequest) {
       id: purchaseId,
       sessionId: sessionId,
       userId: actualUserId,
-      type: "product_box",
+      type: "bundle",
       status: "complete",
 
-      // Product info
-      itemId: productBoxId,
-      productBoxId: productBoxId,
-      itemTitle: productBoxData?.title || "Test Product Box",
-      itemDescription: productBoxData?.description || "Test purchase for debugging",
+      // Bundle info
+      itemId: bundleId,
+      bundleId: bundleId,
+      itemTitle: bundleData?.title || "Test Bundle",
+      itemDescription: bundleData?.description || "Test bundle purchase for debugging",
 
       // Creator info
-      creatorId: productBoxData?.creatorId || "unknown",
-      creatorName: productBoxData?.creatorName || "Test Creator",
-      creatorUsername: productBoxData?.creatorUsername || "testcreator",
+      creatorId: bundleData?.creatorId || "unknown",
+      creatorName: bundleData?.creatorName || "Test Creator",
+      creatorUsername: bundleData?.creatorUsername || "testcreator",
 
       // Payment info
       amount: price,
@@ -78,7 +78,7 @@ export async function POST(request: NextRequest) {
 
       // Additional metadata
       metadata: {
-        productBoxId: productBoxId,
+        bundleId: bundleId,
         testPurchase: true,
         debugInfo: {
           userEmail: userData?.email || decodedToken.email,
@@ -91,12 +91,12 @@ export async function POST(request: NextRequest) {
     console.log(`🔍 [Create Test Purchase] Creating purchase record:`, {
       sessionId,
       userId: actualUserId,
-      productBoxId,
+      bundleId,
       amount: price,
     })
 
-    // Create purchase in user subcollection (using productBoxId as doc ID)
-    await db.collection("users").doc(actualUserId).collection("purchases").doc(productBoxId).set(purchaseData)
+    // Create purchase in user subcollection (using bundleId as doc ID)
+    await db.collection("users").doc(actualUserId).collection("purchases").doc(bundleId).set(purchaseData)
     console.log(`✅ [Create Test Purchase] Created in user purchases collection`)
 
     // Also create in unified purchases collection (using sessionId as doc ID)
@@ -108,7 +108,7 @@ export async function POST(request: NextRequest) {
       purchaseId: purchaseId,
       sessionId: sessionId,
       userId: actualUserId,
-      productBoxId: productBoxId,
+      bundleId: bundleId,
       action: "test_purchase_created",
       timestamp: now,
       metadata: {
@@ -127,7 +127,7 @@ export async function POST(request: NextRequest) {
       sessionId: sessionId,
       data: {
         sessionId,
-        productBoxId,
+        bundleId,
         amount: price,
         userId: actualUserId,
         itemTitle: purchaseData.itemTitle,

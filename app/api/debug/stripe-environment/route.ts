@@ -1,46 +1,42 @@
 import { NextResponse } from "next/server"
-import { STRIPE_CONFIG } from "@/lib/stripe"
 
 export async function GET() {
   try {
-    // Check if Firebase is connected
-    let firebaseConnected = false
-    try {
-      const { db } = await import("@/lib/firebase-admin")
-      await db.collection("_health").limit(1).get()
-      firebaseConnected = true
-    } catch (error) {
-      console.error("Firebase connection check failed:", error)
-    }
+    const stripeSecretKey = process.env.STRIPE_SECRET_KEY
+    const stripeWebhookSecret = process.env.STRIPE_WEBHOOK_SECRET
+    const firebaseProjectId = process.env.FIREBASE_PROJECT_ID
+    const vercelEnv = process.env.VERCEL_ENV || process.env.NODE_ENV
 
     // Determine Stripe mode
-    const stripeSecretKey = process.env.STRIPE_SECRET_KEY
-    const stripeMode = stripeSecretKey?.startsWith("sk_live_")
-      ? "LIVE"
-      : stripeSecretKey?.startsWith("sk_test_")
-        ? "TEST"
-        : "UNKNOWN"
-
-    // Check webhook configuration
-    const webhookConfigured =
-      stripeMode === "LIVE" ? !!process.env.STRIPE_WEBHOOK_SECRET_LIVE : !!process.env.STRIPE_WEBHOOK_SECRET_TEST
+    const stripeMode = stripeSecretKey?.startsWith("sk_live_") ? "LIVE" : "TEST"
+    const stripeKeyPrefix = stripeSecretKey ? stripeSecretKey.substring(0, 12) : "NOT_SET"
 
     const environmentStatus = {
       stripeMode,
-      stripeKeyPrefix: stripeSecretKey?.substring(0, 7) || "NOT_SET",
-      webhookConfigured,
-      firebaseConnected,
-      environment: process.env.VERCEL_ENV || process.env.NODE_ENV || "unknown",
-      isLiveMode: STRIPE_CONFIG.isLiveMode,
-      isTestMode: STRIPE_CONFIG.isTestMode,
-      hasPublishableKey: STRIPE_CONFIG.hasPublishableKey,
+      stripeKeyPrefix,
+      webhookConfigured: !!stripeWebhookSecret,
+      firebaseConnected: !!firebaseProjectId,
+      environment: vercelEnv,
+      timestamp: new Date().toISOString(),
     }
 
-    console.log("🔍 [Environment Debug] Status:", environmentStatus)
+    console.log("🔍 [Environment Status]", {
+      stripeMode,
+      stripeKeyPrefix,
+      webhookConfigured: environmentStatus.webhookConfigured,
+      firebaseConnected: environmentStatus.firebaseConnected,
+      environment: vercelEnv,
+    })
 
     return NextResponse.json(environmentStatus)
   } catch (error) {
-    console.error("❌ [Environment Debug] Error:", error)
-    return NextResponse.json({ error: "Failed to check environment status", details: error.message }, { status: 500 })
+    console.error("❌ [Environment Status] Error:", error)
+    return NextResponse.json(
+      {
+        error: "Failed to fetch environment status",
+        details: error instanceof Error ? error.message : "Unknown error",
+      },
+      { status: 500 },
+    )
   }
 }

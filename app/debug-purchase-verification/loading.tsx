@@ -1,4 +1,4 @@
-import { Card, CardContent } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 
 export default function Loading() {
@@ -11,16 +11,24 @@ export default function Loading() {
         </div>
 
         <Card>
-          <CardContent className="p-6">
-            <div className="space-y-4">
-              <Skeleton className="h-12 w-full" />
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                <Skeleton className="h-24 w-full" />
-                <Skeleton className="h-24 w-full" />
-                <Skeleton className="h-24 w-full" />
+          <CardHeader>
+            <CardTitle>
+              <Skeleton className="h-6 w-48" />
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-3">
+                <Skeleton className="h-4 w-32" />
+                <Skeleton className="h-4 w-24" />
+                <Skeleton className="h-4 w-40" />
               </div>
-              <Skeleton className="h-32 w-full" />
+              <div className="space-y-3">
+                <Skeleton className="h-4 w-36" />
+                <Skeleton className="h-4 w-28" />
+              </div>
             </div>
+            <Skeleton className="h-10 w-full" />
           </CardContent>
         </Card>
       </div>

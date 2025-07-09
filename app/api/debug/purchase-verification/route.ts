@@ -64,8 +64,18 @@ export async function POST(request: NextRequest) {
         debugResult.firestorePurchase = purchaseDoc.data()
         console.log(`✅ [Purchase Debug] Firestore purchase found`)
       } else {
-        console.log(`❌ [Purchase Debug] No Firestore purchase found`)
-        debugResult.errors.push("Purchase record not found in Firestore")
+        // Also check by stripeSessionId field if sessionId doesn't work
+        const altQuery = query(userPurchasesRef, where("stripeSessionId", "==", sessionId))
+        const altSnapshot = await getDocs(altQuery)
+
+        if (!altSnapshot.empty) {
+          const purchaseDoc = altSnapshot.docs[0]
+          debugResult.firestorePurchase = purchaseDoc.data()
+          console.log(`✅ [Purchase Debug] Firestore purchase found via stripeSessionId`)
+        } else {
+          console.log(`❌ [Purchase Debug] No Firestore purchase found`)
+          debugResult.errors.push("Purchase record not found in Firestore")
+        }
       }
     } catch (firestoreError) {
       console.error(`❌ [Purchase Debug] Firestore error:`, firestoreError)

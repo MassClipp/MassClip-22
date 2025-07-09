@@ -43,7 +43,7 @@ export default function DebugPurchaseVerificationPage() {
   const { user } = useAuth()
   const [loading, setLoading] = useState(false)
   const [sessionId, setSessionId] = useState("")
-  const [productBoxId, setProductBoxId] = useState("")
+  const [bundleId, setBundleId] = useState("")
   const [debugResult, setDebugResult] = useState<PurchaseDebugResult | null>(null)
   const [environmentStatus, setEnvironmentStatus] = useState<EnvironmentStatus | null>(null)
   const [testPurchaseLoading, setTestPurchaseLoading] = useState(false)
@@ -92,7 +92,7 @@ export default function DebugPurchaseVerificationPage() {
   }
 
   const createTestPurchase = async () => {
-    if (!productBoxId || !user) return
+    if (!bundleId || !user) return
 
     setTestPurchaseLoading(true)
     try {
@@ -103,7 +103,7 @@ export default function DebugPurchaseVerificationPage() {
           Authorization: `Bearer ${await user.getIdToken()}`,
         },
         body: JSON.stringify({
-          productBoxId,
+          bundleId,
           userId: user.uid,
           price: 9.99,
         }),
@@ -375,19 +375,19 @@ export default function DebugPurchaseVerificationPage() {
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="productBoxId">Product Box ID</Label>
+                  <Label htmlFor="bundleId">Bundle ID</Label>
                   <Input
-                    id="productBoxId"
-                    placeholder="Enter product box ID to test"
-                    value={productBoxId}
-                    onChange={(e) => setProductBoxId(e.target.value)}
+                    id="bundleId"
+                    placeholder="Enter bundle ID to test"
+                    value={bundleId}
+                    onChange={(e) => setBundleId(e.target.value)}
                   />
                   <p className="text-sm text-gray-500">
                     This will create a mock purchase record for testing verification
                   </p>
                 </div>
 
-                <Button onClick={createTestPurchase} disabled={!productBoxId || testPurchaseLoading} className="w-full">
+                <Button onClick={createTestPurchase} disabled={!bundleId || testPurchaseLoading} className="w-full">
                   {testPurchaseLoading ? (
                     <>
                       <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
