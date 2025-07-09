@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { verifyIdToken } from "@/lib/auth-utils"
 import { db } from "@/lib/firebase-admin"
+import { STRIPE_CONFIG } from "@/lib/stripe"
 
 export async function POST(request: NextRequest) {
   try {
@@ -33,8 +34,15 @@ export async function POST(request: NextRequest) {
     }
 
     const purchaseId = `test_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
-    const sessionId = `cs_test_debug_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+
+    // Generate session ID that matches current Stripe environment
+    const sessionPrefix = STRIPE_CONFIG.isLiveMode ? "cs_live_debug" : "cs_test_debug"
+    const sessionId = `${sessionPrefix}_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+
     const now = new Date()
+
+    console.log(`🔍 [Create Test Purchase] Using Stripe mode: ${STRIPE_CONFIG.isLiveMode ? "LIVE" : "TEST"}`)
+    console.log(`🔍 [Create Test Purchase] Generated session ID: ${sessionId}`)
 
     // Create comprehensive purchase record
     const purchaseData = {
@@ -70,16 +78,20 @@ export async function POST(request: NextRequest) {
       isTestPurchase: true,
       testCreatedBy: actualUserId,
       testCreatedAt: now.toISOString(),
+      stripeEnvironment: STRIPE_CONFIG.isLiveMode ? "live" : "test",
 
-      // Stripe simulation
+      // Stripe simulation - match current environment
       stripeSessionId: sessionId,
-      paymentIntentId: `pi_test_${Math.random().toString(36).substr(2, 20)}`,
+      paymentIntentId: STRIPE_CONFIG.isLiveMode
+        ? `pi_live_${Math.random().toString(36).substr(2, 20)}`
+        : `pi_test_${Math.random().toString(36).substr(2, 20)}`,
       paymentStatus: "paid",
 
       // Additional metadata
       metadata: {
         bundleId: bundleId,
         testPurchase: true,
+        stripeMode: STRIPE_CONFIG.isLiveMode ? "live" : "test",
         debugInfo: {
           userEmail: userData?.email || decodedToken.email,
           userName: userData?.displayName || decodedToken.name,
@@ -93,6 +105,7 @@ export async function POST(request: NextRequest) {
       userId: actualUserId,
       bundleId,
       amount: price,
+      stripeMode: STRIPE_CONFIG.isLiveMode ? "live" : "test",
     })
 
     // Create purchase in user subcollection (using bundleId as doc ID)
@@ -103,6 +116,10 @@ export async function POST(request: NextRequest) {
     await db.collection("userPurchases").doc(actualUserId).collection("purchases").doc(sessionId).set(purchaseData)
     console.log(`✅ [Create Test Purchase] Created in unified purchases collection`)
 
+    // Create a record that can be found by sessionId for debugging
+    await db.collection("debugPurchases").doc(sessionId).set(purchaseData)
+    console.log(`✅ [Create Test Purchase] Created in debug purchases collection`)
+
     // Log the purchase for tracking
     await db.collection("purchaseLogs").add({
       purchaseId: purchaseId,
@@ -111,6 +128,7 @@ export async function POST(request: NextRequest) {
       bundleId: bundleId,
       action: "test_purchase_created",
       timestamp: now,
+      stripeMode: STRIPE_CONFIG.isLiveMode ? "live" : "test",
       metadata: {
         createdVia: "debug-api",
         userAgent: request.headers.get("user-agent"),
@@ -125,12 +143,14 @@ export async function POST(request: NextRequest) {
       message: "Test purchase created successfully",
       purchaseId: purchaseId,
       sessionId: sessionId,
+      stripeMode: STRIPE_CONFIG.isLiveMode ? "live" : "test",
       data: {
         sessionId,
         bundleId,
         amount: price,
         userId: actualUserId,
         itemTitle: purchaseData.itemTitle,
+        stripeEnvironment: STRIPE_CONFIG.isLiveMode ? "live" : "test",
       },
     })
   } catch (error) {
