@@ -4,6 +4,15 @@ import { db } from "@/lib/firebase-admin"
 import { stripe } from "@/lib/stripe"
 import type Stripe from "stripe"
 
+// Stripe minimum charge amounts by currency
+const STRIPE_MINIMUMS = {
+  usd: 0.5,
+  eur: 0.5,
+  gbp: 0.3,
+  cad: 0.5,
+  aud: 0.5,
+} as const
+
 export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
   try {
     console.log(`🔍 [Checkout API] === STARTING CHECKOUT FOR BUNDLE: ${params.id} ===`)
@@ -64,6 +73,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     console.log(`✅ [Checkout API] Bundle found:`, {
       title: bundleData?.title,
       price: bundleData?.price,
+      currency: bundleData?.currency || "usd",
       creatorId: bundleData?.creatorId,
       active: bundleData?.active,
     })
@@ -80,12 +90,18 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       )
     }
 
-    if (!bundleData?.price || bundleData.price <= 0) {
-      console.error(`❌ [Checkout API] Invalid bundle price: ${bundleData?.price}`)
+    const currency = (bundleData?.currency || "usd").toLowerCase()
+    const price = bundleData?.price || 0
+    const minimumAmount = STRIPE_MINIMUMS[currency as keyof typeof STRIPE_MINIMUMS] || 0.5
+
+    if (!price || price < minimumAmount) {
+      console.error(`❌ [Checkout API] Price ${price} below minimum ${minimumAmount} for ${currency}`)
       return NextResponse.json(
         {
-          error: "Invalid bundle pricing",
-          code: "INVALID_PRICE",
+          error: `Minimum charge amount is $${minimumAmount} ${currency.toUpperCase()}`,
+          code: "AMOUNT_TOO_SMALL",
+          minimumAmount,
+          currency,
         },
         { status: 400 },
       )
@@ -198,19 +214,23 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     // Create Stripe checkout session
     try {
       console.log(`🔄 [Checkout API] === CREATING STRIPE CHECKOUT SESSION ===`)
-      console.log(`💰 [Checkout API] Price: $${bundleData.price} (${Math.round(bundleData.price * 100)} cents)`)
+      console.log(`💰 [Checkout API] Price: $${price} (${Math.round(price * 100)} cents)`)
       console.log(`🏦 [Checkout API] Connected account: ${creatorData.stripeAccountId}`)
 
-      const priceInCents = Math.round(bundleData.price * 100) // Convert to cents
+      const priceInCents = Math.round(price * 100) // Convert to cents
       const platformFeeAmount = Math.round(priceInCents * 0.05) // 5% platform fee
       console.log(`💸 [Checkout API] Platform fee: ${platformFeeAmount} cents`)
+
+      // Use consistent success URL - always redirect to payment-success with payment_intent
+      const defaultSuccessUrl = `${process.env.NEXT_PUBLIC_SITE_URL}/payment-success?payment_intent={CHECKOUT_SESSION_PAYMENT_INTENT}&account_id=${creatorData.stripeAccountId}`
+      const defaultCancelUrl = `${process.env.NEXT_PUBLIC_SITE_URL}/creator/${creatorData.username}`
 
       const sessionParams: Stripe.Checkout.SessionCreateParams = {
         payment_method_types: ["card"],
         line_items: [
           {
             price_data: {
-              currency: bundleData.currency || "usd",
+              currency: currency,
               product_data: {
                 name: bundleData.title,
                 description: bundleData.description || `Premium content by ${creatorData.username}`,
@@ -226,10 +246,8 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
           },
         ],
         mode: "payment",
-        success_url:
-          successUrl ||
-          `${process.env.NEXT_PUBLIC_SITE_URL}/success?session_id={CHECKOUT_SESSION_ID}&account_id=${creatorData.stripeAccountId}`,
-        cancel_url: cancelUrl || `${process.env.NEXT_PUBLIC_SITE_URL}/creator/${creatorData.username}`,
+        success_url: successUrl || defaultSuccessUrl,
+        cancel_url: cancelUrl || defaultCancelUrl,
         client_reference_id: userId,
         metadata: {
           productBoxId: params.id,
@@ -251,6 +269,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
 
       console.log("📝 [Checkout API] Session metadata:", sessionParams.metadata)
       console.log("📝 [Checkout API] Payment intent metadata:", sessionParams.payment_intent_data?.metadata)
+      console.log("🔗 [Checkout API] Success URL:", sessionParams.success_url)
 
       // CRITICAL: Create session on the connected account
       console.log(`🔗 [Checkout API] Creating session on connected account: ${creatorData.stripeAccountId}`)
@@ -268,8 +287,8 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
         buyerId: userId,
         creatorId: bundleData.creatorId,
         sessionId: session.id,
-        amount: bundleData.price,
-        currency: bundleData.currency || "usd",
+        amount: price,
+        currency: currency,
         status: "created",
         stripeAccount: creatorData.stripeAccountId,
         createdAt: new Date(),
@@ -282,8 +301,8 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
         bundle: {
           id: params.id,
           title: bundleData.title,
-          price: bundleData.price,
-          currency: bundleData.currency || "usd",
+          price: price,
+          currency: currency,
         },
         creator: {
           id: bundleData.creatorId,
@@ -307,7 +326,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       if (stripeError.code === "account_invalid") {
         userFriendlyMessage = "Creator's payment account needs attention"
       } else if (stripeError.code === "amount_too_small") {
-        userFriendlyMessage = "Purchase amount is too small for this currency"
+        userFriendlyMessage = `Minimum charge amount is $${minimumAmount} ${currency.toUpperCase()}`
       } else if (stripeError.code === "application_fee_too_large") {
         userFriendlyMessage = "Platform fee configuration error"
       }
@@ -375,6 +394,9 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
     const creatorDoc = await db.collection("users").doc(bundleData?.creatorId).get()
     const creatorData = creatorDoc.data()
 
+    const currency = (bundleData?.currency || "usd").toLowerCase()
+    const minimumAmount = STRIPE_MINIMUMS[currency as keyof typeof STRIPE_MINIMUMS] || 0.5
+
     return NextResponse.json({
       success: true,
       bundle: {
@@ -382,10 +404,11 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
         title: bundleData?.title,
         description: bundleData?.description,
         price: bundleData?.price,
-        currency: bundleData?.currency || "usd",
+        currency: currency,
         active: bundleData?.active,
         creatorId: bundleData?.creatorId,
         hasStripeIntegration: !!(creatorData?.stripeAccountId && creatorData?.stripeOnboardingComplete),
+        minimumAmount,
       },
     })
   } catch (error: any) {

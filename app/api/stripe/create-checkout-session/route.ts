@@ -53,7 +53,8 @@ export async function POST(request: NextRequest) {
         },
       ],
       mode: "payment",
-      success_url: `${process.env.NEXT_PUBLIC_SITE_URL}/payment-success?session_id={CHECKOUT_SESSION_ID}&account_id=${connectedAccountId || ""}`,
+      // Use consistent success URL with payment_intent
+      success_url: `${process.env.NEXT_PUBLIC_SITE_URL}/payment-success?payment_intent={CHECKOUT_SESSION_PAYMENT_INTENT}&account_id=${connectedAccountId || ""}`,
       cancel_url: `${process.env.NEXT_PUBLIC_SITE_URL}/product-box/${productBoxId}`,
       metadata: {
         productBoxId,
