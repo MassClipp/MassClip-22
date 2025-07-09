@@ -1,243 +1,110 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { verifyIdToken } from "@/lib/auth-utils"
-import { db } from "@/lib/firebase-admin"
 import { stripe } from "@/lib/stripe"
-import type Stripe from "stripe"
-
-// Stripe minimum charge amounts by currency
-const STRIPE_MINIMUMS = {
-  usd: 0.5,
-  eur: 0.5,
-  gbp: 0.3,
-  cad: 0.5,
-  aud: 0.5,
-} as const
+import { auth } from "@/lib/firebase-admin"
+import { db } from "@/lib/firebase-admin"
 
 export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
   try {
-    console.log(`🔍 [Checkout API] === STARTING CHECKOUT FOR BUNDLE: ${params.id} ===`)
+    const { id: productBoxId } = params
+    const authHeader = request.headers.get("authorization")
 
-    // Verify authentication
-    const decodedToken = await verifyIdToken(request)
-    if (!decodedToken) {
-      console.error("❌ [Checkout API] Authentication failed")
-      return NextResponse.json(
-        {
-          error: "Authentication required",
-          code: "UNAUTHORIZED",
-        },
-        { status: 401 },
-      )
+    if (!authHeader?.startsWith("Bearer ")) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
+    const idToken = authHeader.split("Bearer ")[1]
+    const decodedToken = await auth.verifyIdToken(idToken)
     const userId = decodedToken.uid
-    console.log(`✅ [Checkout API] User authenticated: ${userId}`)
 
-    // Parse request body
-    let body
-    try {
-      body = await request.json()
-    } catch (parseError) {
-      console.error("❌ [Checkout API] Failed to parse request body:", parseError)
-      return NextResponse.json(
-        {
-          error: "Invalid request body",
-          code: "INVALID_REQUEST_BODY",
-        },
-        { status: 400 },
-      )
+    console.log(`🛒 [Checkout] Creating checkout for product box ${productBoxId} by user ${userId}`)
+
+    // Get product box details
+    const productBoxDoc = await db.collection("productBoxes").doc(productBoxId).get()
+    if (!productBoxDoc.exists) {
+      return NextResponse.json({ error: "Product box not found" }, { status: 404 })
     }
 
-    const { successUrl, cancelUrl } = body
-
-    // Get bundle data - try productBoxes collection first
-    let bundleDoc = await db.collection("productBoxes").doc(params.id).get()
-
-    if (!bundleDoc.exists) {
-      // Fallback to bundles collection
-      bundleDoc = await db.collection("bundles").doc(params.id).get()
+    const productBox = productBoxDoc.data()
+    if (!productBox) {
+      return NextResponse.json({ error: "Product box data not found" }, { status: 404 })
     }
 
-    if (!bundleDoc.exists) {
-      console.error(`❌ [Checkout API] Bundle not found: ${params.id}`)
-      return NextResponse.json(
-        {
-          error: "Bundle not found",
-          code: "BUNDLE_NOT_FOUND",
-        },
-        { status: 404 },
-      )
-    }
-
-    const bundleData = bundleDoc.data()
-    console.log(`✅ [Checkout API] Bundle found:`, {
-      title: bundleData?.title,
-      price: bundleData?.price,
-      currency: bundleData?.currency || "usd",
-      creatorId: bundleData?.creatorId,
-      active: bundleData?.active,
-    })
-
-    // Validate bundle data
-    if (!bundleData?.active) {
-      console.error(`❌ [Checkout API] Bundle is inactive: ${params.id}`)
-      return NextResponse.json(
-        {
-          error: "This bundle is currently unavailable",
-          code: "BUNDLE_INACTIVE",
-        },
-        { status: 400 },
-      )
-    }
-
-    const currency = (bundleData?.currency || "usd").toLowerCase()
-    const price = bundleData?.price || 0
-    const minimumAmount = STRIPE_MINIMUMS[currency as keyof typeof STRIPE_MINIMUMS] || 0.5
-
-    if (!price || price < minimumAmount) {
-      console.error(`❌ [Checkout API] Price ${price} below minimum ${minimumAmount} for ${currency}`)
-      return NextResponse.json(
-        {
-          error: `Minimum charge amount is $${minimumAmount} ${currency.toUpperCase()}`,
-          code: "AMOUNT_TOO_SMALL",
-          minimumAmount,
-          currency,
-        },
-        { status: 400 },
-      )
-    }
-
-    // Get creator data
-    const creatorDoc = await db.collection("users").doc(bundleData.creatorId).get()
+    // Get creator details
+    const creatorDoc = await db.collection("users").doc(productBox.creatorId).get()
     if (!creatorDoc.exists) {
-      console.error(`❌ [Checkout API] Creator not found: ${bundleData.creatorId}`)
-      return NextResponse.json(
-        {
-          error: "Creator not found",
-          code: "CREATOR_NOT_FOUND",
-        },
-        { status: 404 },
-      )
+      return NextResponse.json({ error: "Creator not found" }, { status: 404 })
     }
 
-    const creatorData = creatorDoc.data()
-    console.log(`✅ [Checkout API] Creator found:`, {
-      username: creatorData?.username,
-      hasStripeAccount: !!creatorData?.stripeAccountId,
-      onboardingComplete: creatorData?.stripeOnboardingComplete,
-    })
-
-    // Check if creator has Stripe account and can accept payments
-    if (!creatorData?.stripeAccountId) {
-      console.error(`❌ [Checkout API] Creator has no Stripe account: ${bundleData.creatorId}`)
-      return NextResponse.json(
-        {
-          error: "Payment processing not available for this creator",
-          code: "NO_STRIPE_ACCOUNT",
-        },
-        { status: 400 },
-      )
+    const creator = creatorDoc.data()
+    if (!creator?.stripeConnectedAccountId) {
+      return NextResponse.json({ error: "Creator has not connected Stripe account" }, { status: 400 })
     }
 
-    // Verify the Stripe account is actually accessible and can accept payments
-    let stripeAccountValid = false
-    try {
-      console.log(`🔍 [Checkout API] Verifying Stripe account: ${creatorData.stripeAccountId}`)
-      const account = await stripe.accounts.retrieve(creatorData.stripeAccountId)
+    // Validate price meets Stripe minimums
+    const price = productBox.price || 0
+    const currency = (productBox.currency || "USD").toLowerCase()
 
-      console.log(`📊 [Checkout API] Account status:`, {
-        chargesEnabled: account.charges_enabled,
-        payoutsEnabled: account.payouts_enabled,
-        detailsSubmitted: account.details_submitted,
-        currentlyDue: account.requirements?.currently_due?.length || 0,
-        pastDue: account.requirements?.past_due?.length || 0,
-      })
+    // Stripe minimum amounts (in cents)
+    const minimums: { [key: string]: number } = {
+      usd: 50, // $0.50
+      eur: 50, // €0.50
+      gbp: 30, // £0.30
+      cad: 50, // $0.50 CAD
+      aud: 50, // $0.50 AUD
+      jpy: 50, // ¥50
+      chf: 50, // 0.50 CHF
+      sek: 3, // 3.00 SEK
+      nok: 3, // 3.00 NOK
+      dkk: 2.5, // 2.50 DKK
+    }
 
-      // Account is valid if it can accept charges and details are submitted
-      stripeAccountValid = account.charges_enabled && account.details_submitted
+    const minimumAmount = minimums[currency] || 50
+    const priceInCents = Math.round(price * 100)
 
-      if (!stripeAccountValid) {
-        const issues = []
-        if (!account.charges_enabled) issues.push("charges disabled")
-        if (!account.details_submitted) issues.push("details not submitted")
-        if (account.requirements?.past_due?.length > 0) issues.push("past due requirements")
-
-        console.error(`❌ [Checkout API] Stripe account issues: ${issues.join(", ")}`)
-        return NextResponse.json(
-          {
-            error: `Creator's payment account needs attention: ${issues.join(", ")}`,
-            code: "STRIPE_ACCOUNT_INCOMPLETE",
-            details: {
-              chargesEnabled: account.charges_enabled,
-              detailsSubmitted: account.details_submitted,
-              requirementsPastDue: account.requirements?.past_due || [],
-              requirementsCurrentlyDue: account.requirements?.currently_due || [],
-            },
-          },
-          { status: 400 },
-        )
-      }
-    } catch (stripeError: any) {
-      console.error(`❌ [Checkout API] Failed to verify Stripe account:`, stripeError)
+    if (priceInCents < minimumAmount) {
+      const minimumFormatted = (minimumAmount / 100).toFixed(2)
       return NextResponse.json(
         {
-          error: "Unable to verify creator's payment setup",
-          code: "STRIPE_VERIFICATION_FAILED",
-          details: stripeError.message,
+          error: `Minimum charge amount is $${minimumFormatted} ${currency.toUpperCase()}`,
+          minimum: minimumAmount,
+          provided: priceInCents,
+          currency: currency.toUpperCase(),
         },
         { status: 400 },
       )
     }
 
-    console.log(`✅ [Checkout API] Stripe account verified and ready for payments`)
+    // Get user details
+    const userDoc = await db.collection("users").doc(userId).get()
+    const user = userDoc.data()
 
-    // Check if user already owns this bundle
-    const existingPurchase = await db
-      .collection("users")
-      .doc(userId)
-      .collection("purchases")
-      .where("productBoxId", "==", params.id)
-      .limit(1)
-      .get()
+    // Calculate application fee (10% of the total)
+    const applicationFeeAmount = Math.round(priceInCents * 0.1)
 
-    if (!existingPurchase.empty) {
-      console.error(`❌ [Checkout API] User already owns bundle: ${params.id}`)
-      return NextResponse.json(
-        {
-          error: "You already own this bundle",
-          code: "ALREADY_PURCHASED",
-        },
-        { status: 400 },
-      )
-    }
+    // Build success and cancel URLs
+    const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://massclip.com"
+    const successUrl = `${baseUrl}/api/purchase/convert-session-to-payment-intent?session_id={CHECKOUT_SESSION_ID}&account_id=${creator.stripeConnectedAccountId}`
+    const cancelUrl = `${baseUrl}/creator/${creator.username || creator.id}`
+
+    console.log(`💰 [Checkout] Price: ${priceInCents} cents, Fee: ${applicationFeeAmount} cents`)
+    console.log(`🔗 [Checkout] Success URL: ${successUrl}`)
 
     // Create Stripe checkout session
-    try {
-      console.log(`🔄 [Checkout API] === CREATING STRIPE CHECKOUT SESSION ===`)
-      console.log(`💰 [Checkout API] Price: $${price} (${Math.round(price * 100)} cents)`)
-      console.log(`🏦 [Checkout API] Connected account: ${creatorData.stripeAccountId}`)
-
-      const priceInCents = Math.round(price * 100) // Convert to cents
-      const platformFeeAmount = Math.round(priceInCents * 0.05) // 5% platform fee
-      console.log(`💸 [Checkout API] Platform fee: ${platformFeeAmount} cents`)
-
-      // Use consistent success URL - always redirect to payment-success with payment_intent
-      const defaultSuccessUrl = `${process.env.NEXT_PUBLIC_SITE_URL}/payment-success?payment_intent={CHECKOUT_SESSION_PAYMENT_INTENT}&account_id=${creatorData.stripeAccountId}`
-      const defaultCancelUrl = `${process.env.NEXT_PUBLIC_SITE_URL}/creator/${creatorData.username}`
-
-      const sessionParams: Stripe.Checkout.SessionCreateParams = {
+    const session = await stripe.checkout.sessions.create(
+      {
         payment_method_types: ["card"],
         line_items: [
           {
             price_data: {
               currency: currency,
               product_data: {
-                name: bundleData.title,
-                description: bundleData.description || `Premium content by ${creatorData.username}`,
-                images: bundleData.thumbnailUrl ? [bundleData.thumbnailUrl] : undefined,
+                name: productBox.title,
+                description: productBox.description || `Premium content from ${creator.name || creator.username}`,
+                images: productBox.thumbnailUrl ? [productBox.thumbnailUrl] : [],
                 metadata: {
-                  bundleId: params.id,
-                  creatorId: bundleData.creatorId,
+                  product_box_id: productBoxId,
+                  creator_id: productBox.creatorId,
+                  creator_username: creator.username || creator.id,
                 },
               },
               unit_amount: priceInCents,
@@ -246,177 +113,45 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
           },
         ],
         mode: "payment",
-        success_url: successUrl || defaultSuccessUrl,
-        cancel_url: cancelUrl || defaultCancelUrl,
-        client_reference_id: userId,
-        metadata: {
-          productBoxId: params.id,
-          buyerUid: userId,
-          creatorUid: bundleData.creatorId,
-          bundleTitle: bundleData.title,
-          connectedAccountId: creatorData.stripeAccountId,
-        },
+        success_url: successUrl,
+        cancel_url: cancelUrl,
+        customer_email: user?.email || decodedToken.email,
         payment_intent_data: {
-          application_fee_amount: platformFeeAmount,
+          application_fee_amount: applicationFeeAmount,
           metadata: {
-            productBoxId: params.id,
-            buyerUid: userId,
-            creatorUid: bundleData.creatorId,
-            connectedAccountId: creatorData.stripeAccountId,
+            product_box_id: productBoxId,
+            creator_id: productBox.creatorId,
+            buyer_id: userId,
+            creator_username: creator.username || creator.id,
+            product_title: productBox.title,
           },
         },
-      }
-
-      console.log("📝 [Checkout API] Session metadata:", sessionParams.metadata)
-      console.log("📝 [Checkout API] Payment intent metadata:", sessionParams.payment_intent_data?.metadata)
-      console.log("🔗 [Checkout API] Success URL:", sessionParams.success_url)
-
-      // CRITICAL: Create session on the connected account
-      console.log(`🔗 [Checkout API] Creating session on connected account: ${creatorData.stripeAccountId}`)
-      const session = await stripe.checkout.sessions.create(sessionParams, {
-        stripeAccount: creatorData.stripeAccountId,
-      })
-
-      console.log(`✅ [Checkout API] Stripe session created: ${session.id}`)
-      console.log(`🔗 [Checkout API] Session URL: ${session.url}`)
-      console.log(`🔗 [Checkout API] Session created on account: ${creatorData.stripeAccountId}`)
-
-      // Log the checkout attempt
-      await db.collection("checkoutAttempts").add({
-        bundleId: params.id,
-        buyerId: userId,
-        creatorId: bundleData.creatorId,
-        sessionId: session.id,
-        amount: price,
-        currency: currency,
-        status: "created",
-        stripeAccount: creatorData.stripeAccountId,
-        createdAt: new Date(),
-      })
-
-      return NextResponse.json({
-        success: true,
-        sessionId: session.id,
-        url: session.url,
-        bundle: {
-          id: params.id,
-          title: bundleData.title,
-          price: price,
-          currency: currency,
+        metadata: {
+          product_box_id: productBoxId,
+          creator_id: productBox.creatorId,
+          buyer_id: userId,
+          creator_username: creator.username || creator.id,
+          product_title: productBox.title,
         },
-        creator: {
-          id: bundleData.creatorId,
-          username: creatorData.username,
-          stripeAccountId: creatorData.stripeAccountId,
-        },
-      })
-    } catch (stripeError: any) {
-      console.error(`❌ [Checkout API] Stripe error details:`, {
-        message: stripeError.message,
-        type: stripeError.type,
-        code: stripeError.code,
-        param: stripeError.param,
-        statusCode: stripeError.statusCode,
-        requestId: stripeError.requestId,
-      })
-
-      // More specific error messages based on Stripe error types
-      let userFriendlyMessage = "Failed to create checkout session"
-
-      if (stripeError.code === "account_invalid") {
-        userFriendlyMessage = "Creator's payment account needs attention"
-      } else if (stripeError.code === "amount_too_small") {
-        userFriendlyMessage = `Minimum charge amount is $${minimumAmount} ${currency.toUpperCase()}`
-      } else if (stripeError.code === "application_fee_too_large") {
-        userFriendlyMessage = "Platform fee configuration error"
-      }
-
-      return NextResponse.json(
-        {
-          error: userFriendlyMessage,
-          code: "CHECKOUT_CREATION_FAILED",
-          details: stripeError.message || "Unknown Stripe error",
-          stripeCode: stripeError.code,
-          stripeType: stripeError.type,
-        },
-        { status: 500 },
-      )
-    }
-  } catch (error: any) {
-    console.error(`❌ [Checkout API] Unexpected error:`, error)
-    return NextResponse.json(
-      {
-        error: "Internal server error",
-        code: "INTERNAL_ERROR",
-        details: error.message || "Unknown error",
       },
-      { status: 500 },
+      {
+        stripeAccount: creator.stripeConnectedAccountId,
+      },
     )
-  }
-}
 
-export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
-  try {
-    console.log(`🔍 [Checkout API] GET request for bundle: ${params.id}`)
-
-    // Verify authentication
-    const decodedToken = await verifyIdToken(request)
-    if (!decodedToken) {
-      return NextResponse.json(
-        {
-          error: "Authentication required",
-          code: "UNAUTHORIZED",
-        },
-        { status: 401 },
-      )
-    }
-
-    // Get bundle data
-    let bundleDoc = await db.collection("productBoxes").doc(params.id).get()
-
-    if (!bundleDoc.exists) {
-      bundleDoc = await db.collection("bundles").doc(params.id).get()
-    }
-
-    if (!bundleDoc.exists) {
-      return NextResponse.json(
-        {
-          error: "Bundle not found",
-          code: "BUNDLE_NOT_FOUND",
-        },
-        { status: 404 },
-      )
-    }
-
-    const bundleData = bundleDoc.data()
-
-    // Get creator data to check Stripe status
-    const creatorDoc = await db.collection("users").doc(bundleData?.creatorId).get()
-    const creatorData = creatorDoc.data()
-
-    const currency = (bundleData?.currency || "usd").toLowerCase()
-    const minimumAmount = STRIPE_MINIMUMS[currency as keyof typeof STRIPE_MINIMUMS] || 0.5
+    console.log(`✅ [Checkout] Session created: ${session.id}`)
 
     return NextResponse.json({
+      sessionId: session.id,
+      url: session.url,
       success: true,
-      bundle: {
-        id: params.id,
-        title: bundleData?.title,
-        description: bundleData?.description,
-        price: bundleData?.price,
-        currency: currency,
-        active: bundleData?.active,
-        creatorId: bundleData?.creatorId,
-        hasStripeIntegration: !!(creatorData?.stripeAccountId && creatorData?.stripeOnboardingComplete),
-        minimumAmount,
-      },
     })
   } catch (error: any) {
-    console.error(`❌ [Checkout API] GET error:`, error)
+    console.error(`❌ [Checkout] Error:`, error)
     return NextResponse.json(
       {
-        error: "Internal server error",
-        code: "INTERNAL_ERROR",
+        error: "Failed to create checkout session",
+        details: error.message,
       },
       { status: 500 },
     )
