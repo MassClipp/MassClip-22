@@ -401,121 +401,96 @@ export default function PaymentSuccessPage() {
           <CardHeader className="text-center">
             <CheckCircle className="h-16 w-16 text-green-500 mx-auto mb-4" />
             <CardTitle className="text-2xl text-green-700">
-              {alreadyProcessed
-                ? "Purchase Already Verified"
-                : alreadyOwned
-                  ? "Content Already Owned"
-                  : "Payment Successful!"}
+              {alreadyOwned ? "Already Purchased!" : alreadyProcessed ? "Purchase Confirmed!" : "Payment Successful!"}
             </CardTitle>
-            <p className="text-gray-600">
-              {message || "Your payment has been verified and your content access has been granted."}
-            </p>
+            {alreadyProcessed && <p className="text-sm text-green-600">This purchase was previously verified</p>}
+            {alreadyOwned && <p className="text-sm text-green-600">You already own this content</p>}
+            {message && <p className="text-sm text-green-600">{message}</p>}
           </CardHeader>
           <CardContent className="space-y-4">
-            {/* Purchase Details */}
-            {(purchase || paymentIntent) && (
-              <div className="p-4 bg-green-50 rounded-lg">
-                <h3 className="font-medium text-green-900 mb-2 flex items-center">
-                  <CreditCard className="h-4 w-4 mr-2" />
-                  Payment Details
-                </h3>
-                <div className="space-y-1 text-sm text-green-800">
-                  <p>
-                    <span className="font-medium">Amount:</span> $
-                    {(purchase?.amount || paymentIntent?.amount || 0).toFixed(2)}{" "}
-                    {(purchase?.currency || paymentIntent?.currency || "USD").toUpperCase()}
-                  </p>
-                  <p>
-                    <span className="font-medium">Status:</span>{" "}
-                    {purchase?.status || paymentIntent?.status || "Completed"}
-                  </p>
-                  {(purchase?.receiptEmail || paymentIntent?.receiptEmail) && (
-                    <p>
-                      <span className="font-medium">Receipt sent to:</span>{" "}
-                      {purchase?.receiptEmail || paymentIntent?.receiptEmail}
-                    </p>
-                  )}
-                  <p>
-                    <span className="font-medium">Payment ID:</span> ...
-                    {(purchase?.paymentIntentId || paymentIntent?.id || "").slice(-8)}
-                  </p>
+            {/* Product Information */}
+            <div className="text-center">
+              <h3 className="font-semibold text-lg flex items-center justify-center gap-2">
+                <Package className="h-5 w-5" />
+                {productBox?.title || purchase?.productTitle || "Your Purchase"}
+              </h3>
+              <div className="flex items-center justify-center gap-2 text-gray-600 mt-1">
+                <CreditCard className="h-4 w-4" />
+                <span>
+                  ${(paymentIntent?.amount || purchase?.amount || productBox?.price || 0).toFixed(2)}{" "}
+                  {(paymentIntent?.currency || purchase?.currency || "USD").toUpperCase()}
+                </span>
+              </div>
+              {paymentIntent?.amountReceived !== paymentIntent?.amount && paymentIntent?.amountReceived && (
+                <p className="text-sm text-gray-500">(Amount Received: ${paymentIntent.amountReceived.toFixed(2)})</p>
+              )}
+              {creator && (
+                <div className="flex items-center justify-center gap-1 text-sm text-gray-500 mt-1">
+                  <User className="h-4 w-4" />
+                  <span>
+                    by {creator.name} (@{creator.username})
+                  </span>
                 </div>
+              )}
+            </div>
+
+            {/* Product Thumbnail */}
+            {(productBox?.thumbnailUrl || purchase?.thumbnailUrl) && (
+              <div className="flex justify-center">
+                <img
+                  src={productBox?.thumbnailUrl || purchase?.thumbnailUrl || "/placeholder.svg"}
+                  alt={productBox?.title || purchase?.productTitle || "Product"}
+                  className="w-24 h-24 object-cover rounded-lg border"
+                  onError={(e) => {
+                    e.currentTarget.src = "/placeholder.svg?height=96&width=96"
+                  }}
+                />
               </div>
             )}
 
-            {/* Product Details */}
-            {(productBox || purchase) && (
-              <div className="p-4 bg-blue-50 rounded-lg">
-                <h3 className="font-medium text-blue-900 mb-2 flex items-center">
-                  <Package className="h-4 w-4 mr-2" />
-                  Content Purchased
-                </h3>
-                <div className="space-y-1 text-sm text-blue-800">
-                  <p>
-                    <span className="font-medium">Title:</span>{" "}
-                    {productBox?.title || purchase?.productTitle || "Digital Content"}
-                  </p>
-                  {(productBox?.description || purchase?.productDescription) && (
-                    <p>
-                      <span className="font-medium">Description:</span>{" "}
-                      {(productBox?.description || purchase?.productDescription || "").slice(0, 100)}
-                      {(productBox?.description || purchase?.productDescription || "").length > 100 ? "..." : ""}
-                    </p>
-                  )}
-                  <p>
-                    <span className="font-medium">Content ID:</span> ...
-                    {(productBox?.id || purchase?.productBoxId || "").slice(-8)}
-                  </p>
+            {/* Payment Details */}
+            <div className="bg-gray-50 p-4 rounded-lg space-y-2">
+              {paymentIntentId && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-600">Payment Intent:</span>
+                  <span className="font-mono text-xs">...{paymentIntentId.slice(-8)}</span>
                 </div>
-              </div>
-            )}
-
-            {/* Creator Details */}
-            {(creator || purchase) && (
-              <div className="p-4 bg-purple-50 rounded-lg">
-                <h3 className="font-medium text-purple-900 mb-2 flex items-center">
-                  <User className="h-4 w-4 mr-2" />
-                  Creator
-                </h3>
-                <div className="space-y-1 text-sm text-purple-800">
-                  <p>
-                    <span className="font-medium">Name:</span>{" "}
-                    {creator?.name || purchase?.creatorName || "Unknown Creator"}
-                  </p>
-                  {(creator?.username || purchase?.creatorUsername) && (
-                    <p>
-                      <span className="font-medium">Username:</span> @{creator?.username || purchase?.creatorUsername}
-                    </p>
-                  )}
+              )}
+              {sessionId && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-600">Session ID:</span>
+                  <span className="font-mono text-xs">...{sessionId.slice(-8)}</span>
                 </div>
+              )}
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-600">Payment Status:</span>
+                <span className="text-green-600 font-medium">
+                  {paymentIntent?.status || purchase?.status || "Completed"}
+                </span>
               </div>
-            )}
-
-            {/* Verification Details */}
-            {verificationDetails && (
-              <div className="p-4 bg-gray-50 rounded-lg">
-                <h3 className="font-medium text-gray-900 mb-1">Verification Details</h3>
-                <div className="space-y-1 text-xs text-gray-600">
-                  <p>
-                    <span className="font-medium">Method:</span> {verificationDetails.method}
-                  </p>
-                  <p>
-                    <span className="font-medium">Verified at:</span>{" "}
-                    {new Date(verificationDetails.verifiedAt).toLocaleString()}
-                  </p>
-                  {verificationDetails.connectedAccount && (
-                    <p>
-                      <span className="font-medium">Connected Account:</span> ...
-                      {verificationDetails.connectedAccount.slice(-8)}
-                    </p>
-                  )}
-                  <p>
-                    <span className="font-medium">Duplicate Check:</span>{" "}
-                    {verificationDetails.duplicateCheck ? "Yes" : "No"}
-                  </p>
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-600">Verification Method:</span>
+                <span className="text-green-600 font-medium">
+                  {verificationDetails?.method === "payment_intent_direct" ? "Direct API" : "Standard"}
+                </span>
+              </div>
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-600">Access Level:</span>
+                <span className="text-green-600 font-medium">Lifetime</span>
+              </div>
+              {connectedAccountId && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-600">Creator Account:</span>
+                  <span className="font-mono text-xs">...{connectedAccountId.slice(-8)}</span>
                 </div>
-              </div>
-            )}
+              )}
+              {paymentIntent?.receiptEmail && (
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-600">Receipt Email:</span>
+                  <span className="text-xs">{paymentIntent.receiptEmail}</span>
+                </div>
+              )}
+            </div>
 
             {/* Action Buttons */}
             <div className="space-y-2">
@@ -526,40 +501,42 @@ export default function PaymentSuccessPage() {
               <Button onClick={handleViewPurchases} variant="outline" className="w-full bg-transparent">
                 View All Purchases
               </Button>
-              <Button onClick={() => router.push("/dashboard")} variant="outline" className="w-full bg-transparent">
-                Go to Dashboard
-              </Button>
             </div>
 
-            <div className="text-center">
-              <p className="text-xs text-gray-500">
-                Thank you for your purchase! Your content is now available in your account.
-              </p>
+            {/* Success Information */}
+            <div className="mt-4 p-3 bg-green-50 rounded-lg">
+              <h3 className="font-medium text-green-900 mb-1">✅ All Set!</h3>
+              <ul className="text-sm text-green-800 space-y-1">
+                <li>• Payment verified instantly via Stripe Payment Intent API</li>
+                <li>• Content access activated immediately</li>
+                <li>• Purchase recorded in multiple database locations</li>
+                <li>• Receipt sent to your email address</li>
+                <li>• No webhook dependencies - direct verification!</li>
+              </ul>
             </div>
+
+            {/* Technical Details */}
+            {verificationDetails && (
+              <div className="mt-4 p-3 bg-blue-50 rounded-lg">
+                <h3 className="font-medium text-blue-900 mb-1">🔧 Technical Details</h3>
+                <div className="text-xs text-blue-800 space-y-1">
+                  <p>Verified: {new Date(verificationDetails.verifiedAt).toLocaleString()}</p>
+                  <p>Method: {verificationDetails.method}</p>
+                  {verificationDetails.connectedAccount && (
+                    <p>Connected Account: ...{verificationDetails.connectedAccount.slice(-8)}</p>
+                  )}
+                </div>
+              </div>
+            )}
+
+            <p className="text-xs text-gray-500 text-center">
+              Your payment has been verified and securely recorded. You now have lifetime access to this content.
+            </p>
           </CardContent>
         </Card>
       </div>
     )
   }
 
-  // Fallback state
-  return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50">
-      <Card className="w-full max-w-md">
-        <CardContent className="p-6 text-center">
-          <AlertCircle className="h-12 w-12 text-yellow-500 mx-auto mb-4" />
-          <h2 className="text-xl font-semibold mb-2">Unexpected State</h2>
-          <p className="text-gray-600 mb-4">Something unexpected happened during payment verification.</p>
-          <div className="space-y-2">
-            <Button onClick={() => router.push("/dashboard")} className="w-full">
-              Go to Dashboard
-            </Button>
-            <Button onClick={handleContactSupport} variant="outline" className="w-full bg-transparent">
-              Contact Support
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-    </div>
-  )
+  return null
 }

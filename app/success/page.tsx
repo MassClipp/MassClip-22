@@ -63,6 +63,20 @@ export default function SuccessPage() {
   const connectedAccountId = searchParams.get("account_id")
 
   useEffect(() => {
+    // Handle legacy session_id parameter by converting to payment_intent
+    const sessionId = searchParams.get("session_id")
+    if (sessionId && !paymentIntentId) {
+      console.log(`🔄 [Success Page] Converting legacy session_id to payment_intent`)
+
+      let conversionUrl = `/api/purchase/convert-session-to-payment-intent?session_id=${sessionId}`
+      if (connectedAccountId) {
+        conversionUrl += `&account_id=${connectedAccountId}`
+      }
+
+      window.location.href = conversionUrl
+      return
+    }
+
     if (!user || !paymentIntentId) {
       setLoading(false)
       return
