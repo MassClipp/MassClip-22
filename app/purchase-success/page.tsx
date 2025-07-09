@@ -9,7 +9,7 @@ import { CheckCircle, Clock, AlertCircle, Package, User, ShoppingBag } from "luc
 
 interface PurchaseResult {
   success: boolean
-  productBox?: {
+  bundle?: {
     id: string
     title: string
     description?: string
@@ -33,13 +33,13 @@ export default function PurchaseSuccessPage() {
   const [result, setResult] = useState<PurchaseResult | null>(null)
   const [loading, setLoading] = useState(true)
 
-  const productBoxId = searchParams.get("product_box_id")
+  const productBoxId = searchParams.get("product_box_id") // Keep same param name for compatibility
   const userId = searchParams.get("user_id")
   const creatorId = searchParams.get("creator_id")
 
   useEffect(() => {
     console.log(`🎉 [Purchase Success] Page loaded with params:`, {
-      productBoxId,
+      bundleId: productBoxId, // It's actually a bundle ID
       userId,
       userUid: user?.uid,
     })
@@ -68,7 +68,7 @@ export default function PurchaseSuccessPage() {
 
     try {
       console.log(`🚀 [Purchase Success] Granting IMMEDIATE access - no verification needed!`)
-      console.log(`📦 Product Box: ${productBoxId}`)
+      console.log(`📦 Bundle: ${productBoxId}`)
       console.log(`👤 User: ${user.uid}`)
 
       const idToken = await user.getIdToken()
@@ -80,7 +80,7 @@ export default function PurchaseSuccessPage() {
           Authorization: `Bearer ${idToken}`,
         },
         body: JSON.stringify({
-          productBoxId,
+          bundleId: productBoxId, // Use bundleId instead of productBoxId
           userId: user.uid,
           creatorId,
           verificationMethod: "landing_page", // Simple verification!
@@ -108,7 +108,7 @@ export default function PurchaseSuccessPage() {
 
   const handleViewContent = () => {
     if (productBoxId) {
-      router.push(`/product-box/${productBoxId}/content`)
+      router.push(`/product-box/${productBoxId}/content`) // Keep same URL structure
     }
   }
 
@@ -154,7 +154,7 @@ export default function PurchaseSuccessPage() {
                 Try Again
               </Button>
               <Button onClick={handleViewPurchases} variant="outline" className="w-full bg-transparent">
-                View My Purchases
+                My Purchases
               </Button>
             </div>
           </CardContent>
@@ -170,23 +170,23 @@ export default function PurchaseSuccessPage() {
         <Card className="w-full max-w-md">
           <CardHeader className="text-center">
             <CheckCircle className="h-16 w-16 text-green-500 mx-auto mb-4" />
-            <CardTitle className="text-2xl text-green-700">
-              🎉 {result.alreadyPurchased ? "Welcome Back!" : "Purchase Complete!"}
-            </CardTitle>
+            <CardTitle className="text-2xl text-green-700">🎉 You're Good to Go!</CardTitle>
             <p className="text-sm text-green-600">
-              {result.alreadyPurchased ? "You already have access" : "Instant access granted!"}
+              {result.alreadyPurchased
+                ? "Welcome back! You already have access"
+                : "Your purchase is complete and ready!"}
             </p>
           </CardHeader>
           <CardContent className="space-y-4">
-            {/* Product Information */}
+            {/* Bundle Information */}
             <div className="text-center">
               <h3 className="font-semibold text-lg flex items-center justify-center gap-2">
                 <Package className="h-5 w-5" />
-                {result.productBox?.title || "Your Purchase"}
+                {result.bundle?.title || "Your Bundle"}
               </h3>
-              {result.productBox?.price && (
+              {result.bundle?.price && (
                 <p className="text-gray-600 mt-1">
-                  ${result.productBox.price.toFixed(2)} {result.productBox.currency?.toUpperCase() || "USD"}
+                  ${result.bundle.price.toFixed(2)} {result.bundle.currency?.toUpperCase() || "USD"}
                 </p>
               )}
               {result.creator && (
@@ -199,12 +199,12 @@ export default function PurchaseSuccessPage() {
               )}
             </div>
 
-            {/* Product Thumbnail */}
-            {result.productBox?.thumbnailUrl && (
+            {/* Bundle Thumbnail */}
+            {result.bundle?.thumbnailUrl && (
               <div className="flex justify-center">
                 <img
-                  src={result.productBox.thumbnailUrl || "/placeholder.svg"}
-                  alt={result.productBox.title}
+                  src={result.bundle.thumbnailUrl || "/placeholder.svg"}
+                  alt={result.bundle.title}
                   className="w-24 h-24 object-cover rounded-lg border"
                   onError={(e) => {
                     e.currentTarget.src = "/placeholder.svg?height=96&width=96"
@@ -220,7 +220,7 @@ export default function PurchaseSuccessPage() {
                 Access Your Content Now
               </Button>
               <Button onClick={handleViewPurchases} variant="outline" className="w-full bg-transparent">
-                View All Purchases
+                My Purchases
               </Button>
             </div>
 
@@ -232,7 +232,7 @@ export default function PurchaseSuccessPage() {
                 <li>🚀 Instant access granted - no waiting!</li>
                 <li>📝 Purchase recorded in your account</li>
                 <li>🔒 Lifetime access to this content</li>
-                <li>🎯 Simple verification - landing page only!</li>
+                <li>🎯 Simple verification - you made it here!</li>
               </ul>
             </div>
 

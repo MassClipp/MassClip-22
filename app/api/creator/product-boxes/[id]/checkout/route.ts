@@ -17,30 +17,25 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     const userId = decodedToken.uid
     console.log(`✅ [Checkout] User authenticated: ${userId}`)
 
-    // Get product box - try both collections
-    let productBoxDoc = await db.collection("productBoxes").doc(params.id).get()
+    // Get bundle details - use bundles collection
+    const bundleDoc = await db.collection("bundles").doc(params.id).get()
 
-    if (!productBoxDoc.exists) {
-      console.log(`🔍 [Checkout] Not found in productBoxes, trying bundles collection`)
-      productBoxDoc = await db.collection("bundles").doc(params.id).get()
+    if (!bundleDoc.exists) {
+      console.error(`❌ [Checkout] Bundle not found: ${params.id}`)
+      return NextResponse.json({ error: "Bundle not found" }, { status: 404 })
     }
 
-    if (!productBoxDoc.exists) {
-      console.error(`❌ [Checkout] Product box not found: ${params.id}`)
-      return NextResponse.json({ error: "Product box not found" }, { status: 404 })
-    }
-
-    const productBoxData = productBoxDoc.data()!
-    console.log(`✅ [Checkout] Found product box:`, {
-      title: productBoxData.title,
-      price: productBoxData.price,
-      currency: productBoxData.currency,
-      creatorId: productBoxData.creatorId,
+    const bundleData = bundleDoc.data()!
+    console.log(`✅ [Checkout] Found bundle:`, {
+      title: bundleData.title,
+      price: bundleData.price,
+      currency: bundleData.currency,
+      creatorId: bundleData.creatorId,
     })
 
     // Validate price meets minimums
-    const price = productBoxData.price || 0
-    const currency = (productBoxData.currency || "usd").toLowerCase()
+    const price = bundleData.price || 0
+    const currency = (bundleData.currency || "usd").toLowerCase()
 
     const minimums: { [key: string]: number } = {
       usd: 0.5,
@@ -64,9 +59,9 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     }
 
     // Get creator data
-    const creatorDoc = await db.collection("users").doc(productBoxData.creatorId).get()
+    const creatorDoc = await db.collection("users").doc(bundleData.creatorId).get()
     if (!creatorDoc.exists) {
-      console.error(`❌ [Checkout] Creator not found: ${productBoxData.creatorId}`)
+      console.error(`❌ [Checkout] Creator not found: ${bundleData.creatorId}`)
       return NextResponse.json({ error: "Creator not found" }, { status: 404 })
     }
 
@@ -79,12 +74,15 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       return NextResponse.json({ error: "Creator payment setup incomplete" }, { status: 400 })
     }
 
-    // Create Stripe checkout session
-    const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://massclip.com"
+    // Fix domain configuration - use the correct domain
+    const baseUrl =
+      process.env.NEXT_PUBLIC_SITE_URL || process.env.VERCEL_URL
+        ? `https://${process.env.VERCEL_URL}`
+        : "https://massclip.pro"
 
     // SIMPLE SUCCESS URL - no complex verification, just landing page verification
-    const successUrl = `${baseUrl}/purchase-success?product_box_id=${params.id}&user_id=${userId}&creator_id=${productBoxData.creatorId}`
-    const cancelUrl = `${baseUrl}/creator/${creatorData.username || productBoxData.creatorId}`
+    const successUrl = `${baseUrl}/purchase-success?product_box_id=${params.id}&user_id=${userId}&creator_id=${bundleData.creatorId}`
+    const cancelUrl = `${baseUrl}/creator/${creatorData.username || bundleData.creatorId}`
 
     console.log(`🔗 [Checkout] Success URL: ${successUrl}`)
     console.log(`🔗 [Checkout] Cancel URL: ${cancelUrl}`)
@@ -96,10 +94,9 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
           price_data: {
             currency: currency,
             product_data: {
-              name: productBoxData.title || "Premium Content",
-              description:
-                productBoxData.description || `Premium content from ${creatorData.username || creatorData.name}`,
-              images: productBoxData.thumbnailUrl ? [productBoxData.thumbnailUrl] : [],
+              name: bundleData.title || "Premium Bundle",
+              description: bundleData.description || `Premium bundle from ${creatorData.username || creatorData.name}`,
+              images: bundleData.thumbnailUrl ? [bundleData.thumbnailUrl] : [],
             },
             unit_amount: Math.round(price * 100), // Convert to cents
           },
@@ -111,17 +108,19 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       cancel_url: cancelUrl,
       client_reference_id: userId,
       metadata: {
-        product_box_id: params.id,
+        bundle_id: params.id,
+        product_box_id: params.id, // Keep for compatibility
         buyer_user_id: userId,
-        creator_id: productBoxData.creatorId,
+        creator_id: bundleData.creatorId,
         verification_method: "landing_page", // No Stripe verification needed!
       },
       payment_intent_data: {
         application_fee_amount: Math.round(price * 100 * 0.1), // 10% platform fee
         metadata: {
-          product_box_id: params.id,
+          bundle_id: params.id,
+          product_box_id: params.id, // Keep for compatibility
           buyer_user_id: userId,
-          creator_id: productBoxData.creatorId,
+          creator_id: bundleData.creatorId,
           verification_method: "landing_page",
         },
       },
@@ -142,7 +141,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       url: session.url,
       productBox: {
         id: params.id,
-        title: productBoxData.title,
+        title: bundleData.title,
         price: price,
         currency: currency,
       },
