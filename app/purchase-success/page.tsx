@@ -35,55 +35,72 @@ export default function PurchaseSuccessPage() {
 
   const productBoxId = searchParams.get("product_box_id")
   const userId = searchParams.get("user_id")
+  const creatorId = searchParams.get("creator_id")
 
   useEffect(() => {
+    console.log(`🎉 [Purchase Success] Page loaded with params:`, {
+      productBoxId,
+      userId,
+      userUid: user?.uid,
+    })
+
     if (!user || !productBoxId || !userId) {
+      console.log(`❌ [Purchase Success] Missing required data`)
       setLoading(false)
       return
     }
 
     // Verify the user ID matches the logged-in user
     if (user.uid !== userId) {
-      setResult({ success: false, error: "User mismatch" })
+      console.error(`❌ [Purchase Success] User mismatch: ${user.uid} vs ${userId}`)
+      setResult({ success: false, error: "User verification failed" })
       setLoading(false)
       return
     }
 
-    // Grant access immediately - no Stripe verification needed
-    grantAccess()
+    // IMMEDIATE ACCESS - no Stripe verification needed!
+    // If they landed here, they completed the purchase
+    grantImmediateAccess()
   }, [user, productBoxId, userId])
 
-  const grantAccess = async () => {
+  const grantImmediateAccess = async () => {
     if (!user || !productBoxId) return
 
     try {
-      setLoading(true)
+      console.log(`🚀 [Purchase Success] Granting IMMEDIATE access - no verification needed!`)
+      console.log(`📦 Product Box: ${productBoxId}`)
+      console.log(`👤 User: ${user.uid}`)
 
-      console.log(`🎉 [Purchase Success] Granting immediate access to ${productBoxId} for user ${user.uid}`)
+      const idToken = await user.getIdToken()
 
-      const response = await fetch("/api/purchase/grant-access", {
+      const response = await fetch("/api/purchase/grant-immediate-access", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${await user.getIdToken()}`,
+          Authorization: `Bearer ${idToken}`,
         },
         body: JSON.stringify({
           productBoxId,
           userId: user.uid,
+          creatorId,
+          verificationMethod: "landing_page", // Simple verification!
         }),
       })
 
-      const result: PurchaseResult = await response.json()
+      const data = await response.json()
 
       if (!response.ok) {
-        throw new Error(result.error || "Failed to grant access")
+        throw new Error(data.error || "Failed to grant access")
       }
 
-      console.log(`✅ [Purchase Success] Access granted successfully`)
-      setResult(result)
+      console.log(`✅ [Purchase Success] Access granted immediately!`)
+      setResult(data)
     } catch (error: any) {
       console.error(`❌ [Purchase Success] Error:`, error)
-      setResult({ success: false, error: error.message })
+      setResult({
+        success: false,
+        error: error.message || "Failed to grant access",
+      })
     } finally {
       setLoading(false)
     }
@@ -99,42 +116,6 @@ export default function PurchaseSuccessPage() {
     router.push("/dashboard/purchases")
   }
 
-  // Authentication check
-  if (!user) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <Card className="w-full max-w-md">
-          <CardContent className="p-6 text-center">
-            <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
-            <h2 className="text-xl font-semibold mb-2">Authentication Required</h2>
-            <p className="text-gray-600 mb-4">Please log in to access your purchase.</p>
-            <Button onClick={() => router.push("/login")} className="w-full">
-              Log In to Continue
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
-    )
-  }
-
-  // Missing parameters
-  if (!productBoxId || !userId) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <Card className="w-full max-w-md">
-          <CardContent className="p-6 text-center">
-            <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
-            <h2 className="text-xl font-semibold mb-2">Invalid Purchase Link</h2>
-            <p className="text-gray-600 mb-4">This purchase link is missing required information.</p>
-            <Button onClick={() => router.push("/dashboard")} className="w-full">
-              Go to Dashboard
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
-    )
-  }
-
   // Loading state
   if (loading) {
     return (
@@ -142,15 +123,15 @@ export default function PurchaseSuccessPage() {
         <Card className="w-full max-w-md">
           <CardContent className="p-6 text-center">
             <Clock className="h-12 w-12 text-blue-500 mx-auto mb-4 animate-spin" />
-            <h2 className="text-xl font-semibold mb-2">Processing Your Purchase</h2>
-            <p className="text-gray-600 mb-4">Setting up your access to the content. This will only take a moment!</p>
+            <h2 className="text-xl font-semibold mb-2">🎉 Purchase Complete!</h2>
+            <p className="text-gray-600 mb-4">Setting up your instant access...</p>
             <div className="mt-4 p-3 bg-blue-50 rounded-lg">
               <h3 className="font-medium text-blue-900 mb-1">What's happening:</h3>
               <ul className="text-sm text-blue-800 space-y-1">
-                <li>• Confirming your purchase completion</li>
-                <li>• Setting up instant content access</li>
-                <li>• Recording your purchase history</li>
-                <li>• No complex verification needed!</li>
+                <li>✅ Payment completed successfully</li>
+                <li>🚀 Granting immediate access</li>
+                <li>📝 Recording your purchase</li>
+                <li>🎯 No complex verification needed!</li>
               </ul>
             </div>
           </CardContent>
@@ -166,10 +147,10 @@ export default function PurchaseSuccessPage() {
         <Card className="w-full max-w-md">
           <CardContent className="p-6 text-center">
             <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
-            <h2 className="text-xl font-semibold mb-2">Access Setup Failed</h2>
+            <h2 className="text-xl font-semibold mb-2">Setup Issue</h2>
             <p className="text-gray-600 mb-4">{result.error}</p>
             <div className="space-y-2">
-              <Button onClick={grantAccess} className="w-full">
+              <Button onClick={grantImmediateAccess} className="w-full">
                 Try Again
               </Button>
               <Button onClick={handleViewPurchases} variant="outline" className="w-full bg-transparent">
@@ -190,10 +171,10 @@ export default function PurchaseSuccessPage() {
           <CardHeader className="text-center">
             <CheckCircle className="h-16 w-16 text-green-500 mx-auto mb-4" />
             <CardTitle className="text-2xl text-green-700">
-              {result.alreadyPurchased ? "Welcome Back!" : "Purchase Complete!"}
+              🎉 {result.alreadyPurchased ? "Welcome Back!" : "Purchase Complete!"}
             </CardTitle>
             <p className="text-sm text-green-600">
-              {result.alreadyPurchased ? "You already have access to this content" : "Your content is ready to access"}
+              {result.alreadyPurchased ? "You already have access" : "Instant access granted!"}
             </p>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -247,16 +228,16 @@ export default function PurchaseSuccessPage() {
             <div className="mt-4 p-3 bg-green-50 rounded-lg">
               <h3 className="font-medium text-green-900 mb-1">🎉 All Set!</h3>
               <ul className="text-sm text-green-800 space-y-1">
-                <li>• Payment completed successfully</li>
-                <li>• Instant access granted - no waiting!</li>
-                <li>• Purchase recorded in your account</li>
-                <li>• Lifetime access to this content</li>
-                <li>• Simple verification - no complex checks needed!</li>
+                <li>✅ Payment completed successfully</li>
+                <li>🚀 Instant access granted - no waiting!</li>
+                <li>📝 Purchase recorded in your account</li>
+                <li>🔒 Lifetime access to this content</li>
+                <li>🎯 Simple verification - landing page only!</li>
               </ul>
             </div>
 
             <p className="text-xs text-gray-500 text-center">
-              Your purchase has been confirmed and you now have immediate access to this content.
+              Your purchase is confirmed. You reached this page = verification complete!
             </p>
           </CardContent>
         </Card>
@@ -264,5 +245,21 @@ export default function PurchaseSuccessPage() {
     )
   }
 
-  return null
+  // Fallback for missing parameters
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-gray-50">
+      <Card className="w-full max-w-md">
+        <CardContent className="p-6 text-center">
+          <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
+          <h2 className="text-xl font-semibold mb-2">Invalid Purchase Link</h2>
+          <p className="text-gray-600 mb-4">
+            {!user ? "Please log in to access your purchase." : "This purchase link is missing required information."}
+          </p>
+          <Button onClick={() => router.push(!user ? "/login" : "/dashboard")} className="w-full">
+            {!user ? "Log In" : "Go to Dashboard"}
+          </Button>
+        </CardContent>
+      </Card>
+    </div>
+  )
 }

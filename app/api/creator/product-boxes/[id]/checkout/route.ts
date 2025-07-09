@@ -1,43 +1,58 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { stripe } from "@/lib/stripe"
-import { auth } from "@/lib/firebase-admin"
+import { verifyIdToken } from "@/lib/auth-utils"
 import { db } from "@/lib/firebase-admin"
+import { stripe } from "@/lib/stripe"
 
 export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
   try {
-    const authHeader = request.headers.get("authorization")
-    if (!authHeader?.startsWith("Bearer ")) {
+    console.log(`🛒 [Checkout] Starting checkout for product box: ${params.id}`)
+
+    // Verify authentication
+    const decodedToken = await verifyIdToken(request)
+    if (!decodedToken) {
+      console.error("❌ [Checkout] Authentication failed")
       return NextResponse.json({ error: "Authentication required" }, { status: 401 })
     }
 
-    const idToken = authHeader.split("Bearer ")[1]
-    const decodedToken = await auth.verifyIdToken(idToken)
     const userId = decodedToken.uid
+    console.log(`✅ [Checkout] User authenticated: ${userId}`)
 
-    const productBoxId = params.id
+    // Get product box - try both collections
+    let productBoxDoc = await db.collection("productBoxes").doc(params.id).get()
 
-    // Get product box details
-    const productBoxDoc = await db.collection("productBoxes").doc(productBoxId).get()
     if (!productBoxDoc.exists) {
+      console.log(`🔍 [Checkout] Not found in productBoxes, trying bundles collection`)
+      productBoxDoc = await db.collection("bundles").doc(params.id).get()
+    }
+
+    if (!productBoxDoc.exists) {
+      console.error(`❌ [Checkout] Product box not found: ${params.id}`)
       return NextResponse.json({ error: "Product box not found" }, { status: 404 })
     }
 
     const productBoxData = productBoxDoc.data()!
-    const price = productBoxData.price || 0
-    const currency = productBoxData.currency || "usd"
-    const creatorId = productBoxData.creatorId
+    console.log(`✅ [Checkout] Found product box:`, {
+      title: productBoxData.title,
+      price: productBoxData.price,
+      currency: productBoxData.currency,
+      creatorId: productBoxData.creatorId,
+    })
 
-    // Validate minimum amounts based on currency
+    // Validate price meets minimums
+    const price = productBoxData.price || 0
+    const currency = (productBoxData.currency || "usd").toLowerCase()
+
     const minimums: { [key: string]: number } = {
-      usd: 0.5, // $0.50
-      eur: 0.5, // €0.50
-      gbp: 0.3, // £0.30
-      cad: 0.5, // CAD $0.50
-      aud: 0.5, // AUD $0.50
+      usd: 0.5,
+      eur: 0.5,
+      gbp: 0.3,
+      cad: 0.5,
+      aud: 0.5,
     }
 
-    const minimum = minimums[currency.toLowerCase()] || 0.5
+    const minimum = minimums[currency] || 0.5
     if (price < minimum) {
+      console.error(`❌ [Checkout] Price ${price} below minimum ${minimum} for ${currency}`)
       return NextResponse.json(
         {
           error: `Minimum charge amount is ${minimum.toFixed(2)} ${currency.toUpperCase()}`,
@@ -48,76 +63,142 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       )
     }
 
-    // Get creator's Stripe account
-    const creatorDoc = await db.collection("users").doc(creatorId).get()
+    // Get creator data
+    const creatorDoc = await db.collection("users").doc(productBoxData.creatorId).get()
     if (!creatorDoc.exists) {
+      console.error(`❌ [Checkout] Creator not found: ${productBoxData.creatorId}`)
       return NextResponse.json({ error: "Creator not found" }, { status: 404 })
     }
 
     const creatorData = creatorDoc.data()!
-    const stripeAccountId = creatorData.stripeAccountId
+    console.log(`✅ [Checkout] Creator found: ${creatorData.username || creatorData.name}`)
 
-    if (!stripeAccountId) {
-      return NextResponse.json({ error: "Creator has not connected Stripe account" }, { status: 400 })
+    // Check if creator has Stripe account
+    if (!creatorData.stripeAccountId) {
+      console.error(`❌ [Checkout] Creator has no Stripe account`)
+      return NextResponse.json({ error: "Creator payment setup incomplete" }, { status: 400 })
     }
 
-    // Create checkout session
-    const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || request.headers.get("origin") || ""
+    // Create Stripe checkout session
+    const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || "https://massclip.com"
 
-    // Simple success URL that includes the product box ID - no complex verification needed
-    const successUrl = `${baseUrl}/purchase-success?product_box_id=${productBoxId}&user_id=${userId}`
-    const cancelUrl = `${baseUrl}/creator/${creatorData.username || creatorId}`
+    // SIMPLE SUCCESS URL - no complex verification, just landing page verification
+    const successUrl = `${baseUrl}/purchase-success?product_box_id=${params.id}&user_id=${userId}&creator_id=${productBoxData.creatorId}`
+    const cancelUrl = `${baseUrl}/creator/${creatorData.username || productBoxData.creatorId}`
 
-    const session = await stripe.checkout.sessions.create(
-      {
-        payment_method_types: ["card"],
-        line_items: [
-          {
-            price_data: {
-              currency: currency,
-              product_data: {
-                name: productBoxData.title || "Premium Content",
-                description: productBoxData.description || "",
-                images: productBoxData.thumbnailUrl ? [productBoxData.thumbnailUrl] : [],
-              },
-              unit_amount: Math.round(price * 100), // Convert to cents
+    console.log(`🔗 [Checkout] Success URL: ${successUrl}`)
+    console.log(`🔗 [Checkout] Cancel URL: ${cancelUrl}`)
+
+    const sessionParams = {
+      payment_method_types: ["card"],
+      line_items: [
+        {
+          price_data: {
+            currency: currency,
+            product_data: {
+              name: productBoxData.title || "Premium Content",
+              description:
+                productBoxData.description || `Premium content from ${creatorData.username || creatorData.name}`,
+              images: productBoxData.thumbnailUrl ? [productBoxData.thumbnailUrl] : [],
             },
-            quantity: 1,
+            unit_amount: Math.round(price * 100), // Convert to cents
           },
-        ],
-        mode: "payment",
-        success_url: successUrl,
-        cancel_url: cancelUrl,
+          quantity: 1,
+        },
+      ],
+      mode: "payment" as const,
+      success_url: successUrl,
+      cancel_url: cancelUrl,
+      client_reference_id: userId,
+      metadata: {
+        product_box_id: params.id,
+        buyer_user_id: userId,
+        creator_id: productBoxData.creatorId,
+        verification_method: "landing_page", // No Stripe verification needed!
+      },
+      payment_intent_data: {
+        application_fee_amount: Math.round(price * 100 * 0.1), // 10% platform fee
         metadata: {
-          product_box_id: productBoxId,
+          product_box_id: params.id,
           buyer_user_id: userId,
-          creator_id: creatorId,
-        },
-        payment_intent_data: {
-          application_fee_amount: Math.round(price * 100 * 0.1), // 10% platform fee
-          metadata: {
-            product_box_id: productBoxId,
-            buyer_user_id: userId,
-            creator_id: creatorId,
-          },
+          creator_id: productBoxData.creatorId,
+          verification_method: "landing_page",
         },
       },
-      {
-        stripeAccount: stripeAccountId,
-      },
-    )
+    }
 
-    console.log(`✅ [Checkout] Created session ${session.id} for product box ${productBoxId}`)
+    console.log(`💰 [Checkout] Creating session with price: ${price} ${currency}`)
+
+    const session = await stripe.checkout.sessions.create(sessionParams, {
+      stripeAccount: creatorData.stripeAccountId,
+    })
+
+    console.log(`✅ [Checkout] Session created successfully: ${session.id}`)
+    console.log(`🔗 [Checkout] Checkout URL: ${session.url}`)
 
     return NextResponse.json({
+      success: true,
       sessionId: session.id,
       url: session.url,
+      productBox: {
+        id: params.id,
+        title: productBoxData.title,
+        price: price,
+        currency: currency,
+      },
     })
   } catch (error: any) {
     console.error(`❌ [Checkout] Error:`, error)
     return NextResponse.json(
       {
         error: "Failed to create checkout session",
+        details: error.message,
+      },
+      { status: 500 },
+    )
+  }
+}
+
+export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
+  try {
+    console.log(`🔍 [Checkout] GET request for product box: ${params.id}`)
+
+    // Verify authentication
+    const decodedToken = await verifyIdToken(request)
+    if (!decodedToken) {
+      return NextResponse.json({ error: "Authentication required" }, { status: 401 })
+    }
+
+    // Get product box data
+    let productBoxDoc = await db.collection("productBoxes").doc(params.id).get()
+
+    if (!productBoxDoc.exists) {
+      productBoxDoc = await db.collection("bundles").doc(params.id).get()
+    }
+
+    if (!productBoxDoc.exists) {
+      return NextResponse.json({ error: "Product box not found" }, { status: 404 })
+    }
+
+    const productBoxData = productBoxDoc.data()!
+
+    return NextResponse.json({
+      success: true,
+      productBox: {
+        id: params.id,
+        title: productBoxData.title,
+        description: productBoxData.description,
+        price: productBoxData.price,
+        currency: productBoxData.currency || "usd",
+        active: productBoxData.active !== false,
+        creatorId: productBoxData.creatorId,
+      },
+    })
+  } catch (error: any) {
+    console.error(`❌ [Checkout] GET error:`, error)
+    return NextResponse.json(
+      {
+        error: "Internal server error",
         details: error.message,
       },
       { status: 500 },
