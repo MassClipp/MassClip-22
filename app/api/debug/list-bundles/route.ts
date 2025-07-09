@@ -4,15 +4,15 @@ import { db } from "@/lib/firebase-admin"
 
 export async function GET(request: NextRequest) {
   try {
-    console.log(`🔍 [List Bundles] Fetching bundles`)
-
     // Verify authentication
     const decodedToken = await verifyIdToken(request)
     if (!decodedToken) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    // Fetch bundles from Firestore
+    console.log(`🔍 [List Bundles] Fetching bundles for debugging`)
+
+    // Get all bundles
     const bundlesSnapshot = await db.collection("bundles").limit(50).get()
 
     const bundles = bundlesSnapshot.docs.map((doc) => {
@@ -26,8 +26,8 @@ export async function GET(request: NextRequest) {
         active: data.active !== false, // Default to true if not specified
         currency: data.currency || "usd",
         type: data.type || "one_time",
-        createdAt: data.createdAt || null,
-        updatedAt: data.updatedAt || null,
+        createdAt: data.createdAt,
+        updatedAt: data.updatedAt,
       }
     })
 
@@ -43,9 +43,10 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(
       {
         success: false,
+        error: "Failed to fetch bundles",
+        details: error instanceof Error ? error.message : "Unknown error",
         bundles: [],
         count: 0,
-        error: error instanceof Error ? error.message : "Unknown error",
       },
       { status: 500 },
     )

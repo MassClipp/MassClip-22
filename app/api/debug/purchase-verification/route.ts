@@ -38,7 +38,7 @@ export async function POST(request: NextRequest) {
       } else {
         console.log(`ℹ️ [Purchase Verification Debug] Skipping Stripe check for debug session`)
       }
-    } catch (error) {
+    } catch (error: any) {
       console.log(`❌ [Purchase Verification Debug] Stripe session not found:`, error.message)
       errors.push(`Stripe session not found: ${error.message}`)
 
@@ -83,7 +83,7 @@ export async function POST(request: NextRequest) {
           recommendations.push("Check if the webhook processed the purchase correctly")
         }
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error(`❌ [Purchase Verification Debug] Error checking user purchases:`, error)
       errors.push(`Error checking user purchases: ${error.message}`)
     }
@@ -105,7 +105,7 @@ export async function POST(request: NextRequest) {
         console.log(`❌ [Purchase Verification Debug] No purchase found in unified collection`)
         errors.push("Purchase not found in unified purchases collection")
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error(`❌ [Purchase Verification Debug] Error checking unified purchases:`, error)
       errors.push(`Error checking unified purchases: ${error.message}`)
     }
@@ -121,7 +121,7 @@ export async function POST(request: NextRequest) {
           firestorePurchase = debugPurchase
         }
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error(`❌ [Purchase Verification Debug] Error checking debug purchases:`, error)
     }
 
@@ -141,7 +141,7 @@ export async function POST(request: NextRequest) {
       recommendations.push("Webhook may not have processed this purchase yet. Check webhook logs.")
     }
 
-    if (stripeSession?.payment_status !== "paid") {
+    if (stripeSession && stripeSession.payment_status !== "paid") {
       recommendations.push(
         `Stripe payment status is '${stripeSession.payment_status}', not 'paid'. Purchase may not be complete.`,
       )
@@ -193,11 +193,11 @@ export async function POST(request: NextRequest) {
     console.log(`✅ [Purchase Verification Debug] Debug completed`)
 
     return NextResponse.json(result)
-  } catch (error) {
+  } catch (error: any) {
     console.error(`❌ [Purchase Verification Debug] Error:`, error)
     return NextResponse.json(
       {
-        sessionId: request.body?.sessionId || "unknown",
+        sessionId: "unknown",
         stripeSession: null,
         firestorePurchase: null,
         unifiedPurchase: null,

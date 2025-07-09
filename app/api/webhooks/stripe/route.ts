@@ -21,12 +21,12 @@ if (!getApps().length) {
 
 const db = getFirestore()
 
-// Determine environment and select appropriate keys (same logic as lib/stripe.ts)
+// Use live keys for production, test keys for development/preview
 const isProduction = process.env.VERCEL_ENV === "production"
 const isDevelopment = process.env.NODE_ENV === "development"
 const isPreview = process.env.VERCEL_ENV === "preview"
 
-// Use test keys for development and preview environments, live keys only for production
+// For connected accounts webhook, always use live keys in production
 const useTestKeys = isDevelopment || isPreview || !isProduction
 
 // Select the appropriate Stripe secret key
@@ -76,6 +76,7 @@ export async function POST(request: NextRequest) {
       stripeAccount: stripeAccount || "platform",
       bodyLength: body.length,
       timestamp: new Date().toISOString(),
+      webhookUrl: request.url,
     })
 
     if (!signature) {
@@ -142,18 +143,18 @@ export async function POST(request: NextRequest) {
       console.log(`🔍 [Webhook ${requestId}] Full session metadata:`, JSON.stringify(session.metadata, null, 2))
 
       // Extract required data from metadata
-      const { productBoxId, buyerUid, creatorUid, connectedAccountId } = session.metadata || {}
+      const { bundleId, buyerUid, creatorUid, connectedAccountId } = session.metadata || {}
 
       console.log(`🔍 [Webhook ${requestId}] Extracted metadata:`, {
-        productBoxId,
+        bundleId,
         buyerUid,
         creatorUid,
         connectedAccountId,
       })
 
-      if (!productBoxId || !buyerUid) {
+      if (!bundleId || !buyerUid) {
         console.error(`❌ [Webhook ${requestId}] Missing required metadata:`, {
-          productBoxId: !!productBoxId,
+          bundleId: !!bundleId,
           buyerUid: !!buyerUid,
           allMetadata: session.metadata,
         })
@@ -177,37 +178,37 @@ export async function POST(request: NextRequest) {
       }
 
       try {
-        // Get product box details
-        console.log(`🔍 [Webhook ${requestId}] Fetching product box: ${productBoxId}`)
-        const productBoxDoc = await db.collection("productBoxes").doc(productBoxId).get()
+        // Get bundle details
+        console.log(`🔍 [Webhook ${requestId}] Fetching bundle: ${bundleId}`)
+        const bundleDoc = await db.collection("bundles").doc(bundleId).get()
 
-        if (!productBoxDoc.exists) {
-          console.error(`❌ [Webhook ${requestId}] Product box not found: ${productBoxId}`)
+        if (!bundleDoc.exists) {
+          console.error(`❌ [Webhook ${requestId}] Bundle not found: ${bundleId}`)
 
-          // Create a basic purchase record even if product box is missing
+          // Create a basic purchase record even if bundle is missing
           const basicPurchaseData = {
-            productBoxId,
+            bundleId,
             sessionId: session.id,
             paymentIntentId: session.payment_intent,
             amount: session.amount_total ? session.amount_total / 100 : 0,
             currency: session.currency || "usd",
             status: "complete",
-            itemTitle: "Unknown Product",
+            itemTitle: "Unknown Bundle",
             purchasedAt: new Date(),
             isTestPurchase: actuallyUsingTestMode,
             customerEmail: session.customer_details?.email,
             stripeAccount: stripeAccount,
             connectedAccountId: connectedAccountId,
-            error: "Product box not found during webhook processing",
+            error: "Bundle not found during webhook processing",
             webhookProcessedAt: new Date(),
             webhookEventId: event.id,
             webhookRequestId: requestId,
           }
 
           console.log(
-            `💾 [Webhook ${requestId}] Saving basic purchase record to users/${buyerUid}/purchases/${productBoxId}`,
+            `💾 [Webhook ${requestId}] Saving basic purchase record to users/${buyerUid}/purchases/${bundleId}`,
           )
-          await db.collection("users").doc(buyerUid).collection("purchases").doc(productBoxId).set(basicPurchaseData)
+          await db.collection("users").doc(buyerUid).collection("purchases").doc(bundleId).set(basicPurchaseData)
 
           console.log(
             `💾 [Webhook ${requestId}] Saving basic purchase record to userPurchases/${buyerUid}/purchases/${session.id}`,
@@ -223,7 +224,7 @@ export async function POST(request: NextRequest) {
 
           return NextResponse.json({
             received: true,
-            warning: "Product box not found",
+            warning: "Bundle not found",
             sessionId: session.id,
             purchaseRecorded: true,
             processingTime: Date.now() - startTime,
@@ -231,27 +232,27 @@ export async function POST(request: NextRequest) {
           })
         }
 
-        const productBoxData = productBoxDoc.data()!
+        const bundleData = bundleDoc.data()!
         const purchaseAmount = session.amount_total ? session.amount_total / 100 : 0
 
-        console.log(`📦 [Webhook ${requestId}] Product box data:`, {
-          title: productBoxData.title,
-          creatorId: productBoxData.creatorId,
-          price: productBoxData.price,
+        console.log(`📦 [Webhook ${requestId}] Bundle data:`, {
+          title: bundleData.title,
+          creatorId: bundleData.creatorId,
+          price: bundleData.price,
         })
 
         // Create comprehensive purchase record
         const purchaseData = {
-          productBoxId,
+          bundleId,
           sessionId: session.id,
           paymentIntentId: session.payment_intent,
           amount: purchaseAmount,
           currency: session.currency || "usd",
           status: "complete",
-          creatorId: creatorUid || productBoxData.creatorId,
-          itemTitle: productBoxData.title || "Untitled Product",
-          itemDescription: productBoxData.description || "",
-          thumbnailUrl: productBoxData.thumbnailUrl || "",
+          creatorId: creatorUid || bundleData.creatorId,
+          itemTitle: bundleData.title || "Untitled Bundle",
+          itemDescription: bundleData.description || "",
+          thumbnailUrl: bundleData.customPreviewThumbnail || "",
           purchasedAt: new Date(),
           isTestPurchase: actuallyUsingTestMode,
           customerEmail: session.customer_details?.email,
@@ -266,17 +267,17 @@ export async function POST(request: NextRequest) {
         console.log(`💾 [Webhook ${requestId}] === SAVING PURCHASE RECORDS ===`)
         console.log(`💾 [Webhook ${requestId}] Purchase data summary:`, {
           userId: buyerUid,
-          productBoxId,
+          bundleId,
           sessionId: session.id,
           amount: purchaseAmount,
           title: purchaseData.itemTitle,
           isTestPurchase: actuallyUsingTestMode,
         })
 
-        // Store purchase in user's purchases subcollection using productBoxId as doc ID
-        console.log(`💾 [Webhook ${requestId}] Saving to users/${buyerUid}/purchases/${productBoxId}`)
-        await db.collection("users").doc(buyerUid).collection("purchases").doc(productBoxId).set(purchaseData)
-        console.log(`✅ [Webhook ${requestId}] Purchase record saved: users/${buyerUid}/purchases/${productBoxId}`)
+        // Store purchase in user's purchases subcollection using bundleId as doc ID
+        console.log(`💾 [Webhook ${requestId}] Saving to users/${buyerUid}/purchases/${bundleId}`)
+        await db.collection("users").doc(buyerUid).collection("purchases").doc(bundleId).set(purchaseData)
+        console.log(`✅ [Webhook ${requestId}] Purchase record saved: users/${buyerUid}/purchases/${bundleId}`)
 
         // ALSO store in a unified purchases collection for easier querying by session ID
         console.log(`💾 [Webhook ${requestId}] Saving to userPurchases/${buyerUid}/purchases/${session.id}`)
@@ -285,26 +286,26 @@ export async function POST(request: NextRequest) {
           `✅ [Webhook ${requestId}] Unified purchase record saved: userPurchases/${buyerUid}/purchases/${session.id}`,
         )
 
-        // Update product box sales stats
+        // Update bundle sales stats
         try {
-          console.log(`📊 [Webhook ${requestId}] Updating product box stats for: ${productBoxId}`)
+          console.log(`📊 [Webhook ${requestId}] Updating bundle stats for: ${bundleId}`)
           await db
-            .collection("productBoxes")
-            .doc(productBoxId)
+            .collection("bundles")
+            .doc(bundleId)
             .update({
               totalSales: FieldValue.increment(1),
               totalRevenue: FieldValue.increment(purchaseAmount),
               lastSaleAt: new Date(),
             })
-          console.log(`✅ [Webhook ${requestId}] Product box stats updated`)
+          console.log(`✅ [Webhook ${requestId}] Bundle stats updated`)
         } catch (updateError) {
-          console.error(`❌ [Webhook ${requestId}] Failed to update product box stats:`, updateError)
+          console.error(`❌ [Webhook ${requestId}] Failed to update bundle stats:`, updateError)
         }
 
         // Record sale for creator
-        if (creatorUid || productBoxData.creatorId) {
+        if (creatorUid || bundleData.creatorId) {
           try {
-            const creatorId = creatorUid || productBoxData.creatorId
+            const creatorId = creatorUid || bundleData.creatorId
             const platformFee = purchaseAmount * 0.05 // 5% platform fee
             const netAmount = purchaseAmount - platformFee
 
@@ -314,7 +315,7 @@ export async function POST(request: NextRequest) {
               .doc(creatorId)
               .collection("sales")
               .add({
-                productBoxId,
+                bundleId,
                 buyerUid,
                 sessionId: session.id,
                 amount: purchaseAmount,
@@ -357,7 +358,7 @@ export async function POST(request: NextRequest) {
           purchaseRecorded: true,
           stripeAccount: stripeAccount,
           connectedAccountId: connectedAccountId,
-          purchaseDocId: productBoxId,
+          purchaseDocId: bundleId,
           unifiedDocId: session.id,
           processingTime: Date.now() - startTime,
           timestamp: new Date().toISOString(),
@@ -369,7 +370,7 @@ export async function POST(request: NextRequest) {
         // Try to create a minimal purchase record as fallback
         try {
           const fallbackPurchaseData = {
-            productBoxId: productBoxId || "unknown",
+            bundleId: bundleId || "unknown",
             sessionId: session.id,
             amount: session.amount_total ? session.amount_total / 100 : 0,
             currency: session.currency || "usd",
@@ -386,13 +387,8 @@ export async function POST(request: NextRequest) {
             webhookRequestId: requestId,
           }
 
-          if (buyerUid && productBoxId) {
-            await db
-              .collection("users")
-              .doc(buyerUid)
-              .collection("purchases")
-              .doc(productBoxId)
-              .set(fallbackPurchaseData)
+          if (buyerUid && bundleId) {
+            await db.collection("users").doc(buyerUid).collection("purchases").doc(bundleId).set(fallbackPurchaseData)
 
             // Also save to unified collection
             await db
@@ -461,5 +457,7 @@ export async function GET() {
     webhookSecretConfigured: actuallyUsingTestMode
       ? !!process.env.STRIPE_WEBHOOK_SECRET_TEST
       : !!process.env.STRIPE_WEBHOOK_SECRET_LIVE,
+    endpoint: "/api/webhooks/stripe",
+    expectedUrl: "https://massclip.pro/api/webhooks/stripe",
   })
 }
