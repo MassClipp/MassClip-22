@@ -4,7 +4,7 @@ import { db } from "@/lib/firebase-admin"
 
 export async function GET(request: NextRequest) {
   try {
-    console.log(`🔍 [List Bundles Debug] Starting bundle listing`)
+    console.log(`🔍 [List Bundles] Fetching bundles`)
 
     // Verify authentication
     const decodedToken = await verifyIdToken(request)
@@ -12,8 +12,8 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    // Get all bundles from Firestore
-    const bundlesSnapshot = await db.collection("bundles").orderBy("createdAt", "desc").limit(20).get()
+    // Fetch bundles from Firestore
+    const bundlesSnapshot = await db.collection("bundles").limit(50).get()
 
     const bundles = bundlesSnapshot.docs.map((doc) => {
       const data = doc.data()
@@ -22,15 +22,16 @@ export async function GET(request: NextRequest) {
         title: data.title || "Untitled Bundle",
         description: data.description || "No description",
         price: data.price || 0,
-        currency: data.currency || "usd",
-        creatorId: data.creatorId,
+        creatorId: data.creatorId || "unknown",
         active: data.active !== false, // Default to true if not specified
-        createdAt: data.createdAt,
-        contentItems: data.contentItems || [],
+        currency: data.currency || "usd",
+        type: data.type || "one_time",
+        createdAt: data.createdAt || null,
+        updatedAt: data.updatedAt || null,
       }
     })
 
-    console.log(`✅ [List Bundles Debug] Found ${bundles.length} bundles`)
+    console.log(`✅ [List Bundles] Found ${bundles.length} bundles`)
 
     return NextResponse.json({
       success: true,
@@ -38,11 +39,13 @@ export async function GET(request: NextRequest) {
       count: bundles.length,
     })
   } catch (error) {
-    console.error(`❌ [List Bundles Debug] Error:`, error)
+    console.error(`❌ [List Bundles] Error:`, error)
     return NextResponse.json(
       {
-        error: "Failed to list bundles",
-        details: error instanceof Error ? error.message : "Unknown error",
+        success: false,
+        bundles: [],
+        count: 0,
+        error: error instanceof Error ? error.message : "Unknown error",
       },
       { status: 500 },
     )

@@ -28,19 +28,22 @@ export async function POST(request: NextRequest) {
     // 1. Check Stripe session
     let stripeSession = null
     try {
-      stripeSession = await stripe.checkout.sessions.retrieve(sessionId)
-      console.log(`✅ [Purchase Verification Debug] Stripe session found:`, {
-        id: stripeSession.id,
-        payment_status: stripeSession.payment_status,
-        customer_email: stripeSession.customer_email,
-      })
+      if (!sessionId.includes("debug")) {
+        stripeSession = await stripe.checkout.sessions.retrieve(sessionId)
+        console.log(`✅ [Purchase Verification Debug] Stripe session found:`, {
+          id: stripeSession.id,
+          payment_status: stripeSession.payment_status,
+          customer_email: stripeSession.customer_email,
+        })
+      } else {
+        console.log(`ℹ️ [Purchase Verification Debug] Skipping Stripe check for debug session`)
+      }
     } catch (error) {
       console.log(`❌ [Purchase Verification Debug] Stripe session not found:`, error.message)
       errors.push(`Stripe session not found: ${error.message}`)
 
-      // Check if it's a debug session
       if (sessionId.includes("debug")) {
-        recommendations.push("This appears to be a debug session ID. Check the debugPurchases collection instead.")
+        recommendations.push("This is a debug session ID. Stripe lookup skipped.")
       } else {
         recommendations.push("Verify the session ID is correct and matches your Stripe environment (live vs test)")
       }
@@ -62,9 +65,23 @@ export async function POST(request: NextRequest) {
         firestorePurchase = userPurchasesQuery.docs[0].data()
         console.log(`✅ [Purchase Verification Debug] Found purchase in user collection`)
       } else {
-        console.log(`❌ [Purchase Verification Debug] No purchase found in user collection`)
-        errors.push("Purchase not found in user's purchases collection")
-        recommendations.push("Check if the webhook processed the purchase correctly")
+        // Also try stripeSessionId field
+        const altQuery = await db
+          .collection("users")
+          .doc(actualUserId)
+          .collection("purchases")
+          .where("stripeSessionId", "==", sessionId)
+          .limit(1)
+          .get()
+
+        if (!altQuery.empty) {
+          firestorePurchase = altQuery.docs[0].data()
+          console.log(`✅ [Purchase Verification Debug] Found purchase in user collection via stripeSessionId`)
+        } else {
+          console.log(`❌ [Purchase Verification Debug] No purchase found in user collection`)
+          errors.push("Purchase not found in user's purchases collection")
+          recommendations.push("Check if the webhook processed the purchase correctly")
+        }
       }
     } catch (error) {
       console.error(`❌ [Purchase Verification Debug] Error checking user purchases:`, error)
@@ -131,7 +148,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Success case
-    if (stripeSession && firestorePurchase && webhookProcessed) {
+    if ((stripeSession || sessionId.includes("debug")) && firestorePurchase && webhookProcessed) {
       recommendations.push("✅ Purchase verification looks good! All systems are working correctly.")
     }
 
@@ -141,10 +158,12 @@ export async function POST(request: NextRequest) {
         ? {
             id: stripeSession.id,
             payment_status: stripeSession.payment_status,
+            status: stripeSession.status,
             customer_email: stripeSession.customer_email,
             amount_total: stripeSession.amount_total,
             currency: stripeSession.currency,
             created: stripeSession.created,
+            metadata: stripeSession.metadata || {},
           }
         : null,
       firestorePurchase: firestorePurchase
@@ -154,7 +173,8 @@ export async function POST(request: NextRequest) {
             bundleId: firestorePurchase.bundleId,
             amount: firestorePurchase.amount,
             createdAt: firestorePurchase.createdAt,
-            isTestPurchase: firestorePurchase.isTestPurchase,
+            isTestPurchase: firestorePurchase.isTestPurchase || false,
+            stripeEnvironment: firestorePurchase.stripeEnvironment || "unknown",
           }
         : null,
       unifiedPurchase: unifiedPurchase
@@ -166,8 +186,8 @@ export async function POST(request: NextRequest) {
           }
         : null,
       webhookProcessed,
-      recommendations,
-      errors,
+      recommendations: recommendations || [],
+      errors: errors || [],
     }
 
     console.log(`✅ [Purchase Verification Debug] Debug completed`)
@@ -177,8 +197,13 @@ export async function POST(request: NextRequest) {
     console.error(`❌ [Purchase Verification Debug] Error:`, error)
     return NextResponse.json(
       {
-        error: "Failed to debug purchase verification",
-        details: error instanceof Error ? error.message : "Unknown error",
+        sessionId: request.body?.sessionId || "unknown",
+        stripeSession: null,
+        firestorePurchase: null,
+        unifiedPurchase: null,
+        webhookProcessed: false,
+        recommendations: [],
+        errors: [`Failed to debug purchase verification: ${error instanceof Error ? error.message : "Unknown error"}`],
       },
       { status: 500 },
     )
