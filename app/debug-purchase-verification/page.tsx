@@ -21,6 +21,7 @@ import {
   Settings,
   Copy,
   Package,
+  TestTube,
 } from "lucide-react"
 
 interface EnvironmentStatus {
@@ -33,6 +34,7 @@ interface EnvironmentStatus {
 
 interface PurchaseDebugResult {
   sessionId: string
+  isDebugSession: boolean
   stripeSession?: any
   firestorePurchase?: any
   unifiedPurchase?: any
@@ -120,10 +122,11 @@ export default function DebugPurchaseVerificationPage() {
 
       const result = await response.json()
       setDebugResult(result)
-    } catch (error) {
+    } catch (error: any) {
       console.error("Debug failed:", error)
       setDebugResult({
         sessionId,
+        isDebugSession: false,
         recommendations: [],
         errors: [`Failed to debug purchase: ${error.message}`],
         webhookProcessed: false,
@@ -159,7 +162,7 @@ export default function DebugPurchaseVerificationPage() {
       } else {
         alert(`Failed to create test purchase: ${result.error}`)
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Test purchase creation failed:", error)
       alert(`Error: ${error.message}`)
     } finally {
@@ -369,11 +372,13 @@ export default function DebugPurchaseVerificationPage() {
                   <Label htmlFor="sessionId">Stripe Session ID</Label>
                   <Input
                     id="sessionId"
-                    placeholder="cs_live_... or cs_test_..."
+                    placeholder="cs_live_... or cs_test_... or debug session"
                     value={sessionId}
                     onChange={(e) => setSessionId(e.target.value)}
                   />
-                  <p className="text-sm text-gray-500">Enter the Stripe checkout session ID to debug</p>
+                  <p className="text-sm text-gray-500">
+                    Enter the Stripe checkout session ID or debug session ID to debug
+                  </p>
                 </div>
 
                 <Button onClick={debugPurchase} disabled={!sessionId || loading} className="w-full">
@@ -392,7 +397,15 @@ export default function DebugPurchaseVerificationPage() {
 
                 {debugResult && (
                   <div className="space-y-4 mt-6">
-                    <h3 className="text-lg font-semibold">Debug Results</h3>
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-lg font-semibold">Debug Results</h3>
+                      {debugResult.isDebugSession && (
+                        <Badge variant="secondary" className="flex items-center gap-1">
+                          <TestTube className="h-3 w-3" />
+                          Debug Session
+                        </Badge>
+                      )}
+                    </div>
 
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                       <Card>
@@ -401,7 +414,11 @@ export default function DebugPurchaseVerificationPage() {
                             <CreditCard className="h-4 w-4" />
                             <span className="font-medium">Stripe Session</span>
                           </div>
-                          {getStatusBadge(!!debugResult.stripeSession, "Found", "Not Found")}
+                          {debugResult.isDebugSession ? (
+                            <Badge variant="secondary">Skipped (Debug)</Badge>
+                          ) : (
+                            getStatusBadge(!!debugResult.stripeSession, "Found", "Not Found")
+                          )}
                           {debugResult.stripeSession && (
                             <div className="mt-2 text-sm text-gray-600">
                               Status: {debugResult.stripeSession.payment_status}
@@ -420,6 +437,11 @@ export default function DebugPurchaseVerificationPage() {
                           {debugResult.firestorePurchase && (
                             <div className="mt-2 text-sm text-gray-600">
                               Status: {debugResult.firestorePurchase.status}
+                              {debugResult.firestorePurchase.isTestPurchase && (
+                                <Badge variant="secondary" className="ml-2 text-xs">
+                                  Test
+                                </Badge>
+                              )}
                             </div>
                           )}
                         </CardContent>
