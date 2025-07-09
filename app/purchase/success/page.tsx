@@ -3,39 +3,42 @@
 import { useEffect, useState } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
 import { useAuth } from "@/contexts/auth-context"
-import { db } from "@/lib/firebase"
-import { collection, query, where, getDocs, limit, doc, getDoc } from "firebase/firestore"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { CheckCircle, Clock, AlertCircle, RefreshCw, ExternalLink } from "lucide-react"
+import { CheckCircle, Clock, AlertCircle, RefreshCw, ExternalLink, ShoppingBag } from "lucide-react"
 
-interface PurchaseData {
-  productBoxId: string
-  sessionId: string
-  amount: number
-  currency: string
-  status: string
-  itemTitle: string
-  itemDescription?: string
-  thumbnailUrl?: string
-  purchasedAt: any
-  isTestPurchase?: boolean
-  stripeAccount?: string
-  connectedAccountId?: string
-  webhookProcessedAt?: any
+interface PurchaseVerificationResult {
+  success: boolean
+  purchase?: any
+  session?: {
+    id: string
+    amount: number
+    currency: string
+    payment_status: string
+    status: string
+  }
+  productBox?: {
+    id: string
+    title: string
+    description?: string
+    thumbnailUrl?: string
+  }
+  creator?: {
+    id: string
+    name: string
+    username: string
+  }
+  error?: string
+  alreadyProcessed?: boolean
 }
 
 export default function PurchaseSuccessPage() {
   const searchParams = useSearchParams()
   const router = useRouter()
   const { user } = useAuth()
-  const [purchaseData, setPurchaseData] = useState<PurchaseData | null>(null)
+  const [verificationResult, setVerificationResult] = useState<PurchaseVerificationResult | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [retryCount, setRetryCount] = useState(0)
-  const [lastCheckTime, setLastCheckTime] = useState<Date | null>(null)
-  const maxRetries = 20 // 20 attempts over ~2 minutes
-  const retryIntervals = [2000, 3000, 5000, 5000, 10000] // Progressive backoff
 
   const sessionId = searchParams.get("session_id")
 
@@ -45,101 +48,61 @@ export default function PurchaseSuccessPage() {
       return
     }
 
-    const checkPurchaseStatus = async () => {
-      try {
-        setLastCheckTime(new Date())
-        console.log(
-          `🔍 [Purchase Success] Checking purchase status for session: ${sessionId} (attempt ${retryCount + 1})`,
-        )
+    verifyPurchase()
+  }, [user, sessionId])
 
-        // Method 1: Check unified purchases collection by session ID (fastest)
-        try {
-          console.log(`🔍 [Purchase Success] Checking unified purchases collection...`)
-          const unifiedPurchaseDoc = await getDoc(doc(db, "userPurchases", user.uid, "purchases", sessionId))
+  const verifyPurchase = async () => {
+    if (!user || !sessionId) return
 
-          if (unifiedPurchaseDoc.exists()) {
-            const data = unifiedPurchaseDoc.data() as PurchaseData
-            console.log("✅ [Purchase Success] Unified purchase found:", data)
-            setPurchaseData(data)
-            setLoading(false)
-            return true
-          }
-        } catch (unifiedError) {
-          console.log("⚠️ [Purchase Success] Unified collection check failed:", unifiedError)
-        }
+    try {
+      setLoading(true)
+      setError(null)
 
-        // Method 2: Query user purchases by session ID
-        try {
-          console.log(`🔍 [Purchase Success] Querying user purchases by session ID...`)
-          const userPurchasesRef = collection(db, "users", user.uid, "purchases")
-          const purchasesQuery = query(userPurchasesRef, where("sessionId", "==", sessionId), limit(1))
-          const purchasesSnapshot = await getDocs(purchasesQuery)
+      console.log(`🔍 [Purchase Success] Verifying purchase for session: ${sessionId}`)
 
-          if (!purchasesSnapshot.empty) {
-            const purchaseDoc = purchasesSnapshot.docs[0]
-            const data = purchaseDoc.data() as PurchaseData
+      const response = await fetch("/api/purchase/verify-session", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          sessionId,
+          userId: user.uid,
+        }),
+      })
 
-            console.log("✅ [Purchase Success] User purchase found:", data)
-            setPurchaseData(data)
-            setLoading(false)
-            return true
-          }
-        } catch (queryError) {
-          console.log("⚠️ [Purchase Success] User purchases query failed:", queryError)
-        }
+      const result: PurchaseVerificationResult = await response.json()
 
-        console.log(`❌ [Purchase Success] Purchase not found for session: ${sessionId}`)
-        return false
-      } catch (err) {
-        console.error("❌ [Purchase Success] Error checking purchase:", err)
-        return false
+      if (!response.ok) {
+        throw new Error(result.error || "Verification failed")
       }
+
+      console.log(`✅ [Purchase Success] Verification successful:`, result)
+      setVerificationResult(result)
+    } catch (err: any) {
+      console.error(`❌ [Purchase Success] Verification error:`, err)
+      setError(err.message || "Failed to verify purchase")
+    } finally {
+      setLoading(false)
     }
+  }
 
-    const pollForPurchase = async () => {
-      const found = await checkPurchaseStatus()
-
-      if (!found && retryCount < maxRetries) {
-        console.log(`🔄 [Purchase Success] Retrying... (${retryCount + 1}/${maxRetries})`)
-        setRetryCount((prev) => prev + 1)
-
-        // Use progressive backoff intervals
-        const intervalIndex = Math.min(retryCount, retryIntervals.length - 1)
-        const delay = retryIntervals[intervalIndex]
-
-        setTimeout(pollForPurchase, delay)
-      } else if (!found) {
-        console.log("⏰ [Purchase Success] Max retries reached")
-        setError(
-          "Purchase verification is taking longer than expected. Your payment was likely successful - please check your purchases or contact support.",
-        )
-        setLoading(false)
-      }
+  const handleViewContent = () => {
+    if (verificationResult?.productBox?.id) {
+      router.push(`/product-box/${verificationResult.productBox.id}/content`)
     }
-
-    pollForPurchase()
-  }, [user, sessionId, retryCount])
-
-  const handleRetry = () => {
-    setRetryCount(0)
-    setError(null)
-    setLoading(true)
-    setLastCheckTime(null)
   }
 
   const handleViewPurchases = () => {
     router.push("/dashboard/purchases")
   }
 
-  const handleViewContent = () => {
-    if (purchaseData?.productBoxId) {
-      router.push(`/product-box/${purchaseData.productBoxId}/content`)
-    }
-  }
-
-  const handleDebugWebhook = () => {
-    const debugUrl = `/debug-webhook-verification?sessionId=${sessionId}&userId=${user?.uid}`
-    window.open(debugUrl, "_blank")
+  const handleContactSupport = () => {
+    // You can implement your support contact method here
+    window.open(
+      "mailto:support@massclip.com?subject=Purchase Verification Issue&body=Session ID: " + sessionId,
+      "_blank",
+    )
   }
 
   if (!user) {
@@ -149,7 +112,7 @@ export default function PurchaseSuccessPage() {
           <CardContent className="p-6 text-center">
             <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
             <h2 className="text-xl font-semibold mb-2">Authentication Required</h2>
-            <p className="text-gray-600 mb-4">Please log in to view your purchase.</p>
+            <p className="text-gray-600 mb-4">Please log in to verify your purchase.</p>
             <Button onClick={() => router.push("/login")}>Log In</Button>
           </CardContent>
         </Card>
@@ -164,7 +127,7 @@ export default function PurchaseSuccessPage() {
           <CardContent className="p-6 text-center">
             <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
             <h2 className="text-xl font-semibold mb-2">Invalid Purchase Link</h2>
-            <p className="text-gray-600 mb-4">This purchase link is invalid or expired.</p>
+            <p className="text-gray-600 mb-4">This purchase link is missing the session ID or is invalid.</p>
             <Button onClick={() => router.push("/dashboard")}>Go to Dashboard</Button>
           </CardContent>
         </Card>
@@ -173,9 +136,6 @@ export default function PurchaseSuccessPage() {
   }
 
   if (loading) {
-    const nextRetryIn =
-      retryCount < retryIntervals.length ? retryIntervals[retryCount] : retryIntervals[retryIntervals.length - 1]
-
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <Card className="w-full max-w-md">
@@ -183,37 +143,20 @@ export default function PurchaseSuccessPage() {
             <Clock className="h-12 w-12 text-blue-500 mx-auto mb-4 animate-spin" />
             <h2 className="text-xl font-semibold mb-2">Verifying Purchase</h2>
             <p className="text-gray-600 mb-4">
-              We're confirming your purchase was processed successfully. This usually takes just a few seconds.
+              We're confirming your purchase with Stripe. This should only take a moment.
             </p>
-            <div className="space-y-2 mb-4">
-              <p className="text-sm text-gray-500">
-                Attempt {retryCount + 1} of {maxRetries}
-              </p>
-              {lastCheckTime && (
-                <p className="text-xs text-gray-400">Last checked: {lastCheckTime.toLocaleTimeString()}</p>
-              )}
-              <p className="text-xs text-gray-400">Next check in {Math.round(nextRetryIn / 1000)} seconds</p>
-            </div>
             <div className="space-y-2">
-              <Button onClick={handleRetry} variant="outline" className="w-full bg-transparent">
-                <RefreshCw className="h-4 w-4 mr-2" />
-                Check Again Now
-              </Button>
-              <Button onClick={handleViewPurchases} className="w-full">
+              <Button onClick={handleViewPurchases} variant="outline" className="w-full bg-transparent">
                 View My Purchases
-              </Button>
-              <Button onClick={handleDebugWebhook} variant="outline" size="sm" className="w-full bg-transparent">
-                <ExternalLink className="h-4 w-4 mr-2" />
-                Debug Webhook Processing
               </Button>
             </div>
             <div className="mt-4 p-3 bg-blue-50 rounded-lg">
               <h3 className="font-medium text-blue-900 mb-1">What's happening?</h3>
               <ul className="text-sm text-blue-800 space-y-1">
-                <li>• Your payment was processed by Stripe</li>
-                <li>• We're recording your purchase in our system</li>
-                <li>• This process usually completes within 30 seconds</li>
-                <li>• You'll get access once verification completes</li>
+                <li>• Retrieving your payment details from Stripe</li>
+                <li>• Validating payment completion</li>
+                <li>• Setting up your content access</li>
+                <li>• This is much faster than waiting for webhooks!</li>
               </ul>
             </div>
             <p className="text-xs text-gray-400 mt-4">Session ID: {sessionId.slice(-8)}</p>
@@ -229,28 +172,28 @@ export default function PurchaseSuccessPage() {
         <Card className="w-full max-w-md">
           <CardContent className="p-6 text-center">
             <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
-            <h2 className="text-xl font-semibold mb-2">Verification Taking Longer</h2>
+            <h2 className="text-xl font-semibold mb-2">Verification Failed</h2>
             <p className="text-gray-600 mb-4">{error}</p>
             <div className="space-y-2">
-              <Button onClick={handleRetry} className="w-full">
+              <Button onClick={verifyPurchase} className="w-full">
                 <RefreshCw className="h-4 w-4 mr-2" />
                 Try Again
               </Button>
               <Button onClick={handleViewPurchases} variant="outline" className="w-full bg-transparent">
                 View My Purchases
               </Button>
-              <Button onClick={handleDebugWebhook} variant="outline" size="sm" className="w-full bg-transparent">
+              <Button onClick={handleContactSupport} variant="outline" size="sm" className="w-full bg-transparent">
                 <ExternalLink className="h-4 w-4 mr-2" />
-                Debug Webhook Processing
+                Contact Support
               </Button>
             </div>
-            <div className="mt-4 p-3 bg-yellow-50 rounded-lg">
-              <h3 className="font-medium text-yellow-900 mb-1">Don't worry!</h3>
-              <ul className="text-sm text-yellow-800 space-y-1">
-                <li>• Your payment was likely successful</li>
+            <div className="mt-4 p-3 bg-red-50 rounded-lg">
+              <h3 className="font-medium text-red-900 mb-1">What to do:</h3>
+              <ul className="text-sm text-red-800 space-y-1">
                 <li>• Check your email for a Stripe receipt</li>
-                <li>• Your purchase should appear in "My Purchases"</li>
-                <li>• Use the debug tool to investigate</li>
+                <li>• If you were charged, your purchase is valid</li>
+                <li>• Try refreshing or contact support</li>
+                <li>• We'll resolve this quickly!</li>
               </ul>
             </div>
             <p className="text-xs text-gray-400 mt-4">Session ID: {sessionId.slice(-8)}</p>
@@ -260,48 +203,65 @@ export default function PurchaseSuccessPage() {
     )
   }
 
-  if (purchaseData) {
+  if (verificationResult?.success) {
+    const { purchase, session, productBox, creator, alreadyProcessed } = verificationResult
+
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <Card className="w-full max-w-md">
           <CardHeader className="text-center">
             <CheckCircle className="h-16 w-16 text-green-500 mx-auto mb-4" />
-            <CardTitle className="text-2xl text-green-700">Purchase Successful!</CardTitle>
+            <CardTitle className="text-2xl text-green-700">
+              {alreadyProcessed ? "Purchase Confirmed!" : "Purchase Successful!"}
+            </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="text-center">
-              <h3 className="font-semibold text-lg">{purchaseData.itemTitle}</h3>
+              <h3 className="font-semibold text-lg">{productBox?.title || "Your Purchase"}</h3>
               <p className="text-gray-600">
-                ${purchaseData.amount.toFixed(2)} {purchaseData.currency.toUpperCase()}
+                ${session?.amount?.toFixed(2) || "0.00"} {session?.currency?.toUpperCase() || "USD"}
               </p>
-              {purchaseData.isTestPurchase && (
-                <p className="text-sm text-orange-600 bg-orange-50 px-2 py-1 rounded mt-2">Test Purchase</p>
+              {creator && (
+                <p className="text-sm text-gray-500 mt-1">
+                  by {creator.name} (@{creator.username})
+                </p>
               )}
             </div>
+
+            {productBox?.thumbnailUrl && (
+              <div className="flex justify-center">
+                <img
+                  src={productBox.thumbnailUrl || "/placeholder.svg"}
+                  alt={productBox.title}
+                  className="w-24 h-24 object-cover rounded-lg"
+                />
+              </div>
+            )}
 
             <div className="bg-gray-50 p-4 rounded-lg space-y-2">
               <div className="flex justify-between text-sm">
                 <span className="text-gray-600">Session ID:</span>
-                <span className="font-mono text-xs">{purchaseData.sessionId.slice(-8)}</span>
+                <span className="font-mono text-xs">{sessionId.slice(-8)}</span>
               </div>
               <div className="flex justify-between text-sm">
-                <span className="text-gray-600">Status:</span>
-                <span className="text-green-600 font-medium">Complete</span>
+                <span className="text-gray-600">Payment Status:</span>
+                <span className="text-green-600 font-medium">{session?.payment_status || "Paid"}</span>
               </div>
               <div className="flex justify-between text-sm">
-                <span className="text-gray-600">Purchased:</span>
-                <span>{new Date(purchaseData.purchasedAt.toDate()).toLocaleDateString()}</span>
+                <span className="text-gray-600">Verification:</span>
+                <span className="text-green-600 font-medium">
+                  {alreadyProcessed ? "Previously Verified" : "Instantly Verified"}
+                </span>
               </div>
-              {purchaseData.webhookProcessedAt && (
-                <div className="flex justify-between text-sm">
-                  <span className="text-gray-600">Processed:</span>
-                  <span>{new Date(purchaseData.webhookProcessedAt.toDate()).toLocaleTimeString()}</span>
-                </div>
-              )}
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-600">Access:</span>
+                <span className="text-green-600 font-medium">Lifetime</span>
+              </div>
             </div>
 
             <div className="space-y-2">
               <Button onClick={handleViewContent} className="w-full">
+                <ShoppingBag className="h-4 w-4 mr-2" />
                 Access Your Content
               </Button>
               <Button onClick={handleViewPurchases} variant="outline" className="w-full bg-transparent">
@@ -309,8 +269,18 @@ export default function PurchaseSuccessPage() {
               </Button>
             </div>
 
+            <div className="mt-4 p-3 bg-green-50 rounded-lg">
+              <h3 className="font-medium text-green-900 mb-1">✅ All Set!</h3>
+              <ul className="text-sm text-green-800 space-y-1">
+                <li>• Payment verified instantly with Stripe</li>
+                <li>• Content access activated immediately</li>
+                <li>• Receipt sent to your email</li>
+                <li>• No waiting for webhooks!</li>
+              </ul>
+            </div>
+
             <p className="text-xs text-gray-500 text-center">
-              You now have lifetime access to this content. Check your email for a receipt.
+              Your purchase has been verified and recorded. You now have lifetime access to this content.
             </p>
           </CardContent>
         </Card>

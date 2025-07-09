@@ -1,32 +1,14 @@
 import { type NextRequest, NextResponse } from "next/server"
 import Stripe from "stripe"
-import { getFirestore } from "firebase-admin/firestore"
-import { initializeApp, getApps, cert } from "firebase-admin/app"
+import { db } from "@/lib/firebase-admin"
+import { UnifiedPurchaseService } from "@/lib/unified-purchase-service"
 
-// Initialize Firebase Admin if not already initialized
-if (!getApps().length) {
-  try {
-    initializeApp({
-      credential: cert({
-        projectId: process.env.FIREBASE_PROJECT_ID,
-        clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-        privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n"),
-      }),
-    })
-  } catch (error) {
-    console.error("Firebase Admin initialization failed:", error)
-  }
-}
-
-const db = getFirestore()
-
-// Initialize Stripe
-const stripeSecretKey = process.env.STRIPE_SECRET_KEY!
-const stripe = new Stripe(stripeSecretKey, {
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: "2024-06-20",
 })
 
 // Determine which webhook secret to use based on the Stripe key
+const stripeSecretKey = process.env.STRIPE_SECRET_KEY!
 const usingLiveKey = stripeSecretKey?.startsWith("sk_live_")
 const usingTestKey = stripeSecretKey?.startsWith("sk_test_")
 
@@ -45,12 +27,7 @@ if (usingLiveKey) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.text()
-    const signature = request.headers.get("stripe-signature")
-
-    if (!signature) {
-      console.error("❌ [Stripe Webhook] No signature found in request")
-      return NextResponse.json({ error: "No signature" }, { status: 400 })
-    }
+    const signature = request.headers.get("stripe-signature")!
 
     let event: Stripe.Event
 
@@ -63,98 +40,175 @@ export async function POST(request: NextRequest) {
         usingLiveKey,
         usingTestKey,
         webhookSecretLength: webhookSecret?.length,
-        signaturePresent: !!signature,
       })
       return NextResponse.json({ error: "Invalid signature" }, { status: 400 })
     }
 
     console.log(`🔔 [Stripe Webhook] Processing event: ${event.type} (${usingLiveKey ? "LIVE" : "TEST"} mode)`)
 
-    // Handle the event
-    switch (event.type) {
-      case "checkout.session.completed":
-        await handleCheckoutSessionCompleted(event.data.object as Stripe.Checkout.Session)
-        break
-      case "payment_intent.succeeded":
-        await handlePaymentIntentSucceeded(event.data.object as Stripe.PaymentIntent)
-        break
-      default:
-        console.log(`🔔 [Stripe Webhook] Unhandled event type: ${event.type}`)
+    // Handle checkout.session.completed event (backup to direct verification)
+    if (event.type === "checkout.session.completed") {
+      const session = event.data.object as Stripe.Checkout.Session
+      await handleCheckoutSessionCompleted(session)
     }
 
     return NextResponse.json({ received: true })
-  } catch (error: any) {
-    console.error(`❌ [Stripe Webhook] Error processing webhook:`, error)
-    return NextResponse.json({ error: "Webhook processing failed" }, { status: 500 })
+  } catch (error) {
+    console.error("Error handling webhook:", error)
+    return NextResponse.json({ error: "Webhook handler failed" }, { status: 500 })
   }
 }
 
 async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session) {
   try {
-    console.log(`✅ [Stripe Webhook] Processing checkout session completed: ${session.id}`)
+    console.log("🔍 [Webhook] Processing checkout session:", session.id)
 
-    const { customer_details, metadata, amount_total, currency } = session
+    // Extract metadata
+    const { productBoxId, buyerUid, creatorUid } = session.metadata || {}
 
-    if (!metadata?.productBoxId || !metadata?.buyerUid) {
-      console.error(`❌ [Stripe Webhook] Missing required metadata in session: ${session.id}`, {
-        metadata,
-        hasProductBoxId: !!metadata?.productBoxId,
-        hasBuyerUid: !!metadata?.buyerUid,
-      })
+    if (!productBoxId || !buyerUid) {
+      console.error("❌ [Webhook] Missing required metadata in session:", session.id)
       return
     }
 
-    const purchaseData = {
-      id: session.id,
-      sessionId: session.id,
-      stripeSessionId: session.id,
-      paymentIntentId: session.payment_intent as string,
-      productBoxId: metadata.productBoxId,
-      bundleId: metadata.productBoxId, // For backward compatibility
-      userId: metadata.buyerUid,
-      creatorUid: metadata.creatorUid,
-      amount: (amount_total || 0) / 100, // Convert from cents
-      currency: currency || "usd",
-      status: "complete",
-      customerEmail: customer_details?.email || "",
-      webhookProcessedAt: new Date().toISOString(),
-      webhookEventId: event.id || `evt_${Date.now()}`,
-      createdAt: new Date().toISOString(),
-      metadata: metadata,
-      mode: usingLiveKey ? "live" : "test",
+    console.log("✅ [Webhook] Session metadata:", { productBoxId, buyerUid, creatorUid })
+
+    // Check if this purchase has already been processed (likely by direct verification)
+    const existingPurchase = await UnifiedPurchaseService.getUserPurchase(buyerUid, session.id)
+    if (existingPurchase) {
+      console.log("⚠️ [Webhook] Purchase already processed (likely via direct verification):", session.id)
+      return
     }
 
-    // Store purchase in multiple locations for redundancy
-    const batch = db.batch()
+    // Get product box details
+    const productBoxDoc = await db.collection("productBoxes").doc(productBoxId).get()
+    if (!productBoxDoc.exists) {
+      console.error("❌ [Webhook] Product box not found:", productBoxId)
+      return
+    }
+    const productBoxData = productBoxDoc.data()!
 
-    // 1. User's purchases subcollection
-    const userPurchaseRef = db.collection("users").doc(metadata.buyerUid).collection("purchases").doc(session.id)
-    batch.set(userPurchaseRef, purchaseData)
+    // Get creator details
+    const creatorId = creatorUid || productBoxData.creatorId
+    let creatorData = null
+    if (creatorId) {
+      const creatorDoc = await db.collection("users").doc(creatorId).get()
+      creatorData = creatorDoc.exists ? creatorDoc.data() : null
+    }
 
-    // 2. Unified purchases collection
-    const unifiedPurchaseRef = db
-      .collection("userPurchases")
-      .doc(metadata.buyerUid)
-      .collection("purchases")
-      .doc(session.id)
-    batch.set(unifiedPurchaseRef, purchaseData)
+    // Create unified purchase record (this will fetch and normalize all content)
+    await UnifiedPurchaseService.createUnifiedPurchase(buyerUid, {
+      productBoxId,
+      sessionId: session.id,
+      amount: session.amount_total ? session.amount_total / 100 : 0,
+      currency: session.currency || "usd",
+      creatorId: creatorId || "",
+    })
 
-    await batch.commit()
+    // Also ensure purchase is written to main purchases collection for API compatibility
+    const mainPurchaseData = {
+      userId: buyerUid,
+      buyerUid,
+      productBoxId,
+      itemId: productBoxId,
+      sessionId: session.id,
+      paymentIntentId: session.payment_intent,
+      amount: session.amount_total ? session.amount_total / 100 : 0,
+      currency: session.currency || "usd",
+      timestamp: new Date(),
+      createdAt: new Date(),
+      purchasedAt: new Date(),
+      status: "completed",
+      type: "product_box",
+      itemTitle: productBoxData.title || "Untitled Product Box",
+      itemDescription: productBoxData.description || "",
+      thumbnailUrl: productBoxData.thumbnailUrl || "",
+      customPreviewThumbnail: productBoxData.customPreviewThumbnail || "",
+      creatorId: creatorId,
+      creatorName: creatorData?.displayName || creatorData?.name || "",
+      creatorUsername: creatorData?.username || "",
+      accessUrl: `/product-box/${productBoxId}/content`,
+      verificationMethod: "webhook_backup", // Mark as webhook backup
+      webhookProcessedAt: new Date(),
+    }
 
-    console.log(
-      `✅ [Stripe Webhook] Purchase recorded successfully for session: ${session.id} (${usingLiveKey ? "LIVE" : "TEST"} mode)`,
-    )
-  } catch (error: any) {
-    console.error(`❌ [Stripe Webhook] Error handling checkout session completed:`, error)
-  }
-}
+    // Write to main purchases collection with document ID as sessionId for easy lookup
+    await db.collection("purchases").doc(session.id).set(mainPurchaseData)
 
-async function handlePaymentIntentSucceeded(paymentIntent: Stripe.PaymentIntent) {
-  try {
-    console.log(`✅ [Stripe Webhook] Processing payment intent succeeded: ${paymentIntent.id}`)
-    // Additional processing if needed
-    console.log(`✅ [Stripe Webhook] Payment intent processed: ${paymentIntent.id}`)
-  } catch (error: any) {
-    console.error(`❌ [Stripe Webhook] Error handling payment intent succeeded:`, error)
+    // Also record in legacy purchases collection for backward compatibility
+    const legacyPurchaseData = {
+      productBoxId,
+      itemId: productBoxId,
+      sessionId: session.id,
+      paymentIntentId: session.payment_intent,
+      amount: session.amount_total ? session.amount_total / 100 : 0,
+      currency: session.currency || "usd",
+      timestamp: new Date(),
+      purchasedAt: new Date(),
+      status: "completed",
+      type: "product_box",
+      itemTitle: productBoxData.title || "Untitled Product Box",
+      itemDescription: productBoxData.description || "",
+      thumbnailUrl: productBoxData.thumbnailUrl || "",
+      customPreviewThumbnail: productBoxData.customPreviewThumbnail || "",
+      creatorId: creatorId,
+      creatorName: creatorData?.displayName || creatorData?.name || "",
+      creatorUsername: creatorData?.username || "",
+      accessUrl: `/product-box/${productBoxId}/content`,
+      verificationMethod: "webhook_backup",
+    }
+
+    await db.collection("users").doc(buyerUid).collection("purchases").add(legacyPurchaseData)
+    await db.collection("purchases").add({
+      ...legacyPurchaseData,
+      userId: buyerUid,
+      buyerUid,
+    })
+
+    // Update product box sales counter
+    await db
+      .collection("productBoxes")
+      .doc(productBoxId)
+      .update({
+        totalSales: db.FieldValue.increment(1),
+        totalRevenue: db.FieldValue.increment(session.amount_total ? session.amount_total / 100 : 0),
+        lastPurchaseAt: new Date(),
+      })
+
+    // Record the sale for the creator
+    if (creatorId) {
+      await db
+        .collection("users")
+        .doc(creatorId)
+        .collection("sales")
+        .add({
+          productBoxId,
+          buyerUid,
+          sessionId: session.id,
+          amount: session.amount_total ? session.amount_total / 100 : 0,
+          platformFee: session.amount_total ? (session.amount_total * 0.25) / 100 : 0,
+          netAmount: session.amount_total ? (session.amount_total * 0.75) / 100 : 0,
+          purchasedAt: new Date(),
+          status: "completed",
+          productTitle: productBoxData.title || "Untitled Product Box",
+          buyerEmail: session.customer_email || "",
+          verificationMethod: "webhook_backup",
+        })
+
+      // Increment the creator's total sales
+      await db
+        .collection("users")
+        .doc(creatorId)
+        .update({
+          totalSales: db.FieldValue.increment(1),
+          totalRevenue: db.FieldValue.increment(session.amount_total ? session.amount_total / 100 : 0),
+          lastSaleAt: new Date(),
+        })
+    }
+
+    console.log("✅ [Webhook] Successfully processed webhook for session:", session.id)
+  } catch (error) {
+    console.error("❌ [Webhook] Error handling checkout.session.completed:", error)
+    throw error
   }
 }
