@@ -4,6 +4,8 @@ import { requireAuth } from "@/lib/auth-utils"
 
 export async function POST(request: NextRequest) {
   try {
+    console.log(`🔍 [Session Converter] === CONVERTING SESSION TO PAYMENT INTENT ===`)
+
     const decodedToken = await requireAuth(request)
     const { sessionId, accountId } = await request.json()
 
@@ -11,68 +13,84 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Missing sessionId" }, { status: 400 })
     }
 
-    console.log(`🔄 [Session Converter] Converting session ${sessionId} to payment intent`)
-    console.log(`🔄 [Session Converter] Account ID: ${accountId || "none"}`)
+    console.log(`🔍 [Session Converter] Session ID: ${sessionId}`)
+    console.log(`🔍 [Session Converter] Account ID: ${accountId || "none"}`)
+    console.log(`🔍 [Session Converter] User: ${decodedToken.uid}`)
 
-    // Retrieve the session from Stripe
+    // Retrieve the checkout session from Stripe
     let session
     try {
       if (accountId) {
-        // Retrieve from connected account
+        // Session was created on a connected account
+        console.log(`🔍 [Session Converter] Retrieving session from connected account: ${accountId}`)
         session = await stripe.checkout.sessions.retrieve(sessionId, {
-          expand: ["payment_intent"],
           stripeAccount: accountId,
         })
       } else {
-        // Retrieve from platform account
-        session = await stripe.checkout.sessions.retrieve(sessionId, {
-          expand: ["payment_intent"],
-        })
+        // Session was created on the platform account
+        console.log(`🔍 [Session Converter] Retrieving session from platform account`)
+        session = await stripe.checkout.sessions.retrieve(sessionId)
       }
     } catch (stripeError: any) {
-      console.error(`❌ [Session Converter] Stripe error:`, stripeError)
+      console.error(`❌ [Session Converter] Failed to retrieve session:`, stripeError)
       return NextResponse.json(
         {
-          error: "Failed to retrieve session from Stripe",
+          error: "Failed to retrieve checkout session",
           details: stripeError.message,
+          code: stripeError.code,
         },
         { status: 400 },
       )
     }
 
-    if (!session) {
-      return NextResponse.json({ error: "Session not found" }, { status: 404 })
-    }
+    console.log(`✅ [Session Converter] Session retrieved:`, {
+      id: session.id,
+      status: session.status,
+      paymentStatus: session.payment_status,
+      paymentIntentId: session.payment_intent,
+      mode: session.mode,
+      amountTotal: session.amount_total,
+      currency: session.currency,
+    })
 
-    // Extract payment intent ID
-    const paymentIntentId =
-      typeof session.payment_intent === "string" ? session.payment_intent : session.payment_intent?.id
-
-    if (!paymentIntentId) {
+    // Validate session
+    if (session.payment_status !== "paid") {
+      console.error(`❌ [Session Converter] Session not paid: ${session.payment_status}`)
       return NextResponse.json(
         {
-          error: "No payment intent found in session",
-          sessionStatus: session.status,
+          error: "Payment not completed",
           paymentStatus: session.payment_status,
+          sessionStatus: session.status,
         },
         { status: 400 },
       )
     }
 
-    console.log(
-      `✅ [Session Converter] Successfully converted session ${sessionId} to payment intent ${paymentIntentId}`,
-    )
+    if (!session.payment_intent) {
+      console.error(`❌ [Session Converter] No payment intent found in session`)
+      return NextResponse.json({ error: "No payment intent found in session" }, { status: 400 })
+    }
+
+    const paymentIntentId =
+      typeof session.payment_intent === "string" ? session.payment_intent : session.payment_intent.id
+
+    console.log(`✅ [Session Converter] Payment Intent ID extracted: ${paymentIntentId}`)
 
     return NextResponse.json({
       success: true,
-      sessionId,
       paymentIntentId,
-      sessionStatus: session.status,
-      paymentStatus: session.payment_status,
-      accountId: accountId || null,
+      sessionData: {
+        id: session.id,
+        status: session.status,
+        paymentStatus: session.payment_status,
+        amountTotal: session.amount_total,
+        currency: session.currency,
+        customerEmail: session.customer_details?.email,
+        metadata: session.metadata,
+      },
     })
   } catch (error: any) {
-    console.error(`❌ [Session Converter] Error:`, error)
+    console.error(`❌ [Session Converter] Unexpected error:`, error)
     return NextResponse.json(
       {
         error: "Internal server error",
