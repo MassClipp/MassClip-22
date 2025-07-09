@@ -13,6 +13,13 @@ interface ProductBoxCreationError {
   suggestedActions: string[]
 }
 
+// Stripe minimum charge amounts by currency
+const STRIPE_MINIMUMS = {
+  usd: 0.5,
+  eur: 0.5,
+  gbp: 0.3,
+} as const
+
 export async function GET(request: NextRequest) {
   try {
     // Get authenticated user
@@ -284,11 +291,16 @@ function validateProductBoxData(data: any): ProductBoxCreationError | null {
   }
 
   const priceValue = Number.parseFloat(price.toString())
-  if (priceValue < 0.01) {
+  const currencyCode = (currency || "usd").toLowerCase() as keyof typeof STRIPE_MINIMUMS
+  const minimumAmount = STRIPE_MINIMUMS[currencyCode] || STRIPE_MINIMUMS.usd
+
+  if (priceValue < minimumAmount) {
+    const currencySymbol = currencyCode === "usd" ? "$" : currencyCode === "eur" ? "€" : "£"
     return {
       code: "PRICE_TOO_LOW",
-      message: "Price must be at least $0.01",
-      suggestedActions: ["Set a price of $0.01 or higher"],
+      message: `Price must be at least ${currencySymbol}${minimumAmount} (Stripe minimum)`,
+      details: `Stripe requires a minimum charge of ${currencySymbol}${minimumAmount} for ${currencyCode.toUpperCase()}`,
+      suggestedActions: [`Set a price of ${currencySymbol}${minimumAmount} or higher`],
     }
   }
 

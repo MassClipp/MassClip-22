@@ -37,6 +37,19 @@ interface SuccessResponse {
   message: string
 }
 
+// Stripe minimum charge amounts by currency
+const STRIPE_MINIMUMS = {
+  usd: 0.5,
+  eur: 0.5,
+  gbp: 0.3,
+} as const
+
+const CURRENCY_SYMBOLS = {
+  usd: "$",
+  eur: "€",
+  gbp: "£",
+} as const
+
 export default function BundleCreationForm({ onSuccess }: { onSuccess?: () => void }) {
   const [formData, setFormData] = useState<ProductBoxFormData>({
     title: "",
@@ -52,6 +65,16 @@ export default function BundleCreationForm({ onSuccess }: { onSuccess?: () => vo
   const [success, setSuccess] = useState<SuccessResponse | null>(null)
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({})
 
+  const getCurrentMinimum = () => {
+    const currency = formData.currency as keyof typeof STRIPE_MINIMUMS
+    return STRIPE_MINIMUMS[currency] || STRIPE_MINIMUMS.usd
+  }
+
+  const getCurrentSymbol = () => {
+    const currency = formData.currency as keyof typeof CURRENCY_SYMBOLS
+    return CURRENCY_SYMBOLS[currency] || CURRENCY_SYMBOLS.usd
+  }
+
   const validateForm = (): boolean => {
     const errors: Record<string, string> = {}
 
@@ -65,10 +88,13 @@ export default function BundleCreationForm({ onSuccess }: { onSuccess?: () => vo
       errors.price = "Price is required"
     } else {
       const price = Number.parseFloat(formData.price)
+      const minimum = getCurrentMinimum()
+      const symbol = getCurrentSymbol()
+
       if (isNaN(price)) {
         errors.price = "Please enter a valid price"
-      } else if (price < 0.01) {
-        errors.price = "Price must be at least $0.01"
+      } else if (price < minimum) {
+        errors.price = `Price must be at least ${symbol}${minimum} (Stripe minimum for ${formData.currency.toUpperCase()})`
       } else if (price > 999.99) {
         errors.price = "Price cannot exceed $999.99"
       }
@@ -92,7 +118,7 @@ export default function BundleCreationForm({ onSuccess }: { onSuccess?: () => vo
     try {
       console.log("🔍 [Product Box Form] Submitting form data:", formData)
 
-      const response = await fetch("/api/creator/bundles", {
+      const response = await fetch("/api/creator/product-boxes", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -170,6 +196,9 @@ export default function BundleCreationForm({ onSuccess }: { onSuccess?: () => vo
       })
     }
   }
+
+  const minimum = getCurrentMinimum()
+  const symbol = getCurrentSymbol()
 
   return (
     <Card className="w-full max-w-2xl mx-auto">
@@ -258,14 +287,18 @@ export default function BundleCreationForm({ onSuccess }: { onSuccess?: () => vo
                 id="price"
                 type="number"
                 step="0.01"
-                min="0.01"
+                min={minimum}
                 max="999.99"
                 value={formData.price}
                 onChange={(e) => handleInputChange("price", e.target.value)}
-                placeholder="9.99"
+                placeholder={`${minimum}`}
                 className={validationErrors.price ? "border-red-500" : ""}
               />
               {validationErrors.price && <p className="text-sm text-red-600">{validationErrors.price}</p>}
+              <p className="text-xs text-gray-500">
+                Minimum: {symbol}
+                {minimum} (Stripe requirement for {formData.currency.toUpperCase()})
+              </p>
             </div>
 
             <div className="space-y-2">
@@ -275,9 +308,9 @@ export default function BundleCreationForm({ onSuccess }: { onSuccess?: () => vo
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="usd">USD ($)</SelectItem>
-                  <SelectItem value="eur">EUR (€)</SelectItem>
-                  <SelectItem value="gbp">GBP (£)</SelectItem>
+                  <SelectItem value="usd">USD ($) - Min: $0.50</SelectItem>
+                  <SelectItem value="eur">EUR (€) - Min: €0.50</SelectItem>
+                  <SelectItem value="gbp">GBP (£) - Min: £0.30</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -333,6 +366,10 @@ export default function BundleCreationForm({ onSuccess }: { onSuccess?: () => vo
                 <div className="text-xs text-gray-600">
                   <strong>What happens:</strong> Product created in Stripe → Price created → Data saved to database →
                   Ready for purchases
+                </div>
+                <div className="text-xs text-amber-700 bg-amber-50 p-2 rounded mt-2">
+                  <strong>Note:</strong> Minimum prices are set by Stripe and vary by currency:
+                  <br />• USD: $0.50 • EUR: €0.50 • GBP: £0.30
                 </div>
               </div>
             </AlertDescription>
