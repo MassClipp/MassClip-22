@@ -53,7 +53,7 @@ export async function POST(request: NextRequest) {
         },
       ],
       mode: "payment",
-      success_url: `${process.env.NEXT_PUBLIC_SITE_URL}/payment-success?payment_intent={CHECKOUT_SESSION_ID}&account_id=${connectedAccountId || ""}`,
+      success_url: `${process.env.NEXT_PUBLIC_SITE_URL}/payment-success?session_id={CHECKOUT_SESSION_ID}&account_id=${connectedAccountId || ""}`,
       cancel_url: `${process.env.NEXT_PUBLIC_SITE_URL}/product-box/${productBoxId}`,
       metadata: {
         productBoxId,
@@ -73,17 +73,6 @@ export async function POST(request: NextRequest) {
 
     // Create the checkout session
     const session = await stripe.checkout.sessions.create(sessionOptions)
-
-    // Retrieve the session to get the payment intent
-    const sessionWithPaymentIntent = await stripe.checkout.sessions.retrieve(session.id, {
-      expand: ["payment_intent"],
-    })
-
-    // Update the success URL to include the payment intent ID
-    const paymentIntentId =
-      typeof sessionWithPaymentIntent.payment_intent === "string"
-        ? sessionWithPaymentIntent.payment_intent
-        : sessionWithPaymentIntent.payment_intent?.id
 
     console.log(`✅ [Checkout] Session created: ${session.id}`)
 
@@ -108,8 +97,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       sessionId: session.id,
       url: session.url,
-      // Override the success URL to use payment intent
-      customSuccessUrl: `${process.env.NEXT_PUBLIC_SITE_URL}/payment-success?payment_intent=${paymentIntentId}&account_id=${connectedAccountId || ""}`,
       productBox: {
         id: productBoxId,
         title: productData.title,
