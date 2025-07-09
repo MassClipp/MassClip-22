@@ -8,7 +8,7 @@ export default function SuccessLoading() {
         <CardContent className="p-6 text-center">
           <Clock className="h-12 w-12 text-blue-500 mx-auto mb-4 animate-spin" />
           <h2 className="text-xl font-semibold mb-2">Loading Payment Verification</h2>
-          <p className="text-gray-600">Please wait while we verify your payment...</p>
+          <p className="text-gray-600">Please wait while we verify your purchase...</p>
         </CardContent>
       </Card>
     </div>
