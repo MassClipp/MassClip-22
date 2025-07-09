@@ -29,23 +29,23 @@ export async function verifyIdToken(request: NextRequest): Promise<DecodedToken 
   try {
     const authHeader = request.headers.get("authorization")
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      console.error("❌ [Auth] No valid authorization header found")
+      console.error("❌ [Auth Utils] No valid authorization header found")
       return null
     }
 
     const idToken = authHeader.split("Bearer ")[1]
     if (!idToken) {
-      console.error("❌ [Auth] No ID token found in authorization header")
+      console.error("❌ [Auth Utils] No ID token found in authorization header")
       return null
     }
 
-    // Verify the Firebase ID token
+    console.log("🔍 [Auth Utils] Verifying ID token...")
     const decodedToken = await auth.verifyIdToken(idToken)
-    console.log(`✅ [Auth] Token verified for user: ${decodedToken.uid}`)
+    console.log("✅ [Auth Utils] ID token verified successfully for user:", decodedToken.uid)
 
     return decodedToken
   } catch (error) {
-    console.error("❌ [Auth] Token verification failed:", error)
+    console.error("❌ [Auth Utils] Failed to verify ID token:", error)
     return null
   }
 }
