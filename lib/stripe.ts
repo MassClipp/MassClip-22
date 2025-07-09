@@ -1,6 +1,6 @@
 import Stripe from "stripe"
 
-// Always use live keys - no test key logic
+// Force live keys for all environments - no test key logic
 const stripeSecretKey = process.env.STRIPE_SECRET_KEY
 const stripePublishableKey = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
 

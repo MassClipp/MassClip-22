@@ -1,348 +1,199 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { useAuth } from "@/contexts/auth-context"
 import { useRouter } from "next/navigation"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { useFirebaseAuth } from "@/hooks/use-firebase-auth"
+import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
+import { AlertCircle } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import {
-  ShoppingBag,
-  Calendar,
-  DollarSign,
-  ExternalLink,
-  RefreshCw,
-  AlertCircle,
-  Package,
-  Clock,
-  CheckCircle,
-} from "lucide-react"
 import Link from "next/link"
+import Image from "next/image"
 
 interface Purchase {
   id: string
   productBoxId: string
-  sessionId: string
+  bundleTitle: string
+  thumbnailUrl?: string
+  creatorUsername: string
+  creatorId: string
+  purchaseDate: string
   amount: number
   currency: string
-  status: string
-  itemTitle: string
-  itemDescription: string
-  thumbnailUrl: string
-  purchasedAt: Date
-  isTestPurchase: boolean
-  type: string
-}
-
-interface PurchasesResponse {
-  success: boolean
-  purchases: Purchase[]
-  total: number
-  source?: string
-  error?: string
-  details?: string
 }
 
 export default function PurchasesPage() {
-  const { user, loading: authLoading } = useAuth()
+  const { user, loading: authLoading } = useFirebaseAuth()
   const router = useRouter()
   const [purchases, setPurchases] = useState<Purchase[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [lastRefresh, setLastRefresh] = useState<Date | null>(null)
 
-  // Redirect if not authenticated
   useEffect(() => {
-    if (!authLoading && !user) {
-      router.push("/login?redirect=/dashboard/purchases")
+    if (authLoading) return
+
+    if (!user) {
+      router.push("/login")
+      return
     }
+
+    fetchPurchases()
   }, [user, authLoading, router])
 
-  // Fetch purchases
   const fetchPurchases = async () => {
-    if (!user) return
-
     try {
       setLoading(true)
       setError(null)
 
-      console.log("🔍 [Purchases Page] Fetching purchases...")
-
+      const token = await user.getIdToken()
       const response = await fetch("/api/user/unified-purchases", {
-        method: "GET",
         headers: {
-          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
         },
-        credentials: "include",
       })
 
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: Failed to fetch purchases`)
-      }
+      const data = await response.json()
 
-      const data: PurchasesResponse = await response.json()
-      console.log("✅ [Purchases Page] API response:", data)
-
-      if (data.success) {
-        // Convert date strings back to Date objects
-        const processedPurchases = data.purchases.map((purchase) => ({
-          ...purchase,
-          purchasedAt: new Date(purchase.purchasedAt),
-        }))
-
-        setPurchases(processedPurchases)
-        setLastRefresh(new Date())
-
-        // Only show error if there was a database issue but we still got some data
-        if (data.error && data.purchases.length === 0) {
-          console.warn("⚠️ [Purchases Page] API returned error but no purchases:", data.error)
+      // Handle both successful responses and error responses
+      if (data.purchases) {
+        setPurchases(data.purchases)
+      } else {
+        setPurchases([])
+        if (data.error) {
+          console.warn("API returned error:", data.error)
+          // Don't show error to user for empty purchases
         }
-      } else {
-        console.error("❌ [Purchases Page] API returned success: false")
-        setPurchases([])
       }
-    } catch (err: any) {
-      console.error("❌ [Purchases Page] Error fetching purchases:", err)
-
-      // Only show error for actual network/server issues
-      if (err.message.includes("HTTP") || err.message.includes("fetch")) {
-        setError(`Failed to load purchases: ${err.message}`)
-      } else {
-        // For other errors, just log them but don't show to user
-        console.error("❌ [Purchases Page] Non-critical error:", err)
-        setPurchases([])
+    } catch (error: any) {
+      console.error("Error fetching purchases:", error)
+      setPurchases([]) // Set empty array instead of showing error
+      // Only show error for actual network/parsing errors
+      if (error.name !== "TypeError") {
+        setError(error.message || "Failed to load purchases")
       }
     } finally {
       setLoading(false)
     }
   }
 
-  useEffect(() => {
-    if (user) {
-      fetchPurchases()
-    }
-  }, [user])
-
-  const handleRefresh = () => {
-    fetchPurchases()
+  const handleOpenContent = (purchase: Purchase) => {
+    router.push(`/product-box/${purchase.productBoxId}/content`)
   }
 
-  const getStatusIcon = (status: string) => {
-    switch (status.toLowerCase()) {
-      case "completed":
-      case "complete":
-        return <CheckCircle className="h-4 w-4 text-green-500" />
-      case "pending":
-        return <Clock className="h-4 w-4 text-yellow-500" />
-      default:
-        return <AlertCircle className="h-4 w-4 text-gray-500" />
-    }
-  }
-
-  const getStatusColor = (status: string) => {
-    switch (status.toLowerCase()) {
-      case "completed":
-      case "complete":
-        return "bg-green-100 text-green-800"
-      case "pending":
-        return "bg-yellow-100 text-yellow-800"
-      default:
-        return "bg-gray-100 text-gray-800"
-    }
-  }
-
-  if (authLoading) {
+  if (authLoading || loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto"></div>
-          <p className="mt-2 text-gray-600">Loading...</p>
+      <div className="min-h-screen bg-black">
+        <div className="p-6">
+          <h1 className="text-3xl font-bold text-white mb-8">My Purchases</h1>
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+            {Array.from({ length: 8 }).map((_, i) => (
+              <div key={i} className="space-y-3">
+                <Skeleton className="aspect-square w-full bg-gray-800" />
+                <Skeleton className="h-4 w-20 bg-gray-800" />
+                <Skeleton className="h-10 w-full bg-gray-800" />
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     )
   }
 
-  if (!user) {
-    return null
+  if (error && purchases.length === 0) {
+    return (
+      <div className="min-h-screen bg-black">
+        <div className="p-6">
+          <h1 className="text-3xl font-bold text-white mb-8">My Purchases</h1>
+          <Alert variant="destructive" className="max-w-md">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+          <Button onClick={fetchPurchases} className="mt-4">
+            Try Again
+          </Button>
+        </div>
+      </div>
+    )
   }
 
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900">My Purchases</h1>
-          <p className="text-gray-600">View and manage your purchased content</p>
-          {lastRefresh && (
-            <p className="text-xs text-gray-400 mt-1">Last updated: {lastRefresh.toLocaleTimeString()}</p>
-          )}
-        </div>
-        <Button onClick={handleRefresh} variant="outline" disabled={loading}>
-          <RefreshCw className={`h-4 w-4 mr-2 ${loading ? "animate-spin" : ""}`} />
-          Refresh
-        </Button>
-      </div>
+    <div className="min-h-screen bg-black">
+      <div className="p-6">
+        <h1 className="text-3xl font-bold text-white mb-8">My Purchases</h1>
 
-      {/* Error Alert */}
-      {error && (
-        <Alert variant="destructive">
-          <AlertCircle className="h-4 w-4" />
-          <AlertDescription>{error}</AlertDescription>
-        </Alert>
-      )}
-
-      {/* Loading State */}
-      {loading && (
-        <div className="space-y-4">
-          {[1, 2, 3].map((i) => (
-            <Card key={i}>
-              <CardContent className="p-6">
-                <div className="flex items-center space-x-4">
-                  <Skeleton className="h-16 w-16 rounded" />
-                  <div className="space-y-2 flex-1">
-                    <Skeleton className="h-4 w-1/3" />
-                    <Skeleton className="h-4 w-1/2" />
-                    <Skeleton className="h-4 w-1/4" />
+        {purchases.length === 0 ? (
+          <div className="text-center py-12">
+            <div className="text-gray-400 text-lg mb-4">No purchases yet</div>
+            <div className="text-gray-500 text-sm">Browse creators to find premium content to purchase</div>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+            {purchases.map((purchase, index) => (
+              <Card
+                key={purchase.id}
+                className="bg-gray-900/50 border-gray-800 overflow-hidden group hover:bg-gray-900/70 transition-all duration-300"
+                style={{
+                  animationDelay: `${index * 100}ms`,
+                  animation: "fadeInUp 0.6s ease-out forwards",
+                }}
+              >
+                <div className="relative">
+                  {/* Creator Username - Top Left */}
+                  <div className="absolute top-3 left-3 z-10">
+                    <Link
+                      href={`/creator/${purchase.creatorUsername}`}
+                      className="text-xs text-white/80 hover:text-white bg-black/50 px-2 py-1 rounded-full backdrop-blur-sm transition-colors"
+                    >
+                      {purchase.creatorUsername}
+                    </Link>
                   </div>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      )}
 
-      {/* Empty State */}
-      {!loading && purchases.length === 0 && (
-        <Card>
-          <CardContent className="p-12 text-center">
-            <ShoppingBag className="h-16 w-16 text-gray-400 mx-auto mb-4" />
-            <h3 className="text-xl font-semibold text-gray-900 mb-2">No Purchases Yet</h3>
-            <p className="text-gray-600 mb-6">
-              You haven't purchased any content yet. Explore our creators and find something you like!
-            </p>
-            <Button asChild>
-              <Link href="/">
-                <ExternalLink className="h-4 w-4 mr-2" />
-                Browse Content
-              </Link>
-            </Button>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Purchases List */}
-      {!loading && purchases.length > 0 && (
-        <div className="space-y-4">
-          {purchases.map((purchase) => (
-            <Card key={purchase.id}>
-              <CardContent className="p-6">
-                <div className="flex items-start space-x-4">
                   {/* Thumbnail */}
-                  <div className="flex-shrink-0">
+                  <div className="aspect-square relative bg-gray-800">
                     {purchase.thumbnailUrl ? (
-                      <img
+                      <Image
                         src={purchase.thumbnailUrl || "/placeholder.svg"}
-                        alt={purchase.itemTitle}
-                        className="h-16 w-16 rounded-lg object-cover"
+                        alt={purchase.bundleTitle}
+                        fill
+                        className="object-cover"
+                        sizes="(max-width: 640px) 100vw, (max-width: 768px) 50vw, (max-width: 1024px) 33vw, 25vw"
                       />
                     ) : (
-                      <div className="h-16 w-16 rounded-lg bg-gray-200 flex items-center justify-center">
-                        <Package className="h-8 w-8 text-gray-400" />
+                      <div className="w-full h-full flex items-center justify-center">
+                        <div className="text-gray-500 text-4xl">📦</div>
                       </div>
                     )}
                   </div>
 
-                  {/* Content */}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-start justify-between">
-                      <div>
-                        <h3 className="text-lg font-semibold text-gray-900 truncate">{purchase.itemTitle}</h3>
-                        {purchase.itemDescription && (
-                          <p className="text-sm text-gray-600 mt-1 line-clamp-2">{purchase.itemDescription}</p>
-                        )}
-                        <div className="flex items-center space-x-4 mt-2">
-                          <div className="flex items-center text-sm text-gray-500">
-                            <Calendar className="h-4 w-4 mr-1" />
-                            {purchase.purchasedAt.toLocaleDateString()}
-                          </div>
-                          <div className="flex items-center text-sm text-gray-500">
-                            <DollarSign className="h-4 w-4 mr-1" />
-                            {purchase.amount.toFixed(2)} {purchase.currency.toUpperCase()}
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Status and Actions */}
-                      <div className="flex flex-col items-end space-y-2">
-                        <div className="flex items-center space-x-2">
-                          {getStatusIcon(purchase.status)}
-                          <Badge className={getStatusColor(purchase.status)}>{purchase.status}</Badge>
-                          {purchase.isTestPurchase && (
-                            <Badge variant="outline" className="text-orange-600 border-orange-600">
-                              Test
-                            </Badge>
-                          )}
-                        </div>
-
-                        <div className="flex space-x-2">
-                          {purchase.productBoxId && (
-                            <Button asChild size="sm">
-                              <Link href={`/product-box/${purchase.productBoxId}/content`}>
-                                <ExternalLink className="h-4 w-4 mr-1" />
-                                Access
-                              </Link>
-                            </Button>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Additional Info */}
-                    <div className="mt-3 pt-3 border-t border-gray-100">
-                      <div className="flex items-center justify-between text-xs text-gray-500">
-                        <span>Purchase ID: {purchase.id.slice(-8)}</span>
-                        {purchase.sessionId && <span>Session: {purchase.sessionId.slice(-8)}</span>}
-                      </div>
-                    </div>
+                  {/* Open Button */}
+                  <div className="p-4">
+                    <Button
+                      onClick={() => handleOpenContent(purchase)}
+                      className="w-full bg-white text-black hover:bg-gray-100 font-medium"
+                    >
+                      Open
+                    </Button>
                   </div>
                 </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      )}
+              </Card>
+            ))}
+          </div>
+        )}
+      </div>
 
-      {/* Summary */}
-      {!loading && purchases.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">Purchase Summary</CardTitle>
-            <CardDescription>Overview of your purchase history</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="text-center">
-                <div className="text-2xl font-bold text-gray-900">{purchases.length}</div>
-                <div className="text-sm text-gray-600">Total Purchases</div>
-              </div>
-              <div className="text-center">
-                <div className="text-2xl font-bold text-gray-900">
-                  ${purchases.reduce((sum, p) => sum + p.amount, 0).toFixed(2)}
-                </div>
-                <div className="text-sm text-gray-600">Total Spent</div>
-              </div>
-              <div className="text-center">
-                <div className="text-2xl font-bold text-gray-900">
-                  {purchases.filter((p) => p.status.toLowerCase() === "completed").length}
-                </div>
-                <div className="text-sm text-gray-600">Completed</div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
+      <style jsx>{`
+        @keyframes fadeInUp {
+          from {
+            opacity: 0;
+            transform: translateY(20px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+      `}</style>
     </div>
   )
 }

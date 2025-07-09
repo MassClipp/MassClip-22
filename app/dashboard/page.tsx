@@ -1,109 +1,103 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useState } from "react"
 import { useAuth } from "@/contexts/auth-context"
-import { useRouter } from "next/navigation"
+import { useProfileInitialization } from "@/hooks/use-profile-initialization"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
-import { Alert, AlertDescription } from "@/components/ui/alert"
-import {
-  DollarSign,
-  Video,
-  TrendingUp,
-  Upload,
-  Settings,
-  Eye,
-  Calendar,
-  AlertCircle,
-  RefreshCw,
-  ExternalLink,
-} from "lucide-react"
-import Link from "next/link"
-import { useProfileViewStats } from "@/hooks/use-profile-view-stats"
-import StripeStatus from "@/components/stripe-status"
-
-interface DashboardStats {
-  totalSales: number
-  totalRevenue: number
-  totalUploads: number
-  totalViews: number
-  recentSales: any[]
-  recentUploads: any[]
-}
+import { DollarSign, Upload, TrendingUp, Video, RefreshCw, Activity, Calendar } from "lucide-react"
+import { useRouter } from "next/navigation"
+import { useToast } from "@/components/ui/use-toast"
+import { useVideoStatsAPI } from "@/hooks/use-video-stats-api"
+import { useStripeDashboardSales } from "@/hooks/use-stripe-dashboard-sales"
+import { SalesForecastCard } from "@/components/sales-forecast-card"
+import ProfileViewStats from "@/components/profile-view-stats"
 
 export default function DashboardPage() {
-  const { user, loading: authLoading } = useAuth()
+  const { user } = useAuth()
+  const { isInitializing, isComplete, username, error } = useProfileInitialization()
   const router = useRouter()
-  const [stats, setStats] = useState<DashboardStats | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [lastRefresh, setLastRefresh] = useState<Date | null>(null)
+  const { toast } = useToast()
 
-  const { profileViews, loading: viewsLoading } = useProfileViewStats()
+  const [refreshing, setRefreshing] = useState(false)
 
-  // Redirect if not authenticated
-  useEffect(() => {
-    if (!authLoading && !user) {
-      router.push("/login?redirect=/dashboard")
-    }
-  }, [user, authLoading, router])
+  // Use API-based video statistics (avoids Firestore index issues)
+  const videoStats = useVideoStatsAPI()
 
-  // Fetch dashboard stats
-  const fetchStats = async () => {
-    if (!user) return
+  // Use live dashboard sales data
+  const salesData = useStripeDashboardSales()
 
+  // Manual refresh function
+  const handleRefresh = async () => {
+    setRefreshing(true)
     try {
-      setLoading(true)
-      setError(null)
-
-      const response = await fetch("/api/dashboard/statistics", {
-        method: "GET",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        credentials: "include",
+      await videoStats.refetch()
+      // Force refresh sales data by reloading the page
+      window.location.reload()
+    } catch (error) {
+      console.error("Error refreshing data:", error)
+      toast({
+        title: "Error",
+        description: "Failed to refresh data",
+        variant: "destructive",
       })
-
-      if (!response.ok) {
-        throw new Error(`Failed to fetch stats: ${response.status}`)
-      }
-
-      const data = await response.json()
-      setStats(data)
-      setLastRefresh(new Date())
-    } catch (err) {
-      console.error("Error fetching dashboard stats:", err)
-      setError(err instanceof Error ? err.message : "Failed to load dashboard")
     } finally {
-      setLoading(false)
+      setRefreshing(false)
     }
   }
 
-  useEffect(() => {
-    if (user) {
-      fetchStats()
-    }
-  }, [user])
-
-  const handleRefresh = () => {
-    fetchStats()
-  }
-
-  if (authLoading) {
+  // Show loading state while profile is being initialized or stats are loading
+  if (isInitializing || videoStats.loading || salesData.loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900 mx-auto"></div>
-          <p className="mt-2 text-gray-600">Loading...</p>
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <Skeleton className="h-8 w-48 mb-2" />
+            <Skeleton className="h-4 w-32" />
+          </div>
+          <div className="flex gap-3">
+            <Skeleton className="h-10 w-32" />
+            <Skeleton className="h-10 w-32" />
+          </div>
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-3">
+          {Array.from({ length: 3 }).map((_, i) => (
+            <Card key={i} className="bg-zinc-900/50 border-zinc-800/50">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <Skeleton className="h-4 w-24" />
+                <Skeleton className="h-4 w-4" />
+              </CardHeader>
+              <CardContent>
+                <Skeleton className="h-8 w-16 mb-1" />
+                <Skeleton className="h-3 w-20" />
+              </CardContent>
+            </Card>
+          ))}
         </div>
       </div>
     )
   }
 
-  if (!user) {
-    return null
+  // Show error state if profile initialization failed
+  if (error || videoStats.error) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <Card className="w-full max-w-md bg-zinc-900/50 border-zinc-800/50">
+          <CardHeader>
+            <CardTitle className="text-red-400">Dashboard Error</CardTitle>
+            <CardDescription>There was an issue loading your dashboard</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-zinc-400 mb-4">{error || videoStats.error}</p>
+            <Button onClick={() => window.location.reload()} className="w-full">
+              Try Again
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    )
   }
 
   return (
@@ -111,211 +105,164 @@ export default function DashboardPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-gray-900">Creator Dashboard</h1>
-          <p className="text-gray-600">Welcome back, {user.displayName || user.email?.split("@")[0] || "Creator"}</p>
-          {lastRefresh && (
-            <p className="text-xs text-gray-400 mt-1">Last updated: {lastRefresh.toLocaleTimeString()}</p>
-          )}
+          <h1 className="text-3xl font-bold tracking-tight">Creator Dashboard</h1>
+          <p className="text-zinc-400">Welcome back, {user?.displayName || username || "Creator"}</p>
+          <div className="flex items-center gap-2 mt-1">
+            <Activity className="h-3 w-3 text-green-500" />
+            <span className="text-xs text-green-500">Live Data</span>
+          </div>
         </div>
-        <div className="flex items-center gap-2">
-          <Button onClick={handleRefresh} variant="outline" size="sm" disabled={loading}>
-            <RefreshCw className={`h-4 w-4 mr-2 ${loading ? "animate-spin" : ""}`} />
-            Refresh
-          </Button>
-          <Button asChild>
-            <Link href="/dashboard/upload">
-              <Upload className="h-4 w-4 mr-2" />
-              Upload
-            </Link>
+        <div className="flex gap-3">
+          <Button
+            onClick={handleRefresh}
+            variant="outline"
+            disabled={refreshing}
+            className="border-zinc-700 hover:bg-zinc-800 bg-transparent"
+          >
+            {refreshing ? (
+              <>
+                <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                Refreshing...
+              </>
+            ) : (
+              <>
+                <RefreshCw className="h-4 w-4 mr-2" />
+                Refresh
+              </>
+            )}
           </Button>
         </div>
       </div>
-
-      {/* Error Alert */}
-      {error && (
-        <Alert variant="destructive">
-          <AlertCircle className="h-4 w-4" />
-          <AlertDescription>{error}</AlertDescription>
-        </Alert>
-      )}
-
-      {/* Stripe Status */}
-      <StripeStatus />
 
       {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {/* Sales */}
-        <Card>
+      <div className="grid gap-4 md:grid-cols-3">
+        <Card className="bg-zinc-900/50 border-zinc-800/50">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Sales (30 Days)</CardTitle>
-            <DollarSign className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium text-zinc-200">Sales (30 Days)</CardTitle>
+            <Calendar className="h-4 w-4 text-zinc-400" />
           </CardHeader>
           <CardContent>
-            {loading ? (
-              <Skeleton className="h-8 w-20" />
-            ) : (
-              <>
-                <div className="text-2xl font-bold">${stats?.totalRevenue?.toFixed(2) || "0.00"}</div>
-                <p className="text-xs text-muted-foreground">{stats?.totalSales || 0} sales in last 30 days</p>
-              </>
+            <div className="text-2xl font-bold">${salesData.totalRevenueLast30Days.toFixed(2)}</div>
+            <p className="text-xs text-zinc-500">{salesData.totalSalesLast30Days} sales in last 30 days</p>
+            {salesData.averageOrderValue > 0 && (
+              <p className="text-xs text-zinc-400 mt-1">Avg: ${salesData.averageOrderValue.toFixed(2)} per sale</p>
+            )}
+            {salesData.error && <p className="text-xs text-red-400 mt-1">Data may be outdated</p>}
+          </CardContent>
+        </Card>
+
+        <Card className="bg-zinc-900/50 border-zinc-800/50">
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium text-zinc-200">Free Videos</CardTitle>
+            <Video className="h-4 w-4 text-zinc-400" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{videoStats.totalFreeVideos}</div>
+            <p className="text-xs text-zinc-500">Free content available</p>
+            {videoStats.totalUploads > 0 && (
+              <p className="text-xs text-zinc-400 mt-1">
+                {videoStats.freeVideoPercentage.toFixed(1)}% of {videoStats.totalUploads} total uploads
+              </p>
+            )}
+            {videoStats.totalFreeVideos === 0 && videoStats.totalUploads > 0 && (
+              <p className="text-xs text-yellow-500 mt-1">Consider adding free content</p>
             )}
           </CardContent>
         </Card>
 
-        {/* Free Videos */}
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Free Videos</CardTitle>
-            <Video className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            {loading ? (
-              <Skeleton className="h-8 w-8" />
-            ) : (
-              <>
-                <div className="text-2xl font-bold">{stats?.totalUploads || 0}</div>
-                <p className="text-xs text-muted-foreground">
-                  Free content available
-                  <br />
-                  0.0% of 1 total uploads
-                </p>
-                <Link href="/dashboard/free-content" className="text-xs text-blue-600 hover:underline">
-                  Consider adding free content
-                </Link>
-              </>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Profile Views */}
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Profile Views</CardTitle>
-            <Eye className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            {viewsLoading ? (
-              <Skeleton className="h-8 w-8" />
-            ) : (
-              <>
-                <div className="text-2xl font-bold">{profileViews?.totalViews || 3}</div>
-                <p className="text-xs text-muted-foreground">
-                  All time
-                  <br />
-                  Last: {profileViews?.lastViewDate || "7/8/2025"}
-                </p>
-              </>
-            )}
-          </CardContent>
-        </Card>
-
-        {/* Total Views */}
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Views</CardTitle>
-            <TrendingUp className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            {loading ? (
-              <Skeleton className="h-8 w-8" />
-            ) : (
-              <>
-                <div className="text-2xl font-bold">{stats?.totalViews || 0}</div>
-                <p className="text-xs text-muted-foreground">Across all content</p>
-              </>
-            )}
-          </CardContent>
-        </Card>
+        <div className="bg-zinc-900/50 border-zinc-800/50 rounded-lg">
+          <ProfileViewStats userId={user?.uid || ""} />
+        </div>
       </div>
 
-      {/* Quick Actions */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">Quick Actions</CardTitle>
-            <CardDescription>Common tasks and shortcuts</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <Button asChild className="w-full justify-start">
-              <Link href="/dashboard/upload">
+      {/* Main Content Grid */}
+      <div className="grid gap-6 lg:grid-cols-3">
+        {/* Financial Forecast - Replaces Sales Performance */}
+        <div className="lg:col-span-2">
+          <SalesForecastCard />
+        </div>
+
+        {/* Quick Actions & Video Stats */}
+        <div className="space-y-6">
+          {/* Quick Actions */}
+          <Card className="bg-zinc-900/50 border-zinc-800/50">
+            <CardHeader>
+              <CardTitle>Quick Actions</CardTitle>
+              <CardDescription>Common tasks and shortcuts</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <Button
+                onClick={() => router.push("/dashboard/uploads")}
+                className="w-full justify-start bg-zinc-900 hover:bg-zinc-800 border border-zinc-700"
+              >
                 <Upload className="h-4 w-4 mr-2" />
-                Upload New Content
-              </Link>
-            </Button>
-            <Button asChild variant="outline" className="w-full justify-start bg-transparent">
-              <Link href="/dashboard/product-boxes">
-                <Video className="h-4 w-4 mr-2" />
-                Manage Product Boxes
-              </Link>
-            </Button>
-            <Button asChild variant="outline" className="w-full justify-start bg-transparent">
-              <Link href="/dashboard/earnings">
+                Upload Content
+              </Button>
+
+              <Button
+                onClick={() => router.push("/dashboard/earnings")}
+                variant="outline"
+                className="w-full justify-start border-zinc-700 hover:bg-zinc-800"
+              >
                 <DollarSign className="h-4 w-4 mr-2" />
                 View Earnings
-              </Link>
-            </Button>
-          </CardContent>
-        </Card>
+              </Button>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">Recent Activity</CardTitle>
-            <CardDescription>Latest uploads and sales</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {loading ? (
-              <div className="space-y-2">
-                <Skeleton className="h-4 w-full" />
-                <Skeleton className="h-4 w-3/4" />
-                <Skeleton className="h-4 w-1/2" />
-              </div>
-            ) : stats?.recentSales?.length > 0 || stats?.recentUploads?.length > 0 ? (
-              <div className="space-y-2">
-                {stats.recentSales?.slice(0, 3).map((sale, index) => (
-                  <div key={index} className="flex items-center justify-between text-sm">
-                    <span className="truncate">{sale.itemTitle}</span>
-                    <Badge variant="secondary">${sale.amount}</Badge>
-                  </div>
-                ))}
-                {stats.recentUploads?.slice(0, 3).map((upload, index) => (
-                  <div key={index} className="flex items-center justify-between text-sm">
-                    <span className="truncate">{upload.title}</span>
-                    <Badge variant="outline">New</Badge>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <p className="text-sm text-gray-500">No recent activity</p>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-lg">Account Settings</CardTitle>
-            <CardDescription>Manage your creator account</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-3">
-            <Button asChild variant="outline" className="w-full justify-start bg-transparent">
-              <Link href="/dashboard/profile/edit">
-                <Settings className="h-4 w-4 mr-2" />
+              <Button
+                onClick={() => router.push("/dashboard/profile")}
+                variant="outline"
+                className="w-full justify-start border-zinc-700 hover:bg-zinc-800"
+              >
+                <TrendingUp className="h-4 w-4 mr-2" />
                 Edit Profile
-              </Link>
-            </Button>
-            <Button asChild variant="outline" className="w-full justify-start bg-transparent">
-              <Link href="/dashboard/connect-stripe">
-                <ExternalLink className="h-4 w-4 mr-2" />
-                Payment Setup
-              </Link>
-            </Button>
-            <Button asChild variant="outline" className="w-full justify-start bg-transparent">
-              <Link href="/dashboard/purchases">
-                <Calendar className="h-4 w-4 mr-2" />
-                My Purchases
-              </Link>
-            </Button>
-          </CardContent>
-        </Card>
+              </Button>
+            </CardContent>
+          </Card>
+
+          {/* Video Statistics - Enhanced with API-based data */}
+          <Card className="bg-gradient-to-br from-zinc-900/50 to-zinc-800/30 border-zinc-700/50">
+            <CardContent className="pt-6">
+              <div className="flex items-start gap-3">
+                <div className="w-8 h-8 rounded-full bg-gradient-to-r from-blue-600 to-blue-700 flex items-center justify-center flex-shrink-0">
+                  <Video className="h-4 w-4 text-white" />
+                </div>
+                <div className="flex-1">
+                  <div className="text-sm font-medium text-zinc-200 mb-1">Content Library</div>
+                  <div className="text-2xl font-bold text-white">{videoStats.totalUploads}</div>
+                  <div className="text-xs text-zinc-500 mt-1">total uploads</div>
+
+                  {/* Enhanced breakdown */}
+                  <div className="mt-2 space-y-1">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-green-400">Free videos:</span>
+                      <span className="text-white font-medium">{videoStats.totalFreeVideos}</span>
+                    </div>
+                    {videoStats.totalUploads > videoStats.totalFreeVideos && (
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-yellow-400">Premium videos:</span>
+                        <span className="text-white font-medium">
+                          {videoStats.totalUploads - videoStats.totalFreeVideos}
+                        </span>
+                      </div>
+                    )}
+                    {videoStats.totalUploads > 0 && (
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-blue-400">Free ratio:</span>
+                        <span className="text-white font-medium">{videoStats.freeVideoPercentage.toFixed(1)}%</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Auto-refresh indicator */}
+                  <div className="flex items-center gap-1 mt-2">
+                    <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse"></div>
+                    <span className="text-xs text-blue-500">Auto-refresh (60s)</span>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
       </div>
     </div>
   )
