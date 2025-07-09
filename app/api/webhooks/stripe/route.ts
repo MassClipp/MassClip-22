@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { stripe, stripeConfig } from "@/lib/stripe"
-import { getFirestore } from "firebase-admin/firestore"
+import Stripe from "stripe"
+import { getFirestore, FieldValue } from "firebase-admin/firestore"
 import { initializeApp, getApps, cert } from "firebase-admin/app"
 
 // Initialize Firebase Admin if not already initialized
@@ -21,139 +21,432 @@ if (!getApps().length) {
 
 const db = getFirestore()
 
-// Get the appropriate webhook secret based on environment
-const getWebhookSecret = () => {
-  if (stripeConfig.isLiveMode) {
-    const liveSecret = process.env.STRIPE_WEBHOOK_SECRET_LIVE || process.env.STRIPE_WEBHOOK_SECRET
-    if (!liveSecret) {
-      throw new Error("STRIPE_WEBHOOK_SECRET_LIVE is not set")
-    }
-    return liveSecret
-  } else {
-    const testSecret = process.env.STRIPE_WEBHOOK_SECRET_TEST || process.env.STRIPE_WEBHOOK_SECRET
-    if (!testSecret) {
-      throw new Error("STRIPE_WEBHOOK_SECRET_TEST is not set")
-    }
-    return testSecret
+// Determine environment and select appropriate keys (same logic as lib/stripe.ts)
+const isProduction = process.env.VERCEL_ENV === "production"
+const isDevelopment = process.env.NODE_ENV === "development"
+const isPreview = process.env.VERCEL_ENV === "preview"
+
+// Use test keys for development and preview environments, live keys only for production
+const useTestKeys = isDevelopment || isPreview || !isProduction
+
+// Select the appropriate Stripe secret key
+const stripeSecretKey = useTestKeys ? process.env.STRIPE_SECRET_KEY_TEST : process.env.STRIPE_SECRET_KEY
+
+// Fallback to regular key if test key is not available
+const finalSecretKey = stripeSecretKey || process.env.STRIPE_SECRET_KEY
+
+// Initialize Stripe with proper error handling
+let stripe: Stripe
+try {
+  if (!finalSecretKey) {
+    throw new Error("No Stripe secret key available")
   }
+  stripe = new Stripe(finalSecretKey, {
+    apiVersion: "2024-06-20",
+  })
+} catch (error) {
+  console.error("❌ [Webhook] Failed to initialize Stripe:", error)
+  throw error
 }
 
 export async function POST(request: NextRequest) {
-  const body = await request.text()
-  const signature = request.headers.get("stripe-signature")
-
-  if (!signature) {
-    console.error("❌ [WEBHOOK] No Stripe signature found")
-    return NextResponse.json({ error: "No signature" }, { status: 400 })
-  }
-
-  let event: any
+  const startTime = Date.now()
+  const requestId = Math.random().toString(36).substring(7)
 
   try {
-    const webhookSecret = getWebhookSecret()
-    event = stripe.webhooks.constructEvent(body, signature, webhookSecret)
-    console.log(`🔥 [WEBHOOK] Event received: ${event.type} (${stripeConfig.environment} mode)`)
-  } catch (err) {
-    console.error(`❌ [WEBHOOK] Signature verification failed:`, err.message)
-    return NextResponse.json({ error: "Invalid signature" }, { status: 400 })
-  }
+    console.log(`🔍 [Webhook ${requestId}] === INCOMING WEBHOOK REQUEST ===`)
 
-  try {
-    switch (event.type) {
-      case "checkout.session.completed":
-        await handleCheckoutSessionCompleted(event.data.object)
-        break
-      case "payment_intent.succeeded":
-        await handlePaymentIntentSucceeded(event.data.object)
-        break
-      case "invoice.payment_succeeded":
-        await handleInvoicePaymentSucceeded(event.data.object)
-        break
-      default:
-        console.log(`🔄 [WEBHOOK] Unhandled event type: ${event.type}`)
+    const body = await request.text()
+    const signature = request.headers.get("stripe-signature")
+    const stripeAccount = request.headers.get("stripe-account")
+    const userAgent = request.headers.get("user-agent")
+
+    // Determine actual mode based on the key we're using
+    const actuallyUsingTestMode = finalSecretKey?.startsWith("sk_test_")
+    const actuallyUsingLiveMode = finalSecretKey?.startsWith("sk_live_")
+
+    console.log(`🔍 [Webhook ${requestId}] Environment & Key Info:`, {
+      NODE_ENV: process.env.NODE_ENV,
+      VERCEL_ENV: process.env.VERCEL_ENV,
+      intendedMode: useTestKeys ? "TEST" : "LIVE",
+      actualMode: actuallyUsingTestMode ? "TEST" : actuallyUsingLiveMode ? "LIVE" : "UNKNOWN",
+      keyPrefix: finalSecretKey?.substring(0, 7),
+      hasSignature: !!signature,
+      signatureLength: signature?.length || 0,
+      stripeAccount: stripeAccount || "platform",
+      bodyLength: body.length,
+      timestamp: new Date().toISOString(),
+    })
+
+    if (!signature) {
+      console.error(`❌ [Webhook ${requestId}] No Stripe signature found`)
+      return NextResponse.json({ error: "No signature provided" }, { status: 400 })
     }
 
-    return NextResponse.json({ received: true })
-  } catch (error) {
-    console.error(`❌ [WEBHOOK] Error processing ${event.type}:`, error)
-    return NextResponse.json({ error: "Webhook processing failed" }, { status: 500 })
-  }
-}
-
-async function handleCheckoutSessionCompleted(session: any) {
-  console.log(`🔥 [WEBHOOK] Processing checkout.session.completed: ${session.id}`)
-  console.log(`🔥 [WEBHOOK] Session mode: ${session.mode}`)
-  console.log(`🔥 [WEBHOOK] Payment status: ${session.payment_status}`)
-  console.log(`🔥 [WEBHOOK] Environment: ${stripeConfig.environment}`)
-
-  const userId = session.client_reference_id || session.metadata?.userId
-  const sessionId = session.id
-
-  if (!userId) {
-    console.error("❌ [WEBHOOK] No user ID found in session")
-    return
-  }
-
-  try {
-    // Create purchase record in user's purchases collection
-    const purchaseData = {
-      sessionId: sessionId,
-      userId: userId,
-      amount: session.amount_total,
-      currency: session.currency,
-      status: session.payment_status,
-      mode: session.mode,
-      environment: stripeConfig.environment,
-      purchasedAt: new Date(),
-      metadata: session.metadata || {},
-      stripeCustomerId: session.customer,
-      paymentIntentId: session.payment_intent,
+    // Select the correct webhook secret based on actual key mode (not intended mode)
+    let webhookSecret: string | undefined
+    if (actuallyUsingTestMode) {
+      webhookSecret = process.env.STRIPE_WEBHOOK_SECRET_TEST
+      console.log(`🔍 [Webhook ${requestId}] Using TEST webhook secret: ${!!webhookSecret}`)
+    } else if (actuallyUsingLiveMode) {
+      webhookSecret = process.env.STRIPE_WEBHOOK_SECRET_LIVE
+      console.log(`🔍 [Webhook ${requestId}] Using LIVE webhook secret: ${!!webhookSecret}`)
+    } else {
+      console.error(`❌ [Webhook ${requestId}] Unable to determine key mode from: ${finalSecretKey?.substring(0, 7)}`)
+      return NextResponse.json({ error: "Unable to determine Stripe key mode" }, { status: 500 })
     }
 
-    // Add type-specific data
-    if (session.metadata?.type === "product_box_purchase") {
-      purchaseData.type = "product_box"
-      purchaseData.productBoxId = session.metadata.productBoxId
-      purchaseData.itemTitle = `Product Box: ${session.metadata.productBoxId}`
-    } else if (session.metadata?.type === "premium_subscription") {
-      purchaseData.type = "subscription"
-      purchaseData.subscriptionId = session.subscription
-      purchaseData.itemTitle = "Premium Subscription"
+    if (!webhookSecret) {
+      const missingSecret = actuallyUsingTestMode ? "STRIPE_WEBHOOK_SECRET_TEST" : "STRIPE_WEBHOOK_SECRET_LIVE"
+      console.error(`❌ [Webhook ${requestId}] Missing ${missingSecret} environment variable`)
+      return NextResponse.json(
+        { error: `Webhook secret not configured for ${actuallyUsingTestMode ? "test" : "live"} mode` },
+        { status: 500 },
+      )
     }
 
-    // Store in user's purchases collection
-    await db.collection("users").doc(userId).collection("purchases").doc(sessionId).set(purchaseData)
-    console.log(`✅ [WEBHOOK] Created purchase record for user: ${userId}`)
-
-    // Also store in unified purchases collection
-    await db.collection("userPurchases").doc(userId).collection("purchases").doc(sessionId).set(purchaseData)
-    console.log(`✅ [WEBHOOK] Created unified purchase record`)
-
-    // Update checkout session status
+    // Verify the webhook signature
+    let event: Stripe.Event
     try {
-      await db.collection("checkoutSessions").doc(sessionId).update({
-        status: "completed",
-        completedAt: new Date(),
-        webhookProcessedAt: new Date(),
+      console.log(
+        `🔍 [Webhook ${requestId}] Verifying signature with ${actuallyUsingTestMode ? "TEST" : "LIVE"} secret`,
+      )
+      event = stripe.webhooks.constructEvent(body, signature, webhookSecret)
+      console.log(`✅ [Webhook ${requestId}] Signature verified successfully`)
+      console.log(`📋 [Webhook ${requestId}] Event type: ${event.type}, Event ID: ${event.id}`)
+      console.log(`📋 [Webhook ${requestId}] Event created: ${new Date(event.created * 1000).toISOString()}`)
+    } catch (err: any) {
+      console.error(`❌ [Webhook ${requestId}] Signature verification failed:`, {
+        error: err.message,
+        type: err.type,
+        statusCode: err.statusCode,
+        webhookSecretLength: webhookSecret?.length,
+        actualMode: actuallyUsingTestMode ? "TEST" : "LIVE",
       })
-      console.log(`✅ [WEBHOOK] Updated checkout session status`)
-    } catch (updateError) {
-      console.error("Failed to update checkout session:", updateError)
+      return NextResponse.json({ error: "Invalid signature" }, { status: 400 })
     }
-  } catch (error) {
-    console.error(`❌ [WEBHOOK] Failed to process checkout session:`, error)
-    throw error
+
+    // Handle the checkout.session.completed event
+    if (event.type === "checkout.session.completed") {
+      const session = event.data.object as Stripe.Checkout.Session
+
+      console.log(`🎉 [Webhook ${requestId}] === CHECKOUT SESSION COMPLETED ===`)
+      console.log(`🎉 [Webhook ${requestId}] Session ID: ${session.id}`)
+      console.log(`🎉 [Webhook ${requestId}] Payment Status: ${session.payment_status}`)
+      console.log(`🎉 [Webhook ${requestId}] Amount: ${session.amount_total} ${session.currency}`)
+      console.log(`🎉 [Webhook ${requestId}] Customer Email: ${session.customer_details?.email}`)
+      console.log(`🎉 [Webhook ${requestId}] Connected Account: ${stripeAccount || "platform"}`)
+      console.log(`🎉 [Webhook ${requestId}] Mode: ${actuallyUsingTestMode ? "TEST" : "LIVE"}`)
+
+      // Log all metadata for debugging
+      console.log(`🔍 [Webhook ${requestId}] Full session metadata:`, JSON.stringify(session.metadata, null, 2))
+
+      // Extract required data from metadata
+      const { productBoxId, buyerUid, creatorUid, connectedAccountId } = session.metadata || {}
+
+      console.log(`🔍 [Webhook ${requestId}] Extracted metadata:`, {
+        productBoxId,
+        buyerUid,
+        creatorUid,
+        connectedAccountId,
+      })
+
+      if (!productBoxId || !buyerUid) {
+        console.error(`❌ [Webhook ${requestId}] Missing required metadata:`, {
+          productBoxId: !!productBoxId,
+          buyerUid: !!buyerUid,
+          allMetadata: session.metadata,
+        })
+
+        // Still return success to Stripe to avoid retries, but log the issue
+        return NextResponse.json({
+          received: true,
+          error: "Missing required metadata",
+          sessionId: session.id,
+          timestamp: new Date().toISOString(),
+          requestId,
+        })
+      }
+
+      // Verify the connected account matches if both are present
+      if (stripeAccount && connectedAccountId && stripeAccount !== connectedAccountId) {
+        console.warn(`⚠️ [Webhook ${requestId}] Connected account mismatch:`, {
+          headerAccount: stripeAccount,
+          metadataAccount: connectedAccountId,
+        })
+      }
+
+      try {
+        // Get product box details
+        console.log(`🔍 [Webhook ${requestId}] Fetching product box: ${productBoxId}`)
+        const productBoxDoc = await db.collection("productBoxes").doc(productBoxId).get()
+
+        if (!productBoxDoc.exists) {
+          console.error(`❌ [Webhook ${requestId}] Product box not found: ${productBoxId}`)
+
+          // Create a basic purchase record even if product box is missing
+          const basicPurchaseData = {
+            productBoxId,
+            sessionId: session.id,
+            paymentIntentId: session.payment_intent,
+            amount: session.amount_total ? session.amount_total / 100 : 0,
+            currency: session.currency || "usd",
+            status: "complete",
+            itemTitle: "Unknown Product",
+            purchasedAt: new Date(),
+            isTestPurchase: actuallyUsingTestMode,
+            customerEmail: session.customer_details?.email,
+            stripeAccount: stripeAccount,
+            connectedAccountId: connectedAccountId,
+            error: "Product box not found during webhook processing",
+            webhookProcessedAt: new Date(),
+            webhookEventId: event.id,
+            webhookRequestId: requestId,
+          }
+
+          console.log(
+            `💾 [Webhook ${requestId}] Saving basic purchase record to users/${buyerUid}/purchases/${productBoxId}`,
+          )
+          await db.collection("users").doc(buyerUid).collection("purchases").doc(productBoxId).set(basicPurchaseData)
+
+          console.log(
+            `💾 [Webhook ${requestId}] Saving basic purchase record to userPurchases/${buyerUid}/purchases/${session.id}`,
+          )
+          await db
+            .collection("userPurchases")
+            .doc(buyerUid)
+            .collection("purchases")
+            .doc(session.id)
+            .set(basicPurchaseData)
+
+          console.log(`✅ [Webhook ${requestId}] Basic purchase records saved for user ${buyerUid}`)
+
+          return NextResponse.json({
+            received: true,
+            warning: "Product box not found",
+            sessionId: session.id,
+            purchaseRecorded: true,
+            processingTime: Date.now() - startTime,
+            requestId,
+          })
+        }
+
+        const productBoxData = productBoxDoc.data()!
+        const purchaseAmount = session.amount_total ? session.amount_total / 100 : 0
+
+        console.log(`📦 [Webhook ${requestId}] Product box data:`, {
+          title: productBoxData.title,
+          creatorId: productBoxData.creatorId,
+          price: productBoxData.price,
+        })
+
+        // Create comprehensive purchase record
+        const purchaseData = {
+          productBoxId,
+          sessionId: session.id,
+          paymentIntentId: session.payment_intent,
+          amount: purchaseAmount,
+          currency: session.currency || "usd",
+          status: "complete",
+          creatorId: creatorUid || productBoxData.creatorId,
+          itemTitle: productBoxData.title || "Untitled Product",
+          itemDescription: productBoxData.description || "",
+          thumbnailUrl: productBoxData.thumbnailUrl || "",
+          purchasedAt: new Date(),
+          isTestPurchase: actuallyUsingTestMode,
+          customerEmail: session.customer_details?.email,
+          stripeAccount: stripeAccount,
+          connectedAccountId: connectedAccountId,
+          webhookProcessedAt: new Date(),
+          webhookEventId: event.id,
+          webhookRequestId: requestId,
+          paymentStatus: session.payment_status,
+        }
+
+        console.log(`💾 [Webhook ${requestId}] === SAVING PURCHASE RECORDS ===`)
+        console.log(`💾 [Webhook ${requestId}] Purchase data summary:`, {
+          userId: buyerUid,
+          productBoxId,
+          sessionId: session.id,
+          amount: purchaseAmount,
+          title: purchaseData.itemTitle,
+          isTestPurchase: actuallyUsingTestMode,
+        })
+
+        // Store purchase in user's purchases subcollection using productBoxId as doc ID
+        console.log(`💾 [Webhook ${requestId}] Saving to users/${buyerUid}/purchases/${productBoxId}`)
+        await db.collection("users").doc(buyerUid).collection("purchases").doc(productBoxId).set(purchaseData)
+        console.log(`✅ [Webhook ${requestId}] Purchase record saved: users/${buyerUid}/purchases/${productBoxId}`)
+
+        // ALSO store in a unified purchases collection for easier querying by session ID
+        console.log(`💾 [Webhook ${requestId}] Saving to userPurchases/${buyerUid}/purchases/${session.id}`)
+        await db.collection("userPurchases").doc(buyerUid).collection("purchases").doc(session.id).set(purchaseData)
+        console.log(
+          `✅ [Webhook ${requestId}] Unified purchase record saved: userPurchases/${buyerUid}/purchases/${session.id}`,
+        )
+
+        // Update product box sales stats
+        try {
+          console.log(`📊 [Webhook ${requestId}] Updating product box stats for: ${productBoxId}`)
+          await db
+            .collection("productBoxes")
+            .doc(productBoxId)
+            .update({
+              totalSales: FieldValue.increment(1),
+              totalRevenue: FieldValue.increment(purchaseAmount),
+              lastSaleAt: new Date(),
+            })
+          console.log(`✅ [Webhook ${requestId}] Product box stats updated`)
+        } catch (updateError) {
+          console.error(`❌ [Webhook ${requestId}] Failed to update product box stats:`, updateError)
+        }
+
+        // Record sale for creator
+        if (creatorUid || productBoxData.creatorId) {
+          try {
+            const creatorId = creatorUid || productBoxData.creatorId
+            const platformFee = purchaseAmount * 0.05 // 5% platform fee
+            const netAmount = purchaseAmount - platformFee
+
+            console.log(`💰 [Webhook ${requestId}] Recording sale for creator: ${creatorId}`)
+            await db
+              .collection("users")
+              .doc(creatorId)
+              .collection("sales")
+              .add({
+                productBoxId,
+                buyerUid,
+                sessionId: session.id,
+                amount: purchaseAmount,
+                platformFee,
+                netAmount,
+                currency: session.currency || "usd",
+                status: "complete",
+                isTestSale: actuallyUsingTestMode,
+                stripeAccount: stripeAccount,
+                connectedAccountId: connectedAccountId,
+                soldAt: new Date(),
+                webhookEventId: event.id,
+                webhookRequestId: requestId,
+              })
+
+            // Update creator's total stats
+            await db
+              .collection("users")
+              .doc(creatorId)
+              .update({
+                totalSales: FieldValue.increment(1),
+                totalRevenue: FieldValue.increment(netAmount),
+                lastSaleAt: new Date(),
+              })
+
+            console.log(`✅ [Webhook ${requestId}] Sale recorded for creator ${creatorId}`)
+          } catch (creatorError) {
+            console.error(`❌ [Webhook ${requestId}] Failed to record creator sale:`, creatorError)
+          }
+        }
+
+        console.log(`🎉 [Webhook ${requestId}] === PURCHASE PROCESSING COMPLETED SUCCESSFULLY ===`)
+        console.log(`🎉 [Webhook ${requestId}] Processing time: ${Date.now() - startTime}ms`)
+
+        // Return success response to Stripe
+        return NextResponse.json({
+          received: true,
+          mode: actuallyUsingTestMode ? "test" : "live",
+          sessionId: session.id,
+          purchaseRecorded: true,
+          stripeAccount: stripeAccount,
+          connectedAccountId: connectedAccountId,
+          purchaseDocId: productBoxId,
+          unifiedDocId: session.id,
+          processingTime: Date.now() - startTime,
+          timestamp: new Date().toISOString(),
+          requestId,
+        })
+      } catch (dbError: any) {
+        console.error(`❌ [Webhook ${requestId}] Database error:`, dbError)
+
+        // Try to create a minimal purchase record as fallback
+        try {
+          const fallbackPurchaseData = {
+            productBoxId: productBoxId || "unknown",
+            sessionId: session.id,
+            amount: session.amount_total ? session.amount_total / 100 : 0,
+            currency: session.currency || "usd",
+            status: "complete",
+            itemTitle: "Purchase (Processing Error)",
+            purchasedAt: new Date(),
+            isTestPurchase: actuallyUsingTestMode,
+            customerEmail: session.customer_details?.email,
+            stripeAccount: stripeAccount,
+            connectedAccountId: connectedAccountId,
+            error: `Database error during webhook processing: ${dbError.message}`,
+            webhookProcessedAt: new Date(),
+            webhookEventId: event.id,
+            webhookRequestId: requestId,
+          }
+
+          if (buyerUid && productBoxId) {
+            await db
+              .collection("users")
+              .doc(buyerUid)
+              .collection("purchases")
+              .doc(productBoxId)
+              .set(fallbackPurchaseData)
+
+            // Also save to unified collection
+            await db
+              .collection("userPurchases")
+              .doc(buyerUid)
+              .collection("purchases")
+              .doc(session.id)
+              .set(fallbackPurchaseData)
+
+            console.log(`⚠️ [Webhook ${requestId}] Fallback purchase records created`)
+          }
+        } catch (fallbackError) {
+          console.error(`❌ [Webhook ${requestId}] Fallback purchase creation failed:`, fallbackError)
+        }
+
+        // Still return success to Stripe to avoid retries
+        return NextResponse.json({
+          received: true,
+          error: "Database error",
+          sessionId: session.id,
+          processingTime: Date.now() - startTime,
+          requestId,
+        })
+      }
+    }
+
+    // Log other events but don't process them
+    console.log(
+      `ℹ️ [Webhook ${requestId}] ${actuallyUsingTestMode ? "TEST" : "LIVE"} Received unhandled event type: ${event.type}`,
+    )
+    return NextResponse.json({
+      received: true,
+      eventType: event.type,
+      processingTime: Date.now() - startTime,
+      requestId,
+    })
+  } catch (error: any) {
+    console.error(`❌ [Webhook ${requestId}] Error processing webhook:`, {
+      error: error.message,
+      stack: error.stack,
+      processingTime: Date.now() - startTime,
+    })
+
+    // Return 500 to trigger Stripe retry
+    return NextResponse.json(
+      {
+        error: "Webhook processing failed",
+        details: error.message,
+        processingTime: Date.now() - startTime,
+        requestId,
+      },
+      { status: 500 },
+    )
   }
-}
-
-async function handlePaymentIntentSucceeded(paymentIntent: any) {
-  console.log(`🔥 [WEBHOOK] Processing payment_intent.succeeded: ${paymentIntent.id}`)
-  // Additional payment intent processing if needed
-}
-
-async function handleInvoicePaymentSucceeded(invoice: any) {
-  console.log(`🔥 [WEBHOOK] Processing invoice.payment_succeeded: ${invoice.id}`)
-  // Additional invoice processing if needed
 }
 
 // Handle GET requests (for webhook endpoint verification)

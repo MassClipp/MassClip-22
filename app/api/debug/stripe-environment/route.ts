@@ -1,49 +1,46 @@
 import { NextResponse } from "next/server"
-import { stripeConfig } from "@/lib/stripe"
+import { STRIPE_CONFIG } from "@/lib/stripe"
 
 export async function GET() {
   try {
-    const result = {
-      environment: stripeConfig.environment,
-      keyType: stripeConfig.keyType,
-      isLiveMode: stripeConfig.isLiveMode,
-      webhookSecrets: {
-        testSecretSet: !!process.env.STRIPE_WEBHOOK_SECRET_TEST,
-        liveSecretSet: !!process.env.STRIPE_WEBHOOK_SECRET_LIVE,
-        correctSecretAvailable: false,
-      },
-      recommendations: [],
-      issues: [],
+    // Check if Firebase is connected
+    let firebaseConnected = false
+    try {
+      const { db } = await import("@/lib/firebase-admin")
+      await db.collection("_health").limit(1).get()
+      firebaseConnected = true
+    } catch (error) {
+      console.error("Firebase connection check failed:", error)
     }
 
-    // Check if correct webhook secret is available
-    if (stripeConfig.isLiveMode) {
-      result.webhookSecrets.correctSecretAvailable = !!process.env.STRIPE_WEBHOOK_SECRET_LIVE
-      if (!result.webhookSecrets.correctSecretAvailable) {
-        result.issues.push("STRIPE_WEBHOOK_SECRET_LIVE is not set but running in live mode")
-        result.recommendations.push("Set STRIPE_WEBHOOK_SECRET_LIVE environment variable")
-      }
-    } else {
-      result.webhookSecrets.correctSecretAvailable = !!process.env.STRIPE_WEBHOOK_SECRET_TEST
-      if (!result.webhookSecrets.correctSecretAvailable) {
-        result.issues.push("STRIPE_WEBHOOK_SECRET_TEST is not set but running in test mode")
-        result.recommendations.push("Set STRIPE_WEBHOOK_SECRET_TEST environment variable")
-      }
+    // Determine Stripe mode
+    const stripeSecretKey = process.env.STRIPE_SECRET_KEY
+    const stripeMode = stripeSecretKey?.startsWith("sk_live_")
+      ? "LIVE"
+      : stripeSecretKey?.startsWith("sk_test_")
+        ? "TEST"
+        : "UNKNOWN"
+
+    // Check webhook configuration
+    const webhookConfigured =
+      stripeMode === "LIVE" ? !!process.env.STRIPE_WEBHOOK_SECRET_LIVE : !!process.env.STRIPE_WEBHOOK_SECRET_TEST
+
+    const environmentStatus = {
+      stripeMode,
+      stripeKeyPrefix: stripeSecretKey?.substring(0, 7) || "NOT_SET",
+      webhookConfigured,
+      firebaseConnected,
+      environment: process.env.VERCEL_ENV || process.env.NODE_ENV || "unknown",
+      isLiveMode: STRIPE_CONFIG.isLiveMode,
+      isTestMode: STRIPE_CONFIG.isTestMode,
+      hasPublishableKey: STRIPE_CONFIG.hasPublishableKey,
     }
 
-    // General recommendations
-    if (stripeConfig.isLiveMode) {
-      result.recommendations.push("⚠️ LIVE MODE: Real payments will be processed")
-      result.recommendations.push("Ensure live webhook endpoint is configured in Stripe Dashboard")
-      result.recommendations.push("Verify live webhook secret is correctly set")
-    } else {
-      result.recommendations.push("✅ TEST MODE: Safe for development")
-      result.recommendations.push("Ensure test webhook endpoint is configured in Stripe Dashboard")
-    }
+    console.log("🔍 [Environment Debug] Status:", environmentStatus)
 
-    return NextResponse.json(result)
+    return NextResponse.json(environmentStatus)
   } catch (error) {
-    console.error("Environment check error:", error)
-    return NextResponse.json({ error: "Environment check failed" }, { status: 500 })
+    console.error("❌ [Environment Debug] Error:", error)
+    return NextResponse.json({ error: "Failed to check environment status", details: error.message }, { status: 500 })
   }
 }

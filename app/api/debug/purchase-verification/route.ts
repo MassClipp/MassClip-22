@@ -1,163 +1,132 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { stripe, stripeConfig } from "@/lib/stripe"
-import { getFirestore } from "firebase-admin/firestore"
-import { initializeApp, getApps, cert } from "firebase-admin/app"
-
-// Initialize Firebase Admin if not already initialized
-if (!getApps().length) {
-  try {
-    initializeApp({
-      credential: cert({
-        projectId: process.env.FIREBASE_PROJECT_ID,
-        clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-        privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n"),
-      }),
-    })
-  } catch (error) {
-    console.error("Firebase Admin initialization failed:", error)
-  }
-}
-
-const db = getFirestore()
+import { verifyIdToken } from "@/lib/auth-utils"
+import { stripe } from "@/lib/stripe"
+import { collection, query, where, getDocs, doc, getDoc } from "firebase/firestore"
+import { db as clientDb } from "@/lib/firebase"
 
 export async function POST(request: NextRequest) {
   try {
-    const { sessionId, userId } = await request.json()
-
-    if (!sessionId || !userId) {
-      return NextResponse.json({ error: "Missing sessionId or userId" }, { status: 400 })
+    // Verify authentication
+    const decodedToken = await verifyIdToken(request)
+    if (!decodedToken) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    console.log(`🔍 [DEBUG] Starting purchase verification debug for session: ${sessionId}, user: ${userId}`)
+    const { sessionId, userId } = await request.json()
 
-    const result = {
+    if (!sessionId) {
+      return NextResponse.json({ error: "Session ID is required" }, { status: 400 })
+    }
+
+    console.log(`🔍 [Purchase Debug] Starting debug for session: ${sessionId}`)
+
+    const debugResult = {
       sessionId,
-      userId,
-      timestamp: new Date().toISOString(),
-      stripeSession: { found: false },
-      firestorePurchases: {
-        userPurchases: { found: false, count: 0, data: [] },
-        unifiedPurchases: { found: false },
-      },
-      webhookLogs: {
-        checkoutSession: { found: false },
-      },
+      stripeSession: null,
+      firestorePurchase: null,
+      unifiedPurchase: null,
+      webhookProcessed: false,
       recommendations: [],
-      issues: [],
-      success: false,
+      errors: [],
     }
 
     // 1. Check Stripe session
     try {
+      console.log(`🔍 [Purchase Debug] Checking Stripe session...`)
       const session = await stripe.checkout.sessions.retrieve(sessionId)
-      result.stripeSession = {
-        found: true,
-        data: {
-          id: session.id,
-          payment_status: session.payment_status,
-          mode: session.mode,
-          amount_total: session.amount_total,
-          currency: session.currency,
-          client_reference_id: session.client_reference_id,
-          metadata: session.metadata,
-          created: session.created,
-          expires_at: session.expires_at,
-        },
+      debugResult.stripeSession = {
+        id: session.id,
+        payment_status: session.payment_status,
+        status: session.status,
+        amount_total: session.amount_total,
+        currency: session.currency,
+        customer_email: session.customer_details?.email,
+        metadata: session.metadata,
+        created: session.created,
       }
-      console.log(`✅ [DEBUG] Stripe session found: ${session.payment_status}`)
-    } catch (error) {
-      result.stripeSession = {
-        found: false,
-        error: error.message,
-      }
-      result.issues.push(`Stripe session not found: ${error.message}`)
-      console.log(`❌ [DEBUG] Stripe session not found: ${error.message}`)
+      console.log(`✅ [Purchase Debug] Stripe session found:`, debugResult.stripeSession)
+    } catch (stripeError) {
+      console.error(`❌ [Purchase Debug] Stripe session error:`, stripeError)
+      debugResult.errors.push(`Stripe session not found: ${stripeError.message}`)
     }
 
-    // 2. Check user purchases collection
+    // 2. Check Firestore purchase records
     try {
-      const userPurchasesSnapshot = await db
-        .collection("users")
-        .doc(userId)
-        .collection("purchases")
-        .where("sessionId", "==", sessionId)
-        .get()
+      console.log(`🔍 [Purchase Debug] Checking Firestore purchases...`)
 
-      result.firestorePurchases.userPurchases = {
-        found: !userPurchasesSnapshot.empty,
-        count: userPurchasesSnapshot.size,
-        data: userPurchasesSnapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })),
+      // Check user purchases collection
+      const userPurchasesRef = collection(clientDb, "users", userId, "purchases")
+      const purchasesQuery = query(userPurchasesRef, where("sessionId", "==", sessionId))
+      const purchasesSnapshot = await getDocs(purchasesQuery)
+
+      if (!purchasesSnapshot.empty) {
+        const purchaseDoc = purchasesSnapshot.docs[0]
+        debugResult.firestorePurchase = purchaseDoc.data()
+        console.log(`✅ [Purchase Debug] Firestore purchase found`)
+      } else {
+        console.log(`❌ [Purchase Debug] No Firestore purchase found`)
+        debugResult.errors.push("Purchase record not found in Firestore")
       }
-      console.log(`✅ [DEBUG] User purchases check: ${userPurchasesSnapshot.size} records found`)
-    } catch (error) {
-      result.issues.push(`Failed to check user purchases: ${error.message}`)
-      console.log(`❌ [DEBUG] User purchases check failed: ${error.message}`)
+    } catch (firestoreError) {
+      console.error(`❌ [Purchase Debug] Firestore error:`, firestoreError)
+      debugResult.errors.push(`Firestore error: ${firestoreError.message}`)
     }
 
     // 3. Check unified purchases collection
     try {
-      const unifiedPurchaseDoc = await db
-        .collection("userPurchases")
-        .doc(userId)
-        .collection("purchases")
-        .doc(sessionId)
-        .get()
+      console.log(`🔍 [Purchase Debug] Checking unified purchases...`)
+      const unifiedPurchaseDoc = await getDoc(doc(clientDb, "userPurchases", userId, "purchases", sessionId))
 
-      result.firestorePurchases.unifiedPurchases = {
-        found: unifiedPurchaseDoc.exists,
-        data: unifiedPurchaseDoc.exists ? unifiedPurchaseDoc.data() : null,
+      if (unifiedPurchaseDoc.exists()) {
+        debugResult.unifiedPurchase = unifiedPurchaseDoc.data()
+        console.log(`✅ [Purchase Debug] Unified purchase found`)
+      } else {
+        console.log(`❌ [Purchase Debug] No unified purchase found`)
+        debugResult.errors.push("Purchase record not found in unified collection")
       }
-      console.log(`✅ [DEBUG] Unified purchases check: ${unifiedPurchaseDoc.exists ? "found" : "not found"}`)
-    } catch (error) {
-      result.issues.push(`Failed to check unified purchases: ${error.message}`)
-      console.log(`❌ [DEBUG] Unified purchases check failed: ${error.message}`)
+    } catch (unifiedError) {
+      console.error(`❌ [Purchase Debug] Unified purchase error:`, unifiedError)
+      debugResult.errors.push(`Unified purchase error: ${unifiedError.message}`)
     }
 
-    // 4. Check checkout session logs
-    try {
-      const checkoutSessionDoc = await db.collection("checkoutSessions").doc(sessionId).get()
-      result.webhookLogs.checkoutSession = {
-        found: checkoutSessionDoc.exists,
-        data: checkoutSessionDoc.exists ? checkoutSessionDoc.data() : null,
-      }
-      console.log(`✅ [DEBUG] Checkout session logs: ${checkoutSessionDoc.exists ? "found" : "not found"}`)
-    } catch (error) {
-      result.issues.push(`Failed to check checkout session logs: ${error.message}`)
-      console.log(`❌ [DEBUG] Checkout session logs check failed: ${error.message}`)
-    }
+    // 4. Check if webhook was processed
+    debugResult.webhookProcessed = !!(
+      debugResult.firestorePurchase?.webhookProcessedAt || debugResult.unifiedPurchase?.webhookProcessedAt
+    )
 
     // 5. Generate recommendations
-    if (result.stripeSession.found && result.stripeSession.data.payment_status === "paid") {
-      if (!result.firestorePurchases.userPurchases.found) {
-        result.issues.push("Stripe session is paid but no purchase record found in Firestore")
-        result.recommendations.push("Check if webhook is properly configured and receiving events")
-        result.recommendations.push("Verify webhook secret matches your Stripe dashboard")
-        result.recommendations.push("Check Vercel function logs for webhook processing errors")
-      } else {
-        result.recommendations.push("✅ Purchase verification is working correctly")
-        result.success = true
-      }
-    } else if (result.stripeSession.found && result.stripeSession.data.payment_status !== "paid") {
-      result.recommendations.push(
-        `Stripe session status is '${result.stripeSession.data.payment_status}' - payment may not be complete`,
-      )
-    } else if (!result.stripeSession.found) {
-      result.recommendations.push("Stripe session not found - check if session ID is correct")
-      result.recommendations.push("Verify you're using the correct Stripe environment (test vs live)")
+    if (debugResult.stripeSession && !debugResult.firestorePurchase) {
+      debugResult.recommendations.push("Stripe session exists but no Firestore record - webhook may not have processed")
     }
 
-    // Environment-specific recommendations
-    if (stripeConfig.isLiveMode) {
-      result.recommendations.push("⚠️ Running in LIVE mode - ensure live webhook secret is configured")
-    } else {
-      result.recommendations.push("ℹ️ Running in TEST mode - ensure test webhook secret is configured")
+    if (debugResult.stripeSession?.payment_status === "paid" && !debugResult.webhookProcessed) {
+      debugResult.recommendations.push("Payment completed but webhook not processed - check webhook configuration")
     }
 
-    console.log(`🔍 [DEBUG] Purchase verification debug completed. Success: ${result.success}`)
+    if (!debugResult.stripeSession) {
+      debugResult.recommendations.push("Stripe session not found - verify the session ID is correct")
+    }
 
-    return NextResponse.json(result)
+    if (debugResult.firestorePurchase && !debugResult.unifiedPurchase) {
+      debugResult.recommendations.push("Purchase exists in user collection but not in unified collection")
+    }
+
+    if (debugResult.errors.length === 0 && debugResult.firestorePurchase) {
+      debugResult.recommendations.push("✅ Purchase verification is working correctly")
+    }
+
+    console.log(`✅ [Purchase Debug] Debug completed:`, {
+      hasStripeSession: !!debugResult.stripeSession,
+      hasFirestorePurchase: !!debugResult.firestorePurchase,
+      hasUnifiedPurchase: !!debugResult.unifiedPurchase,
+      webhookProcessed: debugResult.webhookProcessed,
+      errorsCount: debugResult.errors.length,
+      recommendationsCount: debugResult.recommendations.length,
+    })
+
+    return NextResponse.json(debugResult)
   } catch (error) {
-    console.error("Purchase verification debug error:", error)
+    console.error(`❌ [Purchase Debug] Error:`, error)
     return NextResponse.json({ error: "Debug failed", details: error.message }, { status: 500 })
   }
 }
