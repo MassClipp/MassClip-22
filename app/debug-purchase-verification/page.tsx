@@ -19,6 +19,8 @@ import {
   Database,
   Webhook,
   Settings,
+  Copy,
+  Package,
 } from "lucide-react"
 
 interface EnvironmentStatus {
@@ -39,6 +41,15 @@ interface PurchaseDebugResult {
   errors: string[]
 }
 
+interface Bundle {
+  id: string
+  title: string
+  description: string
+  price: number
+  creatorId: string
+  active: boolean
+}
+
 export default function DebugPurchaseVerificationPage() {
   const { user } = useAuth()
   const [loading, setLoading] = useState(false)
@@ -47,10 +58,15 @@ export default function DebugPurchaseVerificationPage() {
   const [debugResult, setDebugResult] = useState<PurchaseDebugResult | null>(null)
   const [environmentStatus, setEnvironmentStatus] = useState<EnvironmentStatus | null>(null)
   const [testPurchaseLoading, setTestPurchaseLoading] = useState(false)
+  const [bundles, setBundles] = useState<Bundle[]>([])
+  const [bundlesLoading, setBundlesLoading] = useState(false)
 
   useEffect(() => {
     fetchEnvironmentStatus()
-  }, [])
+    if (user) {
+      fetchBundles()
+    }
+  }, [user])
 
   const fetchEnvironmentStatus = async () => {
     try {
@@ -60,6 +76,32 @@ export default function DebugPurchaseVerificationPage() {
     } catch (error) {
       console.error("Failed to fetch environment status:", error)
     }
+  }
+
+  const fetchBundles = async () => {
+    if (!user) return
+
+    setBundlesLoading(true)
+    try {
+      const response = await fetch("/api/debug/list-bundles", {
+        headers: {
+          Authorization: `Bearer ${await user.getIdToken()}`,
+        },
+      })
+      const data = await response.json()
+      if (data.success) {
+        setBundles(data.bundles)
+      }
+    } catch (error) {
+      console.error("Failed to fetch bundles:", error)
+    } finally {
+      setBundlesLoading(false)
+    }
+  }
+
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text)
+    alert(`Copied: ${text}`)
   }
 
   const debugPurchase = async () => {
@@ -157,10 +199,14 @@ export default function DebugPurchaseVerificationPage() {
         </div>
 
         <Tabs defaultValue="environment" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-4">
+          <TabsList className="grid w-full grid-cols-5">
             <TabsTrigger value="environment" className="flex items-center gap-2">
               <Settings className="h-4 w-4" />
               Environment
+            </TabsTrigger>
+            <TabsTrigger value="bundles" className="flex items-center gap-2">
+              <Package className="h-4 w-4" />
+              Bundles
             </TabsTrigger>
             <TabsTrigger value="debug" className="flex items-center gap-2">
               <Search className="h-4 w-4" />
@@ -241,6 +287,68 @@ export default function DebugPurchaseVerificationPage() {
                           ⚠️ System is in TEST mode. Only test payments will be processed.
                         </span>
                       )}
+                    </AlertDescription>
+                  </Alert>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="bundles">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Package className="h-5 w-5" />
+                  Available Bundles
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <Button onClick={fetchBundles} variant="outline" className="w-full bg-transparent">
+                  <RefreshCw className="h-4 w-4 mr-2" />
+                  Refresh Bundles
+                </Button>
+
+                {bundlesLoading ? (
+                  <div className="flex items-center justify-center py-8">
+                    <RefreshCw className="h-6 w-6 animate-spin mr-2" />
+                    Loading bundles...
+                  </div>
+                ) : bundles.length > 0 ? (
+                  <div className="space-y-3">
+                    {bundles.map((bundle) => (
+                      <Card key={bundle.id} className="p-4">
+                        <div className="flex items-center justify-between">
+                          <div className="flex-1">
+                            <h3 className="font-medium">{bundle.title}</h3>
+                            <p className="text-sm text-gray-600 truncate">{bundle.description}</p>
+                            <div className="flex items-center gap-2 mt-2">
+                              <Badge variant="outline">${bundle.price}</Badge>
+                              <Badge variant={bundle.active ? "default" : "secondary"}>
+                                {bundle.active ? "Active" : "Inactive"}
+                              </Badge>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Button size="sm" variant="outline" onClick={() => copyToClipboard(bundle.id)}>
+                              <Copy className="h-4 w-4 mr-1" />
+                              Copy ID
+                            </Button>
+                            <Button size="sm" onClick={() => setBundleId(bundle.id)}>
+                              Use for Test
+                            </Button>
+                          </div>
+                        </div>
+                        <div className="mt-2 text-xs text-gray-500 font-mono bg-gray-100 p-2 rounded">
+                          ID: {bundle.id}
+                        </div>
+                      </Card>
+                    ))}
+                  </div>
+                ) : (
+                  <Alert>
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertDescription>
+                      No bundles found. Create some bundles first to test purchase verification.
                     </AlertDescription>
                   </Alert>
                 )}
@@ -383,7 +491,8 @@ export default function DebugPurchaseVerificationPage() {
                     onChange={(e) => setBundleId(e.target.value)}
                   />
                   <p className="text-sm text-gray-500">
-                    This will create a mock purchase record for testing verification
+                    This will create a mock purchase record for testing verification. Use the Bundles tab to find
+                    available bundle IDs.
                   </p>
                 </div>
 
