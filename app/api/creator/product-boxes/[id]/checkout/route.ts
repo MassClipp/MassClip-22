@@ -227,7 +227,8 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
         ],
         mode: "payment",
         success_url:
-          successUrl || `${process.env.NEXT_PUBLIC_SITE_URL}/purchase/success?session_id={CHECKOUT_SESSION_ID}`,
+          successUrl ||
+          `${process.env.NEXT_PUBLIC_SITE_URL}/payment-success?session_id={CHECKOUT_SESSION_ID}&account_id=${creatorData.stripeAccountId}`,
         cancel_url: cancelUrl || `${process.env.NEXT_PUBLIC_SITE_URL}/creator/${creatorData.username}`,
         client_reference_id: userId,
         metadata: {
