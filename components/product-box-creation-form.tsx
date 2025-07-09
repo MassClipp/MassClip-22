@@ -67,8 +67,8 @@ export default function BundleCreationForm({ onSuccess }: { onSuccess?: () => vo
       const price = Number.parseFloat(formData.price)
       if (isNaN(price)) {
         errors.price = "Please enter a valid price"
-      } else if (price < 0.5) {
-        errors.price = "Price must be at least $0.50"
+      } else if (price < 0.01) {
+        errors.price = "Price must be at least $0.01"
       } else if (price > 999.99) {
         errors.price = "Price cannot exceed $999.99"
       }
@@ -258,7 +258,7 @@ export default function BundleCreationForm({ onSuccess }: { onSuccess?: () => vo
                 id="price"
                 type="number"
                 step="0.01"
-                min="0.50"
+                min="0.01"
                 max="999.99"
                 value={formData.price}
                 onChange={(e) => handleInputChange("price", e.target.value)}

@@ -284,11 +284,11 @@ function validateProductBoxData(data: any): ProductBoxCreationError | null {
   }
 
   const priceValue = Number.parseFloat(price.toString())
-  if (priceValue < 0.5) {
+  if (priceValue < 0.01) {
     return {
       code: "PRICE_TOO_LOW",
-      message: "Price must be at least $0.50",
-      suggestedActions: ["Set a price of $0.50 or higher"],
+      message: "Price must be at least $0.01",
+      suggestedActions: ["Set a price of $0.01 or higher"],
     }
   }
 
