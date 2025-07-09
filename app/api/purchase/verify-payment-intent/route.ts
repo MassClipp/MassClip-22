@@ -1,7 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { stripe } from "@/lib/stripe"
 import { db } from "@/lib/firebase-admin"
-import { UnifiedPurchaseService } from "@/lib/unified-purchase-service"
 
 export async function POST(request: NextRequest) {
   try {
@@ -125,17 +124,6 @@ export async function POST(request: NextRequest) {
       creatorData = creatorDoc.exists ? creatorDoc.data() : null
       console.log(`✅ [Payment Verify] Creator data retrieved: ${creatorData?.displayName || "Unknown"}`)
     }
-
-    // Create unified purchase record
-    const purchaseId = await UnifiedPurchaseService.createUnifiedPurchase(userId, {
-      productBoxId: actualProductId,
-      sessionId: paymentIntent.id, // Use payment intent ID as session ID
-      amount: paymentIntent.amount / 100, // Convert from cents
-      currency: paymentIntent.currency,
-      creatorId: creatorId || "",
-    })
-
-    console.log(`✅ [Payment Verify] Unified purchase created: ${purchaseId}`)
 
     // Create comprehensive purchase data with enhanced logging
     const purchaseData = {
@@ -276,12 +264,9 @@ export async function POST(request: NextRequest) {
       `🎉 [Payment Verify] Successfully verified and recorded purchase for payment intent: ${paymentIntentId}`,
     )
 
-    // Get the created purchase for response
-    const createdPurchase = await UnifiedPurchaseService.getUserPurchase(userId, paymentIntent.id)
-
     return NextResponse.json({
       success: true,
-      purchase: createdPurchase,
+      purchase: purchaseData,
       paymentIntent: {
         id: paymentIntent.id,
         amount: paymentIntent.amount / 100,
