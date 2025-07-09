@@ -9,6 +9,7 @@ export async function GET(request: NextRequest) {
     // Verify authentication
     const decodedToken = await verifyIdToken(request)
     if (!decodedToken) {
+      console.error(`❌ [List Bundles Debug] Authentication failed`)
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 

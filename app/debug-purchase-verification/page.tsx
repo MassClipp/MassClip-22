@@ -64,19 +64,49 @@ export default function DebugPurchaseVerificationPage() {
   const [bundlesLoading, setBundlesLoading] = useState(false)
 
   useEffect(() => {
-    fetchEnvironmentStatus()
     if (user) {
+      fetchEnvironmentStatus()
       fetchBundles()
     }
   }, [user])
 
-  const fetchEnvironmentStatus = async () => {
+  const getAuthHeaders = async () => {
+    if (!user) return {}
+
     try {
-      const response = await fetch("/api/debug/stripe-environment")
+      const token = await user.getIdToken(true) // Force refresh
+      return {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      }
+    } catch (error) {
+      console.error("Failed to get auth token:", error)
+      return {}
+    }
+  }
+
+  const fetchEnvironmentStatus = async () => {
+    if (!user) return
+
+    try {
+      const headers = await getAuthHeaders()
+      const response = await fetch("/api/debug/stripe-environment", { headers })
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+      }
+
       const data = await response.json()
       setEnvironmentStatus(data)
-    } catch (error) {
+    } catch (error: any) {
       console.error("Failed to fetch environment status:", error)
+      setEnvironmentStatus({
+        stripeMode: "ERROR",
+        stripeKeyPrefix: "Failed to load",
+        webhookConfigured: false,
+        firebaseConnected: false,
+        environment: "error",
+      })
     }
   }
 
@@ -85,16 +115,18 @@ export default function DebugPurchaseVerificationPage() {
 
     setBundlesLoading(true)
     try {
-      const response = await fetch("/api/debug/list-bundles", {
-        headers: {
-          Authorization: `Bearer ${await user.getIdToken()}`,
-        },
-      })
+      const headers = await getAuthHeaders()
+      const response = await fetch("/api/debug/list-bundles", { headers })
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+      }
+
       const data = await response.json()
       if (data.success) {
         setBundles(data.bundles)
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Failed to fetch bundles:", error)
     } finally {
       setBundlesLoading(false)
@@ -111,14 +143,16 @@ export default function DebugPurchaseVerificationPage() {
 
     setLoading(true)
     try {
+      const headers = await getAuthHeaders()
       const response = await fetch("/api/debug/purchase-verification", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${await user.getIdToken()}`,
-        },
+        headers,
         body: JSON.stringify({ sessionId, userId: user.uid }),
       })
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+      }
 
       const result = await response.json()
       setDebugResult(result)
@@ -141,18 +175,20 @@ export default function DebugPurchaseVerificationPage() {
 
     setTestPurchaseLoading(true)
     try {
+      const headers = await getAuthHeaders()
       const response = await fetch("/api/debug/create-test-purchase", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${await user.getIdToken()}`,
-        },
+        headers,
         body: JSON.stringify({
           bundleId,
           userId: user.uid,
           price: 9.99,
         }),
       })
+
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+      }
 
       const result = await response.json()
 

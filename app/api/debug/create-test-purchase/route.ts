@@ -9,6 +9,7 @@ export async function POST(request: NextRequest) {
     // Verify authentication
     const decodedToken = await verifyIdToken(request)
     if (!decodedToken) {
+      console.error(`❌ [Create Test Purchase] Authentication failed`)
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 

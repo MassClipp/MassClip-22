@@ -28,8 +28,14 @@ export interface DecodedToken {
 export async function verifyIdToken(request: NextRequest): Promise<DecodedToken | null> {
   try {
     const authHeader = request.headers.get("authorization")
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      console.error("❌ [Auth Utils] No valid authorization header found")
+
+    if (!authHeader) {
+      console.error("❌ [Auth Utils] No authorization header found")
+      return null
+    }
+
+    if (!authHeader.startsWith("Bearer ")) {
+      console.error("❌ [Auth Utils] Invalid authorization header format")
       return null
     }
 
@@ -44,8 +50,8 @@ export async function verifyIdToken(request: NextRequest): Promise<DecodedToken 
     console.log("✅ [Auth Utils] ID token verified successfully for user:", decodedToken.uid)
 
     return decodedToken
-  } catch (error) {
-    console.error("❌ [Auth Utils] Failed to verify ID token:", error)
+  } catch (error: any) {
+    console.error("❌ [Auth Utils] Failed to verify ID token:", error.message)
     return null
   }
 }

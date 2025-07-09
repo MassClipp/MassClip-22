@@ -1,45 +1,52 @@
-import { NextResponse } from "next/server"
-import { STRIPE_CONFIG } from "@/lib/stripe"
+import { type NextRequest, NextResponse } from "next/server"
+import { verifyIdToken } from "@/lib/auth-utils"
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    console.log(`🔍 [Stripe Environment Debug] Checking environment status`)
+    console.log(`🔍 [Stripe Environment] Checking environment status`)
 
-    // Check environment variables
-    const stripeSecretKey = process.env.STRIPE_SECRET_KEY
-    const stripePublishableKey = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
-    const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET
-
-    // Determine mode from the actual key
-    const stripeMode = stripeSecretKey?.startsWith("sk_live_")
-      ? "LIVE"
-      : stripeSecretKey?.startsWith("sk_test_")
-        ? "TEST"
-        : "UNKNOWN"
-
-    const result = {
-      stripeMode,
-      stripeKeyPrefix: stripeSecretKey?.substring(0, 7) || "missing",
-      webhookConfigured: !!webhookSecret,
-      firebaseConnected: !!(process.env.FIREBASE_PROJECT_ID && process.env.FIREBASE_PRIVATE_KEY),
-      environment: process.env.VERCEL_ENV || process.env.NODE_ENV || "unknown",
-      hasPublishableKey: !!stripePublishableKey,
-      config: STRIPE_CONFIG,
+    // Verify authentication
+    const decodedToken = await verifyIdToken(request)
+    if (!decodedToken) {
+      console.error(`❌ [Stripe Environment] Authentication failed`)
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    console.log(`✅ [Stripe Environment Debug] Environment status:`, result)
+    // Check Stripe configuration
+    const stripeSecretKey = process.env.STRIPE_SECRET_KEY
+    const stripeWebhookSecret = process.env.STRIPE_WEBHOOK_SECRET
 
-    return NextResponse.json(result)
+    const isLiveMode = stripeSecretKey?.startsWith("sk_live_")
+    const stripeKeyPrefix = stripeSecretKey?.substring(0, 12) || "Not configured"
+
+    // Check Firebase configuration
+    const firebaseProjectId = process.env.FIREBASE_PROJECT_ID
+    const firebasePrivateKey = process.env.FIREBASE_PRIVATE_KEY
+    const firebaseClientEmail = process.env.FIREBASE_CLIENT_EMAIL
+
+    const firebaseConnected = !!(firebaseProjectId && firebasePrivateKey && firebaseClientEmail)
+
+    const environmentStatus = {
+      stripeMode: isLiveMode ? "LIVE" : "TEST",
+      stripeKeyPrefix,
+      webhookConfigured: !!stripeWebhookSecret,
+      firebaseConnected,
+      environment: process.env.NODE_ENV || "development",
+    }
+
+    console.log(`✅ [Stripe Environment] Environment status checked`)
+
+    return NextResponse.json(environmentStatus)
   } catch (error: any) {
-    console.error(`❌ [Stripe Environment Debug] Error:`, error)
+    console.error(`❌ [Stripe Environment] Error:`, error)
     return NextResponse.json(
       {
-        error: `Failed to check environment: ${error instanceof Error ? error.message : "Unknown error"}`,
-        stripeMode: "ERROR",
-        stripeKeyPrefix: "error",
+        stripeMode: "UNKNOWN",
+        stripeKeyPrefix: "Error",
         webhookConfigured: false,
         firebaseConnected: false,
         environment: "error",
+        error: error instanceof Error ? error.message : "Unknown error",
       },
       { status: 500 },
     )
