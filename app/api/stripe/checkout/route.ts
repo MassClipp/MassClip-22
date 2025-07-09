@@ -1,17 +1,17 @@
 import { type NextRequest, NextResponse } from "next/server"
-import Stripe from "stripe"
+import { stripe } from "@/lib/stripe"
 import { auth } from "@/lib/firebase-admin"
 import { db } from "@/lib/firebase-admin"
-
-// Initialize Stripe with the secret key
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: "2024-06-20",
-})
 
 export async function POST(request: NextRequest) {
   try {
     // Get the request data
     const { idToken, videoId } = await request.json()
+
+    console.log("🛒 [Video Checkout] Starting video checkout session creation:", {
+      videoId,
+      hasIdToken: !!idToken,
+    })
 
     if (!idToken || !videoId) {
       return NextResponse.json({ error: "Missing required parameters" }, { status: 400 })
@@ -21,14 +21,25 @@ export async function POST(request: NextRequest) {
     const decodedToken = await auth.verifyIdToken(idToken)
     const buyerUid = decodedToken.uid
 
+    console.log("✅ [Video Checkout] Token verified for user:", buyerUid)
+
     // Get the video document from Firestore
     const videoDoc = await db.collection("videos").doc(videoId).get()
 
     if (!videoDoc.exists) {
+      console.error("❌ [Video Checkout] Video not found:", videoId)
       return NextResponse.json({ error: "Video not found" }, { status: 404 })
     }
 
     const videoData = videoDoc.data()!
+
+    console.log("✅ [Video Checkout] Video found:", {
+      videoId,
+      title: videoData.title,
+      isPremium: videoData.isPremium,
+      price: videoData.price,
+      creatorUid: videoData.uid,
+    })
 
     // Check if the video is premium
     if (!videoData.isPremium) {
@@ -47,6 +58,11 @@ export async function POST(request: NextRequest) {
     const creatorData = creatorDoc.data()
 
     if (!creatorData?.stripeAccountId || !creatorData.stripeOnboarded) {
+      console.error("❌ [Video Checkout] Creator not set up for payments:", {
+        creatorUid: videoData.uid,
+        hasStripeAccount: !!creatorData?.stripeAccountId,
+        isOnboarded: !!creatorData?.stripeOnboarded,
+      })
       return NextResponse.json({ error: "Creator is not set up to receive payments" }, { status: 400 })
     }
 
@@ -56,11 +72,19 @@ export async function POST(request: NextRequest) {
     // Calculate the application fee (25% of the price)
     const applicationFee = Math.round(price * 0.25)
 
+    console.log("💰 [Video Checkout] Price calculation:", {
+      price,
+      applicationFee,
+      creatorAmount: price - applicationFee,
+    })
+
     // Create a product for the video if it doesn't exist
     let productId = videoData.stripeProductId
     let priceId = videoData.stripePriceId
 
     if (!productId) {
+      console.log("🏗️ [Video Checkout] Creating new Stripe product for video")
+
       // Create a new product
       const product = await stripe.products.create({
         name: videoData.title || "Premium Video",
@@ -87,18 +111,23 @@ export async function POST(request: NextRequest) {
         stripeProductId: productId,
         stripePriceId: priceId,
       })
+
+      console.log("✅ [Video Checkout] Created Stripe product and price:", {
+        productId,
+        priceId,
+      })
     }
 
-    // Create a Checkout session
-    const session = await stripe.checkout.sessions.create({
-      payment_method_types: ["card"],
+    // Create a Checkout session - FORCE live mode
+    const sessionData = {
+      payment_method_types: ["card"] as const,
       line_items: [
         {
           price: priceId,
           quantity: 1,
         },
       ],
-      mode: "payment",
+      mode: "payment" as const,
       success_url: `${process.env.NEXT_PUBLIC_SITE_URL}/purchase/success?session_id={CHECKOUT_SESSION_ID}&video_id=${videoId}`,
       cancel_url: `${process.env.NEXT_PUBLIC_SITE_URL}/creator/${videoData.username}`,
       payment_intent_data: {
@@ -112,14 +141,33 @@ export async function POST(request: NextRequest) {
           creatorUid: videoData.uid,
           platformFeeAmount: applicationFee.toString(),
           creatorAmount: (price - applicationFee).toString(),
+          checkout_type: "video_purchase",
         },
       },
       metadata: {
         videoId,
         buyerUid,
         creatorUid: videoData.uid,
+        checkout_type: "video_purchase",
       },
+    }
+
+    console.log("🔄 [Video Checkout] Creating Stripe session")
+
+    const session = await stripe.checkout.sessions.create(sessionData)
+
+    console.log("✅ [Video Checkout] Session created:", {
+      sessionId: session.id,
+      url: session.url ? "Generated" : "Missing",
     })
+
+    // Verify session was created with live keys
+    if (session.id.startsWith("cs_test_")) {
+      console.error("❌ [Video Checkout] ERROR: Created test session when live was expected!")
+      console.error("❌ [Video Checkout] Session ID:", session.id)
+    } else if (session.id.startsWith("cs_live_")) {
+      console.log("🎉 [Video Checkout] SUCCESS: Created live session as expected!")
+    }
 
     return NextResponse.json({
       success: true,
@@ -127,7 +175,15 @@ export async function POST(request: NextRequest) {
       url: session.url,
     })
   } catch (error) {
-    console.error("Error creating checkout session:", error)
+    console.error("❌ [Video Checkout] Error creating checkout session:", error)
+
+    if (error instanceof Error) {
+      console.error("❌ [Video Checkout] Error details:", {
+        message: error.message,
+        stack: error.stack?.split("\n").slice(0, 3),
+      })
+    }
+
     return NextResponse.json({ error: "Failed to create checkout session" }, { status: 500 })
   }
 }
