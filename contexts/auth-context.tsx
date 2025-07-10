@@ -1,40 +1,49 @@
 "use client"
 
-import type React from "react"
+import { createContext, useContext, useEffect, useState, type ReactNode } from "react"
+import { onAuthStateChanged, type User } from "firebase/auth"
+import { firebaseAuth } from "@/firebase" // <- adjust if your auth export lives elsewhere
 
-import { createContext, useContext, useEffect, useState } from "react"
-import type { User } from "firebase/auth"
-import { auth as firebaseAuth } from "@/lib/firebase" // adjust import if your firebase client lives elsewhere
+/* -------------------------------------------------------------------------- */
+/*                              Context & Types                               */
+/* -------------------------------------------------------------------------- */
 
-type AuthContextValue = {
+interface AuthContextValue {
   user: User | null
   loading: boolean
 }
 
-const AuthContext = createContext<AuthContextValue>({
-  user: null,
-  loading: true,
-})
+const AuthContext = createContext<AuthContextValue | undefined>(undefined)
 
-export function AuthProvider({ children }: { children: React.ReactNode }) {
+/* -------------------------------------------------------------------------- */
+/*                                Provider                                    */
+/* -------------------------------------------------------------------------- */
+
+export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    // Listen for Firebase auth changes
-    const unsub = firebaseAuth.onAuthStateChanged((u) => {
+    const unsub = onAuthStateChanged(firebaseAuth, (u) => {
       setUser(u)
       setLoading(false)
     })
     return () => unsub()
   }, [])
 
-  return <AuthContext.Provider value={{ user, loading }}>{children}</AuthContext.Provider>
+  const value: AuthContextValue = { user, loading }
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }
 
-/**
- * Access the current authenticated user and loading flag.
- */
-export function useAuthContext(): AuthContextValue {
-  return useContext(AuthContext)
+/* -------------------------------------------------------------------------- */
+/*                                Hook                                        */
+/* -------------------------------------------------------------------------- */
+
+export function useAuthContext() {
+  const ctx = useContext(AuthContext)
+  if (!ctx) {
+    throw new Error("useAuthContext must be used inside <AuthProvider>")
+  }
+  return ctx
 }
