@@ -1,134 +1,165 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { verifyIdToken } from "@/lib/auth-utils"
+import { auth } from "@/lib/firebase-admin"
 import { db } from "@/lib/firebase-admin"
+import { UnifiedPurchaseService } from "@/lib/unified-purchase-service"
 
 export async function POST(request: NextRequest) {
   try {
-    // Verify authentication
-    const decodedToken = await verifyIdToken(request)
-    if (!decodedToken) {
+    const authHeader = request.headers.get("authorization")
+    if (!authHeader?.startsWith("Bearer ")) {
       return NextResponse.json({ error: "Authentication required" }, { status: 401 })
     }
 
+    const idToken = authHeader.split("Bearer ")[1]
+    const decodedToken = await auth.verifyIdToken(idToken)
     const userId = decodedToken.uid
-    const { bundleId, productBoxId, creatorId, verificationMethod } = await request.json()
 
-    // Support both bundleId and productBoxId for compatibility
-    const actualBundleId = bundleId || productBoxId
+    const { bundleId, productBoxId, creatorId, verificationMethod = "landing_page" } = await request.json()
 
-    if (!actualBundleId) {
-      return NextResponse.json({ error: "Bundle ID required" }, { status: 400 })
+    // Use bundleId if provided, otherwise use productBoxId
+    const actualProductBoxId = bundleId || productBoxId
+
+    if (!actualProductBoxId) {
+      return NextResponse.json({ error: "Product box ID required" }, { status: 400 })
     }
 
-    console.log(`🚀 [Grant Immediate Access] Processing for:`)
-    console.log(`   📦 Bundle: ${actualBundleId}`)
-    console.log(`   👤 User: ${userId}`)
-    console.log(`   🎯 Verification: ${verificationMethod || "landing_page"}`)
+    console.log(`🎉 [Grant Immediate Access] Processing for user ${userId}, product box ${actualProductBoxId}`)
 
-    // Get bundle details from bundles collection
-    const bundleDoc = await db.collection("bundles").doc(actualBundleId).get()
-
-    if (!bundleDoc.exists) {
-      console.error(`❌ [Grant Immediate Access] Bundle not found: ${actualBundleId}`)
-      return NextResponse.json({ error: "Bundle not found" }, { status: 404 })
+    // Get product box details
+    const productBoxDoc = await db.collection("productBoxes").doc(actualProductBoxId).get()
+    if (!productBoxDoc.exists) {
+      console.error(`❌ [Grant Access] Product box not found: ${actualProductBoxId}`)
+      return NextResponse.json({ error: "Product box not found" }, { status: 404 })
     }
 
-    const bundleData = bundleDoc.data()!
-    console.log(`✅ [Grant Immediate Access] Found bundle: ${bundleData.title}`)
+    const productBoxData = productBoxDoc.data()!
+    const actualCreatorId = creatorId || productBoxData.creatorId
 
     // Get creator details
-    const creatorDoc = await db.collection("users").doc(bundleData.creatorId).get()
-    const creatorData = creatorDoc.exists ? creatorDoc.data() : null
+    let creatorData = null
+    if (actualCreatorId) {
+      const creatorDoc = await db.collection("users").doc(actualCreatorId).get()
+      creatorData = creatorDoc.exists ? creatorDoc.data() : null
+    }
 
-    // Check if user already has access - check both collections for compatibility
-    const existingPurchaseQuery1 = await db
-      .collection("bundlePurchases")
-      .where("buyerUid", "==", userId)
-      .where("bundleId", "==", actualBundleId)
-      .where("status", "==", "completed")
-      .limit(1)
-      .get()
+    // Check if user already has access via unified purchases
+    const existingUnifiedPurchase = await UnifiedPurchaseService.hasUserPurchased(userId, actualProductBoxId)
 
-    const existingPurchaseQuery2 = await db
-      .collection("productBoxPurchases")
+    if (existingUnifiedPurchase) {
+      console.log(`ℹ️ [Grant Access] User already has unified purchase for ${actualProductBoxId}`)
+      return NextResponse.json({
+        success: true,
+        alreadyPurchased: true,
+        bundle: {
+          id: actualProductBoxId,
+          title: productBoxData.title || "Untitled Bundle",
+          description: productBoxData.description || "",
+          thumbnailUrl: productBoxData.thumbnailUrl || productBoxData.customPreviewThumbnail || "",
+          price: productBoxData.price || 0,
+          currency: productBoxData.currency || "usd",
+        },
+        creator: creatorData
+          ? {
+              id: actualCreatorId,
+              name: creatorData.displayName || creatorData.name || "Unknown Creator",
+              username: creatorData.username || "",
+            }
+          : null,
+      })
+    }
+
+    // Check legacy purchases
+    const legacyPurchasesQuery = await db
+      .collection("purchases")
       .where("buyerUid", "==", userId)
-      .where("productBoxId", "==", actualBundleId)
+      .where("productBoxId", "==", actualProductBoxId)
       .where("status", "==", "completed")
       .limit(1)
       .get()
 
     let alreadyPurchased = false
+    if (!legacyPurchasesQuery.empty) {
+      console.log(`ℹ️ [Grant Access] Found legacy purchase, migrating to unified format`)
 
-    if (!existingPurchaseQuery1.empty || !existingPurchaseQuery2.empty) {
-      console.log(`ℹ️ [Grant Immediate Access] User already has access`)
+      // Migrate legacy purchase to unified format
+      const legacyPurchase = legacyPurchasesQuery.docs[0].data()
+      const sessionId = legacyPurchase.sessionId || `legacy_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+
+      await UnifiedPurchaseService.createUnifiedPurchase(userId, {
+        productBoxId: actualProductBoxId,
+        sessionId: sessionId,
+        amount: legacyPurchase.amount || productBoxData.price || 0,
+        currency: legacyPurchase.currency || productBoxData.currency || "usd",
+        creatorId: actualCreatorId || "",
+      })
+
       alreadyPurchased = true
     } else {
-      // Create purchase record immediately - no Stripe verification needed!
+      // Create new purchase record - IMMEDIATE ACCESS!
+      console.log(`🚀 [Grant Access] Creating new purchase record with immediate access`)
+
+      const sessionId = `immediate_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+
+      // Create unified purchase
+      await UnifiedPurchaseService.createUnifiedPurchase(userId, {
+        productBoxId: actualProductBoxId,
+        sessionId: sessionId,
+        amount: productBoxData.price || 0,
+        currency: productBoxData.currency || "usd",
+        creatorId: actualCreatorId || "",
+      })
+
+      // Also create legacy purchase for backward compatibility
       const purchaseData = {
         buyerUid: userId,
-        bundleId: actualBundleId,
-        productBoxId: actualBundleId, // Keep for compatibility
-        creatorId: bundleData.creatorId,
-        amount: bundleData.price || 0,
-        currency: bundleData.currency || "usd",
-        status: "completed", // Immediately completed!
-        type: "bundle",
+        userId: userId,
+        productBoxId: actualProductBoxId,
+        itemId: actualProductBoxId,
+        creatorId: actualCreatorId,
+        amount: productBoxData.price || 0,
+        currency: productBoxData.currency || "usd",
+        status: "completed",
+        type: "product_box",
         createdAt: new Date(),
         completedAt: new Date(),
-        verificationMethod: verificationMethod || "landing_page", // Simple verification
-        notes: "Access granted via landing page verification - no Stripe API verification required",
+        purchasedAt: new Date(),
+        sessionId: sessionId,
+        verificationMethod: verificationMethod,
+        itemTitle: productBoxData.title || "Untitled Bundle",
+        itemDescription: productBoxData.description || "",
+        thumbnailUrl: productBoxData.thumbnailUrl || productBoxData.customPreviewThumbnail || "",
+        accessUrl: `/product-box/${actualProductBoxId}/content`,
       }
 
-      // Store in both collections for compatibility
-      const purchaseRef1 = await db.collection("bundlePurchases").add(purchaseData)
-      const purchaseRef2 = await db.collection("productBoxPurchases").add(purchaseData)
+      // Write to multiple collections for compatibility
+      await db.collection("purchases").doc(sessionId).set(purchaseData)
+      await db.collection("users").doc(userId).collection("purchases").doc(sessionId).set(purchaseData)
 
-      console.log(`✅ [Grant Immediate Access] Created purchase records: ${purchaseRef1.id}, ${purchaseRef2.id}`)
-
-      // Also add to user's purchases subcollection for easy access
-      await db
-        .collection("users")
-        .doc(userId)
-        .collection("purchases")
-        .doc(purchaseRef1.id)
-        .set({
-          ...purchaseData,
-          purchaseId: purchaseRef1.id,
-        })
-
-      console.log(`✅ [Grant Immediate Access] Added to user's purchase history`)
+      console.log(`✅ [Grant Access] Created purchase records for ${actualProductBoxId}`)
     }
 
-    // Return success with all the details
-    const response = {
+    // Return success with product details
+    return NextResponse.json({
       success: true,
       alreadyPurchased,
       bundle: {
-        id: actualBundleId,
-        title: bundleData.title,
-        description: bundleData.description,
-        thumbnailUrl: bundleData.thumbnailUrl || bundleData.customPreviewThumbnail,
-        price: bundleData.price,
-        currency: bundleData.currency || "usd",
+        id: actualProductBoxId,
+        title: productBoxData.title || "Untitled Bundle",
+        description: productBoxData.description || "",
+        thumbnailUrl: productBoxData.thumbnailUrl || productBoxData.customPreviewThumbnail || "",
+        price: productBoxData.price || 0,
+        currency: productBoxData.currency || "usd",
       },
       creator: creatorData
         ? {
-            id: bundleData.creatorId,
-            name: creatorData.displayName || creatorData.name || creatorData.username || "Unknown Creator",
+            id: actualCreatorId,
+            name: creatorData.displayName || creatorData.name || "Unknown Creator",
             username: creatorData.username || "",
           }
         : null,
-      verificationMethod: verificationMethod || "landing_page",
-      message: alreadyPurchased
-        ? "Welcome back! You already have access to this content."
-        : "🎉 Purchase complete! Access granted immediately - no complex verification needed!",
-    }
-
-    console.log(`🎉 [Grant Immediate Access] Success! User now has access to ${bundleData.title}`)
-
-    return NextResponse.json(response)
+    })
   } catch (error: any) {
-    console.error(`❌ [Grant Immediate Access] Error:`, error)
+    console.error(`❌ [Grant Access] Error:`, error)
     return NextResponse.json(
       {
         success: false,
