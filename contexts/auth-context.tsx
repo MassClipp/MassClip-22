@@ -117,3 +117,6 @@ export function useAuth() {
   }
   return context
 }
+
+// Convenient alias used across the code-base
+export const useAuthContext = useAuth
