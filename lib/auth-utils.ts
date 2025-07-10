@@ -60,13 +60,37 @@ export async function verifyIdToken(request: NextRequest): Promise<DecodedToken 
  * Require authentication for API routes
  */
 export async function requireAuth(request: NextRequest): Promise<DecodedToken> {
-  const decodedToken = await verifyIdToken(request)
+  const authHeader = request.headers.get("authorization")
 
-  if (!decodedToken) {
-    throw new Error("Authentication required")
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    throw new Error("Missing or invalid authorization header")
   }
 
-  return decodedToken
+  const idToken = authHeader.split("Bearer ")[1]
+
+  if (!idToken) {
+    throw new Error("Missing ID token")
+  }
+
+  try {
+    const decodedToken = await auth.verifyIdToken(idToken)
+    console.log(`✅ [Auth] Token verified for user: ${decodedToken.uid}`)
+    return decodedToken
+  } catch (error: any) {
+    console.error(`❌ [Auth] Token verification failed:`, error)
+    throw new Error("Invalid or expired token")
+  }
+}
+
+/**
+ * Optional authentication for API routes
+ */
+export async function optionalAuth(request: NextRequest): Promise<DecodedToken | null> {
+  try {
+    return await requireAuth(request)
+  } catch (error) {
+    return null
+  }
 }
 
 /**
@@ -161,3 +185,4 @@ export async function getAuthenticatedUser(request: NextRequest): Promise<string
   const decodedToken = await verifyIdToken(request)
   return decodedToken ? decodedToken.uid : null
 }
+</merged_code>
