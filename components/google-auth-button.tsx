@@ -8,14 +8,30 @@ import { auth } from "@/lib/firebase"
 import { cn } from "@/lib/utils"
 
 interface GoogleAuthButtonProps {
+  onClick?: () => void
   onSuccess?: () => void
+  isLoading?: boolean
+  text: string
+  disabled?: boolean
   className?: string
 }
 
-export function GoogleAuthButton({ onSuccess, className }: GoogleAuthButtonProps) {
+export function GoogleAuthButton({
+  onClick,
+  onSuccess,
+  isLoading = false,
+  text,
+  disabled = false,
+  className,
+}: GoogleAuthButtonProps) {
   const [loading, setLoading] = useState(false)
 
   const handleGoogleSignIn = async () => {
+    if (onClick) {
+      onClick()
+      return
+    }
+
     setLoading(true)
     try {
       const provider = new GoogleAuthProvider()
@@ -31,15 +47,17 @@ export function GoogleAuthButton({ onSuccess, className }: GoogleAuthButtonProps
     }
   }
 
+  const isButtonLoading = isLoading || loading
+
   return (
     <Button
       type="button"
       variant="outline"
       onClick={handleGoogleSignIn}
-      disabled={loading}
-      className={cn("relative font-semibold text-slate-700 hover:text-slate-900", className)}
+      disabled={isButtonLoading || disabled}
+      className={cn("relative font-semibold text-gray-700 hover:text-gray-900", className)}
     >
-      {loading ? (
+      {isButtonLoading ? (
         <Loader2 className="h-5 w-5 animate-spin" />
       ) : (
         <>
@@ -61,7 +79,7 @@ export function GoogleAuthButton({ onSuccess, className }: GoogleAuthButtonProps
               fill="#EA4335"
             />
           </svg>
-          Continue with Google
+          {text}
         </>
       )}
     </Button>

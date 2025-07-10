@@ -31,10 +31,10 @@ export default function LoginPage() {
 
   if (user) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-100 flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-100 flex items-center justify-center">
         <div className="text-center space-y-4">
-          <Loader2 className="h-12 w-12 animate-spin mx-auto text-crimson" />
-          <p className="text-slate-600 text-lg">Redirecting to your dashboard...</p>
+          <Loader2 className="h-12 w-12 animate-spin mx-auto text-red-600" />
+          <p className="text-gray-600 text-lg">Redirecting to your dashboard...</p>
         </div>
       </div>
     )

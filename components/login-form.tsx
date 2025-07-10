@@ -13,7 +13,7 @@ import { Loader2, Mail, Lock, Eye, EyeOff, ArrowRight } from "lucide-react"
 import { signInWithEmailAndPassword } from "firebase/auth"
 import { auth } from "@/lib/firebase"
 import { GoogleAuthButton } from "@/components/google-auth-button"
-import { Logo } from "@/components/logo"
+import Logo from "@/components/logo"
 
 export function LoginForm({ className, ...props }: React.ComponentProps<"div">) {
   const [email, setEmail] = useState("")
@@ -74,7 +74,7 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
   }
 
   return (
-    <div className={cn("min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-100", className)} {...props}>
+    <div className={cn("min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-100", className)} {...props}>
       {/* Header with Logo */}
       <div className="absolute top-0 left-0 right-0 z-10 p-6">
         <Logo
@@ -90,15 +90,15 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
         {/* Left Side - Form */}
         <div className="flex-1 flex items-center justify-center p-8 lg:p-16">
           <div className="w-full max-w-md">
-            <Card className="border-0 shadow-2xl bg-white/80 backdrop-blur-sm">
+            <Card className="border-0 shadow-2xl bg-white/90 backdrop-blur-sm">
               <CardContent className="p-8 lg:p-10">
                 <div className="space-y-8">
                   {/* Header */}
                   <div className="text-center space-y-3">
-                    <h1 className="text-3xl font-bold bg-gradient-to-r from-slate-900 to-slate-700 bg-clip-text text-transparent">
+                    <h1 className="text-3xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent">
                       Welcome back
                     </h1>
-                    <p className="text-slate-600 text-lg">Sign in to your MassClip account</p>
+                    <p className="text-gray-600 text-lg">Sign in to your MassClip account</p>
                   </div>
 
                   {/* Purchase Success Notice */}
@@ -124,14 +124,14 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
                   <form onSubmit={handleEmailLogin} className="space-y-6">
                     {/* Email Field */}
                     <div className="space-y-2">
-                      <Label htmlFor="email" className="text-sm font-medium text-slate-700">
+                      <Label htmlFor="email" className="text-sm font-medium text-gray-700">
                         Email address
                       </Label>
                       <div className="relative group">
                         <Mail
                           className={cn(
                             "absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 transition-colors duration-200",
-                            focusedField === "email" ? "text-crimson" : "text-slate-400",
+                            focusedField === "email" ? "text-red-600" : "text-gray-400",
                           )}
                         />
                         <Input
@@ -145,8 +145,8 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
                           className={cn(
                             "pl-10 h-12 border-2 transition-all duration-200 bg-white/50",
                             focusedField === "email"
-                              ? "border-crimson ring-4 ring-crimson/10"
-                              : "border-slate-200 hover:border-slate-300",
+                              ? "border-red-600 ring-4 ring-red-600/10"
+                              : "border-gray-200 hover:border-gray-300",
                           )}
                           required
                         />
@@ -156,13 +156,13 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
                     {/* Password Field */}
                     <div className="space-y-2">
                       <div className="flex items-center justify-between">
-                        <Label htmlFor="password" className="text-sm font-medium text-slate-700">
+                        <Label htmlFor="password" className="text-sm font-medium text-gray-700">
                           Password
                         </Label>
                         <Button
                           variant="link"
                           size="sm"
-                          className="h-auto p-0 text-sm text-crimson hover:text-crimson/80"
+                          className="h-auto p-0 text-sm text-red-600 hover:text-red-700"
                           onClick={() => router.push("/forgot-password")}
                           type="button"
                         >
@@ -173,7 +173,7 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
                         <Lock
                           className={cn(
                             "absolute left-3 top-1/2 transform -translate-y-1/2 h-5 w-5 transition-colors duration-200",
-                            focusedField === "password" ? "text-crimson" : "text-slate-400",
+                            focusedField === "password" ? "text-red-600" : "text-gray-400",
                           )}
                         />
                         <Input
@@ -187,8 +187,8 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
                           className={cn(
                             "pl-10 pr-10 h-12 border-2 transition-all duration-200 bg-white/50",
                             focusedField === "password"
-                              ? "border-crimson ring-4 ring-crimson/10"
-                              : "border-slate-200 hover:border-slate-300",
+                              ? "border-red-600 ring-4 ring-red-600/10"
+                              : "border-gray-200 hover:border-gray-300",
                           )}
                           required
                         />
@@ -200,9 +200,9 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
                           onClick={() => setShowPassword(!showPassword)}
                         >
                           {showPassword ? (
-                            <EyeOff className="h-4 w-4 text-slate-400" />
+                            <EyeOff className="h-4 w-4 text-gray-400" />
                           ) : (
-                            <Eye className="h-4 w-4 text-slate-400" />
+                            <Eye className="h-4 w-4 text-gray-400" />
                           )}
                         </Button>
                       </div>
@@ -218,7 +218,7 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
                     {/* Sign In Button */}
                     <Button
                       type="submit"
-                      className="w-full h-12 bg-gradient-to-r from-crimson to-red-600 hover:from-crimson/90 hover:to-red-600/90 text-white font-semibold rounded-lg transition-all duration-200 transform hover:scale-[1.02] active:scale-[0.98] shadow-lg hover:shadow-xl"
+                      className="w-full h-12 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white font-semibold rounded-lg transition-all duration-200 transform hover:scale-[1.02] active:scale-[0.98] shadow-lg hover:shadow-xl"
                       disabled={loading}
                     >
                       {loading ? (
@@ -238,28 +238,30 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
                   {/* Divider */}
                   <div className="relative">
                     <div className="absolute inset-0 flex items-center">
-                      <div className="w-full border-t border-slate-200" />
+                      <div className="w-full border-t border-gray-200" />
                     </div>
                     <div className="relative flex justify-center text-sm">
-                      <span className="px-4 bg-white text-slate-500 font-medium">Or continue with</span>
+                      <span className="px-4 bg-white text-gray-500 font-medium">Or continue with</span>
                     </div>
                   </div>
 
                   {/* Google Sign In */}
                   <div className="space-y-4">
                     <GoogleAuthButton
-                      onSuccess={handleGoogleSuccess}
-                      className="w-full h-12 border-2 border-slate-200 hover:border-slate-300 bg-white hover:bg-slate-50 transition-all duration-200 transform hover:scale-[1.02] active:scale-[0.98]"
+                      onClick={handleGoogleSuccess}
+                      isLoading={false}
+                      text="Continue with Google"
+                      className="w-full h-12 border-2 border-gray-200 hover:border-gray-300 bg-white hover:bg-gray-50 transition-all duration-200 transform hover:scale-[1.02] active:scale-[0.98]"
                     />
                   </div>
 
                   {/* Sign Up Link */}
                   <div className="text-center">
-                    <span className="text-slate-600">Don't have an account? </span>
+                    <span className="text-gray-600">Don't have an account? </span>
                     <Button
                       variant="link"
                       size="sm"
-                      className="h-auto p-0 font-semibold text-crimson hover:text-crimson/80"
+                      className="h-auto p-0 font-semibold text-red-600 hover:text-red-700"
                       onClick={() => router.push(`/signup${redirect ? `?redirect=${redirect}` : ""}`)}
                       type="button"
                     >
@@ -277,7 +279,7 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
           <div className="absolute inset-0 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
             {/* Animated Background Pattern */}
             <div className="absolute inset-0 opacity-10">
-              <div className="absolute top-1/4 left-1/4 w-64 h-64 bg-crimson rounded-full blur-3xl animate-pulse"></div>
+              <div className="absolute top-1/4 left-1/4 w-64 h-64 bg-red-600 rounded-full blur-3xl animate-pulse"></div>
               <div className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-blue-500 rounded-full blur-3xl animate-pulse delay-1000"></div>
               <div className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-80 h-80 bg-purple-500 rounded-full blur-3xl animate-pulse delay-500"></div>
             </div>
@@ -289,7 +291,7 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
                   <h2 className="text-4xl font-bold text-white leading-tight">
                     Premium Content
                     <br />
-                    <span className="text-crimson">Awaits You</span>
+                    <span className="text-red-500">Awaits You</span>
                   </h2>
                   <p className="text-xl text-slate-300 leading-relaxed">
                     Access exclusive video content, connect with creators, and discover premium experiences tailored
@@ -299,15 +301,15 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
 
                 <div className="grid grid-cols-1 gap-4 text-left">
                   <div className="flex items-center space-x-3 text-slate-300">
-                    <div className="w-2 h-2 bg-crimson rounded-full"></div>
+                    <div className="w-2 h-2 bg-red-500 rounded-full"></div>
                     <span>Unlimited access to premium content</span>
                   </div>
                   <div className="flex items-center space-x-3 text-slate-300">
-                    <div className="w-2 h-2 bg-crimson rounded-full"></div>
+                    <div className="w-2 h-2 bg-red-500 rounded-full"></div>
                     <span>Connect directly with creators</span>
                   </div>
                   <div className="flex items-center space-x-3 text-slate-300">
-                    <div className="w-2 h-2 bg-crimson rounded-full"></div>
+                    <div className="w-2 h-2 bg-red-500 rounded-full"></div>
                     <span>High-quality video streaming</span>
                   </div>
                 </div>
@@ -319,12 +321,12 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
 
       {/* Footer */}
       <div className="absolute bottom-0 left-0 right-0 p-6">
-        <div className="text-center text-sm text-slate-500">
+        <div className="text-center text-sm text-gray-500">
           By signing in, you agree to our{" "}
           <Button
             variant="link"
             size="sm"
-            className="h-auto p-0 text-sm text-slate-600 hover:text-slate-900 underline"
+            className="h-auto p-0 text-sm text-gray-600 hover:text-gray-900 underline"
             onClick={() => router.push("/terms")}
             type="button"
           >
@@ -334,7 +336,7 @@ export function LoginForm({ className, ...props }: React.ComponentProps<"div">) 
           <Button
             variant="link"
             size="sm"
-            className="h-auto p-0 text-sm text-slate-600 hover:text-slate-900 underline"
+            className="h-auto p-0 text-sm text-gray-600 hover:text-gray-900 underline"
             onClick={() => router.push("/privacy")}
             type="button"
           >
