@@ -4,7 +4,7 @@ import { useEffect, useState } from "react"
 import { useParams, useRouter } from "next/navigation"
 import { useAuth } from "@/contexts/auth-context"
 import { Button } from "@/components/ui/button"
-import { ArrowLeft, Download, RefreshCw, Play, Pause } from "lucide-react"
+import { ArrowLeft, Download, RefreshCw, Heart } from "lucide-react"
 
 interface ContentItem {
   id: string
@@ -37,7 +37,6 @@ export default function ProductBoxContentPage() {
   const [error, setError] = useState<string | null>(null)
   const [bundleData, setBundleData] = useState<BundleData | null>(null)
   const [items, setItems] = useState<ContentItem[]>([])
-  const [playingVideo, setPlayingVideo] = useState<string | null>(null)
 
   const productBoxId = params.id as string
 
@@ -162,14 +161,6 @@ export default function ProductBoxContentPage() {
     }
   }
 
-  const handleVideoPlay = (itemId: string) => {
-    setPlayingVideo(itemId)
-  }
-
-  const handleVideoPause = () => {
-    setPlayingVideo(null)
-  }
-
   const formatFileSize = (bytes: number): string => {
     if (bytes === 0) return "0 Bytes"
     const k = 1024
@@ -256,12 +247,12 @@ export default function ProductBoxContentPage() {
           <>
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 mb-8">
               {items.map((item) => (
-                <div
-                  key={item.id}
-                  className="bg-gray-900/50 border border-gray-800 rounded-lg overflow-hidden hover:bg-gray-900/70 transition-all duration-300 group"
-                >
+                <div key={item.id} className="relative group cursor-pointer">
                   {/* Video Container - 9:16 Aspect Ratio */}
-                  <div className="relative bg-gray-800" style={{ aspectRatio: "9/16" }}>
+                  <div
+                    className="relative bg-gray-900 rounded-lg overflow-hidden border border-gray-800 hover:border-gray-600 transition-all duration-300"
+                    style={{ aspectRatio: "9/16" }}
+                  >
                     {item.contentType === "video" ? (
                       <div className="relative w-full h-full">
                         <video
@@ -270,8 +261,6 @@ export default function ProductBoxContentPage() {
                           muted
                           loop
                           playsInline
-                          onPlay={() => handleVideoPlay(item.id)}
-                          onPause={handleVideoPause}
                           onMouseEnter={(e) => {
                             const video = e.target as HTMLVideoElement
                             video.play()
@@ -283,46 +272,45 @@ export default function ProductBoxContentPage() {
                           }}
                         />
 
-                        {/* Play/Pause Overlay */}
-                        <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center">
-                          {playingVideo === item.id ? (
-                            <Pause className="h-8 w-8 text-white" />
-                          ) : (
-                            <Play className="h-8 w-8 text-white" />
-                          )}
-                        </div>
-
                         {/* Download Button - Top Right */}
                         <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
                           <Button
-                            onClick={() => handleDownload(item)}
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              handleDownload(item)
+                            }}
                             size="sm"
-                            className="h-8 w-8 p-0 bg-black/50 hover:bg-black/70 text-white border-0"
+                            className="h-8 w-8 p-0 bg-black/70 hover:bg-black/90 text-white border-0 rounded-full"
                           >
                             <Download className="h-4 w-4" />
                           </Button>
                         </div>
+
+                        {/* Heart Icon - Bottom Right */}
+                        <div className="absolute bottom-2 right-2">
+                          <Heart className="h-5 w-5 text-white/80" />
+                        </div>
                       </div>
                     ) : (
-                      <div className="w-full h-full flex flex-col items-center justify-center">
-                        <div className="text-gray-500 text-3xl mb-2">
+                      <div className="w-full h-full flex flex-col items-center justify-center p-4">
+                        <div className="text-gray-500 text-4xl mb-3">
                           {item.contentType === "audio" ? "🎵" : item.contentType === "image" ? "🖼️" : "📄"}
                         </div>
                         <Button
                           onClick={() => handleDownload(item)}
                           size="sm"
-                          className="bg-white text-black hover:bg-gray-100"
+                          className="bg-white text-black hover:bg-gray-100 text-xs px-3 py-1"
                         >
-                          <Download className="h-4 w-4 mr-2" />
+                          <Download className="h-3 w-3 mr-1" />
                           Download
                         </Button>
                       </div>
                     )}
                   </div>
 
-                  {/* Content Info */}
-                  <div className="p-3">
-                    <div className="text-white text-xs font-medium mb-1 truncate">{item.contentType}</div>
+                  {/* Title and File Size - Below Video */}
+                  <div className="mt-2 px-1">
+                    <div className="text-white text-sm font-medium truncate mb-1">{item.contentType}</div>
                     <div className="text-gray-400 text-xs">{formatFileSize(item.fileSize)}</div>
                   </div>
                 </div>

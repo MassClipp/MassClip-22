@@ -1,62 +1,82 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { auth, db } from "@/lib/firebase-admin"
+import { getAuth } from "firebase-admin/auth"
+import { getFirestore } from "firebase-admin/firestore"
+import { initializeApp, getApps, cert } from "firebase-admin/app"
+
+// Initialize Firebase Admin if not already initialized
+if (!getApps().length) {
+  initializeApp({
+    credential: cert({
+      projectId: process.env.FIREBASE_PROJECT_ID,
+      clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+      privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n"),
+    }),
+  })
+}
+
+const db = getFirestore()
 
 export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
   try {
-    const authHeader = request.headers.get("authorization")
+    const authHeader = request.headers.get("Authorization")
     if (!authHeader?.startsWith("Bearer ")) {
-      return NextResponse.json({ error: "Authentication required" }, { status: 401 })
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const idToken = authHeader.split("Bearer ")[1]
-    const decodedToken = await auth.verifyIdToken(idToken)
+    const token = authHeader.split("Bearer ")[1]
+    const decodedToken = await getAuth().verifyIdToken(token)
+    const userId = decodedToken.uid
+
     const bundleId = params.id
 
-    console.log(`🔍 [Bundles API] Fetching bundle: ${bundleId}`)
+    console.log(`🔍 [Bundles API] Fetching bundle ${bundleId} for user ${userId}`)
 
-    // Get bundle details
-    const bundleDoc = await db.collection("bundles").doc(bundleId).get()
+    // Try to find the bundle in different collections
+    const collections = ["bundles", "product_boxes", "productBoxes"]
+    let bundleData = null
 
-    if (!bundleDoc.exists) {
-      return NextResponse.json({ error: "Bundle not found" }, { status: 404 })
-    }
-
-    const bundleData = bundleDoc.data()
-
-    // Get creator details
-    let creatorData = null
-    if (bundleData?.creatorId) {
+    for (const collectionName of collections) {
       try {
-        const creatorDoc = await db.collection("users").doc(bundleData.creatorId).get()
-        if (creatorDoc.exists) {
-          creatorData = creatorDoc.data()
+        const bundleDoc = await db.collection(collectionName).doc(bundleId).get()
+
+        if (bundleDoc.exists) {
+          bundleData = {
+            id: bundleDoc.id,
+            ...bundleDoc.data(),
+          }
+          console.log(`✅ [Bundles API] Found bundle in ${collectionName}`)
+          break
         }
       } catch (error) {
-        console.warn(`⚠️ [Bundles API] Could not fetch creator:`, error)
+        console.warn(`⚠️ [Bundles API] Error checking ${collectionName}:`, error)
       }
     }
 
-    const response = {
-      id: bundleId,
-      title: bundleData?.title || "Untitled Bundle",
-      description: bundleData?.description || "",
-      customPreviewThumbnail: bundleData?.customPreviewThumbnail,
-      thumbnailUrl: bundleData?.thumbnailUrl,
-      price: bundleData?.price || 0,
-      currency: bundleData?.currency || "usd",
-      creatorId: bundleData?.creatorId,
-      creatorUsername: creatorData?.username || "Unknown",
-      creatorDisplayName: creatorData?.displayName,
-      totalItems: bundleData?.totalItems || 0,
-      createdAt: bundleData?.createdAt,
-      updatedAt: bundleData?.updatedAt,
+    if (!bundleData) {
+      console.log(`❌ [Bundles API] Bundle ${bundleId} not found`)
+      return NextResponse.json({ error: "Bundle not found" }, { status: 404 })
     }
 
-    console.log(`✅ [Bundles API] Bundle fetched successfully:`, response.title)
+    // Return bundle data
+    const response = {
+      id: bundleData.id,
+      title: bundleData.title || bundleData.bundleTitle || "Untitled Bundle",
+      description: bundleData.description || "",
+      thumbnailUrl: bundleData.thumbnailUrl || bundleData.customPreviewThumbnail,
+      customPreviewThumbnail: bundleData.customPreviewThumbnail,
+      creatorUsername: bundleData.creatorUsername || bundleData.creator?.username || "Unknown",
+      creatorId: bundleData.creatorId || bundleData.creator?.id,
+      totalItems: bundleData.totalItems || bundleData.itemCount || 0,
+      price: bundleData.price || 0,
+      currency: bundleData.currency || "usd",
+      createdAt: bundleData.createdAt,
+      updatedAt: bundleData.updatedAt,
+    }
 
+    console.log(`✅ [Bundles API] Returning bundle data:`, response)
     return NextResponse.json(response)
   } catch (error: any) {
-    console.error(`❌ [Bundles API] Error:`, error)
+    console.error("❌ [Bundles API] Error:", error)
     return NextResponse.json(
       {
         error: "Failed to fetch bundle",

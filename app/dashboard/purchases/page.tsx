@@ -30,6 +30,7 @@ export default function PurchasesPage() {
   const [purchases, setPurchases] = useState<Purchase[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [removingPurchase, setRemovingPurchase] = useState<string | null>(null)
 
   useEffect(() => {
     if (authLoading) return
@@ -82,7 +83,12 @@ export default function PurchasesPage() {
 
             // Transform purchases to consistent format
             const transformedPurchases = purchases.map((purchase: any) => ({
-              id: purchase.id || purchase.sessionId || purchase.purchaseId || Math.random().toString(),
+              id:
+                purchase.id ||
+                purchase.sessionId ||
+                purchase.purchaseId ||
+                purchase.productBoxId ||
+                Math.random().toString(),
               productBoxId: purchase.productBoxId || purchase.bundleId || purchase.itemId,
               bundleTitle: purchase.bundleTitle || purchase.productBoxTitle || purchase.title || "Untitled Bundle",
               thumbnailUrl: purchase.thumbnailUrl || purchase.productBoxThumbnail || purchase.previewImage,
@@ -124,25 +130,53 @@ export default function PurchasesPage() {
 
   const handleRemovePurchase = async (purchase: Purchase) => {
     try {
-      console.log(`🗑️ [Purchases Page] Removing purchase:`, purchase.id)
+      console.log(`🗑️ [Purchases Page] Removing purchase:`, purchase)
+      setRemovingPurchase(purchase.id)
 
-      // Remove from local state immediately for better UX
-      setPurchases((prev) => prev.filter((p) => p.id !== purchase.id))
+      const token = await user.getIdToken()
 
-      // TODO: Implement actual removal API call
-      // const token = await user.getIdToken()
-      // await fetch(`/api/user/purchases/${purchase.id}`, {
-      //   method: 'DELETE',
-      //   headers: {
-      //     Authorization: `Bearer ${token}`,
-      //   },
-      // })
+      // Try removing by different IDs
+      const idsToTry = [purchase.id, purchase.productBoxId, `${purchase.productBoxId}_${user.uid}`].filter(Boolean)
 
-      console.log(`✅ [Purchases Page] Purchase removed from view`)
+      let removed = false
+
+      for (const idToTry of idsToTry) {
+        try {
+          const response = await fetch(`/api/user/purchases/${idToTry}`, {
+            method: "DELETE",
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          })
+
+          if (response.ok) {
+            console.log(`✅ [Purchases Page] Successfully removed purchase with ID: ${idToTry}`)
+            removed = true
+            break
+          } else {
+            const errorData = await response.json()
+            console.warn(`⚠️ [Purchases Page] Failed to remove with ID ${idToTry}:`, errorData)
+          }
+        } catch (apiError) {
+          console.warn(`⚠️ [Purchases Page] API error for ID ${idToTry}:`, apiError)
+        }
+      }
+
+      if (removed) {
+        // Remove from local state
+        setPurchases((prev) => prev.filter((p) => p.id !== purchase.id))
+        console.log(`✅ [Purchases Page] Purchase removed successfully`)
+      } else {
+        // If API removal failed, still remove from local state as fallback
+        setPurchases((prev) => prev.filter((p) => p.id !== purchase.id))
+        console.log(`⚠️ [Purchases Page] API removal failed, removed from local state only`)
+      }
     } catch (error) {
       console.error(`❌ [Purchases Page] Error removing purchase:`, error)
-      // Re-fetch purchases to restore state if removal failed
-      fetchPurchases()
+      // Still remove from local state as fallback
+      setPurchases((prev) => prev.filter((p) => p.id !== purchase.id))
+    } finally {
+      setRemovingPurchase(null)
     }
   }
 
@@ -228,6 +262,7 @@ export default function PurchasesPage() {
                           variant="ghost"
                           size="sm"
                           className="h-8 w-8 p-0 bg-black/50 hover:bg-black/70 text-white/80 hover:text-white backdrop-blur-sm"
+                          disabled={removingPurchase === purchase.id}
                         >
                           <MoreVertical className="h-4 w-4" />
                         </Button>
@@ -236,9 +271,10 @@ export default function PurchasesPage() {
                         <DropdownMenuItem
                           onClick={() => handleRemovePurchase(purchase)}
                           className="text-red-400 hover:text-red-300 hover:bg-red-900/20 cursor-pointer"
+                          disabled={removingPurchase === purchase.id}
                         >
                           <Trash2 className="h-4 w-4 mr-2" />
-                          Remove
+                          {removingPurchase === purchase.id ? "Removing..." : "Remove"}
                         </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
@@ -277,6 +313,7 @@ export default function PurchasesPage() {
                     <Button
                       onClick={() => handleOpenContent(purchase)}
                       className="w-full bg-white text-black hover:bg-gray-100 font-medium"
+                      disabled={removingPurchase === purchase.id}
                     >
                       Open
                     </Button>
