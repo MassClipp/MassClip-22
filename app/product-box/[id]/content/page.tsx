@@ -6,7 +6,40 @@ import { useAuth } from "@/contexts/auth-context"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { AlertCircle, Lock, ShoppingBag, Download, Play, FileText, ImageIcon, Music } from "lucide-react"
-import type { UnifiedPurchase, UnifiedPurchaseItem } from "@/lib/unified-purchase-service"
+
+interface UnifiedPurchaseItem {
+  id: string
+  title: string
+  fileUrl: string
+  mimeType: string
+  fileSize: number
+  thumbnailUrl?: string
+  contentType: "video" | "audio" | "image" | "document"
+  duration?: number
+  filename: string
+  displayTitle: string
+  displaySize: string
+  displayResolution?: string
+  displayDuration?: string
+  description?: string
+}
+
+interface UnifiedPurchase {
+  id: string
+  productBoxId: string
+  productBoxTitle: string
+  productBoxDescription?: string
+  productBoxThumbnail?: string
+  creatorId: string
+  creatorName: string
+  creatorUsername: string
+  purchasedAt: Date | string
+  amount: number
+  currency: string
+  items: UnifiedPurchaseItem[]
+  totalItems: number
+  totalSize: number
+}
 
 interface ContentPageState {
   loading: boolean
@@ -47,7 +80,7 @@ export default function ProductBoxContentPage() {
 
       const idToken = await user.getIdToken()
 
-      // First, try to get unified purchases
+      // Check unified purchases API
       const unifiedResponse = await fetch("/api/user/unified-purchases", {
         headers: {
           Authorization: `Bearer ${idToken}`,
@@ -55,25 +88,77 @@ export default function ProductBoxContentPage() {
       })
 
       if (unifiedResponse.ok) {
-        const unifiedPurchases: UnifiedPurchase[] = await unifiedResponse.json()
-        console.log(`📦 [Content Page] Found unified purchases: ${unifiedPurchases.length}`)
-        console.log(`🔍 [Content Page] Purchase data sample:`, unifiedPurchases.slice(0, 2))
+        const responseData = await unifiedResponse.json()
+        console.log(`📦 [Content Page] Unified purchases response:`, responseData)
+
+        // Handle both array and object responses
+        let purchases = []
+        if (Array.isArray(responseData)) {
+          purchases = responseData
+        } else if (responseData.purchases && Array.isArray(responseData.purchases)) {
+          purchases = responseData.purchases
+        } else {
+          console.warn(`⚠️ [Content Page] Unexpected response format:`, responseData)
+          purchases = []
+        }
+
+        console.log(`📦 [Content Page] Found ${purchases.length} unified purchases`)
 
         // Case-insensitive search for the product box
-        const matchingPurchase = unifiedPurchases.find(
-          (purchase) =>
-            purchase.productBoxId.toLowerCase() === productBoxId.toLowerCase() ||
-            purchase.itemId?.toLowerCase() === productBoxId.toLowerCase(),
+        const matchingPurchase = purchases.find(
+          (purchase: any) =>
+            purchase.productBoxId?.toLowerCase() === productBoxId.toLowerCase() ||
+            purchase.bundleId?.toLowerCase() === productBoxId.toLowerCase(),
         )
 
         if (matchingPurchase) {
-          console.log(`✅ [Content Page] Found matching unified purchase!`)
+          console.log(`✅ [Content Page] Found matching unified purchase!`, matchingPurchase)
+
+          // Try to get content items for this purchase
+          let contentItems: UnifiedPurchaseItem[] = []
+
+          try {
+            const contentResponse = await fetch(`/api/product-box/${productBoxId}/content`, {
+              headers: {
+                Authorization: `Bearer ${idToken}`,
+              },
+            })
+
+            if (contentResponse.ok) {
+              const contentData = await contentResponse.json()
+              console.log(`✅ [Content Page] Content data:`, contentData)
+
+              if (contentData.items && Array.isArray(contentData.items)) {
+                contentItems = contentData.items
+              } else if (Array.isArray(contentData)) {
+                contentItems = contentData
+              }
+            }
+          } catch (contentError) {
+            console.warn(`⚠️ [Content Page] Could not fetch content items:`, contentError)
+          }
+
           setState({
             loading: false,
             hasAccess: true,
             error: null,
-            purchase: matchingPurchase,
-            items: matchingPurchase.items || [],
+            purchase: {
+              id: matchingPurchase.id || matchingPurchase.productBoxId,
+              productBoxId: matchingPurchase.productBoxId || matchingPurchase.bundleId,
+              productBoxTitle: matchingPurchase.bundleTitle || matchingPurchase.productBoxTitle || "Untitled Bundle",
+              productBoxDescription: matchingPurchase.description || "",
+              productBoxThumbnail: matchingPurchase.thumbnailUrl || matchingPurchase.productBoxThumbnail || "",
+              creatorId: matchingPurchase.creatorId || "",
+              creatorName: matchingPurchase.creatorName || "Unknown Creator",
+              creatorUsername: matchingPurchase.creatorUsername || "",
+              purchasedAt: matchingPurchase.purchaseDate || matchingPurchase.purchasedAt || new Date(),
+              amount: matchingPurchase.amount || 0,
+              currency: matchingPurchase.currency || "usd",
+              items: contentItems,
+              totalItems: contentItems.length,
+              totalSize: contentItems.reduce((sum, item) => sum + (item.fileSize || 0), 0),
+            },
+            items: contentItems,
           })
           return
         } else {
@@ -82,7 +167,7 @@ export default function ProductBoxContentPage() {
       }
 
       // If no unified purchase found, check legacy purchases
-      console.log(`🔍 [Content Page] Unified purchase not found, checking legacy purchases...`)
+      console.log(`🔍 [Content Page] Checking legacy purchases...`)
 
       const legacyResponse = await fetch("/api/user/purchases", {
         headers: {
@@ -92,47 +177,22 @@ export default function ProductBoxContentPage() {
 
       if (legacyResponse.ok) {
         const legacyPurchases = await legacyResponse.json()
-        console.log(`📦 [Content Page] Found legacy purchases: ${legacyPurchases.length}`)
-        console.log(`🔍 [Content Page] Legacy purchase data sample:`, legacyPurchases.slice(0, 2))
+        console.log(`📦 [Content Page] Found legacy purchases:`, legacyPurchases)
+
+        // Ensure legacyPurchases is an array
+        const purchasesArray = Array.isArray(legacyPurchases) ? legacyPurchases : []
 
         // Case-insensitive search in legacy purchases
-        const matchingLegacyPurchase = legacyPurchases.find(
+        const matchingLegacyPurchase = purchasesArray.find(
           (purchase: any) =>
             purchase.productBoxId?.toLowerCase() === productBoxId.toLowerCase() ||
             purchase.itemId?.toLowerCase() === productBoxId.toLowerCase(),
         )
 
         if (matchingLegacyPurchase) {
-          console.log(`✅ [Content Page] Found legacy purchase, attempting automatic migration...`)
+          console.log(`✅ [Content Page] Found legacy purchase, trying to access content directly...`)
 
-          // Try to migrate the legacy purchase
-          try {
-            const migrationResponse = await fetch("/api/migrate-product-box-purchase", {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                Authorization: `Bearer ${idToken}`,
-              },
-              body: JSON.stringify({
-                productBoxId: productBoxId,
-                legacyPurchaseData: matchingLegacyPurchase,
-              }),
-            })
-
-            if (migrationResponse.ok) {
-              console.log(`✅ [Content Page] Migration successful, retrying content fetch...`)
-              // Retry the unified purchases fetch
-              setTimeout(() => checkAccess(), 1000)
-              return
-            } else {
-              console.error(`❌ [Content Page] Migration failed`)
-            }
-          } catch (migrationError) {
-            console.error(`❌ [Content Page] Migration error:`, migrationError)
-          }
-
-          // If migration fails, try to fetch content directly
-          console.log(`🔄 [Content Page] Trying to fetch content directly...`)
+          // Try to fetch content directly
           try {
             const contentResponse = await fetch(`/api/product-box/${productBoxId}/content`, {
               headers: {
@@ -144,12 +204,34 @@ export default function ProductBoxContentPage() {
               const contentData = await contentResponse.json()
               console.log(`✅ [Content Page] Direct content fetch successful`)
 
+              let contentItems: UnifiedPurchaseItem[] = []
+              if (contentData.items && Array.isArray(contentData.items)) {
+                contentItems = contentData.items
+              } else if (Array.isArray(contentData)) {
+                contentItems = contentData
+              }
+
               setState({
                 loading: false,
                 hasAccess: true,
                 error: null,
-                purchase: null, // No unified purchase object
-                items: contentData.items || [],
+                purchase: {
+                  id: matchingLegacyPurchase.id || productBoxId,
+                  productBoxId: productBoxId,
+                  productBoxTitle: matchingLegacyPurchase.itemTitle || "Untitled Bundle",
+                  productBoxDescription: matchingLegacyPurchase.itemDescription || "",
+                  productBoxThumbnail: matchingLegacyPurchase.thumbnailUrl || "",
+                  creatorId: matchingLegacyPurchase.creatorId || "",
+                  creatorName: matchingLegacyPurchase.creatorName || "Unknown Creator",
+                  creatorUsername: matchingLegacyPurchase.creatorUsername || "",
+                  purchasedAt: matchingLegacyPurchase.purchasedAt || matchingLegacyPurchase.timestamp || new Date(),
+                  amount: matchingLegacyPurchase.amount || 0,
+                  currency: matchingLegacyPurchase.currency || "usd",
+                  items: contentItems,
+                  totalItems: contentItems.length,
+                  totalSize: contentItems.reduce((sum, item) => sum + (item.fileSize || 0), 0),
+                },
+                items: contentItems,
               })
               return
             }
@@ -212,6 +294,14 @@ export default function ProductBoxContentPage() {
     }
   }
 
+  const formatFileSize = (bytes: number): string => {
+    if (bytes === 0) return "0 Bytes"
+    const k = 1024
+    const sizes = ["Bytes", "KB", "MB", "GB"]
+    const i = Math.floor(Math.log(bytes) / Math.log(k))
+    return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + " " + sizes[i]
+  }
+
   // Loading state
   if (state.loading) {
     return (
@@ -247,7 +337,7 @@ export default function ProductBoxContentPage() {
                 🔄 Retry Access
               </Button>
               <Button onClick={() => router.push("/dashboard")} variant="outline" className="w-full">
-                🏠 Debug Purchase
+                🏠 Go to Dashboard
               </Button>
             </div>
           </CardContent>
@@ -268,7 +358,7 @@ export default function ProductBoxContentPage() {
           </p>
           {state.purchase && (
             <div className="mt-2 text-sm text-gray-500">
-              Purchased on {new Date(state.purchase.purchasedAt).toLocaleDateString()} •{state.items.length} items •
+              Purchased on {new Date(state.purchase.purchasedAt).toLocaleDateString()} • {state.items.length} items •
               Total size: {formatFileSize(state.purchase.totalSize)}
             </div>
           )}
@@ -332,12 +422,4 @@ export default function ProductBoxContentPage() {
       </div>
     </div>
   )
-}
-
-function formatFileSize(bytes: number): string {
-  if (bytes === 0) return "0 Bytes"
-  const k = 1024
-  const sizes = ["Bytes", "KB", "MB", "GB"]
-  const i = Math.floor(Math.log(bytes) / Math.log(k))
-  return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + " " + sizes[i]
 }
