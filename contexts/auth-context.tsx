@@ -77,3 +77,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }
+
+// Convenient alias used across the code-base
+export const useAuthContext = useAuth
