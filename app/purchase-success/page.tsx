@@ -89,7 +89,9 @@ function PurchaseSuccessContent() {
       }
 
       const idToken = await user.getIdToken()
-      const response = await fetch("/api/purchase/grant-immediate-access", {
+
+      // Try the primary API route first
+      let response = await fetch("/api/purchase/grant-immediate-access", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -102,15 +104,34 @@ function PurchaseSuccessContent() {
         }),
       })
 
+      // If primary route fails, try backup route
       if (!response.ok) {
-        const errorData = await response.json()
+        console.warn(`⚠️ [Grant Access] Primary route failed (${response.status}), trying backup route`)
+
+        response = await fetch("/api/purchase/grant-access", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${idToken}`,
+          },
+          body: JSON.stringify({
+            productBoxId: productBoxId,
+            creatorId: creatorId,
+          }),
+        })
+      }
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
         throw new Error(errorData.error || `Failed to grant access: ${response.status}`)
       }
 
       const data = await response.json()
 
       if (data.success) {
-        setBundle(data.bundle)
+        // Handle both response formats
+        const bundleData = data.bundle || data.productBox
+        setBundle(bundleData)
         setCreator(data.creator)
         setAlreadyPurchased(data.alreadyPurchased)
         console.log(`✅ [Grant Access] Access granted successfully!`)

@@ -1,9 +1,6 @@
 import { auth } from "@/lib/firebase-admin"
 import type { NextRequest } from "next/server"
 
-/**
- * A decoded Firebase ID token
- */
 export interface DecodedToken {
   uid: string
   email?: string
@@ -19,80 +16,127 @@ export interface DecodedToken {
   exp: number
   firebase: {
     identities: {
-      [key: string]: unknown
+      [key: string]: any
     }
     sign_in_provider: string
   }
 }
 
-/* -------------------------------------------------------------------------- */
-/*                               Core Helpers                                 */
-/* -------------------------------------------------------------------------- */
-
 /**
- * Extract the bearer token from the request headers (if present)
- */
-function getBearerToken(request: NextRequest): string | null {
-  const header = request.headers.get("authorization") ?? ""
-  return header.startsWith("Bearer ") ? header.slice(7) : null
-}
-
-/**
- * Verify a Firebase ID token. Returns `null` if verification fails.
+ * Verify Firebase ID token from request headers
  */
 export async function verifyIdToken(request: NextRequest): Promise<DecodedToken | null> {
-  const token = getBearerToken(request)
-  if (!token) return null
-
   try {
-    const decoded = await auth.verifyIdToken(token)
-    return decoded as DecodedToken
-  } catch (err) {
-    console.error("❌ [Auth Utils] Token verification failed:", err)
+    const authHeader = request.headers.get("authorization")
+
+    if (!authHeader) {
+      console.error("❌ [Auth Utils] No authorization header found")
+      return null
+    }
+
+    if (!authHeader.startsWith("Bearer ")) {
+      console.error("❌ [Auth Utils] Invalid authorization header format")
+      return null
+    }
+
+    const idToken = authHeader.split("Bearer ")[1]
+    if (!idToken) {
+      console.error("❌ [Auth Utils] No ID token found in authorization header")
+      return null
+    }
+
+    console.log("🔍 [Auth Utils] Verifying ID token...")
+    const decodedToken = await auth.verifyIdToken(idToken)
+    console.log("✅ [Auth Utils] ID token verified successfully for user:", decodedToken.uid)
+
+    return decodedToken
+  } catch (error: any) {
+    console.error("❌ [Auth Utils] Failed to verify ID token:", error.message)
     return null
   }
 }
 
 /**
- * Throws if the request does not contain a valid, verifiable ID token.
+ * Require authentication for API routes
  */
 export async function requireAuth(request: NextRequest): Promise<DecodedToken> {
-  const decoded = await verifyIdToken(request)
-  if (!decoded) throw new Error("Authentication required")
-  return decoded
+  const decodedToken = await verifyIdToken(request)
+
+  if (!decodedToken) {
+    throw new Error("Authentication required")
+  }
+
+  return decodedToken
 }
 
 /**
- * Convenience helper – `true` if the request carries a valid token.
+ * Check if user is authenticated (returns boolean)
  */
 export async function isAuthenticated(request: NextRequest): Promise<boolean> {
-  return (await verifyIdToken(request)) !== null
+  const decodedToken = await verifyIdToken(request)
+  return !!decodedToken
 }
 
 /**
- * Get the authenticated user’s UID (or `null` if unauthenticated).
+ * Get user ID from request
  */
 export async function getUserId(request: NextRequest): Promise<string | null> {
-  const decoded = await verifyIdToken(request)
-  return decoded?.uid ?? null
+  const decodedToken = await verifyIdToken(request)
+  return decodedToken?.uid || null
 }
 
 /**
- * Check if the authenticated user has a specific custom claim.
+ * Extract token from request headers
  */
-export async function hasUserClaim(request: NextRequest, claim: string, value?: unknown): Promise<boolean> {
-  const decoded = await verifyIdToken(request)
-  if (!decoded) return false
+export function extractToken(request: NextRequest): string | null {
+  const authHeader = request.headers.get("authorization")
 
-  const claims = decoded as Record<string, unknown>
-  if (value === undefined) return claim in claims
-  return claims[claim] === value
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return null
+  }
+
+  return authHeader.substring(7)
 }
 
-/* -------------------------------------------------------------------------- */
-/*                                  Errors                                    */
-/* -------------------------------------------------------------------------- */
+/**
+ * Validate token format
+ */
+export function isValidTokenFormat(token: string): boolean {
+  // Firebase tokens are JWTs with 3 parts separated by dots
+  const parts = token.split(".")
+  return parts.length === 3 && parts.every((part) => part.length > 0)
+}
 
+/**
+ * Get user claims from token
+ */
+export async function getUserClaims(request: NextRequest): Promise<any> {
+  const decodedToken = await verifyIdToken(request)
+  return decodedToken || {}
+}
+
+/**
+ * Check if user has specific claim
+ */
+export async function hasUserClaim(request: NextRequest, claimName: string, claimValue?: any): Promise<boolean> {
+  const decodedToken = await verifyIdToken(request)
+
+  if (!decodedToken) {
+    return false
+  }
+
+  const claims = decodedToken as any
+
+  if (claimValue === undefined) {
+    return claimName in claims
+  }
+
+  return claims[claimName] === claimValue
+}
+
+/**
+ * Error class for authentication errors
+ */
 export class AuthenticationError extends Error {
   constructor(message = "Authentication required") {
     super(message)
@@ -100,9 +144,20 @@ export class AuthenticationError extends Error {
   }
 }
 
+/**
+ * Error class for authorization errors
+ */
 export class AuthorizationError extends Error {
   constructor(message = "Insufficient permissions") {
     super(message)
     this.name = "AuthorizationError"
   }
+}
+
+/**
+ * Get authenticated user ID
+ */
+export async function getAuthenticatedUser(request: NextRequest): Promise<string | null> {
+  const decodedToken = await verifyIdToken(request)
+  return decodedToken ? decodedToken.uid : null
 }
