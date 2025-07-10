@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
-import { useFirebaseAuth } from "@/hooks/use-firebase-auth"
+import { useAuth } from "@/contexts/auth-context"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -19,10 +19,11 @@ import { db } from "@/lib/firebase"
 import { User, Globe, Settings, LogOut, Heart } from "lucide-react"
 
 export default function UserDropdown() {
-  const { user, logOut } = useFirebaseAuth()
+  const { user, signOut } = useAuth()
   const router = useRouter()
   const [username, setUsername] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  const [isLoggingOut, setIsLoggingOut] = useState(false)
 
   useEffect(() => {
     const fetchUserData = async () => {
@@ -45,8 +46,19 @@ export default function UserDropdown() {
   }, [user])
 
   const handleLogout = async () => {
-    await logOut()
-    router.push("/login")
+    if (isLoggingOut) return
+
+    try {
+      setIsLoggingOut(true)
+      await signOut()
+      // The signOut function handles the redirect
+    } catch (error) {
+      console.error("Logout error:", error)
+      // Force redirect on error
+      window.location.href = "/login"
+    } finally {
+      setIsLoggingOut(false)
+    }
   }
 
   if (!user) return null
@@ -102,9 +114,13 @@ export default function UserDropdown() {
 
         <DropdownMenuSeparator />
 
-        <DropdownMenuItem onClick={handleLogout} className="cursor-pointer flex items-center text-red-500">
+        <DropdownMenuItem
+          onClick={handleLogout}
+          className="cursor-pointer flex items-center text-red-500"
+          disabled={isLoggingOut}
+        >
           <LogOut className="mr-2 h-4 w-4" />
-          <span>Log out</span>
+          <span>{isLoggingOut ? "Signing out..." : "Log out"}</span>
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>

@@ -22,14 +22,16 @@ export default function UserDashboardPage() {
   const [isLoggingOut, setIsLoggingOut] = useState(false)
 
   const handleLogout = async () => {
+    if (isLoggingOut) return
+
     try {
       setIsLoggingOut(true)
       await signOut()
-      // The redirect is handled in the auth context
+      // The signOut function handles the redirect
     } catch (error) {
       console.error("Error during logout:", error)
-      // Fallback redirect
-      router.push("/login")
+      // Force redirect on error
+      window.location.href = "/login"
     } finally {
       setIsLoggingOut(false)
     }
@@ -105,13 +107,13 @@ export default function UserDashboardPage() {
             <TabsList className="bg-zinc-900/30 border-b border-zinc-800/50 w-full justify-start rounded-none mb-6">
               <TabsTrigger
                 value="overview"
-                className="text-white data-[state=active]:bg-zinc-800/50 data-[state=active]:border-b-2 data-[state=active]:border-crimson rounded-none px-6 py-3"
+                className="text-white data-[state=active]:bg-zinc-800/50 data-[state=active]:border-b-2 data-[state=active]:border-red-600 rounded-none px-6 py-3"
               >
                 Overview
               </TabsTrigger>
               <TabsTrigger
                 value="settings"
-                className="text-white data-[state=active]:bg-zinc-800/50 data-[state=active]:border-b-2 data-[state=active]:border-crimson rounded-none px-6 py-3"
+                className="text-white data-[state=active]:bg-zinc-800/50 data-[state=active]:border-b-2 data-[state=active]:border-red-600 rounded-none px-6 py-3"
               >
                 Settings
               </TabsTrigger>
@@ -129,7 +131,7 @@ export default function UserDashboardPage() {
                   <Card className="bg-zinc-900/30 border-zinc-800/50 backdrop-blur-sm">
                     <CardHeader className="pb-4">
                       <CardTitle className="flex items-center text-white text-xl font-light">
-                        <User2 className="mr-2 h-5 w-5 text-crimson" /> Account Information
+                        <User2 className="mr-2 h-5 w-5 text-red-600" /> Account Information
                       </CardTitle>
                       <CardDescription className="text-zinc-400">Your account details</CardDescription>
                     </CardHeader>
@@ -183,7 +185,7 @@ export default function UserDashboardPage() {
                   <Card className="bg-zinc-900/30 border-zinc-800/50 backdrop-blur-sm">
                     <CardHeader className="pb-4">
                       <CardTitle className="flex items-center text-white text-xl font-light">
-                        <Clock className="mr-2 h-5 w-5 text-crimson" /> Quick Actions
+                        <Clock className="mr-2 h-5 w-5 text-red-600" /> Quick Actions
                       </CardTitle>
                       <CardDescription className="text-zinc-400">Access your content quickly</CardDescription>
                     </CardHeader>
@@ -194,7 +196,7 @@ export default function UserDashboardPage() {
                           className="h-auto py-6 flex flex-col items-center justify-center gap-3 border-zinc-800 bg-zinc-900/30 text-white hover:bg-zinc-900/50 hover:border-zinc-700"
                           onClick={() => router.push("/dashboard")}
                         >
-                          <Download className="h-6 w-6 text-crimson" />
+                          <Download className="h-6 w-6 text-red-600" />
                           <span>Browse Clips</span>
                         </Button>
 
@@ -203,7 +205,7 @@ export default function UserDashboardPage() {
                           className="h-auto py-6 flex flex-col items-center justify-center gap-3 border-zinc-800 bg-zinc-900/30 text-white hover:bg-zinc-900/50 hover:border-zinc-700"
                           onClick={() => router.push("/dashboard/favorites")}
                         >
-                          <Heart className="h-6 w-6 text-crimson" />
+                          <Heart className="h-6 w-6 text-red-600" />
                           <span>Favorites</span>
                         </Button>
 
@@ -212,7 +214,7 @@ export default function UserDashboardPage() {
                           className="h-auto py-6 flex flex-col items-center justify-center gap-3 border-zinc-800 bg-zinc-900/30 text-white hover:bg-zinc-900/50 hover:border-zinc-700"
                           onClick={() => router.push("/dashboard/history")}
                         >
-                          <Clock className="h-6 w-6 text-crimson" />
+                          <Clock className="h-6 w-6 text-red-600" />
                           <span>History</span>
                         </Button>
 
@@ -221,7 +223,7 @@ export default function UserDashboardPage() {
                           className="h-auto py-6 flex flex-col items-center justify-center gap-3 border-zinc-800 bg-zinc-900/30 text-white hover:bg-zinc-900/50 hover:border-zinc-700"
                           onClick={() => router.push("/dashboard/profile")}
                         >
-                          <User2 className="h-6 w-6 text-crimson" />
+                          <User2 className="h-6 w-6 text-red-600" />
                           <span>Profile</span>
                         </Button>
                       </div>
@@ -294,19 +296,19 @@ export default function UserDashboardPage() {
                             </p>
                             <ul className="space-y-2 text-sm mb-4">
                               <li className="flex items-center text-zinc-300">
-                                <Check className="h-4 w-4 mr-2 text-crimson" />{" "}
+                                <Check className="h-4 w-4 mr-2 text-red-600" />{" "}
                                 <span className="font-light">Access to ALL premium clips</span>
                               </li>
                               <li className="flex items-center text-zinc-300">
-                                <Check className="h-4 w-4 mr-2 text-crimson" />{" "}
+                                <Check className="h-4 w-4 mr-2 text-red-600" />{" "}
                                 <span className="font-light">Unlimited downloads</span>
                               </li>
                               <li className="flex items-center text-zinc-300">
-                                <Check className="h-4 w-4 mr-2 text-crimson" />{" "}
+                                <Check className="h-4 w-4 mr-2 text-red-600" />{" "}
                                 <span className="font-light">Advanced organization features</span>
                               </li>
                               <li className="flex items-center text-zinc-300">
-                                <Check className="h-4 w-4 mr-2 text-crimson" />{" "}
+                                <Check className="h-4 w-4 mr-2 text-red-600" />{" "}
                                 <span className="font-light">Early access to new clips</span>
                               </li>
                             </ul>
@@ -318,7 +320,7 @@ export default function UserDashboardPage() {
                     <CardFooter className="flex justify-between">
                       <Button
                         variant="link"
-                        className="text-crimson hover:text-crimson/80 p-0"
+                        className="text-red-600 hover:text-red-600/80 p-0"
                         onClick={() => router.push("/membership-plans")}
                       >
                         View all plan options
@@ -333,7 +335,7 @@ export default function UserDashboardPage() {
                   <Card className="bg-zinc-900/30 border-zinc-800/50 backdrop-blur-sm">
                     <CardHeader className="pb-4">
                       <CardTitle className="flex items-center text-white text-xl font-light">
-                        <Shield className="mr-2 h-5 w-5 text-crimson" /> Account Security
+                        <Shield className="mr-2 h-5 w-5 text-red-600" /> Account Security
                       </CardTitle>
                     </CardHeader>
                     <CardContent>
