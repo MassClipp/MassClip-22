@@ -29,32 +29,34 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    // Set persistence to LOCAL to survive redirects
+    // Set persistence to LOCAL to survive redirects and page reloads
     setPersistence(auth, browserLocalPersistence)
       .then(() => {
-        console.log("🔧 [Auth] Persistence set to LOCAL")
+        console.log("🔧 [Auth] Persistence set to LOCAL - will survive redirects")
       })
       .catch((error) => {
         console.error("❌ [Auth] Failed to set persistence:", error)
       })
 
     const unsubscribe = onAuthStateChanged(auth, (user) => {
-      console.log("🔍 [Auth] State changed:", user ? `User: ${user.uid}` : "No user")
+      console.log("🔍 [Auth] State changed:", user ? `User: ${user.uid} (${user.email})` : "No user")
       setUser(user)
       setLoading(false)
 
-      // Store auth state in localStorage for cross-tab persistence
+      // Store auth state in localStorage for additional persistence
       if (user) {
-        localStorage.setItem(
-          "authUser",
-          JSON.stringify({
-            uid: user.uid,
-            email: user.email,
-            displayName: user.displayName,
-          }),
-        )
+        const authData = {
+          uid: user.uid,
+          email: user.email,
+          displayName: user.displayName,
+          photoURL: user.photoURL,
+          timestamp: Date.now(),
+        }
+        localStorage.setItem("authUser", JSON.stringify(authData))
+        console.log("💾 [Auth] User data stored in localStorage")
       } else {
         localStorage.removeItem("authUser")
+        console.log("🗑️ [Auth] User data removed from localStorage")
       }
     })
 
@@ -64,8 +66,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signInWithEmail = async (email: string, password: string) => {
     try {
       console.log("🔐 [Auth] Signing in with email...")
-      await signInWithEmailAndPassword(auth, email, password)
-      console.log("✅ [Auth] Email sign-in successful")
+      const result = await signInWithEmailAndPassword(auth, email, password)
+      console.log("✅ [Auth] Email sign-in successful:", result.user.uid)
     } catch (error: any) {
       console.error("❌ [Auth] Email sign-in failed:", error)
       throw error
@@ -79,8 +81,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       provider.setCustomParameters({
         prompt: "select_account",
       })
-      await signInWithPopup(auth, provider)
-      console.log("✅ [Auth] Google sign-in successful")
+      const result = await signInWithPopup(auth, provider)
+      console.log("✅ [Auth] Google sign-in successful:", result.user.uid)
     } catch (error: any) {
       console.error("❌ [Auth] Google sign-in failed:", error)
       throw error

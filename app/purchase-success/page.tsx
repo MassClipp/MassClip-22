@@ -6,7 +6,7 @@ import { useAuth } from "@/contexts/auth-context"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { CheckCircle, Package, User, DollarSign, Clock, AlertTriangle, LogIn } from "lucide-react"
+import { CheckCircle, Package, User, DollarSign, Clock, AlertTriangle, LogIn, Zap } from "lucide-react"
 import Link from "next/link"
 
 interface Bundle {
@@ -34,67 +34,59 @@ function PurchaseSuccessContent() {
   const [creator, setCreator] = useState<Creator | null>(null)
   const [alreadyPurchased, setAlreadyPurchased] = useState(false)
   const [authRetryCount, setAuthRetryCount] = useState(0)
+  const [verificationAttempts, setVerificationAttempts] = useState(0)
 
   const productBoxId = searchParams.get("product_box_id")
   const userId = searchParams.get("user_id")
   const creatorId = searchParams.get("creator_id")
   const testMode = searchParams.get("test_mode") === "true"
 
-  // Wait longer for auth to stabilize after redirect
+  // Immediate verification on page load
   useEffect(() => {
-    console.log(`🔍 [Purchase Success] Auth state check:`, {
-      user: user?.uid,
-      authLoading,
+    console.log(`🎉 [Purchase Success] Page loaded with params:`, {
       productBoxId,
       userId,
-      authRetryCount,
+      creatorId,
+      testMode,
+      currentUser: user?.uid,
+      authLoading,
     })
 
-    // If auth is still loading, wait
-    if (authLoading) {
-      console.log(`⏳ [Purchase Success] Auth still loading...`)
-      return
-    }
-
-    // If no user but we expect one, retry a few times
-    if (!user && userId && authRetryCount < 5) {
-      console.log(`🔄 [Purchase Success] No user yet, retrying... (${authRetryCount + 1}/5)`)
-      setTimeout(() => {
-        setAuthRetryCount((prev) => prev + 1)
-      }, 1000)
-      return
-    }
-
-    // If we have user and required data, proceed
-    if (user && productBoxId) {
-      // Verify user matches if userId provided
-      if (userId && user.uid !== userId) {
-        console.error(`❌ [Purchase Success] User mismatch: ${user.uid} vs ${userId}`)
-        setError("User verification failed")
+    // If we have all required data, try immediate verification
+    if (productBoxId && userId && !authLoading) {
+      // Check if current user matches expected user
+      if (user && user.uid === userId) {
+        console.log(`✅ [Purchase Success] User matches, granting immediate access`)
+        grantAccess()
+      } else if (!user && verificationAttempts < 3) {
+        console.log(`⏳ [Purchase Success] No user yet, waiting... (attempt ${verificationAttempts + 1}/3)`)
+        setTimeout(() => {
+          setVerificationAttempts((prev) => prev + 1)
+        }, 1000)
+      } else if (!user) {
+        console.log(`❌ [Purchase Success] No user after retries, showing login`)
         setLoading(false)
-        return
       }
-
-      console.log(`✅ [Purchase Success] Auth verified, granting access`)
-      grantAccess()
-      return
     }
-
-    // If no user after retries, show login
-    if (!authLoading && !user) {
-      console.log(`❌ [Purchase Success] No user after retries, showing login`)
-      setLoading(false)
-    }
-  }, [user, authLoading, productBoxId, userId, authRetryCount])
+  }, [user, authLoading, productBoxId, userId, verificationAttempts])
 
   const grantAccess = async () => {
-    if (!user || !productBoxId) return
+    if (!user || !productBoxId) {
+      console.error("❌ [Grant Access] Missing user or productBoxId")
+      return
+    }
 
     try {
       setLoading(true)
-      console.log(`🎉 [Purchase Success] Processing ${testMode ? "TEST MODE" : "LIVE"} purchase`)
+      console.log(`🚀 [Grant Access] Processing ${testMode ? "TEST MODE" : "LIVE"} purchase`)
       console.log(`📦 Product Box: ${productBoxId}`)
       console.log(`👤 User: ${user.uid}`)
+      console.log(`🔍 Expected User: ${userId}`)
+
+      // Verify user matches
+      if (userId && user.uid !== userId) {
+        throw new Error("User verification failed - please sign in with the correct account")
+      }
 
       const idToken = await user.getIdToken()
       const response = await fetch("/api/purchase/grant-immediate-access", {
@@ -106,7 +98,7 @@ function PurchaseSuccessContent() {
         body: JSON.stringify({
           bundleId: productBoxId,
           creatorId: creatorId,
-          verificationMethod: testMode ? "test_mode" : "stripe_success",
+          verificationMethod: testMode ? "test_mode_immediate" : "stripe_success_immediate",
         }),
       })
 
@@ -121,12 +113,13 @@ function PurchaseSuccessContent() {
         setBundle(data.bundle)
         setCreator(data.creator)
         setAlreadyPurchased(data.alreadyPurchased)
-        console.log(`✅ [Purchase Success] Access granted successfully!`)
+        console.log(`✅ [Grant Access] Access granted successfully!`)
+        console.log(`📝 Purchase ID: ${data.purchaseId}`)
       } else {
         throw new Error(data.error || "Failed to grant access")
       }
     } catch (error: any) {
-      console.error("❌ [Purchase Success] Error:", error)
+      console.error("❌ [Grant Access] Error:", error)
       setError(error.message)
     } finally {
       setLoading(false)
@@ -140,33 +133,36 @@ function PurchaseSuccessContent() {
     router.push(`/login?redirect=${encodeURIComponent(currentUrl)}`)
   }
 
-  // Show loading while auth is stabilizing
-  if (authLoading || (loading && authRetryCount < 5)) {
+  // Show loading while processing
+  if (loading || authLoading || verificationAttempts < 3) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <Card className="w-full max-w-md">
           <CardContent className="p-6 text-center">
-            <Clock className="h-12 w-12 text-blue-500 mx-auto mb-4 animate-spin" />
+            <Zap className="h-12 w-12 text-blue-500 mx-auto mb-4 animate-pulse" />
             <h2 className="text-xl font-semibold mb-2">
-              {testMode ? "🧪 Processing Test Purchase" : "🎉 Processing Your Purchase"}
+              {testMode ? "🧪 Processing Test Purchase" : "⚡ Processing Your Purchase"}
             </h2>
             <p className="text-gray-600 mb-4">
-              {authRetryCount > 0 ? "Verifying your authentication..." : "Setting up your access..."}
+              {verificationAttempts > 0 ? "Verifying your authentication..." : "Setting up instant access..."}
             </p>
+
             {testMode && (
               <div className="mt-4 p-3 bg-yellow-50 rounded-lg">
                 <p className="text-sm text-yellow-800">
-                  <strong>TEST MODE:</strong> This is a test purchase using Stripe test cards.
+                  <strong>TEST MODE:</strong> Using Stripe test cards - no real charges
                 </p>
               </div>
             )}
+
             <div className="mt-4 p-3 bg-blue-50 rounded-lg">
-              <h3 className="font-medium text-blue-900 mb-1">What's happening:</h3>
+              <h3 className="font-medium text-blue-900 mb-1">⚡ Instant Access Process:</h3>
               <ul className="text-sm text-blue-800 space-y-1">
                 <li>✅ Payment completed successfully</li>
-                <li>🔐 {authRetryCount > 0 ? "Verifying authentication..." : "Checking login status"}</li>
-                <li>🚀 Preparing immediate access</li>
-                <li>📝 Setting up your purchase</li>
+                <li>🔐 {verificationAttempts > 0 ? "Verifying authentication..." : "Checking login status"}</li>
+                <li>🚀 Granting immediate access</li>
+                <li>📝 Recording your purchase</li>
+                <li>🎯 No complex verification needed!</li>
               </ul>
             </div>
           </CardContent>
@@ -181,25 +177,26 @@ function PurchaseSuccessContent() {
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <Card className="w-full max-w-md">
           <CardContent className="p-6 text-center">
-            <AlertTriangle className="h-12 w-12 text-orange-500 mx-auto mb-4" />
+            <CheckCircle className="h-12 w-12 text-green-500 mx-auto mb-4" />
             <h2 className="text-xl font-semibold mb-2">🎉 Purchase Complete!</h2>
-            <p className="text-gray-600 mb-4">Your payment was successful. Please sign in to access your content.</p>
+            <p className="text-gray-600 mb-4">
+              Your payment was successful. Please sign in to access your content instantly.
+            </p>
 
             <Button onClick={handleLogin} className="w-full mb-4">
               <LogIn className="h-4 w-4 mr-2" />
-              Sign In to Access Content
+              Sign In for Instant Access
             </Button>
 
-            <div className="p-3 bg-blue-50 rounded-lg">
-              <h3 className="font-medium text-blue-900 mb-1">Why do I need to sign in?</h3>
-              <p className="text-sm text-blue-800">
-                Your purchase was successful, but we need to verify your identity to grant access to your content.
-                You'll be redirected back here after signing in.
+            <div className="p-3 bg-green-50 rounded-lg mb-4">
+              <h3 className="font-medium text-green-900 mb-1">✅ Payment Confirmed</h3>
+              <p className="text-sm text-green-800">
+                Your purchase is complete and waiting for you. Sign in to get instant access to your content.
               </p>
             </div>
 
             {testMode && (
-              <div className="mt-4 p-3 bg-yellow-50 rounded-lg">
+              <div className="p-3 bg-yellow-50 rounded-lg">
                 <p className="text-sm text-yellow-800">
                   <strong>TEST MODE:</strong> This was a test purchase using Stripe test cards.
                 </p>
@@ -237,32 +234,6 @@ function PurchaseSuccessContent() {
     )
   }
 
-  // Show processing state
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <Card className="w-full max-w-md">
-          <CardContent className="p-6 text-center">
-            <Clock className="h-12 w-12 text-blue-500 mx-auto mb-4 animate-spin" />
-            <h2 className="text-xl font-semibold mb-2">
-              {testMode ? "🧪 Processing Test Purchase" : "🎉 Processing Your Purchase"}
-            </h2>
-            <p className="text-gray-600 mb-4">Setting up your access...</p>
-            <div className="mt-4 p-3 bg-blue-50 rounded-lg">
-              <h3 className="font-medium text-blue-900 mb-1">What's happening:</h3>
-              <ul className="text-sm text-blue-800 space-y-1">
-                <li>✅ Payment completed successfully</li>
-                <li>🚀 Granting immediate access</li>
-                <li>📝 Recording your purchase</li>
-                <li>🎯 No complex verification needed!</li>
-              </ul>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    )
-  }
-
   // Show success state
   if (bundle) {
     return (
@@ -273,12 +244,12 @@ function PurchaseSuccessContent() {
             <div className="text-center mb-6">
               <CheckCircle className="h-16 w-16 text-green-500 mx-auto mb-4" />
               <h1 className="text-2xl font-bold text-gray-900 mb-2">
-                {testMode ? "🧪 Test Purchase Complete!" : "🎉 You're Good to Go!"}
+                {testMode ? "🧪 Test Purchase Complete!" : "⚡ Instant Access Granted!"}
               </h1>
               <p className="text-gray-600">
                 {alreadyPurchased
                   ? "Welcome back! You already have access to this content."
-                  : "Your purchase is complete and ready!"}
+                  : "Your purchase is complete and ready instantly!"}
               </p>
             </div>
 
@@ -327,7 +298,7 @@ function PurchaseSuccessContent() {
             {/* Action Buttons */}
             <div className="space-y-3">
               <Button asChild className="w-full">
-                <Link href={`/product-box/${bundle.id}/content`}>📱 Access Your Content Now</Link>
+                <Link href={`/product-box/${bundle.id}/content`}>⚡ Access Your Content Now</Link>
               </Button>
 
               <Button asChild variant="outline" className="w-full bg-transparent">
@@ -337,10 +308,11 @@ function PurchaseSuccessContent() {
 
             {/* Success Checklist */}
             <div className="mt-6 p-4 bg-green-50 rounded-lg">
-              <h3 className="font-medium text-green-900 mb-2">🎉 All Set!</h3>
+              <h3 className="font-medium text-green-900 mb-2">⚡ Instant Access Complete!</h3>
               <ul className="text-sm text-green-800 space-y-1">
                 <li>✅ {testMode ? "Test payment" : "Payment"} completed successfully</li>
-                <li>🚀 Instant access granted - no waiting!</li>
+                <li>⚡ Instant access granted - no waiting!</li>
+                <li>🔐 No login required - you stayed authenticated</li>
                 <li>📝 Purchase recorded in your account</li>
                 <li>🔄 Lifetime access to this content</li>
                 {testMode && <li>🧪 Test mode - no real charges applied</li>}
@@ -349,7 +321,7 @@ function PurchaseSuccessContent() {
 
             {/* Footer */}
             <div className="mt-6 text-center text-sm text-gray-500">
-              Your purchase is confirmed. You reached this page = verification complete!
+              ⚡ Instant verification complete - no complex steps needed!
             </div>
           </CardContent>
         </Card>
@@ -373,7 +345,18 @@ function PurchaseSuccessContent() {
 
 export default function PurchaseSuccessPage() {
   return (
-    <Suspense fallback={<div>Loading...</div>}>
+    <Suspense
+      fallback={
+        <div className="min-h-screen flex items-center justify-center bg-gray-50">
+          <Card className="w-full max-w-md">
+            <CardContent className="p-6 text-center">
+              <Clock className="h-12 w-12 text-blue-500 mx-auto mb-4 animate-spin" />
+              <h2 className="text-xl font-semibold mb-2">Loading...</h2>
+            </CardContent>
+          </Card>
+        </div>
+      }
+    >
       <PurchaseSuccessContent />
     </Suspense>
   )
