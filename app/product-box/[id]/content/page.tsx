@@ -18,6 +18,8 @@ interface ContentItem {
   filename: string
   displayTitle: string
   displaySize: string
+  originalTitle?: string
+  name?: string
 }
 
 interface BundleData {
@@ -119,6 +121,12 @@ export default function ProductBoxContentPage() {
           if (contentResponse.ok) {
             const contentData = await contentResponse.json()
             contentItems = Array.isArray(contentData) ? contentData : contentData.items || []
+
+            // Process content items to get proper titles
+            contentItems = contentItems.map((item) => ({
+              ...item,
+              displayTitle: item.originalTitle || item.title || item.name || item.filename || "Untitled",
+            }))
           }
 
           setBundleData(bundleInfo)
@@ -145,20 +153,20 @@ export default function ProductBoxContentPage() {
 
   const handleDownload = async (item: ContentItem) => {
     try {
-      console.log(`📥 [Download] Starting download for: ${item.title}`)
+      console.log(`📥 [Download] Starting download for: ${item.displayTitle}`)
 
       // Create download link
       const link = document.createElement("a")
       link.href = item.fileUrl
-      link.download = item.filename || item.title
+      link.download = item.filename || item.displayTitle
       link.target = "_blank"
       document.body.appendChild(link)
       link.click()
       document.body.removeChild(link)
 
-      console.log(`✅ [Download] Download initiated for: ${item.title}`)
+      console.log(`✅ [Download] Download initiated for: ${item.displayTitle}`)
     } catch (error) {
-      console.error(`❌ [Download] Error downloading ${item.title}:`, error)
+      console.error(`❌ [Download] Error downloading ${item.displayTitle}:`, error)
     }
   }
 
@@ -184,6 +192,11 @@ export default function ProductBoxContentPage() {
     const sizes = ["Bytes", "KB", "MB", "GB"]
     const i = Math.floor(Math.log(bytes) / Math.log(k))
     return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + " " + sizes[i]
+  }
+
+  const truncateTitle = (title: string, maxLength = 20): string => {
+    if (title.length <= maxLength) return title
+    return title.substring(0, maxLength) + "..."
   }
 
   if (loading) {
@@ -267,7 +280,7 @@ export default function ProductBoxContentPage() {
                 <div key={item.id} className="relative group cursor-pointer">
                   {/* Video Container - 9:16 Aspect Ratio */}
                   <div
-                    className="relative bg-gray-900 rounded-lg overflow-hidden border border-gray-800 hover:border-gray-600 transition-all duration-300"
+                    className="relative bg-gray-900 rounded-lg overflow-hidden border border-transparent group-hover:border-gray-600 transition-all duration-300"
                     style={{ aspectRatio: "9/16" }}
                   >
                     {item.contentType === "video" ? (
@@ -286,9 +299,9 @@ export default function ProductBoxContentPage() {
                           }}
                         />
 
-                        {/* Play/Pause Button - Center */}
+                        {/* Play/Pause Button - Center - Only visible on hover */}
                         <div
-                          className="absolute inset-0 flex items-center justify-center cursor-pointer"
+                          className="absolute inset-0 flex items-center justify-center cursor-pointer opacity-0 group-hover:opacity-100 transition-opacity duration-300"
                           onClick={(e) => {
                             const video = e.currentTarget.parentElement?.querySelector("video") as HTMLVideoElement
                             if (video) {
@@ -296,7 +309,7 @@ export default function ProductBoxContentPage() {
                             }
                           }}
                         >
-                          <div className="bg-black/50 rounded-full p-3 opacity-70 hover:opacity-100 transition-opacity duration-300">
+                          <div className="bg-black/50 rounded-full p-3 hover:bg-black/70 transition-colors duration-300">
                             {playingVideos.has(item.id) ? (
                               <Pause className="h-6 w-6 text-white" />
                             ) : (
@@ -305,8 +318,8 @@ export default function ProductBoxContentPage() {
                           </div>
                         </div>
 
-                        {/* Download Button - Bottom Right */}
-                        <div className="absolute bottom-2 right-2">
+                        {/* Download Button - Bottom Right - Only visible on hover */}
+                        <div className="absolute bottom-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
                           <Button
                             onClick={(e) => {
                               e.stopPropagation()
@@ -327,7 +340,7 @@ export default function ProductBoxContentPage() {
                         <Button
                           onClick={() => handleDownload(item)}
                           size="sm"
-                          className="bg-white text-black hover:bg-gray-100 text-xs px-3 py-1"
+                          className="bg-white text-black hover:bg-gray-100 text-xs px-3 py-1 opacity-0 group-hover:opacity-100 transition-opacity duration-300"
                         >
                           <Download className="h-3 w-3 mr-1" />
                           Download
@@ -338,7 +351,9 @@ export default function ProductBoxContentPage() {
 
                   {/* Title and File Size - Below Video */}
                   <div className="mt-2 px-1">
-                    <div className="text-white text-sm font-medium truncate mb-1">{item.contentType}</div>
+                    <div className="text-white text-sm font-medium truncate mb-1" title={item.displayTitle}>
+                      {truncateTitle(item.displayTitle)}
+                    </div>
                     <div className="text-gray-400 text-xs">{formatFileSize(item.fileSize)}</div>
                   </div>
                 </div>
