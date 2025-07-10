@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server"
 import { stripe } from "@/lib/stripe"
 import { db } from "@/lib/firebase-admin"
 import { requireAuth } from "@/lib/auth-utils"
+import { getSiteUrl } from "@/lib/url-utils"
 
 export async function POST(request: NextRequest) {
   try {
@@ -35,6 +36,10 @@ export async function POST(request: NextRequest) {
       creatorData = creatorDoc.exists ? creatorDoc.data() : null
     }
 
+    // Use environment-aware URL
+    const siteUrl = getSiteUrl()
+    console.log(`🌐 [Checkout] Using site URL: ${siteUrl}`)
+
     // Prepare checkout session options
     const sessionOptions: any = {
       payment_method_types: ["card"],
@@ -53,9 +58,9 @@ export async function POST(request: NextRequest) {
         },
       ],
       mode: "payment",
-      // Use consistent success URL with payment_intent
-      success_url: `${process.env.NEXT_PUBLIC_SITE_URL}/payment-success?payment_intent={CHECKOUT_SESSION_PAYMENT_INTENT}&account_id=${connectedAccountId || ""}`,
-      cancel_url: `${process.env.NEXT_PUBLIC_SITE_URL}/product-box/${productBoxId}`,
+      // Use environment-aware URL and correct page path
+      success_url: `${siteUrl}/purchase-success?product_box_id=${productBoxId}&user_id=${decodedToken.uid}&creator_id=${creatorId || ""}`,
+      cancel_url: `${siteUrl}/product-box/${productBoxId}`,
       metadata: {
         productBoxId,
         vaultId: productBoxId, // For backward compatibility
@@ -73,6 +78,9 @@ export async function POST(request: NextRequest) {
       sessionOptions.stripe_account = connectedAccountId
       console.log(`🔍 [Checkout] Using connected account: ${connectedAccountId}`)
     }
+
+    console.log(`🔗 [Checkout] Success URL: ${sessionOptions.success_url}`)
+    console.log(`🔗 [Checkout] Cancel URL: ${sessionOptions.cancel_url}`)
 
     // Create the checkout session
     const session = await stripe.checkout.sessions.create(sessionOptions)
@@ -95,6 +103,9 @@ export async function POST(request: NextRequest) {
         status: "pending",
         createdAt: new Date(),
         metadata: sessionOptions.metadata,
+        siteUrl: siteUrl, // Track which environment was used
+        successUrl: sessionOptions.success_url,
+        cancelUrl: sessionOptions.cancel_url,
       })
 
     return NextResponse.json({
@@ -112,6 +123,11 @@ export async function POST(request: NextRequest) {
             username: creatorData.username,
           }
         : null,
+      environment: {
+        siteUrl: siteUrl,
+        successUrl: sessionOptions.success_url,
+        isPreview: siteUrl.includes("vercel.app") || siteUrl.includes("preview"),
+      },
     })
   } catch (error: any) {
     console.error(`❌ [Checkout] Error creating session:`, error)

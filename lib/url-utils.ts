@@ -11,13 +11,22 @@ export function getSiteUrl(): string {
     return window.location.origin
   }
 
-  // Server-side: check for Vercel preview URL
+  // Server-side: check for Vercel preview URL first
   if (process.env.VERCEL_URL && process.env.VERCEL_ENV !== "production") {
     return `https://${process.env.VERCEL_URL}`
   }
 
-  // Fallback to configured site URL or production URL
-  return process.env.NEXT_PUBLIC_SITE_URL || "https://massclip.pro"
+  // Check for explicit site URL environment variables
+  if (process.env.NEXT_PUBLIC_SITE_URL_2) {
+    return process.env.NEXT_PUBLIC_SITE_URL_2
+  }
+
+  if (process.env.NEXT_PUBLIC_SITE_URL) {
+    return process.env.NEXT_PUBLIC_SITE_URL
+  }
+
+  // Fallback to production URL
+  return "https://massclip.pro"
 }
 
 /**
@@ -95,4 +104,20 @@ export function isPreviewEnvironment(): boolean {
  */
 export function isProductionEnvironment(): boolean {
   return process.env.VERCEL_ENV === "production"
+}
+
+/**
+ * Debug function to log current environment info
+ */
+export function logEnvironmentInfo(): void {
+  console.log("🌐 Environment Info:", {
+    VERCEL_ENV: process.env.VERCEL_ENV,
+    VERCEL_URL: process.env.VERCEL_URL,
+    NODE_ENV: process.env.NODE_ENV,
+    NEXT_PUBLIC_SITE_URL: process.env.NEXT_PUBLIC_SITE_URL,
+    NEXT_PUBLIC_SITE_URL_2: process.env.NEXT_PUBLIC_SITE_URL_2,
+    calculatedSiteUrl: getSiteUrl(),
+    isPreview: isPreviewEnvironment(),
+    isProduction: isProductionEnvironment(),
+  })
 }
