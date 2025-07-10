@@ -8,33 +8,79 @@ export async function POST(request: NextRequest) {
     const { bundleId, userId, creatorId } = await request.json()
 
     if (!bundleId || !userId) {
+      console.log(`❌ [Auto Grant] Missing required fields:`, { bundleId, userId })
       return NextResponse.json({ error: "Missing bundleId or userId" }, { status: 400 })
     }
 
     console.log(`⚡ [Auto Grant] Processing auto-grant`)
     console.log(`📦 Bundle ID: ${bundleId}`)
     console.log(`👤 User ID: ${userId}`)
+    console.log(`🎨 Creator ID: ${creatorId}`)
 
-    // Get bundle details from productBoxes collection
-    const bundleDoc = await db.collection("productBoxes").doc(bundleId).get()
-    if (!bundleDoc.exists) {
-      console.error(`❌ [Auto Grant] Bundle not found: ${bundleId}`)
+    // Try multiple collection names to find the bundle
+    let bundleDoc = null
+    let bundleData = null
+    let collectionUsed = ""
+
+    // Check productBoxes collection first
+    console.log(`🔍 [Auto Grant] Checking productBoxes collection...`)
+    bundleDoc = await db.collection("productBoxes").doc(bundleId).get()
+    if (bundleDoc.exists) {
+      bundleData = bundleDoc.data()!
+      collectionUsed = "productBoxes"
+      console.log(`✅ [Auto Grant] Bundle found in productBoxes: ${bundleData.title}`)
+    } else {
+      // Check bundles collection as backup
+      console.log(`🔍 [Auto Grant] Checking bundles collection...`)
+      bundleDoc = await db.collection("bundles").doc(bundleId).get()
+      if (bundleDoc.exists) {
+        bundleData = bundleDoc.data()!
+        collectionUsed = "bundles"
+        console.log(`✅ [Auto Grant] Bundle found in bundles: ${bundleData.title}`)
+      }
+    }
+
+    if (!bundleData) {
+      console.error(`❌ [Auto Grant] Bundle not found in any collection: ${bundleId}`)
+
+      // Let's also try to list some documents to debug
+      try {
+        const productBoxesSnapshot = await db.collection("productBoxes").limit(5).get()
+        console.log(
+          `🔍 [Debug] Sample productBoxes IDs:`,
+          productBoxesSnapshot.docs.map((doc) => doc.id),
+        )
+
+        const bundlesSnapshot = await db.collection("bundles").limit(5).get()
+        console.log(
+          `🔍 [Debug] Sample bundles IDs:`,
+          bundlesSnapshot.docs.map((doc) => doc.id),
+        )
+      } catch (debugError) {
+        console.error(`❌ [Debug] Error listing collections:`, debugError)
+      }
+
       return NextResponse.json({ error: "Bundle not found" }, { status: 404 })
     }
 
-    const bundleData = bundleDoc.data()!
-    console.log(`✅ [Auto Grant] Bundle found: ${bundleData.title}`)
-
     // Get creator details
     let creatorData = null
-    const targetCreatorId = creatorId || bundleData.creatorId
+    const targetCreatorId = creatorId || bundleData.creatorId || bundleData.userId
     if (targetCreatorId) {
+      console.log(`🔍 [Auto Grant] Looking up creator: ${targetCreatorId}`)
       const creatorDoc = await db.collection("users").doc(targetCreatorId).get()
-      creatorData = creatorDoc.exists ? creatorDoc.data() : null
-      console.log(`✅ [Auto Grant] Creator found: ${creatorData?.username || targetCreatorId}`)
+      if (creatorDoc.exists) {
+        creatorData = creatorDoc.data()
+        console.log(
+          `✅ [Auto Grant] Creator found: ${creatorData?.username || creatorData?.displayName || targetCreatorId}`,
+        )
+      } else {
+        console.log(`⚠️ [Auto Grant] Creator not found: ${targetCreatorId}`)
+      }
     }
 
     // Check if user already has access
+    console.log(`🔍 [Auto Grant] Checking existing purchases...`)
     const existingPurchaseQuery = await db
       .collection("productBoxPurchases")
       .where("buyerUid", "==", userId)
@@ -48,6 +94,8 @@ export async function POST(request: NextRequest) {
       console.log(`ℹ️ [Auto Grant] User already has access to ${bundleId}`)
       alreadyPurchased = true
     } else {
+      console.log(`🆕 [Auto Grant] Creating new purchase record...`)
+
       // Create purchase record - auto grant access
       const purchaseData = {
         buyerUid: userId,
@@ -64,11 +112,12 @@ export async function POST(request: NextRequest) {
           grantedVia: "auto_grant",
           autoGranted: true,
           timestamp: new Date().toISOString(),
+          collectionUsed: collectionUsed,
         },
       }
 
-      await db.collection("productBoxPurchases").add(purchaseData)
-      console.log(`✅ [Auto Grant] Created purchase record for ${bundleId}`)
+      const purchaseRef = await db.collection("productBoxPurchases").add(purchaseData)
+      console.log(`✅ [Auto Grant] Created purchase record: ${purchaseRef.id}`)
 
       // Create unified purchase record
       const unifiedPurchaseId = `auto_${userId}_${bundleId}_${Date.now()}`
@@ -82,7 +131,7 @@ export async function POST(request: NextRequest) {
           bundleId: bundleId,
           creatorId: targetCreatorId || "",
           amount: bundleData.price || 0,
-          currency: "usd",
+          currency: bundleData.currency || "usd",
           status: "completed",
           verificationMethod: "auto_grant_success_page",
           purchaseDate: new Date(),
@@ -90,20 +139,21 @@ export async function POST(request: NextRequest) {
           updatedAt: new Date(),
           grantedAt: new Date(),
           autoGranted: true,
+          collectionUsed: collectionUsed,
         })
       console.log(`✅ [Auto Grant] Created unified purchase: ${unifiedPurchaseId}`)
 
-      // Update bundle stats
+      // Update bundle stats if possible
       try {
         await db
-          .collection("productBoxes")
+          .collection(collectionUsed)
           .doc(bundleId)
           .update({
             totalSales: db.FieldValue.increment(1),
             totalRevenue: db.FieldValue.increment(bundleData.price || 0),
             lastPurchaseAt: new Date(),
           })
-        console.log(`✅ [Auto Grant] Bundle stats updated`)
+        console.log(`✅ [Auto Grant] Bundle stats updated in ${collectionUsed}`)
       } catch (error) {
         console.warn(`⚠️ [Auto Grant] Could not update bundle stats:`, error)
       }
@@ -111,24 +161,34 @@ export async function POST(request: NextRequest) {
 
     console.log(`🎉 [Auto Grant] ACCESS GRANTED SUCCESSFULLY!`)
 
+    // Return bundle information
+    const responseBundle = {
+      id: bundleId,
+      title: bundleData.title || bundleData.name || "Untitled Bundle",
+      description: bundleData.description || bundleData.summary || "",
+      thumbnailUrl: bundleData.thumbnailUrl || bundleData.customPreviewThumbnail || bundleData.previewImage || "",
+      price: bundleData.price || 0,
+      currency: bundleData.currency || "usd",
+    }
+
+    const responseCreator = creatorData
+      ? {
+          id: targetCreatorId,
+          name: creatorData.displayName || creatorData.name || creatorData.username || "Unknown Creator",
+          username: creatorData.username || "",
+        }
+      : null
+
     return NextResponse.json({
       success: true,
       alreadyPurchased,
-      bundle: {
-        id: bundleId,
-        title: bundleData.title,
-        description: bundleData.description,
-        thumbnailUrl: bundleData.thumbnailUrl || bundleData.customPreviewThumbnail,
-        price: bundleData.price,
-        currency: bundleData.currency || "usd",
+      bundle: responseBundle,
+      creator: responseCreator,
+      debug: {
+        collectionUsed,
+        bundleFound: true,
+        creatorFound: !!creatorData,
       },
-      creator: creatorData
-        ? {
-            id: targetCreatorId,
-            name: creatorData.displayName || creatorData.name || "Unknown Creator",
-            username: creatorData.username || "",
-          }
-        : null,
     })
   } catch (error: any) {
     console.error(`❌ [Auto Grant] Error:`, error)
@@ -137,6 +197,7 @@ export async function POST(request: NextRequest) {
         success: false,
         error: "Failed to auto-grant access",
         details: error.message,
+        stack: error.stack,
       },
       { status: 500 },
     )
