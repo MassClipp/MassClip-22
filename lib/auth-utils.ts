@@ -185,4 +185,3 @@ export async function getAuthenticatedUser(request: NextRequest): Promise<string
   const decodedToken = await verifyIdToken(request)
   return decodedToken ? decodedToken.uid : null
 }
-</merged_code>
