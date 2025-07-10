@@ -29,7 +29,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
 
     const bundleId = params.id
 
-    console.log(`🔍 [Bundles API] Fetching bundle ${bundleId} for user ${userId}`)
+    console.log(`🔍 [Bundles API] Fetching bundle: ${bundleId} for user: ${userId}`)
 
     // Try to find the bundle in different collections
     const collections = ["bundles", "product_boxes", "productBoxes"]
@@ -53,28 +53,28 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
     }
 
     if (!bundleData) {
-      console.log(`❌ [Bundles API] Bundle ${bundleId} not found`)
-      return NextResponse.json({ error: "Bundle not found" }, { status: 404 })
+      return NextResponse.json(
+        {
+          error: "Bundle not found",
+        },
+        { status: 404 },
+      )
     }
 
     // Return bundle data
-    const response = {
+    return NextResponse.json({
       id: bundleData.id,
       title: bundleData.title || bundleData.bundleTitle || "Untitled Bundle",
       description: bundleData.description || "",
       thumbnailUrl: bundleData.thumbnailUrl || bundleData.customPreviewThumbnail,
-      customPreviewThumbnail: bundleData.customPreviewThumbnail,
       creatorUsername: bundleData.creatorUsername || bundleData.creator?.username || "Unknown",
-      creatorId: bundleData.creatorId || bundleData.creator?.id,
+      creatorId: bundleData.creatorId || bundleData.creator?.id || "",
       totalItems: bundleData.totalItems || bundleData.itemCount || 0,
       price: bundleData.price || 0,
       currency: bundleData.currency || "usd",
-      createdAt: bundleData.createdAt,
-      updatedAt: bundleData.updatedAt,
-    }
-
-    console.log(`✅ [Bundles API] Returning bundle data:`, response)
-    return NextResponse.json(response)
+      createdAt: bundleData.createdAt || bundleData.created_at,
+      updatedAt: bundleData.updatedAt || bundleData.updated_at,
+    })
   } catch (error: any) {
     console.error("❌ [Bundles API] Error:", error)
     return NextResponse.json(

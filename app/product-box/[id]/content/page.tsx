@@ -4,7 +4,7 @@ import { useEffect, useState } from "react"
 import { useParams, useRouter } from "next/navigation"
 import { useAuth } from "@/contexts/auth-context"
 import { Button } from "@/components/ui/button"
-import { ArrowLeft, Download, RefreshCw, Heart } from "lucide-react"
+import { ArrowLeft, Download, RefreshCw, Play, Pause } from "lucide-react"
 
 interface ContentItem {
   id: string
@@ -37,6 +37,7 @@ export default function ProductBoxContentPage() {
   const [error, setError] = useState<string | null>(null)
   const [bundleData, setBundleData] = useState<BundleData | null>(null)
   const [items, setItems] = useState<ContentItem[]>([])
+  const [playingVideos, setPlayingVideos] = useState<Set<string>>(new Set())
 
   const productBoxId = params.id as string
 
@@ -161,6 +162,22 @@ export default function ProductBoxContentPage() {
     }
   }
 
+  const handleVideoToggle = (itemId: string, videoElement: HTMLVideoElement) => {
+    const isPlaying = playingVideos.has(itemId)
+
+    if (isPlaying) {
+      videoElement.pause()
+      setPlayingVideos((prev) => {
+        const newSet = new Set(prev)
+        newSet.delete(itemId)
+        return newSet
+      })
+    } else {
+      videoElement.play()
+      setPlayingVideos((prev) => new Set(prev).add(itemId))
+    }
+  }
+
   const formatFileSize = (bytes: number): string => {
     if (bytes === 0) return "0 Bytes"
     const k = 1024
@@ -258,22 +275,38 @@ export default function ProductBoxContentPage() {
                         <video
                           className="w-full h-full object-cover"
                           src={item.fileUrl}
-                          muted
                           loop
                           playsInline
-                          onMouseEnter={(e) => {
-                            const video = e.target as HTMLVideoElement
-                            video.play()
-                          }}
-                          onMouseLeave={(e) => {
-                            const video = e.target as HTMLVideoElement
-                            video.pause()
-                            video.currentTime = 0
+                          onEnded={() => {
+                            setPlayingVideos((prev) => {
+                              const newSet = new Set(prev)
+                              newSet.delete(item.id)
+                              return newSet
+                            })
                           }}
                         />
 
-                        {/* Download Button - Top Right */}
-                        <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                        {/* Play/Pause Button - Center */}
+                        <div
+                          className="absolute inset-0 flex items-center justify-center cursor-pointer"
+                          onClick={(e) => {
+                            const video = e.currentTarget.parentElement?.querySelector("video") as HTMLVideoElement
+                            if (video) {
+                              handleVideoToggle(item.id, video)
+                            }
+                          }}
+                        >
+                          <div className="bg-black/50 rounded-full p-3 opacity-70 hover:opacity-100 transition-opacity duration-300">
+                            {playingVideos.has(item.id) ? (
+                              <Pause className="h-6 w-6 text-white" />
+                            ) : (
+                              <Play className="h-6 w-6 text-white ml-1" />
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Download Button - Bottom Right */}
+                        <div className="absolute bottom-2 right-2">
                           <Button
                             onClick={(e) => {
                               e.stopPropagation()
@@ -284,11 +317,6 @@ export default function ProductBoxContentPage() {
                           >
                             <Download className="h-4 w-4" />
                           </Button>
-                        </div>
-
-                        {/* Heart Icon - Bottom Right */}
-                        <div className="absolute bottom-2 right-2">
-                          <Heart className="h-5 w-5 text-white/80" />
                         </div>
                       </div>
                     ) : (
