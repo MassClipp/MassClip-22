@@ -20,46 +20,18 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
     const bundleId = params.id
     console.log(`🔍 [Bundles API] Fetching bundle: ${bundleId}`)
 
-    // Check authorization
-    const authHeader = request.headers.get("authorization")
-    if (!authHeader?.startsWith("Bearer ")) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
-
-    // Try to find bundle in multiple collections
-    const collections = ["product-boxes", "bundles", "creator-bundles"]
+    // Try to find the bundle in different collections
+    const collections = ["productBoxes", "bundles", "creator_product_boxes"]
     let bundleData = null
-    let contentItems = []
 
     for (const collectionName of collections) {
       try {
-        console.log(`🔍 [Bundles API] Checking collection: ${collectionName}`)
+        const docRef = db.collection(collectionName).doc(bundleId)
+        const doc = await docRef.get()
 
-        const bundleRef = db.collection(collectionName).doc(bundleId)
-        const bundleDoc = await bundleRef.get()
-
-        if (bundleDoc.exists) {
-          bundleData = {
-            id: bundleDoc.id,
-            ...bundleDoc.data(),
-          }
-          console.log(`✅ [Bundles API] Found bundle in ${collectionName}:`, bundleData.title)
-
-          // Try to fetch content items from subcollection
-          try {
-            const contentRef = bundleRef.collection("content")
-            const contentSnapshot = await contentRef.get()
-
-            contentItems = contentSnapshot.docs.map((doc) => ({
-              id: doc.id,
-              ...doc.data(),
-            }))
-
-            console.log(`📁 [Bundles API] Found ${contentItems.length} content items`)
-          } catch (contentError) {
-            console.warn(`⚠️ [Bundles API] Error fetching content:`, contentError)
-          }
-
+        if (doc.exists) {
+          bundleData = { id: doc.id, ...doc.data() }
+          console.log(`✅ [Bundles API] Found bundle in ${collectionName}:`, bundleData)
           break
         }
       } catch (error) {
@@ -72,22 +44,35 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
       return NextResponse.json({ error: "Bundle not found" }, { status: 404 })
     }
 
-    // If no content items found in subcollection, try to get from bundle data
-    if (contentItems.length === 0 && bundleData.contentItems) {
-      contentItems = bundleData.contentItems
+    // Try to get content items count
+    let totalItems = 0
+    try {
+      const contentRef = db.collection("productBoxContent").where("productBoxId", "==", bundleId)
+      const contentSnapshot = await contentRef.get()
+      totalItems = contentSnapshot.size
+    } catch (error) {
+      console.warn(`⚠️ [Bundles API] Error getting content count:`, error)
     }
 
-    return NextResponse.json({
-      bundle: bundleData,
-      contentItems: contentItems,
-      title: bundleData.title,
-      description: bundleData.description,
-      thumbnailUrl: bundleData.thumbnailUrl || bundleData.customPreviewThumbnail,
-      creatorUsername: bundleData.creatorUsername,
-      totalItems: contentItems.length,
-    })
-  } catch (error) {
-    console.error("❌ [Bundles API] Error:", error)
-    return NextResponse.json({ error: "Failed to fetch bundle" }, { status: 500 })
+    const response = {
+      id: bundleData.id,
+      title: bundleData.title || bundleData.name || "Untitled Bundle",
+      description: bundleData.description || "",
+      thumbnailUrl: bundleData.thumbnailUrl || bundleData.customPreviewThumbnail || bundleData.previewImage,
+      customPreviewThumbnail: bundleData.customPreviewThumbnail,
+      creatorId: bundleData.creatorId || bundleData.userId,
+      creatorUsername: bundleData.creatorUsername || bundleData.username,
+      price: bundleData.price || 0,
+      currency: bundleData.currency || "usd",
+      totalItems,
+      createdAt: bundleData.createdAt,
+      updatedAt: bundleData.updatedAt,
+    }
+
+    console.log(`✅ [Bundles API] Returning bundle data:`, response)
+    return NextResponse.json(response)
+  } catch (error: any) {
+    console.error(`❌ [Bundles API] Error:`, error)
+    return NextResponse.json({ error: "Failed to fetch bundle", details: error.message }, { status: 500 })
   }
 }

@@ -4,6 +4,7 @@ import { useEffect, useState } from "react"
 import { useParams, useRouter } from "next/navigation"
 import { useAuth } from "@/contexts/auth-context"
 import { Button } from "@/components/ui/button"
+import { FullscreenWrapper } from "@/components/fullscreen-wrapper"
 import { ArrowLeft, Download, RefreshCw, Play, Pause } from "lucide-react"
 
 interface ContentItem {
@@ -40,6 +41,7 @@ export default function ProductBoxContentPage() {
   const [bundleData, setBundleData] = useState<BundleData | null>(null)
   const [items, setItems] = useState<ContentItem[]>([])
   const [currentlyPlayingVideo, setCurrentlyPlayingVideo] = useState<string | null>(null)
+  const [downloadingItems, setDownloadingItems] = useState<Set<string>>(new Set())
 
   const productBoxId = params.id as string
 
@@ -153,20 +155,57 @@ export default function ProductBoxContentPage() {
 
   const handleDownload = async (item: ContentItem) => {
     try {
-      console.log(`📥 [Download] Starting download for: ${item.displayTitle}`)
+      console.log(`📥 [Download] Starting direct download for: ${item.displayTitle}`)
+
+      setDownloadingItems((prev) => new Set(prev).add(item.id))
+
+      // Fetch the file as a blob
+      const response = await fetch(item.fileUrl)
+      if (!response.ok) {
+        throw new Error(`Failed to fetch file: ${response.statusText}`)
+      }
+
+      const blob = await response.blob()
+
+      // Create a blob URL
+      const blobUrl = URL.createObjectURL(blob)
 
       // Create download link
       const link = document.createElement("a")
-      link.href = item.fileUrl
+      link.href = blobUrl
       link.download = item.filename || item.displayTitle
-      link.target = "_blank"
+
+      // Append to body, click, and remove
       document.body.appendChild(link)
       link.click()
       document.body.removeChild(link)
 
-      console.log(`✅ [Download] Download initiated for: ${item.displayTitle}`)
+      // Clean up the blob URL
+      URL.revokeObjectURL(blobUrl)
+
+      console.log(`✅ [Download] Direct download completed for: ${item.displayTitle}`)
     } catch (error) {
       console.error(`❌ [Download] Error downloading ${item.displayTitle}:`, error)
+
+      // Fallback to original method
+      try {
+        const link = document.createElement("a")
+        link.href = item.fileUrl
+        link.download = item.filename || item.displayTitle
+        link.target = "_blank"
+        document.body.appendChild(link)
+        link.click()
+        document.body.removeChild(link)
+        console.log(`✅ [Download] Fallback download initiated for: ${item.displayTitle}`)
+      } catch (fallbackError) {
+        console.error(`❌ [Download] Fallback download failed:`, fallbackError)
+      }
+    } finally {
+      setDownloadingItems((prev) => {
+        const newSet = new Set(prev)
+        newSet.delete(item.id)
+        return newSet
+      })
     }
   }
 
@@ -205,18 +244,18 @@ export default function ProductBoxContentPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-black flex items-center justify-center">
+      <FullscreenWrapper className="bg-black flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
           <div className="text-white text-lg">Loading content...</div>
         </div>
-      </div>
+      </FullscreenWrapper>
     )
   }
 
   if (!hasAccess || error) {
     return (
-      <div className="min-h-screen bg-black flex items-center justify-center">
+      <FullscreenWrapper className="bg-black flex items-center justify-center">
         <div className="text-center max-w-md px-6">
           <div className="text-red-500 text-6xl mb-4">🔒</div>
           <h2 className="text-white text-2xl font-bold mb-4">Access Denied</h2>
@@ -238,14 +277,14 @@ export default function ProductBoxContentPage() {
             </Button>
           </div>
         </div>
-      </div>
+      </FullscreenWrapper>
     )
   }
 
   return (
-    <div className="min-h-screen bg-black">
+    <FullscreenWrapper className="bg-black">
       {/* Header */}
-      <div className="px-6 py-8 border-b border-gray-800">
+      <div className="p-6 border-b border-gray-800">
         <div className="flex items-center gap-4 mb-4">
           <Button
             onClick={() => router.push("/dashboard/purchases")}
@@ -276,7 +315,7 @@ export default function ProductBoxContentPage() {
       </div>
 
       {/* Content Grid */}
-      <div className="px-6 py-8">
+      <div className="p-6">
         {items.length > 0 ? (
           <>
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 mb-8">
@@ -327,9 +366,14 @@ export default function ProductBoxContentPage() {
                               handleDownload(item)
                             }}
                             size="sm"
+                            disabled={downloadingItems.has(item.id)}
                             className="h-8 w-8 p-0 bg-black/70 hover:bg-black/90 text-white border-0 rounded-full"
                           >
-                            <Download className="h-4 w-4" />
+                            {downloadingItems.has(item.id) ? (
+                              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                            ) : (
+                              <Download className="h-4 w-4" />
+                            )}
                           </Button>
                         </div>
                       </div>
@@ -341,10 +385,15 @@ export default function ProductBoxContentPage() {
                         <Button
                           onClick={() => handleDownload(item)}
                           size="sm"
+                          disabled={downloadingItems.has(item.id)}
                           className="bg-white text-black hover:bg-gray-100 text-xs px-3 py-1 opacity-0 group-hover:opacity-100 transition-opacity duration-300"
                         >
-                          <Download className="h-3 w-3 mr-1" />
-                          Download
+                          {downloadingItems.has(item.id) ? (
+                            <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-black mr-1"></div>
+                          ) : (
+                            <Download className="h-3 w-3 mr-1" />
+                          )}
+                          {downloadingItems.has(item.id) ? "Downloading..." : "Download"}
                         </Button>
                       </div>
                     )}
@@ -382,6 +431,6 @@ export default function ProductBoxContentPage() {
           </div>
         )}
       </div>
-    </div>
+    </FullscreenWrapper>
   )
 }

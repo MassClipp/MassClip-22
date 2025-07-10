@@ -9,6 +9,7 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { AlertCircle, RefreshCw, MoreVertical, Trash2 } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { FullscreenWrapper } from "@/components/fullscreen-wrapper"
 import Link from "next/link"
 import Image from "next/image"
 
@@ -182,8 +183,8 @@ export default function PurchasesPage() {
 
   if (authLoading || loading) {
     return (
-      <div className="min-h-screen bg-black">
-        <div className="px-6 py-8">
+      <FullscreenWrapper className="bg-black">
+        <div className="p-6">
           <h1 className="text-3xl font-bold text-white mb-8">My Purchases</h1>
           <div className="h-px bg-gradient-to-r from-transparent via-gray-600 to-transparent mb-8"></div>
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
@@ -196,13 +197,13 @@ export default function PurchasesPage() {
             ))}
           </div>
         </div>
-      </div>
+      </FullscreenWrapper>
     )
   }
 
   return (
-    <div className="min-h-screen bg-black">
-      <div className="px-6 py-8">
+    <FullscreenWrapper className="bg-black">
+      <div className="p-6">
         <div className="flex items-center justify-between mb-8">
           <h1 className="text-3xl font-bold text-white">My Purchases</h1>
           <Button
@@ -341,6 +342,6 @@ export default function PurchasesPage() {
           }
         }
       `}</style>
-    </div>
+    </FullscreenWrapper>
   )
 }
