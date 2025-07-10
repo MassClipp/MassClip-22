@@ -13,7 +13,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Missing productBoxId" }, { status: 400 })
     }
 
-    console.log(`🔍 [Checkout] Creating session for product ${productBoxId}, user ${decodedToken.uid}`)
+    console.log(`🔍 [Checkout] Creating TEST MODE session for product ${productBoxId}, user ${decodedToken.uid}`)
 
     // Get product details
     const productDoc = await db.collection("productBoxes").doc(productBoxId).get()
@@ -40,11 +40,11 @@ export async function POST(request: NextRequest) {
     const siteUrl = getSiteUrl()
     console.log(`🌐 [Checkout] Using site URL: ${siteUrl}`)
 
-    // CLIENT-SIDE TEST MODE - Simple success URL without session verification
-    const successUrl = `${siteUrl}/purchase-success?product_box_id=${productBoxId}&user_id=${decodedToken.uid}&creator_id=${creatorId || ""}`
+    // Force TEST MODE - Simple success URL without session verification
+    const successUrl = `${siteUrl}/purchase-success?product_box_id=${productBoxId}&user_id=${decodedToken.uid}&creator_id=${creatorId || ""}&test_mode=true`
     const cancelUrl = `${siteUrl}/product-box/${productBoxId}`
 
-    // Prepare checkout session options
+    // Prepare checkout session options - FORCE TEST MODE
     const sessionOptions: any = {
       payment_method_types: ["card"],
       line_items: [
@@ -52,8 +52,8 @@ export async function POST(request: NextRequest) {
           price_data: {
             currency: "usd",
             product_data: {
-              name: productData.title || "Digital Content",
-              description: productData.description || "Premium digital content access",
+              name: `[TEST] ${productData.title || "Digital Content"}`,
+              description: `TEST MODE: ${productData.description || "Premium digital content access"}`,
               images: productData.thumbnailUrl ? [productData.thumbnailUrl] : [],
             },
             unit_amount: Math.round(price * 100), // Convert to cents
@@ -62,36 +62,39 @@ export async function POST(request: NextRequest) {
         },
       ],
       mode: "payment",
-      // Simple success URL - no session verification needed
       success_url: successUrl,
       cancel_url: cancelUrl,
       metadata: {
         productBoxId,
-        vaultId: productBoxId, // For backward compatibility
+        vaultId: productBoxId,
         userId: decodedToken.uid,
         buyerUid: decodedToken.uid,
         creatorId: creatorId || "",
         creatorUid: creatorId || "",
         creatorName: creatorData?.displayName || creatorData?.name || "",
-        verificationMethod: "client_side_test", // Mark as client-side test
+        verificationMethod: "test_mode",
+        testMode: "true",
       },
       customer_email: decodedToken.email,
     }
 
-    // Add connected account if provided
-    if (connectedAccountId) {
+    // Don't use connected account in test mode to avoid complications
+    if (connectedAccountId && process.env.NODE_ENV === "production") {
       sessionOptions.stripe_account = connectedAccountId
       console.log(`🔍 [Checkout] Using connected account: ${connectedAccountId}`)
+    } else {
+      console.log(`🧪 [Checkout] Skipping connected account in TEST MODE`)
     }
 
     console.log(`🔗 [Checkout] Success URL: ${successUrl}`)
     console.log(`🔗 [Checkout] Cancel URL: ${cancelUrl}`)
-    console.log(`🧪 [Checkout] Using CLIENT-SIDE TEST MODE - no session verification`)
+    console.log(`🧪 [Checkout] FORCING TEST MODE - using test keys`)
 
-    // Create the checkout session
+    // Create the checkout session with test configuration
     const session = await stripe.checkout.sessions.create(sessionOptions)
 
-    console.log(`✅ [Checkout] Session created: ${session.id}`)
+    console.log(`✅ [Checkout] TEST session created: ${session.id}`)
+    console.log(`🔍 [Checkout] Session URL: ${session.url}`)
 
     // Store checkout session for tracking
     await db
@@ -112,7 +115,8 @@ export async function POST(request: NextRequest) {
         siteUrl: siteUrl,
         successUrl: successUrl,
         cancelUrl: cancelUrl,
-        verificationMethod: "client_side_test",
+        verificationMethod: "test_mode",
+        testMode: true,
       })
 
     return NextResponse.json({
@@ -134,11 +138,12 @@ export async function POST(request: NextRequest) {
         siteUrl: siteUrl,
         successUrl: successUrl,
         isPreview: siteUrl.includes("vercel.app") || siteUrl.includes("preview"),
-        verificationMethod: "client_side_test",
+        verificationMethod: "test_mode",
+        testMode: true,
       },
     })
   } catch (error: any) {
-    console.error(`❌ [Checkout] Error creating session:`, error)
+    console.error(`❌ [Checkout] Error creating TEST session:`, error)
     return NextResponse.json({ error: "Failed to create checkout session" }, { status: 500 })
   }
 }
