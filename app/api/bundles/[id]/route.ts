@@ -10,17 +10,14 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
 
     const idToken = authHeader.split("Bearer ")[1]
     const decodedToken = await auth.verifyIdToken(idToken)
-    const userId = decodedToken.uid
-
     const bundleId = params.id
 
-    console.log(`🔍 [Bundle API] Fetching bundle details for: ${bundleId}`)
+    console.log(`🔍 [Bundles API] Fetching bundle: ${bundleId}`)
 
     // Get bundle details
     const bundleDoc = await db.collection("bundles").doc(bundleId).get()
 
     if (!bundleDoc.exists) {
-      console.log(`❌ [Bundle API] Bundle not found: ${bundleId}`)
       return NextResponse.json({ error: "Bundle not found" }, { status: 404 })
     }
 
@@ -35,12 +32,12 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
           creatorData = creatorDoc.data()
         }
       } catch (error) {
-        console.warn(`⚠️ [Bundle API] Could not fetch creator:`, error)
+        console.warn(`⚠️ [Bundles API] Could not fetch creator:`, error)
       }
     }
 
     const response = {
-      id: bundleDoc.id,
+      id: bundleId,
       title: bundleData?.title || "Untitled Bundle",
       description: bundleData?.description || "",
       customPreviewThumbnail: bundleData?.customPreviewThumbnail,
@@ -51,19 +48,18 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
       creatorUsername: creatorData?.username || "Unknown",
       creatorDisplayName: creatorData?.displayName,
       totalItems: bundleData?.totalItems || 0,
-      totalSize: bundleData?.totalSize || 0,
       createdAt: bundleData?.createdAt,
       updatedAt: bundleData?.updatedAt,
     }
 
-    console.log(`✅ [Bundle API] Bundle details fetched successfully`)
+    console.log(`✅ [Bundles API] Bundle fetched successfully:`, response.title)
 
     return NextResponse.json(response)
   } catch (error: any) {
-    console.error(`❌ [Bundle API] Error:`, error)
+    console.error(`❌ [Bundles API] Error:`, error)
     return NextResponse.json(
       {
-        error: "Failed to fetch bundle details",
+        error: "Failed to fetch bundle",
         details: error.message,
       },
       { status: 500 },

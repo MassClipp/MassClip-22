@@ -6,8 +6,9 @@ import { useFirebaseAuth } from "@/hooks/use-firebase-auth"
 import { Card } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
-import { AlertCircle, RefreshCw } from "lucide-react"
+import { AlertCircle, RefreshCw, MoreVertical, Trash2 } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import Link from "next/link"
 import Image from "next/image"
 
@@ -121,6 +122,30 @@ export default function PurchasesPage() {
     router.push(`/product-box/${purchase.productBoxId}/content`)
   }
 
+  const handleRemovePurchase = async (purchase: Purchase) => {
+    try {
+      console.log(`🗑️ [Purchases Page] Removing purchase:`, purchase.id)
+
+      // Remove from local state immediately for better UX
+      setPurchases((prev) => prev.filter((p) => p.id !== purchase.id))
+
+      // TODO: Implement actual removal API call
+      // const token = await user.getIdToken()
+      // await fetch(`/api/user/purchases/${purchase.id}`, {
+      //   method: 'DELETE',
+      //   headers: {
+      //     Authorization: `Bearer ${token}`,
+      //   },
+      // })
+
+      console.log(`✅ [Purchases Page] Purchase removed from view`)
+    } catch (error) {
+      console.error(`❌ [Purchases Page] Error removing purchase:`, error)
+      // Re-fetch purchases to restore state if removal failed
+      fetchPurchases()
+    }
+  }
+
   if (authLoading || loading) {
     return (
       <div className="min-h-screen bg-black">
@@ -178,7 +203,7 @@ export default function PurchasesPage() {
             {purchases.map((purchase, index) => (
               <Card
                 key={purchase.id}
-                className="bg-gray-900/50 border-gray-800 overflow-hidden group hover:bg-gray-900/70 transition-all duration-300"
+                className="bg-gray-900/50 border-gray-800 overflow-hidden group hover:bg-gray-900/70 transition-all duration-300 relative"
                 style={{
                   animationDelay: `${index * 100}ms`,
                   animation: "fadeInUp 0.6s ease-out forwards",
@@ -193,6 +218,30 @@ export default function PurchasesPage() {
                     >
                       {purchase.creatorUsername}
                     </Link>
+                  </div>
+
+                  {/* Three Dots Menu - Top Right */}
+                  <div className="absolute top-3 right-3 z-10">
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 w-8 p-0 bg-black/50 hover:bg-black/70 text-white/80 hover:text-white backdrop-blur-sm"
+                        >
+                          <MoreVertical className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" className="bg-gray-900 border-gray-700">
+                        <DropdownMenuItem
+                          onClick={() => handleRemovePurchase(purchase)}
+                          className="text-red-400 hover:text-red-300 hover:bg-red-900/20 cursor-pointer"
+                        >
+                          <Trash2 className="h-4 w-4 mr-2" />
+                          Remove
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </div>
 
                   {/* Thumbnail - 1:1 Aspect Ratio */}
@@ -220,6 +269,11 @@ export default function PurchasesPage() {
 
                   {/* Content */}
                   <div className="p-4">
+                    {/* Bundle Title */}
+                    <h3 className="text-white text-sm font-medium mb-3 line-clamp-2 min-h-[2.5rem]">
+                      {purchase.bundleTitle}
+                    </h3>
+
                     <Button
                       onClick={() => handleOpenContent(purchase)}
                       className="w-full bg-white text-black hover:bg-gray-100 font-medium"
