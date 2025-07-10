@@ -11,26 +11,24 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { GoogleAuthButton } from "@/components/google-auth-button"
-import { Separator } from "@/components/ui/separator"
-import { Eye, EyeOff, Mail, Lock, LogIn, AlertCircle } from "lucide-react"
-import Link from "next/link"
+import { Loader2, Mail, Lock, ArrowRight } from "lucide-react"
+import { signInWithEmailAndPassword } from "firebase/auth"
+import { auth } from "@/lib/firebase"
 
 export default function LoginPage() {
-  const { user, signInWithEmail, signInWithGoogle, loading } = useAuth()
-  const router = useRouter()
-  const searchParams = useSearchParams()
-
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
-  const [showPassword, setShowPassword] = useState(false)
+  const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
-  const [isLoading, setIsLoading] = useState(false)
+  const { user } = useAuth()
+  const router = useRouter()
+  const searchParams = useSearchParams()
 
   const redirect = searchParams.get("redirect")
 
   useEffect(() => {
-    if (user && !loading) {
-      // Check if there's a stored redirect URL from purchase flow
+    if (user) {
+      // Check for stored redirect URL from purchase flow
       const storedRedirect = localStorage.getItem("redirectAfterLogin")
       if (storedRedirect) {
         localStorage.removeItem("redirectAfterLogin")
@@ -38,16 +36,11 @@ export default function LoginPage() {
         return
       }
 
-      // Use URL redirect parameter
-      if (redirect) {
-        router.push(redirect)
-        return
-      }
-
-      // Default redirect
-      router.push("/dashboard")
+      // Use redirect parameter or default to dashboard
+      const redirectUrl = redirect || "/dashboard"
+      router.push(redirectUrl)
     }
-  }, [user, loading, redirect, router])
+  }, [user, router, redirect])
 
   const handleEmailLogin = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -56,46 +49,22 @@ export default function LoginPage() {
       return
     }
 
-    setIsLoading(true)
+    setLoading(true)
     setError("")
 
     try {
-      await signInWithEmail(email, password)
+      await signInWithEmailAndPassword(auth, email, password)
       // Redirect will be handled by useEffect
     } catch (error: any) {
       console.error("Login error:", error)
       setError(error.message || "Failed to sign in")
     } finally {
-      setIsLoading(false)
+      setLoading(false)
     }
   }
 
-  const handleGoogleLogin = async () => {
-    setIsLoading(true)
-    setError("")
-
-    try {
-      await signInWithGoogle()
-      // Redirect will be handled by useEffect
-    } catch (error: any) {
-      console.error("Google login error:", error)
-      setError(error.message || "Failed to sign in with Google")
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
-  if (loading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <Card className="w-full max-w-md">
-          <CardContent className="p-6 text-center">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
-            <p className="text-gray-600">Checking authentication...</p>
-          </CardContent>
-        </Card>
-      </div>
-    )
+  const handleGoogleSuccess = () => {
+    // Redirect will be handled by useEffect when user state updates
   }
 
   if (user) {
@@ -103,8 +72,8 @@ export default function LoginPage() {
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <Card className="w-full max-w-md">
           <CardContent className="p-6 text-center">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-600 mx-auto mb-4"></div>
-            <p className="text-gray-600">Redirecting...</p>
+            <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
+            <p>Redirecting...</p>
           </CardContent>
         </Card>
       </div>
@@ -119,83 +88,102 @@ export default function LoginPage() {
           <p className="text-gray-600">Sign in to your account</p>
         </CardHeader>
         <CardContent className="space-y-6">
-          {error && (
-            <Alert variant="destructive">
-              <AlertCircle className="h-4 w-4" />
-              <AlertDescription>{error}</AlertDescription>
-            </Alert>
-          )}
+          {/* Google Sign In */}
+          <GoogleAuthButton onSuccess={handleGoogleSuccess} />
 
+          <div className="relative">
+            <div className="absolute inset-0 flex items-center">
+              <div className="w-full border-t border-gray-300" />
+            </div>
+            <div className="relative flex justify-center text-sm">
+              <span className="px-2 bg-white text-gray-500">Or continue with email</span>
+            </div>
+          </div>
+
+          {/* Email/Password Form */}
           <form onSubmit={handleEmailLogin} className="space-y-4">
-            <div className="space-y-2">
+            <div>
               <Label htmlFor="email">Email</Label>
               <div className="relative">
                 <Mail className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
                 <Input
                   id="email"
                   type="email"
-                  placeholder="Enter your email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
+                  placeholder="Enter your email"
                   className="pl-10"
                   required
                 />
               </div>
             </div>
 
-            <div className="space-y-2">
+            <div>
               <Label htmlFor="password">Password</Label>
               <div className="relative">
                 <Lock className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
                 <Input
                   id="password"
-                  type={showPassword ? "text" : "password"}
-                  placeholder="Enter your password"
+                  type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="pl-10 pr-10"
+                  placeholder="Enter your password"
+                  className="pl-10"
                   required
                 />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-3 text-gray-400 hover:text-gray-600"
-                >
-                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                </button>
               </div>
             </div>
 
-            <Button type="submit" className="w-full" disabled={isLoading}>
-              {isLoading ? (
-                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+            {error && (
+              <Alert variant="destructive">
+                <AlertDescription>{error}</AlertDescription>
+              </Alert>
+            )}
+
+            <Button type="submit" className="w-full" disabled={loading}>
+              {loading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Signing in...
+                </>
               ) : (
-                <LogIn className="h-4 w-4 mr-2" />
+                <>
+                  Sign In
+                  <ArrowRight className="ml-2 h-4 w-4" />
+                </>
               )}
-              Sign In
             </Button>
           </form>
 
-          <div className="relative">
-            <Separator />
-            <div className="absolute inset-0 flex items-center justify-center">
-              <span className="bg-white px-2 text-sm text-gray-500">or</span>
+          <div className="text-center space-y-2">
+            <Button
+              variant="link"
+              onClick={() => router.push("/forgot-password")}
+              className="text-sm text-gray-600 hover:text-gray-900"
+            >
+              Forgot your password?
+            </Button>
+            <div className="text-sm text-gray-600">
+              Don't have an account?{" "}
+              <Button
+                variant="link"
+                onClick={() => router.push(`/signup${redirect ? `?redirect=${redirect}` : ""}`)}
+                className="p-0 h-auto font-medium text-blue-600 hover:text-blue-500"
+              >
+                Sign up
+              </Button>
             </div>
           </div>
 
-          <GoogleAuthButton onClick={handleGoogleLogin} disabled={isLoading} />
-
-          <div className="text-center space-y-2">
-            <Link href="/forgot-password" className="text-sm text-blue-600 hover:underline">
-              Forgot your password?
-            </Link>
-            <p className="text-sm text-gray-600">
-              Don't have an account?{" "}
-              <Link href="/signup" className="text-blue-600 hover:underline">
-                Sign up
-              </Link>
-            </p>
-          </div>
+          {/* Purchase Flow Notice */}
+          {redirect?.includes("purchase-success") && (
+            <div className="mt-4 p-3 bg-blue-50 rounded-lg">
+              <h3 className="font-medium text-blue-900 mb-1">🎉 Purchase Complete!</h3>
+              <p className="text-sm text-blue-800">
+                Your payment was successful. Please sign in to access your content.
+              </p>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

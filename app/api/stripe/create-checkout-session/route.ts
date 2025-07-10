@@ -40,6 +40,10 @@ export async function POST(request: NextRequest) {
     const siteUrl = getSiteUrl()
     console.log(`🌐 [Checkout] Using site URL: ${siteUrl}`)
 
+    // CLIENT-SIDE TEST MODE - Simple success URL without session verification
+    const successUrl = `${siteUrl}/purchase-success?product_box_id=${productBoxId}&user_id=${decodedToken.uid}&creator_id=${creatorId || ""}`
+    const cancelUrl = `${siteUrl}/product-box/${productBoxId}`
+
     // Prepare checkout session options
     const sessionOptions: any = {
       payment_method_types: ["card"],
@@ -58,9 +62,9 @@ export async function POST(request: NextRequest) {
         },
       ],
       mode: "payment",
-      // Use environment-aware URL and correct page path
-      success_url: `${siteUrl}/purchase-success?product_box_id=${productBoxId}&user_id=${decodedToken.uid}&creator_id=${creatorId || ""}`,
-      cancel_url: `${siteUrl}/product-box/${productBoxId}`,
+      // Simple success URL - no session verification needed
+      success_url: successUrl,
+      cancel_url: cancelUrl,
       metadata: {
         productBoxId,
         vaultId: productBoxId, // For backward compatibility
@@ -69,6 +73,7 @@ export async function POST(request: NextRequest) {
         creatorId: creatorId || "",
         creatorUid: creatorId || "",
         creatorName: creatorData?.displayName || creatorData?.name || "",
+        verificationMethod: "client_side_test", // Mark as client-side test
       },
       customer_email: decodedToken.email,
     }
@@ -79,8 +84,9 @@ export async function POST(request: NextRequest) {
       console.log(`🔍 [Checkout] Using connected account: ${connectedAccountId}`)
     }
 
-    console.log(`🔗 [Checkout] Success URL: ${sessionOptions.success_url}`)
-    console.log(`🔗 [Checkout] Cancel URL: ${sessionOptions.cancel_url}`)
+    console.log(`🔗 [Checkout] Success URL: ${successUrl}`)
+    console.log(`🔗 [Checkout] Cancel URL: ${cancelUrl}`)
+    console.log(`🧪 [Checkout] Using CLIENT-SIDE TEST MODE - no session verification`)
 
     // Create the checkout session
     const session = await stripe.checkout.sessions.create(sessionOptions)
@@ -103,9 +109,10 @@ export async function POST(request: NextRequest) {
         status: "pending",
         createdAt: new Date(),
         metadata: sessionOptions.metadata,
-        siteUrl: siteUrl, // Track which environment was used
-        successUrl: sessionOptions.success_url,
-        cancelUrl: sessionOptions.cancel_url,
+        siteUrl: siteUrl,
+        successUrl: successUrl,
+        cancelUrl: cancelUrl,
+        verificationMethod: "client_side_test",
       })
 
     return NextResponse.json({
@@ -125,8 +132,9 @@ export async function POST(request: NextRequest) {
         : null,
       environment: {
         siteUrl: siteUrl,
-        successUrl: sessionOptions.success_url,
+        successUrl: successUrl,
         isPreview: siteUrl.includes("vercel.app") || siteUrl.includes("preview"),
+        verificationMethod: "client_side_test",
       },
     })
   } catch (error: any) {
