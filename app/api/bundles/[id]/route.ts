@@ -18,19 +18,48 @@ const db = getFirestore()
 export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
   try {
     const bundleId = params.id
-
     console.log(`🔍 [Bundles API] Fetching bundle: ${bundleId}`)
 
-    // Try to find the bundle in different collections
-    const collections = ["productBoxes", "bundles", "product-boxes"]
+    // Check authorization
+    const authHeader = request.headers.get("authorization")
+    if (!authHeader?.startsWith("Bearer ")) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
+    // Try to find bundle in multiple collections
+    const collections = ["product-boxes", "bundles", "creator-bundles"]
     let bundleData = null
+    let contentItems = []
 
     for (const collectionName of collections) {
       try {
-        const doc = await db.collection(collectionName).doc(bundleId).get()
-        if (doc.exists) {
-          bundleData = { id: doc.id, ...doc.data() }
-          console.log(`✅ [Bundles API] Found bundle in ${collectionName}`)
+        console.log(`🔍 [Bundles API] Checking collection: ${collectionName}`)
+
+        const bundleRef = db.collection(collectionName).doc(bundleId)
+        const bundleDoc = await bundleRef.get()
+
+        if (bundleDoc.exists) {
+          bundleData = {
+            id: bundleDoc.id,
+            ...bundleDoc.data(),
+          }
+          console.log(`✅ [Bundles API] Found bundle in ${collectionName}:`, bundleData.title)
+
+          // Try to fetch content items from subcollection
+          try {
+            const contentRef = bundleRef.collection("content")
+            const contentSnapshot = await contentRef.get()
+
+            contentItems = contentSnapshot.docs.map((doc) => ({
+              id: doc.id,
+              ...doc.data(),
+            }))
+
+            console.log(`📁 [Bundles API] Found ${contentItems.length} content items`)
+          } catch (contentError) {
+            console.warn(`⚠️ [Bundles API] Error fetching content:`, contentError)
+          }
+
           break
         }
       } catch (error) {
@@ -39,63 +68,26 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
     }
 
     if (!bundleData) {
+      console.log(`❌ [Bundles API] Bundle not found: ${bundleId}`)
       return NextResponse.json({ error: "Bundle not found" }, { status: 404 })
     }
 
-    // Fetch content items for this bundle
-    const contentItems = []
-
-    // Try to get content from productBoxContent collection
-    try {
-      const contentQuery = await db.collection("productBoxContent").where("productBoxId", "==", bundleId).get()
-
-      contentQuery.forEach((doc) => {
-        contentItems.push({ id: doc.id, ...doc.data() })
-      })
-
-      // If no content found, try with boxId field
-      if (contentItems.length === 0) {
-        const boxIdQuery = await db.collection("productBoxContent").where("boxId", "==", bundleId).get()
-
-        boxIdQuery.forEach((doc) => {
-          contentItems.push({ id: doc.id, ...doc.data() })
-        })
-      }
-
-      // If still no content, try uploads collection
-      if (contentItems.length === 0) {
-        const uploadsQuery = await db.collection("uploads").where("productBoxId", "==", bundleId).get()
-
-        uploadsQuery.forEach((doc) => {
-          contentItems.push({ id: doc.id, ...doc.data() })
-        })
-      }
-
-      // If still no content, check bundle's contentItems array
-      if (contentItems.length === 0 && bundleData.contentItems) {
-        for (const itemId of bundleData.contentItems) {
-          try {
-            const uploadDoc = await db.collection("uploads").doc(itemId).get()
-            if (uploadDoc.exists) {
-              contentItems.push({ id: uploadDoc.id, ...uploadDoc.data() })
-            }
-          } catch (error) {
-            console.warn(`⚠️ [Bundles API] Error fetching upload ${itemId}:`, error)
-          }
-        }
-      }
-    } catch (error) {
-      console.warn(`⚠️ [Bundles API] Error fetching content:`, error)
+    // If no content items found in subcollection, try to get from bundle data
+    if (contentItems.length === 0 && bundleData.contentItems) {
+      contentItems = bundleData.contentItems
     }
-
-    console.log(`✅ [Bundles API] Found ${contentItems.length} content items`)
 
     return NextResponse.json({
       bundle: bundleData,
-      contentItems,
+      contentItems: contentItems,
+      title: bundleData.title,
+      description: bundleData.description,
+      thumbnailUrl: bundleData.thumbnailUrl || bundleData.customPreviewThumbnail,
+      creatorUsername: bundleData.creatorUsername,
+      totalItems: contentItems.length,
     })
-  } catch (error: any) {
+  } catch (error) {
     console.error("❌ [Bundles API] Error:", error)
-    return NextResponse.json({ error: "Failed to fetch bundle", details: error.message }, { status: 500 })
+    return NextResponse.json({ error: "Failed to fetch bundle" }, { status: 500 })
   }
 }

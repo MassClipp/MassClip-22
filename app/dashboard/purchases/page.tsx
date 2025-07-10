@@ -183,8 +183,9 @@ export default function PurchasesPage() {
   if (authLoading || loading) {
     return (
       <div className="min-h-screen bg-black">
-        <div className="p-6">
+        <div className="px-6 py-8">
           <h1 className="text-3xl font-bold text-white mb-8">My Purchases</h1>
+          <div className="h-px bg-gradient-to-r from-transparent via-gray-600 to-transparent mb-8"></div>
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
             {Array.from({ length: 8 }).map((_, i) => (
               <div key={i} className="space-y-3">
@@ -201,7 +202,7 @@ export default function PurchasesPage() {
 
   return (
     <div className="min-h-screen bg-black">
-      <div className="p-6">
+      <div className="px-6 py-8">
         <div className="flex items-center justify-between mb-8">
           <h1 className="text-3xl font-bold text-white">My Purchases</h1>
           <Button
@@ -214,6 +215,9 @@ export default function PurchasesPage() {
             Refresh
           </Button>
         </div>
+
+        {/* Border Line */}
+        <div className="h-px bg-gradient-to-r from-transparent via-gray-600 to-transparent mb-8"></div>
 
         {error && (
           <Alert variant="destructive" className="max-w-md mb-6">

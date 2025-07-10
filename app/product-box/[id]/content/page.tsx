@@ -39,7 +39,7 @@ export default function ProductBoxContentPage() {
   const [error, setError] = useState<string | null>(null)
   const [bundleData, setBundleData] = useState<BundleData | null>(null)
   const [items, setItems] = useState<ContentItem[]>([])
-  const [playingVideos, setPlayingVideos] = useState<Set<string>>(new Set())
+  const [currentlyPlayingVideo, setCurrentlyPlayingVideo] = useState<string | null>(null)
 
   const productBoxId = params.id as string
 
@@ -171,18 +171,22 @@ export default function ProductBoxContentPage() {
   }
 
   const handleVideoToggle = (itemId: string, videoElement: HTMLVideoElement) => {
-    const isPlaying = playingVideos.has(itemId)
+    // If there's a currently playing video and it's not this one, pause it
+    if (currentlyPlayingVideo && currentlyPlayingVideo !== itemId) {
+      const currentVideo = document.querySelector(`video[data-video-id="${currentlyPlayingVideo}"]`) as HTMLVideoElement
+      if (currentVideo) {
+        currentVideo.pause()
+      }
+    }
 
-    if (isPlaying) {
+    const isCurrentlyPlaying = currentlyPlayingVideo === itemId
+
+    if (isCurrentlyPlaying) {
       videoElement.pause()
-      setPlayingVideos((prev) => {
-        const newSet = new Set(prev)
-        newSet.delete(itemId)
-        return newSet
-      })
+      setCurrentlyPlayingVideo(null)
     } else {
       videoElement.play()
-      setPlayingVideos((prev) => new Set(prev).add(itemId))
+      setCurrentlyPlayingVideo(itemId)
     }
   }
 
@@ -241,7 +245,7 @@ export default function ProductBoxContentPage() {
   return (
     <div className="min-h-screen bg-black">
       {/* Header */}
-      <div className="p-6 border-b border-gray-800">
+      <div className="px-6 py-8 border-b border-gray-800">
         <div className="flex items-center gap-4 mb-4">
           <Button
             onClick={() => router.push("/dashboard/purchases")}
@@ -272,7 +276,7 @@ export default function ProductBoxContentPage() {
       </div>
 
       {/* Content Grid */}
-      <div className="p-6">
+      <div className="px-6 py-8">
         {items.length > 0 ? (
           <>
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 mb-8">
@@ -290,12 +294,9 @@ export default function ProductBoxContentPage() {
                           src={item.fileUrl}
                           loop
                           playsInline
+                          data-video-id={item.id}
                           onEnded={() => {
-                            setPlayingVideos((prev) => {
-                              const newSet = new Set(prev)
-                              newSet.delete(item.id)
-                              return newSet
-                            })
+                            setCurrentlyPlayingVideo(null)
                           }}
                         />
 
@@ -310,7 +311,7 @@ export default function ProductBoxContentPage() {
                           }}
                         >
                           <div className="bg-black/50 rounded-full p-3 hover:bg-black/70 transition-colors duration-300">
-                            {playingVideos.has(item.id) ? (
+                            {currentlyPlayingVideo === item.id ? (
                               <Pause className="h-6 w-6 text-white" />
                             ) : (
                               <Play className="h-6 w-6 text-white ml-1" />

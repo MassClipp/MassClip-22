@@ -1,7 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { getAuth } from "firebase-admin/auth"
 import { getFirestore } from "firebase-admin/firestore"
 import { initializeApp, getApps, cert } from "firebase-admin/app"
+import { getAuth } from "firebase-admin/auth"
 
 // Initialize Firebase Admin if not already initialized
 if (!getApps().length) {
@@ -15,33 +15,63 @@ if (!getApps().length) {
 }
 
 const db = getFirestore()
+const auth = getAuth()
 
 export async function DELETE(request: NextRequest, { params }: { params: { id: string } }) {
   try {
-    const authHeader = request.headers.get("Authorization")
+    const purchaseId = params.id
+    console.log(`🗑️ [Delete Purchase] Starting deletion for ID: ${purchaseId}`)
+
+    // Verify authentication
+    const authHeader = request.headers.get("authorization")
     if (!authHeader?.startsWith("Bearer ")) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
     const token = authHeader.split("Bearer ")[1]
-    const decodedToken = await getAuth().verifyIdToken(token)
+    const decodedToken = await auth.verifyIdToken(token)
     const userId = decodedToken.uid
-    const purchaseId = params.id
 
-    console.log(`🗑️ [Delete Purchase] Removing purchase ${purchaseId} for user ${userId}`)
+    console.log(`👤 [Delete Purchase] User: ${userId}`)
 
     let deletedCount = 0
     const deletedFrom: string[] = []
 
     // 1. Delete from user's purchases subcollection
     try {
-      const userPurchaseRef = db.collection("users").doc(userId).collection("purchases").doc(purchaseId)
-      const userPurchaseDoc = await userPurchaseRef.get()
-      if (userPurchaseDoc.exists) {
-        await userPurchaseRef.delete()
-        deletedCount++
-        deletedFrom.push("users/{userId}/purchases")
-        console.log(`✅ [Delete Purchase] Removed from users/${userId}/purchases`)
+      const userPurchasesRef = db.collection("users").doc(userId).collection("purchases")
+
+      // Try multiple query approaches
+      const queries = [
+        userPurchasesRef.where("productBoxId", "==", purchaseId),
+        userPurchasesRef.where("bundleId", "==", purchaseId),
+        userPurchasesRef.where("itemId", "==", purchaseId),
+        userPurchasesRef.where("sessionId", "==", purchaseId),
+      ]
+
+      for (const query of queries) {
+        const snapshot = await query.get()
+        for (const doc of snapshot.docs) {
+          await doc.ref.delete()
+          deletedCount++
+          console.log(`✅ [Delete Purchase] Deleted from user purchases: ${doc.id}`)
+        }
+      }
+
+      // Also try direct document deletion
+      try {
+        const directDoc = await userPurchasesRef.doc(purchaseId).get()
+        if (directDoc.exists) {
+          await directDoc.ref.delete()
+          deletedCount++
+          console.log(`✅ [Delete Purchase] Deleted direct user purchase: ${purchaseId}`)
+        }
+      } catch (directError) {
+        console.warn(`⚠️ [Delete Purchase] Direct deletion failed:`, directError)
+      }
+
+      if (deletedCount > 0) {
+        deletedFrom.push("user-purchases")
       }
     } catch (error) {
       console.warn(`⚠️ [Delete Purchase] Error deleting from user purchases:`, error)
@@ -49,149 +79,136 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
 
     // 2. Delete from main purchases collection
     try {
-      const mainPurchaseRef = db.collection("purchases").doc(purchaseId)
-      const mainPurchaseDoc = await mainPurchaseRef.get()
-      if (mainPurchaseDoc.exists) {
-        await mainPurchaseRef.delete()
-        deletedCount++
-        deletedFrom.push("purchases")
-        console.log(`✅ [Delete Purchase] Removed from purchases collection`)
+      const mainPurchasesRef = db.collection("purchases")
+      const mainQueries = [
+        mainPurchasesRef.where("userId", "==", userId).where("productBoxId", "==", purchaseId),
+        mainPurchasesRef.where("userId", "==", userId).where("bundleId", "==", purchaseId),
+        mainPurchasesRef.where("userId", "==", userId).where("sessionId", "==", purchaseId),
+      ]
+
+      for (const query of mainQueries) {
+        const snapshot = await query.get()
+        for (const doc of snapshot.docs) {
+          await doc.ref.delete()
+          deletedCount++
+          console.log(`✅ [Delete Purchase] Deleted from main purchases: ${doc.id}`)
+        }
+      }
+
+      if (deletedCount > 0) {
+        deletedFrom.push("main-purchases")
       }
     } catch (error) {
       console.warn(`⚠️ [Delete Purchase] Error deleting from main purchases:`, error)
     }
 
-    // 3. Search and delete from purchases collection by userId and productBoxId/bundleId
+    // 3. Delete from UserPurchases collection
     try {
-      const purchasesByUserQuery = await db
-        .collection("purchases")
-        .where("userId", "==", userId)
-        .where("productBoxId", "==", purchaseId)
-        .get()
+      const userPurchasesCollectionRef = db.collection("UserPurchases")
+      const userPurchaseQueries = [
+        userPurchasesCollectionRef.where("userId", "==", userId).where("productBoxId", "==", purchaseId),
+        userPurchasesCollectionRef.where("userId", "==", userId).where("bundleId", "==", purchaseId),
+      ]
 
-      for (const doc of purchasesByUserQuery.docs) {
-        await doc.ref.delete()
-        deletedCount++
-        deletedFrom.push(`purchases (by productBoxId)`)
-        console.log(`✅ [Delete Purchase] Removed purchase ${doc.id} by productBoxId`)
+      for (const query of userPurchaseQueries) {
+        const snapshot = await query.get()
+        for (const doc of snapshot.docs) {
+          await doc.ref.delete()
+          deletedCount++
+          console.log(`✅ [Delete Purchase] Deleted from UserPurchases: ${doc.id}`)
+        }
       }
 
-      const purchasesByBundleQuery = await db
-        .collection("purchases")
-        .where("userId", "==", userId)
-        .where("bundleId", "==", purchaseId)
-        .get()
-
-      for (const doc of purchasesByBundleQuery.docs) {
-        await doc.ref.delete()
-        deletedCount++
-        deletedFrom.push(`purchases (by bundleId)`)
-        console.log(`✅ [Delete Purchase] Removed purchase ${doc.id} by bundleId`)
+      if (deletedCount > 0) {
+        deletedFrom.push("UserPurchases")
       }
     } catch (error) {
-      console.warn(`⚠️ [Delete Purchase] Error searching purchases by fields:`, error)
+      console.warn(`⚠️ [Delete Purchase] Error deleting from UserPurchases:`, error)
     }
 
-    // 4. Delete from userPurchases collection
+    // 4. Delete from CompletedPurchases collection
     try {
-      const userPurchasesQuery = await db
-        .collection("userPurchases")
-        .where("userId", "==", userId)
-        .where("productBoxId", "==", purchaseId)
-        .get()
+      const completedPurchasesRef = db.collection("CompletedPurchases")
+      const completedQueries = [
+        completedPurchasesRef.where("userId", "==", userId).where("productBoxId", "==", purchaseId),
+        completedPurchasesRef.where("userId", "==", userId).where("bundleId", "==", purchaseId),
+      ]
 
-      for (const doc of userPurchasesQuery.docs) {
-        await doc.ref.delete()
-        deletedCount++
-        deletedFrom.push("userPurchases")
-        console.log(`✅ [Delete Purchase] Removed from userPurchases`)
+      for (const query of completedQueries) {
+        const snapshot = await query.get()
+        for (const doc of snapshot.docs) {
+          await doc.ref.delete()
+          deletedCount++
+          console.log(`✅ [Delete Purchase] Deleted from CompletedPurchases: ${doc.id}`)
+        }
       }
 
-      const userPurchasesByBundleQuery = await db
-        .collection("userPurchases")
-        .where("userId", "==", userId)
-        .where("bundleId", "==", purchaseId)
-        .get()
-
-      for (const doc of userPurchasesByBundleQuery.docs) {
-        await doc.ref.delete()
-        deletedCount++
-        deletedFrom.push("userPurchases (by bundleId)")
-        console.log(`✅ [Delete Purchase] Removed from userPurchases by bundleId`)
+      if (deletedCount > 0) {
+        deletedFrom.push("CompletedPurchases")
       }
     } catch (error) {
-      console.warn(`⚠️ [Delete Purchase] Error deleting from userPurchases:`, error)
+      console.warn(`⚠️ [Delete Purchase] Error deleting from CompletedPurchases:`, error)
     }
 
-    // 5. Delete from completedPurchases collection
+    // 5. Delete Stripe sessions
     try {
-      const completedPurchasesQuery = await db
-        .collection("completedPurchases")
-        .where("userId", "==", userId)
-        .where("productBoxId", "==", purchaseId)
-        .get()
+      const stripeSessionsRef = db.collection("stripe-sessions")
+      const sessionQueries = [
+        stripeSessionsRef.where("userId", "==", userId).where("productBoxId", "==", purchaseId),
+        stripeSessionsRef.where("userId", "==", userId).where("bundleId", "==", purchaseId),
+      ]
 
-      for (const doc of completedPurchasesQuery.docs) {
-        await doc.ref.delete()
-        deletedCount++
-        deletedFrom.push("completedPurchases")
-        console.log(`✅ [Delete Purchase] Removed from completedPurchases`)
+      for (const query of sessionQueries) {
+        const snapshot = await query.get()
+        for (const doc of snapshot.docs) {
+          await doc.ref.delete()
+          deletedCount++
+          console.log(`✅ [Delete Purchase] Deleted Stripe session: ${doc.id}`)
+        }
       }
-    } catch (error) {
-      console.warn(`⚠️ [Delete Purchase] Error deleting from completedPurchases:`, error)
-    }
 
-    // 6. Search for and delete any Stripe session records
-    try {
-      const stripeSessionsQuery = await db
-        .collection("stripe_sessions")
-        .where("customer_details.email", "==", decodedToken.email)
-        .where("metadata.productBoxId", "==", purchaseId)
-        .get()
-
-      for (const doc of stripeSessionsQuery.docs) {
-        await doc.ref.delete()
-        deletedCount++
-        deletedFrom.push("stripe_sessions")
-        console.log(`✅ [Delete Purchase] Removed Stripe session ${doc.id}`)
+      if (deletedCount > 0) {
+        deletedFrom.push("stripe-sessions")
       }
     } catch (error) {
       console.warn(`⚠️ [Delete Purchase] Error deleting Stripe sessions:`, error)
     }
 
-    // 7. Delete from any nested purchase structures
+    // 6. Use collectionGroup to find any nested purchases
     try {
-      const nestedPurchasesQuery = await db.collectionGroup("purchases").where("userId", "==", userId).get()
+      const collectionGroupQuery = db
+        .collectionGroup("purchases")
+        .where("userId", "==", userId)
+        .where("productBoxId", "==", purchaseId)
 
-      for (const doc of nestedPurchasesQuery.docs) {
-        const data = doc.data()
-        if (
-          data.productBoxId === purchaseId ||
-          data.bundleId === purchaseId ||
-          data.itemId === purchaseId ||
-          data.sessionId === purchaseId
-        ) {
-          await doc.ref.delete()
-          deletedCount++
-          deletedFrom.push(`nested purchases (${doc.ref.path})`)
-          console.log(`✅ [Delete Purchase] Removed nested purchase at ${doc.ref.path}`)
-        }
+      const groupSnapshot = await collectionGroupQuery.get()
+      for (const doc of groupSnapshot.docs) {
+        await doc.ref.delete()
+        deletedCount++
+        console.log(`✅ [Delete Purchase] Deleted from collection group: ${doc.ref.path}`)
+      }
+
+      if (groupSnapshot.docs.length > 0) {
+        deletedFrom.push("collection-group")
       }
     } catch (error) {
-      console.warn(`⚠️ [Delete Purchase] Error deleting nested purchases:`, error)
+      console.warn(`⚠️ [Delete Purchase] Error with collection group:`, error)
     }
 
-    console.log(
-      `✅ [Delete Purchase] Deletion complete. Removed ${deletedCount} records from: ${deletedFrom.join(", ")}`,
-    )
+    console.log(`🎯 [Delete Purchase] Total deleted: ${deletedCount} records from: ${deletedFrom.join(", ")}`)
 
     if (deletedCount === 0) {
       return NextResponse.json(
         {
-          success: false,
-          message: "Purchase not found",
-          deletedCount: 0,
-          deletedFrom: [],
+          error: "Purchase not found",
+          message: `No purchase found with ID: ${purchaseId}`,
+          searchedCollections: [
+            "user-purchases",
+            "main-purchases",
+            "UserPurchases",
+            "CompletedPurchases",
+            "stripe-sessions",
+          ],
         },
         { status: 404 },
       )
@@ -199,70 +216,13 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
 
     return NextResponse.json({
       success: true,
-      message: "Purchase permanently deleted",
+      message: `Successfully deleted ${deletedCount} purchase record(s)`,
       deletedCount,
       deletedFrom,
+      purchaseId,
     })
-  } catch (error: any) {
+  } catch (error) {
     console.error("❌ [Delete Purchase] Error:", error)
-    return NextResponse.json(
-      {
-        error: "Failed to delete purchase",
-        details: error.message,
-      },
-      { status: 500 },
-    )
-  }
-}
-
-export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
-  try {
-    const authHeader = request.headers.get("Authorization")
-    if (!authHeader?.startsWith("Bearer ")) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
-
-    const token = authHeader.split("Bearer ")[1]
-    const decodedToken = await getAuth().verifyIdToken(token)
-    const userId = decodedToken.uid
-    const purchaseId = params.id
-
-    console.log(`🔍 [Get Purchase] Fetching purchase ${purchaseId} for user ${userId}`)
-
-    // Check user's purchases subcollection first
-    const userPurchaseRef = db.collection("users").doc(userId).collection("purchases").doc(purchaseId)
-    const userPurchaseDoc = await userPurchaseRef.get()
-
-    if (userPurchaseDoc.exists) {
-      return NextResponse.json({
-        id: userPurchaseDoc.id,
-        ...userPurchaseDoc.data(),
-      })
-    }
-
-    // Check main purchases collection
-    const mainPurchaseRef = db.collection("purchases").doc(purchaseId)
-    const mainPurchaseDoc = await mainPurchaseRef.get()
-
-    if (mainPurchaseDoc.exists) {
-      const data = mainPurchaseDoc.data()
-      if (data?.userId === userId) {
-        return NextResponse.json({
-          id: mainPurchaseDoc.id,
-          ...data,
-        })
-      }
-    }
-
-    return NextResponse.json({ error: "Purchase not found" }, { status: 404 })
-  } catch (error: any) {
-    console.error("❌ [Get Purchase] Error:", error)
-    return NextResponse.json(
-      {
-        error: "Failed to fetch purchase",
-        details: error.message,
-      },
-      { status: 500 },
-    )
+    return NextResponse.json({ error: "Failed to delete purchase" }, { status: 500 })
   }
 }
