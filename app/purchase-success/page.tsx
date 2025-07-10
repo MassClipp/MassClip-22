@@ -5,7 +5,7 @@ import { useSearchParams, useRouter } from "next/navigation"
 import { useAuth } from "@/contexts/auth-context"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { CheckCircle, Clock, AlertCircle, Package, User, ShoppingBag } from "lucide-react"
+import { CheckCircle, Clock, AlertCircle, Package, User, ShoppingBag, LogIn } from "lucide-react"
 
 interface PurchaseResult {
   success: boolean
@@ -29,45 +29,66 @@ interface PurchaseResult {
 export default function PurchaseSuccessPage() {
   const searchParams = useSearchParams()
   const router = useRouter()
-  const { user } = useAuth()
+  const { user, loading: authLoading } = useAuth()
   const [result, setResult] = useState<PurchaseResult | null>(null)
   const [loading, setLoading] = useState(true)
+  const [authRetryCount, setAuthRetryCount] = useState(0)
 
-  const productBoxId = searchParams.get("product_box_id") // Keep same param name for compatibility
+  const productBoxId = searchParams.get("product_box_id")
   const userId = searchParams.get("user_id")
   const creatorId = searchParams.get("creator_id")
 
+  // Wait for auth to stabilize before proceeding
   useEffect(() => {
-    console.log(`🎉 [Purchase Success] Page loaded with params:`, {
-      bundleId: productBoxId, // It's actually a bundle ID
+    console.log(`🔍 [Purchase Success] Auth state:`, {
+      user: user?.uid,
+      authLoading,
+      productBoxId,
       userId,
-      userUid: user?.uid,
+      authRetryCount,
     })
 
-    if (!user || !productBoxId || !userId) {
-      console.log(`❌ [Purchase Success] Missing required data`)
-      setLoading(false)
+    // If auth is still loading, wait
+    if (authLoading) {
+      console.log(`⏳ [Purchase Success] Waiting for auth to load...`)
       return
     }
 
-    // Verify the user ID matches the logged-in user
-    if (user.uid !== userId) {
-      console.error(`❌ [Purchase Success] User mismatch: ${user.uid} vs ${userId}`)
-      setResult({ success: false, error: "User verification failed" })
-      setLoading(false)
+    // If no user but we have a userId from URL, try to wait a bit more
+    if (!user && userId && authRetryCount < 3) {
+      console.log(`🔄 [Purchase Success] No user yet, retrying... (${authRetryCount + 1}/3)`)
+      setTimeout(() => {
+        setAuthRetryCount((prev) => prev + 1)
+      }, 1000)
       return
     }
 
-    // IMMEDIATE ACCESS - no Stripe verification needed!
-    // If they landed here, they completed the purchase
-    grantImmediateAccess()
-  }, [user, productBoxId, userId])
+    // If we have all required data, proceed
+    if (user && productBoxId && userId) {
+      if (user.uid !== userId) {
+        console.error(`❌ [Purchase Success] User mismatch: ${user.uid} vs ${userId}`)
+        setResult({ success: false, error: "User verification failed" })
+        setLoading(false)
+        return
+      }
+
+      console.log(`✅ [Purchase Success] All data available, granting access`)
+      grantImmediateAccess()
+      return
+    }
+
+    // If missing required data after auth loaded
+    if (!authLoading) {
+      console.log(`❌ [Purchase Success] Missing required data after auth loaded`)
+      setLoading(false)
+    }
+  }, [user, authLoading, productBoxId, userId, authRetryCount])
 
   const grantImmediateAccess = async () => {
     if (!user || !productBoxId) return
 
     try {
-      console.log(`🚀 [Purchase Success] Granting IMMEDIATE access - no verification needed!`)
+      console.log(`🚀 [Purchase Success] Granting IMMEDIATE access`)
       console.log(`📦 Bundle: ${productBoxId}`)
       console.log(`👤 User: ${user.uid}`)
 
@@ -80,10 +101,10 @@ export default function PurchaseSuccessPage() {
           Authorization: `Bearer ${idToken}`,
         },
         body: JSON.stringify({
-          bundleId: productBoxId, // Use bundleId instead of productBoxId
+          bundleId: productBoxId,
           userId: user.uid,
           creatorId,
-          verificationMethod: "landing_page", // Simple verification!
+          verificationMethod: "landing_page",
         }),
       })
 
@@ -106,9 +127,16 @@ export default function PurchaseSuccessPage() {
     }
   }
 
+  const handleLogin = () => {
+    // Store the current URL to redirect back after login
+    const currentUrl = window.location.href
+    localStorage.setItem("redirectAfterLogin", currentUrl)
+    router.push("/login")
+  }
+
   const handleViewContent = () => {
     if (productBoxId) {
-      router.push(`/product-box/${productBoxId}/content`) // Keep same URL structure
+      router.push(`/product-box/${productBoxId}/content`)
     }
   }
 
@@ -116,7 +144,76 @@ export default function PurchaseSuccessPage() {
     router.push("/dashboard/purchases")
   }
 
-  // Loading state
+  // Auth loading state
+  if (authLoading || (loading && authRetryCount < 3)) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <Card className="w-full max-w-md">
+          <CardContent className="p-6 text-center">
+            <Clock className="h-12 w-12 text-blue-500 mx-auto mb-4 animate-spin" />
+            <h2 className="text-xl font-semibold mb-2">🎉 Purchase Complete!</h2>
+            <p className="text-gray-600 mb-4">Verifying your authentication...</p>
+            <div className="mt-4 p-3 bg-blue-50 rounded-lg">
+              <h3 className="font-medium text-blue-900 mb-1">What's happening:</h3>
+              <ul className="text-sm text-blue-800 space-y-1">
+                <li>✅ Payment completed successfully</li>
+                <li>🔐 Verifying your login status</li>
+                <li>🚀 Preparing immediate access</li>
+                <li>📝 Setting up your purchase</li>
+              </ul>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  // Not authenticated - show login prompt
+  if (!user) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <Card className="w-full max-w-md">
+          <CardContent className="p-6 text-center">
+            <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
+            <h2 className="text-xl font-semibold mb-2">Invalid Purchase Link</h2>
+            <p className="text-gray-600 mb-4">Please log in to access your purchase.</p>
+            <div className="space-y-2">
+              <Button onClick={handleLogin} className="w-full">
+                <LogIn className="h-4 w-4 mr-2" />
+                Log In
+              </Button>
+            </div>
+            <div className="mt-4 p-3 bg-yellow-50 rounded-lg">
+              <h3 className="font-medium text-yellow-900 mb-1">Why do I need to log in?</h3>
+              <p className="text-sm text-yellow-800">
+                Your purchase was successful, but we need to verify your identity to grant access to your content.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  // Missing required parameters
+  if (!productBoxId || !userId) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <Card className="w-full max-w-md">
+          <CardContent className="p-6 text-center">
+            <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
+            <h2 className="text-xl font-semibold mb-2">Invalid Purchase Link</h2>
+            <p className="text-gray-600 mb-4">This purchase link is missing required information.</p>
+            <Button onClick={() => router.push("/dashboard")} className="w-full">
+              Go to Dashboard
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  // Processing state
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
@@ -245,19 +342,14 @@ export default function PurchaseSuccessPage() {
     )
   }
 
-  // Fallback for missing parameters
+  // Fallback
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50">
       <Card className="w-full max-w-md">
         <CardContent className="p-6 text-center">
-          <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
-          <h2 className="text-xl font-semibold mb-2">Invalid Purchase Link</h2>
-          <p className="text-gray-600 mb-4">
-            {!user ? "Please log in to access your purchase." : "This purchase link is missing required information."}
-          </p>
-          <Button onClick={() => router.push(!user ? "/login" : "/dashboard")} className="w-full">
-            {!user ? "Log In" : "Go to Dashboard"}
-          </Button>
+          <Clock className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+          <h2 className="text-xl font-semibold mb-2">Processing...</h2>
+          <p className="text-gray-600">Please wait while we set up your purchase.</p>
         </CardContent>
       </Card>
     </div>
