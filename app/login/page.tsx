@@ -3,7 +3,6 @@
 import { useEffect } from "react"
 import { useRouter, useSearchParams } from "next/navigation"
 import { useAuth } from "@/contexts/auth-context"
-import { Card, CardContent } from "@/components/ui/card"
 import { LoginForm } from "@/components/login-form"
 import { Loader2 } from "lucide-react"
 
@@ -32,22 +31,14 @@ export default function LoginPage() {
 
   if (user) {
     return (
-      <div className="flex min-h-svh flex-col items-center justify-center bg-muted p-6 md:p-10">
-        <Card className="w-full max-w-sm">
-          <CardContent className="p-6 text-center">
-            <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
-            <p>Redirecting...</p>
-          </CardContent>
-        </Card>
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-slate-100 flex items-center justify-center">
+        <div className="text-center space-y-4">
+          <Loader2 className="h-12 w-12 animate-spin mx-auto text-crimson" />
+          <p className="text-slate-600 text-lg">Redirecting to your dashboard...</p>
+        </div>
       </div>
     )
   }
 
-  return (
-    <div className="flex min-h-svh flex-col items-center justify-center bg-muted p-6 md:p-10">
-      <div className="w-full max-w-sm md:max-w-3xl">
-        <LoginForm />
-      </div>
-    </div>
-  )
+  return <LoginForm />
 }
