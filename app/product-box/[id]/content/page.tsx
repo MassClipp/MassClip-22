@@ -3,11 +3,11 @@
 import { useEffect, useState } from "react"
 import { useParams, useRouter } from "next/navigation"
 import { useAuth } from "@/contexts/auth-context"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { AlertCircle, Lock, ShoppingBag, Download, Play, FileText, ImageIcon, Music } from "lucide-react"
+import { ArrowLeft, Download, RefreshCw } from "lucide-react"
+import Image from "next/image"
 
-interface UnifiedPurchaseItem {
+interface ContentItem {
   id: string
   title: string
   fileUrl: string
@@ -19,92 +19,60 @@ interface UnifiedPurchaseItem {
   filename: string
   displayTitle: string
   displaySize: string
-  displayResolution?: string
-  displayDuration?: string
+}
+
+interface BundleData {
+  title: string
   description?: string
-}
-
-interface UnifiedPurchase {
-  id: string
-  productBoxId: string
-  productBoxTitle: string
-  productBoxDescription?: string
-  productBoxThumbnail?: string
-  creatorId: string
-  creatorName: string
+  thumbnail?: string
   creatorUsername: string
-  purchasedAt: Date | string
-  amount: number
-  currency: string
-  items: UnifiedPurchaseItem[]
   totalItems: number
-  totalSize: number
-}
-
-interface ContentPageState {
-  loading: boolean
-  hasAccess: boolean
-  error: string | null
-  purchase: UnifiedPurchase | null
-  items: UnifiedPurchaseItem[]
 }
 
 export default function ProductBoxContentPage() {
   const params = useParams()
   const router = useRouter()
   const { user } = useAuth()
-  const [state, setState] = useState<ContentPageState>({
-    loading: true,
-    hasAccess: false,
-    error: null,
-    purchase: null,
-    items: [],
-  })
+  const [loading, setLoading] = useState(true)
+  const [hasAccess, setHasAccess] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [bundleData, setBundleData] = useState<BundleData | null>(null)
+  const [items, setItems] = useState<ContentItem[]>([])
 
   const productBoxId = params.id as string
 
   useEffect(() => {
     if (!user || !productBoxId) {
-      setState((prev) => ({ ...prev, loading: false, error: "Missing user or product box ID" }))
+      setLoading(false)
+      setError("Missing user or product box ID")
       return
     }
 
-    checkAccess()
+    checkAccessAndFetchContent()
   }, [user, productBoxId])
 
-  const checkAccess = async () => {
+  const checkAccessAndFetchContent = async () => {
     if (!user || !productBoxId) return
 
     try {
-      console.log(`🔍 [Content Page] Fetching content for product box: ${productBoxId}`)
+      setLoading(true)
+      setError(null)
+
+      console.log(`🔍 [Content Page] Checking access for bundle: ${productBoxId}`)
 
       const idToken = await user.getIdToken()
 
-      // Check unified purchases API
-      const unifiedResponse = await fetch("/api/user/unified-purchases", {
+      // Check if user has access via purchases
+      const purchasesResponse = await fetch("/api/user/unified-purchases", {
         headers: {
           Authorization: `Bearer ${idToken}`,
         },
       })
 
-      if (unifiedResponse.ok) {
-        const responseData = await unifiedResponse.json()
-        console.log(`📦 [Content Page] Unified purchases response:`, responseData)
+      if (purchasesResponse.ok) {
+        const purchasesData = await purchasesResponse.json()
+        const purchases = Array.isArray(purchasesData) ? purchasesData : purchasesData.purchases || []
 
-        // Handle both array and object responses
-        let purchases = []
-        if (Array.isArray(responseData)) {
-          purchases = responseData
-        } else if (responseData.purchases && Array.isArray(responseData.purchases)) {
-          purchases = responseData.purchases
-        } else {
-          console.warn(`⚠️ [Content Page] Unexpected response format:`, responseData)
-          purchases = []
-        }
-
-        console.log(`📦 [Content Page] Found ${purchases.length} unified purchases`)
-
-        // Case-insensitive search for the product box
         const matchingPurchase = purchases.find(
           (purchase: any) =>
             purchase.productBoxId?.toLowerCase() === productBoxId.toLowerCase() ||
@@ -112,174 +80,74 @@ export default function ProductBoxContentPage() {
         )
 
         if (matchingPurchase) {
-          console.log(`✅ [Content Page] Found matching unified purchase!`, matchingPurchase)
+          console.log(`✅ [Content Page] Access granted via purchase`)
 
-          // Try to get content items for this purchase
-          let contentItems: UnifiedPurchaseItem[] = []
-
-          try {
-            const contentResponse = await fetch(`/api/product-box/${productBoxId}/content`, {
-              headers: {
-                Authorization: `Bearer ${idToken}`,
-              },
-            })
-
-            if (contentResponse.ok) {
-              const contentData = await contentResponse.json()
-              console.log(`✅ [Content Page] Content data:`, contentData)
-
-              if (contentData.items && Array.isArray(contentData.items)) {
-                contentItems = contentData.items
-              } else if (Array.isArray(contentData)) {
-                contentItems = contentData
-              }
-            }
-          } catch (contentError) {
-            console.warn(`⚠️ [Content Page] Could not fetch content items:`, contentError)
-          }
-
-          setState({
-            loading: false,
-            hasAccess: true,
-            error: null,
-            purchase: {
-              id: matchingPurchase.id || matchingPurchase.productBoxId,
-              productBoxId: matchingPurchase.productBoxId || matchingPurchase.bundleId,
-              productBoxTitle: matchingPurchase.bundleTitle || matchingPurchase.productBoxTitle || "Untitled Bundle",
-              productBoxDescription: matchingPurchase.description || "",
-              productBoxThumbnail: matchingPurchase.thumbnailUrl || matchingPurchase.productBoxThumbnail || "",
-              creatorId: matchingPurchase.creatorId || "",
-              creatorName: matchingPurchase.creatorName || "Unknown Creator",
-              creatorUsername: matchingPurchase.creatorUsername || "",
-              purchasedAt: matchingPurchase.purchaseDate || matchingPurchase.purchasedAt || new Date(),
-              amount: matchingPurchase.amount || 0,
-              currency: matchingPurchase.currency || "usd",
-              items: contentItems,
-              totalItems: contentItems.length,
-              totalSize: contentItems.reduce((sum, item) => sum + (item.fileSize || 0), 0),
+          // Fetch bundle details
+          const bundleResponse = await fetch(`/api/bundles/${productBoxId}`, {
+            headers: {
+              Authorization: `Bearer ${idToken}`,
             },
-            items: contentItems,
           })
-          return
-        } else {
-          console.log(`❌ [Content Page] No matching purchase found in unified purchases`)
-        }
-      }
 
-      // If no unified purchase found, check legacy purchases
-      console.log(`🔍 [Content Page] Checking legacy purchases...`)
-
-      const legacyResponse = await fetch("/api/user/purchases", {
-        headers: {
-          Authorization: `Bearer ${idToken}`,
-        },
-      })
-
-      if (legacyResponse.ok) {
-        const legacyPurchases = await legacyResponse.json()
-        console.log(`📦 [Content Page] Found legacy purchases:`, legacyPurchases)
-
-        // Ensure legacyPurchases is an array
-        const purchasesArray = Array.isArray(legacyPurchases) ? legacyPurchases : []
-
-        // Case-insensitive search in legacy purchases
-        const matchingLegacyPurchase = purchasesArray.find(
-          (purchase: any) =>
-            purchase.productBoxId?.toLowerCase() === productBoxId.toLowerCase() ||
-            purchase.itemId?.toLowerCase() === productBoxId.toLowerCase(),
-        )
-
-        if (matchingLegacyPurchase) {
-          console.log(`✅ [Content Page] Found legacy purchase, trying to access content directly...`)
-
-          // Try to fetch content directly
-          try {
-            const contentResponse = await fetch(`/api/product-box/${productBoxId}/content`, {
-              headers: {
-                Authorization: `Bearer ${idToken}`,
-              },
-            })
-
-            if (contentResponse.ok) {
-              const contentData = await contentResponse.json()
-              console.log(`✅ [Content Page] Direct content fetch successful`)
-
-              let contentItems: UnifiedPurchaseItem[] = []
-              if (contentData.items && Array.isArray(contentData.items)) {
-                contentItems = contentData.items
-              } else if (Array.isArray(contentData)) {
-                contentItems = contentData
-              }
-
-              setState({
-                loading: false,
-                hasAccess: true,
-                error: null,
-                purchase: {
-                  id: matchingLegacyPurchase.id || productBoxId,
-                  productBoxId: productBoxId,
-                  productBoxTitle: matchingLegacyPurchase.itemTitle || "Untitled Bundle",
-                  productBoxDescription: matchingLegacyPurchase.itemDescription || "",
-                  productBoxThumbnail: matchingLegacyPurchase.thumbnailUrl || "",
-                  creatorId: matchingLegacyPurchase.creatorId || "",
-                  creatorName: matchingLegacyPurchase.creatorName || "Unknown Creator",
-                  creatorUsername: matchingLegacyPurchase.creatorUsername || "",
-                  purchasedAt: matchingLegacyPurchase.purchasedAt || matchingLegacyPurchase.timestamp || new Date(),
-                  amount: matchingLegacyPurchase.amount || 0,
-                  currency: matchingLegacyPurchase.currency || "usd",
-                  items: contentItems,
-                  totalItems: contentItems.length,
-                  totalSize: contentItems.reduce((sum, item) => sum + (item.fileSize || 0), 0),
-                },
-                items: contentItems,
-              })
-              return
-            }
-          } catch (contentError) {
-            console.error(`❌ [Content Page] Direct content fetch failed:`, contentError)
+          let bundleInfo: BundleData = {
+            title: matchingPurchase.bundleTitle || "Untitled Bundle",
+            description: "",
+            thumbnail: matchingPurchase.thumbnailUrl,
+            creatorUsername: matchingPurchase.creatorUsername || "Unknown",
+            totalItems: 0,
           }
+
+          if (bundleResponse.ok) {
+            const bundleData = await bundleResponse.json()
+            bundleInfo = {
+              title: bundleData.title || bundleInfo.title,
+              description: bundleData.description,
+              thumbnail: bundleData.customPreviewThumbnail || bundleData.thumbnailUrl || bundleInfo.thumbnail,
+              creatorUsername: bundleData.creatorUsername || bundleInfo.creatorUsername,
+              totalItems: bundleData.totalItems || 0,
+            }
+          }
+
+          // Fetch content items
+          const contentResponse = await fetch(`/api/product-box/${productBoxId}/content`, {
+            headers: {
+              Authorization: `Bearer ${idToken}`,
+            },
+          })
+
+          let contentItems: ContentItem[] = []
+          if (contentResponse.ok) {
+            const contentData = await contentResponse.json()
+            contentItems = Array.isArray(contentData) ? contentData : contentData.items || []
+          }
+
+          setBundleData(bundleInfo)
+          setItems(contentItems)
+          setHasAccess(true)
+        } else {
+          console.log(`❌ [Content Page] No matching purchase found`)
+          setError("You don't have access to this content")
+          setHasAccess(false)
         }
+      } else {
+        console.error(`❌ [Content Page] Failed to check purchases`)
+        setError("Failed to verify access")
+        setHasAccess(false)
       }
-
-      // No access found
-      console.error(`❌ [Content Page] ACCESS DENIED - No valid purchase found for product box: ${productBoxId}`)
-      setState({
-        loading: false,
-        hasAccess: false,
-        error: "No valid purchase found for this content",
-        purchase: null,
-        items: [],
-      })
     } catch (error: any) {
-      console.error(`❌ [Content Page] Error checking access:`, error)
-      setState({
-        loading: false,
-        hasAccess: false,
-        error: error.message || "Failed to verify access",
-        purchase: null,
-        items: [],
-      })
+      console.error(`❌ [Content Page] Error:`, error)
+      setError(error.message || "Failed to load content")
+      setHasAccess(false)
+    } finally {
+      setLoading(false)
     }
   }
 
-  const getContentIcon = (contentType: string) => {
-    switch (contentType) {
-      case "video":
-        return <Play className="h-5 w-5" />
-      case "audio":
-        return <Music className="h-5 w-5" />
-      case "image":
-        return <ImageIcon className="h-5 w-5" />
-      default:
-        return <FileText className="h-5 w-5" />
-    }
-  }
-
-  const handleDownload = async (item: UnifiedPurchaseItem) => {
+  const handleDownload = async (item: ContentItem) => {
     try {
       console.log(`📥 [Download] Starting download for: ${item.title}`)
 
-      // Create a temporary link to trigger download
+      // Create download link
       const link = document.createElement("a")
       link.href = item.fileUrl
       link.download = item.filename || item.title
@@ -302,122 +170,147 @@ export default function ProductBoxContentPage() {
     return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + " " + sizes[i]
   }
 
-  // Loading state
-  if (state.loading) {
+  if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <Card className="w-full max-w-md">
-          <CardContent className="p-6 text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500 mx-auto mb-4"></div>
-            <h2 className="text-xl font-semibold mb-2">Loading Content</h2>
-            <p className="text-gray-600">Verifying your access...</p>
-          </CardContent>
-        </Card>
+      <div className="min-h-screen bg-black flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
+          <div className="text-white text-lg">Loading content...</div>
+        </div>
       </div>
     )
   }
 
-  // Access denied state
-  if (!state.hasAccess) {
+  if (!hasAccess || error) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <Card className="w-full max-w-md">
-          <CardContent className="p-6 text-center">
-            <Lock className="h-12 w-12 text-red-500 mx-auto mb-4" />
-            <h2 className="text-xl font-semibold mb-2">Access Denied</h2>
-            <p className="text-gray-600 mb-4">
-              {state.error || "You don't have access to this content. Please purchase it first."}
-            </p>
-            <div className="space-y-2">
-              <Button onClick={() => router.push("/dashboard/purchases")} className="w-full">
-                <ShoppingBag className="h-4 w-4 mr-2" />
-                Return to Purchases
-              </Button>
-              <Button onClick={checkAccess} variant="outline" className="w-full bg-transparent">
-                🔄 Retry Access
-              </Button>
-              <Button onClick={() => router.push("/dashboard")} variant="outline" className="w-full">
-                🏠 Go to Dashboard
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+      <div className="min-h-screen bg-black flex items-center justify-center">
+        <div className="text-center max-w-md px-6">
+          <div className="text-red-500 text-6xl mb-4">🔒</div>
+          <h2 className="text-white text-2xl font-bold mb-4">Access Denied</h2>
+          <p className="text-gray-400 mb-6">{error || "You don't have access to this content"}</p>
+          <div className="space-y-3">
+            <Button
+              onClick={() => router.push("/dashboard/purchases")}
+              className="w-full bg-white text-black hover:bg-gray-100"
+            >
+              Back to Purchases
+            </Button>
+            <Button
+              onClick={checkAccessAndFetchContent}
+              variant="outline"
+              className="w-full border-gray-600 text-white hover:bg-gray-800 bg-transparent"
+            >
+              <RefreshCw className="h-4 w-4 mr-2" />
+              Retry
+            </Button>
+          </div>
+        </div>
       </div>
     )
   }
 
-  // Content display
   return (
-    <div className="min-h-screen bg-gray-50 py-8">
-      <div className="max-w-4xl mx-auto px-4">
-        {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold mb-2">{state.purchase?.productBoxTitle || "Your Content"}</h1>
-          <p className="text-gray-600">
-            {state.purchase?.productBoxDescription || "Access your purchased content below"}
-          </p>
-          {state.purchase && (
-            <div className="mt-2 text-sm text-gray-500">
-              Purchased on {new Date(state.purchase.purchasedAt).toLocaleDateString()} • {state.items.length} items •
-              Total size: {formatFileSize(state.purchase.totalSize)}
-            </div>
-          )}
+    <div className="min-h-screen bg-black">
+      {/* Header */}
+      <div className="p-6 border-b border-gray-800">
+        <div className="flex items-center gap-4 mb-4">
+          <Button
+            onClick={() => router.push("/dashboard/purchases")}
+            variant="ghost"
+            size="sm"
+            className="text-gray-400 hover:text-white hover:bg-gray-800"
+          >
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            Back to Purchases
+          </Button>
+          <Button
+            onClick={checkAccessAndFetchContent}
+            variant="ghost"
+            size="sm"
+            className="text-gray-400 hover:text-white hover:bg-gray-800 ml-auto"
+          >
+            <RefreshCw className="h-4 w-4 mr-2" />
+            Refresh
+          </Button>
         </div>
 
-        {/* Content Grid */}
-        {state.items.length > 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {state.items.map((item) => (
-              <Card key={item.id} className="hover:shadow-lg transition-shadow">
-                <CardHeader className="pb-3">
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-center gap-2">
-                      {getContentIcon(item.contentType)}
-                      <CardTitle className="text-lg truncate">{item.displayTitle}</CardTitle>
-                    </div>
-                  </div>
-                  <div className="text-sm text-gray-500 space-y-1">
-                    <div>Size: {item.displaySize}</div>
-                    {item.displayResolution && <div>Resolution: {item.displayResolution}</div>}
-                    {item.displayDuration && <div>Duration: {item.displayDuration}</div>}
-                  </div>
-                </CardHeader>
-                <CardContent className="pt-0">
+        <div className="max-w-4xl">
+          <h1 className="text-3xl font-bold text-white mb-2">{bundleData?.title}</h1>
+          <p className="text-gray-400 text-lg">
+            {items.length} premium file{items.length !== 1 ? "s" : ""} unlocked
+          </p>
+        </div>
+      </div>
+
+      {/* Content Grid */}
+      <div className="p-6">
+        {items.length > 0 ? (
+          <>
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 mb-8">
+              {items.map((item) => (
+                <div
+                  key={item.id}
+                  className="bg-gray-900/50 border border-gray-800 rounded-lg overflow-hidden hover:bg-gray-900/70 transition-all duration-300"
+                >
                   {/* Thumbnail */}
-                  {item.thumbnailUrl && (
-                    <div className="mb-3">
-                      <img
+                  <div className="aspect-square relative bg-gray-800">
+                    {item.thumbnailUrl ? (
+                      <Image
                         src={item.thumbnailUrl || "/placeholder.svg"}
                         alt={item.title}
-                        className="w-full h-32 object-cover rounded-lg"
-                        onError={(e) => {
-                          e.currentTarget.src = "/placeholder.svg?height=128&width=200"
-                        }}
+                        fill
+                        className="object-cover"
+                        sizes="(max-width: 640px) 100vw, (max-width: 768px) 50vw, (max-width: 1024px) 33vw, 25vw"
                       />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center">
+                        <div className="text-gray-500 text-4xl">
+                          {item.contentType === "video" ? "🎥" : item.contentType === "audio" ? "🎵" : "📄"}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Download Button Overlay */}
+                    <div className="absolute inset-0 bg-black/50 opacity-0 hover:opacity-100 transition-opacity duration-300 flex items-center justify-center">
+                      <Button
+                        onClick={() => handleDownload(item)}
+                        size="sm"
+                        className="bg-white text-black hover:bg-gray-100"
+                      >
+                        <Download className="h-4 w-4 mr-2" />
+                        Download
+                      </Button>
                     </div>
-                  )}
+                  </div>
 
-                  {/* Description */}
-                  {item.description && <p className="text-sm text-gray-600 mb-3 line-clamp-2">{item.description}</p>}
+                  {/* Content Info */}
+                  <div className="p-4">
+                    <div className="text-white text-sm font-medium mb-1 truncate">{item.contentType}</div>
+                    <div className="text-gray-400 text-xs">{formatFileSize(item.fileSize)}</div>
+                  </div>
+                </div>
+              ))}
+            </div>
 
-                  {/* Download Button */}
-                  <Button onClick={() => handleDownload(item)} className="w-full" size="sm">
-                    <Download className="h-4 w-4 mr-2" />
-                    Download
-                  </Button>
-                </CardContent>
-              </Card>
-            ))}
-          </div>
+            {/* Summary */}
+            <div className="text-center py-8">
+              <div className="text-gray-400 text-lg">
+                You've unlocked all {items.length} premium file{items.length !== 1 ? "s" : ""}
+              </div>
+            </div>
+          </>
         ) : (
-          <Card>
-            <CardContent className="p-8 text-center">
-              <AlertCircle className="h-12 w-12 text-yellow-500 mx-auto mb-4" />
-              <h3 className="text-xl font-semibold mb-2">No Content Available</h3>
-              <p className="text-gray-600 mb-4">This product box doesn't contain any content items yet.</p>
-              <Button onClick={() => router.push("/dashboard/purchases")}>Return to Purchases</Button>
-            </CardContent>
-          </Card>
+          <div className="text-center py-12">
+            <div className="text-gray-500 text-6xl mb-4">📦</div>
+            <h3 className="text-white text-xl font-semibold mb-2">No Content Available</h3>
+            <p className="text-gray-400 mb-6">This bundle doesn't contain any content items yet.</p>
+            <Button
+              onClick={() => router.push("/dashboard/purchases")}
+              className="bg-white text-black hover:bg-gray-100"
+            >
+              Back to Purchases
+            </Button>
+          </div>
         )}
       </div>
     </div>
