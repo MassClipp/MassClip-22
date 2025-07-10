@@ -1,19 +1,22 @@
 import Stripe from "stripe"
 
-// Use test keys for development/preview environments
-const isProduction = process.env.NODE_ENV === "production" && !process.env.VERCEL_URL?.includes("vercel.app")
-
-const stripeSecretKey = isProduction ? process.env.STRIPE_SECRET_KEY! : process.env.STRIPE_SECRET_KEY_TEST!
-
-if (!stripeSecretKey) {
-  throw new Error(`Missing Stripe secret key for ${isProduction ? "production" : "test"} mode`)
+if (!process.env.STRIPE_SECRET_KEY && !process.env.STRIPE_SECRET_KEY_TEST) {
+  throw new Error("Missing Stripe secret key")
 }
 
-export const stripe = new Stripe(stripeSecretKey, {
+// Use test key by default in development, live key only in production with explicit flag
+const useTestMode = process.env.NODE_ENV !== "production" || process.env.STRIPE_FORCE_TEST === "true"
+const stripeKey = useTestMode ? process.env.STRIPE_SECRET_KEY_TEST : process.env.STRIPE_SECRET_KEY
+
+if (!stripeKey) {
+  throw new Error(`Missing Stripe ${useTestMode ? "test" : "live"} secret key`)
+}
+
+console.log(`🔧 [Stripe] Using ${useTestMode ? "TEST" : "LIVE"} mode`)
+
+export const stripe = new Stripe(stripeKey, {
   apiVersion: "2024-06-20",
   typescript: true,
 })
 
-// Log which mode we're using
-console.log(`🔧 Stripe initialized in ${isProduction ? "LIVE" : "TEST"} mode`)
-console.log(`🔑 Using key: ${stripeSecretKey.substring(0, 12)}...`)
+export const isTestMode = useTestMode

@@ -1,187 +1,132 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { auth } from "@/lib/firebase-admin"
 import { db } from "@/lib/firebase-admin"
+import { requireAuth } from "@/lib/auth-utils"
 
 export async function POST(request: NextRequest) {
   try {
-    const authHeader = request.headers.get("authorization")
-    if (!authHeader?.startsWith("Bearer ")) {
-      return NextResponse.json({ error: "Authentication required" }, { status: 401 })
-    }
-
-    const idToken = authHeader.split("Bearer ")[1]
-    const decodedToken = await auth.verifyIdToken(idToken)
-    const userId = decodedToken.uid
-
+    const decodedToken = await requireAuth(request)
     const { bundleId, creatorId, verificationMethod = "landing_page" } = await request.json()
 
     if (!bundleId) {
-      return NextResponse.json({ error: "Bundle ID required" }, { status: 400 })
+      return NextResponse.json({ error: "Missing bundleId" }, { status: 400 })
     }
 
-    console.log(`🎉 [Grant Access] CLIENT-SIDE TEST MODE - Granting immediate access`)
+    console.log(`🚀 [Grant Access] Processing immediate access for user ${decodedToken.uid}`)
     console.log(`📦 Bundle: ${bundleId}`)
-    console.log(`👤 User: ${userId}`)
-    console.log(`🧪 Verification: ${verificationMethod}`)
+    console.log(`🔍 Verification: ${verificationMethod}`)
 
-    // Get product box details
-    const productBoxDoc = await db.collection("productBoxes").doc(bundleId).get()
-    if (!productBoxDoc.exists) {
-      return NextResponse.json({ error: "Product box not found" }, { status: 404 })
+    // Get bundle details
+    const bundleDoc = await db.collection("productBoxes").doc(bundleId).get()
+    if (!bundleDoc.exists) {
+      return NextResponse.json({ error: "Bundle not found" }, { status: 404 })
     }
 
-    const productBoxData = productBoxDoc.data()!
+    const bundleData = bundleDoc.data()!
 
-    // Get creator details
+    // Get creator details if provided
     let creatorData = null
-    const finalCreatorId = creatorId || productBoxData.creatorId
-    if (finalCreatorId) {
-      const creatorDoc = await db.collection("users").doc(finalCreatorId).get()
+    if (creatorId) {
+      const creatorDoc = await db.collection("users").doc(creatorId).get()
       creatorData = creatorDoc.exists ? creatorDoc.data() : null
     }
 
     // Check if user already has access
-    const existingPurchaseQuery = await db
-      .collection("purchases")
-      .where("userId", "==", userId)
+    const existingPurchase = await db
+      .collection("unifiedPurchases")
+      .where("userId", "==", decodedToken.uid)
       .where("productBoxId", "==", bundleId)
-      .where("status", "==", "completed")
       .limit(1)
       .get()
 
-    let alreadyPurchased = false
-    if (!existingPurchaseQuery.empty) {
-      console.log(`ℹ️ [Grant Access] User already has access to ${bundleId}`)
-      alreadyPurchased = true
-    } else {
-      // Create purchase record - CLIENT-SIDE TEST MODE
-      const purchaseData = {
-        userId: userId,
-        buyerUid: userId,
-        productBoxId: bundleId,
-        itemId: bundleId,
-        amount: productBoxData.price || 0,
-        currency: productBoxData.currency || "usd",
-        status: "completed",
-        type: "product_box",
-        itemTitle: productBoxData.title || "Untitled Product Box",
-        itemDescription: productBoxData.description || "",
-        thumbnailUrl: productBoxData.thumbnailUrl || "",
-        customPreviewThumbnail: productBoxData.customPreviewThumbnail || "",
-        creatorId: finalCreatorId || "",
-        creatorName: creatorData?.displayName || creatorData?.name || "",
-        creatorUsername: creatorData?.username || "",
-        accessUrl: `/product-box/${bundleId}/content`,
-        verificationMethod: verificationMethod,
-        verifiedAt: new Date(),
-        createdAt: new Date(),
-        purchasedAt: new Date(),
-        timestamp: new Date(),
-        // CLIENT-SIDE TEST MODE - no Stripe session
-        sessionId: `test_${Date.now()}_${userId.substring(0, 8)}`,
-        paymentIntentId: `pi_test_${Date.now()}_${userId.substring(0, 8)}`,
-      }
-
-      // Write to main purchases collection
-      await db.collection("purchases").add(purchaseData)
-
-      // Also write to user's purchases subcollection for backward compatibility
-      await db.collection("users").doc(userId).collection("purchases").add(purchaseData)
-
-      // Create unified purchase record
-      await db.collection("unifiedPurchases").add({
-        userId: userId,
-        productBoxId: bundleId,
-        amount: productBoxData.price || 0,
-        currency: productBoxData.currency || "usd",
-        creatorId: finalCreatorId || "",
-        status: "completed",
-        verificationMethod: verificationMethod,
-        createdAt: new Date(),
-        purchasedAt: new Date(),
-        sessionId: purchaseData.sessionId,
-        paymentIntentId: purchaseData.paymentIntentId,
+    if (!existingPurchase.empty) {
+      console.log(`✅ [Grant Access] User already has access`)
+      return NextResponse.json({
+        success: true,
+        alreadyPurchased: true,
+        bundle: {
+          id: bundleId,
+          title: bundleData.title,
+          description: bundleData.description,
+          thumbnailUrl: bundleData.thumbnailUrl,
+          price: bundleData.price,
+          currency: "usd",
+        },
+        creator: creatorData
+          ? {
+              id: creatorId,
+              name: creatorData.displayName || creatorData.name,
+              username: creatorData.username,
+            }
+          : null,
       })
-
-      console.log(`✅ [Grant Access] Created purchase records for ${bundleId}`)
-
-      // Update product box sales counter
-      await db
-        .collection("productBoxes")
-        .doc(bundleId)
-        .update({
-          totalSales: db.FieldValue.increment(1),
-          totalRevenue: db.FieldValue.increment(productBoxData.price || 0),
-          lastPurchaseAt: new Date(),
-        })
-
-      // Record the sale for the creator
-      if (finalCreatorId) {
-        const platformFee = (productBoxData.price || 0) * 0.05 // 5% platform fee
-        const netAmount = (productBoxData.price || 0) - platformFee
-
-        await db
-          .collection("users")
-          .doc(finalCreatorId)
-          .collection("sales")
-          .add({
-            productBoxId: bundleId,
-            buyerUid: userId,
-            sessionId: purchaseData.sessionId,
-            amount: productBoxData.price || 0,
-            platformFee,
-            netAmount,
-            purchasedAt: new Date(),
-            status: "completed",
-            productTitle: productBoxData.title || "Untitled Product Box",
-            buyerEmail: decodedToken.email || "",
-            verificationMethod: verificationMethod,
-          })
-
-        // Increment the creator's total sales
-        await db
-          .collection("users")
-          .doc(finalCreatorId)
-          .update({
-            totalSales: db.FieldValue.increment(1),
-            totalRevenue: db.FieldValue.increment(productBoxData.price || 0),
-            lastSaleAt: new Date(),
-          })
-      }
     }
 
-    // Return success with product details
+    // Create unified purchase record
+    const purchaseId = `${decodedToken.uid}_${bundleId}_${Date.now()}`
+    const purchaseData = {
+      id: purchaseId,
+      userId: decodedToken.uid,
+      productBoxId: bundleId,
+      bundleId: bundleId,
+      creatorId: creatorId || bundleData.creatorId || "",
+      amount: bundleData.price || 0,
+      currency: "usd",
+      status: "completed",
+      verificationMethod: verificationMethod,
+      purchaseDate: new Date(),
+      createdAt: new Date(),
+      updatedAt: new Date(),
+      metadata: {
+        grantedVia: "immediate_access",
+        verificationMethod: verificationMethod,
+        userAgent: request.headers.get("user-agent") || "",
+      },
+    }
+
+    // Store in unified purchases collection
+    await db.collection("unifiedPurchases").doc(purchaseId).set(purchaseData)
+
+    // Also store in legacy purchases collection for backward compatibility
+    const legacyPurchaseId = `legacy_${purchaseId}`
+    await db
+      .collection("purchases")
+      .doc(legacyPurchaseId)
+      .set({
+        ...purchaseData,
+        legacyId: legacyPurchaseId,
+        migratedFrom: "immediate_access",
+      })
+
+    console.log(`✅ [Grant Access] Purchase records created successfully`)
+    console.log(`📝 Unified Purchase: ${purchaseId}`)
+    console.log(`📝 Legacy Purchase: ${legacyPurchaseId}`)
+
     return NextResponse.json({
       success: true,
-      alreadyPurchased,
+      alreadyPurchased: false,
+      purchaseId: purchaseId,
       bundle: {
         id: bundleId,
-        title: productBoxData.title,
-        description: productBoxData.description,
-        thumbnailUrl: productBoxData.thumbnailUrl || productBoxData.customPreviewThumbnail,
-        price: productBoxData.price,
-        currency: productBoxData.currency,
+        title: bundleData.title,
+        description: bundleData.description,
+        thumbnailUrl: bundleData.thumbnailUrl,
+        price: bundleData.price,
+        currency: "usd",
       },
       creator: creatorData
         ? {
-            id: finalCreatorId,
-            name: creatorData.displayName || creatorData.name || "Unknown Creator",
-            username: creatorData.username || "",
+            id: creatorId,
+            name: creatorData.displayName || creatorData.name,
+            username: creatorData.username,
           }
         : null,
-      verificationDetails: {
-        method: verificationMethod,
-        verifiedAt: new Date().toISOString(),
-        mode: "client_side_test",
-      },
     })
   } catch (error: any) {
     console.error(`❌ [Grant Access] Error:`, error)
     return NextResponse.json(
       {
+        error: error.message || "Failed to grant access",
         success: false,
-        error: "Failed to grant access",
-        details: error.message,
       },
       { status: 500 },
     )
