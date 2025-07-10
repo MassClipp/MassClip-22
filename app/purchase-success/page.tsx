@@ -6,7 +6,7 @@ import { useAuth } from "@/contexts/auth-context"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { CheckCircle, Package, User, DollarSign, Clock, AlertTriangle, Zap } from "lucide-react"
+import { CheckCircle, Package, User, DollarSign, Clock, AlertTriangle } from "lucide-react"
 import Link from "next/link"
 
 interface Bundle {
@@ -25,218 +25,139 @@ interface Creator {
 }
 
 function PurchaseSuccessContent() {
-  const { user, loading: authLoading } = useAuth()
+  const { user } = useAuth()
   const searchParams = useSearchParams()
   const router = useRouter()
-  const [loading, setLoading] = useState(true)
+  const [isProcessing, setIsProcessing] = useState(true)
+  const [success, setSuccess] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [bundle, setBundle] = useState<Bundle | null>(null)
   const [creator, setCreator] = useState<Creator | null>(null)
   const [alreadyPurchased, setAlreadyPurchased] = useState(false)
   const [accessGranted, setAccessGranted] = useState(false)
 
-  // Get URL parameters - using product_box_id as bundleId
-  const bundleId = searchParams.get("product_box_id")
-  const userId = searchParams.get("user_id")
+  const productBoxId = searchParams.get("product_box_id")
   const creatorId = searchParams.get("creator_id")
   const testMode = searchParams.get("test_mode") === "true"
 
-  // Auto-grant access on page load
   useEffect(() => {
     console.log(`🎉 [Purchase Success] Page loaded with params:`, {
-      bundleId,
-      userId,
+      productBoxId,
       creatorId,
       testMode,
       currentUser: user?.uid,
-      authLoading,
     })
 
-    // If we have bundle and user info, grant access immediately
-    if (bundleId && userId) {
-      autoGrantAccess()
-    } else if (bundleId && user) {
-      // Use current user if no userId in URL
-      autoGrantAccessWithAuth()
-    } else {
-      console.log(`❌ [Purchase Success] Missing required parameters`)
-      setError("Missing purchase information")
-      setLoading(false)
-    }
-  }, [bundleId, userId, user, authLoading])
-
-  const autoGrantAccess = async () => {
-    if (!bundleId || !userId) {
-      console.error("❌ [Auto Grant] Missing bundleId or userId")
-      setError("Missing purchase information")
-      setLoading(false)
+    if (!user || !productBoxId || !creatorId) {
+      setIsProcessing(false)
       return
     }
 
-    try {
-      setLoading(true)
-      console.log(`🚀 [Auto Grant] Processing automatic access grant`)
-      console.log(`📦 Bundle ID: ${bundleId}`)
-      console.log(`👤 User ID: ${userId}`)
-      console.log(`🧪 Test Mode: ${testMode}`)
+    verifyPurchase()
+  }, [user, productBoxId, creatorId])
 
-      // Call auto-grant API (no auth required)
-      const response = await fetch("/api/bundle/auto-grant", {
+  const verifyPurchase = async () => {
+    try {
+      const response = await fetch("/api/purchase/grant-immediate-access", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          bundleId: bundleId,
-          userId: userId,
-          creatorId: creatorId,
+          productBoxId,
+          creatorId,
+          userId: user?.uid,
         }),
       })
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}))
-        throw new Error(errorData.error || `Failed to grant access: ${response.status}`)
-      }
-
-      const data = await response.json()
-
-      if (data.success) {
-        setBundle(data.bundle)
-        setCreator(data.creator)
-        setAlreadyPurchased(data.alreadyPurchased)
-        setAccessGranted(true)
-        console.log(`✅ [Auto Grant] Access granted successfully!`)
-      } else {
-        throw new Error(data.error || "Failed to grant access")
-      }
-    } catch (error: any) {
-      console.error("❌ [Auto Grant] Error:", error)
-      setError(error.message)
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const autoGrantAccessWithAuth = async () => {
-    if (!user || !bundleId) {
-      console.error("❌ [Auth Grant] Missing user or bundleId")
-      return
-    }
-
-    try {
-      setLoading(true)
-      console.log(`🚀 [Auth Grant] Processing with authentication`)
-      console.log(`📦 Bundle ID: ${bundleId}`)
-      console.log(`👤 User: ${user.uid}`)
-
-      const idToken = await user.getIdToken()
-
-      const response = await fetch("/api/bundle/grant-access", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${idToken}`,
-        },
-        body: JSON.stringify({
-          bundleId: bundleId,
-          creatorId: creatorId,
-        }),
-      })
+      const result = await response.json()
 
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}))
-        throw new Error(errorData.error || `Failed to grant access: ${response.status}`)
+        throw new Error(result.error || "Purchase verification failed")
       }
 
-      const data = await response.json()
-
-      if (data.success) {
-        setBundle(data.bundle)
-        setCreator(data.creator)
-        setAlreadyPurchased(data.alreadyPurchased)
-        setAccessGranted(true)
-        console.log(`✅ [Auth Grant] Access granted successfully!`)
-      } else {
-        throw new Error(data.error || "Failed to grant access")
-      }
-    } catch (error: any) {
-      console.error("❌ [Auth Grant] Error:", error)
-      setError(error.message)
+      setBundle(result.bundle)
+      setCreator(result.creator)
+      setAlreadyPurchased(result.alreadyPurchased)
+      setAccessGranted(true)
+      setSuccess(true)
+    } catch (err: any) {
+      setError(err.message || "Failed to verify purchase")
     } finally {
-      setLoading(false)
+      // Add a small delay to show the loading animation
+      setTimeout(() => {
+        setIsProcessing(false)
+      }, 1500)
     }
   }
 
-  const handleLogin = () => {
-    const currentUrl = window.location.href
-    localStorage.setItem("redirectAfterLogin", currentUrl)
-    router.push(`/login?redirect=${encodeURIComponent(currentUrl)}`)
+  const handleViewPurchases = () => {
+    router.push("/dashboard/purchases")
   }
 
-  // Show loading while processing
-  if (loading) {
+  // Authentication check
+  if (!user) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <Card className="w-full max-w-md">
-          <CardContent className="p-6 text-center">
-            <Zap className="h-12 w-12 text-blue-500 mx-auto mb-4 animate-pulse" />
-            <h2 className="text-xl font-semibold mb-2">
-              {testMode ? "🧪 Processing Test Purchase" : "⚡ Processing Your Purchase"}
-            </h2>
-            <p className="text-gray-600 mb-4">Automatically granting access to your bundle...</p>
-
-            {testMode && (
-              <div className="mt-4 p-3 bg-yellow-50 rounded-lg">
-                <p className="text-sm text-yellow-800">
-                  <strong>TEST MODE:</strong> Using Stripe test cards - no real charges
-                </p>
-              </div>
-            )}
-
-            <div className="mt-4 p-3 bg-blue-50 rounded-lg">
-              <h3 className="font-medium text-blue-900 mb-1">⚡ Auto-Grant Process:</h3>
-              <ul className="text-sm text-blue-800 space-y-1">
-                <li>✅ Payment completed successfully</li>
-                <li>🔍 Fetching bundle details from Firestore</li>
-                <li>⚡ Automatically granting access</li>
-                <li>📝 Recording your purchase</li>
-                <li>🎯 No login required!</li>
-              </ul>
-            </div>
+        <Card className="w-full max-w-sm">
+          <CardContent className="p-8 text-center">
+            <p className="text-gray-600 mb-4">Please log in to continue</p>
+            <Button onClick={() => router.push("/login")} className="w-full bg-red-600 hover:bg-red-700">
+              Log In
+            </Button>
           </CardContent>
         </Card>
       </div>
     )
   }
 
-  // Show error state
+  // Parameter validation
+  if (!productBoxId || !creatorId) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <Card className="w-full max-w-sm">
+          <CardContent className="p-8 text-center">
+            <p className="text-gray-600 mb-4">Invalid purchase link</p>
+            <Button onClick={() => router.push("/dashboard")} className="w-full bg-red-600 hover:bg-red-700">
+              Go to Dashboard
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  // Loading state with three dots animation
+  if (isProcessing) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="flex space-x-2">
+          <div className="w-3 h-3 bg-red-600 rounded-full animate-bounce [animation-delay:-0.3s]"></div>
+          <div className="w-3 h-3 bg-red-600 rounded-full animate-bounce [animation-delay:-0.15s]"></div>
+          <div className="w-3 h-3 bg-red-600 rounded-full animate-bounce"></div>
+        </div>
+      </div>
+    )
+  }
+
+  // Error state
   if (error) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <Card className="w-full max-w-md">
-          <CardContent className="p-6">
-            <Alert variant="destructive">
-              <AlertTriangle className="h-4 w-4" />
-              <AlertDescription>
-                <strong>Error:</strong> {error}
-              </AlertDescription>
-            </Alert>
-            <div className="mt-4 space-y-2">
-              <Button onClick={() => window.location.reload()} className="w-full">
-                Try Again
-              </Button>
-              <Button asChild variant="outline" className="w-full bg-transparent">
-                <Link href="/dashboard/purchases">View My Purchases</Link>
-              </Button>
-            </div>
+        <Card className="w-full max-w-sm">
+          <CardContent className="p-8 text-center">
+            <p className="text-gray-600 mb-4">Something went wrong</p>
+            <Button onClick={handleViewPurchases} className="w-full bg-red-600 hover:bg-red-700">
+              My Purchases
+            </Button>
           </CardContent>
         </Card>
       </div>
     )
   }
 
-  // Show success state
-  if (accessGranted && bundle) {
+  // Success state
+  if (success && bundle) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4">
         <Card className="w-full max-w-md">
@@ -330,18 +251,7 @@ function PurchaseSuccessContent() {
     )
   }
 
-  // Fallback
-  return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50">
-      <Card className="w-full max-w-md">
-        <CardContent className="p-6 text-center">
-          <Clock className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-          <h2 className="text-xl font-semibold mb-2">Processing...</h2>
-          <p className="text-gray-600">Please wait while we set up your purchase.</p>
-        </CardContent>
-      </Card>
-    </div>
-  )
+  return null
 }
 
 export default function PurchaseSuccessPage() {
