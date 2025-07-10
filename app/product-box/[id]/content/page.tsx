@@ -51,7 +51,7 @@ export default function ProductBoxContentPage({ params }: { params: { id: string
       setError(null)
 
       const token = await user.getIdToken(true)
-      const productBoxId = params.id.trim().toLowerCase()
+      const productBoxId = params.id // Keep original casing
 
       console.log("🔍 [Content Page] Fetching content for product box:", productBoxId)
 
@@ -78,13 +78,14 @@ export default function ProductBoxContentPage({ params }: { params: { id: string
           })),
         )
 
-        // Find the purchase using multiple possible field names
+        // Find the purchase using case-insensitive matching
         const foundPurchase = purchases.find((p: any) => {
-          const purchaseProductBoxId = (p.productBoxId || "").trim().toLowerCase()
-          const purchaseItemId = (p.itemId || "").trim().toLowerCase()
-          const purchaseId = (p.id || "").trim().toLowerCase()
+          const purchaseProductBoxId = (p.productBoxId || "").toLowerCase()
+          const purchaseItemId = (p.itemId || "").toLowerCase()
+          const purchaseId = (p.id || "").toLowerCase()
+          const searchId = productBoxId.toLowerCase()
 
-          return purchaseProductBoxId === productBoxId || purchaseItemId === productBoxId || purchaseId === productBoxId
+          return purchaseProductBoxId === searchId || purchaseItemId === searchId || purchaseId === searchId
         })
 
         if (foundPurchase && foundPurchase.items && foundPurchase.items.length > 0) {
@@ -96,6 +97,7 @@ export default function ProductBoxContentPage({ params }: { params: { id: string
         } else {
           console.warn("❌ [Content Page] No matching purchase found in unified purchases", {
             productBoxId,
+            searchId: productBoxId.toLowerCase(),
             availablePurchases: purchases.map((p) => ({
               productBoxId: p.productBoxId,
               itemId: p.itemId,
@@ -120,23 +122,15 @@ export default function ProductBoxContentPage({ params }: { params: { id: string
         const legacyPurchases = legacyData.purchases || []
 
         console.log("📦 [Content Page] Found legacy purchases:", legacyPurchases.length)
-        console.log(
-          "📦 [Content Page] Legacy purchase data sample:",
-          legacyPurchases.map((p) => ({
-            id: p.id,
-            productBoxId: p.productBoxId,
-            itemId: p.itemId,
-            sessionId: p.sessionId,
-          })),
-        )
 
-        // Find legacy purchase using multiple possible field names
+        // Find legacy purchase using case-insensitive matching
         const legacyPurchase = legacyPurchases.find((p: any) => {
-          const purchaseProductBoxId = (p.productBoxId || "").trim().toLowerCase()
-          const purchaseItemId = (p.itemId || "").trim().toLowerCase()
-          const purchaseId = (p.id || "").trim().toLowerCase()
+          const purchaseProductBoxId = (p.productBoxId || "").toLowerCase()
+          const purchaseItemId = (p.itemId || "").toLowerCase()
+          const purchaseId = (p.id || "").toLowerCase()
+          const searchId = productBoxId.toLowerCase()
 
-          return purchaseProductBoxId === productBoxId || purchaseItemId === productBoxId || purchaseId === productBoxId
+          return purchaseProductBoxId === searchId || purchaseItemId === searchId || purchaseId === searchId
         })
 
         // If we found a legacy purchase, automatically migrate it
@@ -152,7 +146,7 @@ export default function ProductBoxContentPage({ params }: { params: { id: string
                 Authorization: `Bearer ${token}`,
               },
               body: JSON.stringify({
-                productBoxId: params.id, // Use original ID, not normalized
+                productBoxId: params.id, // Use original ID
               }),
             })
 
@@ -173,15 +167,12 @@ export default function ProductBoxContentPage({ params }: { params: { id: string
                   const retryUnifiedData = await retryUnifiedResponse.json()
                   const retryPurchases = retryUnifiedData.purchases || []
                   const retryFoundPurchase = retryPurchases.find((p: any) => {
-                    const purchaseProductBoxId = (p.productBoxId || "").trim().toLowerCase()
-                    const purchaseItemId = (p.itemId || "").trim().toLowerCase()
-                    const purchaseId = (p.id || "").trim().toLowerCase()
+                    const purchaseProductBoxId = (p.productBoxId || "").toLowerCase()
+                    const purchaseItemId = (p.itemId || "").toLowerCase()
+                    const purchaseId = (p.id || "").toLowerCase()
+                    const searchId = productBoxId.toLowerCase()
 
-                    return (
-                      purchaseProductBoxId === productBoxId ||
-                      purchaseItemId === productBoxId ||
-                      purchaseId === productBoxId
-                    )
+                    return purchaseProductBoxId === searchId || purchaseItemId === searchId || purchaseId === searchId
                   })
 
                   if (retryFoundPurchase && retryFoundPurchase.items && retryFoundPurchase.items.length > 0) {
@@ -199,15 +190,6 @@ export default function ProductBoxContentPage({ params }: { params: { id: string
           } catch (migrationError) {
             console.warn("⚠️ [Content Page] Automatic migration failed, falling back to legacy content:", migrationError)
           }
-        } else {
-          console.warn("❌ [Content Page] No matching purchase found in legacy purchases", {
-            productBoxId,
-            availablePurchases: legacyPurchases.map((p) => ({
-              productBoxId: p.productBoxId,
-              itemId: p.itemId,
-              id: p.id,
-            })),
-          })
         }
 
         if (legacyPurchase) {
@@ -635,11 +617,19 @@ export default function ProductBoxContentPage({ params }: { params: { id: string
               >
                 Return to Purchases
               </Button>
-              <Button onClick={fetchContent} variant="outline" className="w-full border-zinc-700 text-zinc-300">
+              <Button
+                onClick={fetchContent}
+                variant="outline"
+                className="w-full border-zinc-700 text-zinc-300 bg-transparent"
+              >
                 <RefreshCw className="mr-2 h-4 w-4" />
                 Retry Access
               </Button>
-              <Button onClick={checkPurchase} variant="outline" className="w-full border-zinc-700 text-zinc-300">
+              <Button
+                onClick={checkPurchase}
+                variant="outline"
+                className="w-full border-zinc-700 text-zinc-300 bg-transparent"
+              >
                 <Bug className="mr-2 h-4 w-4" />
                 Debug Purchase
               </Button>
@@ -665,7 +655,11 @@ export default function ProductBoxContentPage({ params }: { params: { id: string
               >
                 Return to Purchases
               </Button>
-              <Button onClick={checkPurchase} variant="outline" className="w-full border-zinc-700 text-zinc-300">
+              <Button
+                onClick={checkPurchase}
+                variant="outline"
+                className="w-full border-zinc-700 text-zinc-300 bg-transparent"
+              >
                 <Bug className="mr-2 h-4 w-4" />
                 Debug Purchase
               </Button>
@@ -698,7 +692,7 @@ export default function ProductBoxContentPage({ params }: { params: { id: string
               <Button
                 variant="outline"
                 onClick={fetchContent}
-                className="border-zinc-700 text-zinc-300 hover:bg-zinc-800 h-9 px-3"
+                className="border-zinc-700 text-zinc-300 hover:bg-zinc-800 h-9 px-3 bg-transparent"
               >
                 <RefreshCw className="mr-2 h-4 w-4" />
                 Refresh

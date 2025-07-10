@@ -32,43 +32,59 @@ export async function POST(request: NextRequest) {
 
     console.log(`🔄 [Migration] Starting migration for user ${authenticatedUserId} and product box ${productBoxId}`)
 
-    // Find the legacy purchase for this product box
+    // Find the legacy purchase for this product box (case-insensitive)
     const legacyPurchasesRef = db.collection("users").doc(authenticatedUserId).collection("purchases")
-    const legacySnapshot = await legacyPurchasesRef.where("productBoxId", "==", productBoxId).get()
+    const legacySnapshot = await legacyPurchasesRef.get()
 
-    if (legacySnapshot.empty) {
+    let matchingPurchase = null
+    let purchaseId = null
+
+    // Search through all purchases to find a match (case-insensitive)
+    for (const doc of legacySnapshot.docs) {
+      const data = doc.data()
+      const docProductBoxId = data.productBoxId || data.itemId || ""
+
+      if (docProductBoxId.toLowerCase() === productBoxId.toLowerCase()) {
+        matchingPurchase = data
+        purchaseId = doc.id
+        console.log(`✅ [Migration] Found matching purchase: ${purchaseId}`)
+        break
+      }
+    }
+
+    if (!matchingPurchase) {
       return NextResponse.json({ error: "No legacy purchase found for this product box" }, { status: 404 })
     }
 
-    // Get the first matching purchase
-    const purchaseDoc = legacySnapshot.docs[0]
-    const purchaseData = purchaseDoc.data()
-    const purchaseId = purchaseDoc.id
-
     // Check if already migrated
     const unifiedPurchasesRef = db.collection("userPurchases").doc(authenticatedUserId).collection("purchases")
-    const existingDoc = await unifiedPurchasesRef.doc(purchaseData.sessionId || purchaseId).get()
+    const existingDoc = await unifiedPurchasesRef.doc(matchingPurchase.sessionId || purchaseId).get()
 
     if (existingDoc.exists) {
       return NextResponse.json({
         success: true,
         message: "Purchase already migrated",
-        purchaseId: purchaseData.sessionId || purchaseId,
+        purchaseId: matchingPurchase.sessionId || purchaseId,
       })
     }
 
-    // Get product box details
-    const productBoxRef = db.collection("productBoxes").doc(productBoxId)
-    const productBoxDoc = await productBoxRef.get()
+    // Get product box details (case-insensitive search)
+    const productBoxesSnapshot = await db.collection("productBoxes").get()
+    let productBoxData = null
 
-    if (!productBoxDoc.exists) {
+    for (const doc of productBoxesSnapshot.docs) {
+      if (doc.id.toLowerCase() === productBoxId.toLowerCase()) {
+        productBoxData = doc.data()
+        break
+      }
+    }
+
+    if (!productBoxData) {
       return NextResponse.json({ error: "Product box not found" }, { status: 404 })
     }
 
-    const productBoxData = productBoxDoc.data()!
-
     // Get creator details
-    const creatorId = productBoxData.creatorId || purchaseData.creatorId
+    const creatorId = productBoxData.creatorId || matchingPurchase.creatorId
     let creatorData: any = { displayName: "Unknown Creator", username: "" }
 
     if (creatorId) {
@@ -84,32 +100,33 @@ export async function POST(request: NextRequest) {
 
     // Create unified purchase document
     const unifiedPurchase = {
-      id: purchaseData.sessionId || purchaseId,
-      productBoxId: productBoxId,
-      productBoxTitle: productBoxData.title || purchaseData.itemTitle || "Untitled Product Box",
+      id: matchingPurchase.sessionId || purchaseId,
+      productBoxId: productBoxId, // Use original casing
+      itemId: productBoxId, // Compatibility field
+      productBoxTitle: productBoxData.title || matchingPurchase.itemTitle || "Untitled Product Box",
       productBoxDescription: productBoxData.description || "",
       productBoxThumbnail: productBoxData.thumbnailUrl || productBoxData.customPreviewThumbnail || "",
       creatorId: creatorId || "",
       creatorName: creatorData.displayName || creatorData.name || "Unknown Creator",
       creatorUsername: creatorData.username || "",
-      purchasedAt: purchaseData.createdAt || purchaseData.timestamp || new Date(),
-      amount: purchaseData.amount || 0,
-      currency: purchaseData.currency || "usd",
-      sessionId: purchaseData.sessionId || purchaseId,
+      purchasedAt: matchingPurchase.createdAt || matchingPurchase.timestamp || new Date(),
+      amount: matchingPurchase.amount || 0,
+      currency: matchingPurchase.currency || "usd",
+      sessionId: matchingPurchase.sessionId || purchaseId,
       items: contentItems,
       totalItems: contentItems.length,
       totalSize: contentItems.reduce((sum, item) => sum + (item.fileSize || 0), 0),
     }
 
     // Save to userPurchases collection
-    await unifiedPurchasesRef.doc(purchaseData.sessionId || purchaseId).set(unifiedPurchase)
+    await unifiedPurchasesRef.doc(matchingPurchase.sessionId || purchaseId).set(unifiedPurchase)
 
     console.log(`✅ [Migration] Migrated purchase ${purchaseId} for product box ${productBoxId}`)
 
     return NextResponse.json({
       success: true,
       message: "Purchase migrated successfully",
-      purchaseId: purchaseData.sessionId || purchaseId,
+      purchaseId: matchingPurchase.sessionId || purchaseId,
       contentItems: contentItems.length,
     })
   } catch (error) {
@@ -124,68 +141,67 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// Helper function to fetch content items
+// Helper function to fetch content items (case-insensitive)
 async function fetchContentItems(productBoxId: string) {
   const items = []
 
   try {
-    // Try productBoxContent collection first (primary source)
-    const contentSnapshot = await db.collection("productBoxContent").where("productBoxId", "==", productBoxId).get()
-
-    console.log(`📊 [Content Fetch] productBoxContent query found ${contentSnapshot.size} items`)
+    // Try productBoxContent collection first (case-insensitive)
+    const contentSnapshot = await db.collection("productBoxContent").get()
 
     for (const doc of contentSnapshot.docs) {
       const data = doc.data()
-      const item = normalizeContentItem(doc.id, data)
-      if (item) items.push(item)
-    }
+      const docProductBoxId = data.productBoxId || data.boxId || ""
 
-    // If no items found, try with boxId field
-    if (items.length === 0) {
-      const boxIdSnapshot = await db.collection("productBoxContent").where("boxId", "==", productBoxId).get()
-
-      console.log(`📊 [Content Fetch] boxId query found ${boxIdSnapshot.size} items`)
-
-      for (const doc of boxIdSnapshot.docs) {
-        const data = doc.data()
+      if (docProductBoxId.toLowerCase() === productBoxId.toLowerCase()) {
         const item = normalizeContentItem(doc.id, data)
         if (item) items.push(item)
       }
     }
 
-    // If still no items, try uploads collection
-    if (items.length === 0) {
-      const uploadsSnapshot = await db.collection("uploads").where("productBoxId", "==", productBoxId).get()
+    console.log(`📊 [Content Fetch] Found ${items.length} items in productBoxContent`)
 
-      console.log(`📊 [Content Fetch] uploads query found ${uploadsSnapshot.size} items`)
+    // If no items found, try uploads collection
+    if (items.length === 0) {
+      const uploadsSnapshot = await db.collection("uploads").get()
 
       for (const doc of uploadsSnapshot.docs) {
         const data = doc.data()
-        const item = normalizeContentItem(doc.id, data)
-        if (item) items.push(item)
+        const docProductBoxId = data.productBoxId || ""
+
+        if (docProductBoxId.toLowerCase() === productBoxId.toLowerCase()) {
+          const item = normalizeContentItem(doc.id, data)
+          if (item) items.push(item)
+        }
       }
+
+      console.log(`📊 [Content Fetch] Found ${items.length} items in uploads`)
     }
 
     // If still no items, check product box contentItems array
     if (items.length === 0) {
-      const productBoxDoc = await db.collection("productBoxes").doc(productBoxId).get()
-      if (productBoxDoc.exists) {
-        const productBoxData = productBoxDoc.data()!
-        const contentItemIds = productBoxData.contentItems || []
+      const productBoxesSnapshot = await db.collection("productBoxes").get()
 
-        console.log(`📊 [Content Fetch] Product box has ${contentItemIds.length} content item IDs`)
+      for (const doc of productBoxesSnapshot.docs) {
+        if (doc.id.toLowerCase() === productBoxId.toLowerCase()) {
+          const productBoxData = doc.data()
+          const contentItemIds = productBoxData.contentItems || []
 
-        for (const itemId of contentItemIds) {
-          try {
-            const uploadDoc = await db.collection("uploads").doc(itemId).get()
-            if (uploadDoc.exists) {
-              const data = uploadDoc.data()!
-              const item = normalizeContentItem(itemId, data)
-              if (item) items.push(item)
+          console.log(`📊 [Content Fetch] Product box has ${contentItemIds.length} content item IDs`)
+
+          for (const itemId of contentItemIds) {
+            try {
+              const uploadDoc = await db.collection("uploads").doc(itemId).get()
+              if (uploadDoc.exists) {
+                const data = uploadDoc.data()!
+                const item = normalizeContentItem(itemId, data)
+                if (item) items.push(item)
+              }
+            } catch (error) {
+              console.warn(`⚠️ [Content Fetch] Error fetching upload ${itemId}:`, error)
             }
-          } catch (error) {
-            console.warn(`⚠️ [Content Fetch] Error fetching upload ${itemId}:`, error)
           }
+          break
         }
       }
     }
