@@ -42,25 +42,26 @@ export async function POST(request: NextRequest) {
 
     if (!bundleData) {
       console.error(`❌ [Auto Grant] Bundle not found in any collection: ${bundleId}`)
-
-      // Let's also try to list some documents to debug
-      try {
-        const productBoxesSnapshot = await db.collection("productBoxes").limit(5).get()
-        console.log(
-          `🔍 [Debug] Sample productBoxes IDs:`,
-          productBoxesSnapshot.docs.map((doc) => doc.id),
-        )
-
-        const bundlesSnapshot = await db.collection("bundles").limit(5).get()
-        console.log(
-          `🔍 [Debug] Sample bundles IDs:`,
-          bundlesSnapshot.docs.map((doc) => doc.id),
-        )
-      } catch (debugError) {
-        console.error(`❌ [Debug] Error listing collections:`, debugError)
-      }
-
       return NextResponse.json({ error: "Bundle not found" }, { status: 404 })
+    }
+
+    // Get bundle contents
+    console.log(`🔍 [Auto Grant] Fetching bundle contents...`)
+    let bundleContents: any[] = []
+
+    try {
+      // Check productBoxContent collection
+      const contentQuery = await db.collection("productBoxContent").where("productBoxId", "==", bundleId).get()
+
+      bundleContents = contentQuery.docs.map((doc) => ({
+        id: doc.id,
+        ...doc.data(),
+        contentId: doc.id,
+      }))
+
+      console.log(`✅ [Auto Grant] Found ${bundleContents.length} content items`)
+    } catch (contentError) {
+      console.warn(`⚠️ [Auto Grant] Could not fetch bundle contents:`, contentError)
     }
 
     // Get creator details
@@ -82,9 +83,9 @@ export async function POST(request: NextRequest) {
     // Check if user already has access
     console.log(`🔍 [Auto Grant] Checking existing purchases...`)
     const existingPurchaseQuery = await db
-      .collection("productBoxPurchases")
+      .collection("bundlePurchases")
       .where("buyerUid", "==", userId)
-      .where("productBoxId", "==", bundleId)
+      .where("bundleId", "==", bundleId)
       .where("status", "==", "completed")
       .limit(1)
       .get()
@@ -94,10 +95,50 @@ export async function POST(request: NextRequest) {
       console.log(`ℹ️ [Auto Grant] User already has access to ${bundleId}`)
       alreadyPurchased = true
     } else {
-      console.log(`🆕 [Auto Grant] Creating new purchase record...`)
+      console.log(`🆕 [Auto Grant] Creating new purchase record in bundlePurchases...`)
 
-      // Create purchase record - auto grant access
+      // Create purchase record in bundlePurchases collection with contents
       const purchaseData = {
+        buyerUid: userId,
+        bundleId: bundleId,
+        productBoxId: bundleId, // For compatibility
+        creatorId: targetCreatorId || "",
+        amount: bundleData.price || 0,
+        currency: bundleData.currency || "usd",
+        status: "completed",
+        type: "bundle",
+        createdAt: new Date(),
+        completedAt: new Date(),
+        verificationMethod: "auto_grant_success_page",
+
+        // Bundle details
+        bundleTitle: bundleData.title || bundleData.name || "Untitled Bundle",
+        bundleDescription: bundleData.description || bundleData.summary || "",
+        bundleThumbnail: bundleData.thumbnailUrl || bundleData.customPreviewThumbnail || bundleData.previewImage || "",
+
+        // Creator details
+        creatorUsername: creatorData?.username || "",
+        creatorName: creatorData?.displayName || creatorData?.name || "",
+
+        // Bundle contents
+        contents: bundleContents,
+        contentCount: bundleContents.length,
+        totalSize: bundleContents.reduce((sum, item) => sum + (item.fileSize || 0), 0),
+
+        metadata: {
+          grantedVia: "auto_grant",
+          autoGranted: true,
+          timestamp: new Date().toISOString(),
+          collectionUsed: collectionUsed,
+          contentsIncluded: bundleContents.length > 0,
+        },
+      }
+
+      const purchaseRef = await db.collection("bundlePurchases").add(purchaseData)
+      console.log(`✅ [Auto Grant] Created bundlePurchases record: ${purchaseRef.id}`)
+
+      // Also create in productBoxPurchases for compatibility
+      const productBoxPurchaseData = {
         buyerUid: userId,
         productBoxId: bundleId,
         creatorId: targetCreatorId || "",
@@ -113,13 +154,14 @@ export async function POST(request: NextRequest) {
           autoGranted: true,
           timestamp: new Date().toISOString(),
           collectionUsed: collectionUsed,
+          bundlePurchaseId: purchaseRef.id,
         },
       }
 
-      const purchaseRef = await db.collection("productBoxPurchases").add(purchaseData)
-      console.log(`✅ [Auto Grant] Created purchase record: ${purchaseRef.id}`)
+      await db.collection("productBoxPurchases").add(productBoxPurchaseData)
+      console.log(`✅ [Auto Grant] Created productBoxPurchases record for compatibility`)
 
-      // Create unified purchase record
+      // Create unified purchase record with full details
       const unifiedPurchaseId = `auto_${userId}_${bundleId}_${Date.now()}`
       await db
         .collection("unifiedPurchases")
@@ -140,6 +182,23 @@ export async function POST(request: NextRequest) {
           grantedAt: new Date(),
           autoGranted: true,
           collectionUsed: collectionUsed,
+
+          // Bundle details for display
+          bundleTitle: bundleData.title || bundleData.name || "Untitled Bundle",
+          productBoxTitle: bundleData.title || bundleData.name || "Untitled Bundle",
+          bundleDescription: bundleData.description || bundleData.summary || "",
+          thumbnailUrl: bundleData.thumbnailUrl || bundleData.customPreviewThumbnail || bundleData.previewImage || "",
+          productBoxThumbnail:
+            bundleData.thumbnailUrl || bundleData.customPreviewThumbnail || bundleData.previewImage || "",
+
+          // Creator details
+          creatorUsername: creatorData?.username || "",
+          creatorName: creatorData?.displayName || creatorData?.name || "",
+
+          // Contents
+          items: bundleContents,
+          totalItems: bundleContents.length,
+          totalSize: bundleContents.reduce((sum, item) => sum + (item.fileSize || 0), 0),
         })
       console.log(`✅ [Auto Grant] Created unified purchase: ${unifiedPurchaseId}`)
 
@@ -169,6 +228,7 @@ export async function POST(request: NextRequest) {
       thumbnailUrl: bundleData.thumbnailUrl || bundleData.customPreviewThumbnail || bundleData.previewImage || "",
       price: bundleData.price || 0,
       currency: bundleData.currency || "usd",
+      contentCount: bundleContents.length,
     }
 
     const responseCreator = creatorData
@@ -184,10 +244,12 @@ export async function POST(request: NextRequest) {
       alreadyPurchased,
       bundle: responseBundle,
       creator: responseCreator,
+      contents: bundleContents,
       debug: {
         collectionUsed,
         bundleFound: true,
         creatorFound: !!creatorData,
+        contentsFound: bundleContents.length,
       },
     })
   } catch (error: any) {
