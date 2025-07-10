@@ -121,3 +121,6 @@ export function useAuth() {
   }
   return context
 }
+
+// Provide the named export expected elsewhere in the codebase.
+export const useAuthContext = useAuth
