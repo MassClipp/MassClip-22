@@ -18,125 +18,71 @@ export async function POST(request: NextRequest) {
 
     const { bundleId, creatorId } = await request.json()
 
-    if (!bundleId) {
-      return NextResponse.json({ error: "Missing bundleId" }, { status: 400 })
+    if (!bundleId || !creatorId) {
+      return NextResponse.json({ error: "Missing required parameters" }, { status: 400 })
     }
 
-    console.log(`⚡ [Grant Access] Processing with auth`)
-    console.log(`📦 Bundle ID: ${bundleId}`)
-    console.log(`👤 User ID: ${userId}`)
+    console.log(`🔄 [Grant Access] Processing for user: ${userId}, bundle: ${bundleId}`)
 
-    // Try to find bundle in multiple collections
-    let bundleDoc = null
-    let bundleData = null
-    let collectionUsed = ""
+    // Get bundle information
+    const bundleRef = db.collection("productBoxes").doc(bundleId)
+    const bundleDoc = await bundleRef.get()
 
-    // Check productBoxes first
-    bundleDoc = await db.collection("productBoxes").doc(bundleId).get()
-    if (bundleDoc.exists) {
-      bundleData = bundleDoc.data()!
-      collectionUsed = "productBoxes"
-    } else {
-      // Check bundles collection
-      bundleDoc = await db.collection("bundles").doc(bundleId).get()
-      if (bundleDoc.exists) {
-        bundleData = bundleDoc.data()!
-        collectionUsed = "bundles"
-      }
-    }
-
-    if (!bundleData) {
-      console.error(`❌ [Grant Access] Bundle not found: ${bundleId}`)
+    if (!bundleDoc.exists) {
       return NextResponse.json({ error: "Bundle not found" }, { status: 404 })
     }
 
-    console.log(`✅ [Grant Access] Bundle found in ${collectionUsed}: ${bundleData.title}`)
+    const bundleData = bundleDoc.data()
 
-    // Get creator details
-    let creatorData = null
-    const targetCreatorId = creatorId || bundleData.creatorId || bundleData.userId
-    if (targetCreatorId) {
-      const creatorDoc = await db.collection("users").doc(targetCreatorId).get()
-      creatorData = creatorDoc.exists ? creatorDoc.data() : null
+    // Get creator information
+    const creatorRef = db.collection("users").doc(creatorId)
+    const creatorDoc = await creatorRef.get()
+
+    if (!creatorDoc.exists) {
+      return NextResponse.json({ error: "Creator not found" }, { status: 404 })
     }
 
-    // Check existing purchase
-    const existingPurchaseQuery = await db
+    const creatorData = creatorDoc.data()
+
+    // Check if user already has access
+    const existingPurchaseRef = db
       .collection("productBoxPurchases")
-      .where("buyerUid", "==", userId)
+      .where("userId", "==", userId)
       .where("productBoxId", "==", bundleId)
-      .where("status", "==", "completed")
-      .limit(1)
-      .get()
 
-    let alreadyPurchased = false
-    if (!existingPurchaseQuery.empty) {
-      alreadyPurchased = true
-      console.log(`ℹ️ [Grant Access] User already has access to ${bundleId}`)
-    } else {
-      // Create purchase record with batch write for consistency
-      const batch = db.batch()
+    const existingPurchases = await existingPurchaseRef.get()
+    const alreadyPurchased = !existingPurchases.empty
 
+    if (!alreadyPurchased) {
       // Create purchase record
-      const purchaseRef = db.collection("productBoxPurchases").doc()
       const purchaseData = {
-        buyerUid: userId,
+        userId,
         productBoxId: bundleId,
-        creatorId: targetCreatorId || "",
-        amount: bundleData.price || 0,
-        currency: bundleData.currency || "usd",
+        creatorId,
+        purchaseDate: new Date(),
         status: "completed",
-        type: "product_box",
-        createdAt: new Date(),
-        completedAt: new Date(),
-        verificationMethod: "auth_grant_success_page",
-        metadata: {
-          grantedVia: "auth_grant",
-          autoGranted: true,
-          timestamp: new Date().toISOString(),
-          collectionUsed: collectionUsed,
-        },
+        accessGranted: true,
+        grantMethod: "post_purchase_verification",
+        bundleTitle: bundleData?.title || "Unknown Bundle",
+        bundlePrice: bundleData?.price || 0,
+        currency: bundleData?.currency || "usd",
       }
-      batch.set(purchaseRef, purchaseData)
 
-      // Create unified purchase
-      const unifiedPurchaseId = `auth_${userId}_${bundleId}_${Date.now()}`
-      const unifiedPurchaseRef = db.collection("unifiedPurchases").doc(unifiedPurchaseId)
-      batch.set(unifiedPurchaseRef, {
-        id: unifiedPurchaseId,
-        userId: userId,
-        productBoxId: bundleId,
-        bundleId: bundleId,
-        creatorId: targetCreatorId || "",
-        amount: bundleData.price || 0,
-        currency: bundleData.currency || "usd",
-        status: "completed",
-        verificationMethod: "auth_grant_success_page",
-        purchaseDate: new Date(),
-        createdAt: new Date(),
-        updatedAt: new Date(),
-        grantedAt: new Date(),
-        autoGranted: true,
-        collectionUsed: collectionUsed,
+      // Add to main purchases collection
+      await db.collection("productBoxPurchases").add(purchaseData)
+
+      // Add to unified purchases collection
+      await db.collection("unifiedPurchases").add({
+        ...purchaseData,
+        type: "product_box",
       })
 
-      // Also add to user's purchases subcollection
-      const userPurchaseRef = db.collection("users").doc(userId).collection("purchases").doc(unifiedPurchaseId)
-      batch.set(userPurchaseRef, {
-        id: unifiedPurchaseId,
-        productBoxId: bundleId,
-        bundleId: bundleId,
-        creatorId: targetCreatorId || "",
-        amount: bundleData.price || 0,
-        currency: bundleData.currency || "usd",
-        status: "completed",
-        purchaseDate: new Date(),
-        grantedAt: new Date(),
-        autoGranted: true,
-      })
+      // Add to user's purchases subcollection
+      await db.collection("users").doc(userId).collection("purchases").add(purchaseData)
 
-      await batch.commit()
-      console.log(`✅ [Grant Access] Purchase records created successfully`)
+      console.log(`✅ [Grant Access] Access granted successfully for user: ${userId}`)
+    } else {
+      console.log(`ℹ️ [Grant Access] User already has access: ${userId}`)
     }
 
     return NextResponse.json({
@@ -144,19 +90,17 @@ export async function POST(request: NextRequest) {
       alreadyPurchased,
       bundle: {
         id: bundleId,
-        title: bundleData.title || bundleData.name || "Untitled Bundle",
-        description: bundleData.description || bundleData.summary || "",
-        thumbnailUrl: bundleData.thumbnailUrl || bundleData.customPreviewThumbnail || "",
-        price: bundleData.price || 0,
-        currency: bundleData.currency || "usd",
+        title: bundleData?.title || "Unknown Bundle",
+        description: bundleData?.description || "",
+        price: bundleData?.price || 0,
+        currency: bundleData?.currency || "usd",
+        thumbnailUrl: bundleData?.thumbnailUrl || "",
       },
-      creator: creatorData
-        ? {
-            id: targetCreatorId,
-            name: creatorData.displayName || creatorData.name || "Unknown Creator",
-            username: creatorData.username || "",
-          }
-        : null,
+      creator: {
+        id: creatorId,
+        name: creatorData?.displayName || creatorData?.name || "Unknown Creator",
+        username: creatorData?.username || "",
+      },
     })
   } catch (error: any) {
     console.error(`❌ [Grant Access] Error:`, error)
