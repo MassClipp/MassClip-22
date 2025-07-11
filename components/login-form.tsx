@@ -5,9 +5,9 @@ import type React from "react"
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import { signInWithPopup, GoogleAuthProvider } from "firebase/auth"
-import { auth } from "@/firebase/config"
+import { auth } from "@/lib/firebase"
 
-const LoginForm = () => {
+export function LoginForm() {
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [error, setError] = useState("")
@@ -143,5 +143,3 @@ const LoginForm = () => {
     </form>
   )
 }
-
-export default LoginForm
