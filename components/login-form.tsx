@@ -14,7 +14,7 @@ import { toast } from "sonner"
 import { Eye, EyeOff, Mail, Lock } from "lucide-react"
 import { Logo } from "@/components/logo"
 
-export default function LoginForm() {
+export function LoginForm() {
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [showPassword, setShowPassword] = useState(false)

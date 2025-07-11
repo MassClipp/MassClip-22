@@ -15,7 +15,7 @@ import { toast } from "sonner"
 import { Eye, EyeOff, Mail, Lock, User, AtSign } from "lucide-react"
 import { Logo } from "@/components/logo"
 
-export default function SignupForm() {
+export function SignupForm({ className, ...props }: React.ComponentProps<"div">) {
   const [formData, setFormData] = useState({
     username: "",
     displayName: "",
