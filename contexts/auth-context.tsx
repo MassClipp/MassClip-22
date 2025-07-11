@@ -1,35 +1,36 @@
 "use client"
 
-import { createContext, useContext, useEffect, useState, type ReactNode } from "react"
-import {
-  type User,
-  signInWithEmailAndPassword,
-  createUserWithEmailAndPassword,
-  signOut as firebaseSignOut,
-  onAuthStateChanged,
-  sendPasswordResetEmail,
-  GoogleAuthProvider,
-  signInWithPopup,
-} from "firebase/auth"
+import type React from "react"
+
+import { createContext, useContext, useEffect, useState } from "react"
+import type { User } from "firebase/auth"
 import { auth } from "@/lib/firebase"
-import { useRouter } from "next/navigation"
+import { onAuthStateChanged } from "firebase/auth"
 
 interface AuthContextType {
   user: User | null
   loading: boolean
-  signIn: (email: string, password: string) => Promise<void>
-  signUp: (email: string, password: string) => Promise<void>
-  signOut: () => Promise<void>
-  signInWithGoogle: () => Promise<void>
-  resetPassword: (email: string) => Promise<void>
 }
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined)
+const AuthContext = createContext<AuthContextType>({
+  user: null,
+  loading: true,
+})
 
-export function AuthProvider({ children }: { children: ReactNode }) {
+export const useAuth = () => {
+  const context = useContext(AuthContext)
+  if (!context) {
+    throw new Error("useAuth must be used within an AuthProvider")
+  }
+  return context
+}
+
+// Named export for compatibility
+export const useAuthContext = useAuth
+
+export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
-  const router = useRouter()
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (user) => {
@@ -37,100 +38,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setLoading(false)
     })
 
-    return () => unsubscribe()
+    return unsubscribe
   }, [])
 
-  const signIn = async (email: string, password: string) => {
-    try {
-      await signInWithEmailAndPassword(auth, email, password)
-    } catch (error) {
-      console.error("Sign in error:", error)
-      throw error
-    }
-  }
-
-  const signUp = async (email: string, password: string) => {
-    try {
-      await createUserWithEmailAndPassword(auth, email, password)
-    } catch (error) {
-      console.error("Sign up error:", error)
-      throw error
-    }
-  }
-
-  const signOut = async () => {
-    try {
-      // Clear any client-side session data
-      if (typeof window !== "undefined") {
-        localStorage.removeItem("user")
-        sessionStorage.clear()
-      }
-
-      // Call the logout API to clear server-side session
-      try {
-        await fetch("/api/auth/logout", {
-          method: "POST",
-          credentials: "include",
-        })
-      } catch (apiError) {
-        console.warn("Failed to clear server session:", apiError)
-      }
-
-      // Sign out from Firebase
-      await firebaseSignOut(auth)
-
-      // Force redirect to login
-      if (typeof window !== "undefined") {
-        window.location.href = "/login"
-      }
-    } catch (error) {
-      console.error("Sign out error:", error)
-      // Force redirect even if there's an error
-      if (typeof window !== "undefined") {
-        window.location.href = "/login"
-      }
-    }
-  }
-
-  const signInWithGoogle = async () => {
-    try {
-      const provider = new GoogleAuthProvider()
-      await signInWithPopup(auth, provider)
-    } catch (error) {
-      console.error("Google sign in error:", error)
-      throw error
-    }
-  }
-
-  const resetPassword = async (email: string) => {
-    try {
-      await sendPasswordResetEmail(auth, email)
-    } catch (error) {
-      console.error("Password reset error:", error)
-      throw error
-    }
-  }
-
-  const value = {
-    user,
-    loading,
-    signIn,
-    signUp,
-    signOut,
-    signInWithGoogle,
-    resetPassword,
-  }
-
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
+  return <AuthContext.Provider value={{ user, loading }}>{children}</AuthContext.Provider>
 }
-
-export function useAuth() {
-  const context = useContext(AuthContext)
-  if (context === undefined) {
-    throw new Error("useAuth must be used within an AuthProvider")
-  }
-  return context
-}
-
-// Provide the named export expected elsewhere in the codebase.
-export const useAuthContext = useAuth
