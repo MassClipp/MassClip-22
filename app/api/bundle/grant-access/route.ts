@@ -72,8 +72,13 @@ export async function POST(request: NextRequest) {
     let alreadyPurchased = false
     if (!existingPurchaseQuery.empty) {
       alreadyPurchased = true
+      console.log(`ℹ️ [Grant Access] User already has access to ${bundleId}`)
     } else {
+      // Create purchase record with batch write for consistency
+      const batch = db.batch()
+
       // Create purchase record
+      const purchaseRef = db.collection("productBoxPurchases").doc()
       const purchaseData = {
         buyerUid: userId,
         productBoxId: bundleId,
@@ -92,31 +97,46 @@ export async function POST(request: NextRequest) {
           collectionUsed: collectionUsed,
         },
       }
-
-      await db.collection("productBoxPurchases").add(purchaseData)
+      batch.set(purchaseRef, purchaseData)
 
       // Create unified purchase
       const unifiedPurchaseId = `auth_${userId}_${bundleId}_${Date.now()}`
-      await db
-        .collection("unifiedPurchases")
-        .doc(unifiedPurchaseId)
-        .set({
-          id: unifiedPurchaseId,
-          userId: userId,
-          productBoxId: bundleId,
-          bundleId: bundleId,
-          creatorId: targetCreatorId || "",
-          amount: bundleData.price || 0,
-          currency: bundleData.currency || "usd",
-          status: "completed",
-          verificationMethod: "auth_grant_success_page",
-          purchaseDate: new Date(),
-          createdAt: new Date(),
-          updatedAt: new Date(),
-          grantedAt: new Date(),
-          autoGranted: true,
-          collectionUsed: collectionUsed,
-        })
+      const unifiedPurchaseRef = db.collection("unifiedPurchases").doc(unifiedPurchaseId)
+      batch.set(unifiedPurchaseRef, {
+        id: unifiedPurchaseId,
+        userId: userId,
+        productBoxId: bundleId,
+        bundleId: bundleId,
+        creatorId: targetCreatorId || "",
+        amount: bundleData.price || 0,
+        currency: bundleData.currency || "usd",
+        status: "completed",
+        verificationMethod: "auth_grant_success_page",
+        purchaseDate: new Date(),
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        grantedAt: new Date(),
+        autoGranted: true,
+        collectionUsed: collectionUsed,
+      })
+
+      // Also add to user's purchases subcollection
+      const userPurchaseRef = db.collection("users").doc(userId).collection("purchases").doc(unifiedPurchaseId)
+      batch.set(userPurchaseRef, {
+        id: unifiedPurchaseId,
+        productBoxId: bundleId,
+        bundleId: bundleId,
+        creatorId: targetCreatorId || "",
+        amount: bundleData.price || 0,
+        currency: bundleData.currency || "usd",
+        status: "completed",
+        purchaseDate: new Date(),
+        grantedAt: new Date(),
+        autoGranted: true,
+      })
+
+      await batch.commit()
+      console.log(`✅ [Grant Access] Purchase records created successfully`)
     }
 
     return NextResponse.json({
