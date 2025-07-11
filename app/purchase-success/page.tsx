@@ -58,33 +58,88 @@ function PurchaseSuccessContent() {
 
   const verifyPurchase = async () => {
     try {
-      const response = await fetch("/api/purchase/grant-immediate-access", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          productBoxId,
-          creatorId,
-          userId: user?.uid,
-        }),
-      })
+      // First, try to verify purchase without authentication using session storage
+      const sessionPurchaseData = sessionStorage.getItem("pendingPurchase")
+      if (sessionPurchaseData) {
+        const purchaseInfo = JSON.parse(sessionPurchaseData)
+        console.log("🔍 [Purchase Success] Found session purchase data:", purchaseInfo)
 
-      const result = await response.json()
+        // Try to grant access using session data
+        const response = await fetch("/api/purchase/grant-access", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...(user && { Authorization: `Bearer ${await user.getIdToken()}` }),
+          },
+          body: JSON.stringify({
+            productBoxId: purchaseInfo.productBoxId || productBoxId,
+            creatorId: purchaseInfo.creatorId || creatorId,
+            sessionId: purchaseInfo.sessionId,
+          }),
+        })
 
-      if (!response.ok) {
-        throw new Error(result.error || "Purchase verification failed")
+        const result = await response.json()
+
+        if (response.ok) {
+          setBundle(result.productBox)
+          setCreator(result.creator)
+          setAlreadyPurchased(result.alreadyPurchased)
+          setAccessGranted(true)
+          setSuccess(true)
+
+          // Clear session data after successful verification
+          sessionStorage.removeItem("pendingPurchase")
+          return
+        }
       }
 
-      setBundle(result.bundle)
-      setCreator(result.creator)
-      setAlreadyPurchased(result.alreadyPurchased)
-      setAccessGranted(true)
-      setSuccess(true)
+      // If user is authenticated, try normal verification
+      if (user) {
+        const response = await fetch("/api/purchase/grant-access", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${await user.getIdToken()}`,
+          },
+          body: JSON.stringify({
+            productBoxId,
+            creatorId,
+            userId: user.uid,
+          }),
+        })
+
+        const result = await response.json()
+
+        if (response.ok) {
+          setBundle(result.productBox)
+          setCreator(result.creator)
+          setAlreadyPurchased(result.alreadyPurchased)
+          setAccessGranted(true)
+          setSuccess(true)
+          return
+        }
+      }
+
+      // If no user and no session data, store purchase info and redirect to login
+      if (!user) {
+        const purchaseInfo = {
+          productBoxId,
+          creatorId,
+          timestamp: Date.now(),
+        }
+        sessionStorage.setItem("pendingPurchase", JSON.stringify(purchaseInfo))
+
+        // Redirect to login with return URL
+        const returnUrl = encodeURIComponent(window.location.href)
+        router.push(`/login?redirect=${returnUrl}`)
+        return
+      }
+
+      throw new Error("Purchase verification failed")
     } catch (err: any) {
+      console.error("❌ [Purchase Success] Verification error:", err)
       setError(err.message || "Failed to verify purchase")
     } finally {
-      // Add a small delay to show the loading animation
       setTimeout(() => {
         setIsProcessing(false)
       }, 1500)
@@ -94,6 +149,17 @@ function PurchaseSuccessContent() {
   const handleViewPurchases = () => {
     router.push("/dashboard/purchases")
   }
+
+  // Handle returning from login
+  useEffect(() => {
+    if (user && !success && !error) {
+      const sessionPurchaseData = sessionStorage.getItem("pendingPurchase")
+      if (sessionPurchaseData) {
+        console.log("🔄 [Purchase Success] User returned from login, retrying verification")
+        verifyPurchase()
+      }
+    }
+  }, [user])
 
   // Authentication check
   if (!user) {

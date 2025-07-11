@@ -3,69 +3,92 @@ import { auth, db } from "@/lib/firebase-admin"
 
 export async function POST(request: NextRequest) {
   try {
-    console.log(`🚀 [Grant Access Backup] API called`)
+    console.log(`🚀 [Grant Access] API called`)
 
-    // Get authorization header
-    const authHeader = request.headers.get("authorization")
-    if (!authHeader?.startsWith("Bearer ")) {
-      return NextResponse.json({ error: "Authentication required" }, { status: 401 })
-    }
-
-    // Verify the ID token
-    const idToken = authHeader.split("Bearer ")[1]
-    const decodedToken = await auth.verifyIdToken(idToken)
-    const userId = decodedToken.uid
-
-    const { productBoxId, bundleId, creatorId } = await request.json()
+    const { productBoxId, bundleId, creatorId, sessionId, userId } = await request.json()
     const targetId = productBoxId || bundleId
 
     if (!targetId) {
       return NextResponse.json({ error: "Missing product box ID" }, { status: 400 })
     }
 
-    console.log(`⚡ [Grant Access Backup] Processing for user ${userId}`)
+    let authenticatedUserId = userId
+
+    // Try to get user from auth header if not provided
+    if (!authenticatedUserId) {
+      const authHeader = request.headers.get("authorization")
+      if (authHeader?.startsWith("Bearer ")) {
+        try {
+          const idToken = authHeader.split("Bearer ")[1]
+          const decodedToken = await auth.verifyIdToken(idToken)
+          authenticatedUserId = decodedToken.uid
+        } catch (authError) {
+          console.log("⚠️ [Grant Access] Auth token verification failed, continuing without auth")
+        }
+      }
+    }
+
+    console.log(`⚡ [Grant Access] Processing for user ${authenticatedUserId || "anonymous"}`)
     console.log(`📦 Product Box: ${targetId}`)
 
     // Get product box details
     const productBoxDoc = await db.collection("productBoxes").doc(targetId).get()
     if (!productBoxDoc.exists) {
-      console.error(`❌ [Grant Access Backup] Product box not found: ${targetId}`)
+      console.error(`❌ [Grant Access] Product box not found: ${targetId}`)
       return NextResponse.json({ error: "Product box not found" }, { status: 404 })
     }
 
     const productBoxData = productBoxDoc.data()!
-    console.log(`✅ [Grant Access Backup] Product box found: ${productBoxData.title}`)
+    console.log(`✅ [Grant Access] Product box found: ${productBoxData.title}`)
 
-    // Check if user already has access
-    const existingPurchaseQuery = await db
-      .collection("productBoxPurchases")
-      .where("buyerUid", "==", userId)
-      .where("productBoxId", "==", targetId)
-      .where("status", "==", "completed")
-      .limit(1)
-      .get()
-
+    // If we have a user ID, check for existing purchase and create if needed
     let alreadyPurchased = false
-    if (!existingPurchaseQuery.empty) {
-      console.log(`ℹ️ [Grant Access Backup] User already has access to ${targetId}`)
-      alreadyPurchased = true
-    } else {
-      // Create purchase record
-      const purchaseData = {
-        buyerUid: userId,
-        productBoxId: targetId,
-        creatorId: productBoxData.creatorId,
-        amount: productBoxData.price || 0,
-        currency: productBoxData.currency || "usd",
-        status: "completed",
-        type: "product_box",
-        createdAt: new Date(),
-        completedAt: new Date(),
-        verificationMethod: "backup_landing_page",
-      }
+    if (authenticatedUserId) {
+      const existingPurchaseQuery = await db
+        .collection("productBoxPurchases")
+        .where("buyerUid", "==", authenticatedUserId)
+        .where("productBoxId", "==", targetId)
+        .where("status", "==", "completed")
+        .limit(1)
+        .get()
 
-      await db.collection("productBoxPurchases").add(purchaseData)
-      console.log(`✅ [Grant Access Backup] Created purchase record for ${targetId}`)
+      if (!existingPurchaseQuery.empty) {
+        console.log(`ℹ️ [Grant Access] User already has access to ${targetId}`)
+        alreadyPurchased = true
+      } else {
+        // Create purchase record for authenticated user
+        const purchaseData = {
+          buyerUid: authenticatedUserId,
+          productBoxId: targetId,
+          creatorId: productBoxData.creatorId,
+          amount: productBoxData.price || 0,
+          currency: productBoxData.currency || "usd",
+          status: "completed",
+          type: "product_box",
+          createdAt: new Date(),
+          completedAt: new Date(),
+          verificationMethod: "auto_grant_access",
+          sessionId: sessionId || null,
+        }
+
+        await db.collection("productBoxPurchases").add(purchaseData)
+
+        // Also add to unified purchases
+        await db
+          .collection("users")
+          .doc(authenticatedUserId)
+          .collection("purchases")
+          .add({
+            ...purchaseData,
+            itemId: targetId,
+            itemTitle: productBoxData.title,
+            itemDescription: productBoxData.description,
+            thumbnailUrl: productBoxData.thumbnailUrl || productBoxData.customPreviewThumbnail,
+            accessUrl: `/product-box/${targetId}/content`,
+          })
+
+        console.log(`✅ [Grant Access] Created purchase record for ${targetId}`)
+      }
     }
 
     // Get creator details
@@ -90,9 +113,10 @@ export async function POST(request: NextRequest) {
             username: creatorData.username || "",
           }
         : null,
+      hasAuth: !!authenticatedUserId,
     })
   } catch (error: any) {
-    console.error(`❌ [Grant Access Backup] Error:`, error)
+    console.error(`❌ [Grant Access] Error:`, error)
     return NextResponse.json(
       {
         success: false,
