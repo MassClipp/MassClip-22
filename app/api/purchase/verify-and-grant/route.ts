@@ -1,283 +1,226 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { db } from "@/lib/firebase-admin"
-import { UnifiedPurchaseService } from "@/lib/unified-purchase-service"
+import Stripe from "stripe"
+
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
+  apiVersion: "2024-06-20",
+})
 
 export async function POST(request: NextRequest) {
   try {
     const { sessionId, productBoxId, creatorId } = await request.json()
 
-    console.log(`🔍 [Verify & Grant] Processing request:`, {
-      sessionId,
-      productBoxId,
-      creatorId,
-    })
+    console.log(`🔍 [Verify & Grant] Starting verification for session: ${sessionId}`)
+    console.log(`🔍 [Verify & Grant] Product ID: ${productBoxId}, Creator ID: ${creatorId}`)
 
-    if (!sessionId && !productBoxId) {
-      return NextResponse.json({ error: "Missing required parameters" }, { status: 400 })
+    // 1. Verify the Stripe session
+    const session = await stripe.checkout.sessions.retrieve(sessionId)
+
+    if (session.payment_status !== "paid") {
+      console.log(`❌ [Verify & Grant] Payment not completed. Status: ${session.payment_status}`)
+      return NextResponse.json({ error: "Payment not completed" }, { status: 400 })
     }
 
-    // First, try to find existing purchase by session ID
-    let buyerUid = null
+    console.log(`✅ [Verify & Grant] Payment verified. Amount: ${session.amount_total}`)
 
-    if (sessionId) {
-      try {
-        // Look for existing purchase in main purchases collection
-        const purchaseDoc = await db.collection("purchases").doc(sessionId).get()
-        if (purchaseDoc.exists) {
-          const data = purchaseDoc.data()!
-          buyerUid = data.buyerUid || data.userId
-          console.log(`✅ [Verify & Grant] Found existing purchase for session ${sessionId}, buyer: ${buyerUid}`)
-        }
-      } catch (error) {
-        console.warn(`⚠️ [Verify & Grant] Could not find purchase by session ID:`, error)
-      }
-    }
-
-    // If no session-based purchase found, create anonymous purchase record
-    if (!buyerUid) {
-      // Generate anonymous user ID for this purchase
-      buyerUid = `anonymous_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
-      console.log(`🔄 [Verify & Grant] Creating anonymous purchase for user: ${buyerUid}`)
-    }
-
-    // Try to get product details from both collections
+    // 2. Try to find the product in both collections
+    let productDoc = null
     let productData = null
-    let productCollection = null
+    let collectionUsed = null
 
     // First try bundles collection
     try {
-      const bundleDoc = await db.collection("bundles").doc(productBoxId).get()
-      if (bundleDoc.exists) {
-        productData = bundleDoc.data()!
-        productCollection = "bundles"
+      console.log(`🔍 [Verify & Grant] Checking bundles collection for ID: ${productBoxId}`)
+      productDoc = await db.collection("bundles").doc(productBoxId).get()
+      if (productDoc.exists) {
+        productData = productDoc.data()
+        collectionUsed = "bundles"
         console.log(`✅ [Verify & Grant] Found product in bundles collection`)
       }
     } catch (error) {
-      console.warn(`⚠️ [Verify & Grant] Could not find in bundles collection:`, error)
+      console.warn(`⚠️ [Verify & Grant] Error checking bundles:`, error)
     }
 
-    // If not found in bundles, try productBoxes collection
+    // If not found in bundles, try productBoxes
     if (!productData) {
       try {
-        const productBoxDoc = await db.collection("productBoxes").doc(productBoxId).get()
-        if (productBoxDoc.exists) {
-          productData = productBoxDoc.data()!
-          productCollection = "productBoxes"
+        console.log(`🔍 [Verify & Grant] Checking productBoxes collection for ID: ${productBoxId}`)
+        productDoc = await db.collection("productBoxes").doc(productBoxId).get()
+        if (productDoc.exists) {
+          productData = productDoc.data()
+          collectionUsed = "productBoxes"
           console.log(`✅ [Verify & Grant] Found product in productBoxes collection`)
         }
       } catch (error) {
-        console.warn(`⚠️ [Verify & Grant] Could not find in productBoxes collection:`, error)
+        console.warn(`⚠️ [Verify & Grant] Error checking productBoxes:`, error)
       }
     }
 
-    // If still not found, return error
     if (!productData) {
-      console.error(`❌ [Verify & Grant] Product not found in any collection for ID: ${productBoxId}`)
+      console.log(`❌ [Verify & Grant] Product not found in either collection`)
       return NextResponse.json({ error: "Product not found" }, { status: 404 })
     }
 
-    console.log(`📦 [Verify & Grant] Product found in ${productCollection}:`, {
-      title: productData.title,
-      price: productData.price,
-      creatorId: productData.creatorId,
+    // 3. Get content items
+    let contentItems = []
+    try {
+      if (collectionUsed === "bundles") {
+        // For bundles, get content from the contents array
+        contentItems = productData.contents || []
+      } else {
+        // For productBoxes, get content from productBoxContent subcollection
+        const contentSnapshot = await db.collection("productBoxes").doc(productBoxId).collection("content").get()
+
+        contentItems = contentSnapshot.docs.map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        }))
+      }
+      console.log(`✅ [Verify & Grant] Found ${contentItems.length} content items`)
+    } catch (error) {
+      console.warn(`⚠️ [Verify & Grant] Error fetching content:`, error)
+      contentItems = []
+    }
+
+    // 4. Create purchase record
+    const purchaseData = {
+      sessionId,
+      productBoxId,
+      bundleId: productBoxId, // For compatibility
+      creatorId,
+      buyerEmail: session.customer_details?.email || "anonymous",
+      buyerUid: session.metadata?.userId || "anonymous",
+      amount: (session.amount_total || 0) / 100,
+      currency: session.currency || "usd",
+      status: "completed",
+      createdAt: new Date(),
+      completedAt: new Date(),
+      bundleTitle: productData.title || "Untitled Bundle",
+      productBoxTitle: productData.title || "Untitled Bundle",
+      productBoxDescription: productData.description || "",
+      productBoxThumbnail: productData.customPreviewThumbnail || productData.thumbnailUrl || "",
+      creatorName: productData.creatorName || "Unknown Creator",
+      creatorUsername: productData.creatorUsername || "unknown",
+      totalItems: contentItems.length,
+      totalSize: contentItems.reduce((sum, item) => sum + (item.fileSize || 0), 0),
+      contents: contentItems,
+      items: contentItems.map((item) => ({
+        id: item.id,
+        title: item.title || item.name || "Untitled",
+        fileUrl: item.fileUrl || item.url || "",
+        thumbnailUrl: item.thumbnailUrl || item.thumbnail || "",
+        fileSize: item.fileSize || 0,
+        duration: item.duration || 0,
+        contentType: item.contentType || item.type || "unknown",
+        displaySize: formatFileSize(item.fileSize || 0),
+        displayDuration: formatDuration(item.duration || 0),
+      })),
+      source: collectionUsed,
+      stripeSessionId: sessionId,
+      stripePaymentIntentId: session.payment_intent,
+    }
+
+    // 5. Save to multiple collections for compatibility
+    const batch = db.batch()
+
+    // Save to bundlePurchases (primary)
+    const bundlePurchaseRef = db.collection("bundlePurchases").doc()
+    batch.set(bundlePurchaseRef, purchaseData)
+
+    // Save to unifiedPurchases
+    const unifiedPurchaseRef = db.collection("unifiedPurchases").doc()
+    batch.set(unifiedPurchaseRef, {
+      ...purchaseData,
+      userId: purchaseData.buyerUid,
+      purchaseDate: purchaseData.createdAt,
     })
 
-    // Get creator details
-    const actualCreatorId = creatorId || productData.creatorId
-    let creatorData = null
-    if (actualCreatorId) {
-      try {
-        const creatorDoc = await db.collection("users").doc(actualCreatorId).get()
-        creatorData = creatorDoc.exists ? creatorDoc.data() : null
-        console.log(`👤 [Verify & Grant] Creator found:`, {
-          name: creatorData?.displayName || creatorData?.name,
-          username: creatorData?.username,
+    // Save to productBoxPurchases for compatibility
+    const productBoxPurchaseRef = db.collection("productBoxPurchases").doc()
+    batch.set(productBoxPurchaseRef, purchaseData)
+
+    await batch.commit()
+
+    console.log(`✅ [Verify & Grant] Purchase records created successfully`)
+
+    // 6. Update creator earnings and stats
+    try {
+      const creatorRef = db.collection("users").doc(creatorId)
+      const creatorDoc = await creatorRef.get()
+
+      if (creatorDoc.exists) {
+        const currentEarnings = creatorDoc.data()?.totalEarnings || 0
+        const currentSales = creatorDoc.data()?.totalSales || 0
+
+        await creatorRef.update({
+          totalEarnings: currentEarnings + purchaseData.amount,
+          totalSales: currentSales + 1,
+          lastSaleAt: new Date(),
         })
-      } catch (error) {
-        console.warn(`⚠️ [Verify & Grant] Could not find creator:`, error)
+        console.log(`✅ [Verify & Grant] Creator stats updated`)
       }
-    }
-
-    // Create unified purchase record (this fetches all content items)
-    const purchaseId = sessionId || `purchase_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
-
-    try {
-      await UnifiedPurchaseService.createUnifiedPurchase(buyerUid, {
-        productBoxId,
-        sessionId: purchaseId,
-        amount: productData.price || 0,
-        currency: "usd",
-        creatorId: actualCreatorId || "",
-      })
-      console.log(`✅ [Verify & Grant] Unified purchase created successfully`)
     } catch (error) {
-      console.error(`❌ [Verify & Grant] Failed to create unified purchase:`, error)
-      // Continue anyway - we'll create a basic purchase record
+      console.warn(`⚠️ [Verify & Grant] Error updating creator stats:`, error)
     }
 
-    // Get the created purchase for response (with fallback)
-    let createdPurchase = null
+    // 7. Update product sales counter
     try {
-      createdPurchase = await UnifiedPurchaseService.getUserPurchase(buyerUid, purchaseId)
-    } catch (error) {
-      console.warn(`⚠️ [Verify & Grant] Could not get unified purchase, using fallback`)
-    }
-
-    // Get content items directly if unified purchase failed
-    let contentItems = []
-    let totalItems = 0
-    let totalSize = 0
-
-    if (!createdPurchase) {
-      try {
-        // Try to get content from the product's content subcollection
-        const contentSnapshot = await db.collection(productCollection!).doc(productBoxId).collection("content").get()
-
-        contentItems = contentSnapshot.docs.map((doc) => {
-          const data = doc.data()
-          return {
-            id: doc.id,
-            title: data.title || data.name || "Untitled",
-            fileUrl: data.fileUrl || data.url || "",
-            thumbnailUrl: data.thumbnailUrl || "",
-            fileSize: data.fileSize || 0,
-            duration: data.duration || 0,
-            contentType: data.contentType || data.type || "video",
-          }
-        })
-
-        totalItems = contentItems.length
-        totalSize = contentItems.reduce((sum, item) => sum + (item.fileSize || 0), 0)
-
-        console.log(`📁 [Verify & Grant] Found ${totalItems} content items directly`)
-      } catch (error) {
-        console.warn(`⚠️ [Verify & Grant] Could not fetch content items:`, error)
-      }
-    } else {
-      contentItems = createdPurchase.items || []
-      totalItems = createdPurchase.totalItems || 0
-      totalSize = createdPurchase.totalSize || 0
-    }
-
-    // Create main purchase record for API compatibility
-    const mainPurchaseData = {
-      userId: buyerUid,
-      buyerUid,
-      productBoxId,
-      itemId: productBoxId,
-      sessionId: purchaseId,
-      amount: productData.price || 0,
-      currency: "usd",
-      timestamp: new Date(),
-      createdAt: new Date(),
-      purchasedAt: new Date(),
-      status: "completed",
-      type: productCollection === "bundles" ? "bundle" : "product_box",
-      itemTitle: productData.title || "Untitled Product",
-      itemDescription: productData.description || "",
-      thumbnailUrl: productData.thumbnailUrl || "",
-      customPreviewThumbnail: productData.customPreviewThumbnail || "",
-      creatorId: actualCreatorId,
-      creatorName: creatorData?.displayName || creatorData?.name || "",
-      creatorUsername: creatorData?.username || "",
-      accessUrl: `/product-box/${productBoxId}/content`,
-      verificationMethod: "direct_grant",
-      grantedAt: new Date(),
-      isAnonymous: !sessionId, // Mark if this is an anonymous purchase
-      sourceCollection: productCollection, // Track which collection this came from
-    }
-
-    // Write to main purchases collection
-    await db.collection("purchases").doc(purchaseId).set(mainPurchaseData)
-    console.log(`✅ [Verify & Grant] Main purchase record created`)
-
-    // Update product sales counter in the correct collection
-    try {
-      await db
-        .collection(productCollection!)
-        .doc(productBoxId)
-        .update({
-          totalSales: db.FieldValue.increment(1),
-          totalRevenue: db.FieldValue.increment(productData.price || 0),
-          lastPurchaseAt: new Date(),
-        })
-      console.log(`✅ [Verify & Grant] Updated sales counter in ${productCollection}`)
-    } catch (error) {
-      console.warn(`⚠️ [Verify & Grant] Could not update sales counter:`, error)
-    }
-
-    // Record the sale for the creator
-    if (actualCreatorId) {
-      try {
+      if (collectionUsed === "bundles") {
         await db
-          .collection("users")
-          .doc(actualCreatorId)
-          .collection("sales")
-          .add({
-            productBoxId,
-            buyerUid,
-            sessionId: purchaseId,
-            amount: productData.price || 0,
-            platformFee: (productData.price || 0) * 0.25,
-            netAmount: (productData.price || 0) * 0.75,
-            purchasedAt: new Date(),
-            status: "completed",
-            productTitle: productData.title || "Untitled Product",
-            verificationMethod: "direct_grant",
-            isAnonymous: !sessionId,
-            sourceCollection: productCollection,
-          })
-
-        // Increment the creator's total sales
-        await db
-          .collection("users")
-          .doc(actualCreatorId)
+          .collection("bundles")
+          .doc(productBoxId)
           .update({
-            totalSales: db.FieldValue.increment(1),
-            totalRevenue: db.FieldValue.increment(productData.price || 0),
+            salesCount: (productData.salesCount || 0) + 1,
             lastSaleAt: new Date(),
           })
-
-        console.log(`✅ [Verify & Grant] Creator sales recorded`)
-      } catch (error) {
-        console.warn(`⚠️ [Verify & Grant] Could not record creator sales:`, error)
+      } else {
+        await db
+          .collection("productBoxes")
+          .doc(productBoxId)
+          .update({
+            salesCount: (productData.salesCount || 0) + 1,
+            lastSaleAt: new Date(),
+          })
       }
+      console.log(`✅ [Verify & Grant] Product sales counter updated`)
+    } catch (error) {
+      console.warn(`⚠️ [Verify & Grant] Error updating sales counter:`, error)
     }
 
-    console.log(`✅ [Verify & Grant] Successfully granted access for purchase: ${purchaseId}`)
-
-    // Return comprehensive purchase data
-    const responseData = {
-      purchase: {
-        id: purchaseId,
-        productBoxId,
-        productBoxTitle: productData.title || "Untitled Product",
-        productBoxDescription: productData.description || "",
-        productBoxThumbnail: productData.thumbnailUrl || productData.customPreviewThumbnail || "",
-        creatorId: actualCreatorId,
-        creatorName: creatorData?.displayName || creatorData?.name || "Unknown Creator",
-        creatorUsername: creatorData?.username || "",
-        amount: productData.price || 0,
-        currency: "usd",
-        items: contentItems,
-        totalItems,
-        totalSize,
-        purchasedAt: new Date().toISOString(),
-        sourceCollection: productCollection,
-      },
-      accessGranted: true,
-      message: "Access granted successfully",
-    }
-
-    return NextResponse.json(responseData)
+    return NextResponse.json({
+      success: true,
+      purchaseId: bundlePurchaseRef.id,
+      productTitle: purchaseData.bundleTitle,
+      contentItems: purchaseData.items,
+      totalItems: purchaseData.totalItems,
+      totalSize: purchaseData.totalSize,
+      amount: purchaseData.amount,
+      currency: purchaseData.currency,
+    })
   } catch (error: any) {
     console.error(`❌ [Verify & Grant] Error:`, error)
     return NextResponse.json(
       {
-        error: error.message || "Failed to verify purchase and grant access",
-        details: error.stack,
+        error: "Verification failed",
+        details: error.message,
       },
       { status: 500 },
     )
   }
+}
+
+function formatFileSize(bytes: number): string {
+  if (bytes === 0) return "0 B"
+  const k = 1024
+  const sizes = ["B", "KB", "MB", "GB"]
+  const i = Math.floor(Math.log(bytes) / Math.log(k))
+  return Number.parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + " " + sizes[i]
+}
+
+function formatDuration(seconds: number): string {
+  if (seconds === 0) return ""
+  const minutes = Math.floor(seconds / 60)
+  const remainingSeconds = seconds % 60
+  if (minutes === 0) return `${remainingSeconds}s`
+  return `${minutes}:${remainingSeconds.toString().padStart(2, "0")}`
 }
