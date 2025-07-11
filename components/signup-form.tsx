@@ -1,386 +1,351 @@
 "use client"
 
 import type React from "react"
+
 import { useState } from "react"
-import { useRouter, useSearchParams } from "next/navigation"
-import { cn } from "@/lib/utils"
+import { useRouter } from "next/navigation"
+import { createUserWithEmailAndPassword, GoogleAuthProvider, signInWithPopup } from "firebase/auth"
+import { doc, setDoc, getDoc, serverTimestamp } from "firebase/firestore"
+import { auth, db } from "@/lib/firebase"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Loader2, Eye, EyeOff, User, Mail, AtSign } from "lucide-react"
-import { createUserWithEmailAndPassword } from "firebase/auth"
-import { auth } from "@/lib/firebase"
-import { GoogleAuthButton } from "@/components/google-auth-button"
-import Logo from "@/components/logo"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Separator } from "@/components/ui/separator"
 import { Checkbox } from "@/components/ui/checkbox"
+import { Eye, EyeOff, Apple, Mail } from "lucide-react"
+import Link from "next/link"
+import Logo from "@/components/logo"
 
-export function SignupForm({ className, ...props }: React.ComponentProps<"div">) {
-  const [username, setUsername] = useState("")
-  const [displayName, setDisplayName] = useState("")
-  const [email, setEmail] = useState("")
-  const [password, setPassword] = useState("")
-  const [confirmPassword, setConfirmPassword] = useState("")
+export default function SignupForm() {
+  const [formData, setFormData] = useState({
+    username: "",
+    displayName: "",
+    email: "",
+    password: "",
+    confirmPassword: "",
+  })
   const [showPassword, setShowPassword] = useState(false)
   const [showConfirmPassword, setShowConfirmPassword] = useState(false)
   const [agreeToTerms, setAgreeToTerms] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
   const router = useRouter()
-  const searchParams = useSearchParams()
 
-  const redirect = searchParams.get("redirect")
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setFormData({
+      ...formData,
+      [e.target.name]: e.target.value,
+    })
+  }
 
-  const handleEmailSignup = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!username || !displayName || !email || !password || !confirmPassword) {
-      setError("Please fill in all fields")
-      return
-    }
+    setLoading(true)
+    setError("")
 
-    if (password !== confirmPassword) {
-      setError("Passwords do not match")
-      return
-    }
-
-    if (password.length < 6) {
-      setError("Password must be at least 6 characters")
+    if (formData.password !== formData.confirmPassword) {
+      setError("Passwords don't match")
+      setLoading(false)
       return
     }
 
     if (!agreeToTerms) {
       setError("Please agree to the Terms of Service and Privacy Policy")
+      setLoading(false)
       return
     }
 
-    setLoading(true)
-    setError("")
-
     try {
-      await createUserWithEmailAndPassword(auth, email, password)
-
-      // Check for stored redirect URL from purchase flow
-      const storedRedirect = localStorage.getItem("redirectAfterLogin")
-      if (storedRedirect) {
-        localStorage.removeItem("redirectAfterLogin")
-        window.location.href = storedRedirect
-        return
+      // Check if username is already taken
+      if (formData.username) {
+        const usernameDoc = await getDoc(doc(db, "usernames", formData.username))
+        if (usernameDoc.exists()) {
+          setError("Username is already taken")
+          setLoading(false)
+          return
+        }
       }
 
-      // Use redirect parameter or default to dashboard
-      const redirectUrl = redirect || "/dashboard"
-      router.push(redirectUrl)
+      // Create user
+      const userCredential = await createUserWithEmailAndPassword(auth, formData.email, formData.password)
+      const user = userCredential.user
+
+      // Create user profile
+      await setDoc(doc(db, "users", user.uid), {
+        email: formData.email,
+        displayName: formData.displayName || formData.username,
+        username: formData.username,
+        createdAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      })
+
+      // Reserve username
+      if (formData.username) {
+        await setDoc(doc(db, "usernames", formData.username), {
+          uid: user.uid,
+          createdAt: serverTimestamp(),
+        })
+      }
+
+      router.push("/dashboard")
     } catch (error: any) {
-      console.error("Signup error:", error)
       setError(error.message || "Failed to create account")
     } finally {
       setLoading(false)
     }
   }
 
-  const handleGoogleSuccess = () => {
-    // Check for stored redirect URL from purchase flow
-    const storedRedirect = localStorage.getItem("redirectAfterLogin")
-    if (storedRedirect) {
-      localStorage.removeItem("redirectAfterLogin")
-      window.location.href = storedRedirect
-      return
-    }
+  const handleGoogleSignUp = async () => {
+    setLoading(true)
+    setError("")
 
-    // Use redirect parameter or default to dashboard
-    const redirectUrl = redirect || "/dashboard"
-    router.push(redirectUrl)
+    try {
+      const provider = new GoogleAuthProvider()
+      const userCredential = await signInWithPopup(auth, provider)
+      const user = userCredential.user
+
+      // Check if this is a new user
+      const userDoc = await getDoc(doc(db, "users", user.uid))
+
+      if (!userDoc.exists()) {
+        // Create user profile for new users
+        await setDoc(doc(db, "users", user.uid), {
+          email: user.email,
+          displayName: user.displayName,
+          createdAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+        })
+      }
+
+      router.push("/dashboard")
+    } catch (error: any) {
+      setError(error.message || "Failed to sign up with Google")
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (
-    <div className={cn("min-h-screen bg-black", className)} {...props}>
-      {/* Header with Logo */}
-      <div className="absolute top-0 left-0 p-6">
-        <Logo
-          href="/"
-          size="md"
-          className="cursor-pointer transition-transform hover:scale-105"
-          linkClassName="inline-block"
-        />
+    <div className="min-h-screen bg-black flex flex-col">
+      {/* Logo */}
+      <div className="absolute top-6 left-6 z-10">
+        <Logo href="/" size="sm" />
       </div>
 
       {/* Main Content */}
-      <div className="flex min-h-screen items-center justify-center p-8">
-        <div className="w-full max-w-md">
-          <Card className="border-0 shadow-2xl bg-white">
-            <CardContent className="p-8">
-              <div className="space-y-6">
-                {/* Header */}
-                <div className="text-center space-y-2">
-                  <h1 className="text-2xl font-semibold text-gray-900">Create your account</h1>
-                  <p className="text-gray-600">Start selling to your audience today</p>
-                </div>
+      <div className="flex-1 flex items-center justify-center p-4">
+        <Card className="w-full max-w-md bg-white border-0 shadow-xl">
+          <CardHeader className="text-center pb-6">
+            <CardTitle className="text-2xl font-semibold text-gray-900">Create your account</CardTitle>
+            <CardDescription className="text-gray-600">Start selling to your audience today</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            {error && (
+              <div className="p-3 text-sm text-red-600 bg-red-50 border border-red-200 rounded-md">{error}</div>
+            )}
 
-                {/* Form */}
-                <form onSubmit={handleEmailSignup} className="space-y-4">
-                  {/* Username Field */}
-                  <div className="space-y-2">
-                    <Label htmlFor="username" className="text-sm font-medium text-gray-900">
-                      Username
-                    </Label>
-                    <div className="relative">
-                      <AtSign className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                      <Input
-                        id="username"
-                        type="text"
-                        placeholder="Choose a unique username"
-                        value={username}
-                        onChange={(e) => setUsername(e.target.value)}
-                        className="h-10 pl-10 border-gray-300 focus:border-gray-900 focus:ring-gray-900"
-                        required
-                      />
-                    </div>
-                    <p className="text-xs text-gray-500">
-                      This will be your public URL: massclip.pro/creator/{username}
-                    </p>
-                  </div>
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="username" className="text-gray-700">
+                  Username
+                </Label>
+                <Input
+                  id="username"
+                  name="username"
+                  type="text"
+                  placeholder="Choose a unique username"
+                  value={formData.username}
+                  onChange={handleInputChange}
+                  required
+                  className="border-gray-300 focus:border-gray-900 focus:ring-gray-900"
+                />
+                <p className="text-xs text-gray-500">
+                  This will be your public URL: massclip.pro/creator/{formData.username || "username"}
+                </p>
+              </div>
 
-                  {/* Display Name Field */}
-                  <div className="space-y-2">
-                    <Label htmlFor="displayName" className="text-sm font-medium text-gray-900">
-                      Display Name
-                    </Label>
-                    <div className="relative">
-                      <User className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                      <Input
-                        id="displayName"
-                        type="text"
-                        placeholder="How you'll appear to others"
-                        value={displayName}
-                        onChange={(e) => setDisplayName(e.target.value)}
-                        className="h-10 pl-10 border-gray-300 focus:border-gray-900 focus:ring-gray-900"
-                        required
-                      />
-                    </div>
-                  </div>
+              <div className="space-y-2">
+                <Label htmlFor="displayName" className="text-gray-700">
+                  Display Name
+                </Label>
+                <Input
+                  id="displayName"
+                  name="displayName"
+                  type="text"
+                  placeholder="How you'll appear to others"
+                  value={formData.displayName}
+                  onChange={handleInputChange}
+                  className="border-gray-300 focus:border-gray-900 focus:ring-gray-900"
+                />
+              </div>
 
-                  {/* Email Field */}
-                  <div className="space-y-2">
-                    <Label htmlFor="email" className="text-sm font-medium text-gray-900">
-                      Email address
-                    </Label>
-                    <div className="relative">
-                      <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                      <Input
-                        id="email"
-                        type="email"
-                        placeholder="Enter your email"
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                        className="h-10 pl-10 border-gray-300 focus:border-gray-900 focus:ring-gray-900"
-                        required
-                      />
-                    </div>
-                  </div>
+              <div className="space-y-2">
+                <Label htmlFor="email" className="text-gray-700">
+                  Email address
+                </Label>
+                <Input
+                  id="email"
+                  name="email"
+                  type="email"
+                  placeholder="Enter your email"
+                  value={formData.email}
+                  onChange={handleInputChange}
+                  required
+                  className="border-gray-300 focus:border-gray-900 focus:ring-gray-900"
+                />
+              </div>
 
-                  {/* Password Field */}
-                  <div className="space-y-2">
-                    <Label htmlFor="password" className="text-sm font-medium text-gray-900">
-                      Password
-                    </Label>
-                    <div className="relative">
-                      <Input
-                        id="password"
-                        type={showPassword ? "text" : "password"}
-                        placeholder="Create a password (min 6 characters)"
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        className="h-10 pr-10 border-gray-300 focus:border-gray-900 focus:ring-gray-900"
-                        required
-                      />
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="absolute right-2 top-1/2 transform -translate-y-1/2 h-6 w-6 p-0 hover:bg-transparent"
-                        onClick={() => setShowPassword(!showPassword)}
-                      >
-                        {showPassword ? (
-                          <EyeOff className="h-4 w-4 text-gray-400" />
-                        ) : (
-                          <Eye className="h-4 w-4 text-gray-400" />
-                        )}
-                      </Button>
-                    </div>
-                  </div>
-
-                  {/* Confirm Password Field */}
-                  <div className="space-y-2">
-                    <Label htmlFor="confirmPassword" className="text-sm font-medium text-gray-900">
-                      Confirm Password
-                    </Label>
-                    <div className="relative">
-                      <Input
-                        id="confirmPassword"
-                        type={showConfirmPassword ? "text" : "password"}
-                        placeholder="Confirm your password"
-                        value={confirmPassword}
-                        onChange={(e) => setConfirmPassword(e.target.value)}
-                        className="h-10 pr-10 border-gray-300 focus:border-gray-900 focus:ring-gray-900"
-                        required
-                      />
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="absolute right-2 top-1/2 transform -translate-y-1/2 h-6 w-6 p-0 hover:bg-transparent"
-                        onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                      >
-                        {showConfirmPassword ? (
-                          <EyeOff className="h-4 w-4 text-gray-400" />
-                        ) : (
-                          <Eye className="h-4 w-4 text-gray-400" />
-                        )}
-                      </Button>
-                    </div>
-                  </div>
-
-                  {/* Terms Checkbox */}
-                  <div className="flex items-center space-x-2">
-                    <Checkbox
-                      id="terms"
-                      checked={agreeToTerms}
-                      onCheckedChange={(checked) => setAgreeToTerms(checked as boolean)}
-                    />
-                    <Label htmlFor="terms" className="text-sm text-gray-600">
-                      I agree to the{" "}
-                      <Button
-                        variant="link"
-                        size="sm"
-                        className="h-auto p-0 text-sm text-red-600 hover:text-red-700 underline"
-                        onClick={() => router.push("/terms")}
-                        type="button"
-                      >
-                        Terms of Service
-                      </Button>{" "}
-                      and{" "}
-                      <Button
-                        variant="link"
-                        size="sm"
-                        className="h-auto p-0 text-sm text-red-600 hover:text-red-700 underline"
-                        onClick={() => router.push("/privacy")}
-                        type="button"
-                      >
-                        Privacy Policy
-                      </Button>
-                    </Label>
-                  </div>
-
-                  {/* Error Message */}
-                  {error && (
-                    <Alert variant="destructive" className="border-red-200 bg-red-50">
-                      <AlertDescription className="text-red-700">{error}</AlertDescription>
-                    </Alert>
-                  )}
-
-                  {/* Create Account Button */}
-                  <Button
-                    type="submit"
-                    className="w-full h-10 bg-black hover:bg-gray-800 text-white font-medium"
-                    disabled={loading}
-                  >
-                    {loading ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Creating account...
-                      </>
-                    ) : (
-                      "Create account"
-                    )}
-                  </Button>
-                </form>
-
-                {/* Divider */}
+              <div className="space-y-2">
+                <Label htmlFor="password" className="text-gray-700">
+                  Password
+                </Label>
                 <div className="relative">
-                  <div className="absolute inset-0 flex items-center">
-                    <div className="w-full border-t border-gray-200" />
-                  </div>
-                  <div className="relative flex justify-center text-sm">
-                    <span className="px-2 bg-white text-gray-500">Or continue with</span>
-                  </div>
-                </div>
-
-                {/* Social Login Buttons */}
-                <div className="grid grid-cols-3 gap-3">
-                  <Button
-                    variant="outline"
-                    className="h-10 border-gray-300 hover:bg-gray-50 bg-transparent"
-                    onClick={() => {
-                      // Apple login implementation
-                    }}
-                  >
-                    <svg className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor">
-                      <path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z" />
-                    </svg>
-                  </Button>
-
-                  <GoogleAuthButton
-                    onClick={handleGoogleSuccess}
-                    isLoading={false}
-                    className="h-10 border-gray-300 hover:bg-gray-50"
-                    showText={false}
+                  <Input
+                    id="password"
+                    name="password"
+                    type={showPassword ? "text" : "password"}
+                    placeholder="Create a password (min 6 characters)"
+                    value={formData.password}
+                    onChange={handleInputChange}
+                    required
+                    minLength={6}
+                    className="border-gray-300 focus:border-gray-900 focus:ring-gray-900 pr-10"
                   />
-
-                  <Button
-                    variant="outline"
-                    className="h-10 border-gray-300 hover:bg-gray-50 bg-transparent"
-                    onClick={() => {
-                      // Meta login implementation
-                    }}
-                  >
-                    <svg className="h-5 w-5" viewBox="0 0 24 24" fill="currentColor">
-                      <path d="M9.101 23.691v-7.98H6.627v-3.667h2.474v-1.58c0-4.085 1.848-5.978 5.858-5.978.401 0 .955.042 1.468.103a8.68 8.68 0 0 1 1.141.195v3.325a8.623 8.623 0 0 0-.653-.036 26.805 26.805 0 0 0-.733-.009c-.707 0-1.259.096-1.675.309a1.686 1.686 0 0 0-.679.622c-.258.42-.374.995-.374 1.752v1.297h3.919l-.386 2.103-.287 1.564h-3.246v8.245C19.396 23.238 24 18.179 24 12.044c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.628 3.874 10.35 9.101 11.647Z" />
-                    </svg>
-                  </Button>
-                </div>
-
-                {/* Sign In Link */}
-                <div className="text-center text-sm">
-                  <span className="text-gray-600">Already have an account? </span>
-                  <Button
-                    variant="link"
-                    size="sm"
-                    className="h-auto p-0 font-medium text-gray-900 hover:text-gray-700 underline"
-                    onClick={() => router.push(`/login${redirect ? `?redirect=${redirect}` : ""}`)}
+                  <button
                     type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
                   >
-                    Sign in
-                  </Button>
+                    {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
                 </div>
               </div>
-            </CardContent>
-          </Card>
 
-          {/* Terms */}
-          <div className="mt-6 text-center text-sm text-gray-400">
-            By creating an account, you agree to our{" "}
-            <Button
-              variant="link"
-              size="sm"
-              className="h-auto p-0 text-sm text-gray-400 hover:text-gray-300 underline"
-              onClick={() => router.push("/terms")}
-              type="button"
-            >
-              Terms of Service
-            </Button>{" "}
-            and{" "}
-            <Button
-              variant="link"
-              size="sm"
-              className="h-auto p-0 text-sm text-gray-400 hover:text-gray-300 underline"
-              onClick={() => router.push("/privacy")}
-              type="button"
-            >
-              Privacy Policy
-            </Button>
-          </div>
-        </div>
+              <div className="space-y-2">
+                <Label htmlFor="confirmPassword" className="text-gray-700">
+                  Confirm Password
+                </Label>
+                <div className="relative">
+                  <Input
+                    id="confirmPassword"
+                    name="confirmPassword"
+                    type={showConfirmPassword ? "text" : "password"}
+                    placeholder="Confirm your password"
+                    value={formData.confirmPassword}
+                    onChange={handleInputChange}
+                    required
+                    className="border-gray-300 focus:border-gray-900 focus:ring-gray-900 pr-10"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
+                  >
+                    {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
+              </div>
+
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="terms"
+                  checked={agreeToTerms}
+                  onCheckedChange={(checked) => setAgreeToTerms(checked as boolean)}
+                />
+                <Label htmlFor="terms" className="text-sm text-gray-700">
+                  I agree to the{" "}
+                  <Link href="/terms" className="text-gray-900 hover:underline">
+                    Terms of Service
+                  </Link>{" "}
+                  and{" "}
+                  <Link href="/privacy" className="text-gray-900 hover:underline">
+                    Privacy Policy
+                  </Link>
+                </Label>
+              </div>
+
+              <Button type="submit" className="w-full bg-black hover:bg-gray-800 text-white" disabled={loading}>
+                {loading ? "Creating account..." : "Create account"}
+              </Button>
+            </form>
+
+            <div className="relative">
+              <div className="absolute inset-0 flex items-center">
+                <Separator className="w-full" />
+              </div>
+              <div className="relative flex justify-center text-xs uppercase">
+                <span className="bg-white px-2 text-gray-500">Or continue with</span>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-3 gap-3">
+              <Button
+                variant="outline"
+                className="border-gray-300 hover:bg-gray-50 bg-transparent"
+                onClick={() => {}}
+                disabled={loading}
+              >
+                <Apple className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="outline"
+                className="border-gray-300 hover:bg-gray-50 bg-transparent"
+                onClick={handleGoogleSignUp}
+                disabled={loading}
+              >
+                <svg className="h-4 w-4" viewBox="0 0 24 24">
+                  <path
+                    fill="currentColor"
+                    d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+                  />
+                  <path
+                    fill="currentColor"
+                    d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+                  />
+                  <path
+                    fill="currentColor"
+                    d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
+                  />
+                  <path
+                    fill="currentColor"
+                    d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
+                  />
+                </svg>
+              </Button>
+              <Button
+                variant="outline"
+                className="border-gray-300 hover:bg-gray-50 bg-transparent"
+                onClick={() => {}}
+                disabled={loading}
+              >
+                <Mail className="h-4 w-4" />
+              </Button>
+            </div>
+
+            <div className="text-center">
+              <span className="text-gray-600">Already have an account? </span>
+              <Link href="/login" className="text-gray-900 hover:underline font-medium">
+                Sign in
+              </Link>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Terms */}
+      <div className="text-center pb-6 px-4">
+        <p className="text-sm text-gray-400">
+          By creating an account, you agree to our{" "}
+          <Link href="/terms" className="underline hover:text-gray-300">
+            Terms of Service
+          </Link>{" "}
+          and{" "}
+          <Link href="/privacy" className="underline hover:text-gray-300">
+            Privacy Policy
+          </Link>
+          .
+        </p>
       </div>
     </div>
   )
