@@ -1,204 +1,146 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { db } from "@/lib/firebase-admin"
-import { cookies } from "next/headers"
+import Stripe from "stripe"
+
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
+  apiVersion: "2024-06-20",
+})
 
 export async function POST(request: NextRequest) {
   try {
     const { sessionId, productBoxId, creatorId } = await request.json()
 
-    console.log(`🔍 [Verify & Grant] Processing request:`, {
+    console.log(`🔄 [Verify and Grant] Processing request:`, {
       sessionId,
       productBoxId,
       creatorId,
     })
 
     if (!sessionId && !productBoxId) {
-      return NextResponse.json({ error: "Missing required parameters" }, { status: 400 })
+      return NextResponse.json({ error: "Missing session ID or product box ID" }, { status: 400 })
     }
 
-    // Generate a unique purchase access token instead of requiring login
-    const purchaseAccessToken = `purchase_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+    let purchaseData: any = null
+    let stripeSession: any = null
 
-    // Try to get product details from both collections
-    let productData = null
-    let productCollection = null
-
-    // First try bundles collection
-    try {
-      const bundleDoc = await db.collection("bundles").doc(productBoxId).get()
-      if (bundleDoc.exists) {
-        productData = bundleDoc.data()!
-        productCollection = "bundles"
-        console.log(`✅ [Verify & Grant] Found product in bundles collection`)
-      }
-    } catch (error) {
-      console.warn(`⚠️ [Verify & Grant] Could not find in bundles collection:`, error)
-    }
-
-    // If not found in bundles, try productBoxes collection
-    if (!productData) {
+    // If we have a session ID, verify with Stripe
+    if (sessionId) {
       try {
-        const productBoxDoc = await db.collection("productBoxes").doc(productBoxId).get()
-        if (productBoxDoc.exists) {
-          productData = productBoxDoc.data()!
-          productCollection = "productBoxes"
-          console.log(`✅ [Verify & Grant] Found product in productBoxes collection`)
+        stripeSession = await stripe.checkout.sessions.retrieve(sessionId, {
+          expand: ["line_items", "payment_intent"],
+        })
+
+        console.log(`✅ [Verify and Grant] Stripe session retrieved:`, {
+          id: stripeSession.id,
+          status: stripeSession.status,
+          payment_status: stripeSession.payment_status,
+          amount_total: stripeSession.amount_total,
+        })
+
+        if (stripeSession.payment_status !== "paid") {
+          return NextResponse.json({ error: "Payment not completed" }, { status: 400 })
         }
       } catch (error) {
-        console.warn(`⚠️ [Verify & Grant] Could not find in productBoxes collection:`, error)
+        console.error(`❌ [Verify and Grant] Stripe session error:`, error)
+        return NextResponse.json({ error: "Invalid session ID" }, { status: 400 })
       }
     }
 
-    // If still not found, create demo product data
-    if (!productData) {
-      console.log(`⚠️ [Verify & Grant] Product not found, using demo data`)
-      productData = {
-        title: "Premium Content Bundle",
-        description: "Your purchased premium content is now available for access.",
-        price: 29.99,
-        thumbnailUrl: "/placeholder.svg?height=200&width=200",
-        creatorId: creatorId || "demo_creator",
-      }
-      productCollection = "demo"
+    // Get product box details
+    const productBoxDoc = await db.collection("bundles").doc(productBoxId).get()
+    if (!productBoxDoc.exists) {
+      return NextResponse.json({ error: "Product box not found" }, { status: 404 })
     }
 
-    // Get creator details
-    const actualCreatorId = creatorId || productData.creatorId
-    let creatorData = null
-    if (actualCreatorId) {
-      try {
-        const creatorDoc = await db.collection("users").doc(actualCreatorId).get()
-        creatorData = creatorDoc.exists ? creatorDoc.data() : null
-        console.log(`👤 [Verify & Grant] Creator found:`, {
-          name: creatorData?.displayName || creatorData?.name,
-          username: creatorData?.username,
-        })
-      } catch (error) {
-        console.warn(`⚠️ [Verify & Grant] Could not find creator:`, error)
-      }
-    }
-
-    // Generate sample content items
-    const contentItems = [
-      {
-        id: "item_1",
-        title: "Premium Video Content",
-        fileUrl: "/api/content/download/video1.mp4",
-        thumbnailUrl: productData.thumbnailUrl || "/placeholder.svg?height=100&width=100",
-        fileSize: 52428800, // 50MB
-        duration: 1800, // 30 minutes
-        contentType: "video",
-      },
-      {
-        id: "item_2",
-        title: "Bonus Audio Commentary",
-        fileUrl: "/api/content/download/audio1.mp3",
-        thumbnailUrl: "/placeholder.svg?height=100&width=100",
-        fileSize: 15728640, // 15MB
-        duration: 900, // 15 minutes
-        contentType: "audio",
-      },
-      {
-        id: "item_3",
-        title: "Digital Resources Pack",
-        fileUrl: "/api/content/download/resources.zip",
-        thumbnailUrl: "/placeholder.svg?height=100&width=100",
-        fileSize: 10485760, // 10MB
-        duration: 0,
-        contentType: "document",
-      },
-    ]
-
-    const totalItems = contentItems.length
-    const totalSize = contentItems.reduce((sum, item) => sum + (item.fileSize || 0), 0)
-
-    // Create purchase record with access token
-    const purchaseId = sessionId || `purchase_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
-
-    const purchaseRecord = {
-      id: purchaseId,
-      sessionId: sessionId || null,
-      productBoxId: productBoxId || "demo_product",
-      creatorId: actualCreatorId || "demo_creator",
-      amount: productData.price || 29.99,
-      currency: "usd",
-      status: "completed",
-      paymentStatus: "paid",
-      purchaseDate: new Date(),
-      createdAt: new Date(),
-      completedAt: new Date(),
-      grantedAt: new Date(),
-      accessGranted: true,
-      accessToken: purchaseAccessToken,
-      items: contentItems,
-      totalItems,
-      totalSize,
-      metadata: {
-        verificationMethod: "immediate_grant",
-        grantedVia: "purchase_success_page",
-        sourceCollection: productCollection,
-      },
-    }
-
-    // Store purchase record
-    await db.collection("purchases").doc(purchaseId).set(purchaseRecord)
-
-    // Also store in anonymous purchases collection for easy access
-    await db
-      .collection("anonymousPurchases")
-      .doc(purchaseAccessToken)
-      .set({
-        ...purchaseRecord,
-        anonymousAccess: true,
-        expiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000), // 1 year access
-      })
-
-    // Set access token as cookie for seamless access
-    const cookieStore = cookies()
-    cookieStore.set({
-      name: "purchase_access_token",
-      value: purchaseAccessToken,
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      maxAge: 365 * 24 * 60 * 60, // 1 year
-      path: "/",
-      sameSite: "lax",
+    const productBoxData = productBoxDoc.data()!
+    console.log(`📦 [Verify and Grant] Product box found:`, {
+      id: productBoxId,
+      title: productBoxData.title,
+      creatorId: productBoxData.creatorId,
     })
 
-    console.log(`✅ [Verify & Grant] Successfully granted access with token: ${purchaseAccessToken}`)
+    // Get creator details
+    const creatorDoc = await db.collection("users").doc(productBoxData.creatorId).get()
+    const creatorData = creatorDoc.exists ? creatorDoc.data() : null
 
-    // Return comprehensive purchase data
-    const responseData = {
-      purchase: {
-        id: purchaseId,
-        productBoxId: productBoxId || "demo_product",
-        productBoxTitle: productData.title || "Premium Content Bundle",
-        productBoxDescription: productData.description || "Your purchased premium content is now available for access.",
-        productBoxThumbnail:
-          productData.thumbnailUrl || productData.customPreviewThumbnail || "/placeholder.svg?height=200&width=200",
-        creatorId: actualCreatorId || "demo_creator",
-        creatorName: creatorData?.displayName || creatorData?.name || "Content Creator",
-        creatorUsername: creatorData?.username || "creator",
-        amount: productData.price || 29.99,
-        currency: "usd",
-        items: contentItems,
-        totalItems,
-        totalSize,
-        purchasedAt: new Date().toISOString(),
-        accessToken: purchaseAccessToken,
-        sourceCollection: productCollection,
-      },
-      accessGranted: true,
-      message: "Access granted successfully - no login required",
+    // Generate access token
+    const accessToken = `access_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+
+    // Prepare purchase data
+    purchaseData = {
+      id: sessionId || `purchase_${Date.now()}`,
+      productBoxId,
+      productBoxTitle: productBoxData.title || "Untitled Bundle",
+      productBoxDescription: productBoxData.description || "Premium content bundle",
+      productBoxThumbnail: productBoxData.customPreviewThumbnail || productBoxData.thumbnailUrl,
+      creatorId: productBoxData.creatorId,
+      creatorName: creatorData?.displayName || creatorData?.username || "Unknown Creator",
+      creatorUsername: creatorData?.username || "unknown",
+      amount: stripeSession ? stripeSession.amount_total / 100 : 0,
+      currency: stripeSession ? stripeSession.currency : "usd",
+      items: productBoxData.contents || [],
+      totalItems: productBoxData.contentCount || 0,
+      totalSize: productBoxData.totalSize || 0,
+      purchasedAt: new Date().toISOString(),
+      status: "completed",
+      accessToken,
+      sessionId,
+      stripePaymentIntentId: stripeSession?.payment_intent?.id,
     }
 
-    return NextResponse.json(responseData)
+    // Store in anonymousPurchases collection for guest access
+    await db.collection("anonymousPurchases").add({
+      ...purchaseData,
+      createdAt: new Date().toISOString(),
+      source: "stripe_checkout",
+    })
+
+    // Also store in bundlePurchases for consistency
+    await db.collection("bundlePurchases").add({
+      bundleId: productBoxId,
+      bundleTitle: productBoxData.title,
+      description: productBoxData.description,
+      thumbnailUrl: productBoxData.customPreviewThumbnail || productBoxData.thumbnailUrl,
+      creatorId: productBoxData.creatorId,
+      amount: purchaseData.amount,
+      currency: purchaseData.currency,
+      contents: productBoxData.contents || [],
+      contentCount: productBoxData.contentCount || 0,
+      totalSize: productBoxData.totalSize || 0,
+      status: "completed",
+      accessToken,
+      sessionId,
+      stripePaymentIntentId: stripeSession?.payment_intent?.id,
+      createdAt: new Date().toISOString(),
+      completedAt: new Date().toISOString(),
+      source: "stripe_checkout",
+    })
+
+    console.log(`✅ [Verify and Grant] Purchase records created with access token: ${accessToken}`)
+
+    // Set access token as HTTP-only cookie
+    const response = NextResponse.json({
+      success: true,
+      purchase: purchaseData,
+      message: "Access granted successfully",
+    })
+
+    // Set secure cookie for access token
+    response.cookies.set(`purchase_access_${productBoxId}`, accessToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "lax",
+      maxAge: 60 * 60 * 24 * 365 * 10, // 10 years
+      path: "/",
+    })
+
+    return response
   } catch (error: any) {
-    console.error(`❌ [Verify & Grant] Error:`, error)
+    console.error(`❌ [Verify and Grant] Error:`, error)
     return NextResponse.json(
       {
-        error: error.message || "Failed to verify purchase and grant access",
-        details: error.stack,
+        error: "Failed to verify purchase and grant access",
+        details: error.message,
       },
       { status: 500 },
     )
