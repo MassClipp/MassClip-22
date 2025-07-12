@@ -58,7 +58,11 @@ export default function PurchasesPage() {
 
       console.log(`🔍 [Purchases Page] Fetching purchases for user: ${user?.uid}`)
 
-      const token = await user?.getIdToken()
+      if (!user) {
+        throw new Error("User not authenticated")
+      }
+
+      const token = await user.getIdToken()
 
       // Try multiple endpoints to find purchases
       const endpoints = ["/api/user/unified-purchases", "/api/user/purchases", "/api/debug/user-purchases"]
@@ -79,59 +83,94 @@ export default function PurchasesPage() {
             const data = await response.json()
             console.log(`✅ [Purchases Page] Response from ${endpoint}:`, data)
 
-            // Handle different response formats
-            let purchases = []
+            // Handle different response formats with null safety
+            let purchases: any[] = []
             if (Array.isArray(data)) {
               purchases = data
-            } else if (data.purchases && Array.isArray(data.purchases)) {
-              purchases = data.purchases
-            } else if (data.data && Array.isArray(data.data)) {
-              purchases = data.data
+            } else if (data && typeof data === "object") {
+              if (Array.isArray(data.purchases)) {
+                purchases = data.purchases
+              } else if (Array.isArray(data.data)) {
+                purchases = data.data
+              }
             }
 
-            // Transform purchases to consistent format
-            const transformedPurchases = (purchases || []).map((purchase: any) => ({
-              id:
-                purchase.id ||
-                purchase.sessionId ||
-                purchase.purchaseId ||
-                purchase.productBoxId ||
-                Math.random().toString(),
-              productBoxId: purchase.productBoxId || purchase.bundleId || purchase.itemId || "",
-              bundleTitle: purchase.bundleTitle || purchase.productBoxTitle || purchase.title || "Untitled Bundle",
-              productBoxTitle: purchase.bundleTitle || purchase.productBoxTitle || purchase.title || "Untitled Bundle",
-              thumbnailUrl: purchase.thumbnailUrl || purchase.productBoxThumbnail || purchase.previewImage || "",
-              productBoxThumbnail: purchase.thumbnailUrl || purchase.productBoxThumbnail || purchase.previewImage || "",
-              creatorUsername: purchase.creatorUsername || purchase.creator?.username || "Unknown",
-              creatorId: purchase.creatorId || purchase.creator?.id || "",
-              purchaseDate:
-                purchase.purchaseDate || purchase.purchasedAt || purchase.createdAt || new Date().toISOString(),
-              purchasedAt:
-                purchase.purchaseDate || purchase.purchasedAt || purchase.createdAt || new Date().toISOString(),
-              amount: purchase.amount || 0,
-              currency: purchase.currency || "usd",
-              totalItems:
-                purchase.totalItems || purchase.contentCount || (purchase.items || purchase.contents || []).length || 0,
-              totalSize: purchase.totalSize || 0,
-              items: purchase.items || purchase.contents || [],
-              contents: purchase.items || purchase.contents || [],
-            }))
+            // Transform purchases to consistent format with null safety
+            const transformedPurchases = purchases
+              .filter((purchase) => purchase && typeof purchase === "object")
+              .map((purchase: any) => {
+                try {
+                  return {
+                    id:
+                      purchase.id ||
+                      purchase.sessionId ||
+                      purchase.purchaseId ||
+                      purchase.productBoxId ||
+                      `purchase_${Math.random().toString(36).substr(2, 9)}`,
+                    productBoxId: purchase.productBoxId || purchase.bundleId || purchase.itemId || "",
+                    bundleTitle:
+                      purchase.bundleTitle || purchase.productBoxTitle || purchase.title || "Untitled Bundle",
+                    productBoxTitle:
+                      purchase.bundleTitle || purchase.productBoxTitle || purchase.title || "Untitled Bundle",
+                    thumbnailUrl: purchase.thumbnailUrl || purchase.productBoxThumbnail || purchase.previewImage || "",
+                    productBoxThumbnail:
+                      purchase.thumbnailUrl || purchase.productBoxThumbnail || purchase.previewImage || "",
+                    creatorUsername: (
+                      purchase.creatorUsername ||
+                      (purchase.creator && purchase.creator.username) ||
+                      "Unknown"
+                    ).toString(),
+                    creatorId: purchase.creatorId || (purchase.creator && purchase.creator.id) || "",
+                    purchaseDate:
+                      purchase.purchaseDate || purchase.purchasedAt || purchase.createdAt || new Date().toISOString(),
+                    purchasedAt:
+                      purchase.purchaseDate || purchase.purchasedAt || purchase.createdAt || new Date().toISOString(),
+                    amount: Number(purchase.amount) || 0,
+                    currency: purchase.currency || "usd",
+                    totalItems:
+                      Number(
+                        purchase.totalItems ||
+                          purchase.contentCount ||
+                          (Array.isArray(purchase.items) ? purchase.items.length : 0) ||
+                          (Array.isArray(purchase.contents) ? purchase.contents.length : 0),
+                      ) || 0,
+                    totalSize: Number(purchase.totalSize) || 0,
+                    items: Array.isArray(purchase.items)
+                      ? purchase.items
+                      : Array.isArray(purchase.contents)
+                        ? purchase.contents
+                        : [],
+                    contents: Array.isArray(purchase.contents)
+                      ? purchase.contents
+                      : Array.isArray(purchase.items)
+                        ? purchase.items
+                        : [],
+                  }
+                } catch (transformError) {
+                  console.warn(`⚠️ [Purchases Page] Error transforming purchase:`, transformError, purchase)
+                  return null
+                }
+              })
+              .filter(Boolean) as Purchase[]
 
-            allPurchases = [...allPurchases, ...transformedPurchases]
-            console.log(`✅ [Purchases Page] Found ${transformedPurchases.length} purchases from ${endpoint}`)
+            if (transformedPurchases.length > 0) {
+              allPurchases = [...allPurchases, ...transformedPurchases]
+              console.log(`✅ [Purchases Page] Found ${transformedPurchases.length} purchases from ${endpoint}`)
+            }
           }
         } catch (endpointError) {
           console.warn(`⚠️ [Purchases Page] Error with ${endpoint}:`, endpointError)
         }
       }
 
-      // Remove duplicates based on productBoxId
-      const uniquePurchases = (allPurchases || []).filter(
-        (purchase, index, self) => index === self.findIndex((p) => p.productBoxId === purchase.productBoxId),
-      )
+      // Remove duplicates based on productBoxId with null safety
+      const uniquePurchases = allPurchases.filter((purchase, index, self) => {
+        if (!purchase || !purchase.productBoxId) return false
+        return index === self.findIndex((p) => p && p.productBoxId === purchase.productBoxId)
+      })
 
       console.log(`✅ [Purchases Page] Total unique purchases found: ${uniquePurchases.length}`)
-      setPurchases(uniquePurchases || [])
+      setPurchases(uniquePurchases)
     } catch (error: any) {
       console.error("❌ [Purchases Page] Error fetching purchases:", error)
       setError(error.message || "Failed to load purchases")
@@ -142,19 +181,32 @@ export default function PurchasesPage() {
   }
 
   const handleOpenContent = (purchase: Purchase) => {
+    if (!purchase || !purchase.productBoxId) {
+      console.warn(`⚠️ [Purchases Page] Invalid purchase data:`, purchase)
+      return
+    }
     console.log(`🔗 [Purchases Page] Opening content for:`, purchase)
     router.push(`/product-box/${purchase.productBoxId}/content`)
   }
 
   const handleRemovePurchase = async (purchase: Purchase) => {
+    if (!purchase || !purchase.id) {
+      console.warn(`⚠️ [Purchases Page] Invalid purchase for removal:`, purchase)
+      return
+    }
+
     try {
       console.log(`🗑️ [Purchases Page] Removing purchase:`, purchase)
       setRemovingPurchase(purchase.id)
 
-      const token = await user?.getIdToken()
+      if (!user) {
+        throw new Error("User not authenticated")
+      }
+
+      const token = await user.getIdToken()
 
       // Try removing by different IDs
-      const idsToTry = [purchase.id, purchase.productBoxId, `${purchase.productBoxId}_${user?.uid}`].filter(Boolean)
+      const idsToTry = [purchase.id, purchase.productBoxId, `${purchase.productBoxId}_${user.uid}`].filter(Boolean)
 
       let removed = false
 
@@ -180,19 +232,24 @@ export default function PurchasesPage() {
         }
       }
 
+      // Remove from local state regardless of API success
+      setPurchases((prev) => {
+        if (!Array.isArray(prev)) return []
+        return prev.filter((p) => p && p.id !== purchase.id)
+      })
+
       if (removed) {
-        // Remove from local state
-        setPurchases((prev) => (prev || []).filter((p) => p.id !== purchase.id))
         console.log(`✅ [Purchases Page] Purchase removed successfully`)
       } else {
-        // If API removal failed, still remove from local state as fallback
-        setPurchases((prev) => (prev || []).filter((p) => p.id !== purchase.id))
         console.log(`⚠️ [Purchases Page] API removal failed, removed from local state only`)
       }
     } catch (error) {
       console.error(`❌ [Purchases Page] Error removing purchase:`, error)
       // Still remove from local state as fallback
-      setPurchases((prev) => (prev || []).filter((p) => p.id !== purchase.id))
+      setPurchases((prev) => {
+        if (!Array.isArray(prev)) return []
+        return prev.filter((p) => p && p.id !== purchase.id)
+      })
     } finally {
       setRemovingPurchase(null)
     }
@@ -244,7 +301,7 @@ export default function PurchasesPage() {
           </Alert>
         )}
 
-        {!purchases || purchases.length === 0 ? (
+        {!Array.isArray(purchases) || purchases.length === 0 ? (
           <div className="text-center py-12">
             <ShoppingBag className="h-16 w-16 text-gray-400 mx-auto mb-4" />
             <div className="text-gray-400 text-lg mb-4">No purchases found</div>
@@ -257,107 +314,111 @@ export default function PurchasesPage() {
           </div>
         ) : (
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-            {purchases.map((purchase, index) => (
-              <Card
-                key={purchase.id}
-                className="bg-gray-900/50 border-gray-800 overflow-hidden group hover:bg-gray-900/70 transition-all duration-300 relative"
-                style={{
-                  animationDelay: `${index * 100}ms`,
-                  animation: "fadeInUp 0.6s ease-out forwards",
-                }}
-              >
-                <div className="relative">
-                  {/* Creator Username - Top Left */}
-                  <div className="absolute top-3 left-3 z-10">
-                    <Link
-                      href={`/creator/${purchase.creatorUsername}`}
-                      className="text-xs text-white/80 hover:text-white bg-black/50 px-2 py-1 rounded-full backdrop-blur-sm transition-colors"
-                    >
-                      {purchase.creatorUsername}
-                    </Link>
-                  </div>
+            {purchases.map((purchase, index) => {
+              if (!purchase || !purchase.id) return null
 
-                  {/* Three Dots Menu - Top Right */}
-                  <div className="absolute top-3 right-3 z-10">
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-8 w-8 p-0 bg-black/50 hover:bg-black/70 text-white/80 hover:text-white backdrop-blur-sm"
-                          disabled={removingPurchase === purchase.id}
-                        >
-                          <MoreVertical className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end" className="bg-gray-900 border-gray-700">
-                        <DropdownMenuItem
-                          onClick={() => handleRemovePurchase(purchase)}
-                          className="text-red-400 hover:text-red-300 hover:bg-red-900/20 cursor-pointer"
-                          disabled={removingPurchase === purchase.id}
-                        >
-                          <Trash2 className="h-4 w-4 mr-2" />
-                          {removingPurchase === purchase.id ? "Removing..." : "Remove"}
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </div>
+              return (
+                <Card
+                  key={purchase.id}
+                  className="bg-gray-900/50 border-gray-800 overflow-hidden group hover:bg-gray-900/70 transition-all duration-300 relative"
+                  style={{
+                    animationDelay: `${index * 100}ms`,
+                    animation: "fadeInUp 0.6s ease-out forwards",
+                  }}
+                >
+                  <div className="relative">
+                    {/* Creator Username - Top Left */}
+                    <div className="absolute top-3 left-3 z-10">
+                      <Link
+                        href={`/creator/${purchase.creatorUsername || "unknown"}`}
+                        className="text-xs text-white/80 hover:text-white bg-black/50 px-2 py-1 rounded-full backdrop-blur-sm transition-colors"
+                      >
+                        {purchase.creatorUsername || "Unknown"}
+                      </Link>
+                    </div>
 
-                  {/* Thumbnail - 1:1 Aspect Ratio */}
-                  <div className="aspect-square relative bg-gray-800">
-                    {purchase.thumbnailUrl || purchase.productBoxThumbnail ? (
-                      <Image
-                        src={purchase.thumbnailUrl || purchase.productBoxThumbnail || "/placeholder.svg"}
-                        alt={purchase.bundleTitle || purchase.productBoxTitle}
-                        fill
-                        className="object-cover"
-                        sizes="(max-width: 640px) 100vw, (max-width: 768px) 50vw, (max-width: 1024px) 33vw, 25vw"
-                        onError={(e) => {
-                          console.warn(`⚠️ [Purchases Page] Image failed to load:`, purchase.thumbnailUrl)
-                        }}
-                      />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center">
-                        <Package className="text-gray-500 text-4xl h-12 w-12" />
-                      </div>
-                    )}
-                  </div>
+                    {/* Three Dots Menu - Top Right */}
+                    <div className="absolute top-3 right-3 z-10">
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 w-8 p-0 bg-black/50 hover:bg-black/70 text-white/80 hover:text-white backdrop-blur-sm"
+                            disabled={removingPurchase === purchase.id}
+                          >
+                            <MoreVertical className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end" className="bg-gray-900 border-gray-700">
+                          <DropdownMenuItem
+                            onClick={() => handleRemovePurchase(purchase)}
+                            className="text-red-400 hover:text-red-300 hover:bg-red-900/20 cursor-pointer"
+                            disabled={removingPurchase === purchase.id}
+                          >
+                            <Trash2 className="h-4 w-4 mr-2" />
+                            {removingPurchase === purchase.id ? "Removing..." : "Remove"}
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
 
-                  {/* Border Line */}
-                  <div className="h-px bg-gradient-to-r from-transparent via-gray-600 to-transparent"></div>
-
-                  {/* Content */}
-                  <div className="p-4">
-                    {/* Bundle Title */}
-                    <h3 className="text-white text-sm font-medium mb-3 line-clamp-2 min-h-[2.5rem]">
-                      {purchase.bundleTitle || purchase.productBoxTitle}
-                    </h3>
-
-                    {/* Purchase Info */}
-                    <div className="flex items-center justify-between text-xs text-gray-400 mb-3">
-                      <span className="flex items-center">
-                        <DollarSign className="h-3 w-3 mr-1" />${purchase.amount?.toFixed(2) || "0.00"}
-                      </span>
-                      {purchase.totalItems && purchase.totalItems > 0 && (
-                        <span className="flex items-center">
-                          <Package className="h-3 w-3 mr-1" />
-                          {purchase.totalItems} items
-                        </span>
+                    {/* Thumbnail - 1:1 Aspect Ratio */}
+                    <div className="aspect-square relative bg-gray-800">
+                      {purchase.thumbnailUrl || purchase.productBoxThumbnail ? (
+                        <Image
+                          src={purchase.thumbnailUrl || purchase.productBoxThumbnail || "/placeholder.svg"}
+                          alt={purchase.bundleTitle || purchase.productBoxTitle || "Purchase"}
+                          fill
+                          className="object-cover"
+                          sizes="(max-width: 640px) 100vw, (max-width: 768px) 50vw, (max-width: 1024px) 33vw, 25vw"
+                          onError={(e) => {
+                            console.warn(`⚠️ [Purchases Page] Image failed to load:`, purchase.thumbnailUrl)
+                          }}
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center">
+                          <Package className="text-gray-500 text-4xl h-12 w-12" />
+                        </div>
                       )}
                     </div>
 
-                    <Button
-                      onClick={() => handleOpenContent(purchase)}
-                      className="w-full bg-white text-black hover:bg-gray-100 font-medium"
-                      disabled={removingPurchase === purchase.id}
-                    >
-                      <Eye className="h-4 w-4 mr-2" />
-                      Open
-                    </Button>
+                    {/* Border Line */}
+                    <div className="h-px bg-gradient-to-r from-transparent via-gray-600 to-transparent"></div>
+
+                    {/* Content */}
+                    <div className="p-4">
+                      {/* Bundle Title */}
+                      <h3 className="text-white text-sm font-medium mb-3 line-clamp-2 min-h-[2.5rem]">
+                        {purchase.bundleTitle || purchase.productBoxTitle || "Untitled Purchase"}
+                      </h3>
+
+                      {/* Purchase Info */}
+                      <div className="flex items-center justify-between text-xs text-gray-400 mb-3">
+                        <span className="flex items-center">
+                          <DollarSign className="h-3 w-3 mr-1" />${(purchase.amount || 0).toFixed(2)}
+                        </span>
+                        {purchase.totalItems && purchase.totalItems > 0 && (
+                          <span className="flex items-center">
+                            <Package className="h-3 w-3 mr-1" />
+                            {purchase.totalItems} items
+                          </span>
+                        )}
+                      </div>
+
+                      <Button
+                        onClick={() => handleOpenContent(purchase)}
+                        className="w-full bg-white text-black hover:bg-gray-100 font-medium"
+                        disabled={removingPurchase === purchase.id}
+                      >
+                        <Eye className="h-4 w-4 mr-2" />
+                        Open
+                      </Button>
+                    </div>
                   </div>
-                </div>
-              </Card>
-            ))}
+                </Card>
+              )
+            })}
           </div>
         )}
       </div>
