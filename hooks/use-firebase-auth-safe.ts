@@ -9,7 +9,6 @@ import {
   GoogleAuthProvider,
   signInWithPopup,
   sendPasswordResetEmail,
-  signInWithCustomToken,
   type User,
 } from "firebase/auth"
 import { doc, setDoc, getDoc, serverTimestamp } from "firebase/firestore"
@@ -24,49 +23,14 @@ export function useFirebaseAuthSafe() {
   const [authChecked, setAuthChecked] = useState(false)
   const [configError, setConfigError] = useState<string | null>(null)
 
-  // Check for existing server session and restore Firebase auth
-  const checkAndRestoreSession = useCallback(async () => {
-    try {
-      console.log("🔍 Checking for existing server session...")
-      const response = await fetch("/api/auth/session", {
-        method: "GET",
-        credentials: "include",
-      })
-
-      if (response.ok) {
-        const data = await response.json()
-        if (data.user && !auth?.currentUser) {
-          console.log("🔄 Restoring Firebase auth from server session...")
-
-          // Get custom token to restore Firebase auth
-          const tokenResponse = await fetch("/api/auth/get-custom-token", {
-            method: "POST",
-            credentials: "include",
-          })
-
-          if (tokenResponse.ok) {
-            const tokenData = await tokenResponse.json()
-            if (tokenData.customToken && auth) {
-              await signInWithCustomToken(auth, tokenData.customToken)
-              console.log("✅ Firebase auth restored successfully")
-              return true
-            }
-          }
-        }
-      }
-      return false
-    } catch (error) {
-      console.error("❌ Error restoring session:", error)
-      return false
-    }
-  }, [])
-
   // Clear session cookie on the server
   const clearServerSession = useCallback(async () => {
     try {
-      const response = await fetch("/api/auth/clear-session", {
+      const response = await fetch("/api/auth/logout", {
         method: "POST",
-        credentials: "include",
+        headers: {
+          "Content-Type": "application/json",
+        },
       })
 
       if (!response.ok) {
@@ -88,7 +52,6 @@ export function useFirebaseAuthSafe() {
         headers: {
           "Content-Type": "application/json",
         },
-        credentials: "include",
         body: JSON.stringify({ idToken }),
       })
 
@@ -104,7 +67,19 @@ export function useFirebaseAuthSafe() {
     }
   }, [])
 
-  // Set up auth state listener with session restoration
+  // Check if the user is authenticated on the server
+  const validateServerSession = useCallback(async () => {
+    try {
+      const response = await fetch("/api/auth/validate-session")
+      const data = await response.json()
+      return data.valid === true
+    } catch (error) {
+      console.error("Error validating server session:", error)
+      return false
+    }
+  }, [])
+
+  // Set up auth state listener
   useEffect(() => {
     if (!auth) {
       setConfigError("Firebase auth not initialized")
@@ -113,47 +88,31 @@ export function useFirebaseAuthSafe() {
       return
     }
 
-    console.log("🚀 Setting up unified auth state listener")
+    console.log("Setting up auth state listener")
 
-    const initializeAuth = async () => {
-      // First, try to restore from server session
-      await checkAndRestoreSession()
+    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+      if (currentUser) {
+        console.log("Auth state changed: User logged in")
 
-      // Then set up the auth state listener
-      const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
-        if (currentUser) {
-          console.log("✅ Auth state changed: User logged in")
-          setUser(currentUser)
+        // Set the user in state
+        setUser(currentUser)
 
-          // Ensure server session is synchronized
-          await setServerSession(currentUser)
-        } else {
-          console.log("❌ Auth state changed: No user")
-          setUser(null)
+        // Ensure server session is set
+        await setServerSession(currentUser)
+      } else {
+        console.log("Auth state changed: No user")
+        setUser(null)
 
-          // Clear server session when user logs out
-          await clearServerSession()
-        }
+        // Clear server session when user logs out
+        await clearServerSession()
+      }
 
-        setLoading(false)
-        setAuthChecked(true)
-      })
-
-      return unsubscribe
-    }
-
-    let unsubscribe: (() => void) | undefined
-
-    initializeAuth().then((unsub) => {
-      unsubscribe = unsub
+      setLoading(false)
+      setAuthChecked(true)
     })
 
-    return () => {
-      if (unsubscribe) {
-        unsubscribe()
-      }
-    }
-  }, [checkAndRestoreSession, setServerSession, clearServerSession])
+    return () => unsubscribe()
+  }, [setServerSession, clearServerSession])
 
   // Sign in with email and password
   const signIn = async (email: string, password: string) => {
@@ -322,13 +281,6 @@ export function useFirebaseAuthSafe() {
     }
   }
 
-  // Refresh auth state
-  const refreshAuth = useCallback(async () => {
-    setLoading(true)
-    await checkAndRestoreSession()
-    setLoading(false)
-  }, [checkAndRestoreSession])
-
   return {
     user,
     loading,
@@ -340,6 +292,5 @@ export function useFirebaseAuthSafe() {
     resetPassword,
     configError,
     isConfigured,
-    refreshAuth,
   }
 }
