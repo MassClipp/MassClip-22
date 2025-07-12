@@ -1,5 +1,8 @@
-import { type NextRequest, NextResponse } from "next/server"
-import { db } from "@/lib/firebase-admin"
+import { NextResponse, type NextRequest } from "next/server"
+import { initializeFirebaseAdmin } from "@/lib/firebase-admin"
+import { getFirestore } from "firebase-admin/firestore"
+import { getAuth } from "firebase-admin/auth"
+import { cookies } from "next/headers"
 import Stripe from "stripe"
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
@@ -8,233 +11,203 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
 
 export async function POST(request: NextRequest) {
   try {
-    const { sessionId, productBoxId, creatorId } = await request.json()
+    const { sessionId } = await request.json()
 
-    console.log(`🎉 [Verify & Grant] Starting verification for session: ${sessionId}`)
-
-    if (!sessionId && !productBoxId) {
-      return NextResponse.json({ error: "Missing session ID or product box ID" }, { status: 400 })
+    if (!sessionId) {
+      return NextResponse.json({ error: "Session ID is required" }, { status: 400 })
     }
 
-    let purchaseData: any = {}
-    let bundleData: any = {}
-    let creatorData: any = {}
-    let currentProductBoxId = productBoxId // Use let instead of const
+    console.log("🔍 Verifying purchase for session:", sessionId)
 
-    // If we have a Stripe session, verify it
-    if (sessionId) {
-      try {
-        const session = await stripe.checkout.sessions.retrieve(sessionId, {
-          expand: ["line_items", "customer"],
-        })
+    // Initialize Firebase Admin
+    initializeFirebaseAdmin()
+    const db = getFirestore()
+    const auth = getAuth()
 
-        console.log(`✅ [Verify & Grant] Stripe session retrieved:`, {
-          id: session.id,
-          status: session.payment_status,
-          amount: session.amount_total,
-        })
+    // Retrieve the Stripe session
+    const session = await stripe.checkout.sessions.retrieve(sessionId, {
+      expand: ["line_items", "customer"],
+    })
 
-        if (session.payment_status !== "paid") {
-          return NextResponse.json({ error: "Payment not completed" }, { status: 400 })
-        }
-
-        purchaseData = {
-          sessionId: session.id,
-          amount: (session.amount_total || 0) / 100,
-          currency: session.currency || "usd",
-          customerEmail: session.customer_details?.email,
-          paymentStatus: session.payment_status,
-          metadata: session.metadata || {},
-        }
-
-        // Extract product box ID from metadata if not provided
-        if (!currentProductBoxId && session.metadata?.productBoxId) {
-          currentProductBoxId = session.metadata.productBoxId
-        }
-      } catch (stripeError) {
-        console.warn(`⚠️ [Verify & Grant] Stripe session verification failed:`, stripeError)
-        // Continue without Stripe data for demo purposes
-      }
+    if (!session) {
+      return NextResponse.json({ error: "Session not found" }, { status: 404 })
     }
 
-    // Get bundle/product box details
-    if (currentProductBoxId) {
-      try {
-        // Try bundles collection first
-        const bundleDoc = await db.collection("bundles").doc(currentProductBoxId).get()
-        if (bundleDoc.exists) {
-          bundleData = bundleDoc.data()
-          console.log(`✅ [Verify & Grant] Bundle found: ${bundleData.title}`)
-        } else {
-          // Try productBoxes collection
-          const productDoc = await db.collection("productBoxes").doc(currentProductBoxId).get()
-          if (productDoc.exists) {
-            bundleData = productDoc.data()
-            console.log(`✅ [Verify & Grant] Product box found: ${bundleData.title}`)
-          }
-        }
-      } catch (error) {
-        console.warn(`⚠️ [Verify & Grant] Could not fetch bundle data:`, error)
-      }
+    if (session.payment_status !== "paid") {
+      return NextResponse.json({ error: "Payment not completed" }, { status: 400 })
     }
 
-    // Get creator details
-    if (creatorId || bundleData.creatorId) {
-      try {
-        const creatorDoc = await db
-          .collection("users")
-          .doc(creatorId || bundleData.creatorId)
-          .get()
-        if (creatorDoc.exists) {
-          creatorData = creatorDoc.data()
-          console.log(`✅ [Verify & Grant] Creator found: ${creatorData.username}`)
-        }
-      } catch (error) {
-        console.warn(`⚠️ [Verify & Grant] Could not fetch creator data:`, error)
-      }
+    console.log("✅ Stripe session verified, payment completed")
+
+    // Extract purchase details from session metadata
+    const bundleId = session.metadata?.bundleId
+    const productBoxId = session.metadata?.productBoxId
+    const creatorId = session.metadata?.creatorId
+    const customerEmail = session.customer_details?.email
+
+    if (!bundleId && !productBoxId) {
+      return NextResponse.json({ error: "No content ID found in session" }, { status: 400 })
     }
 
-    // Create purchase record with immediate access
-    const purchaseId = sessionId || `purchase_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
-    const now = new Date()
+    if (!customerEmail) {
+      return NextResponse.json({ error: "No customer email found" }, { status: 400 })
+    }
 
-    // Generate sample content items based on bundle data
-    const sampleItems = [
-      {
-        id: "item_1",
-        title: "Premium Video Content",
-        fileUrl: "/api/content/download/video1.mp4",
-        thumbnailUrl: bundleData.customPreviewThumbnail || "/placeholder.svg?height=100&width=100",
-        fileSize: 52428800, // 50MB
-        duration: 1800, // 30 minutes
-        contentType: "video" as const,
-      },
-      {
-        id: "item_2",
-        title: "Bonus Audio Commentary",
-        fileUrl: "/api/content/download/audio1.mp3",
-        thumbnailUrl: "/placeholder.svg?height=100&width=100",
-        fileSize: 15728640, // 15MB
-        duration: 900, // 15 minutes
-        contentType: "audio" as const,
-      },
-      {
-        id: "item_3",
-        title: "Digital Resources Pack",
-        fileUrl: "/api/content/download/resources.zip",
-        thumbnailUrl: "/placeholder.svg?height=100&width=100",
-        fileSize: 10485760, // 10MB
-        duration: 0,
-        contentType: "document" as const,
-      },
-    ]
+    console.log("📧 Customer email:", customerEmail)
+    console.log("📦 Content ID:", bundleId || productBoxId)
 
-    const totalSize = sampleItems.reduce((sum, item) => sum + item.fileSize, 0)
+    // Find or create user by email
+    let userRecord
+    try {
+      userRecord = await auth.getUserByEmail(customerEmail)
+      console.log("👤 Found existing user:", userRecord.uid)
+    } catch (error) {
+      // User doesn't exist, create a new one
+      console.log("👤 Creating new user for email:", customerEmail)
+      userRecord = await auth.createUser({
+        email: customerEmail,
+        emailVerified: true,
+      })
 
-    const purchaseRecord = {
-      id: purchaseId,
-      sessionId: sessionId || null,
-      productBoxId: currentProductBoxId || "demo_product",
-      bundleId: currentProductBoxId || "demo_product",
-      creatorId: creatorId || bundleData.creatorId || "demo_creator",
-      amount: purchaseData.amount || bundleData.price || 29.99,
-      currency: purchaseData.currency || "usd",
+      // Create user profile in Firestore
+      await db.collection("users").doc(userRecord.uid).set({
+        email: customerEmail,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        plan: "free",
+      })
+
+      console.log("✅ New user created:", userRecord.uid)
+    }
+
+    // Create session cookie for the user
+    const customToken = await auth.createCustomToken(userRecord.uid)
+    const idToken = customToken // In a real scenario, you'd exchange this for an ID token
+
+    // For now, we'll create a session cookie directly
+    const sessionCookie = await auth.createSessionCookie(customToken, {
+      expiresIn: 60 * 60 * 24 * 14 * 1000, // 2 weeks
+    })
+
+    // Set the session cookie
+    cookies().set({
+      name: "session",
+      value: sessionCookie,
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      maxAge: 60 * 60 * 24 * 14, // 2 weeks
+      path: "/",
+      sameSite: "lax",
+    })
+
+    console.log("🍪 Session cookie set for user")
+
+    // Create purchase record
+    const purchaseData = {
+      id: `purchase_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      sessionId,
+      userId: userRecord.uid,
+      bundleId: bundleId || null,
+      productBoxId: productBoxId || null,
+      creatorId,
+      amount: session.amount_total || 0,
+      currency: session.currency || "usd",
       status: "completed",
-      paymentStatus: "paid",
-      customerEmail: purchaseData.customerEmail || "demo@example.com",
-      purchaseDate: now,
-      createdAt: now,
-      completedAt: now,
-      grantedAt: now,
-      accessGranted: true,
-      items: sampleItems,
-      totalItems: sampleItems.length,
-      totalSize: totalSize,
-      metadata: {
-        verificationMethod: "immediate_grant",
-        grantedVia: "purchase_success_page",
-        ...purchaseData.metadata,
-      },
+      stripeSessionId: sessionId,
+      customerEmail,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
     }
 
-    // Store purchase in multiple collections for compatibility
+    // Store purchase in multiple collections for redundancy
     const batch = db.batch()
 
     // Main purchases collection
-    const purchaseRef = db.collection("purchases").doc(purchaseId)
-    batch.set(purchaseRef, purchaseRecord)
+    const purchaseRef = db.collection("purchases").doc(purchaseData.id)
+    batch.set(purchaseRef, purchaseData)
 
-    // Unified purchases collection
-    const unifiedPurchaseRef = db.collection("unifiedPurchases").doc(purchaseId)
-    batch.set(unifiedPurchaseRef, {
-      ...purchaseRecord,
-      userId: "demo_user", // In real implementation, this would be the actual user ID
-      buyerUid: "demo_user",
-    })
+    // User's purchases subcollection
+    const userPurchaseRef = db.collection("users").doc(userRecord.uid).collection("purchases").doc(purchaseData.id)
+    batch.set(userPurchaseRef, purchaseData)
 
-    // Bundle purchases collection
-    if (currentProductBoxId) {
-      const bundlePurchaseRef = db.collection("bundlePurchases").doc(purchaseId)
-      batch.set(bundlePurchaseRef, {
-        ...purchaseRecord,
-        bundleId: currentProductBoxId,
-        bundleTitle: bundleData.title || "Premium Content Bundle",
-        buyerUid: "demo_user",
-        contents: sampleItems,
-        contentCount: sampleItems.length,
+    // Creator's sales subcollection (if creatorId exists)
+    if (creatorId) {
+      const creatorSaleRef = db.collection("users").doc(creatorId).collection("sales").doc(purchaseData.id)
+      batch.set(creatorSaleRef, {
+        ...purchaseData,
+        buyerId: userRecord.uid,
+        buyerEmail: customerEmail,
       })
     }
 
-    await batch.commit()
-    console.log(`✅ [Verify & Grant] Purchase records created successfully`)
+    // Unified purchases collection for easier querying
+    const unifiedPurchaseRef = db.collection("unified_purchases").doc(purchaseData.id)
+    batch.set(unifiedPurchaseRef, {
+      ...purchaseData,
+      type: bundleId ? "bundle" : "product_box",
+      contentId: bundleId || productBoxId,
+    })
 
-    // Update bundle statistics
-    if (currentProductBoxId) {
-      try {
-        const bundleRef = db.collection("bundles").doc(currentProductBoxId)
-        await bundleRef.update({
-          totalSales: db.FieldValue.increment(1),
-          totalRevenue: db.FieldValue.increment(purchaseRecord.amount),
-          lastPurchaseAt: now,
-        })
-        console.log(`✅ [Verify & Grant] Bundle stats updated`)
-      } catch (error) {
-        console.warn(`⚠️ [Verify & Grant] Could not update bundle stats:`, error)
+    await batch.commit()
+    console.log("✅ Purchase records created successfully")
+
+    // Fetch content data for response
+    let contentData = null
+    if (bundleId) {
+      const bundleDoc = await db.collection("bundles").doc(bundleId).get()
+      if (bundleDoc.exists()) {
+        contentData = { bundleData: bundleDoc.data() }
+
+        // Fetch creator data
+        if (creatorId) {
+          const creatorDoc = await db.collection("users").doc(creatorId).get()
+          if (creatorDoc.exists()) {
+            contentData.bundleData.creatorData = {
+              displayName: creatorDoc.data()?.displayName,
+              username: creatorDoc.data()?.username,
+            }
+          }
+        }
+      }
+    } else if (productBoxId) {
+      const productBoxDoc = await db.collection("product_boxes").doc(productBoxId).get()
+      if (productBoxDoc.exists()) {
+        contentData = { productBoxData: productBoxDoc.data() }
+
+        // Fetch creator data
+        if (creatorId) {
+          const creatorDoc = await db.collection("users").doc(creatorId).get()
+          if (creatorDoc.exists()) {
+            contentData.productBoxData.creatorData = {
+              displayName: creatorDoc.data()?.displayName,
+              username: creatorDoc.data()?.username,
+            }
+          }
+        }
       }
     }
 
-    // Prepare response data
     const responseData = {
-      id: purchaseId,
-      productBoxId: currentProductBoxId || "demo_product",
-      productBoxTitle: bundleData.title || "Premium Content Bundle",
-      productBoxDescription: bundleData.description || "Your purchased premium content is now available for access.",
-      productBoxThumbnail:
-        bundleData.customPreviewThumbnail || bundleData.thumbnailUrl || "/placeholder.svg?height=200&width=200",
-      creatorId: creatorId || bundleData.creatorId || "demo_creator",
-      creatorName: creatorData.displayName || creatorData.name || "Content Creator",
-      creatorUsername: creatorData.username || "creator",
-      amount: purchaseRecord.amount,
-      currency: purchaseRecord.currency,
-      items: sampleItems,
-      totalItems: sampleItems.length,
-      totalSize: totalSize,
-      purchasedAt: now.toISOString(),
+      success: true,
+      message: "Purchase verified and access granted",
+      purchase: {
+        ...purchaseData,
+        ...contentData,
+      },
+      user: {
+        uid: userRecord.uid,
+        email: userRecord.email,
+      },
     }
 
-    console.log(`🎉 [Verify & Grant] Access granted successfully!`)
-
-    return NextResponse.json({
-      success: true,
-      purchase: responseData,
-      accessGranted: true,
-      message: "Purchase verified and access granted immediately",
-    })
+    console.log("🎉 Purchase verification completed successfully")
+    return NextResponse.json(responseData)
   } catch (error: any) {
-    console.error(`❌ [Verify & Grant] Error:`, error)
+    console.error("❌ Purchase verification error:", error)
     return NextResponse.json(
       {
-        error: error.message || "Failed to verify purchase and grant access",
+        error: "Failed to verify purchase",
+        details: error.message,
         success: false,
       },
       { status: 500 },

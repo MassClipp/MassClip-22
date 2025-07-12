@@ -1,15 +1,20 @@
 import { NextResponse } from "next/server"
 import { cookies } from "next/headers"
 
-export const runtime = "nodejs"
-
 export async function POST() {
   try {
-    const cookieStore = cookies()
-    cookieStore.delete("session")
+    // Clear the session cookie
+    cookies().set({
+      name: "session",
+      value: "",
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      maxAge: 0, // Expire immediately
+      path: "/",
+      sameSite: "lax",
+    })
 
-    console.log("✅ Session cookie cleared successfully")
-
+    console.log("✅ Session cookie cleared")
     return NextResponse.json({ success: true })
   } catch (error) {
     console.error("❌ Error clearing session:", error)
