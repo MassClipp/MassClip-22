@@ -28,6 +28,8 @@ interface SafePurchase {
 export default function PurchasesPage() {
   const { user, loading: authLoading } = useFirebaseAuth()
   const router = useRouter()
+
+  // Initialize with empty array - never undefined
   const [purchases, setPurchases] = useState<SafePurchase[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -47,7 +49,9 @@ export default function PurchasesPage() {
     try {
       setLoading(true)
       setError(null)
-      setPurchases([]) // Reset to empty array
+
+      // Always ensure purchases is an array
+      setPurchases([])
 
       console.log(`🔍 [Purchases Page] Fetching purchases for user: ${user?.uid}`)
 
@@ -55,168 +59,93 @@ export default function PurchasesPage() {
         throw new Error("User not authenticated")
       }
 
-      // Try to get a fresh token with retry logic
-      let token: string
-      try {
-        token = await user.getIdToken(true) // Force refresh
-      } catch (tokenError) {
-        console.warn("⚠️ [Purchases Page] Token refresh failed, using cached token:", tokenError)
-        token = await user.getIdToken(false) // Use cached token
+      const token = await user.getIdToken(true)
+
+      const response = await fetch("/api/user/unified-purchases", {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
+
+      if (!response.ok) {
+        if (response.status === 404) {
+          console.log(`ℹ️ [Purchases Page] No purchases found`)
+          setPurchases([])
+          return
+        }
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
       }
 
-      // Multiple endpoints to try with different approaches
-      const endpoints = [
-        { url: "/api/user/unified-purchases", method: "GET" },
-        { url: "/api/user/purchases", method: "GET" },
-        { url: "/api/debug/user-purchases", method: "GET" },
-      ]
+      const data = await response.json()
+      console.log(`✅ [Purchases Page] Response:`, data)
 
-      let lastError: Error | null = null
-      let foundPurchases = false
+      // Safely extract purchases - always ensure array
+      let rawPurchases: any[] = []
 
-      for (const endpoint of endpoints) {
-        try {
-          console.log(`🔍 [Purchases Page] Trying endpoint: ${endpoint.url}`)
-
-          const controller = new AbortController()
-          const timeoutId = setTimeout(() => controller.abort(), 10000) // 10 second timeout
-
-          const response = await fetch(endpoint.url, {
-            method: endpoint.method,
-            headers: {
-              Authorization: `Bearer ${token}`,
-              "Content-Type": "application/json",
-            },
-            signal: controller.signal,
-          })
-
-          clearTimeout(timeoutId)
-
-          if (response.ok) {
-            const data = await response.json()
-            console.log(`✅ [Purchases Page] Success from ${endpoint.url}:`, data)
-
-            // Safely extract purchases
-            let rawPurchases: any[] = []
-            if (Array.isArray(data)) {
-              rawPurchases = data
-            } else if (data && typeof data === "object") {
-              if (Array.isArray(data.purchases)) {
-                rawPurchases = data.purchases
-              } else if (Array.isArray(data.data)) {
-                rawPurchases = data.data
-              }
-            }
-
-            if (rawPurchases.length > 0) {
-              // Transform to safe format
-              const safePurchases: SafePurchase[] = []
-
-              for (const rawPurchase of rawPurchases) {
-                try {
-                  if (!rawPurchase || typeof rawPurchase !== "object") continue
-
-                  const safePurchase: SafePurchase = {
-                    id: String(
-                      rawPurchase.id ||
-                        rawPurchase.sessionId ||
-                        rawPurchase.purchaseId ||
-                        rawPurchase.productBoxId ||
-                        `purchase_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-                    ),
-                    productBoxId: String(rawPurchase.productBoxId || rawPurchase.bundleId || rawPurchase.itemId || ""),
-                    title: String(
-                      rawPurchase.bundleTitle ||
-                        rawPurchase.productBoxTitle ||
-                        rawPurchase.title ||
-                        rawPurchase.itemTitle ||
-                        "Untitled Purchase",
-                    ),
-                    thumbnailUrl: String(
-                      rawPurchase.thumbnailUrl ||
-                        rawPurchase.productBoxThumbnail ||
-                        rawPurchase.previewImage ||
-                        rawPurchase.customPreviewThumbnail ||
-                        "",
-                    ),
-                    creatorUsername: String(
-                      rawPurchase.creatorUsername || (rawPurchase.creator && rawPurchase.creator.username) || "Unknown",
-                    ),
-                    creatorId: String(rawPurchase.creatorId || (rawPurchase.creator && rawPurchase.creator.id) || ""),
-                    purchaseDate: String(
-                      rawPurchase.purchaseDate ||
-                        rawPurchase.purchasedAt ||
-                        rawPurchase.createdAt ||
-                        new Date().toISOString(),
-                    ),
-                    amount: Number(rawPurchase.amount) || 0,
-                    currency: String(rawPurchase.currency || "usd"),
-                    totalItems: Number(
-                      rawPurchase.totalItems ||
-                        rawPurchase.contentCount ||
-                        (Array.isArray(rawPurchase.items) ? rawPurchase.items.length : 0) ||
-                        (Array.isArray(rawPurchase.contents) ? rawPurchase.contents.length : 0) ||
-                        0,
-                    ),
-                  }
-
-                  if (safePurchase.productBoxId && safePurchase.title) {
-                    safePurchases.push(safePurchase)
-                  }
-                } catch (transformError) {
-                  console.warn(`⚠️ [Purchases Page] Error transforming purchase:`, transformError)
-                  continue
-                }
-              }
-
-              // Remove duplicates
-              const uniquePurchases = safePurchases.filter(
-                (purchase, index, self) => index === self.findIndex((p) => p.productBoxId === purchase.productBoxId),
-              )
-
-              console.log(`✅ [Purchases Page] Processed ${uniquePurchases.length} valid purchases`)
-              setPurchases(uniquePurchases)
-              foundPurchases = true
-              break // Success, exit the loop
-            }
-          } else if (response.status === 404) {
-            // 404 is normal - no purchases found
-            console.log(`ℹ️ [Purchases Page] No purchases found at ${endpoint.url}`)
-            continue
-          } else {
-            throw new Error(`HTTP ${response.status}: ${response.statusText}`)
-          }
-        } catch (endpointError: any) {
-          console.warn(`⚠️ [Purchases Page] Error with ${endpoint.url}:`, endpointError)
-          lastError = endpointError
-          continue
+      if (data && typeof data === "object") {
+        if (Array.isArray(data.purchases)) {
+          rawPurchases = data.purchases
+        } else if (Array.isArray(data.data)) {
+          rawPurchases = data.data
+        } else if (Array.isArray(data)) {
+          rawPurchases = data
         }
       }
 
-      // If no purchases found from any endpoint, that's okay
-      if (!foundPurchases) {
-        console.log(`ℹ️ [Purchases Page] No purchases found from any endpoint`)
-        setPurchases([])
+      // Ensure rawPurchases is always an array
+      if (!Array.isArray(rawPurchases)) {
+        rawPurchases = []
       }
-    } catch (error: any) {
-      console.error("❌ [Purchases Page] Critical error:", error)
-      setError(
-        error.message?.includes("Firebase") || error.message?.includes("Firestore")
-          ? "Connection issue. Please check your internet connection and try again."
-          : error.message || "Failed to load purchases",
+
+      console.log(`📦 [Purchases Page] Processing ${rawPurchases.length} raw purchases`)
+
+      // Transform to safe format - filter out invalid entries
+      const safePurchases: SafePurchase[] = rawPurchases
+        .filter((item): item is any => item && typeof item === "object")
+        .map((rawPurchase): SafePurchase | null => {
+          try {
+            return {
+              id: String(rawPurchase.id || rawPurchase.sessionId || `purchase_${Date.now()}_${Math.random()}`),
+              productBoxId: String(rawPurchase.productBoxId || rawPurchase.bundleId || ""),
+              title: String(
+                rawPurchase.bundleTitle || rawPurchase.productBoxTitle || rawPurchase.title || "Untitled Purchase",
+              ),
+              thumbnailUrl: String(rawPurchase.thumbnailUrl || rawPurchase.productBoxThumbnail || ""),
+              creatorUsername: String(rawPurchase.creatorUsername || "Unknown"),
+              creatorId: String(rawPurchase.creatorId || ""),
+              purchaseDate: String(rawPurchase.purchaseDate || rawPurchase.purchasedAt || new Date().toISOString()),
+              amount: Number(rawPurchase.amount) || 0,
+              currency: String(rawPurchase.currency || "usd"),
+              totalItems: Number(rawPurchase.totalItems || rawPurchase.contentCount || 0),
+            }
+          } catch (transformError) {
+            console.warn(`⚠️ [Purchases Page] Error transforming purchase:`, transformError)
+            return null
+          }
+        })
+        .filter((purchase): purchase is SafePurchase => purchase !== null && purchase.productBoxId !== "")
+
+      // Remove duplicates
+      const uniquePurchases = safePurchases.filter(
+        (purchase, index, self) => index === self.findIndex((p) => p.productBoxId === purchase.productBoxId),
       )
-      setPurchases([])
+
+      console.log(`✅ [Purchases Page] Setting ${uniquePurchases.length} valid purchases`)
+      setPurchases(uniquePurchases)
+    } catch (error: any) {
+      console.error("❌ [Purchases Page] Error:", error)
+      setError(error.message || "Failed to load purchases")
+      setPurchases([]) // Always ensure array
     } finally {
       setLoading(false)
     }
   }
 
   const handleOpenContent = (purchase: SafePurchase) => {
-    if (!purchase.productBoxId) {
-      console.warn(`⚠️ [Purchases Page] No product box ID for purchase:`, purchase)
+    if (!purchase?.productBoxId) {
+      console.warn(`⚠️ [Purchases Page] Invalid purchase:`, purchase)
       return
     }
-    console.log(`🔗 [Purchases Page] Opening content for:`, purchase.title)
     router.push(`/product-box/${purchase.productBoxId}/content`)
   }
 
@@ -228,7 +157,7 @@ export default function PurchasesPage() {
           <h1 className="text-3xl font-bold text-white mb-8">My Purchases</h1>
           <div className="h-px bg-gradient-to-r from-transparent via-gray-600 to-transparent mb-8"></div>
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-            {Array.from({ length: 8 }).map((_, i) => (
+            {[...Array(8)].map((_, i) => (
               <div key={i} className="space-y-3">
                 <Skeleton className="aspect-square w-full bg-gray-800" />
                 <Skeleton className="h-4 w-20 bg-gray-800" />
@@ -257,10 +186,8 @@ export default function PurchasesPage() {
           </Button>
         </div>
 
-        {/* Border Line */}
         <div className="h-px bg-gradient-to-r from-transparent via-gray-600 to-transparent mb-8"></div>
 
-        {/* Error Alert */}
         {error && (
           <Alert variant="destructive" className="max-w-md mb-6">
             <AlertCircle className="h-4 w-4" />
@@ -268,8 +195,7 @@ export default function PurchasesPage() {
           </Alert>
         )}
 
-        {/* Empty State */}
-        {purchases.length === 0 ? (
+        {!Array.isArray(purchases) || purchases.length === 0 ? (
           <div className="text-center py-12">
             <ShoppingBag className="h-16 w-16 text-gray-400 mx-auto mb-4" />
             <div className="text-gray-400 text-lg mb-4">No purchases found</div>
@@ -290,7 +216,6 @@ export default function PurchasesPage() {
             )}
           </div>
         ) : (
-          /* Purchases Grid */
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
             {purchases.map((purchase, index) => (
               <Card
@@ -302,7 +227,6 @@ export default function PurchasesPage() {
                 }}
               >
                 <div className="relative">
-                  {/* Creator Username - Top Left */}
                   <div className="absolute top-3 left-3 z-10">
                     <Link
                       href={`/creator/${purchase.creatorUsername}`}
@@ -312,7 +236,6 @@ export default function PurchasesPage() {
                     </Link>
                   </div>
 
-                  {/* Thumbnail - 1:1 Aspect Ratio */}
                   <div className="aspect-square relative bg-gray-800">
                     {purchase.thumbnailUrl ? (
                       <Image
@@ -322,8 +245,6 @@ export default function PurchasesPage() {
                         className="object-cover"
                         sizes="(max-width: 640px) 100vw, (max-width: 768px) 50vw, (max-width: 1024px) 33vw, 25vw"
                         onError={(e) => {
-                          console.warn(`⚠️ [Purchases Page] Image failed to load:`, purchase.thumbnailUrl)
-                          // Hide the image on error
                           const target = e.target as HTMLImageElement
                           target.style.display = "none"
                         }}
@@ -335,17 +256,13 @@ export default function PurchasesPage() {
                     )}
                   </div>
 
-                  {/* Border Line */}
                   <div className="h-px bg-gradient-to-r from-transparent via-gray-600 to-transparent"></div>
 
-                  {/* Content */}
                   <div className="p-4">
-                    {/* Title */}
                     <h3 className="text-white text-sm font-medium mb-3 line-clamp-2 min-h-[2.5rem]">
                       {purchase.title}
                     </h3>
 
-                    {/* Purchase Info */}
                     <div className="flex items-center justify-between text-xs text-gray-400 mb-3">
                       <span className="flex items-center">
                         <DollarSign className="h-3 w-3 mr-1" />${purchase.amount.toFixed(2)}
@@ -358,7 +275,6 @@ export default function PurchasesPage() {
                       )}
                     </div>
 
-                    {/* Open Button */}
                     <Button
                       onClick={() => handleOpenContent(purchase)}
                       className="w-full bg-white text-black hover:bg-gray-100 font-medium"
