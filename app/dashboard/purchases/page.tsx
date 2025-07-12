@@ -6,6 +6,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import {
   ShoppingBag,
   Eye,
@@ -19,7 +20,8 @@ import {
   AlertCircle,
   RefreshCw,
   Star,
-  CheckCircle,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react"
 import Link from "next/link"
 
@@ -58,6 +60,7 @@ export default function PurchasesPage() {
   const [purchases, setPurchases] = useState<Purchase[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [expandedPurchases, setExpandedPurchases] = useState<Set<string>>(new Set())
 
   useEffect(() => {
     fetchPurchases()
@@ -108,6 +111,18 @@ export default function PurchasesPage() {
     } finally {
       setLoading(false)
     }
+  }
+
+  const togglePurchaseExpansion = (purchaseId: string) => {
+    setExpandedPurchases((prev) => {
+      const newSet = new Set(prev)
+      if (newSet.has(purchaseId)) {
+        newSet.delete(purchaseId)
+      } else {
+        newSet.add(purchaseId)
+      }
+      return newSet
+    })
   }
 
   const formatFileSize = (bytes: number): string => {
@@ -249,145 +264,140 @@ export default function PurchasesPage() {
 
       {/* Purchases Grid */}
       <div className="grid gap-6">
-        {purchases.map((purchase, index) => (
-          <Card
-            key={purchase.id}
-            className="bg-black/40 backdrop-blur-xl border-white/10 hover:border-white/20 transition-all duration-300 overflow-hidden"
-            style={{
-              animationDelay: `${index * 100}ms`,
-              animation: "fadeInUp 0.6s ease-out forwards",
-            }}
-          >
-            <CardContent className="p-6">
-              <div className="flex items-start space-x-4 mb-4">
-                {/* Thumbnail */}
-                <div className="w-20 h-20 bg-gray-800 rounded-lg overflow-hidden flex-shrink-0">
-                  {purchase.productBoxThumbnail ? (
-                    <img
-                      src={purchase.productBoxThumbnail || "/placeholder.svg"}
-                      alt={purchase.productBoxTitle}
-                      className="w-full h-full object-cover"
-                      onError={(e) => {
-                        const target = e.target as HTMLImageElement
-                        target.src = "/placeholder.svg?height=80&width=80&text=No+Image"
-                      }}
-                    />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center">
-                      <Package className="h-8 w-8 text-gray-500" />
-                    </div>
-                  )}
-                </div>
+        {purchases.map((purchase, index) => {
+          const isExpanded = expandedPurchases.has(purchase.id)
 
-                {/* Purchase Info */}
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-start justify-between mb-2">
-                    <div className="flex-1">
-                      <h3 className="text-xl font-bold text-white mb-1 line-clamp-1">{purchase.productBoxTitle}</h3>
-                      <p className="text-white/70 text-sm mb-2 line-clamp-2">{purchase.productBoxDescription}</p>
-                      <div className="flex items-center space-x-4 text-sm text-white/60">
-                        <span className="flex items-center">
-                          <User className="h-4 w-4 mr-1" />
-                          {purchase.creatorName}
-                        </span>
-                        <span className="flex items-center">
-                          <DollarSign className="h-4 w-4 mr-1" />${purchase.amount.toFixed(2)}{" "}
-                          {purchase.currency.toUpperCase()}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Content Summary */}
-              <div className="grid grid-cols-3 gap-4 p-4 bg-white/5 rounded-lg mb-4">
-                <div className="text-center">
-                  <div className="text-lg font-bold text-white">{purchase.totalItems || 0}</div>
-                  <div className="text-sm text-white/60">Items</div>
-                </div>
-                <div className="text-center">
-                  <div className="text-lg font-bold text-white">{formatFileSize(purchase.totalSize || 0)}</div>
-                  <div className="text-sm text-white/60">Total Size</div>
-                </div>
-                <div className="text-center">
-                  <div className="text-lg font-bold text-green-400">∞</div>
-                  <div className="text-sm text-white/60">Lifetime</div>
-                </div>
-              </div>
-
-              {/* Content Items Preview */}
-              {purchase.items && purchase.items.length > 0 && (
-                <div className="mb-4">
-                  <h4 className="text-sm font-semibold text-white/80 mb-2 flex items-center">
-                    <Package className="h-4 w-4 mr-1" />
-                    Content ({purchase.items.length} items)
-                  </h4>
-                  <div className="space-y-2 max-h-32 overflow-y-auto">
-                    {purchase.items.slice(0, 3).map((item) => (
-                      <div key={item.id} className="flex items-center space-x-3 p-2 bg-white/5 rounded-lg">
-                        <div className="w-8 h-8 bg-white/10 rounded flex items-center justify-center">
-                          {getContentIcon(item.contentType)}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <p className="text-white font-medium text-sm truncate">{item.title}</p>
-                          <div className="flex items-center space-x-2 text-xs text-white/60">
-                            <span>{formatFileSize(item.fileSize)}</span>
-                            {item.duration && item.duration > 0 && <span>• {formatDuration(item.duration)}</span>}
-                            <span>• {item.contentType}</span>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                    {purchase.items.length > 3 && (
-                      <div className="text-center text-white/60 text-xs py-1">
-                        +{purchase.items.length - 3} more items
+          return (
+            <Card
+              key={purchase.id}
+              className="bg-black/40 backdrop-blur-xl border-white/10 hover:border-white/20 transition-all duration-300 overflow-hidden"
+              style={{
+                animationDelay: `${index * 100}ms`,
+                animation: "fadeInUp 0.6s ease-out forwards",
+              }}
+            >
+              <CardContent className="p-6">
+                <div className="flex items-start space-x-4 mb-4">
+                  {/* Thumbnail */}
+                  <div className="w-20 h-20 bg-gray-800 rounded-lg overflow-hidden flex-shrink-0">
+                    {purchase.productBoxThumbnail ? (
+                      <img
+                        src={purchase.productBoxThumbnail || "/placeholder.svg"}
+                        alt={purchase.productBoxTitle}
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                          const target = e.target as HTMLImageElement
+                          target.src = "/placeholder.svg?height=80&width=80&text=No+Image"
+                        }}
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center">
+                        <Package className="h-8 w-8 text-gray-500" />
                       </div>
                     )}
                   </div>
+
+                  {/* Purchase Info */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-start justify-between mb-2">
+                      <div className="flex-1">
+                        <h3 className="text-xl font-bold text-white mb-1 line-clamp-1">{purchase.productBoxTitle}</h3>
+                        <p className="text-white/70 text-sm mb-2 line-clamp-2">{purchase.productBoxDescription}</p>
+                        <div className="flex items-center space-x-4 text-sm text-white/60">
+                          <span className="flex items-center">
+                            <User className="h-4 w-4 mr-1" />
+                            {purchase.creatorName}
+                          </span>
+                          <span className="flex items-center">
+                            <DollarSign className="h-4 w-4 mr-1" />${purchase.amount.toFixed(2)}{" "}
+                            {purchase.currency.toUpperCase()}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 </div>
-              )}
 
-              {/* Action Buttons */}
-              <div className="flex space-x-3">
-                <Button
-                  asChild
-                  variant="outline"
-                  className="bg-transparent border-white/20 text-white hover:bg-white/10 flex-1"
-                >
-                  <Link href={`/product-box/${purchase.productBoxId}/content`}>
-                    <Eye className="w-4 h-4 mr-2" />
-                    View Content
-                  </Link>
-                </Button>
-                <Button
-                  asChild
-                  variant="outline"
-                  className="bg-transparent border-white/20 text-white hover:bg-white/10"
-                >
-                  <Link href={`/creator/${purchase.creatorUsername}`}>
-                    <User className="w-4 h-4 mr-2" />
-                    Creator Profile
-                  </Link>
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+                {/* Content Summary */}
+                <div className="grid grid-cols-3 gap-4 p-4 bg-white/5 rounded-lg mb-4">
+                  <div className="text-center">
+                    <div className="text-lg font-bold text-white">{purchase.totalItems || 0}</div>
+                    <div className="text-sm text-white/60">Items</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-lg font-bold text-white">{formatFileSize(purchase.totalSize || 0)}</div>
+                    <div className="text-sm text-white/60">Total Size</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-lg font-bold text-green-400">∞</div>
+                    <div className="text-sm text-white/60">Lifetime</div>
+                  </div>
+                </div>
 
-      {/* Footer */}
-      <div className="mt-8 p-4 bg-blue-500/10 rounded-lg border border-blue-500/20">
-        <div className="flex items-start space-x-3">
-          <CheckCircle className="h-5 w-5 text-blue-400 mt-0.5" />
-          <div>
-            <h4 className="font-medium text-blue-200">Lifetime Access Guaranteed</h4>
-            <p className="text-sm text-blue-200/80 mt-1">
-              All your purchases include lifetime access. You can download and re-download your content anytime.
-              {purchases.some((p) => p.anonymousAccess) && " Guest purchases are automatically saved for easy access."}
-            </p>
-          </div>
-        </div>
+                {/* Collapsible Content Items */}
+                {purchase.items && purchase.items.length > 0 && (
+                  <Collapsible open={isExpanded} onOpenChange={() => togglePurchaseExpansion(purchase.id)}>
+                    <CollapsibleTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        className="w-full justify-between p-0 h-auto text-white/80 hover:text-white hover:bg-white/5 mb-2"
+                      >
+                        <h4 className="text-sm font-semibold flex items-center">
+                          <Package className="h-4 w-4 mr-1" />
+                          Content ({purchase.items.length} items)
+                        </h4>
+                        {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                      </Button>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent className="space-y-2 mb-4">
+                      <div className="max-h-48 overflow-y-auto">
+                        {purchase.items.map((item) => (
+                          <div key={item.id} className="flex items-center space-x-3 p-2 bg-white/5 rounded-lg">
+                            <div className="w-8 h-8 bg-white/10 rounded flex items-center justify-center">
+                              {getContentIcon(item.contentType)}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-white font-medium text-sm truncate">{item.title}</p>
+                              <div className="flex items-center space-x-2 text-xs text-white/60">
+                                <span>{formatFileSize(item.fileSize)}</span>
+                                {item.duration && item.duration > 0 && <span>• {formatDuration(item.duration)}</span>}
+                                <span>• {item.contentType}</span>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </CollapsibleContent>
+                  </Collapsible>
+                )}
+
+                {/* Action Buttons */}
+                <div className="flex space-x-3">
+                  <Button
+                    asChild
+                    variant="outline"
+                    className="bg-transparent border-white/20 text-white hover:bg-white/10 flex-1"
+                  >
+                    <Link href={`/product-box/${purchase.productBoxId}/content`}>
+                      <Eye className="w-4 h-4 mr-2" />
+                      View Content
+                    </Link>
+                  </Button>
+                  <Button
+                    asChild
+                    variant="outline"
+                    className="bg-transparent border-white/20 text-white hover:bg-white/10"
+                  >
+                    <Link href={`/creator/${purchase.creatorUsername}`}>
+                      <User className="w-4 h-4 mr-2" />
+                      Creator Profile
+                    </Link>
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          )
+        })}
       </div>
 
       <style jsx>{`

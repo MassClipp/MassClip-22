@@ -3,61 +3,80 @@ import { db } from "@/lib/firebase-admin"
 
 export async function GET(request: NextRequest) {
   try {
-    // Get purchase access tokens from cookies
-    const cookies = request.cookies
-    const purchaseTokens: string[] = []
+    // Get access token from cookies
+    const accessToken = request.cookies.get("purchase_access_token")?.value
 
-    // Look for purchase access tokens in cookies
-    cookies.getAll().forEach((cookie) => {
-      if (cookie.name.startsWith("purchase_access_")) {
-        purchaseTokens.push(cookie.value)
-      }
-    })
-
-    if (purchaseTokens.length === 0) {
+    if (!accessToken) {
       return NextResponse.json({ purchases: [] })
     }
 
-    // Fetch purchases using access tokens
-    const purchases: any[] = []
+    // Query anonymous purchases using the access token
+    const anonymousPurchasesRef = db.collection("anonymousPurchases")
+    const snapshot = await anonymousPurchasesRef.where("accessToken", "==", accessToken).get()
 
-    for (const token of purchaseTokens) {
-      try {
-        // Query anonymous purchases collection using access token
-        const anonymousPurchasesRef = db.collection("anonymousPurchases")
-        const snapshot = await anonymousPurchasesRef.where("accessToken", "==", token).get()
-
-        if (!snapshot.empty) {
-          snapshot.forEach((doc) => {
-            const purchaseData = doc.data()
-            purchases.push({
-              id: doc.id,
-              ...purchaseData,
-              anonymousAccess: true,
-            })
-          })
-        }
-      } catch (error) {
-        console.error("Error fetching purchase with token:", token, error)
-        // Continue with other tokens
-      }
+    if (snapshot.empty) {
+      return NextResponse.json({ purchases: [] })
     }
 
-    // Sort purchases by purchase date (newest first)
-    purchases.sort((a, b) => {
-      const dateA = a.purchasedAt?.toDate?.() || new Date(a.purchasedAt || 0)
-      const dateB = b.purchasedAt?.toDate?.() || new Date(b.purchasedAt || 0)
-      return dateB.getTime() - dateA.getTime()
-    })
+    const purchases = []
+    for (const doc of snapshot.docs) {
+      const purchaseData = doc.data()
 
-    return NextResponse.json({
-      purchases: purchases.map((purchase) => ({
-        ...purchase,
-        purchasedAt: purchase.purchasedAt?.toDate?.()?.toISOString() || purchase.purchasedAt,
-      })),
-    })
+      // Get product box details
+      const productBoxRef = db.collection("productBoxes").doc(purchaseData.productBoxId)
+      const productBoxDoc = await productBoxRef.get()
+
+      if (!productBoxDoc.exists) {
+        continue
+      }
+
+      const productBoxData = productBoxDoc.data()
+
+      // Get creator details
+      const creatorRef = db.collection("users").doc(productBoxData.creatorId)
+      const creatorDoc = await creatorRef.get()
+      const creatorData = creatorDoc.exists ? creatorDoc.data() : {}
+
+      // Get content items
+      const contentRef = db.collection("productBoxContent")
+      const contentSnapshot = await contentRef.where("productBoxId", "==", purchaseData.productBoxId).get()
+
+      const items = contentSnapshot.docs.map((contentDoc) => {
+        const content = contentDoc.data()
+        return {
+          id: contentDoc.id,
+          title: content.title || content.fileName || "Untitled",
+          fileUrl: content.fileUrl || content.downloadUrl,
+          thumbnailUrl: content.thumbnailUrl,
+          fileSize: content.fileSize || 0,
+          duration: content.duration || 0,
+          contentType: content.contentType || "document",
+        }
+      })
+
+      purchases.push({
+        id: doc.id,
+        productBoxId: purchaseData.productBoxId,
+        productBoxTitle: productBoxData.title,
+        productBoxDescription: productBoxData.description,
+        productBoxThumbnail: productBoxData.thumbnailUrl,
+        creatorId: productBoxData.creatorId,
+        creatorName: creatorData.displayName || creatorData.name || "Unknown Creator",
+        creatorUsername: creatorData.username || "unknown",
+        amount: purchaseData.amount || 0,
+        currency: purchaseData.currency || "usd",
+        items,
+        totalItems: items.length,
+        totalSize: items.reduce((sum, item) => sum + (item.fileSize || 0), 0),
+        purchasedAt: purchaseData.purchasedAt || new Date().toISOString(),
+        status: "completed",
+        anonymousAccess: true,
+      })
+    }
+
+    return NextResponse.json({ purchases })
   } catch (error) {
     console.error("Error fetching anonymous purchases:", error)
-    return NextResponse.json({ error: "Failed to fetch purchases" }, { status: 500 })
+    return NextResponse.json({ purchases: [] })
   }
 }
