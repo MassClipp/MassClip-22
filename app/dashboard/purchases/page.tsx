@@ -4,13 +4,11 @@ import { useEffect, useState } from "react"
 import { useAuth } from "@/contexts/auth-context"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import {
   ShoppingBag,
   Eye,
-  Calendar,
   DollarSign,
   Package,
   User,
@@ -20,7 +18,6 @@ import {
   ImageIcon,
   AlertCircle,
   RefreshCw,
-  ExternalLink,
   Star,
   CheckCircle,
 } from "lucide-react"
@@ -139,17 +136,6 @@ export default function PurchasesPage() {
         return <ImageIcon className="h-4 w-4 text-purple-500" />
       default:
         return <FileText className="h-4 w-4 text-gray-500" />
-    }
-  }
-
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case "completed":
-        return <Badge className="bg-green-500/20 text-green-200 border-green-500/30">Active</Badge>
-      case "pending":
-        return <Badge className="bg-yellow-500/20 text-yellow-200 border-yellow-500/30">Pending</Badge>
-      default:
-        return <Badge variant="secondary">{status}</Badge>
     }
   }
 
@@ -305,27 +291,10 @@ export default function PurchasesPage() {
                           {purchase.creatorName}
                         </span>
                         <span className="flex items-center">
-                          <Calendar className="h-4 w-4 mr-1" />
-                          {new Date(purchase.purchasedAt).toLocaleDateString()}
-                        </span>
-                        <span className="flex items-center">
                           <DollarSign className="h-4 w-4 mr-1" />${purchase.amount.toFixed(2)}{" "}
                           {purchase.currency.toUpperCase()}
                         </span>
                       </div>
-                    </div>
-                    <div className="flex flex-col items-end space-y-2">
-                      {getStatusBadge(purchase.status)}
-                      {purchase.anonymousAccess && (
-                        <Badge variant="outline" className="text-xs border-blue-500/30 text-blue-200 bg-blue-500/10">
-                          Guest Access
-                        </Badge>
-                      )}
-                      {purchase.source && (
-                        <Badge variant="outline" className="text-xs border-white/20 text-white/60">
-                          {purchase.source}
-                        </Badge>
-                      )}
                     </div>
                   </div>
                 </div>
@@ -381,7 +350,11 @@ export default function PurchasesPage() {
 
               {/* Action Buttons */}
               <div className="flex space-x-3">
-                <Button asChild className="bg-red-600 hover:bg-red-700 flex-1">
+                <Button
+                  asChild
+                  variant="outline"
+                  className="bg-transparent border-white/20 text-white hover:bg-white/10 flex-1"
+                >
                   <Link href={`/product-box/${purchase.productBoxId}/content`}>
                     <Eye className="w-4 h-4 mr-2" />
                     View Content
@@ -395,16 +368,6 @@ export default function PurchasesPage() {
                   <Link href={`/creator/${purchase.creatorUsername}`}>
                     <User className="w-4 h-4 mr-2" />
                     Creator Profile
-                  </Link>
-                </Button>
-                <Button
-                  asChild
-                  variant="outline"
-                  size="sm"
-                  className="bg-transparent border-white/20 text-white hover:bg-white/10"
-                >
-                  <Link href={`/purchase-success?session_id=${purchase.id}`}>
-                    <ExternalLink className="w-4 h-4" />
                   </Link>
                 </Button>
               </div>
