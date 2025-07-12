@@ -13,8 +13,25 @@ export async function POST(request: NextRequest) {
     console.log(`🔍 [Verify & Grant] Starting verification for session: ${sessionId}`)
     console.log(`🔍 [Verify & Grant] Product ID: ${productBoxId}, Creator ID: ${creatorId}`)
 
+    if (!sessionId) {
+      return NextResponse.json({ error: "Session ID is required" }, { status: 400 })
+    }
+
     // 1. Verify the Stripe session
-    const session = await stripe.checkout.sessions.retrieve(sessionId)
+    let session
+    try {
+      session = await stripe.checkout.sessions.retrieve(sessionId)
+      console.log(`✅ [Verify & Grant] Session retrieved. Status: ${session.payment_status}`)
+    } catch (stripeError: any) {
+      console.error(`❌ [Verify & Grant] Stripe error:`, stripeError)
+      return NextResponse.json(
+        {
+          error: "Invalid session ID",
+          details: stripeError.message,
+        },
+        { status: 400 },
+      )
+    }
 
     if (session.payment_status !== "paid") {
       console.log(`❌ [Verify & Grant] Payment not completed. Status: ${session.payment_status}`)
@@ -23,15 +40,23 @@ export async function POST(request: NextRequest) {
 
     console.log(`✅ [Verify & Grant] Payment verified. Amount: ${session.amount_total}`)
 
-    // 2. Try to find the product in both collections
+    // 2. Get product info from session metadata or parameters
+    const finalProductBoxId = productBoxId || session.metadata?.productBoxId || session.metadata?.bundleId
+    const finalCreatorId = creatorId || session.metadata?.creatorId
+
+    if (!finalProductBoxId) {
+      return NextResponse.json({ error: "Product ID not found" }, { status: 400 })
+    }
+
+    // 3. Try to find the product in both collections
     let productDoc = null
     let productData = null
     let collectionUsed = null
 
     // First try bundles collection
     try {
-      console.log(`🔍 [Verify & Grant] Checking bundles collection for ID: ${productBoxId}`)
-      productDoc = await db.collection("bundles").doc(productBoxId).get()
+      console.log(`🔍 [Verify & Grant] Checking bundles collection for ID: ${finalProductBoxId}`)
+      productDoc = await db.collection("bundles").doc(finalProductBoxId).get()
       if (productDoc.exists) {
         productData = productDoc.data()
         collectionUsed = "bundles"
@@ -44,8 +69,8 @@ export async function POST(request: NextRequest) {
     // If not found in bundles, try productBoxes
     if (!productData) {
       try {
-        console.log(`🔍 [Verify & Grant] Checking productBoxes collection for ID: ${productBoxId}`)
-        productDoc = await db.collection("productBoxes").doc(productBoxId).get()
+        console.log(`🔍 [Verify & Grant] Checking productBoxes collection for ID: ${finalProductBoxId}`)
+        productDoc = await db.collection("productBoxes").doc(finalProductBoxId).get()
         if (productDoc.exists) {
           productData = productDoc.data()
           collectionUsed = "productBoxes"
@@ -61,35 +86,36 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Product not found" }, { status: 404 })
     }
 
-    // 3. Get content items
-    let contentItems = []
+    // 4. Get content items
+    let contentItems: any[] = []
     try {
       if (collectionUsed === "bundles") {
         // For bundles, get content from the contents array
         contentItems = productData.contents || []
+        console.log(`✅ [Verify & Grant] Found ${contentItems.length} items in bundle contents`)
       } else {
         // For productBoxes, get content from productBoxContent subcollection
-        const contentSnapshot = await db.collection("productBoxes").doc(productBoxId).collection("content").get()
+        const contentSnapshot = await db.collection("productBoxes").doc(finalProductBoxId).collection("content").get()
 
         contentItems = contentSnapshot.docs.map((doc) => ({
           id: doc.id,
           ...doc.data(),
         }))
+        console.log(`✅ [Verify & Grant] Found ${contentItems.length} items in productBox content`)
       }
-      console.log(`✅ [Verify & Grant] Found ${contentItems.length} content items`)
     } catch (error) {
       console.warn(`⚠️ [Verify & Grant] Error fetching content:`, error)
       contentItems = []
     }
 
-    // 4. Create purchase record
+    // 5. Create purchase record
     const purchaseData = {
       sessionId,
-      productBoxId,
-      bundleId: productBoxId, // For compatibility
-      creatorId,
+      productBoxId: finalProductBoxId,
+      bundleId: finalProductBoxId, // For compatibility
+      creatorId: finalCreatorId || productData.creatorId || productData.userId,
       buyerEmail: session.customer_details?.email || "anonymous",
-      buyerUid: session.metadata?.userId || "anonymous",
+      buyerUid: session.metadata?.userId || session.client_reference_id || "anonymous",
       amount: (session.amount_total || 0) / 100,
       currency: session.currency || "usd",
       status: "completed",
@@ -102,10 +128,10 @@ export async function POST(request: NextRequest) {
       creatorName: productData.creatorName || "Unknown Creator",
       creatorUsername: productData.creatorUsername || "unknown",
       totalItems: contentItems.length,
-      totalSize: contentItems.reduce((sum, item) => sum + (item.fileSize || 0), 0),
+      totalSize: contentItems.reduce((sum: number, item: any) => sum + (item.fileSize || 0), 0),
       contents: contentItems,
-      items: contentItems.map((item) => ({
-        id: item.id,
+      items: contentItems.map((item: any) => ({
+        id: item.id || Math.random().toString(36),
         title: item.title || item.name || "Untitled",
         fileUrl: item.fileUrl || item.url || "",
         thumbnailUrl: item.thumbnailUrl || item.thumbnail || "",
@@ -120,7 +146,7 @@ export async function POST(request: NextRequest) {
       stripePaymentIntentId: session.payment_intent,
     }
 
-    // 5. Save to multiple collections for compatibility
+    // 6. Save to multiple collections for compatibility
     const batch = db.batch()
 
     // Save to bundlePurchases (primary)
@@ -143,32 +169,34 @@ export async function POST(request: NextRequest) {
 
     console.log(`✅ [Verify & Grant] Purchase records created successfully`)
 
-    // 6. Update creator earnings and stats
+    // 7. Update creator earnings and stats
     try {
-      const creatorRef = db.collection("users").doc(creatorId)
-      const creatorDoc = await creatorRef.get()
+      if (finalCreatorId) {
+        const creatorRef = db.collection("users").doc(finalCreatorId)
+        const creatorDoc = await creatorRef.get()
 
-      if (creatorDoc.exists) {
-        const currentEarnings = creatorDoc.data()?.totalEarnings || 0
-        const currentSales = creatorDoc.data()?.totalSales || 0
+        if (creatorDoc.exists) {
+          const currentEarnings = creatorDoc.data()?.totalEarnings || 0
+          const currentSales = creatorDoc.data()?.totalSales || 0
 
-        await creatorRef.update({
-          totalEarnings: currentEarnings + purchaseData.amount,
-          totalSales: currentSales + 1,
-          lastSaleAt: new Date(),
-        })
-        console.log(`✅ [Verify & Grant] Creator stats updated`)
+          await creatorRef.update({
+            totalEarnings: currentEarnings + purchaseData.amount,
+            totalSales: currentSales + 1,
+            lastSaleAt: new Date(),
+          })
+          console.log(`✅ [Verify & Grant] Creator stats updated`)
+        }
       }
     } catch (error) {
       console.warn(`⚠️ [Verify & Grant] Error updating creator stats:`, error)
     }
 
-    // 7. Update product sales counter
+    // 8. Update product sales counter
     try {
       if (collectionUsed === "bundles") {
         await db
           .collection("bundles")
-          .doc(productBoxId)
+          .doc(finalProductBoxId)
           .update({
             salesCount: (productData.salesCount || 0) + 1,
             lastSaleAt: new Date(),
@@ -176,7 +204,7 @@ export async function POST(request: NextRequest) {
       } else {
         await db
           .collection("productBoxes")
-          .doc(productBoxId)
+          .doc(finalProductBoxId)
           .update({
             salesCount: (productData.salesCount || 0) + 1,
             lastSaleAt: new Date(),
@@ -189,13 +217,22 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      purchaseId: bundlePurchaseRef.id,
-      productTitle: purchaseData.bundleTitle,
-      contentItems: purchaseData.items,
-      totalItems: purchaseData.totalItems,
-      totalSize: purchaseData.totalSize,
-      amount: purchaseData.amount,
-      currency: purchaseData.currency,
+      purchase: {
+        id: bundlePurchaseRef.id,
+        productBoxId: finalProductBoxId,
+        productBoxTitle: purchaseData.bundleTitle,
+        productBoxDescription: purchaseData.productBoxDescription,
+        productBoxThumbnail: purchaseData.productBoxThumbnail,
+        creatorId: purchaseData.creatorId,
+        creatorName: purchaseData.creatorName,
+        creatorUsername: purchaseData.creatorUsername,
+        amount: purchaseData.amount,
+        currency: purchaseData.currency,
+        items: purchaseData.items,
+        totalItems: purchaseData.totalItems,
+        totalSize: purchaseData.totalSize,
+        purchasedAt: purchaseData.createdAt.toISOString(),
+      },
     })
   } catch (error: any) {
     console.error(`❌ [Verify & Grant] Error:`, error)

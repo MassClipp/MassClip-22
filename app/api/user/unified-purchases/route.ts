@@ -1,85 +1,142 @@
 import { type NextRequest, NextResponse } from "next/server"
+import { db } from "@/lib/firebase-admin"
 
 export async function GET(request: NextRequest) {
   try {
-    const authHeader = request.headers.get("authorization")
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      return NextResponse.json({ error: "Unauthorized", purchases: [] }, { status: 401 })
+    const { searchParams } = new URL(request.url)
+    const userId = searchParams.get("userId")
+
+    if (!userId) {
+      return NextResponse.json({ error: "User ID is required" }, { status: 400 })
     }
 
-    const token = authHeader.split("Bearer ")[1]
-    if (!token) {
-      return NextResponse.json({ error: "Invalid token", purchases: [] }, { status: 401 })
-    }
+    console.log(`🔍 [Unified Purchases] Fetching purchases for user: ${userId}`)
 
-    let userId: string
+    const purchases: any[] = []
+
+    // 1. Fetch from bundlePurchases (primary)
     try {
-      const { getAuth } = await import("firebase-admin/auth")
-      const decodedToken = await getAuth().verifyIdToken(token)
-      userId = decodedToken.uid
-    } catch (authError: any) {
-      console.error("Token verification failed:", authError)
-      return NextResponse.json({ error: "Authentication failed", purchases: [] }, { status: 401 })
+      const bundlePurchasesSnapshot = await db
+        .collection("bundlePurchases")
+        .where("buyerUid", "==", userId)
+        .orderBy("createdAt", "desc")
+        .get()
+
+      console.log(`📦 [Unified Purchases] Found ${bundlePurchasesSnapshot.docs.length} bundle purchases`)
+
+      for (const doc of bundlePurchasesSnapshot.docs) {
+        const data = doc.data()
+        purchases.push({
+          id: doc.id,
+          source: "bundlePurchases",
+          ...data,
+          createdAt: data.createdAt?.toDate?.() || data.createdAt || new Date(),
+          completedAt: data.completedAt?.toDate?.() || data.completedAt || data.createdAt?.toDate?.() || new Date(),
+        })
+      }
+    } catch (error) {
+      console.warn(`⚠️ [Unified Purchases] Error fetching bundle purchases:`, error)
     }
 
-    let db: any
+    // 2. Fetch from unifiedPurchases
     try {
-      const { db: adminDb } = await import("@/lib/firebase-admin")
-      db = adminDb
-    } catch (dbError: any) {
-      console.error("Database connection failed:", dbError)
-      return NextResponse.json({ error: "Database connection failed", purchases: [] }, { status: 500 })
-    }
+      const unifiedPurchasesSnapshot = await db
+        .collection("unifiedPurchases")
+        .where("buyerUid", "==", userId)
+        .orderBy("createdAt", "desc")
+        .get()
 
-    const collections = ["bundlePurchases", "unifiedPurchases", "productBoxPurchases", "purchases"]
-    const allPurchases: any[] = []
+      console.log(`🔄 [Unified Purchases] Found ${unifiedPurchasesSnapshot.docs.length} unified purchases`)
 
-    for (const collectionName of collections) {
-      try {
-        const snapshot = await db.collection(collectionName).where("buyerUid", "==", userId).get()
-        if (!snapshot.empty) {
-          snapshot.docs.forEach((doc: any) => {
-            allPurchases.push({
-              id: doc.id,
-              ...doc.data(),
-              source: collectionName,
-            })
+      for (const doc of unifiedPurchasesSnapshot.docs) {
+        const data = doc.data()
+        // Check if we already have this purchase from bundlePurchases
+        const existingPurchase = purchases.find(
+          (p) =>
+            p.sessionId === data.sessionId ||
+            p.stripeSessionId === data.stripeSessionId ||
+            (p.productBoxId === data.productBoxId &&
+              Math.abs(
+                new Date(p.createdAt).getTime() - new Date(data.createdAt?.toDate?.() || data.createdAt).getTime(),
+              ) < 60000),
+        )
+
+        if (!existingPurchase) {
+          purchases.push({
+            id: doc.id,
+            source: "unifiedPurchases",
+            ...data,
+            createdAt: data.createdAt?.toDate?.() || data.createdAt || new Date(),
+            completedAt: data.completedAt?.toDate?.() || data.completedAt || data.createdAt?.toDate?.() || new Date(),
           })
         }
-      } catch (error) {
-        console.warn(`Error checking ${collectionName}:`, error)
       }
-
-      try {
-        const snapshot = await db.collection(collectionName).where("userId", "==", userId).get()
-        if (!snapshot.empty) {
-          snapshot.docs.forEach((doc: any) => {
-            const exists = allPurchases.some((p) => p.id === doc.id)
-            if (!exists) {
-              allPurchases.push({
-                id: doc.id,
-                ...doc.data(),
-                source: collectionName,
-              })
-            }
-          })
-        }
-      } catch (error) {
-        console.warn(`Error checking ${collectionName} with userId:`, error)
-      }
+    } catch (error) {
+      console.warn(`⚠️ [Unified Purchases] Error fetching unified purchases:`, error)
     }
 
-    const uniquePurchases = allPurchases.filter((purchase, index, self) => {
-      const identifier = purchase.productBoxId || purchase.bundleId || purchase.sessionId
-      return index === self.findIndex((p) => (p.productBoxId || p.bundleId || p.sessionId) === identifier)
-    })
+    // 3. Fetch from productBoxPurchases (fallback)
+    try {
+      const productBoxPurchasesSnapshot = await db
+        .collection("productBoxPurchases")
+        .where("buyerUid", "==", userId)
+        .orderBy("createdAt", "desc")
+        .get()
+
+      console.log(`📋 [Unified Purchases] Found ${productBoxPurchasesSnapshot.docs.length} product box purchases`)
+
+      for (const doc of productBoxPurchasesSnapshot.docs) {
+        const data = doc.data()
+        // Check if we already have this purchase
+        const existingPurchase = purchases.find(
+          (p) =>
+            p.sessionId === data.sessionId ||
+            p.stripeSessionId === data.stripeSessionId ||
+            (p.productBoxId === data.productBoxId &&
+              Math.abs(
+                new Date(p.createdAt).getTime() - new Date(data.createdAt?.toDate?.() || data.createdAt).getTime(),
+              ) < 60000),
+        )
+
+        if (!existingPurchase) {
+          purchases.push({
+            id: doc.id,
+            source: "productBoxPurchases",
+            ...data,
+            createdAt: data.createdAt?.toDate?.() || data.createdAt || new Date(),
+            completedAt: data.completedAt?.toDate?.() || data.completedAt || data.createdAt?.toDate?.() || new Date(),
+          })
+        }
+      }
+    } catch (error) {
+      console.warn(`⚠️ [Unified Purchases] Error fetching product box purchases:`, error)
+    }
+
+    // Sort by creation date (newest first)
+    purchases.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+
+    console.log(`✅ [Unified Purchases] Returning ${purchases.length} total purchases`)
 
     return NextResponse.json({
-      purchases: uniquePurchases,
-      total: uniquePurchases.length,
+      success: true,
+      purchases: purchases,
+      count: purchases.length,
+      sources: {
+        bundlePurchases: purchases.filter((p) => p.source === "bundlePurchases").length,
+        unifiedPurchases: purchases.filter((p) => p.source === "unifiedPurchases").length,
+        productBoxPurchases: purchases.filter((p) => p.source === "productBoxPurchases").length,
+      },
     })
   } catch (error: any) {
-    console.error("Unified purchases API error:", error)
-    return NextResponse.json({ error: "Internal server error", purchases: [] }, { status: 500 })
+    console.error(`❌ [Unified Purchases] Error:`, error)
+    return NextResponse.json(
+      {
+        error: "Failed to fetch purchases",
+        details: error.message,
+        purchases: [], // Always return empty array on error
+        count: 0,
+      },
+      { status: 500 },
+    )
   }
 }
