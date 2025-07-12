@@ -66,6 +66,7 @@ function PurchaseSuccessContent() {
       productBoxId,
       creatorId,
       testMode,
+      fullURL: window.location.href,
     })
 
     if (!sessionId && !productBoxId) {
@@ -81,23 +82,33 @@ function PurchaseSuccessContent() {
     try {
       console.log(`🔄 [Purchase Success] Verifying purchase and granting immediate access...`)
 
+      const requestBody = {
+        sessionId,
+        productBoxId,
+        creatorId,
+      }
+
+      console.log(`📤 [Purchase Success] Sending request:`, requestBody)
+
       const response = await fetch("/api/purchase/verify-and-grant", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         credentials: "include", // Important for cookies
-        body: JSON.stringify({
-          sessionId,
-          productBoxId,
-          creatorId,
-        }),
+        body: JSON.stringify(requestBody),
       })
 
       const result = await response.json()
 
+      console.log(`📥 [Purchase Success] Response:`, {
+        status: response.status,
+        ok: response.ok,
+        result,
+      })
+
       if (!response.ok) {
-        throw new Error(result.error || "Failed to verify purchase")
+        throw new Error(result.error || `HTTP ${response.status}: ${result.details || "Failed to verify purchase"}`)
       }
 
       console.log(`✅ [Purchase Success] Access granted successfully:`, result)

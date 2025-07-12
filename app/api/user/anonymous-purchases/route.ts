@@ -3,76 +3,80 @@ import { db } from "@/lib/firebase-admin"
 
 export async function GET(request: NextRequest) {
   try {
-    console.log("🔍 [Anonymous Purchases] Checking for access tokens in cookies")
+    // Get access token from cookies
+    const accessToken = request.cookies.get("purchase_access_token")?.value
 
-    // Get access tokens from cookies
-    const cookies = request.cookies
-    const accessTokens: string[] = []
-
-    // Look for access token cookies (they might be named with different patterns)
-    cookies.getAll().forEach((cookie) => {
-      if (cookie.name.startsWith("purchase_access_") || cookie.name === "purchase_access_token") {
-        accessTokens.push(cookie.value)
-      }
-    })
-
-    if (accessTokens.length === 0) {
-      console.log("❌ [Anonymous Purchases] No access tokens found in cookies")
+    if (!accessToken) {
       return NextResponse.json({ purchases: [] })
     }
 
-    console.log(`✅ [Anonymous Purchases] Found ${accessTokens.length} access tokens`)
+    // Query anonymous purchases using the access token
+    const anonymousPurchasesRef = db.collection("anonymousPurchases")
+    const snapshot = await anonymousPurchasesRef.where("accessToken", "==", accessToken).get()
 
-    // Fetch purchases using access tokens
-    const purchases: any[] = []
-
-    for (const token of accessTokens) {
-      try {
-        // Query anonymous purchases collection
-        const anonymousPurchasesQuery = await db
-          .collection("anonymousPurchases")
-          .where("accessToken", "==", token)
-          .get()
-
-        anonymousPurchasesQuery.forEach((doc) => {
-          const data = doc.data()
-          purchases.push({
-            id: doc.id,
-            ...data,
-            isAnonymous: true,
-          })
-        })
-
-        // Also check regular purchases collection for this token
-        const regularPurchasesQuery = await db.collection("purchases").where("accessToken", "==", token).get()
-
-        regularPurchasesQuery.forEach((doc) => {
-          const data = doc.data()
-          purchases.push({
-            id: doc.id,
-            ...data,
-            isAnonymous: false,
-          })
-        })
-      } catch (tokenError) {
-        console.error(`❌ [Anonymous Purchases] Error processing token ${token}:`, tokenError)
-      }
+    if (snapshot.empty) {
+      return NextResponse.json({ purchases: [] })
     }
 
-    console.log(`✅ [Anonymous Purchases] Found ${purchases.length} total purchases`)
+    const purchases = []
+    for (const doc of snapshot.docs) {
+      const purchaseData = doc.data()
 
-    // Remove duplicates based on bundleId or productBoxId
-    const uniquePurchases = purchases.filter((purchase, index, self) => {
-      const identifier = purchase.bundleId || purchase.productBoxId
-      return index === self.findIndex((p) => (p.bundleId || p.productBoxId) === identifier)
-    })
+      // Get product box details
+      const productBoxRef = db.collection("productBoxes").doc(purchaseData.productBoxId)
+      const productBoxDoc = await productBoxRef.get()
 
-    return NextResponse.json({
-      purchases: uniquePurchases,
-      totalCount: uniquePurchases.length,
-    })
+      if (!productBoxDoc.exists) {
+        continue
+      }
+
+      const productBoxData = productBoxDoc.data()
+
+      // Get creator details
+      const creatorRef = db.collection("users").doc(productBoxData.creatorId)
+      const creatorDoc = await creatorRef.get()
+      const creatorData = creatorDoc.exists ? creatorDoc.data() : {}
+
+      // Get content items
+      const contentRef = db.collection("productBoxContent")
+      const contentSnapshot = await contentRef.where("productBoxId", "==", purchaseData.productBoxId).get()
+
+      const items = contentSnapshot.docs.map((contentDoc) => {
+        const content = contentDoc.data()
+        return {
+          id: contentDoc.id,
+          title: content.title || content.fileName || "Untitled",
+          fileUrl: content.fileUrl || content.downloadUrl,
+          thumbnailUrl: content.thumbnailUrl,
+          fileSize: content.fileSize || 0,
+          duration: content.duration || 0,
+          contentType: content.contentType || "document",
+        }
+      })
+
+      purchases.push({
+        id: doc.id,
+        productBoxId: purchaseData.productBoxId,
+        productBoxTitle: productBoxData.title,
+        productBoxDescription: productBoxData.description,
+        productBoxThumbnail: productBoxData.thumbnailUrl,
+        creatorId: productBoxData.creatorId,
+        creatorName: creatorData.displayName || creatorData.name || "Unknown Creator",
+        creatorUsername: creatorData.username || "unknown",
+        amount: purchaseData.amount || 0,
+        currency: purchaseData.currency || "usd",
+        items,
+        totalItems: items.length,
+        totalSize: items.reduce((sum, item) => sum + (item.fileSize || 0), 0),
+        purchasedAt: purchaseData.purchasedAt || new Date().toISOString(),
+        status: "completed",
+        anonymousAccess: true,
+      })
+    }
+
+    return NextResponse.json({ purchases })
   } catch (error) {
-    console.error("❌ [Anonymous Purchases] Error:", error)
-    return NextResponse.json({ error: "Failed to fetch anonymous purchases" }, { status: 500 })
+    console.error("Error fetching anonymous purchases:", error)
+    return NextResponse.json({ purchases: [] })
   }
 }
