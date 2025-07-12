@@ -1,62 +1,47 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { useRouter } from "next/navigation"
 import { useAuth } from "@/contexts/auth-context"
-import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Skeleton } from "@/components/ui/skeleton"
-import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
-import {
-  ShoppingBag,
-  Eye,
-  DollarSign,
-  Package,
-  User,
-  FileText,
-  Video,
-  Music,
-  ImageIcon,
-  AlertCircle,
-  RefreshCw,
-  Star,
-  ChevronDown,
-  ChevronUp,
-} from "lucide-react"
-import Link from "next/link"
+import { ChevronDown, ChevronUp, Eye, User, RefreshCw, Loader2 } from "lucide-react"
+import { useToast } from "@/hooks/use-toast"
 
-interface PurchaseItem {
+interface ContentItem {
   id: string
   title: string
   fileUrl: string
-  thumbnailUrl?: string
+  mimeType: string
   fileSize: number
-  duration?: number
   contentType: "video" | "audio" | "image" | "document"
+  duration?: number
+  filename: string
 }
 
 interface Purchase {
   id: string
+  bundleId: string
   productBoxId: string
-  productBoxTitle: string
-  productBoxDescription: string
-  productBoxThumbnail: string
-  creatorId: string
-  creatorName: string
+  bundleTitle: string
+  bundleDescription?: string
+  thumbnailUrl?: string
   creatorUsername: string
-  amount: number
+  price: number
   currency: string
-  items: PurchaseItem[]
+  purchaseDate: any
+  status: string
+  contentItems?: ContentItem[]
   totalItems: number
   totalSize: number
-  purchasedAt: string
-  status: string
-  source?: string
-  anonymousAccess?: boolean
+  accessToken?: string
+  isAnonymous?: boolean
 }
 
 export default function PurchasesPage() {
+  const router = useRouter()
   const { user } = useAuth()
+  const { toast } = useToast()
   const [purchases, setPurchases] = useState<Purchase[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -71,21 +56,28 @@ export default function PurchasesPage() {
       setLoading(true)
       setError(null)
 
-      // Try to fetch anonymous purchases first (no auth required)
-      const anonymousResponse = await fetch("/api/user/anonymous-purchases", {
-        credentials: "include",
-      })
+      // First try to fetch anonymous purchases using access tokens from cookies
+      try {
+        const anonymousResponse = await fetch("/api/user/anonymous-purchases", {
+          credentials: "include", // Include cookies
+        })
 
-      if (anonymousResponse.ok) {
-        const anonymousData = await anonymousResponse.json()
-        if (anonymousData.purchases && anonymousData.purchases.length > 0) {
-          setPurchases(anonymousData.purchases)
-          setLoading(false)
-          return
+        if (anonymousResponse.ok) {
+          const anonymousData = await anonymousResponse.json()
+          const anonymousPurchases = Array.isArray(anonymousData) ? anonymousData : anonymousData.purchases || []
+
+          if (anonymousPurchases.length > 0) {
+            console.log(`✅ [Purchases] Found ${anonymousPurchases.length} anonymous purchases`)
+            setPurchases(anonymousPurchases)
+            setLoading(false)
+            return
+          }
         }
+      } catch (anonymousError) {
+        console.log("No anonymous purchases found, trying authenticated purchases")
       }
 
-      // If user is authenticated, try to fetch authenticated purchases
+      // Fallback to authenticated purchases if user is logged in
       if (user) {
         const idToken = await user.getIdToken()
         const response = await fetch("/api/user/unified-purchases", {
@@ -94,26 +86,75 @@ export default function PurchasesPage() {
           },
         })
 
-        if (!response.ok) {
-          throw new Error("Failed to fetch purchases")
+        if (response.ok) {
+          const data = await response.json()
+          const userPurchases = Array.isArray(data) ? data : data.purchases || []
+          console.log(`✅ [Purchases] Found ${userPurchases.length} authenticated purchases`)
+          setPurchases(userPurchases)
+        } else {
+          throw new Error("Failed to fetch authenticated purchases")
         }
-
-        const data = await response.json()
-        setPurchases(data.purchases || [])
       } else {
         // No user and no anonymous purchases
         setPurchases([])
       }
-    } catch (err: any) {
+    } catch (err) {
       console.error("Error fetching purchases:", err)
-      setError(err.message)
-      setPurchases([])
+      setError(err instanceof Error ? err.message : "Failed to load purchases")
+      toast({
+        title: "Error",
+        description: "Failed to load your purchases",
+        variant: "destructive",
+      })
     } finally {
       setLoading(false)
     }
   }
 
-  const togglePurchaseExpansion = (purchaseId: string) => {
+  const formatFileSize = (bytes: number): string => {
+    if (bytes === 0) return "0 B"
+    const k = 1024
+    const sizes = ["B", "KB", "MB", "GB"]
+    const i = Math.floor(Math.log(bytes) / Math.log(k))
+    return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + " " + sizes[i]
+  }
+
+  const formatDate = (date: any): string => {
+    if (!date) return ""
+    try {
+      const dateObj = date.toDate ? date.toDate() : new Date(date)
+      return dateObj.toLocaleDateString()
+    } catch {
+      return ""
+    }
+  }
+
+  const handleViewContent = (purchase: Purchase) => {
+    const bundleId = purchase.bundleId || purchase.productBoxId
+    if (bundleId) {
+      router.push(`/product-box/${bundleId}/content`)
+    } else {
+      toast({
+        title: "Error",
+        description: "Unable to access content for this purchase",
+        variant: "destructive",
+      })
+    }
+  }
+
+  const handleCreatorProfile = (purchase: Purchase) => {
+    if (purchase.creatorUsername) {
+      router.push(`/creator/${purchase.creatorUsername}`)
+    } else {
+      toast({
+        title: "Error",
+        description: "Creator profile not available",
+        variant: "destructive",
+      })
+    }
+  }
+
+  const toggleExpanded = (purchaseId: string) => {
     setExpandedPurchases((prev) => {
       const newSet = new Set(prev)
       if (newSet.has(purchaseId)) {
@@ -125,293 +166,186 @@ export default function PurchasesPage() {
     })
   }
 
-  const formatFileSize = (bytes: number): string => {
-    if (bytes === 0) return "0 B"
-    const k = 1024
-    const sizes = ["B", "KB", "MB", "GB"]
-    const i = Math.floor(Math.log(bytes) / Math.log(k))
-    return Number.parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + " " + sizes[i]
-  }
-
-  const formatDuration = (seconds: number): string => {
-    if (seconds === 0) return ""
-    const minutes = Math.floor(seconds / 60)
-    const remainingSeconds = seconds % 60
-    if (minutes === 0) return `${remainingSeconds}s`
-    return `${minutes}:${remainingSeconds.toString().padStart(2, "0")}`
-  }
-
-  const getContentIcon = (contentType: string) => {
-    switch (contentType) {
-      case "video":
-        return <Video className="h-4 w-4 text-blue-500" />
-      case "audio":
-        return <Music className="h-4 w-4 text-green-500" />
-      case "image":
-        return <ImageIcon className="h-4 w-4 text-purple-500" />
-      default:
-        return <FileText className="h-4 w-4 text-gray-500" />
-    }
-  }
-
-  // Loading state
   if (loading) {
     return (
-      <div className="container mx-auto px-4 py-8">
-        <div className="mb-8">
-          <Skeleton className="h-8 w-48 mb-2 bg-white/10" />
-          <Skeleton className="h-4 w-96 bg-white/10" />
-        </div>
-        <div className="grid gap-6">
-          {[1, 2, 3].map((i) => (
-            <Card key={i} className="bg-black/40 backdrop-blur-xl border-white/10">
-              <CardContent className="p-6">
-                <div className="flex items-start space-x-4">
-                  <Skeleton className="w-20 h-20 rounded-lg bg-white/10" />
-                  <div className="flex-1 space-y-2">
-                    <Skeleton className="h-6 w-3/4 bg-white/10" />
-                    <Skeleton className="h-4 w-1/2 bg-white/10" />
-                    <Skeleton className="h-4 w-1/4 bg-white/10" />
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+      <div className="min-h-screen bg-black/40 backdrop-blur-xl p-6">
+        <div className="max-w-4xl mx-auto">
+          <div className="flex items-center justify-center py-12">
+            <Loader2 className="h-8 w-8 animate-spin text-white" />
+            <span className="ml-3 text-white">Loading your purchases...</span>
+          </div>
         </div>
       </div>
     )
   }
 
-  // Error state
   if (error) {
     return (
-      <div className="container mx-auto px-4 py-8">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-white mb-2">My Purchases</h1>
-          <p className="text-white/70">Access your purchased content and downloads</p>
-        </div>
-
-        <Alert className="bg-red-500/10 border-red-500/20 mb-6">
-          <AlertCircle className="h-4 w-4 text-red-400" />
-          <AlertDescription className="text-red-200">
-            <strong>Error loading purchases:</strong> {error}
-          </AlertDescription>
-        </Alert>
-
-        <div className="flex space-x-4">
-          <Button onClick={fetchPurchases} className="bg-red-600 hover:bg-red-700">
-            <RefreshCw className="w-4 h-4 mr-2" />
-            Try Again
-          </Button>
-          <Button asChild variant="outline" className="border-white/20 text-white hover:bg-white/10 bg-transparent">
-            <Link href="/dashboard">
-              <Package className="w-4 h-4 mr-2" />
-              Back to Dashboard
-            </Link>
-          </Button>
+      <div className="min-h-screen bg-black/40 backdrop-blur-xl p-6">
+        <div className="max-w-4xl mx-auto">
+          <div className="text-center py-12">
+            <div className="text-red-500 text-6xl mb-4">⚠️</div>
+            <h2 className="text-white text-2xl font-bold mb-4">Error Loading Purchases</h2>
+            <p className="text-gray-400 mb-6">{error}</p>
+            <Button onClick={fetchPurchases} className="bg-white text-black hover:bg-gray-100">
+              <RefreshCw className="h-4 w-4 mr-2" />
+              Try Again
+            </Button>
+          </div>
         </div>
       </div>
     )
   }
 
-  // Empty state
-  if (purchases.length === 0) {
-    return (
-      <div className="container mx-auto px-4 py-8">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-white mb-2">My Purchases</h1>
-          <p className="text-white/70">Access your purchased content and downloads</p>
-        </div>
-
-        <Card className="bg-black/40 backdrop-blur-xl border-white/10">
-          <CardContent className="p-12 text-center">
-            <ShoppingBag className="h-16 w-16 text-white/30 mx-auto mb-4" />
-            <h2 className="text-2xl font-bold text-white mb-2">No Purchases Yet</h2>
-            <p className="text-white/60 mb-6 max-w-md mx-auto">
-              You haven't made any purchases yet. Explore our premium content library to find amazing content from
-              talented creators.
-            </p>
-            <div className="space-y-3">
-              <Button asChild className="bg-red-600 hover:bg-red-700">
-                <Link href="/dashboard/explore">
-                  <Star className="w-4 h-4 mr-2" />
-                  Explore Premium Content
-                </Link>
-              </Button>
-              <Button asChild variant="outline" className="bg-transparent border-white/20 text-white hover:bg-white/10">
-                <Link href="/dashboard">
-                  <Package className="w-4 h-4 mr-2" />
-                  Go to Dashboard
-                </Link>
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    )
-  }
-
-  // Purchases list
   return (
-    <div className="container mx-auto px-4 py-8">
-      {/* Header */}
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold text-white mb-2">My Purchases</h1>
-        <p className="text-white/70">
-          {purchases.length} purchase{purchases.length !== 1 ? "s" : ""} • Lifetime access to all content
-        </p>
-      </div>
+    <div className="min-h-screen bg-black/40 backdrop-blur-xl p-6">
+      <div className="max-w-4xl mx-auto">
+        {/* Header */}
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold text-white mb-2">My Purchases</h1>
+          <p className="text-gray-400">
+            {purchases.length} purchase{purchases.length !== 1 ? "s" : ""} • Lifetime access to all content
+          </p>
+        </div>
 
-      {/* Purchases Grid */}
-      <div className="grid gap-6">
-        {purchases.map((purchase, index) => {
-          const isExpanded = expandedPurchases.has(purchase.id)
-
-          return (
-            <Card
-              key={purchase.id}
-              className="bg-black/40 backdrop-blur-xl border-white/10 hover:border-white/20 transition-all duration-300 overflow-hidden"
-              style={{
-                animationDelay: `${index * 100}ms`,
-                animation: "fadeInUp 0.6s ease-out forwards",
-              }}
-            >
-              <CardContent className="p-6">
-                <div className="flex items-start space-x-4 mb-4">
-                  {/* Thumbnail */}
-                  <div className="w-20 h-20 bg-gray-800 rounded-lg overflow-hidden flex-shrink-0">
-                    {purchase.productBoxThumbnail ? (
+        {/* Purchases List */}
+        {purchases.length > 0 ? (
+          <div className="space-y-6">
+            {purchases.map((purchase) => (
+              <div
+                key={purchase.id}
+                className="bg-black/40 backdrop-blur-xl rounded-lg border border-white/10 overflow-hidden"
+              >
+                {/* Purchase Header */}
+                <div className="p-6">
+                  <div className="flex items-start gap-4">
+                    {/* Thumbnail */}
+                    <div className="flex-shrink-0">
                       <img
-                        src={purchase.productBoxThumbnail || "/placeholder.svg"}
-                        alt={purchase.productBoxTitle}
-                        className="w-full h-full object-cover"
-                        onError={(e) => {
-                          const target = e.target as HTMLImageElement
-                          target.src = "/placeholder.svg?height=80&width=80&text=No+Image"
-                        }}
+                        src={purchase.thumbnailUrl || "/placeholder.svg?height=80&width=80"}
+                        alt={purchase.bundleTitle}
+                        className="w-20 h-20 rounded-lg object-cover bg-gray-800"
                       />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center">
-                        <Package className="h-8 w-8 text-gray-500" />
-                      </div>
-                    )}
-                  </div>
+                    </div>
 
-                  {/* Purchase Info */}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-start justify-between mb-2">
-                      <div className="flex-1">
-                        <h3 className="text-xl font-bold text-white mb-1 line-clamp-1">{purchase.productBoxTitle}</h3>
-                        <p className="text-white/70 text-sm mb-2 line-clamp-2">{purchase.productBoxDescription}</p>
-                        <div className="flex items-center space-x-4 text-sm text-white/60">
-                          <span className="flex items-center">
-                            <User className="h-4 w-4 mr-1" />
-                            {purchase.creatorName}
-                          </span>
-                          <span className="flex items-center">
-                            <DollarSign className="h-4 w-4 mr-1" />${purchase.amount.toFixed(2)}{" "}
-                            {purchase.currency.toUpperCase()}
+                    {/* Purchase Info */}
+                    <div className="flex-1 min-w-0">
+                      <h3 className="text-xl font-semibold text-white mb-1 truncate">{purchase.bundleTitle}</h3>
+                      {purchase.bundleDescription && (
+                        <p className="text-gray-400 text-sm mb-3 line-clamp-2">{purchase.bundleDescription}</p>
+                      )}
+
+                      <div className="flex items-center gap-4 text-sm text-gray-400">
+                        <div className="flex items-center gap-1">
+                          <User className="h-4 w-4" />
+                          <span>{purchase.creatorUsername}</span>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <span>
+                            ${purchase.price.toFixed(2)} {purchase.currency?.toUpperCase() || "USD"}
                           </span>
                         </div>
                       </div>
                     </div>
                   </div>
-                </div>
 
-                {/* Content Summary */}
-                <div className="grid grid-cols-3 gap-4 p-4 bg-white/5 rounded-lg mb-4">
-                  <div className="text-center">
-                    <div className="text-lg font-bold text-white">{purchase.totalItems || 0}</div>
-                    <div className="text-sm text-white/60">Items</div>
+                  {/* Stats Grid */}
+                  <div className="mt-6 grid grid-cols-3 gap-4 p-4 bg-white/5 rounded-lg">
+                    <div className="text-center">
+                      <div className="text-2xl font-bold text-white">{purchase.totalItems || 0}</div>
+                      <div className="text-sm text-gray-400">Items</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-2xl font-bold text-white">{formatFileSize(purchase.totalSize || 0)}</div>
+                      <div className="text-sm text-gray-400">Total Size</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-2xl font-bold text-white">∞</div>
+                      <div className="text-sm text-gray-400">Lifetime</div>
+                    </div>
                   </div>
-                  <div className="text-center">
-                    <div className="text-lg font-bold text-white">{formatFileSize(purchase.totalSize || 0)}</div>
-                    <div className="text-sm text-white/60">Total Size</div>
-                  </div>
-                  <div className="text-center">
-                    <div className="text-lg font-bold text-green-400">∞</div>
-                    <div className="text-sm text-white/60">Lifetime</div>
-                  </div>
-                </div>
 
-                {/* Collapsible Content Items */}
-                {purchase.items && purchase.items.length > 0 && (
-                  <Collapsible open={isExpanded} onOpenChange={() => togglePurchaseExpansion(purchase.id)}>
-                    <CollapsibleTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        className="w-full justify-between p-0 h-auto text-white/80 hover:text-white hover:bg-white/5 mb-2"
-                      >
-                        <h4 className="text-sm font-semibold flex items-center">
-                          <Package className="h-4 w-4 mr-1" />
-                          Content ({purchase.items.length} items)
-                        </h4>
-                        {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-                      </Button>
-                    </CollapsibleTrigger>
-                    <CollapsibleContent className="space-y-2 mb-4">
-                      <div className="max-h-48 overflow-y-auto">
-                        {purchase.items.map((item) => (
-                          <div key={item.id} className="flex items-center space-x-3 p-2 bg-white/5 rounded-lg">
-                            <div className="w-8 h-8 bg-white/10 rounded flex items-center justify-center">
-                              {getContentIcon(item.contentType)}
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <p className="text-white font-medium text-sm truncate">{item.title}</p>
-                              <div className="flex items-center space-x-2 text-xs text-white/60">
-                                <span>{formatFileSize(item.fileSize)}</span>
-                                {item.duration && item.duration > 0 && <span>• {formatDuration(item.duration)}</span>}
-                                <span>• {item.contentType}</span>
+                  {/* Content Items - Collapsible */}
+                  {purchase.contentItems && purchase.contentItems.length > 0 && (
+                    <Collapsible
+                      open={expandedPurchases.has(purchase.id)}
+                      onOpenChange={() => toggleExpanded(purchase.id)}
+                    >
+                      <CollapsibleTrigger className="flex items-center gap-2 mt-4 text-white hover:text-gray-300 transition-colors">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-medium">Content ({purchase.contentItems.length} items)</span>
+                          {expandedPurchases.has(purchase.id) ? (
+                            <ChevronUp className="h-4 w-4" />
+                          ) : (
+                            <ChevronDown className="h-4 w-4" />
+                          )}
+                        </div>
+                      </CollapsibleTrigger>
+                      <CollapsibleContent className="mt-3">
+                        <div className="space-y-2 max-h-48 overflow-y-auto">
+                          {purchase.contentItems.map((item) => (
+                            <div
+                              key={item.id}
+                              className="flex items-center gap-3 p-3 bg-white/5 rounded-lg hover:bg-white/10 transition-colors"
+                            >
+                              <div className="text-gray-400">
+                                {item.contentType === "video"
+                                  ? "🎥"
+                                  : item.contentType === "audio"
+                                    ? "🎵"
+                                    : item.contentType === "image"
+                                      ? "🖼️"
+                                      : "📄"}
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <div className="text-white text-sm font-medium truncate">{item.title}</div>
+                                <div className="text-gray-400 text-xs">
+                                  {formatFileSize(item.fileSize)}
+                                  {item.duration && ` • ${Math.round(item.duration)}s`}
+                                  {item.contentType && ` • ${item.contentType}`}
+                                </div>
                               </div>
                             </div>
-                          </div>
-                        ))}
-                      </div>
-                    </CollapsibleContent>
-                  </Collapsible>
-                )}
+                          ))}
+                        </div>
+                      </CollapsibleContent>
+                    </Collapsible>
+                  )}
 
-                {/* Action Buttons */}
-                <div className="flex space-x-3">
-                  <Button
-                    asChild
-                    variant="outline"
-                    className="bg-transparent border-white/20 text-white hover:bg-white/10 flex-1"
-                  >
-                    <Link href={`/product-box/${purchase.productBoxId}/content`}>
-                      <Eye className="w-4 h-4 mr-2" />
+                  {/* Action Buttons */}
+                  <div className="flex gap-3 mt-6">
+                    <Button
+                      onClick={() => handleViewContent(purchase)}
+                      variant="outline"
+                      className="flex-1 bg-transparent border-white/20 text-white hover:bg-white/10 hover:border-white/40"
+                    >
+                      <Eye className="h-4 w-4 mr-2" />
                       View Content
-                    </Link>
-                  </Button>
-                  <Button
-                    asChild
-                    variant="outline"
-                    className="bg-transparent border-white/20 text-white hover:bg-white/10"
-                  >
-                    <Link href={`/creator/${purchase.creatorUsername}`}>
-                      <User className="w-4 h-4 mr-2" />
+                    </Button>
+                    <Button
+                      onClick={() => handleCreatorProfile(purchase)}
+                      variant="outline"
+                      className="bg-transparent border-white/20 text-white hover:bg-white/10 hover:border-white/40"
+                    >
+                      <User className="h-4 w-4 mr-2" />
                       Creator Profile
-                    </Link>
-                  </Button>
+                    </Button>
+                  </div>
                 </div>
-              </CardContent>
-            </Card>
-          )
-        })}
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="text-center py-12">
+            <div className="text-gray-500 text-6xl mb-4">🛒</div>
+            <h3 className="text-white text-xl font-semibold mb-2">No Purchases Yet</h3>
+            <p className="text-gray-400 mb-6">You haven't made any purchases yet. Browse our content to get started!</p>
+            <Button onClick={() => router.push("/")} className="bg-white text-black hover:bg-gray-100">
+              Browse Content
+            </Button>
+          </div>
+        )}
       </div>
-
-      <style jsx>{`
-       @keyframes fadeInUp {
-         from {
-           opacity: 0;
-           transform: translateY(20px);
-         }
-         to {
-           opacity: 1;
-           transform: translateY(0);
-         }
-       }
-     `}</style>
     </div>
   )
 }

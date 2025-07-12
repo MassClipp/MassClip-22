@@ -14,88 +14,120 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Session ID is required" }, { status: 400 })
     }
 
-    // Retrieve the Stripe session
+    console.log(`🔍 [Purchase Verification] Verifying session: ${sessionId}`)
+
+    // Retrieve the checkout session from Stripe
     const session = await stripe.checkout.sessions.retrieve(sessionId, {
       expand: ["line_items", "payment_intent"],
     })
-
-    if (!session) {
-      return NextResponse.json({ error: "Session not found" }, { status: 404 })
-    }
 
     if (session.payment_status !== "paid") {
       return NextResponse.json({ error: "Payment not completed" }, { status: 400 })
     }
 
-    // Get product box ID from metadata
-    const productBoxId = session.metadata?.productBoxId
+    // Extract product information from metadata
+    const bundleId = session.metadata?.bundleId || session.metadata?.productBoxId
+    const bundleTitle = session.metadata?.bundleTitle || "Unknown Bundle"
+    const creatorUsername = session.metadata?.creatorUsername || "Unknown Creator"
+    const price = session.amount_total ? session.amount_total / 100 : 0
 
-    if (!productBoxId) {
-      return NextResponse.json({ error: "Product box ID not found in session" }, { status: 400 })
+    if (!bundleId) {
+      console.error("❌ [Purchase Verification] No bundle ID found in session metadata")
+      return NextResponse.json({ error: "Invalid purchase session" }, { status: 400 })
     }
 
-    // Get product box details
-    const productBoxRef = db.collection("productBoxes").doc(productBoxId)
-    const productBoxDoc = await productBoxRef.get()
-
-    if (!productBoxDoc.exists) {
-      return NextResponse.json({ error: "Product box not found" }, { status: 404 })
-    }
-
-    const productBoxData = productBoxDoc.data()
-
-    // Generate access token
+    // Generate access token for anonymous access
     const accessToken = `access_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
 
-    // Create anonymous purchase record
-    const anonymousPurchaseData = {
+    // Create purchase record
+    const purchaseData = {
       sessionId,
-      productBoxId,
-      accessToken,
-      amount: session.amount_total ? session.amount_total / 100 : 0,
+      bundleId,
+      productBoxId: bundleId, // For compatibility
+      bundleTitle,
+      creatorUsername,
+      price,
       currency: session.currency || "usd",
-      purchasedAt: new Date().toISOString(),
-      paymentIntentId: session.payment_intent?.id,
-      customerEmail: session.customer_details?.email,
+      purchaseDate: new Date(),
       status: "completed",
-    }
-
-    await db.collection("anonymousPurchases").add(anonymousPurchaseData)
-
-    // Also create regular purchase record if user ID is available
-    if (session.metadata?.userId) {
-      const purchaseData = {
-        userId: session.metadata.userId,
-        productBoxId,
-        sessionId,
-        amount: session.amount_total ? session.amount_total / 100 : 0,
-        currency: session.currency || "usd",
-        purchasedAt: new Date().toISOString(),
-        paymentIntentId: session.payment_intent?.id,
-        status: "completed",
-      }
-
-      await db.collection("purchases").add(purchaseData)
-    }
-
-    // Set access token cookie
-    const response = NextResponse.json({
-      success: true,
       accessToken,
-      productBoxId,
-      productBoxTitle: productBoxData.title,
+      customerEmail: session.customer_details?.email,
+      paymentIntentId: typeof session.payment_intent === "string" ? session.payment_intent : session.payment_intent?.id,
+    }
+
+    // Try to fetch bundle/product details to enrich the purchase
+    try {
+      const bundleDoc = await db.collection("productBoxes").doc(bundleId).get()
+      if (bundleDoc.exists) {
+        const bundleData = bundleDoc.data()
+        purchaseData.bundleTitle = bundleData?.title || purchaseData.bundleTitle
+        purchaseData.bundleDescription = bundleData?.description
+        purchaseData.thumbnailUrl = bundleData?.customPreviewThumbnail || bundleData?.thumbnailUrl
+        purchaseData.totalItems = bundleData?.totalItems || 0
+        purchaseData.totalSize = bundleData?.totalSize || 0
+
+        // Fetch content items
+        const contentQuery = await db.collection("productBoxContent").where("productBoxId", "==", bundleId).get()
+
+        const contentItems: any[] = []
+        contentQuery.forEach((doc) => {
+          const data = doc.data()
+          contentItems.push({
+            id: doc.id,
+            title: data.title || data.filename || "Untitled",
+            fileUrl: data.fileUrl,
+            mimeType: data.mimeType,
+            fileSize: data.fileSize || 0,
+            contentType: data.mimeType?.startsWith("video/")
+              ? "video"
+              : data.mimeType?.startsWith("audio/")
+                ? "audio"
+                : data.mimeType?.startsWith("image/")
+                  ? "image"
+                  : "document",
+            duration: data.duration,
+            filename: data.filename,
+          })
+        })
+
+        purchaseData.contentItems = contentItems
+        purchaseData.totalItems = contentItems.length
+        purchaseData.totalSize = contentItems.reduce((sum, item) => sum + (item.fileSize || 0), 0)
+      }
+    } catch (bundleError) {
+      console.warn("⚠️ [Purchase Verification] Could not fetch bundle details:", bundleError)
+    }
+
+    // Store in both regular and anonymous purchases collections
+    const purchaseRef = await db.collection("purchases").add(purchaseData)
+    await db.collection("anonymousPurchases").add({
+      ...purchaseData,
+      originalPurchaseId: purchaseRef.id,
     })
 
-    response.cookies.set("purchase_access_token", accessToken, {
+    console.log(`✅ [Purchase Verification] Purchase recorded with ID: ${purchaseRef.id}`)
+
+    // Create response with secure cookie
+    const response = NextResponse.json({
+      success: true,
+      purchaseId: purchaseRef.id,
+      accessToken,
+      bundleId,
+      bundleTitle,
+    })
+
+    // Set secure cookie for anonymous access
+    response.cookies.set(`purchase_access_${bundleId}`, accessToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
-      maxAge: 60 * 60 * 24 * 365, // 1 year
+      maxAge: 60 * 60 * 24 * 365 * 10, // 10 years
+      path: "/",
     })
 
     return response
   } catch (error) {
-    console.error("Error verifying purchase:", error)
+    console.error("❌ [Purchase Verification] Error:", error)
     return NextResponse.json({ error: "Failed to verify purchase" }, { status: 500 })
   }
 }

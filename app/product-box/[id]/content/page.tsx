@@ -4,7 +4,6 @@ import { useEffect, useState } from "react"
 import { useParams, useRouter } from "next/navigation"
 import { useAuth } from "@/contexts/auth-context"
 import { Button } from "@/components/ui/button"
-import { FullscreenWrapper } from "@/components/fullscreen-wrapper"
 import { ArrowLeft, Download, RefreshCw, Play, Pause } from "lucide-react"
 
 interface ContentItem {
@@ -244,18 +243,18 @@ export default function ProductBoxContentPage() {
 
   if (loading) {
     return (
-      <FullscreenWrapper className="bg-black flex items-center justify-center">
+      <div className="min-h-screen bg-black bg-gradient-to-b from-black via-black to-gray-900 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
           <div className="text-white text-lg">Loading content...</div>
         </div>
-      </FullscreenWrapper>
+      </div>
     )
   }
 
   if (!hasAccess || error) {
     return (
-      <FullscreenWrapper className="bg-black flex items-center justify-center">
+      <div className="min-h-screen bg-black bg-gradient-to-b from-black via-black to-gray-900 flex items-center justify-center">
         <div className="text-center max-w-md px-6">
           <div className="text-red-500 text-6xl mb-4">🔒</div>
           <h2 className="text-white text-2xl font-bold mb-4">Access Denied</h2>
@@ -277,12 +276,12 @@ export default function ProductBoxContentPage() {
             </Button>
           </div>
         </div>
-      </FullscreenWrapper>
+      </div>
     )
   }
 
   return (
-    <FullscreenWrapper className="bg-black">
+    <div className="min-h-screen bg-black bg-gradient-to-b from-black via-black to-gray-900">
       {/* Header */}
       <div className="p-6 border-b border-gray-800">
         <div className="flex items-center gap-4 mb-4">
@@ -307,8 +306,8 @@ export default function ProductBoxContentPage() {
         </div>
 
         <div className="max-w-4xl">
-          <h1 className="text-3xl font-bold text-white mb-2">{bundleData?.title}</h1>
-          <p className="text-gray-400 text-lg">
+          <h1 className="text-2xl font-bold text-white mb-2">{bundleData?.title}</h1>
+          <p className="text-gray-400 text-base">
             {items.length} premium file{items.length !== 1 ? "s" : ""} unlocked
           </p>
         </div>
@@ -323,7 +322,7 @@ export default function ProductBoxContentPage() {
                 <div key={item.id} className="relative group cursor-pointer">
                   {/* Video Container - 9:16 Aspect Ratio */}
                   <div
-                    className="relative bg-gray-900 rounded-lg overflow-hidden border border-transparent group-hover:border-gray-600 transition-all duration-300"
+                    className="relative bg-gray-900 rounded-lg overflow-hidden border border-transparent hover:border-white transition-all duration-300"
                     style={{ aspectRatio: "9/16" }}
                   >
                     {item.contentType === "video" ? (
@@ -431,6 +430,6 @@ export default function ProductBoxContentPage() {
           </div>
         )}
       </div>
-    </FullscreenWrapper>
+    </div>
   )
 }
