@@ -1,84 +1,138 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { db } from "@/lib/firebase-admin"
-import { getAuth } from "firebase-admin/auth"
 
 export async function GET(request: NextRequest) {
   try {
+    console.log(`🔍 [Unified Purchases API] Starting request`)
+
+    // Check authorization header
     const authHeader = request.headers.get("authorization")
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+      console.warn(`⚠️ [Unified Purchases API] Missing or invalid authorization header`)
+      return NextResponse.json({ error: "Unauthorized", purchases: [] }, { status: 401 })
     }
 
     const token = authHeader.split("Bearer ")[1]
-    const decodedToken = await getAuth().verifyIdToken(token)
-    const userId = decodedToken.uid
+    if (!token) {
+      console.warn(`⚠️ [Unified Purchases API] Empty token`)
+      return NextResponse.json({ error: "Invalid token", purchases: [] }, { status: 401 })
+    }
 
-    console.log(`🔍 [Unified Purchases] Fetching purchases for user: ${userId}`)
+    // Try to verify token and get user ID
+    let userId: string
+    try {
+      // Dynamic import to handle potential Firebase issues
+      const { getAuth } = await import("firebase-admin/auth")
+      const decodedToken = await getAuth().verifyIdToken(token)
+      userId = decodedToken.uid
+      console.log(`✅ [Unified Purchases API] Token verified for user: ${userId}`)
+    } catch (authError: any) {
+      console.error(`❌ [Unified Purchases API] Token verification failed:`, authError)
+      return NextResponse.json(
+        {
+          error: "Authentication failed",
+          details: authError.message,
+          purchases: [],
+        },
+        { status: 401 },
+      )
+    }
 
-    // Try multiple collections to find purchases
+    // Try to get Firebase admin DB
+    let db: any
+    try {
+      const { db: adminDb } = await import("@/lib/firebase-admin")
+      db = adminDb
+      console.log(`✅ [Unified Purchases API] Firebase admin DB connected`)
+    } catch (dbError: any) {
+      console.error(`❌ [Unified Purchases API] Firebase admin DB connection failed:`, dbError)
+      return NextResponse.json(
+        {
+          error: "Database connection failed",
+          details: dbError.message,
+          purchases: [],
+        },
+        { status: 500 },
+      )
+    }
+
+    // Collections to check for purchases
     const collections = ["bundlePurchases", "unifiedPurchases", "productBoxPurchases", "purchases"]
 
     let allPurchases: any[] = []
+    const errors: string[] = []
 
+    // Try each collection with both buyerUid and userId
     for (const collectionName of collections) {
-      try {
-        console.log(`🔍 [Unified Purchases] Checking collection: ${collectionName}`)
+      for (const fieldName of ["buyerUid", "userId"]) {
+        try {
+          console.log(`🔍 [Unified Purchases API] Checking ${collectionName} with ${fieldName}`)
 
-        const snapshot = await db.collection(collectionName).where("buyerUid", "==", userId).get()
+          const snapshot = await db.collection(collectionName).where(fieldName, "==", userId).get()
 
-        if (!snapshot.empty) {
-          const purchases = snapshot.docs.map((doc) => ({
-            id: doc.id,
-            ...doc.data(),
-            source: collectionName,
-          }))
+          if (!snapshot.empty) {
+            const purchases = snapshot.docs.map((doc: any) => ({
+              id: doc.id,
+              ...doc.data(),
+              source: collectionName,
+              queryField: fieldName,
+            }))
 
-          allPurchases = [...allPurchases, ...purchases]
-          console.log(`✅ [Unified Purchases] Found ${purchases.length} purchases in ${collectionName}`)
+            allPurchases = [...allPurchases, ...purchases]
+            console.log(
+              `✅ [Unified Purchases API] Found ${purchases.length} purchases in ${collectionName} with ${fieldName}`,
+            )
+          }
+        } catch (collectionError: any) {
+          const errorMsg = `Error checking ${collectionName} with ${fieldName}: ${collectionError.message}`
+          console.warn(`⚠️ [Unified Purchases API] ${errorMsg}`)
+          errors.push(errorMsg)
         }
-      } catch (error) {
-        console.warn(`⚠️ [Unified Purchases] Error checking ${collectionName}:`, error)
       }
     }
 
-    // Also try with userId field
-    for (const collectionName of collections) {
-      try {
-        const snapshot = await db.collection(collectionName).where("userId", "==", userId).get()
-
-        if (!snapshot.empty) {
-          const purchases = snapshot.docs.map((doc) => ({
-            id: doc.id,
-            ...doc.data(),
-            source: collectionName,
-          }))
-
-          // Avoid duplicates
-          const newPurchases = purchases.filter((p) => !allPurchases.some((existing) => existing.id === p.id))
-
-          allPurchases = [...allPurchases, ...newPurchases]
-          console.log(`✅ [Unified Purchases] Found ${newPurchases.length} additional purchases in ${collectionName}`)
-        }
-      } catch (error) {
-        console.warn(`⚠️ [Unified Purchases] Error checking ${collectionName} with userId:`, error)
-      }
-    }
-
-    // Remove duplicates based on productBoxId or sessionId
+    // Remove duplicates based on multiple possible identifiers
     const uniquePurchases = allPurchases.filter((purchase, index, self) => {
-      const identifier = purchase.productBoxId || purchase.bundleId || purchase.sessionId
-      return index === self.findIndex((p) => (p.productBoxId || p.bundleId || p.sessionId) === identifier)
+      const identifiers = [
+        purchase.id,
+        purchase.productBoxId,
+        purchase.bundleId,
+        purchase.sessionId,
+        purchase.purchaseId,
+      ].filter(Boolean)
+
+      const primaryId = identifiers[0]
+      if (!primaryId) return false
+
+      return (
+        index ===
+        self.findIndex((p) => {
+          const pIdentifiers = [p.id, p.productBoxId, p.bundleId, p.sessionId, p.purchaseId].filter(Boolean)
+
+          return pIdentifiers.some((id) => identifiers.includes(id))
+        })
+      )
     })
 
-    console.log(`✅ [Unified Purchases] Returning ${uniquePurchases.length} unique purchases`)
+    console.log(`✅ [Unified Purchases API] Returning ${uniquePurchases.length} unique purchases`)
 
     return NextResponse.json({
       purchases: uniquePurchases,
       total: uniquePurchases.length,
       sources: [...new Set(allPurchases.map((p) => p.source))],
+      userId,
+      errors: errors.length > 0 ? errors : undefined,
+      timestamp: new Date().toISOString(),
     })
   } catch (error: any) {
-    console.error("❌ [Unified Purchases] Error:", error)
-    return NextResponse.json({ error: "Failed to fetch purchases", details: error.message }, { status: 500 })
+    console.error("❌ [Unified Purchases API] Critical error:", error)
+    return NextResponse.json(
+      {
+        error: "Internal server error",
+        details: error.message,
+        purchases: [],
+        timestamp: new Date().toISOString(),
+      },
+      { status: 500 },
+    )
   }
 }

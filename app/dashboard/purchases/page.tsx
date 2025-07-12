@@ -55,116 +55,157 @@ export default function PurchasesPage() {
         throw new Error("User not authenticated")
       }
 
-      const token = await user.getIdToken()
-
-      // Try the unified purchases endpoint first
-      const response = await fetch("/api/user/unified-purchases", {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      })
-
-      if (!response.ok) {
-        if (response.status === 404) {
-          // No purchases found - this is normal
-          console.log(`ℹ️ [Purchases Page] No purchases found for user`)
-          setPurchases([])
-          return
-        }
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+      // Try to get a fresh token with retry logic
+      let token: string
+      try {
+        token = await user.getIdToken(true) // Force refresh
+      } catch (tokenError) {
+        console.warn("⚠️ [Purchases Page] Token refresh failed, using cached token:", tokenError)
+        token = await user.getIdToken(false) // Use cached token
       }
 
-      const data = await response.json()
-      console.log(`✅ [Purchases Page] Raw response:`, data)
+      // Multiple endpoints to try with different approaches
+      const endpoints = [
+        { url: "/api/user/unified-purchases", method: "GET" },
+        { url: "/api/user/purchases", method: "GET" },
+        { url: "/api/debug/user-purchases", method: "GET" },
+      ]
 
-      // Safely extract purchases array
-      let rawPurchases: any[] = []
+      let lastError: Error | null = null
+      let foundPurchases = false
 
-      if (Array.isArray(data)) {
-        rawPurchases = data
-      } else if (data && typeof data === "object") {
-        if (Array.isArray(data.purchases)) {
-          rawPurchases = data.purchases
-        } else if (Array.isArray(data.data)) {
-          rawPurchases = data.data
-        }
-      }
-
-      console.log(`📦 [Purchases Page] Found ${rawPurchases.length} raw purchases`)
-
-      // Transform to safe format
-      const safePurchases: SafePurchase[] = []
-
-      for (const rawPurchase of rawPurchases) {
+      for (const endpoint of endpoints) {
         try {
-          // Skip if not a valid object
-          if (!rawPurchase || typeof rawPurchase !== "object") {
+          console.log(`🔍 [Purchases Page] Trying endpoint: ${endpoint.url}`)
+
+          const controller = new AbortController()
+          const timeoutId = setTimeout(() => controller.abort(), 10000) // 10 second timeout
+
+          const response = await fetch(endpoint.url, {
+            method: endpoint.method,
+            headers: {
+              Authorization: `Bearer ${token}`,
+              "Content-Type": "application/json",
+            },
+            signal: controller.signal,
+          })
+
+          clearTimeout(timeoutId)
+
+          if (response.ok) {
+            const data = await response.json()
+            console.log(`✅ [Purchases Page] Success from ${endpoint.url}:`, data)
+
+            // Safely extract purchases
+            let rawPurchases: any[] = []
+            if (Array.isArray(data)) {
+              rawPurchases = data
+            } else if (data && typeof data === "object") {
+              if (Array.isArray(data.purchases)) {
+                rawPurchases = data.purchases
+              } else if (Array.isArray(data.data)) {
+                rawPurchases = data.data
+              }
+            }
+
+            if (rawPurchases.length > 0) {
+              // Transform to safe format
+              const safePurchases: SafePurchase[] = []
+
+              for (const rawPurchase of rawPurchases) {
+                try {
+                  if (!rawPurchase || typeof rawPurchase !== "object") continue
+
+                  const safePurchase: SafePurchase = {
+                    id: String(
+                      rawPurchase.id ||
+                        rawPurchase.sessionId ||
+                        rawPurchase.purchaseId ||
+                        rawPurchase.productBoxId ||
+                        `purchase_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+                    ),
+                    productBoxId: String(rawPurchase.productBoxId || rawPurchase.bundleId || rawPurchase.itemId || ""),
+                    title: String(
+                      rawPurchase.bundleTitle ||
+                        rawPurchase.productBoxTitle ||
+                        rawPurchase.title ||
+                        rawPurchase.itemTitle ||
+                        "Untitled Purchase",
+                    ),
+                    thumbnailUrl: String(
+                      rawPurchase.thumbnailUrl ||
+                        rawPurchase.productBoxThumbnail ||
+                        rawPurchase.previewImage ||
+                        rawPurchase.customPreviewThumbnail ||
+                        "",
+                    ),
+                    creatorUsername: String(
+                      rawPurchase.creatorUsername || (rawPurchase.creator && rawPurchase.creator.username) || "Unknown",
+                    ),
+                    creatorId: String(rawPurchase.creatorId || (rawPurchase.creator && rawPurchase.creator.id) || ""),
+                    purchaseDate: String(
+                      rawPurchase.purchaseDate ||
+                        rawPurchase.purchasedAt ||
+                        rawPurchase.createdAt ||
+                        new Date().toISOString(),
+                    ),
+                    amount: Number(rawPurchase.amount) || 0,
+                    currency: String(rawPurchase.currency || "usd"),
+                    totalItems: Number(
+                      rawPurchase.totalItems ||
+                        rawPurchase.contentCount ||
+                        (Array.isArray(rawPurchase.items) ? rawPurchase.items.length : 0) ||
+                        (Array.isArray(rawPurchase.contents) ? rawPurchase.contents.length : 0) ||
+                        0,
+                    ),
+                  }
+
+                  if (safePurchase.productBoxId && safePurchase.title) {
+                    safePurchases.push(safePurchase)
+                  }
+                } catch (transformError) {
+                  console.warn(`⚠️ [Purchases Page] Error transforming purchase:`, transformError)
+                  continue
+                }
+              }
+
+              // Remove duplicates
+              const uniquePurchases = safePurchases.filter(
+                (purchase, index, self) => index === self.findIndex((p) => p.productBoxId === purchase.productBoxId),
+              )
+
+              console.log(`✅ [Purchases Page] Processed ${uniquePurchases.length} valid purchases`)
+              setPurchases(uniquePurchases)
+              foundPurchases = true
+              break // Success, exit the loop
+            }
+          } else if (response.status === 404) {
+            // 404 is normal - no purchases found
+            console.log(`ℹ️ [Purchases Page] No purchases found at ${endpoint.url}`)
             continue
+          } else {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`)
           }
-
-          // Create safe purchase object with all required fields
-          const safePurchase: SafePurchase = {
-            id: String(
-              rawPurchase.id ||
-                rawPurchase.sessionId ||
-                rawPurchase.purchaseId ||
-                rawPurchase.productBoxId ||
-                `purchase_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-            ),
-            productBoxId: String(rawPurchase.productBoxId || rawPurchase.bundleId || rawPurchase.itemId || ""),
-            title: String(
-              rawPurchase.bundleTitle ||
-                rawPurchase.productBoxTitle ||
-                rawPurchase.title ||
-                rawPurchase.itemTitle ||
-                "Untitled Purchase",
-            ),
-            thumbnailUrl: String(
-              rawPurchase.thumbnailUrl ||
-                rawPurchase.productBoxThumbnail ||
-                rawPurchase.previewImage ||
-                rawPurchase.customPreviewThumbnail ||
-                "",
-            ),
-            creatorUsername: String(
-              rawPurchase.creatorUsername || (rawPurchase.creator && rawPurchase.creator.username) || "Unknown",
-            ),
-            creatorId: String(rawPurchase.creatorId || (rawPurchase.creator && rawPurchase.creator.id) || ""),
-            purchaseDate: String(
-              rawPurchase.purchaseDate || rawPurchase.purchasedAt || rawPurchase.createdAt || new Date().toISOString(),
-            ),
-            amount: Number(rawPurchase.amount) || 0,
-            currency: String(rawPurchase.currency || "usd"),
-            totalItems: Number(
-              rawPurchase.totalItems ||
-                rawPurchase.contentCount ||
-                (Array.isArray(rawPurchase.items) ? rawPurchase.items.length : 0) ||
-                (Array.isArray(rawPurchase.contents) ? rawPurchase.contents.length : 0) ||
-                0,
-            ),
-          }
-
-          // Only add if we have essential data
-          if (safePurchase.productBoxId && safePurchase.title) {
-            safePurchases.push(safePurchase)
-          }
-        } catch (transformError) {
-          console.warn(`⚠️ [Purchases Page] Error transforming purchase:`, transformError)
+        } catch (endpointError: any) {
+          console.warn(`⚠️ [Purchases Page] Error with ${endpoint.url}:`, endpointError)
+          lastError = endpointError
           continue
         }
       }
 
-      // Remove duplicates by productBoxId
-      const uniquePurchases = safePurchases.filter(
-        (purchase, index, self) => index === self.findIndex((p) => p.productBoxId === purchase.productBoxId),
-      )
-
-      console.log(`✅ [Purchases Page] Processed ${uniquePurchases.length} valid purchases`)
-      setPurchases(uniquePurchases)
+      // If no purchases found from any endpoint, that's okay
+      if (!foundPurchases) {
+        console.log(`ℹ️ [Purchases Page] No purchases found from any endpoint`)
+        setPurchases([])
+      }
     } catch (error: any) {
-      console.error("❌ [Purchases Page] Error fetching purchases:", error)
-      setError(error.message || "Failed to load purchases")
-      setPurchases([]) // Ensure empty array on error
+      console.error("❌ [Purchases Page] Critical error:", error)
+      setError(
+        error.message?.includes("Firebase") || error.message?.includes("Firestore")
+          ? "Connection issue. Please check your internet connection and try again."
+          : error.message || "Failed to load purchases",
+      )
+      setPurchases([])
     } finally {
       setLoading(false)
     }
