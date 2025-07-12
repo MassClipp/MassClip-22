@@ -1,6 +1,7 @@
 "use client"
 
 import { useEffect, useState } from "react"
+import { useAuth } from "@/contexts/auth-context"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -17,8 +18,10 @@ import {
   Video,
   Music,
   ImageIcon,
-  AlertTriangle,
+  AlertCircle,
   RefreshCw,
+  ExternalLink,
+  Star,
 } from "lucide-react"
 import Link from "next/link"
 
@@ -48,67 +51,103 @@ interface Purchase {
   totalSize: number
   purchasedAt: string
   status: string
+  source?: string
 }
 
 export default function PurchasesPage() {
+  const { user } = useAuth()
   const [purchases, setPurchases] = useState<Purchase[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    fetchPurchases()
-  }, [])
+    if (user) {
+      fetchPurchases()
+    } else {
+      setLoading(false)
+    }
+  }, [user])
 
   const fetchPurchases = async () => {
     try {
-      setLoading(true)
       setError(null)
-
-      const response = await fetch("/api/user/unified-purchases")
-      const data = await response.json()
+      const idToken = await user?.getIdToken()
+      const response = await fetch("/api/user/unified-purchases", {
+        headers: {
+          Authorization: `Bearer ${idToken}`,
+        },
+      })
 
       if (!response.ok) {
-        throw new Error(data.error || "Failed to fetch purchases")
+        throw new Error("Failed to fetch purchases")
       }
 
-      // Ensure we always have an array
-      const purchasesArray = Array.isArray(data.purchases) ? data.purchases : []
-      setPurchases(purchasesArray)
+      const data = await response.json()
+      setPurchases(data.purchases || [])
     } catch (err: any) {
       console.error("Error fetching purchases:", err)
-      setError(err.message || "Failed to load purchases")
-      setPurchases([]) // Always set to empty array on error
+      setError(err.message)
     } finally {
       setLoading(false)
     }
   }
 
   const formatFileSize = (bytes: number): string => {
-    if (bytes === 0) return "0 Bytes"
+    if (bytes === 0) return "0 B"
     const k = 1024
-    const sizes = ["Bytes", "KB", "MB", "GB"]
+    const sizes = ["B", "KB", "MB", "GB"]
     const i = Math.floor(Math.log(bytes) / Math.log(k))
-    return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + " " + sizes[i]
+    return Number.parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + " " + sizes[i]
   }
 
   const formatDuration = (seconds: number): string => {
     if (seconds === 0) return ""
     const minutes = Math.floor(seconds / 60)
     const remainingSeconds = seconds % 60
+    if (minutes === 0) return `${remainingSeconds}s`
     return `${minutes}:${remainingSeconds.toString().padStart(2, "0")}`
   }
 
   const getContentIcon = (contentType: string) => {
     switch (contentType) {
       case "video":
-        return <Video className="h-4 w-4" />
+        return <Video className="h-4 w-4 text-blue-500" />
       case "audio":
-        return <Music className="h-4 w-4" />
+        return <Music className="h-4 w-4 text-green-500" />
       case "image":
-        return <ImageIcon className="h-4 w-4" />
+        return <ImageIcon className="h-4 w-4 text-purple-500" />
       default:
-        return <FileText className="h-4 w-4" />
+        return <FileText className="h-4 w-4 text-gray-500" />
     }
+  }
+
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case "completed":
+        return <Badge className="bg-green-500/20 text-green-200 border-green-500/30">Completed</Badge>
+      case "pending":
+        return <Badge className="bg-yellow-500/20 text-yellow-200 border-yellow-500/30">Pending</Badge>
+      default:
+        return <Badge variant="secondary">{status}</Badge>
+    }
+  }
+
+  // No user state
+  if (!user) {
+    return (
+      <div className="container mx-auto px-4 py-8">
+        <Card className="bg-black/40 backdrop-blur-xl border-white/10">
+          <CardContent className="p-12 text-center">
+            <User className="h-16 w-16 text-white/40 mx-auto mb-4" />
+            <h2 className="text-2xl font-bold text-white mb-2">Please Sign In</h2>
+            <p className="text-white/70 mb-6">You need to be signed in to view your purchases</p>
+            <Button asChild className="bg-red-600 hover:bg-red-700">
+              <Link href="/login">Sign In</Link>
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    )
   }
 
   // Loading state
@@ -116,16 +155,15 @@ export default function PurchasesPage() {
     return (
       <div className="container mx-auto px-4 py-8">
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-white mb-2">My Purchases</h1>
-          <p className="text-white/70">Access your purchased content and downloads</p>
+          <Skeleton className="h-8 w-48 mb-2 bg-white/10" />
+          <Skeleton className="h-4 w-96 bg-white/10" />
         </div>
-
         <div className="grid gap-6">
-          {[0, 1, 2].map((index) => (
-            <Card key={index} className="bg-black/40 backdrop-blur-xl border-white/10">
+          {[1, 2, 3].map((i) => (
+            <Card key={i} className="bg-black/40 backdrop-blur-xl border-white/10">
               <CardContent className="p-6">
                 <div className="flex items-start space-x-4">
-                  <Skeleton className="w-16 h-16 rounded-lg bg-white/10" />
+                  <Skeleton className="w-20 h-20 rounded-lg bg-white/10" />
                   <div className="flex-1 space-y-2">
                     <Skeleton className="h-6 w-3/4 bg-white/10" />
                     <Skeleton className="h-4 w-1/2 bg-white/10" />
@@ -150,16 +188,22 @@ export default function PurchasesPage() {
         </div>
 
         <Alert className="bg-red-500/10 border-red-500/20 mb-6">
-          <AlertTriangle className="h-4 w-4 text-red-400" />
+          <AlertCircle className="h-4 w-4 text-red-400" />
           <AlertDescription className="text-red-200">
             <strong>Error loading purchases:</strong> {error}
           </AlertDescription>
         </Alert>
 
-        <div className="text-center">
+        <div className="flex space-x-4">
           <Button onClick={fetchPurchases} className="bg-red-600 hover:bg-red-700">
             <RefreshCw className="w-4 h-4 mr-2" />
             Try Again
+          </Button>
+          <Button asChild variant="outline" className="border-white/20 text-white hover:bg-white/10 bg-transparent">
+            <Link href="/dashboard">
+              <Package className="w-4 h-4 mr-2" />
+              Back to Dashboard
+            </Link>
           </Button>
         </div>
       </div>
@@ -178,20 +222,21 @@ export default function PurchasesPage() {
         <Card className="bg-black/40 backdrop-blur-xl border-white/10">
           <CardContent className="p-12 text-center">
             <ShoppingBag className="h-16 w-16 text-white/30 mx-auto mb-4" />
-            <h3 className="text-xl font-semibold text-white mb-2">No Purchases Yet</h3>
-            <p className="text-white/60 mb-6">
-              You haven't made any purchases yet. Explore our content library to find premium content.
+            <h2 className="text-2xl font-bold text-white mb-2">No Purchases Yet</h2>
+            <p className="text-white/60 mb-6 max-w-md mx-auto">
+              You haven't made any purchases yet. Explore our premium content library to find amazing content from
+              talented creators.
             </p>
             <div className="space-y-3">
               <Button asChild className="bg-red-600 hover:bg-red-700">
                 <Link href="/dashboard/explore">
-                  <Package className="w-4 h-4 mr-2" />
-                  Explore Content
+                  <Star className="w-4 h-4 mr-2" />
+                  Explore Premium Content
                 </Link>
               </Button>
               <Button asChild variant="outline" className="bg-transparent border-white/20 text-white hover:bg-white/10">
                 <Link href="/dashboard">
-                  <Eye className="w-4 h-4 mr-2" />
+                  <Package className="w-4 h-4 mr-2" />
                   Go to Dashboard
                 </Link>
               </Button>
@@ -205,31 +250,52 @@ export default function PurchasesPage() {
   // Purchases list
   return (
     <div className="container mx-auto px-4 py-8">
+      {/* Header */}
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-white mb-2">My Purchases</h1>
-        <p className="text-white/70">Access your purchased content and downloads ({purchases.length} items)</p>
+        <p className="text-white/70">
+          You have {purchases.length} purchase{purchases.length !== 1 ? "s" : ""} • Lifetime access to all content
+        </p>
       </div>
 
+      {/* Purchases Grid */}
       <div className="grid gap-6">
-        {purchases.map((purchase) => (
+        {purchases.map((purchase, index) => (
           <Card
             key={purchase.id}
-            className="bg-black/40 backdrop-blur-xl border-white/10 hover:border-white/20 transition-colors"
+            className="bg-black/40 backdrop-blur-xl border-white/10 hover:border-white/20 transition-all duration-300 overflow-hidden"
+            style={{
+              animationDelay: `${index * 100}ms`,
+              animation: "fadeInUp 0.6s ease-out forwards",
+            }}
           >
             <CardContent className="p-6">
               <div className="flex items-start space-x-4 mb-4">
-                {purchase.productBoxThumbnail && (
-                  <img
-                    src={purchase.productBoxThumbnail || "/placeholder.svg"}
-                    alt={purchase.productBoxTitle}
-                    className="w-16 h-16 rounded-lg object-cover"
-                  />
-                )}
-                <div className="flex-1">
+                {/* Thumbnail */}
+                <div className="w-20 h-20 bg-gray-800 rounded-lg overflow-hidden flex-shrink-0">
+                  {purchase.productBoxThumbnail ? (
+                    <img
+                      src={purchase.productBoxThumbnail || "/placeholder.svg"}
+                      alt={purchase.productBoxTitle}
+                      className="w-full h-full object-cover"
+                      onError={(e) => {
+                        const target = e.target as HTMLImageElement
+                        target.src = "/placeholder.svg?height=80&width=80&text=No+Image"
+                      }}
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center">
+                      <Package className="h-8 w-8 text-gray-500" />
+                    </div>
+                  )}
+                </div>
+
+                {/* Purchase Info */}
+                <div className="flex-1 min-w-0">
                   <div className="flex items-start justify-between mb-2">
-                    <div>
-                      <h3 className="text-xl font-bold text-white mb-1">{purchase.productBoxTitle}</h3>
-                      <p className="text-white/70 text-sm mb-2">{purchase.productBoxDescription}</p>
+                    <div className="flex-1">
+                      <h3 className="text-xl font-bold text-white mb-1 line-clamp-1">{purchase.productBoxTitle}</h3>
+                      <p className="text-white/70 text-sm mb-2 line-clamp-2">{purchase.productBoxDescription}</p>
                       <div className="flex items-center space-x-4 text-sm text-white/60">
                         <span className="flex items-center">
                           <User className="h-4 w-4 mr-1" />
@@ -245,17 +311,20 @@ export default function PurchasesPage() {
                         </span>
                       </div>
                     </div>
-                    <Badge variant="secondary" className="bg-green-500/20 text-green-200 border-green-500/30">
-                      {String(purchase.status || "completed")
-                        .charAt(0)
-                        .toUpperCase() + String(purchase.status || "completed").slice(1)}
-                    </Badge>
+                    <div className="flex flex-col items-end space-y-2">
+                      {getStatusBadge(purchase.status)}
+                      {purchase.source && (
+                        <Badge variant="outline" className="text-xs border-white/20 text-white/60">
+                          {purchase.source}
+                        </Badge>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>
 
               {/* Content Summary */}
-              <div className="grid grid-cols-3 gap-4 p-4 bg-black/20 rounded-lg mb-4">
+              <div className="grid grid-cols-3 gap-4 p-4 bg-white/5 rounded-lg mb-4">
                 <div className="text-center">
                   <div className="text-lg font-bold text-white">{purchase.totalItems || 0}</div>
                   <div className="text-sm text-white/60">Items</div>
@@ -273,15 +342,18 @@ export default function PurchasesPage() {
               {/* Content Items Preview */}
               {purchase.items && purchase.items.length > 0 && (
                 <div className="mb-4">
-                  <h4 className="text-sm font-semibold text-white/80 mb-2">Content Items</h4>
+                  <h4 className="text-sm font-semibold text-white/80 mb-2 flex items-center">
+                    <Package className="h-4 w-4 mr-1" />
+                    Content Items ({purchase.items.length})
+                  </h4>
                   <div className="space-y-2 max-h-32 overflow-y-auto">
                     {purchase.items.slice(0, 3).map((item) => (
                       <div key={item.id} className="flex items-center space-x-3 p-2 bg-white/5 rounded-lg">
                         <div className="w-8 h-8 bg-white/10 rounded flex items-center justify-center">
                           {getContentIcon(item.contentType)}
                         </div>
-                        <div className="flex-1">
-                          <p className="font-medium text-white text-sm">{item.title}</p>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-white font-medium text-sm truncate">{item.title}</p>
                           <div className="flex items-center space-x-2 text-xs text-white/60">
                             <span>{formatFileSize(item.fileSize)}</span>
                             {item.duration && item.duration > 0 && <span>• {formatDuration(item.duration)}</span>}
@@ -314,7 +386,17 @@ export default function PurchasesPage() {
                 >
                   <Link href={`/creator/${purchase.creatorUsername}`}>
                     <User className="w-4 h-4 mr-2" />
-                    Creator Profile
+                    Creator
+                  </Link>
+                </Button>
+                <Button
+                  asChild
+                  variant="outline"
+                  size="sm"
+                  className="bg-transparent border-white/20 text-white hover:bg-white/10"
+                >
+                  <Link href={`/purchase-success?session_id=${purchase.id}`}>
+                    <ExternalLink className="w-4 h-4" />
                   </Link>
                 </Button>
               </div>
@@ -326,12 +408,25 @@ export default function PurchasesPage() {
       {/* Footer */}
       <div className="mt-8 text-center">
         <p className="text-white/50 text-sm">
-          Need help with your purchases?{" "}
+          All purchases include lifetime access • No subscription required •{" "}
           <Link href="/support" className="text-red-400 hover:text-red-300">
-            Contact Support
+            Need help?
           </Link>
         </p>
       </div>
+
+      <style jsx>{`
+        @keyframes fadeInUp {
+          from {
+            opacity: 0;
+            transform: translateY(20px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+      `}</style>
     </div>
   )
 }
