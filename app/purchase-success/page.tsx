@@ -42,7 +42,6 @@ function PurchaseSuccessContent() {
   const [success, setSuccess] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [purchaseData, setPurchaseData] = useState<PurchaseData | null>(null)
-  const [accessGranted, setAccessGranted] = useState(false)
 
   const sessionId = searchParams.get("session_id")
   const productBoxId = searchParams.get("product_box_id")
@@ -63,14 +62,14 @@ function PurchaseSuccessContent() {
       return
     }
 
-    verifyAndGrantAccess()
+    grantImmediateAccess()
   }, [sessionId, productBoxId, creatorId])
 
-  const verifyAndGrantAccess = async () => {
+  const grantImmediateAccess = async () => {
     try {
-      console.log(`🔄 [Purchase Success] Verifying purchase and granting immediate access...`)
+      console.log(`🔄 [Purchase Success] Granting immediate access...`)
 
-      const response = await fetch("/api/purchase/verify-and-grant", {
+      const response = await fetch("/api/purchase/grant-immediate-access", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -85,17 +84,16 @@ function PurchaseSuccessContent() {
       const result = await response.json()
 
       if (!response.ok) {
-        throw new Error(result.error || "Failed to verify purchase")
+        throw new Error(result.error || "Failed to grant access")
       }
 
       console.log(`✅ [Purchase Success] Access granted successfully:`, result)
 
       setPurchaseData(result.purchase)
-      setAccessGranted(true)
       setSuccess(true)
     } catch (err: any) {
       console.error(`❌ [Purchase Success] Error:`, err)
-      setError(err.message || "Failed to verify purchase")
+      setError(err.message || "Failed to grant access")
     } finally {
       setTimeout(() => {
         setIsProcessing(false)
@@ -135,7 +133,7 @@ function PurchaseSuccessContent() {
             </div>
             <div className="text-center">
               <h2 className="text-2xl font-bold text-white mb-2">Processing Your Purchase</h2>
-              <p className="text-white/70 mb-4">Verifying payment and granting access...</p>
+              <p className="text-white/70 mb-4">Granting access to your content...</p>
               <div className="flex space-x-2 justify-center">
                 <div className="w-3 h-3 bg-red-600 rounded-full animate-bounce [animation-delay:-0.3s]"></div>
                 <div className="w-3 h-3 bg-red-600 rounded-full animate-bounce [animation-delay:-0.15s]"></div>
@@ -170,7 +168,7 @@ function PurchaseSuccessContent() {
           <Card className="w-full max-w-md bg-black/40 backdrop-blur-xl border-white/10">
             <CardContent className="p-8 text-center">
               <AlertTriangle className="h-16 w-16 text-red-400 mx-auto mb-4" />
-              <h1 className="text-xl font-bold text-white mb-2">Purchase Verification Failed</h1>
+              <h1 className="text-xl font-bold text-white mb-2">Access Grant Failed</h1>
               <p className="text-white/70 mb-6">{error}</p>
               <div className="space-y-3">
                 <Button onClick={() => window.location.reload()} className="w-full bg-red-600 hover:bg-red-700">
@@ -282,7 +280,7 @@ function PurchaseSuccessContent() {
               </div>
 
               {/* Content Preview */}
-              {purchaseData.items.length > 0 && (
+              {purchaseData.items && purchaseData.items.length > 0 && (
                 <div className="mb-6">
                   <h4 className="text-lg font-semibold text-white mb-3">
                     Your Content ({purchaseData.items.length} items)
@@ -320,7 +318,7 @@ function PurchaseSuccessContent() {
                 <Button asChild className="w-full bg-red-600 hover:bg-red-700 text-white py-3 text-lg">
                   <Link href="/dashboard/purchases">
                     <ShoppingBag className="w-5 h-5 mr-2" />
-                    Access My Purchases
+                    View My Purchases
                   </Link>
                 </Button>
 
