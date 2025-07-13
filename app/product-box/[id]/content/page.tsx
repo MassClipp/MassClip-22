@@ -84,53 +84,29 @@ export default function ProductBoxContentPage() {
         )
 
         if (matchingPurchase) {
-          console.log(`✅ [Content Page] Access granted via purchase`)
+          console.log(`✅ [Content Page] Access granted via purchase`, matchingPurchase)
 
-          // Fetch bundle details
-          const bundleResponse = await fetch(`/api/bundles/${productBoxId}`, {
-            headers: {
-              Authorization: `Bearer ${idToken}`,
-            },
-          })
-
-          let bundleInfo: BundleData = {
-            title: matchingPurchase.bundleTitle || "Untitled Bundle",
-            description: "",
-            thumbnail: matchingPurchase.thumbnailUrl,
-            creatorUsername: matchingPurchase.creatorUsername || "Unknown",
-            totalItems: 0,
+          // Use the bundle data from the purchase
+          const bundleInfo: BundleData = {
+            title: matchingPurchase.productBoxTitle || matchingPurchase.bundleTitle || "Untitled Bundle",
+            description: matchingPurchase.productBoxDescription || "",
+            thumbnail: matchingPurchase.productBoxThumbnail || matchingPurchase.thumbnailUrl,
+            creatorUsername: matchingPurchase.creatorUsername || matchingPurchase.creatorName || "Unknown",
+            totalItems: matchingPurchase.totalItems || matchingPurchase.items?.length || 0,
           }
 
-          if (bundleResponse.ok) {
-            const bundleData = await bundleResponse.json()
-            bundleInfo = {
-              title: bundleData.title || bundleInfo.title,
-              description: bundleData.description,
-              thumbnail: bundleData.customPreviewThumbnail || bundleData.thumbnailUrl || bundleInfo.thumbnail,
-              creatorUsername: bundleData.creatorUsername || bundleInfo.creatorUsername,
-              totalItems: bundleData.totalItems || 0,
-            }
-          }
-
-          // Fetch content items
-          const contentResponse = await fetch(`/api/product-box/${productBoxId}/content`, {
-            headers: {
-              Authorization: `Bearer ${idToken}`,
-            },
-          })
-
+          // Use the content items directly from the purchase
           let contentItems: ContentItem[] = []
-          if (contentResponse.ok) {
-            const contentData = await contentResponse.json()
-            contentItems = Array.isArray(contentData) ? contentData : contentData.items || []
 
-            // Process content items to get proper titles and ensure video content type
-            contentItems = contentItems.map((item, index) => {
+          if (matchingPurchase.items && Array.isArray(matchingPurchase.items)) {
+            console.log(`📦 [Content Page] Found ${matchingPurchase.items.length} items in purchase`)
+
+            contentItems = matchingPurchase.items.map((item: any, index: number) => {
               // Get the best available title
               let displayTitle =
-                item.originalTitle || item.title || item.name || item.filename || `Content Item ${index + 1}`
+                item.displayTitle || item.title || item.name || item.filename || `Content Item ${index + 1}`
 
-              // Clean up the title - remove file extensions and clean formatting
+              // Clean up the title - remove file extensions
               displayTitle = displayTitle.replace(/\.(mp4|mov|avi|mkv|webm|m4v)$/i, "")
 
               // Determine content type from mimeType or fileUrl
@@ -154,13 +130,72 @@ export default function ProductBoxContentPage() {
               }
 
               return {
-                ...item,
-                displayTitle,
+                id: item.id || `item-${index}`,
+                title: displayTitle,
+                fileUrl: item.fileUrl || "",
+                mimeType: item.mimeType || "application/octet-stream",
+                fileSize: item.fileSize || 0,
+                thumbnailUrl: item.thumbnailUrl || "",
                 contentType,
-                displaySize: formatFileSize(item.fileSize || 0),
+                duration: item.duration,
+                filename: item.filename || displayTitle,
+                displayTitle,
+                displaySize: item.displaySize || formatFileSize(item.fileSize || 0),
+                originalTitle: item.originalTitle,
+                name: item.name,
               }
             })
+          } else {
+            console.log(`⚠️ [Content Page] No items found in purchase, trying API fallback`)
+
+            // Fallback: try to fetch content from API
+            const contentResponse = await fetch(`/api/product-box/${productBoxId}/content`, {
+              headers: {
+                Authorization: `Bearer ${idToken}`,
+              },
+            })
+
+            if (contentResponse.ok) {
+              const contentData = await contentResponse.json()
+              const apiItems = Array.isArray(contentData) ? contentData : contentData.items || []
+
+              contentItems = apiItems.map((item: any, index: number) => {
+                let displayTitle = item.title || item.filename || item.name || `Content Item ${index + 1}`
+                displayTitle = displayTitle.replace(/\.(mp4|mov|avi|mkv|webm|m4v)$/i, "")
+
+                let contentType: "video" | "audio" | "image" | "document" = "document"
+                if (item.mimeType?.startsWith("video/")) contentType = "video"
+                else if (item.mimeType?.startsWith("audio/")) contentType = "audio"
+                else if (item.mimeType?.startsWith("image/")) contentType = "image"
+
+                return {
+                  id: item.id || `item-${index}`,
+                  title: displayTitle,
+                  fileUrl: item.fileUrl || item.downloadUrl || "",
+                  mimeType: item.mimeType || "application/octet-stream",
+                  fileSize: item.fileSize || 0,
+                  thumbnailUrl: item.thumbnailUrl || "",
+                  contentType,
+                  duration: item.duration,
+                  filename: item.filename || displayTitle,
+                  displayTitle,
+                  displaySize: formatFileSize(item.fileSize || 0),
+                  originalTitle: item.originalTitle,
+                  name: item.name,
+                }
+              })
+            }
           }
+
+          console.log(
+            `📝 [Content Page] Final content items:`,
+            contentItems.map((item) => ({
+              title: item.displayTitle,
+              fileUrl: item.fileUrl,
+              contentType: item.contentType,
+              thumbnailUrl: item.thumbnailUrl,
+            })),
+          )
 
           setBundleData(bundleInfo)
           setItems(contentItems)
@@ -284,10 +319,14 @@ export default function ProductBoxContentPage() {
       setVideoError(false)
     }
 
-    const handleVideoError = () => {
+    const handleVideoError = (e: any) => {
+      console.error(`❌ [Video Card] Error loading video for ${item.displayTitle}:`, e)
       setVideoError(true)
       setVideoLoaded(false)
     }
+
+    // Check if we have a valid video URL
+    const hasValidVideoUrl = item.fileUrl && item.fileUrl.startsWith("http") && item.contentType === "video"
 
     return (
       <div className="relative group cursor-pointer">
@@ -296,7 +335,7 @@ export default function ProductBoxContentPage() {
           className="relative bg-gray-900 rounded-lg overflow-hidden border border-transparent group-hover:border-gray-600 transition-all duration-300"
           style={{ aspectRatio: "9/16" }}
         >
-          {item.contentType === "video" && !videoError ? (
+          {hasValidVideoUrl && !videoError ? (
             <div className="relative w-full h-full">
               <video
                 ref={videoRef}
@@ -313,6 +352,7 @@ export default function ProductBoxContentPage() {
                   setCurrentlyPlayingVideo(null)
                 }}
                 poster={item.thumbnailUrl}
+                crossOrigin="anonymous"
               />
 
               {/* Play/Pause Button - Center - Only visible on hover */}

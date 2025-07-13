@@ -6,12 +6,32 @@
  * Returns the appropriate site URL based on environment
  */
 export function getSiteUrl(): string {
-  // Always use hardcoded preview URL for preview environment
-  if (process.env.VERCEL_ENV === "preview" || process.env.NODE_ENV !== "production") {
-    return "https://v0-massclip1-git-preview-massclippp-gmailcoms-projects.vercel.app"
+  // In preview/development, use the current URL if available
+  if (typeof window !== "undefined") {
+    return window.location.origin
   }
 
-  // Production URL
+  // Server-side: check for Vercel preview URL first
+  if (process.env.VERCEL_URL && process.env.VERCEL_ENV !== "production") {
+    // Fix the preview URL format - use git branch URL instead of deployment URL
+    if (process.env.VERCEL_GIT_COMMIT_REF) {
+      const projectName = process.env.VERCEL_URL.split(".")[0]
+      const teamSlug = process.env.VERCEL_URL.split(".").slice(-3, -2)[0] // Extract team slug
+      return `https://${projectName}-git-${process.env.VERCEL_GIT_COMMIT_REF}-${teamSlug}.vercel.app`
+    }
+    return `https://${process.env.VERCEL_URL}`
+  }
+
+  // Check for explicit site URL environment variables
+  if (process.env.NEXT_PUBLIC_SITE_URL_2) {
+    return process.env.NEXT_PUBLIC_SITE_URL_2
+  }
+
+  if (process.env.NEXT_PUBLIC_SITE_URL) {
+    return process.env.NEXT_PUBLIC_SITE_URL
+  }
+
+  // Fallback to production URL
   return "https://massclip.pro"
 }
 
@@ -82,7 +102,7 @@ export function getWebhookUrl(): string {
  * Checks if we're in a preview environment
  */
 export function isPreviewEnvironment(): boolean {
-  return process.env.VERCEL_ENV === "preview" || process.env.NODE_ENV !== "production"
+  return process.env.VERCEL_ENV === "preview" || (process.env.NODE_ENV !== "production" && !!process.env.VERCEL_URL)
 }
 
 /**
@@ -98,10 +118,13 @@ export function isProductionEnvironment(): boolean {
 export function logEnvironmentInfo(): void {
   console.log("🌐 Environment Info:", {
     VERCEL_ENV: process.env.VERCEL_ENV,
+    VERCEL_URL: process.env.VERCEL_URL,
+    VERCEL_GIT_COMMIT_REF: process.env.VERCEL_GIT_COMMIT_REF,
     NODE_ENV: process.env.NODE_ENV,
+    NEXT_PUBLIC_SITE_URL: process.env.NEXT_PUBLIC_SITE_URL,
+    NEXT_PUBLIC_SITE_URL_2: process.env.NEXT_PUBLIC_SITE_URL_2,
     calculatedSiteUrl: getSiteUrl(),
     isPreview: isPreviewEnvironment(),
     isProduction: isProductionEnvironment(),
-    hardcodedPreviewUrl: "https://v0-massclip1-git-preview-massclippp-gmailcoms-projects.vercel.app",
   })
 }

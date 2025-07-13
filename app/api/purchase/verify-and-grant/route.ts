@@ -14,7 +14,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Product Box ID is required" }, { status: 400 })
     }
 
-    // CRITICAL: Wait for user authentication before proceeding
+    // Get authenticated user ID from Authorization header
     let userId = "anonymous"
     let userEmail = ""
     let userName = "Anonymous User"
@@ -40,27 +40,10 @@ export async function POST(request: NextRequest) {
           console.warn(`⚠️ [Verify & Grant] Could not get full user record:`, userError)
         }
       } else {
-        console.log(`⚠️ [Verify & Grant] No authentication provided - DELAYING PURCHASE LOGGING`)
-        // Don't create purchase record yet if no auth - let them authenticate first
-        return NextResponse.json(
-          {
-            error: "Authentication required",
-            requiresAuth: true,
-            message: "Please log in to complete your purchase",
-          },
-          { status: 401 },
-        )
+        console.log(`⚠️ [Verify & Grant] No authentication provided, using anonymous access`)
       }
     } catch (authError) {
-      console.warn(`⚠️ [Verify & Grant] Auth verification failed:`, authError)
-      return NextResponse.json(
-        {
-          error: "Authentication failed",
-          requiresAuth: true,
-          message: "Please log in to complete your purchase",
-        },
-        { status: 401 },
-      )
+      console.warn(`⚠️ [Verify & Grant] Auth verification failed, proceeding as anonymous:`, authError)
     }
 
     console.log(`🔍 [Verify & Grant] Looking for bundle: ${productBoxId}`)
@@ -177,7 +160,7 @@ export async function POST(request: NextRequest) {
     const accessToken = `access_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
     const purchaseId = `purchase_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
 
-    // NOW CREATE PURCHASE RECORD WITH AUTHENTICATED USER
+    // Create bundlePurchases record with PROPER USER IDENTIFICATION
     const bundlePurchaseData = {
       id: purchaseId,
       bundleId: productBoxId,
@@ -196,12 +179,12 @@ export async function POST(request: NextRequest) {
       creatorName: creatorData.name,
       creatorUsername: creatorData.username,
 
-      // AUTHENTICATED USER IDENTIFICATION - NO MORE ANONYMOUS
-      buyerUid: userId, // Real authenticated user ID
-      userId: userId, // Real authenticated user ID
+      // CRITICAL FIX: Proper user identification
+      buyerUid: userId, // Real user ID when authenticated, "anonymous" when not
+      userId: userId, // Real user ID when authenticated, "anonymous" when not
       userEmail: userEmail,
       userName: userName,
-      isAuthenticated: true, // Always true since we require auth above
+      isAuthenticated: isAuthenticated,
 
       // Purchase details
       amount: bundleData.price || 0,
@@ -225,10 +208,10 @@ export async function POST(request: NextRequest) {
 
       // Access control
       accessToken: accessToken,
-      source: "authenticated_access",
+      source: "direct_access",
     }
 
-    console.log(`💾 [Verify & Grant] Creating bundle purchase with AUTHENTICATED user:`, {
+    console.log(`💾 [Verify & Grant] Creating bundle purchase with proper user identification:`, {
       buyerUid: bundlePurchaseData.buyerUid,
       userEmail: bundlePurchaseData.userEmail,
       userName: bundlePurchaseData.userName,
@@ -239,29 +222,39 @@ export async function POST(request: NextRequest) {
     // Store in bundlePurchases collection
     try {
       await db.collection("bundlePurchases").doc(purchaseId).set(bundlePurchaseData)
-      console.log(`✅ [Verify & Grant] Bundle purchase record created with authenticated user: ${userId}`)
+      console.log(`✅ [Verify & Grant] Bundle purchase record created with proper user ID: ${userId}`)
     } catch (error) {
       console.error(`❌ [Verify & Grant] Error creating bundle purchase record:`, error)
       throw error
     }
 
-    // Store in user's personal purchases
-    try {
-      await db.collection("users").doc(userId).collection("purchases").add(bundlePurchaseData)
+    // If user is authenticated, also store in their personal purchases
+    if (isAuthenticated && userId !== "anonymous") {
+      try {
+        await db.collection("users").doc(userId).collection("purchases").add(bundlePurchaseData)
 
-      // Update user profile with purchase info
-      await db
-        .collection("users")
-        .doc(userId)
-        .update({
-          lastPurchaseAt: new Date(),
-          totalPurchases: db.FieldValue.increment(1),
-          totalSpent: db.FieldValue.increment(bundlePurchaseData.amount),
-        })
+        // Update user profile with purchase info
+        await db
+          .collection("users")
+          .doc(userId)
+          .update({
+            lastPurchaseAt: new Date(),
+            totalPurchases: db.FieldValue.increment(1),
+            totalSpent: db.FieldValue.increment(bundlePurchaseData.amount),
+          })
 
-      console.log(`✅ [Verify & Grant] User purchase record created for authenticated user: ${userId}`)
-    } catch (error) {
-      console.warn(`⚠️ [Verify & Grant] Error creating user purchase record:`, error)
+        console.log(`✅ [Verify & Grant] User purchase record created for authenticated user: ${userId}`)
+      } catch (error) {
+        console.warn(`⚠️ [Verify & Grant] Error creating user purchase record (non-critical):`, error)
+      }
+    } else {
+      // Store in anonymous purchases for fallback
+      try {
+        await db.collection("anonymousPurchases").add(bundlePurchaseData)
+        console.log(`✅ [Verify & Grant] Anonymous purchase record created`)
+      } catch (error) {
+        console.warn(`⚠️ [Verify & Grant] Error creating anonymous purchase (non-critical):`, error)
+      }
     }
 
     // Set access token cookie
@@ -271,7 +264,7 @@ export async function POST(request: NextRequest) {
       message: "Access granted successfully",
       bundleId: productBoxId,
       bundleTitle: bundleData.title,
-      isAuthenticated: true,
+      isAuthenticated: isAuthenticated,
       userId: userId,
       userName: userName,
       contentNames: bundlePurchaseData.itemNames,
