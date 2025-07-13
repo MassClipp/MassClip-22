@@ -380,7 +380,7 @@ export async function POST(request: NextRequest) {
 
     console.log(`🔍 [Bundles API] Creating bundle for user: ${userId}`)
 
-    // Create bundle document with enhanced structure
+    // Create bundle document with enhanced structure and proper initialization
     const bundleData = {
       title: title.trim(),
       description: description?.trim() || "",
@@ -390,11 +390,11 @@ export async function POST(request: NextRequest) {
       creatorId: userId,
       active: true,
 
-      // Content arrays
+      // Content arrays - Initialize as empty
       contentItems: [], // Array of content IDs
       detailedContentItems: [], // Array of detailed content metadata
 
-      // Content metadata summary
+      // Content metadata summary - Initialize with zeros
       contentMetadata: {
         totalItems: 0,
         totalDuration: 0,
@@ -414,7 +414,7 @@ export async function POST(request: NextRequest) {
         qualities: [],
       },
 
-      // Quick access arrays
+      // Quick access arrays - Initialize as empty
       contentTitles: [],
       contentDescriptions: [],
       contentTags: [],

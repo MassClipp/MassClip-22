@@ -721,7 +721,7 @@ export default function BundlesPage() {
     }
   }
 
-  // Handle adding content to bundle with detailed metadata storage
+  // Handle adding content to bundle with detailed metadata storage - ENHANCED VERSION
   const handleAddContentToBundle = async (productBoxId: string) => {
     if (selectedContentIds.length === 0) {
       toast({
@@ -739,6 +739,8 @@ export default function BundlesPage() {
 
       // Get detailed metadata for each selected content item
       const detailedContentItems: any[] = []
+      let totalSize = 0
+      let totalDuration = 0
 
       for (const contentId of selectedContentIds) {
         const contentItem = availableUploads.find((item) => item.id === contentId)
@@ -784,6 +786,8 @@ export default function BundlesPage() {
         }
 
         detailedContentItems.push(detailedItem)
+        totalSize += contentItem.fileSize
+        totalDuration += contentItem.duration || 0
 
         // Create productBoxContent entry for backward compatibility
         await addDoc(collection(db, "productBoxContent"), {
@@ -804,33 +808,33 @@ export default function BundlesPage() {
       if (currentBox) {
         const updatedContentItems = [...currentBox.contentItems, ...selectedContentIds]
 
-        // Calculate enhanced metadata
+        // Calculate enhanced metadata for ALL content (existing + new)
         const allDetailedItems = [...(currentBox.detailedContentItems || []), ...detailedContentItems]
-        const totalDuration = allDetailedItems.reduce((sum, item) => sum + (item.duration || 0), 0)
-        const totalSize = allDetailedItems.reduce((sum, item) => sum + (item.fileSize || 0), 0)
+        const allTotalDuration = allDetailedItems.reduce((sum, item) => sum + (item.duration || 0), 0)
+        const allTotalSize = allDetailedItems.reduce((sum, item) => sum + (item.fileSize || 0), 0)
         const videoCount = allDetailedItems.filter((item) => item.contentType === "video").length
         const audioCount = allDetailedItems.filter((item) => item.contentType === "audio").length
         const imageCount = allDetailedItems.filter((item) => item.contentType === "image").length
         const documentCount = allDetailedItems.filter((item) => item.contentType === "document").length
 
-        // Update bundle with comprehensive metadata
+        // Update bundle with comprehensive metadata - THIS IS THE KEY FIX
         await updateDoc(doc(db, "bundles", productBoxId), {
           contentItems: updatedContentItems,
           detailedContentItems: allDetailedItems,
           contentMetadata: {
             totalItems: allDetailedItems.length,
-            totalDuration: totalDuration,
-            totalDurationFormatted: formatDuration(totalDuration),
-            totalSize: totalSize,
-            totalSizeFormatted: formatFileSize(totalSize),
+            totalDuration: allTotalDuration,
+            totalDurationFormatted: formatDuration(allTotalDuration),
+            totalSize: allTotalSize,
+            totalSizeFormatted: formatFileSize(allTotalSize),
             contentBreakdown: {
               videos: videoCount,
               audio: audioCount,
               images: imageCount,
               documents: documentCount,
             },
-            averageDuration: allDetailedItems.length > 0 ? totalDuration / allDetailedItems.length : 0,
-            averageSize: allDetailedItems.length > 0 ? totalSize / allDetailedItems.length : 0,
+            averageDuration: allDetailedItems.length > 0 ? allTotalDuration / allDetailedItems.length : 0,
+            averageSize: allDetailedItems.length > 0 ? allTotalSize / allDetailedItems.length : 0,
             resolutions: [...new Set(allDetailedItems.map((item) => item.resolution).filter(Boolean))],
             formats: [...new Set(allDetailedItems.map((item) => item.format).filter(Boolean))],
             qualities: [...new Set(allDetailedItems.map((item) => item.quality).filter(Boolean))],
@@ -843,8 +847,8 @@ export default function BundlesPage() {
 
         console.log(`✅ [Bundle Content] Enhanced metadata stored for bundle ${productBoxId}:`, {
           totalItems: allDetailedItems.length,
-          totalDuration: formatDuration(totalDuration),
-          totalSize: formatFileSize(totalSize),
+          totalDuration: formatDuration(allTotalDuration),
+          totalSize: formatFileSize(allTotalSize),
           contentBreakdown: { videos: videoCount, audio: audioCount, images: imageCount, documents: documentCount },
         })
       }
@@ -856,7 +860,7 @@ export default function BundlesPage() {
 
       setShowAddContentModal(null)
       setSelectedContentIds([])
-      fetchProductBoxes() // Refresh bundles
+      fetchProductBoxes() // Refresh bundles to show updated metadata
     } catch (error) {
       console.error("Error adding content to bundle:", error)
       toast({
@@ -904,14 +908,47 @@ export default function BundlesPage() {
       await Promise.all(deletePromises)
       console.log(`✅ [Bundles] Removed ${deletePromises.length} productBoxContent entries`)
 
-      // Step 2: Update bundle contentItems array
+      // Step 2: Update bundle contentItems array and recalculate metadata
       const currentBox = productBoxes.find((box) => box.id === productBoxId)
       if (currentBox) {
         const updatedContentItems = currentBox.contentItems.filter((id) => id !== contentId)
 
-        // Update bundles collection
+        // Recalculate metadata for remaining content
+        const remainingDetailedItems = (currentBox.detailedContentItems || []).filter(
+          (item: any) => item.id !== contentId,
+        )
+        const totalDuration = remainingDetailedItems.reduce((sum: number, item: any) => sum + (item.duration || 0), 0)
+        const totalSize = remainingDetailedItems.reduce((sum: number, item: any) => sum + (item.fileSize || 0), 0)
+        const videoCount = remainingDetailedItems.filter((item: any) => item.contentType === "video").length
+        const audioCount = remainingDetailedItems.filter((item: any) => item.contentType === "audio").length
+        const imageCount = remainingDetailedItems.filter((item: any) => item.contentType === "image").length
+        const documentCount = remainingDetailedItems.filter((item: any) => item.contentType === "document").length
+
+        // Update bundles collection with recalculated metadata
         await updateDoc(doc(db, "bundles", productBoxId), {
           contentItems: updatedContentItems,
+          detailedContentItems: remainingDetailedItems,
+          contentMetadata: {
+            totalItems: remainingDetailedItems.length,
+            totalDuration: totalDuration,
+            totalDurationFormatted: formatDuration(totalDuration),
+            totalSize: totalSize,
+            totalSizeFormatted: formatFileSize(totalSize),
+            contentBreakdown: {
+              videos: videoCount,
+              audio: audioCount,
+              images: imageCount,
+              documents: documentCount,
+            },
+            averageDuration: remainingDetailedItems.length > 0 ? totalDuration / remainingDetailedItems.length : 0,
+            averageSize: remainingDetailedItems.length > 0 ? totalSize / remainingDetailedItems.length : 0,
+            resolutions: [...new Set(remainingDetailedItems.map((item: any) => item.resolution).filter(Boolean))],
+            formats: [...new Set(remainingDetailedItems.map((item: any) => item.format).filter(Boolean))],
+            qualities: [...new Set(remainingDetailedItems.map((item: any) => item.quality).filter(Boolean))],
+          },
+          contentTitles: remainingDetailedItems.map((item: any) => item.title),
+          contentDescriptions: remainingDetailedItems.map((item: any) => item.description || "").filter(Boolean),
+          contentTags: [...new Set(remainingDetailedItems.flatMap((item: any) => item.tags || []))],
           updatedAt: new Date(),
         })
 

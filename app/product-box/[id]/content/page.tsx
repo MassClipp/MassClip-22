@@ -86,7 +86,7 @@ export default function ProductBoxContentPage() {
         if (matchingPurchase) {
           console.log(`✅ [Content Page] Access granted via purchase`, matchingPurchase)
 
-          // Use the bundle data from the purchase
+          // Use the bundle data from the purchase with enhanced title logging
           const bundleInfo: BundleData = {
             title: matchingPurchase.productBoxTitle || matchingPurchase.bundleTitle || "Untitled Bundle",
             description: matchingPurchase.productBoxDescription || "",
@@ -95,6 +95,9 @@ export default function ProductBoxContentPage() {
             totalItems: matchingPurchase.totalItems || matchingPurchase.items?.length || 0,
           }
 
+          // Log the bundle title for debugging
+          console.log(`📝 [Content Page] Bundle title: "${bundleInfo.title}"`)
+
           // Use the content items directly from the purchase
           let contentItems: ContentItem[] = []
 
@@ -102,12 +105,30 @@ export default function ProductBoxContentPage() {
             console.log(`📦 [Content Page] Found ${matchingPurchase.items.length} items in purchase`)
 
             contentItems = matchingPurchase.items.map((item: any, index: number) => {
-              // Get the best available title
+              // Enhanced title extraction with better fallbacks
               let displayTitle =
-                item.displayTitle || item.title || item.name || item.filename || `Content Item ${index + 1}`
+                item.displayTitle ||
+                item.title ||
+                item.name ||
+                item.filename ||
+                item.originalFileName ||
+                item.originalTitle ||
+                `Content Item ${index + 1}`
 
-              // Clean up the title - remove file extensions
-              displayTitle = displayTitle.replace(/\.(mp4|mov|avi|mkv|webm|m4v)$/i, "")
+              // Clean up the title - remove file extensions and normalize
+              displayTitle = displayTitle.replace(/\.(mp4|mov|avi|mkv|webm|m4v|mp3|wav|jpg|jpeg|png|gif|pdf)$/i, "")
+
+              // Log each item's title for debugging
+              console.log(
+                `📝 [Content Page] Item ${index + 1} title: "${displayTitle}" (from: ${JSON.stringify({
+                  displayTitle: item.displayTitle,
+                  title: item.title,
+                  name: item.name,
+                  filename: item.filename,
+                  originalFileName: item.originalFileName,
+                  originalTitle: item.originalTitle,
+                })})`,
+              )
 
               // Determine content type from mimeType or fileUrl
               let contentType: "video" | "audio" | "image" | "document" = "document"
@@ -126,6 +147,15 @@ export default function ProductBoxContentPage() {
                   url.includes(".webm")
                 ) {
                   contentType = "video"
+                } else if (url.includes(".mp3") || url.includes(".wav")) {
+                  contentType = "audio"
+                } else if (
+                  url.includes(".jpg") ||
+                  url.includes(".jpeg") ||
+                  url.includes(".png") ||
+                  url.includes(".gif")
+                ) {
+                  contentType = "image"
                 }
               }
 
@@ -161,7 +191,7 @@ export default function ProductBoxContentPage() {
 
               contentItems = apiItems.map((item: any, index: number) => {
                 let displayTitle = item.title || item.filename || item.name || `Content Item ${index + 1}`
-                displayTitle = displayTitle.replace(/\.(mp4|mov|avi|mkv|webm|m4v)$/i, "")
+                displayTitle = displayTitle.replace(/\.(mp4|mov|avi|mkv|webm|m4v|mp3|wav|jpg|jpeg|png|gif|pdf)$/i, "")
 
                 let contentType: "video" | "audio" | "image" | "document" = "document"
                 if (item.mimeType?.startsWith("video/")) contentType = "video"
@@ -308,7 +338,7 @@ export default function ProductBoxContentPage() {
     return title.substring(0, maxLength) + "..."
   }
 
-  // Video Card Component
+  // Enhanced Video Card Component with better video handling
   const VideoCard = ({ item }: { item: ContentItem }) => {
     const videoRef = useRef<HTMLVideoElement>(null)
     const [videoLoaded, setVideoLoaded] = useState(false)
@@ -317,6 +347,7 @@ export default function ProductBoxContentPage() {
     const handleVideoLoad = () => {
       setVideoLoaded(true)
       setVideoError(false)
+      console.log(`✅ [Video Card] Video loaded successfully for: ${item.displayTitle}`)
     }
 
     const handleVideoError = (e: any) => {
@@ -327,6 +358,15 @@ export default function ProductBoxContentPage() {
 
     // Check if we have a valid video URL
     const hasValidVideoUrl = item.fileUrl && item.fileUrl.startsWith("http") && item.contentType === "video"
+
+    console.log(`🎥 [Video Card] Rendering card for "${item.displayTitle}":`, {
+      hasValidVideoUrl,
+      fileUrl: item.fileUrl,
+      contentType: item.contentType,
+      thumbnailUrl: item.thumbnailUrl,
+      videoError,
+      videoLoaded,
+    })
 
     return (
       <div className="relative group cursor-pointer">
@@ -347,13 +387,23 @@ export default function ProductBoxContentPage() {
                 preload="metadata"
                 data-video-id={item.id}
                 onLoadedData={handleVideoLoad}
+                onLoadedMetadata={handleVideoLoad}
+                onCanPlay={handleVideoLoad}
                 onError={handleVideoError}
                 onEnded={() => {
                   setCurrentlyPlayingVideo(null)
                 }}
                 poster={item.thumbnailUrl}
                 crossOrigin="anonymous"
+                controls={false}
               />
+
+              {/* Loading state */}
+              {!videoLoaded && !videoError && (
+                <div className="absolute inset-0 flex items-center justify-center bg-gray-800">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white"></div>
+                </div>
+              )}
 
               {/* Play/Pause Button - Center - Only visible on hover */}
               <div
