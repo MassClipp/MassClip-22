@@ -16,48 +16,20 @@ export async function POST(request: NextRequest) {
 
     console.log(`🔍 [Verify & Grant] Looking for bundle: ${productBoxId}`)
 
-    // Try to find the bundle in both collections
-    let bundleData: any = null
-    let bundleExists = false
+    // Get bundle from bundles collection
+    const bundleDoc = await db.collection("bundles").doc(productBoxId).get()
 
-    // First try bundles collection
-    try {
-      const bundleDoc = await db.collection("bundles").doc(productBoxId).get()
-      if (bundleDoc.exists) {
-        bundleData = bundleDoc.data()
-        bundleExists = true
-        console.log(`✅ [Verify & Grant] Found bundle in 'bundles' collection:`, {
-          id: productBoxId,
-          title: bundleData?.title,
-          creatorId: bundleData?.creatorId,
-        })
-      }
-    } catch (error) {
-      console.warn(`⚠️ [Verify & Grant] Error checking bundles collection:`, error)
+    if (!bundleDoc.exists) {
+      console.error(`❌ [Verify & Grant] Bundle not found in bundles collection: ${productBoxId}`)
+      return NextResponse.json({ error: "Bundle not found" }, { status: 404 })
     }
 
-    // If not found, try productBoxes collection
-    if (!bundleExists) {
-      try {
-        const productBoxDoc = await db.collection("productBoxes").doc(productBoxId).get()
-        if (productBoxDoc.exists) {
-          bundleData = productBoxDoc.data()
-          bundleExists = true
-          console.log(`✅ [Verify & Grant] Found bundle in 'productBoxes' collection:`, {
-            id: productBoxId,
-            title: bundleData?.title,
-            creatorId: bundleData?.creatorId,
-          })
-        }
-      } catch (error) {
-        console.warn(`⚠️ [Verify & Grant] Error checking productBoxes collection:`, error)
-      }
-    }
-
-    if (!bundleExists || !bundleData) {
-      console.error(`❌ [Verify & Grant] Bundle not found in either collection: ${productBoxId}`)
-      return NextResponse.json({ error: "Product box not found" }, { status: 404 })
-    }
+    const bundleData = bundleDoc.data()!
+    console.log(`✅ [Verify & Grant] Found bundle:`, {
+      id: productBoxId,
+      title: bundleData?.title,
+      creatorId: bundleData?.creatorId,
+    })
 
     // Get creator details
     let creatorData: any = { name: "Unknown Creator", username: "unknown" }
