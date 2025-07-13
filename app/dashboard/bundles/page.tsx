@@ -102,6 +102,29 @@ export default function BundlesPage() {
   // Real-time listeners for content updates
   const contentListeners = useRef<{ [key: string]: () => void }>({})
 
+  // Add helper functions at the top of the component
+  const formatFileSize = (bytes: number): string => {
+    if (bytes === 0) return "0 Bytes"
+    const k = 1024
+    const sizes = ["Bytes", "KB", "MB", "GB"]
+    const i = Math.floor(Math.log(bytes) / Math.log(k))
+    return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + " " + sizes[i]
+  }
+
+  const formatDuration = (seconds: number): string => {
+    if (!seconds || seconds <= 0) return "0:00"
+
+    const hours = Math.floor(seconds / 3600)
+    const minutes = Math.floor((seconds % 3600) / 60)
+    const remainingSeconds = Math.floor(seconds % 60)
+
+    if (hours > 0) {
+      return `${hours}:${minutes.toString().padStart(2, "0")}:${remainingSeconds.toString().padStart(2, "0")}`
+    } else {
+      return `${minutes}:${remainingSeconds.toString().padStart(2, "0")}`
+    }
+  }
+
   // Fetch product boxes - Updated to use the bundles API
   const fetchProductBoxes = async () => {
     if (!user) return
@@ -603,13 +626,13 @@ export default function BundlesPage() {
   }
 
   // Format file size
-  const formatFileSize = (bytes: number): string => {
-    if (bytes === 0) return "0 Bytes"
-    const k = 1024
-    const sizes = ["Bytes", "KB", "MB", "GB"]
-    const i = Math.floor(Math.log(bytes) / Math.log(k))
-    return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + " " + sizes[i]
-  }
+  // const formatFileSize = (bytes: number): string => {
+  //   if (bytes === 0) return "0 Bytes"
+  //   const k = 1024
+  //   const sizes = ["Bytes", "KB", "MB", "GB"]
+  //   const i = Math.floor(Math.log(bytes) / Math.log(k))
+  //   return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + " " + sizes[i]
+  // }
 
   // Fetch user's uploads
   const fetchUserUploads = async () => {
@@ -698,7 +721,7 @@ export default function BundlesPage() {
     }
   }
 
-  // Handle adding content to bundle
+  // Handle adding content to bundle with detailed metadata storage
   const handleAddContentToBundle = async (productBoxId: string) => {
     if (selectedContentIds.length === 0) {
       toast({
@@ -712,12 +735,57 @@ export default function BundlesPage() {
     try {
       setAddContentLoading(true)
 
-      // Add each selected content item to the product box
+      console.log(`🔄 [Bundle Content] Adding ${selectedContentIds.length} items to bundle ${productBoxId}`)
+
+      // Get detailed metadata for each selected content item
+      const detailedContentItems: any[] = []
+
       for (const contentId of selectedContentIds) {
         const contentItem = availableUploads.find((item) => item.id === contentId)
         if (!contentItem) continue
 
-        // Create productBoxContent entry
+        // Create comprehensive metadata object
+        const detailedItem = {
+          id: contentId,
+          title: contentItem.title,
+          filename: contentItem.filename,
+          fileUrl: contentItem.fileUrl,
+          publicUrl: contentItem.fileUrl, // Assuming fileUrl is the public URL
+          downloadUrl: contentItem.fileUrl,
+          thumbnailUrl: contentItem.thumbnailUrl || "",
+          previewUrl: contentItem.thumbnailUrl || "",
+
+          // File metadata
+          mimeType: contentItem.mimeType,
+          fileType: contentItem.mimeType,
+          fileSize: contentItem.fileSize,
+          fileSizeFormatted: formatFileSize(contentItem.fileSize),
+
+          // Video/Audio specific
+          duration: contentItem.duration || 0,
+          durationFormatted: contentItem.duration ? formatDuration(contentItem.duration) : "0:00",
+          contentType: contentItem.contentType,
+
+          // Upload metadata
+          uploadedAt: new Date(),
+          createdAt: new Date(),
+          creatorId: user?.uid || "",
+
+          // Additional metadata
+          description: "",
+          isPublic: true,
+          downloadCount: 0,
+          viewCount: 0,
+          tags: [],
+
+          // Quality indicators
+          quality: "HD", // Default, could be determined from resolution
+          format: contentItem.mimeType.split("/")[1] || "unknown",
+        }
+
+        detailedContentItems.push(detailedItem)
+
+        // Create productBoxContent entry for backward compatibility
         await addDoc(collection(db, "productBoxContent"), {
           productBoxId,
           uploadId: contentId,
@@ -731,19 +799,59 @@ export default function BundlesPage() {
         })
       }
 
-      // Update product box contentItems array using bundles collection
+      // Get current bundle data
       const currentBox = productBoxes.find((box) => box.id === productBoxId)
       if (currentBox) {
         const updatedContentItems = [...currentBox.contentItems, ...selectedContentIds]
+
+        // Calculate enhanced metadata
+        const allDetailedItems = [...(currentBox.detailedContentItems || []), ...detailedContentItems]
+        const totalDuration = allDetailedItems.reduce((sum, item) => sum + (item.duration || 0), 0)
+        const totalSize = allDetailedItems.reduce((sum, item) => sum + (item.fileSize || 0), 0)
+        const videoCount = allDetailedItems.filter((item) => item.contentType === "video").length
+        const audioCount = allDetailedItems.filter((item) => item.contentType === "audio").length
+        const imageCount = allDetailedItems.filter((item) => item.contentType === "image").length
+        const documentCount = allDetailedItems.filter((item) => item.contentType === "document").length
+
+        // Update bundle with comprehensive metadata
         await updateDoc(doc(db, "bundles", productBoxId), {
           contentItems: updatedContentItems,
+          detailedContentItems: allDetailedItems,
+          contentMetadata: {
+            totalItems: allDetailedItems.length,
+            totalDuration: totalDuration,
+            totalDurationFormatted: formatDuration(totalDuration),
+            totalSize: totalSize,
+            totalSizeFormatted: formatFileSize(totalSize),
+            contentBreakdown: {
+              videos: videoCount,
+              audio: audioCount,
+              images: imageCount,
+              documents: documentCount,
+            },
+            averageDuration: allDetailedItems.length > 0 ? totalDuration / allDetailedItems.length : 0,
+            averageSize: allDetailedItems.length > 0 ? totalSize / allDetailedItems.length : 0,
+            resolutions: [...new Set(allDetailedItems.map((item) => item.resolution).filter(Boolean))],
+            formats: [...new Set(allDetailedItems.map((item) => item.format).filter(Boolean))],
+            qualities: [...new Set(allDetailedItems.map((item) => item.quality).filter(Boolean))],
+          },
+          contentTitles: allDetailedItems.map((item) => item.title),
+          contentDescriptions: allDetailedItems.map((item) => item.description || "").filter(Boolean),
+          contentTags: [...new Set(allDetailedItems.flatMap((item) => item.tags || []))],
           updatedAt: new Date(),
+        })
+
+        console.log(`✅ [Bundle Content] Enhanced metadata stored for bundle ${productBoxId}:`, {
+          totalItems: allDetailedItems.length,
+          totalDuration: formatDuration(totalDuration),
+          totalSize: formatFileSize(totalSize),
+          contentBreakdown: { videos: videoCount, audio: audioCount, images: imageCount, documents: documentCount },
         })
       }
 
       toast({
         title: "Success",
-        description: `Added ${selectedContentIds.length} content item${selectedContentIds.length !== 1 ? "s" : ""} to bundle`,
+        description: `Added ${selectedContentIds.length} content item${selectedContentIds.length !== 1 ? "s" : ""} to bundle with detailed metadata`,
       })
 
       setShowAddContentModal(null)
