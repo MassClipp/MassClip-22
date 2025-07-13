@@ -1,6 +1,6 @@
 "use client"
 
-import { useEffect, useState, useRef } from "react"
+import { useEffect, useState } from "react"
 import { useParams, useRouter } from "next/navigation"
 import { useAuth } from "@/contexts/auth-context"
 import { Button } from "@/components/ui/button"
@@ -124,42 +124,11 @@ export default function ProductBoxContentPage() {
             const contentData = await contentResponse.json()
             contentItems = Array.isArray(contentData) ? contentData : contentData.items || []
 
-            // Process content items to get proper titles and ensure video content type
-            contentItems = contentItems.map((item, index) => {
-              // Get the best available title
-              let displayTitle =
-                item.originalTitle || item.title || item.name || item.filename || `Content Item ${index + 1}`
-
-              // Clean up the title - remove file extensions and clean formatting
-              displayTitle = displayTitle.replace(/\.(mp4|mov|avi|mkv|webm|m4v)$/i, "")
-
-              // Determine content type from mimeType or fileUrl
-              let contentType: "video" | "audio" | "image" | "document" = "document"
-              if (item.mimeType) {
-                if (item.mimeType.startsWith("video/")) contentType = "video"
-                else if (item.mimeType.startsWith("audio/")) contentType = "audio"
-                else if (item.mimeType.startsWith("image/")) contentType = "image"
-              } else if (item.fileUrl) {
-                // Fallback: check file extension
-                const url = item.fileUrl.toLowerCase()
-                if (
-                  url.includes(".mp4") ||
-                  url.includes(".mov") ||
-                  url.includes(".avi") ||
-                  url.includes(".mkv") ||
-                  url.includes(".webm")
-                ) {
-                  contentType = "video"
-                }
-              }
-
-              return {
-                ...item,
-                displayTitle,
-                contentType,
-                displaySize: formatFileSize(item.fileSize || 0),
-              }
-            })
+            // Process content items to get proper titles
+            contentItems = contentItems.map((item) => ({
+              ...item,
+              displayTitle: item.originalTitle || item.title || item.name || item.filename || "Untitled",
+            }))
           }
 
           setBundleData(bundleInfo)
@@ -268,122 +237,9 @@ export default function ProductBoxContentPage() {
     return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + " " + sizes[i]
   }
 
-  const truncateTitle = (title: string, maxLength = 25): string => {
+  const truncateTitle = (title: string, maxLength = 20): string => {
     if (title.length <= maxLength) return title
     return title.substring(0, maxLength) + "..."
-  }
-
-  // Video Card Component
-  const VideoCard = ({ item }: { item: ContentItem }) => {
-    const videoRef = useRef<HTMLVideoElement>(null)
-    const [videoLoaded, setVideoLoaded] = useState(false)
-    const [videoError, setVideoError] = useState(false)
-
-    const handleVideoLoad = () => {
-      setVideoLoaded(true)
-      setVideoError(false)
-    }
-
-    const handleVideoError = () => {
-      setVideoError(true)
-      setVideoLoaded(false)
-    }
-
-    return (
-      <div className="relative group cursor-pointer">
-        {/* Video Container - 9:16 Aspect Ratio */}
-        <div
-          className="relative bg-gray-900 rounded-lg overflow-hidden border border-transparent group-hover:border-gray-600 transition-all duration-300"
-          style={{ aspectRatio: "9/16" }}
-        >
-          {item.contentType === "video" && !videoError ? (
-            <div className="relative w-full h-full">
-              <video
-                ref={videoRef}
-                className="w-full h-full object-cover"
-                src={item.fileUrl}
-                loop
-                muted
-                playsInline
-                preload="metadata"
-                data-video-id={item.id}
-                onLoadedData={handleVideoLoad}
-                onError={handleVideoError}
-                onEnded={() => {
-                  setCurrentlyPlayingVideo(null)
-                }}
-                poster={item.thumbnailUrl}
-              />
-
-              {/* Play/Pause Button - Center - Only visible on hover */}
-              <div
-                className="absolute inset-0 flex items-center justify-center cursor-pointer opacity-0 group-hover:opacity-100 transition-opacity duration-300"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  if (videoRef.current) {
-                    handleVideoToggle(item.id, videoRef.current)
-                  }
-                }}
-              >
-                <div className="bg-black/50 rounded-full p-3 hover:bg-black/70 transition-colors duration-300">
-                  {currentlyPlayingVideo === item.id ? (
-                    <Pause className="h-6 w-6 text-white" />
-                  ) : (
-                    <Play className="h-6 w-6 text-white ml-1" />
-                  )}
-                </div>
-              </div>
-
-              {/* Download Button - Bottom Right - Only visible on hover */}
-              <div className="absolute bottom-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-                <Button
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    handleDownload(item)
-                  }}
-                  size="sm"
-                  disabled={downloadingItems.has(item.id)}
-                  className="h-8 w-8 p-0 bg-black/70 hover:bg-black/90 text-white border-0 rounded-full"
-                >
-                  {downloadingItems.has(item.id) ? (
-                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
-                  ) : (
-                    <Download className="h-4 w-4" />
-                  )}
-                </Button>
-              </div>
-            </div>
-          ) : (
-            <div className="w-full h-full flex flex-col items-center justify-center p-4">
-              <div className="text-gray-500 text-4xl mb-3">
-                {item.contentType === "audio" ? "🎵" : item.contentType === "image" ? "🖼️" : "📄"}
-              </div>
-              <Button
-                onClick={() => handleDownload(item)}
-                size="sm"
-                disabled={downloadingItems.has(item.id)}
-                className="bg-white text-black hover:bg-gray-100 text-xs px-3 py-1 opacity-0 group-hover:opacity-100 transition-opacity duration-300"
-              >
-                {downloadingItems.has(item.id) ? (
-                  <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-black mr-1"></div>
-                ) : (
-                  <Download className="h-3 w-3 mr-1" />
-                )}
-                {downloadingItems.has(item.id) ? "Downloading..." : "Download"}
-              </Button>
-            </div>
-          )}
-        </div>
-
-        {/* Title and File Size - Below Video */}
-        <div className="mt-2 px-1">
-          <div className="text-white text-sm font-medium mb-1" title={item.displayTitle}>
-            {truncateTitle(item.displayTitle)}
-          </div>
-          <div className="text-gray-400 text-xs">{item.displaySize}</div>
-        </div>
-      </div>
-    )
   }
 
   if (loading) {
@@ -464,7 +320,93 @@ export default function ProductBoxContentPage() {
           <>
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4 mb-8">
               {items.map((item) => (
-                <VideoCard key={item.id} item={item} />
+                <div key={item.id} className="relative group cursor-pointer">
+                  {/* Video Container - 9:16 Aspect Ratio */}
+                  <div
+                    className="relative bg-gray-900 rounded-lg overflow-hidden border border-transparent group-hover:border-gray-600 transition-all duration-300"
+                    style={{ aspectRatio: "9/16" }}
+                  >
+                    {item.contentType === "video" ? (
+                      <div className="relative w-full h-full">
+                        <video
+                          className="w-full h-full object-cover"
+                          src={item.fileUrl}
+                          loop
+                          playsInline
+                          data-video-id={item.id}
+                          onEnded={() => {
+                            setCurrentlyPlayingVideo(null)
+                          }}
+                        />
+
+                        {/* Play/Pause Button - Center - Only visible on hover */}
+                        <div
+                          className="absolute inset-0 flex items-center justify-center cursor-pointer opacity-0 group-hover:opacity-100 transition-opacity duration-300"
+                          onClick={(e) => {
+                            const video = e.currentTarget.parentElement?.querySelector("video") as HTMLVideoElement
+                            if (video) {
+                              handleVideoToggle(item.id, video)
+                            }
+                          }}
+                        >
+                          <div className="bg-black/50 rounded-full p-3 hover:bg-black/70 transition-colors duration-300">
+                            {currentlyPlayingVideo === item.id ? (
+                              <Pause className="h-6 w-6 text-white" />
+                            ) : (
+                              <Play className="h-6 w-6 text-white ml-1" />
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Download Button - Bottom Right - Only visible on hover */}
+                        <div className="absolute bottom-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                          <Button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              handleDownload(item)
+                            }}
+                            size="sm"
+                            disabled={downloadingItems.has(item.id)}
+                            className="h-8 w-8 p-0 bg-black/70 hover:bg-black/90 text-white border-0 rounded-full"
+                          >
+                            {downloadingItems.has(item.id) ? (
+                              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                            ) : (
+                              <Download className="h-4 w-4" />
+                            )}
+                          </Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="w-full h-full flex flex-col items-center justify-center p-4">
+                        <div className="text-gray-500 text-4xl mb-3">
+                          {item.contentType === "audio" ? "🎵" : item.contentType === "image" ? "🖼️" : "📄"}
+                        </div>
+                        <Button
+                          onClick={() => handleDownload(item)}
+                          size="sm"
+                          disabled={downloadingItems.has(item.id)}
+                          className="bg-white text-black hover:bg-gray-100 text-xs px-3 py-1 opacity-0 group-hover:opacity-100 transition-opacity duration-300"
+                        >
+                          {downloadingItems.has(item.id) ? (
+                            <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-black mr-1"></div>
+                          ) : (
+                            <Download className="h-3 w-3 mr-1" />
+                          )}
+                          {downloadingItems.has(item.id) ? "Downloading..." : "Download"}
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Title and File Size - Below Video */}
+                  <div className="mt-2 px-1">
+                    <div className="text-white text-sm font-medium truncate mb-1" title={item.displayTitle}>
+                      {truncateTitle(item.displayTitle)}
+                    </div>
+                    <div className="text-gray-400 text-xs">{formatFileSize(item.fileSize)}</div>
+                  </div>
+                </div>
               ))}
             </div>
 
