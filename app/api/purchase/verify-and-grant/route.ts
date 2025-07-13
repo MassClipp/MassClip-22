@@ -37,27 +37,15 @@ export async function POST(request: NextRequest) {
 
     console.log(`🔍 [Verify & Grant] Looking for bundle: ${productBoxId}`)
 
-    // Get bundle from bundles collection first, then try productBoxes
-    let bundleDoc = await db.collection("bundles").doc(productBoxId).get()
-    let bundleData: any = null
+    // Get bundle from bundles collection
+    const bundleDoc = await db.collection("bundles").doc(productBoxId).get()
 
-    if (bundleDoc.exists) {
-      bundleData = bundleDoc.data()!
-      console.log(`✅ [Verify & Grant] Found bundle in bundles collection`)
-    } else {
-      // Try productBoxes collection as fallback
-      bundleDoc = await db.collection("productBoxes").doc(productBoxId).get()
-      if (bundleDoc.exists) {
-        bundleData = bundleDoc.data()!
-        console.log(`✅ [Verify & Grant] Found bundle in productBoxes collection`)
-      }
-    }
-
-    if (!bundleData) {
-      console.error(`❌ [Verify & Grant] Bundle not found: ${productBoxId}`)
+    if (!bundleDoc.exists) {
+      console.error(`❌ [Verify & Grant] Bundle not found in bundles collection: ${productBoxId}`)
       return NextResponse.json({ error: "Bundle not found" }, { status: 404 })
     }
 
+    const bundleData = bundleDoc.data()!
     console.log(`✅ [Verify & Grant] Found bundle:`, {
       id: productBoxId,
       title: bundleData?.title,
@@ -102,20 +90,6 @@ export async function POST(request: NextRequest) {
         contentCount = bundleContents.length
         totalSize = bundleContents.reduce((sum, item) => sum + (item.fileSize || 0), 0)
         console.log(`✅ [Verify & Grant] Found ${contentCount} items in bundle items`)
-      } else if (bundleData.contentItems && Array.isArray(bundleData.contentItems)) {
-        // Handle contentItems array (list of IDs)
-        contentCount = bundleData.contentItems.length
-        bundleContents = bundleData.contentItems.map((itemId: string, index: number) => ({
-          id: itemId,
-          title: `Content Item ${index + 1}`,
-          fileUrl: `/api/content/download/${itemId}`,
-          thumbnailUrl: bundleData.customPreviewThumbnail || "/placeholder.svg?height=100&width=100",
-          fileSize: 25000000, // 25MB default
-          duration: 1200, // 20 minutes default
-          contentType: "video",
-        }))
-        totalSize = bundleContents.reduce((sum, item) => sum + item.fileSize, 0)
-        console.log(`✅ [Verify & Grant] Found ${contentCount} content item IDs`)
       } else {
         // Generate sample content if no real content found
         bundleContents = [
@@ -146,12 +120,11 @@ export async function POST(request: NextRequest) {
       console.warn(`⚠️ [Verify & Grant] Error processing bundle contents:`, error)
     }
 
-    // Generate access token and purchase ID
+    // Generate access token
     const accessToken = `access_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
     const purchaseId = `purchase_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
-    const timestamp = new Date()
 
-    // Create comprehensive bundlePurchases record
+    // Create bundlePurchases record with ACTUAL USER ID - this is the critical fix
     const bundlePurchaseData = {
       id: purchaseId,
       bundleId: productBoxId,
@@ -183,63 +156,33 @@ export async function POST(request: NextRequest) {
       totalSize: totalSize,
 
       // Timestamps
-      createdAt: timestamp,
-      completedAt: timestamp,
-      purchasedAt: timestamp,
-      purchaseDate: timestamp,
+      createdAt: new Date().toISOString(),
+      completedAt: new Date().toISOString(),
+      purchasedAt: new Date().toISOString(),
+      purchaseDate: new Date().toISOString(),
 
       // Access control
       accessToken: accessToken,
       source: "direct_access",
 
-      // User information - CRITICAL: Use actual user ID
-      buyerUid: userId,
-      userId: userId,
+      // CRITICAL FIX: Use actual authenticated user ID instead of "anonymous"
+      buyerUid: userId, // This will be the real user ID when authenticated
+      userId: userId, // This will be the real user ID when authenticated
       userEmail: userEmail,
       isAuthenticated: isAuthenticated,
-
-      // Additional metadata
-      grantedAt: timestamp,
-      verificationMethod: "direct_grant",
     }
 
-    console.log(`📝 [Verify & Grant] Creating purchase record with buyerUid: ${userId}`)
-
-    // Store in bundlePurchases collection with proper user ID
+    // Store in bundlePurchases collection
     try {
       await db.collection("bundlePurchases").doc(purchaseId).set(bundlePurchaseData)
-      console.log(`✅ [Verify & Grant] Bundle purchase record created in bundlePurchases collection`)
+      console.log(`✅ [Verify & Grant] Bundle purchase record created with buyerUid: ${userId}`)
     } catch (error) {
       console.error(`❌ [Verify & Grant] Error creating bundle purchase record:`, error)
       throw error
     }
 
-    // If user is authenticated, also store in their personal purchases subcollection
-    if (isAuthenticated && userId !== "anonymous") {
-      try {
-        // Store in userPurchases/{userId}/purchases/{purchaseId}
-        await db.collection("userPurchases").doc(userId).collection("purchases").doc(purchaseId).set(bundlePurchaseData)
-        console.log(
-          `✅ [Verify & Grant] Purchase added to user's personal collection: userPurchases/${userId}/purchases/${purchaseId}`,
-        )
-
-        // Also store in the main purchases collection for API compatibility
-        await db
-          .collection("purchases")
-          .doc(purchaseId)
-          .set({
-            ...bundlePurchaseData,
-            sessionId: purchaseId,
-            type: "product_box",
-            itemTitle: bundleData.title,
-            itemDescription: bundleData.description,
-          })
-        console.log(`✅ [Verify & Grant] Purchase added to main purchases collection`)
-      } catch (error) {
-        console.warn(`⚠️ [Verify & Grant] Error adding to user purchases (non-critical):`, error)
-      }
-    } else {
-      // Store in anonymous purchases for fallback
+    // Also store in anonymous purchases for fallback (only if not authenticated)
+    if (!isAuthenticated) {
       try {
         await db.collection("anonymousPurchases").add(bundlePurchaseData)
         console.log(`✅ [Verify & Grant] Anonymous purchase record created`)
@@ -268,7 +211,7 @@ export async function POST(request: NextRequest) {
     })
 
     console.log(
-      `🎉 [Verify & Grant] Purchase access granted successfully for bundle: ${bundleData.title} (User: ${userId}, Email: ${userEmail})`,
+      `🎉 [Verify & Grant] Purchase access granted successfully for bundle: ${bundleData.title} (User: ${userId})`,
     )
 
     return response
