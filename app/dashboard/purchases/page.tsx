@@ -21,6 +21,7 @@ import {
   RefreshCw,
   Star,
   CheckCircle,
+  Calendar,
   Infinity,
 } from "lucide-react"
 import Link from "next/link"
@@ -149,19 +150,15 @@ export default function PurchasesPage() {
           <Skeleton className="h-8 w-48 mb-2" />
           <Skeleton className="h-4 w-96" />
         </div>
-        <div className="grid gap-6">
-          <Card>
-            <CardContent className="p-6">
-              <div className="flex items-start space-x-4">
-                <Skeleton className="w-20 h-20 rounded-lg" />
-                <div className="flex-1 space-y-2">
-                  <Skeleton className="h-6 w-3/4" />
-                  <Skeleton className="h-4 w-1/2" />
-                  <Skeleton className="h-4 w-1/4" />
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+        <div className="flex gap-6">
+          <Skeleton className="w-80 h-96" />
+          <div className="flex-1">
+            <Skeleton className="h-96 w-full" />
+          </div>
+          <div className="w-48">
+            <Skeleton className="h-12 w-full mb-3" />
+            <Skeleton className="h-12 w-full" />
+          </div>
         </div>
       </div>
     )
@@ -236,7 +233,7 @@ export default function PurchasesPage() {
     )
   }
 
-  // Purchases list
+  // Main purchases view - matching the screenshot exactly
   return (
     <div className="container mx-auto px-4 py-8">
       {/* Header */}
@@ -247,12 +244,12 @@ export default function PurchasesPage() {
         </p>
       </div>
 
-      {/* Purchases */}
-      <div className="space-y-6">
-        {purchases.map((purchase) => (
-          <div key={purchase.id} className="flex gap-6">
-            {/* Thumbnail */}
-            <div className="w-64 h-48 bg-muted rounded-lg overflow-hidden flex-shrink-0">
+      {/* Main Layout - exactly like screenshot */}
+      {purchases.map((purchase) => (
+        <div key={purchase.id} className="mb-8">
+          <div className="flex gap-6">
+            {/* Left: Thumbnail */}
+            <div className="w-80 h-96 bg-muted rounded-lg overflow-hidden flex-shrink-0">
               {purchase.productBoxThumbnail ? (
                 <img
                   src={purchase.productBoxThumbnail || "/placeholder.svg"}
@@ -260,101 +257,107 @@ export default function PurchasesPage() {
                   className="w-full h-full object-cover"
                   onError={(e) => {
                     const target = e.target as HTMLImageElement
-                    target.src = "/placeholder.svg?height=192&width=256&text=No+Image"
+                    target.src = "/placeholder.svg?height=384&width=320&text=No+Image"
                   }}
                 />
               ) : (
-                <div className="w-full h-full flex items-center justify-center">
-                  <Package className="h-12 w-12 text-muted-foreground" />
+                <div className="w-full h-full flex items-center justify-center bg-gray-100">
+                  <Package className="h-16 w-16 text-gray-400" />
                 </div>
               )}
             </div>
 
-            {/* Content */}
+            {/* Center: Main Content */}
             <div className="flex-1">
-              <Card>
+              <Card className="h-full">
                 <CardContent className="p-6">
                   {/* Tabs */}
                   <Tabs defaultValue="active" className="mb-6">
                     <TabsList className="grid w-fit grid-cols-2">
-                      <TabsTrigger value="active" className="flex items-center gap-2">
+                      <TabsTrigger value="active" className="flex items-center gap-2 text-green-600">
                         <CheckCircle className="h-4 w-4" />
                         Active
                       </TabsTrigger>
-                      <TabsTrigger value="guest">Guest Access</TabsTrigger>
+                      <TabsTrigger value="guest" className="text-muted-foreground">
+                        Guest Access
+                      </TabsTrigger>
                     </TabsList>
                   </Tabs>
 
-                  {/* Purchase Info */}
-                  <div className="mb-6">
-                    <h2 className="text-2xl font-bold mb-2">{purchase.productBoxTitle}</h2>
-                    <div className="flex items-center gap-6 text-sm text-muted-foreground mb-4">
-                      <span className="flex items-center gap-1">
-                        <User className="h-4 w-4" />
-                        {purchase.creatorName}
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <span>📅</span>
-                        {new Date(purchase.purchasedAt).toLocaleDateString()}
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <DollarSign className="h-4 w-4" />${purchase.amount.toFixed(2)}{" "}
-                        {purchase.currency.toUpperCase()}
-                      </span>
-                    </div>
+                  {/* Title */}
+                  <h2 className="text-2xl font-bold mb-4">{purchase.productBoxTitle}</h2>
 
-                    {/* Stats */}
-                    <div className="grid grid-cols-3 gap-4 p-4 bg-muted/50 rounded-lg mb-6">
-                      <div className="text-center">
+                  {/* Purchase Details */}
+                  <div className="flex items-center gap-6 text-sm text-muted-foreground mb-6">
+                    <span className="flex items-center gap-1">
+                      <User className="h-4 w-4" />
+                      Content Creator
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <Calendar className="h-4 w-4" />
+                      {new Date(purchase.purchasedAt).toLocaleDateString()}
+                    </span>
+                    <span className="flex items-center gap-1 text-green-600 font-medium">
+                      <DollarSign className="h-4 w-4" />${purchase.amount.toFixed(2)} {purchase.currency.toUpperCase()}
+                    </span>
+                  </div>
+
+                  {/* Stats Box */}
+                  <div className="bg-gray-50 rounded-lg p-4 mb-6">
+                    <div className="grid grid-cols-3 gap-4 text-center">
+                      <div>
                         <div className="text-2xl font-bold">{purchase.totalItems || purchase.items?.length || 0}</div>
                         <div className="text-sm text-muted-foreground">Items</div>
                       </div>
-                      <div className="text-center">
+                      <div>
                         <div className="text-2xl font-bold">{formatFileSize(purchase.totalSize || 0)}</div>
                         <div className="text-sm text-muted-foreground">Total Size</div>
                       </div>
-                      <div className="text-center">
+                      <div>
                         <div className="text-2xl font-bold flex items-center justify-center">
                           <Infinity className="h-6 w-6" />
                         </div>
                         <div className="text-sm text-muted-foreground">Lifetime</div>
                       </div>
                     </div>
+                  </div>
 
-                    {/* Content Items */}
-                    {purchase.items && purchase.items.length > 0 && (
-                      <div className="space-y-2 mb-6">
-                        {purchase.items.map((item) => (
-                          <div key={item.id} className="flex items-center gap-3 p-3 border rounded-lg">
-                            <div className="w-8 h-8 rounded flex items-center justify-center bg-muted">
-                              {getContentIcon(item.contentType)}
-                            </div>
-                            <div className="flex-1">
-                              <div className="font-medium">{item.title}</div>
-                              <div className="text-sm text-muted-foreground flex items-center gap-2">
-                                <span>{formatFileSize(item.fileSize)}</span>
-                                {item.duration && item.duration > 0 && (
-                                  <>
-                                    <span>•</span>
-                                    <span>{formatDuration(item.duration)}</span>
-                                  </>
-                                )}
-                                <span>•</span>
-                                <span className="capitalize">{item.contentType}</span>
-                              </div>
+                  {/* Content Items List */}
+                  {purchase.items && purchase.items.length > 0 && (
+                    <div className="space-y-3">
+                      {purchase.items.map((item) => (
+                        <div key={item.id} className="flex items-center gap-3 p-3 border rounded-lg bg-white">
+                          <div className="w-8 h-8 rounded flex items-center justify-center">
+                            {getContentIcon(item.contentType)}
+                          </div>
+                          <div className="flex-1">
+                            <div className="font-medium">{item.title}</div>
+                            <div className="text-sm text-muted-foreground">
+                              {formatFileSize(item.fileSize)}
+                              {item.duration && item.duration > 0 && (
+                                <>
+                                  {" • "}
+                                  {formatDuration(item.duration)}
+                                </>
+                              )}
+                              {" • "}
+                              <span className="capitalize">{item.contentType}</span>
                             </div>
                           </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
+                          <div className="w-8 h-8 flex items-center justify-center">
+                            <span className="text-lg">⚙️</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             </div>
 
-            {/* Action Buttons */}
-            <div className="flex flex-col gap-3 w-48">
-              <Button asChild className="w-full">
+            {/* Right: Action Buttons */}
+            <div className="w-48 flex flex-col gap-3">
+              <Button asChild className="w-full bg-red-600 hover:bg-red-700">
                 <Link href={`/product-box/${purchase.productBoxId}/content`}>
                   <Eye className="w-4 h-4 mr-2" />
                   View Content
@@ -368,14 +371,14 @@ export default function PurchasesPage() {
               </Button>
             </div>
           </div>
-        ))}
-      </div>
+        </div>
+      ))}
 
-      {/* Lifetime Access Info */}
-      <Card className="mt-8 border-blue-200 bg-blue-50">
+      {/* Lifetime Access Info Box */}
+      <Card className="border-blue-200 bg-blue-50">
         <CardContent className="p-6">
           <div className="flex items-start gap-3">
-            <CheckCircle className="h-5 w-5 text-blue-600 mt-0.5" />
+            <CheckCircle className="h-5 w-5 text-blue-600 mt-0.5 flex-shrink-0" />
             <div>
               <h3 className="font-semibold text-blue-900 mb-2">Lifetime Access Guaranteed</h3>
               <p className="text-blue-800 text-sm">
