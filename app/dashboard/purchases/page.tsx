@@ -6,7 +6,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
   ShoppingBag,
   Eye,
@@ -20,8 +20,8 @@ import {
   AlertCircle,
   RefreshCw,
   Star,
-  ChevronDown,
-  ChevronUp,
+  CheckCircle,
+  Infinity,
 } from "lucide-react"
 import Link from "next/link"
 
@@ -60,7 +60,6 @@ export default function PurchasesPage() {
   const [purchases, setPurchases] = useState<Purchase[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [expandedPurchases, setExpandedPurchases] = useState<Set<string>>(new Set())
 
   useEffect(() => {
     fetchPurchases()
@@ -113,18 +112,6 @@ export default function PurchasesPage() {
     }
   }
 
-  const togglePurchaseExpansion = (purchaseId: string) => {
-    setExpandedPurchases((prev) => {
-      const newSet = new Set(prev)
-      if (newSet.has(purchaseId)) {
-        newSet.delete(purchaseId)
-      } else {
-        newSet.add(purchaseId)
-      }
-      return newSet
-    })
-  }
-
   const formatFileSize = (bytes: number): string => {
     if (bytes === 0) return "0 B"
     const k = 1024
@@ -150,7 +137,7 @@ export default function PurchasesPage() {
       case "image":
         return <ImageIcon className="h-4 w-4 text-purple-500" />
       default:
-        return <FileText className="h-4 w-4 text-gray-500" />
+        return <FileText className="h-4 w-4 text-orange-500" />
     }
   }
 
@@ -159,24 +146,22 @@ export default function PurchasesPage() {
     return (
       <div className="container mx-auto px-4 py-8">
         <div className="mb-8">
-          <Skeleton className="h-8 w-48 mb-2 bg-white/10" />
-          <Skeleton className="h-4 w-96 bg-white/10" />
+          <Skeleton className="h-8 w-48 mb-2" />
+          <Skeleton className="h-4 w-96" />
         </div>
         <div className="grid gap-6">
-          {[1, 2, 3].map((i) => (
-            <Card key={i} className="bg-black/40 backdrop-blur-xl border-white/10">
-              <CardContent className="p-6">
-                <div className="flex items-start space-x-4">
-                  <Skeleton className="w-20 h-20 rounded-lg bg-white/10" />
-                  <div className="flex-1 space-y-2">
-                    <Skeleton className="h-6 w-3/4 bg-white/10" />
-                    <Skeleton className="h-4 w-1/2 bg-white/10" />
-                    <Skeleton className="h-4 w-1/4 bg-white/10" />
-                  </div>
+          <Card>
+            <CardContent className="p-6">
+              <div className="flex items-start space-x-4">
+                <Skeleton className="w-20 h-20 rounded-lg" />
+                <div className="flex-1 space-y-2">
+                  <Skeleton className="h-6 w-3/4" />
+                  <Skeleton className="h-4 w-1/2" />
+                  <Skeleton className="h-4 w-1/4" />
                 </div>
-              </CardContent>
-            </Card>
-          ))}
+              </div>
+            </CardContent>
+          </Card>
         </div>
       </div>
     )
@@ -187,23 +172,23 @@ export default function PurchasesPage() {
     return (
       <div className="container mx-auto px-4 py-8">
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-white mb-2">My Purchases</h1>
-          <p className="text-white/70">Access your purchased content and downloads</p>
+          <h1 className="text-3xl font-bold mb-2">My Purchases</h1>
+          <p className="text-muted-foreground">Access your purchased content and downloads</p>
         </div>
 
-        <Alert className="bg-red-500/10 border-red-500/20 mb-6">
-          <AlertCircle className="h-4 w-4 text-red-400" />
-          <AlertDescription className="text-red-200">
+        <Alert variant="destructive" className="mb-6">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>
             <strong>Error loading purchases:</strong> {error}
           </AlertDescription>
         </Alert>
 
         <div className="flex space-x-4">
-          <Button onClick={fetchPurchases} className="bg-red-600 hover:bg-red-700">
+          <Button onClick={fetchPurchases}>
             <RefreshCw className="w-4 h-4 mr-2" />
             Try Again
           </Button>
-          <Button asChild variant="outline" className="border-white/20 text-white hover:bg-white/10 bg-transparent">
+          <Button asChild variant="outline">
             <Link href="/dashboard">
               <Package className="w-4 h-4 mr-2" />
               Back to Dashboard
@@ -219,26 +204,26 @@ export default function PurchasesPage() {
     return (
       <div className="container mx-auto px-4 py-8">
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-white mb-2">My Purchases</h1>
-          <p className="text-white/70">Access your purchased content and downloads</p>
+          <h1 className="text-3xl font-bold mb-2">My Purchases</h1>
+          <p className="text-muted-foreground">Access your purchased content and downloads</p>
         </div>
 
-        <Card className="bg-black/40 backdrop-blur-xl border-white/10">
+        <Card>
           <CardContent className="p-12 text-center">
-            <ShoppingBag className="h-16 w-16 text-white/30 mx-auto mb-4" />
-            <h2 className="text-2xl font-bold text-white mb-2">No Purchases Yet</h2>
-            <p className="text-white/60 mb-6 max-w-md mx-auto">
+            <ShoppingBag className="h-16 w-16 text-muted-foreground mx-auto mb-4" />
+            <h2 className="text-2xl font-bold mb-2">No Purchases Yet</h2>
+            <p className="text-muted-foreground mb-6 max-w-md mx-auto">
               You haven't made any purchases yet. Explore our premium content library to find amazing content from
               talented creators.
             </p>
             <div className="space-y-3">
-              <Button asChild className="bg-red-600 hover:bg-red-700">
+              <Button asChild>
                 <Link href="/dashboard/explore">
                   <Star className="w-4 h-4 mr-2" />
                   Explore Premium Content
                 </Link>
               </Button>
-              <Button asChild variant="outline" className="bg-transparent border-white/20 text-white hover:bg-white/10">
+              <Button asChild variant="outline">
                 <Link href="/dashboard">
                   <Package className="w-4 h-4 mr-2" />
                   Go to Dashboard
@@ -256,162 +241,151 @@ export default function PurchasesPage() {
     <div className="container mx-auto px-4 py-8">
       {/* Header */}
       <div className="mb-8">
-        <h1 className="text-3xl font-bold text-white mb-2">My Purchases</h1>
-        <p className="text-white/70">
+        <h1 className="text-3xl font-bold mb-2">My Purchases</h1>
+        <p className="text-muted-foreground">
           {purchases.length} purchase{purchases.length !== 1 ? "s" : ""} • Lifetime access to all content
         </p>
       </div>
 
-      {/* Purchases Grid */}
-      <div className="grid gap-6">
-        {purchases.map((purchase, index) => {
-          const isExpanded = expandedPurchases.has(purchase.id)
+      {/* Purchases */}
+      <div className="space-y-6">
+        {purchases.map((purchase) => (
+          <div key={purchase.id} className="flex gap-6">
+            {/* Thumbnail */}
+            <div className="w-64 h-48 bg-muted rounded-lg overflow-hidden flex-shrink-0">
+              {purchase.productBoxThumbnail ? (
+                <img
+                  src={purchase.productBoxThumbnail || "/placeholder.svg"}
+                  alt={purchase.productBoxTitle}
+                  className="w-full h-full object-cover"
+                  onError={(e) => {
+                    const target = e.target as HTMLImageElement
+                    target.src = "/placeholder.svg?height=192&width=256&text=No+Image"
+                  }}
+                />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center">
+                  <Package className="h-12 w-12 text-muted-foreground" />
+                </div>
+              )}
+            </div>
 
-          return (
-            <Card
-              key={purchase.id}
-              className="bg-black/40 backdrop-blur-xl border-white/10 hover:border-white/20 transition-all duration-300 overflow-hidden"
-              style={{
-                animationDelay: `${index * 100}ms`,
-                animation: "fadeInUp 0.6s ease-out forwards",
-              }}
-            >
-              <CardContent className="p-6">
-                <div className="flex items-start space-x-4 mb-4">
-                  {/* Thumbnail */}
-                  <div className="w-20 h-20 bg-gray-800 rounded-lg overflow-hidden flex-shrink-0">
-                    {purchase.productBoxThumbnail ? (
-                      <img
-                        src={purchase.productBoxThumbnail || "/placeholder.svg"}
-                        alt={purchase.productBoxTitle}
-                        className="w-full h-full object-cover"
-                        onError={(e) => {
-                          const target = e.target as HTMLImageElement
-                          target.src = "/placeholder.svg?height=80&width=80&text=No+Image"
-                        }}
-                      />
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center">
-                        <Package className="h-8 w-8 text-gray-500" />
-                      </div>
-                    )}
-                  </div>
+            {/* Content */}
+            <div className="flex-1">
+              <Card>
+                <CardContent className="p-6">
+                  {/* Tabs */}
+                  <Tabs defaultValue="active" className="mb-6">
+                    <TabsList className="grid w-fit grid-cols-2">
+                      <TabsTrigger value="active" className="flex items-center gap-2">
+                        <CheckCircle className="h-4 w-4" />
+                        Active
+                      </TabsTrigger>
+                      <TabsTrigger value="guest">Guest Access</TabsTrigger>
+                    </TabsList>
+                  </Tabs>
 
                   {/* Purchase Info */}
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-start justify-between mb-2">
-                      <div className="flex-1">
-                        <h3 className="text-xl font-bold text-white mb-1 line-clamp-1">{purchase.productBoxTitle}</h3>
-                        <p className="text-white/70 text-sm mb-2 line-clamp-2">{purchase.productBoxDescription}</p>
-                        <div className="flex items-center space-x-4 text-sm text-white/60">
-                          <span className="flex items-center">
-                            <User className="h-4 w-4 mr-1" />
-                            {purchase.creatorName}
-                          </span>
-                          <span className="flex items-center">
-                            <DollarSign className="h-4 w-4 mr-1" />${purchase.amount.toFixed(2)}{" "}
-                            {purchase.currency.toUpperCase()}
-                          </span>
+                  <div className="mb-6">
+                    <h2 className="text-2xl font-bold mb-2">{purchase.productBoxTitle}</h2>
+                    <div className="flex items-center gap-6 text-sm text-muted-foreground mb-4">
+                      <span className="flex items-center gap-1">
+                        <User className="h-4 w-4" />
+                        {purchase.creatorName}
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <span>📅</span>
+                        {new Date(purchase.purchasedAt).toLocaleDateString()}
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <DollarSign className="h-4 w-4" />${purchase.amount.toFixed(2)}{" "}
+                        {purchase.currency.toUpperCase()}
+                      </span>
+                    </div>
+
+                    {/* Stats */}
+                    <div className="grid grid-cols-3 gap-4 p-4 bg-muted/50 rounded-lg mb-6">
+                      <div className="text-center">
+                        <div className="text-2xl font-bold">{purchase.totalItems || purchase.items?.length || 0}</div>
+                        <div className="text-sm text-muted-foreground">Items</div>
+                      </div>
+                      <div className="text-center">
+                        <div className="text-2xl font-bold">{formatFileSize(purchase.totalSize || 0)}</div>
+                        <div className="text-sm text-muted-foreground">Total Size</div>
+                      </div>
+                      <div className="text-center">
+                        <div className="text-2xl font-bold flex items-center justify-center">
+                          <Infinity className="h-6 w-6" />
                         </div>
+                        <div className="text-sm text-muted-foreground">Lifetime</div>
                       </div>
                     </div>
-                  </div>
-                </div>
 
-                {/* Content Summary */}
-                <div className="grid grid-cols-3 gap-4 p-4 bg-white/5 rounded-lg mb-4">
-                  <div className="text-center">
-                    <div className="text-lg font-bold text-white">{purchase.totalItems || 0}</div>
-                    <div className="text-sm text-white/60">Items</div>
-                  </div>
-                  <div className="text-center">
-                    <div className="text-lg font-bold text-white">{formatFileSize(purchase.totalSize || 0)}</div>
-                    <div className="text-sm text-white/60">Total Size</div>
-                  </div>
-                  <div className="text-center">
-                    <div className="text-lg font-bold text-green-400">∞</div>
-                    <div className="text-sm text-white/60">Lifetime</div>
-                  </div>
-                </div>
-
-                {/* Collapsible Content Items */}
-                {purchase.items && purchase.items.length > 0 && (
-                  <Collapsible open={isExpanded} onOpenChange={() => togglePurchaseExpansion(purchase.id)}>
-                    <CollapsibleTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        className="w-full justify-between p-0 h-auto text-white/80 hover:text-white hover:bg-white/5 mb-2"
-                      >
-                        <h4 className="text-sm font-semibold flex items-center">
-                          <Package className="h-4 w-4 mr-1" />
-                          Content ({purchase.items.length} items)
-                        </h4>
-                        {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-                      </Button>
-                    </CollapsibleTrigger>
-                    <CollapsibleContent className="space-y-2 mb-4">
-                      <div className="max-h-48 overflow-y-auto">
+                    {/* Content Items */}
+                    {purchase.items && purchase.items.length > 0 && (
+                      <div className="space-y-2 mb-6">
                         {purchase.items.map((item) => (
-                          <div key={item.id} className="flex items-center space-x-3 p-2 bg-white/5 rounded-lg">
-                            <div className="w-8 h-8 bg-white/10 rounded flex items-center justify-center">
+                          <div key={item.id} className="flex items-center gap-3 p-3 border rounded-lg">
+                            <div className="w-8 h-8 rounded flex items-center justify-center bg-muted">
                               {getContentIcon(item.contentType)}
                             </div>
-                            <div className="flex-1 min-w-0">
-                              <p className="text-white font-medium text-sm truncate">{item.title}</p>
-                              <div className="flex items-center space-x-2 text-xs text-white/60">
+                            <div className="flex-1">
+                              <div className="font-medium">{item.title}</div>
+                              <div className="text-sm text-muted-foreground flex items-center gap-2">
                                 <span>{formatFileSize(item.fileSize)}</span>
-                                {item.duration && item.duration > 0 && <span>• {formatDuration(item.duration)}</span>}
-                                <span>• {item.contentType}</span>
+                                {item.duration && item.duration > 0 && (
+                                  <>
+                                    <span>•</span>
+                                    <span>{formatDuration(item.duration)}</span>
+                                  </>
+                                )}
+                                <span>•</span>
+                                <span className="capitalize">{item.contentType}</span>
                               </div>
                             </div>
                           </div>
                         ))}
                       </div>
-                    </CollapsibleContent>
-                  </Collapsible>
-                )}
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
 
-                {/* Action Buttons */}
-                <div className="flex space-x-3">
-                  <Button
-                    asChild
-                    variant="outline"
-                    className="bg-transparent border-white/20 text-white hover:bg-white/10 flex-1"
-                  >
-                    <Link href={`/product-box/${purchase.productBoxId}/content`}>
-                      <Eye className="w-4 h-4 mr-2" />
-                      View Content
-                    </Link>
-                  </Button>
-                  <Button
-                    asChild
-                    variant="outline"
-                    className="bg-transparent border-white/20 text-white hover:bg-white/10"
-                  >
-                    <Link href={`/creator/${purchase.creatorUsername}`}>
-                      <User className="w-4 h-4 mr-2" />
-                      Creator Profile
-                    </Link>
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          )
-        })}
+            {/* Action Buttons */}
+            <div className="flex flex-col gap-3 w-48">
+              <Button asChild className="w-full">
+                <Link href={`/product-box/${purchase.productBoxId}/content`}>
+                  <Eye className="w-4 h-4 mr-2" />
+                  View Content
+                </Link>
+              </Button>
+              <Button asChild variant="outline" className="w-full bg-transparent">
+                <Link href={`/creator/${purchase.creatorUsername}`}>
+                  <User className="w-4 h-4 mr-2" />
+                  Creator Profile
+                </Link>
+              </Button>
+            </div>
+          </div>
+        ))}
       </div>
 
-      <style jsx>{`
-       @keyframes fadeInUp {
-         from {
-           opacity: 0;
-           transform: translateY(20px);
-         }
-         to {
-           opacity: 1;
-           transform: translateY(0);
-         }
-       }
-     `}</style>
+      {/* Lifetime Access Info */}
+      <Card className="mt-8 border-blue-200 bg-blue-50">
+        <CardContent className="p-6">
+          <div className="flex items-start gap-3">
+            <CheckCircle className="h-5 w-5 text-blue-600 mt-0.5" />
+            <div>
+              <h3 className="font-semibold text-blue-900 mb-2">Lifetime Access Guaranteed</h3>
+              <p className="text-blue-800 text-sm">
+                All your purchases include lifetime access. You can download and re-download your content anytime. Guest
+                purchases are automatically saved for easy access.
+              </p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   )
 }
