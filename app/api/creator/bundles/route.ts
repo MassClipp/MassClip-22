@@ -59,7 +59,7 @@ interface DetailedContentItem {
 
   // Audio specific
   audioCodec?: string
-  audioSampleRate?: number
+  audioSampleRate?: string
   audioBitrate?: number
 
   // Content classification
@@ -431,7 +431,7 @@ export async function GET(request: NextRequest) {
           qualities: [...new Set(detailedContentItems.map((item) => item.quality).filter(Boolean))],
         },
 
-        // Quick access arrays for easy querying
+        // Quick access arrays for easy querying and display
         contentTitles: detailedContentItems.map((item) => item.displayTitle),
         contentDescriptions: detailedContentItems.map((item) => item.description || "").filter(Boolean),
         contentTags: [...new Set(detailedContentItems.flatMap((item) => item.tags || []))],
@@ -506,7 +506,7 @@ export async function POST(request: NextRequest) {
         if (detailedItem) {
           detailedContentItems.push(detailedItem)
           validContentIds.push(contentId)
-          console.log(`✅ [Bundles API] Successfully added detailed metadata for: ${detailedItem.displayTitle}`)
+          console.log(`✅ [Bundles API] Successfully added: ${detailedItem.displayTitle}`)
         } else {
           console.warn(`⚠️ [Bundles API] Skipping invalid content: ${contentId}`)
         }
