@@ -4,9 +4,8 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card"
 export default function Loading() {
   return (
     <div className="container mx-auto p-6 max-w-6xl">
-      <div className="mb-8">
-        <Skeleton className="h-8 w-64 mb-2" />
-        <Skeleton className="h-4 w-96" />
+      <div className="flex items-center justify-center h-32">
+        <div className="text-lg">Loading diagnostic tool...</div>
       </div>
 
       <Card className="mb-6">

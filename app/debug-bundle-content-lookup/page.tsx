@@ -2,22 +2,57 @@
 
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
+import { Separator } from "@/components/ui/separator"
+import { CheckCircle, XCircle, AlertCircle, Database, Search, FileText } from "lucide-react"
 import { useFirebaseAuth } from "@/hooks/use-firebase-auth"
-import { CheckCircle, XCircle, Search, Database, FileText, ImageIcon, Video, Music, File } from "lucide-react"
+
+interface LookupResult {
+  contentId: string
+  searchResults: {
+    [key: string]: {
+      exists: boolean
+      data: any
+      docId: string
+      collection: string
+      queryField?: string
+    }
+  }
+  finalResult: any
+  errors: string[]
+  timestamp: string
+}
+
+interface LookupSummary {
+  contentId: string
+  found: boolean
+  source: string
+  hasTitle: boolean
+  hasFileUrl: boolean
+  hasThumbnail: boolean
+  errorCount: number
+}
 
 export default function DebugBundleContentLookupPage() {
-  const { user } = useFirebaseAuth()
-  const [contentId, setContentId] = useState("BQcnQRmyaoADamf80LL8") // Default to the ID from screenshot
-  const [results, setResults] = useState<any>(null)
+  const { user, loading: authLoading } = useFirebaseAuth()
+  const [contentId, setContentId] = useState("BQcnQRmyaoADamf80LL8")
   const [loading, setLoading] = useState(false)
+  const [result, setResult] = useState<{ results: LookupResult; summary: LookupSummary } | null>(null)
+  const [error, setError] = useState<string | null>(null)
 
   const handleLookup = async () => {
-    if (!user || !contentId.trim()) return
+    if (!user) {
+      setError("Please log in to use this tool")
+      return
+    }
 
     setLoading(true)
+    setError(null)
+    setResult(null)
+
     try {
       const token = await user.getIdToken()
       const response = await fetch("/api/debug/bundle-content-lookup", {
@@ -26,261 +61,252 @@ export default function DebugBundleContentLookupPage() {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ contentId: contentId.trim() }),
+        body: JSON.stringify({ contentId }),
       })
 
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+      }
+
       const data = await response.json()
-      setResults(data)
+      setResult(data)
     } catch (error) {
-      console.error("Error:", error)
-      setResults({ error: "Failed to lookup content" })
+      console.error("Lookup error:", error)
+      setError(error instanceof Error ? error.message : "Unknown error occurred")
     } finally {
       setLoading(false)
     }
   }
 
-  const getContentTypeIcon = (mimeType: string) => {
-    if (mimeType?.startsWith("video/")) return <Video className="h-4 w-4" />
-    if (mimeType?.startsWith("audio/")) return <Music className="h-4 w-4" />
-    if (mimeType?.startsWith("image/")) return <ImageIcon className="h-4 w-4" />
-    return <File className="h-4 w-4" />
+  if (authLoading) {
+    return (
+      <div className="container mx-auto p-6">
+        <div className="flex items-center justify-center h-32">
+          <div className="text-lg">Loading...</div>
+        </div>
+      </div>
+    )
   }
 
-  const formatFileSize = (bytes: number) => {
-    if (bytes === 0) return "0 Bytes"
-    const k = 1024
-    const sizes = ["Bytes", "KB", "MB", "GB"]
-    const i = Math.floor(Math.log(bytes) / Math.log(k))
-    return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + " " + sizes[i]
-  }
-
-  const formatDuration = (seconds: number) => {
-    if (!seconds || seconds <= 0) return "0:00"
-    const minutes = Math.floor(seconds / 60)
-    const remainingSeconds = Math.floor(seconds % 60)
-    return `${minutes}:${remainingSeconds.toString().padStart(2, "0")}`
+  if (!user) {
+    return (
+      <div className="container mx-auto p-6">
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <AlertCircle className="h-5 w-5 text-yellow-500" />
+              Authentication Required
+            </CardTitle>
+            <CardDescription>Please log in to use the bundle content lookup diagnostic tool.</CardDescription>
+          </CardHeader>
+        </Card>
+      </div>
+    )
   }
 
   return (
-    <div className="container mx-auto p-6 max-w-6xl">
-      <div className="mb-8">
-        <h1 className="text-3xl font-bold mb-2">Bundle Content Lookup Debug</h1>
-        <p className="text-muted-foreground">Debug tool to investigate why bundle content metadata isn't being found</p>
+    <div className="container mx-auto p-6 space-y-6">
+      <div className="flex items-center gap-3">
+        <Database className="h-6 w-6" />
+        <h1 className="text-2xl font-bold">Bundle Content Lookup Diagnostic</h1>
       </div>
 
-      <Card className="mb-6">
+      <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Search className="h-5 w-5" />
-            Content Lookup
+            Content Lookup Tool
           </CardTitle>
           <CardDescription>Enter a content ID to debug the lookup process across all collections</CardDescription>
         </CardHeader>
-        <CardContent>
-          <div className="flex gap-4">
-            <Input
-              placeholder="Enter content ID (e.g., BQcnQRmyaoADamf80LL8)"
-              value={contentId}
-              onChange={(e) => setContentId(e.target.value)}
-              className="flex-1"
-            />
-            <Button onClick={handleLookup} disabled={loading || !user}>
-              {loading ? "Looking up..." : "Lookup Content"}
-            </Button>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="md:col-span-2">
+              <Label htmlFor="contentId">Content ID</Label>
+              <Input
+                id="contentId"
+                value={contentId}
+                onChange={(e) => setContentId(e.target.value)}
+                placeholder="Enter content ID (e.g., BQcnQRmyaoADamf80LL8)"
+                className="font-mono"
+              />
+            </div>
+            <div className="flex items-end">
+              <Button onClick={handleLookup} disabled={loading || !contentId} className="w-full">
+                {loading ? "Looking up..." : "Lookup Content"}
+              </Button>
+            </div>
           </div>
+
+          {error && (
+            <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
+              <div className="flex items-center gap-2 text-red-800">
+                <XCircle className="h-5 w-5" />
+                <span className="font-medium">Error</span>
+              </div>
+              <p className="text-red-700 mt-1">{error}</p>
+            </div>
+          )}
         </CardContent>
       </Card>
 
-      {results && (
-        <div className="space-y-6">
-          {/* Summary */}
+      {result && (
+        <>
+          {/* Summary Card */}
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <Database className="h-5 w-5" />
+                <FileText className="h-5 w-5" />
                 Lookup Summary
               </CardTitle>
             </CardHeader>
             <CardContent>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                 <div className="text-center">
-                  <div className="text-2xl font-bold">
-                    {results.summary?.found ? (
-                      <CheckCircle className="h-8 w-8 text-green-500 mx-auto" />
-                    ) : (
-                      <XCircle className="h-8 w-8 text-red-500 mx-auto" />
-                    )}
-                  </div>
-                  <p className="text-sm text-muted-foreground">Content Found</p>
+                  {result.summary.found ? (
+                    <CheckCircle className="h-8 w-8 text-green-500 mx-auto mb-2" />
+                  ) : (
+                    <XCircle className="h-8 w-8 text-red-500 mx-auto mb-2" />
+                  )}
+                  <div className="font-medium">Content Found</div>
                 </div>
                 <div className="text-center">
-                  <div className="text-2xl font-bold">
-                    {results.summary?.hasTitle ? (
-                      <CheckCircle className="h-8 w-8 text-green-500 mx-auto" />
-                    ) : (
-                      <XCircle className="h-8 w-8 text-red-500 mx-auto" />
-                    )}
-                  </div>
-                  <p className="text-sm text-muted-foreground">Has Title</p>
+                  {result.summary.hasTitle ? (
+                    <CheckCircle className="h-8 w-8 text-green-500 mx-auto mb-2" />
+                  ) : (
+                    <XCircle className="h-8 w-8 text-red-500 mx-auto mb-2" />
+                  )}
+                  <div className="font-medium">Has Title</div>
                 </div>
                 <div className="text-center">
-                  <div className="text-2xl font-bold">
-                    {results.summary?.hasFileUrl ? (
-                      <CheckCircle className="h-8 w-8 text-green-500 mx-auto" />
-                    ) : (
-                      <XCircle className="h-8 w-8 text-red-500 mx-auto" />
-                    )}
-                  </div>
-                  <p className="text-sm text-muted-foreground">Has File URL</p>
+                  {result.summary.hasFileUrl ? (
+                    <CheckCircle className="h-8 w-8 text-green-500 mx-auto mb-2" />
+                  ) : (
+                    <XCircle className="h-8 w-8 text-red-500 mx-auto mb-2" />
+                  )}
+                  <div className="font-medium">Has File URL</div>
                 </div>
                 <div className="text-center">
-                  <div className="text-2xl font-bold text-blue-600">{results.summary?.source || "None"}</div>
-                  <p className="text-sm text-muted-foreground">Best Source</p>
+                  <div className="text-lg font-bold text-blue-500 mb-2">{result.summary.source || "None"}</div>
+                  <div className="font-medium">Best Source</div>
                 </div>
               </div>
             </CardContent>
           </Card>
 
+          {/* Collection Search Results */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Collection Search Results</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                {Object.entries(result.results.searchResults).map(([key, searchResult]) => (
+                  <div key={key} className="flex items-center justify-between p-3 border rounded-lg">
+                    <div>
+                      <div className="font-medium">{key}</div>
+                      {searchResult.queryField && (
+                        <div className="text-sm text-gray-500">Query by: {searchResult.queryField}</div>
+                      )}
+                    </div>
+                    <div className="text-right">
+                      {searchResult.exists ? (
+                        <Badge variant="default" className="bg-green-100 text-green-800">
+                          Found
+                        </Badge>
+                      ) : (
+                        <Badge variant="secondary" className="bg-red-100 text-red-800">
+                          Not Found
+                        </Badge>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+
           {/* Final Result */}
-          {results.results?.finalResult && (
+          {result.results.finalResult && (
             <Card>
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <FileText className="h-5 w-5" />
-                  Extracted Content Data
-                </CardTitle>
-                <CardDescription>
-                  The final processed content metadata that would be stored in the bundle
-                </CardDescription>
+                <CardTitle>Extracted Content Data</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="space-y-4">
-                  <div className="flex items-center gap-3">
-                    {getContentTypeIcon(results.results.finalResult.mimeType)}
-                    <div>
-                      <h3 className="font-semibold text-lg">{results.results.finalResult.title}</h3>
-                      <p className="text-sm text-muted-foreground">{results.results.finalResult.filename}</p>
-                    </div>
-                    <Badge variant="outline">{results.results.finalResult.source}</Badge>
-                  </div>
-
+                <div className="space-y-3">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <h4 className="font-medium mb-2">File Information</h4>
-                      <div className="space-y-1 text-sm">
-                        <p>
-                          <span className="font-medium">Type:</span> {results.results.finalResult.mimeType}
-                        </p>
-                        <p>
-                          <span className="font-medium">Size:</span>{" "}
-                          {formatFileSize(results.results.finalResult.fileSize)}
-                        </p>
-                        {results.results.finalResult.duration > 0 && (
-                          <p>
-                            <span className="font-medium">Duration:</span>{" "}
-                            {formatDuration(results.results.finalResult.duration)}
-                          </p>
-                        )}
+                      <Label className="text-sm font-medium text-gray-500">Title</Label>
+                      <div className="font-mono text-sm bg-gray-50 p-2 rounded">
+                        {result.results.finalResult.title || "Not found"}
                       </div>
                     </div>
                     <div>
-                      <h4 className="font-medium mb-2">URLs</h4>
-                      <div className="space-y-1 text-sm">
-                        <p>
-                          <span className="font-medium">File URL:</span>
-                          <span className="ml-1 text-xs text-muted-foreground">
-                            {results.results.finalResult.fileUrl ? "✓ Present" : "✗ Missing"}
-                          </span>
-                        </p>
-                        <p>
-                          <span className="font-medium">Public URL:</span>
-                          <span className="ml-1 text-xs text-muted-foreground">
-                            {results.results.finalResult.publicUrl ? "✓ Present" : "✗ Missing"}
-                          </span>
-                        </p>
-                        <p>
-                          <span className="font-medium">Thumbnail:</span>
-                          <span className="ml-1 text-xs text-muted-foreground">
-                            {results.results.finalResult.thumbnailUrl ? "✓ Present" : "✗ Missing"}
-                          </span>
-                        </p>
+                      <Label className="text-sm font-medium text-gray-500">Filename</Label>
+                      <div className="font-mono text-sm bg-gray-50 p-2 rounded">
+                        {result.results.finalResult.filename || "Not found"}
+                      </div>
+                    </div>
+                    <div className="md:col-span-2">
+                      <Label className="text-sm font-medium text-gray-500">File URL</Label>
+                      <div className="font-mono text-sm bg-gray-50 p-2 rounded break-all">
+                        {result.results.finalResult.fileUrl || "Not found"}
+                      </div>
+                    </div>
+                    <div className="md:col-span-2">
+                      <Label className="text-sm font-medium text-gray-500">Public URL</Label>
+                      <div className="font-mono text-sm bg-gray-50 p-2 rounded break-all">
+                        {result.results.finalResult.publicUrl || "Not found"}
                       </div>
                     </div>
                   </div>
-
-                  {results.results.finalResult.fileUrl && (
+                  <Separator />
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                     <div>
-                      <h4 className="font-medium mb-2">File URL</h4>
-                      <code className="text-xs bg-muted p-2 rounded block break-all">
-                        {results.results.finalResult.fileUrl}
-                      </code>
+                      <Label className="text-sm font-medium text-gray-500">MIME Type</Label>
+                      <div className="font-mono text-sm">{result.results.finalResult.mimeType}</div>
                     </div>
-                  )}
+                    <div>
+                      <Label className="text-sm font-medium text-gray-500">File Size</Label>
+                      <div className="font-mono text-sm">{result.results.finalResult.fileSize} bytes</div>
+                    </div>
+                    <div>
+                      <Label className="text-sm font-medium text-gray-500">Duration</Label>
+                      <div className="font-mono text-sm">{result.results.finalResult.duration} seconds</div>
+                    </div>
+                    <div>
+                      <Label className="text-sm font-medium text-gray-500">Source</Label>
+                      <div className="font-mono text-sm">{result.results.finalResult.source}</div>
+                    </div>
+                  </div>
                 </div>
               </CardContent>
             </Card>
           )}
 
-          {/* Search Results */}
+          {/* Raw Data Debug */}
           <Card>
             <CardHeader>
-              <CardTitle>Collection Search Results</CardTitle>
-              <CardDescription>
-                <div className="space-y-4">
-                  {Object.entries(results.results?.searchResults || {}).map(([collection, result]: [string, any]) => (
-                    <div key={collection} className="border rounded-lg p-4">
-                      <div className="flex items-center justify-between mb-2">
-                        <h4 className="font-medium">{collection}</h4>
-                        <Badge variant={result.exists ? "default" : "secondary"}>
-                          {result.exists ? "Found" : "Not Found"}
-                        </Badge>
-                      </div>
-
-                      {result.exists && result.data && (
-                        <div className="space-y-2">
-                          <div className="grid grid-cols-2 gap-4 text-sm">
-                            <div>
-                              <span className="font-medium">Title:</span> {result.data.title || "N/A"}
-                            </div>
-                            <div>
-                              <span className="font-medium">Filename:</span> {result.data.filename || "N/A"}
-                            </div>
-                            <div>
-                              <span className="font-medium">File URL:</span>
-                              <span className="ml-1">{result.data.fileUrl ? "✓ Present" : "✗ Missing"}</span>
-                            </div>
-                            <div>
-                              <span className="font-medium">Public URL:</span>
-                              <span className="ml-1">{result.data.publicUrl ? "✓ Present" : "✗ Missing"}</span>
-                            </div>
-                          </div>
-
-                          <details className="mt-2">
-                            <summary className="cursor-pointer text-sm font-medium">View Raw Data</summary>
-                            <pre className="text-xs bg-muted p-2 rounded mt-2 overflow-auto max-h-40">
-                              {JSON.stringify(result.data, null, 2)}
-                            </pre>
-                          </details>
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </CardDescription>
+              <CardTitle>Raw Debug Data</CardTitle>
+              <CardDescription>Complete lookup results for debugging</CardDescription>
             </CardHeader>
-            <CardContent>{/* Content already moved to CardDescription */}</CardContent>
+            <CardContent>
+              <pre className="text-xs bg-gray-50 p-4 rounded overflow-auto max-h-96">
+                {JSON.stringify(result.results, null, 2)}
+              </pre>
+            </CardContent>
           </Card>
 
           {/* Errors */}
-          {results.results?.errors && results.results.errors.length > 0 && (
-            <Card>
+          {result.results.errors.length > 0 && (
+            <Card className="border-red-200">
               <CardHeader>
-                <CardTitle className="text-red-600">Errors</CardTitle>
+                <CardTitle className="text-red-800">Errors Encountered</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="space-y-2">
-                  {results.results.errors.map((error: string, index: number) => (
-                    <div key={index} className="text-sm text-red-600 bg-red-50 p-2 rounded">
+                  {result.results.errors.map((error, index) => (
+                    <div key={index} className="text-sm text-red-700 bg-red-50 p-2 rounded">
                       {error}
                     </div>
                   ))}
@@ -288,7 +314,7 @@ export default function DebugBundleContentLookupPage() {
               </CardContent>
             </Card>
           )}
-        </div>
+        </>
       )}
     </div>
   )
