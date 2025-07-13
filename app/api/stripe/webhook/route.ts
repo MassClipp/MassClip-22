@@ -103,12 +103,16 @@ async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session) 
       amount: session.amount_total ? session.amount_total / 100 : 0,
       currency: session.currency || "usd",
       creatorId: creatorId || "",
+      userEmail: session.customer_email || "",
     })
 
     // Also ensure purchase is written to main purchases collection for API compatibility
     const mainPurchaseData = {
       userId: buyerUid,
       buyerUid,
+      userEmail: session.customer_email || "",
+      userName: session.customer_details?.name || session.customer_email?.split("@")[0] || "Anonymous User",
+      isAuthenticated: !!(buyerUid && buyerUid !== "anonymous"),
       productBoxId,
       itemId: productBoxId,
       sessionId: session.id,
@@ -163,7 +167,23 @@ async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session) 
       ...legacyPurchaseData,
       userId: buyerUid,
       buyerUid,
+      userEmail: session.customer_email || "",
+      userName: session.customer_details?.name || session.customer_email?.split("@")[0] || "Anonymous User",
+      isAuthenticated: !!(buyerUid && buyerUid !== "anonymous"),
     })
+
+    // Save to bundlePurchases collection with proper user identification
+    const bundlePurchaseData = {
+      ...mainPurchaseData,
+      bundleId: productBoxId,
+      bundleTitle: productBoxData.title || "Untitled Bundle",
+      bundleDescription: productBoxData.description || "",
+      contents: productBoxData.contentItems || [],
+      contentCount: (productBoxData.contentItems || []).length,
+      totalItems: (productBoxData.contentItems || []).length,
+    }
+
+    await db.collection("bundlePurchases").doc(session.id).set(bundlePurchaseData)
 
     // Update product box sales counter
     await db

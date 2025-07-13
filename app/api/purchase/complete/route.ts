@@ -33,7 +33,7 @@ export async function POST(request: NextRequest) {
       }
 
       const bundleData = bundleDoc.data()!
-      return await handleBundlePurchase(request, {
+      return await handleBundlePurchase({
         buyerUid,
         bundleId: productBoxId,
         sessionId,
@@ -228,7 +228,7 @@ export async function POST(request: NextRequest) {
 }
 
 // Handle bundle purchases specifically
-async function handleBundlePurchase(request: NextRequest, data: any) {
+async function handleBundlePurchase(data: any) {
   const { buyerUid, bundleId, sessionId, amount, currency, userEmail, verifiedUser, bundleData } = data
 
   console.log("🎁 [Bundle Purchase] Processing bundle purchase:", { bundleId, buyerUid, userEmail })
