@@ -128,7 +128,7 @@ export class UnifiedPurchaseService {
       const creatorDoc = await getDb().collection("users").doc(purchaseData.creatorId).get()
       const creatorData = creatorDoc.exists ? creatorDoc.data() : null
 
-      // Get all content items for this product box
+      // Get all content items for this product box with enhanced metadata
       const contentItems = await this.fetchAllContentItems(purchaseData.productBoxId)
 
       console.log(`📦 [Unified Purchase] Found ${contentItems.length} content items`)
@@ -189,25 +189,56 @@ export class UnifiedPurchaseService {
   }
 
   /**
-   * Fetch all content items for a product box from various sources
+   * Fetch all content items for a product box from various sources with enhanced metadata
    */
   private static async fetchAllContentItems(productBoxId: string): Promise<UnifiedPurchaseItem[]> {
     const items: UnifiedPurchaseItem[] = []
 
     try {
-      // Try productBoxContent collection first (primary source)
-      const contentQuery = query(collection(getDb(), "productBoxContent"), where("productBoxId", "==", productBoxId))
-      const contentSnapshot = await getDocs(contentQuery)
+      console.log(`📊 [Content Fetch] Starting comprehensive content fetch for: ${productBoxId}`)
 
-      console.log(`📊 [Content Fetch] productBoxContent query found ${contentSnapshot.size} items`)
+      // Method 1: Try uploads collection first (most comprehensive data)
+      const uploadsQuery = query(collection(getDb(), "uploads"), where("productBoxId", "==", productBoxId))
+      const uploadsSnapshot = await getDocs(uploadsQuery)
 
-      contentSnapshot.forEach((doc) => {
+      console.log(`📊 [Content Fetch] uploads query found ${uploadsSnapshot.size} items`)
+
+      uploadsSnapshot.forEach((doc) => {
         const data = doc.data()
-        const item = this.normalizeContentItem(doc.id, data)
+        const item = this.normalizeContentItem(doc.id, data, "uploads")
         if (item) items.push(item)
       })
 
-      // If no items found, try with boxId field
+      // Method 2: Try productBoxContent collection and cross-reference with uploads
+      if (items.length === 0) {
+        const contentQuery = query(collection(getDb(), "productBoxContent"), where("productBoxId", "==", productBoxId))
+        const contentSnapshot = await getDocs(contentQuery)
+
+        console.log(`📊 [Content Fetch] productBoxContent query found ${contentSnapshot.size} items`)
+
+        for (const doc of contentSnapshot.docs) {
+          const data = doc.data()
+          let enhancedData = data
+
+          // If we have an uploadId, try to get the full upload data
+          if (data.uploadId) {
+            try {
+              const uploadDoc = await getDoc(doc(getDb(), "uploads", data.uploadId))
+              if (uploadDoc.exists()) {
+                enhancedData = { ...data, ...uploadDoc.data() }
+                console.log(`✅ [Content Fetch] Enhanced data from uploads for: ${data.uploadId}`)
+              }
+            } catch (error) {
+              console.warn(`⚠️ [Content Fetch] Could not fetch upload data for: ${data.uploadId}`)
+            }
+          }
+
+          const item = this.normalizeContentItem(doc.id, enhancedData, "productBoxContent")
+          if (item) items.push(item)
+        }
+      }
+
+      // Method 3: Try with boxId field
       if (items.length === 0) {
         const boxIdQuery = query(collection(getDb(), "productBoxContent"), where("boxId", "==", productBoxId))
         const boxIdSnapshot = await getDocs(boxIdQuery)
@@ -216,26 +247,12 @@ export class UnifiedPurchaseService {
 
         boxIdSnapshot.forEach((doc) => {
           const data = doc.data()
-          const item = this.normalizeContentItem(doc.id, data)
+          const item = this.normalizeContentItem(doc.id, data, "productBoxContent (boxId)")
           if (item) items.push(item)
         })
       }
 
-      // If still no items, try uploads collection
-      if (items.length === 0) {
-        const uploadsQuery = query(collection(getDb(), "uploads"), where("productBoxId", "==", productBoxId))
-        const uploadsSnapshot = await getDocs(uploadsQuery)
-
-        console.log(`📊 [Content Fetch] uploads query found ${uploadsSnapshot.size} items`)
-
-        uploadsSnapshot.forEach((doc) => {
-          const data = doc.data()
-          const item = this.normalizeContentItem(doc.id, data)
-          if (item) items.push(item)
-        })
-      }
-
-      // If still no items, check product box contentItems array
+      // Method 4: Check product box contentItems array
       if (items.length === 0) {
         const productBoxDoc = await getDb().collection("productBoxes").doc(productBoxId).get()
         if (productBoxDoc.exists) {
@@ -249,7 +266,7 @@ export class UnifiedPurchaseService {
               const uploadDoc = await getDb().collection("uploads").doc(itemId).get()
               if (uploadDoc.exists) {
                 const data = uploadDoc.data()!
-                const item = this.normalizeContentItem(itemId, data)
+                const item = this.normalizeContentItem(itemId, data, "uploads (via productBox)")
                 if (item) items.push(item)
               }
             } catch (error) {
@@ -260,7 +277,16 @@ export class UnifiedPurchaseService {
       }
 
       console.log(`✅ [Content Fetch] Total items found: ${items.length}`)
-      console.log(`📝 [Content Fetch] Item names: ${items.map((item) => item.displayTitle).join(", ")}`)
+      console.log(
+        `📝 [Content Fetch] Item details:`,
+        items.map((item) => ({
+          title: item.displayTitle,
+          contentType: item.contentType,
+          fileSize: item.displaySize,
+          hasValidUrl: !!item.fileUrl && item.fileUrl.startsWith("http"),
+        })),
+      )
+
       return items
     } catch (error) {
       console.error(`❌ [Content Fetch] Error fetching content items:`, error)
@@ -269,31 +295,58 @@ export class UnifiedPurchaseService {
   }
 
   /**
-   * Normalize content item data with comprehensive metadata
+   * Normalize content item data with comprehensive metadata and validation
    */
-  private static normalizeContentItem(id: string, data: any): UnifiedPurchaseItem | null {
+  private static normalizeContentItem(id: string, data: any, source: string): UnifiedPurchaseItem | null {
     try {
-      // Get the best available URL
+      // Get the best available URL with validation
       const fileUrl = data.fileUrl || data.publicUrl || data.downloadUrl || ""
 
       // Skip items without valid URLs
       if (!fileUrl || !fileUrl.startsWith("http")) {
-        console.warn(`⚠️ [Content Normalize] Skipping item ${id} - no valid URL`)
+        console.warn(`⚠️ [Content Normalize] Skipping item ${id} from ${source} - no valid URL (${fileUrl})`)
         return null
       }
 
-      // Determine content type
+      // Determine content type with better detection
       const mimeType = data.mimeType || data.fileType || "application/octet-stream"
       let contentType: "video" | "audio" | "image" | "document" = "document"
 
-      if (mimeType.startsWith("video/")) contentType = "video"
-      else if (mimeType.startsWith("audio/")) contentType = "audio"
-      else if (mimeType.startsWith("image/")) contentType = "image"
+      if (mimeType.startsWith("video/")) {
+        contentType = "video"
+      } else if (mimeType.startsWith("audio/")) {
+        contentType = "audio"
+      } else if (mimeType.startsWith("image/")) {
+        contentType = "image"
+      } else if (fileUrl) {
+        // Fallback: check file extension in URL
+        const url = fileUrl.toLowerCase()
+        if (
+          url.includes(".mp4") ||
+          url.includes(".mov") ||
+          url.includes(".avi") ||
+          url.includes(".mkv") ||
+          url.includes(".webm")
+        ) {
+          contentType = "video"
+          console.log(`🔍 [Content Normalize] Detected video from URL for ${id}`)
+        } else if (url.includes(".mp3") || url.includes(".wav")) {
+          contentType = "audio"
+        } else if (url.includes(".jpg") || url.includes(".jpeg") || url.includes(".png") || url.includes(".gif")) {
+          contentType = "image"
+        }
+      }
+
+      // Get the best available title with multiple fallbacks
+      const rawTitle =
+        data.title || data.filename || data.originalFileName || data.name || `Content Item ${id.slice(-6)}`
+
+      // Clean up the title - remove file extensions
+      const displayTitle = rawTitle.replace(/\.(mp4|mov|avi|mkv|webm|m4v|mp3|wav|jpg|jpeg|png|gif|pdf)$/i, "")
 
       // Format display values exactly as shown in UI
       const fileSize = data.fileSize || data.size || 0
       const displaySize = this.formatFileSize(fileSize)
-      const displayTitle = data.title || data.filename || data.originalFileName || data.name || "Untitled"
       const displayResolution = data.resolution || (data.height ? `${data.height}p` : undefined)
       const displayDuration = data.duration ? this.formatDuration(data.duration) : undefined
 
@@ -307,14 +360,14 @@ export class UnifiedPurchaseService {
         thumbnailUrl: data.thumbnailUrl || data.previewUrl || "",
         contentType,
         duration: data.duration || data.videoDuration || undefined,
-        filename: data.filename || data.originalFileName || `${id}.${this.getFileExtension(mimeType)}`,
+        filename: data.filename || data.originalFileName || `${displayTitle}.${this.getFileExtension(mimeType)}`,
 
         // Enhanced video metadata
         resolution: data.resolution || data.videoResolution || undefined,
         width: data.width || data.videoWidth || undefined,
         height: data.height || data.videoHeight || undefined,
         aspectRatio: data.aspectRatio || undefined,
-        quality: data.quality || undefined,
+        quality: data.quality || (data.height >= 1080 ? "HD" : data.height >= 720 ? "HD" : "SD"),
         format: data.format || data.videoFormat || undefined,
         codec: data.codec || data.videoCodec || undefined,
         bitrate: data.bitrate || data.videoBitrate || undefined,
@@ -335,21 +388,23 @@ export class UnifiedPurchaseService {
         uploadedAt: data.uploadedAt || data.createdAt || new Date(),
         creatorId: data.creatorId || data.userId || undefined,
         encoding: data.encoding || undefined,
-        isPublic: data.isPublic || false,
+        isPublic: data.isPublic !== false,
       }
 
-      console.log(`✅ [Content Normalize] Comprehensive metadata for ${id}:`, {
+      console.log(`✅ [Content Normalize] Enhanced item from ${source}:`, {
+        id: item.id,
         title: item.displayTitle,
-        size: item.displaySize,
-        resolution: item.displayResolution,
-        duration: item.displayDuration,
-        fileUrl: item.fileUrl,
         contentType: item.contentType,
+        size: item.displaySize,
+        duration: item.displayDuration,
+        resolution: item.displayResolution,
+        hasValidUrl: !!item.fileUrl && item.fileUrl.startsWith("http"),
+        hasThumbnail: !!item.thumbnailUrl,
       })
 
       return item
     } catch (error) {
-      console.error(`❌ [Content Normalize] Error normalizing item ${id}:`, error)
+      console.error(`❌ [Content Normalize] Error normalizing item ${id} from ${source}:`, error)
       return null
     }
   }
