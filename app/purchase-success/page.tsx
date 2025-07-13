@@ -55,35 +55,32 @@ function PurchaseSuccessContent() {
   const [error, setError] = useState<string | null>(null)
   const [purchaseData, setPurchaseData] = useState<PurchaseData | null>(null)
 
-  const sessionId = searchParams.get("session_id")
   const productBoxId = searchParams.get("product_box_id")
   const creatorId = searchParams.get("creator_id")
   const testMode = searchParams.get("test_mode") === "true"
 
   useEffect(() => {
     console.log(`🎉 [Purchase Success] Page loaded with params:`, {
-      sessionId,
       productBoxId,
       creatorId,
       testMode,
       fullURL: window.location.href,
     })
 
-    if (!sessionId && !productBoxId) {
-      setError("Invalid purchase parameters - missing session ID or product box ID")
+    if (!productBoxId) {
+      setError("Invalid purchase parameters - missing product box ID")
       setIsProcessing(false)
       return
     }
 
-    verifyAndGrantAccess()
-  }, [sessionId, productBoxId, creatorId])
+    grantAccess()
+  }, [productBoxId, creatorId])
 
-  const verifyAndGrantAccess = async () => {
+  const grantAccess = async () => {
     try {
-      console.log(`🔄 [Purchase Success] Verifying purchase and granting immediate access...`)
+      console.log(`🔄 [Purchase Success] Granting access to content...`)
 
       const requestBody = {
-        sessionId,
         productBoxId,
         creatorId,
       }
@@ -108,7 +105,7 @@ function PurchaseSuccessContent() {
       })
 
       if (!response.ok) {
-        throw new Error(result.error || `HTTP ${response.status}: ${result.details || "Failed to verify purchase"}`)
+        throw new Error(result.error || `HTTP ${response.status}: ${result.details || "Failed to grant access"}`)
       }
 
       console.log(`✅ [Purchase Success] Access granted successfully:`, result)
@@ -117,7 +114,7 @@ function PurchaseSuccessContent() {
       setSuccess(true)
     } catch (err: any) {
       console.error(`❌ [Purchase Success] Error:`, err)
-      setError(err.message || "Failed to verify purchase")
+      setError(err.message || "Failed to grant access")
     } finally {
       setTimeout(() => {
         setIsProcessing(false)
@@ -157,8 +154,8 @@ function PurchaseSuccessContent() {
               <div className="w-20 h-20 bg-green-500/20 rounded-full flex items-center justify-center mx-auto mb-6 animate-pulse">
                 <ShoppingBag className="h-10 w-10 text-green-400" />
               </div>
-              <h2 className="text-2xl font-bold text-white mb-3">Processing Your Purchase</h2>
-              <p className="text-white/70 mb-6">Verifying payment and granting instant access to your content...</p>
+              <h2 className="text-2xl font-bold text-white mb-3">Granting Access</h2>
+              <p className="text-white/70 mb-6">Setting up your premium content access...</p>
 
               {/* Animated loading dots */}
               <div className="flex space-x-2 justify-center mb-6">
@@ -195,7 +192,7 @@ function PurchaseSuccessContent() {
           <Card className="w-full max-w-md bg-black/40 backdrop-blur-xl border-red-500/20">
             <CardContent className="p-8 text-center">
               <AlertTriangle className="h-16 w-16 text-red-400 mx-auto mb-4" />
-              <h1 className="text-xl font-bold text-white mb-2">Purchase Verification Failed</h1>
+              <h1 className="text-xl font-bold text-white mb-2">Access Grant Failed</h1>
               <p className="text-white/70 mb-6">{error}</p>
               <div className="space-y-3">
                 <Button
@@ -246,11 +243,11 @@ function PurchaseSuccessContent() {
                   <CheckCircle className="h-14 w-14 text-green-400" />
                 </div>
                 <h1 className="text-4xl font-bold text-white mb-3">
-                  {testMode ? "🧪 Test Purchase Complete!" : "🎉 Purchase Successful!"}
+                  {testMode ? "🧪 Test Access Granted!" : "🎉 Access Granted!"}
                 </h1>
-                <p className="text-xl text-green-400 mb-2 font-semibold">✨ Access Granted Instantly ✨</p>
+                <p className="text-xl text-green-400 mb-2 font-semibold">✨ Content Unlocked Instantly ✨</p>
                 <p className="text-white/70 text-lg max-w-2xl mx-auto">
-                  Your premium content has been automatically added to your account and is ready to access immediately.
+                  Your premium content has been automatically unlocked and is ready to access immediately.
                   <strong className="text-green-400"> No login required!</strong>
                 </p>
               </div>
@@ -260,8 +257,7 @@ function PurchaseSuccessContent() {
                 <Alert className="mb-8 bg-yellow-500/10 border-yellow-500/20">
                   <AlertTriangle className="h-4 w-4 text-yellow-400" />
                   <AlertDescription className="text-yellow-200">
-                    <strong>TEST MODE:</strong> This was a test purchase using Stripe test cards. No real money was
-                    charged.
+                    <strong>TEST MODE:</strong> This is a test access grant. No payment was processed.
                   </AlertDescription>
                 </Alert>
               )}
@@ -354,7 +350,7 @@ function PurchaseSuccessContent() {
                 >
                   <Link href="/dashboard/purchases">
                     <ShoppingBag className="w-6 h-6 mr-3" />
-                    Access My Purchases
+                    Access My Content
                     <ArrowRight className="w-6 h-6 ml-3" />
                   </Link>
                 </Button>
@@ -387,16 +383,16 @@ function PurchaseSuccessContent() {
               <div className="p-6 bg-green-500/10 rounded-xl border border-green-500/20">
                 <h3 className="font-semibold text-green-200 mb-4 flex items-center text-lg">
                   <CheckCircle className="h-6 w-6 mr-2" />
-                  Purchase Complete - Instant Access Granted!
+                  Access Granted - Content Unlocked!
                 </h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <div className="flex items-center text-green-200/90">
                     <CheckCircle className="h-5 w-5 mr-3 text-green-400 flex-shrink-0" />
-                    <span>{testMode ? "Test payment" : "Payment"} processed successfully</span>
+                    <span>Content access granted successfully</span>
                   </div>
                   <div className="flex items-center text-green-200/90">
                     <CheckCircle className="h-5 w-5 mr-3 text-green-400 flex-shrink-0" />
-                    <span>Content added to your account instantly</span>
+                    <span>Content unlocked instantly</span>
                   </div>
                   <div className="flex items-center text-green-200/90">
                     <CheckCircle className="h-5 w-5 mr-3 text-green-400 flex-shrink-0" />
@@ -412,7 +408,7 @@ function PurchaseSuccessContent() {
                   </div>
                   <div className="flex items-center text-green-200/90">
                     <CheckCircle className="h-5 w-5 mr-3 text-green-400 flex-shrink-0" />
-                    <span>Purchase receipt saved automatically</span>
+                    <span>Access record saved automatically</span>
                   </div>
                 </div>
               </div>
@@ -423,7 +419,7 @@ function PurchaseSuccessContent() {
                   🎉 Welcome to MassClip! Your premium content is ready to enjoy.
                 </p>
                 <p className="text-white/40">
-                  Purchased on {new Date(purchaseData.purchasedAt).toLocaleDateString()} • Order #
+                  Access granted on {new Date(purchaseData.purchasedAt).toLocaleDateString()} • Access ID #
                   {purchaseData.id.slice(-8).toUpperCase()}
                 </p>
                 {purchaseData.accessToken && (
@@ -455,7 +451,7 @@ export default function PurchaseSuccessPage() {
             <Card className="w-full max-w-md bg-black/40 backdrop-blur-xl border-white/10">
               <CardContent className="p-6 text-center">
                 <Clock className="h-12 w-12 text-red-400 mx-auto mb-4 animate-spin" />
-                <h2 className="text-xl font-semibold text-white mb-2">Loading Purchase Details...</h2>
+                <h2 className="text-xl font-semibold text-white mb-2">Loading Content Access...</h2>
               </CardContent>
             </Card>
           </div>

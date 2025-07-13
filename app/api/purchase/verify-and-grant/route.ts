@@ -1,62 +1,20 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { db } from "@/lib/firebase-admin"
-import Stripe from "stripe"
-
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: "2024-06-20",
-})
 
 export async function POST(request: NextRequest) {
   try {
-    const { sessionId, productBoxId, creatorId } = await request.json()
+    const { productBoxId, creatorId } = await request.json()
 
     console.log(`🔍 [Verify & Grant] Received request:`, {
-      sessionId,
       productBoxId,
       creatorId,
     })
 
-    if (!sessionId && !productBoxId) {
-      return NextResponse.json({ error: "Session ID or Product Box ID is required" }, { status: 400 })
+    if (!productBoxId) {
+      return NextResponse.json({ error: "Product Box ID is required" }, { status: 400 })
     }
 
-    let stripeSession: any = null
-    let bundleId = productBoxId
-
-    // If we have a session ID, verify with Stripe
-    if (sessionId) {
-      try {
-        stripeSession = await stripe.checkout.sessions.retrieve(sessionId, {
-          expand: ["line_items", "payment_intent"],
-        })
-
-        console.log(`✅ [Verify & Grant] Stripe session retrieved:`, {
-          id: stripeSession.id,
-          status: stripeSession.status,
-          payment_status: stripeSession.payment_status,
-          amount_total: stripeSession.amount_total,
-          metadata: stripeSession.metadata,
-        })
-
-        if (stripeSession.payment_status !== "paid") {
-          return NextResponse.json({ error: "Payment not completed" }, { status: 400 })
-        }
-
-        // Extract bundle ID from session metadata if not provided
-        if (!bundleId) {
-          bundleId = stripeSession.metadata?.productBoxId || stripeSession.metadata?.bundleId
-        }
-      } catch (error) {
-        console.error(`❌ [Verify & Grant] Stripe session error:`, error)
-        return NextResponse.json({ error: "Invalid session ID" }, { status: 400 })
-      }
-    }
-
-    if (!bundleId) {
-      return NextResponse.json({ error: "Product box ID not found" }, { status: 400 })
-    }
-
-    console.log(`🔍 [Verify & Grant] Looking for bundle: ${bundleId}`)
+    console.log(`🔍 [Verify & Grant] Looking for bundle: ${productBoxId}`)
 
     // Try to find the bundle in both collections
     let bundleData: any = null
@@ -64,12 +22,12 @@ export async function POST(request: NextRequest) {
 
     // First try bundles collection
     try {
-      const bundleDoc = await db.collection("bundles").doc(bundleId).get()
+      const bundleDoc = await db.collection("bundles").doc(productBoxId).get()
       if (bundleDoc.exists) {
         bundleData = bundleDoc.data()
         bundleExists = true
         console.log(`✅ [Verify & Grant] Found bundle in 'bundles' collection:`, {
-          id: bundleId,
+          id: productBoxId,
           title: bundleData?.title,
           creatorId: bundleData?.creatorId,
         })
@@ -81,12 +39,12 @@ export async function POST(request: NextRequest) {
     // If not found, try productBoxes collection
     if (!bundleExists) {
       try {
-        const productBoxDoc = await db.collection("productBoxes").doc(bundleId).get()
+        const productBoxDoc = await db.collection("productBoxes").doc(productBoxId).get()
         if (productBoxDoc.exists) {
           bundleData = productBoxDoc.data()
           bundleExists = true
           console.log(`✅ [Verify & Grant] Found bundle in 'productBoxes' collection:`, {
-            id: bundleId,
+            id: productBoxId,
             title: bundleData?.title,
             creatorId: bundleData?.creatorId,
           })
@@ -97,7 +55,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (!bundleExists || !bundleData) {
-      console.error(`❌ [Verify & Grant] Bundle not found in either collection: ${bundleId}`)
+      console.error(`❌ [Verify & Grant] Bundle not found in either collection: ${productBoxId}`)
       return NextResponse.json({ error: "Product box not found" }, { status: 404 })
     }
 
@@ -159,8 +117,8 @@ export async function POST(request: NextRequest) {
 
     // Prepare purchase data
     const purchaseData = {
-      id: sessionId || `purchase_${Date.now()}`,
-      productBoxId: bundleId,
+      id: `purchase_${Date.now()}`,
+      productBoxId: productBoxId,
       productBoxTitle: bundleData.title || "Untitled Bundle",
       productBoxDescription: bundleData.description || "Premium content bundle",
       productBoxThumbnail:
@@ -168,18 +126,15 @@ export async function POST(request: NextRequest) {
       creatorId: creatorIdToUse || "unknown",
       creatorName: creatorData.name,
       creatorUsername: creatorData.username,
-      amount: stripeSession ? stripeSession.amount_total / 100 : bundleData.price || 0,
-      currency: stripeSession ? stripeSession.currency : "usd",
+      amount: bundleData.price || 0,
+      currency: "usd",
       items: sampleItems,
       totalItems: sampleItems.length,
       totalSize: totalSize,
       purchasedAt: new Date().toISOString(),
       status: "completed",
       accessToken: accessToken,
-      sessionId: sessionId,
-      paymentIntentId: stripeSession?.payment_intent?.id,
-      customerEmail: stripeSession?.customer_details?.email,
-      source: "stripe_checkout",
+      source: "direct_access",
     }
 
     // Store in anonymous purchases collection
@@ -190,19 +145,6 @@ export async function POST(request: NextRequest) {
       console.error(`❌ [Verify & Grant] Error creating anonymous purchase:`, error)
     }
 
-    // Also store in regular purchases if user ID is available
-    if (stripeSession?.metadata?.userId) {
-      try {
-        await db.collection("purchases").add({
-          ...purchaseData,
-          userId: stripeSession.metadata.userId,
-        })
-        console.log(`✅ [Verify & Grant] Regular purchase record created`)
-      } catch (error) {
-        console.error(`❌ [Verify & Grant] Error creating regular purchase:`, error)
-      }
-    }
-
     // Set access token cookie
     const response = NextResponse.json({
       success: true,
@@ -210,7 +152,7 @@ export async function POST(request: NextRequest) {
       message: "Access granted successfully",
     })
 
-    response.cookies.set(`purchase_access_${bundleId}`, accessToken, {
+    response.cookies.set(`purchase_access_${productBoxId}`, accessToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
@@ -218,14 +160,14 @@ export async function POST(request: NextRequest) {
       path: "/",
     })
 
-    console.log(`🎉 [Verify & Grant] Purchase verification completed successfully!`)
+    console.log(`🎉 [Verify & Grant] Purchase access granted successfully!`)
 
     return response
   } catch (error: any) {
     console.error(`❌ [Verify & Grant] Unexpected error:`, error)
     return NextResponse.json(
       {
-        error: "Failed to verify purchase and grant access",
+        error: "Failed to grant access",
         details: error.message,
       },
       { status: 500 },
