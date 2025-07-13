@@ -121,67 +121,108 @@ function getContentType(mimeType: string): "video" | "audio" | "image" | "docume
   return "document"
 }
 
-// Helper function to get detailed content metadata
+// Helper function to get detailed content metadata - FIXED VERSION
 async function getDetailedContentMetadata(contentId: string): Promise<DetailedContentItem | null> {
   try {
     console.log(`🔍 [Bundle Content] Fetching detailed metadata for: ${contentId}`)
 
-    // Try multiple sources for content data
     let contentData: any = null
     let sourceCollection = ""
 
-    // 1. Try uploads collection first (most comprehensive)
-    const uploadsDoc = await db.collection("uploads").doc(contentId).get()
-    if (uploadsDoc.exists) {
-      contentData = uploadsDoc.data()
-      sourceCollection = "uploads"
-      console.log(`✅ [Bundle Content] Found in uploads collection:`, {
-        title: contentData.title,
-        filename: contentData.filename,
-        url: contentData.url,
-        fileType: contentData.fileType,
-      })
+    // 1. Try uploads collection by document ID first (most direct approach)
+    try {
+      console.log(`🔍 [Bundle Content] Checking uploads collection by doc ID: ${contentId}`)
+      const uploadsDoc = await db.collection("uploads").doc(contentId).get()
+      if (uploadsDoc.exists) {
+        contentData = uploadsDoc.data()
+        sourceCollection = "uploads"
+        console.log(`✅ [Bundle Content] Found in uploads collection by doc ID:`, {
+          title: contentData?.title,
+          filename: contentData?.filename,
+          fileUrl: contentData?.fileUrl,
+          publicUrl: contentData?.publicUrl,
+          url: contentData?.url,
+          fileType: contentData?.fileType,
+          mimeType: contentData?.mimeType,
+          size: contentData?.size,
+        })
+      } else {
+        console.log(`❌ [Bundle Content] Not found in uploads by doc ID: ${contentId}`)
+      }
+    } catch (error) {
+      console.error(`❌ [Bundle Content] Error checking uploads by doc ID:`, error)
     }
 
-    // 2. Try productBoxContent collection
+    // 2. If not found by doc ID, try searching by id field in uploads
     if (!contentData) {
-      const productBoxContentDoc = await db.collection("productBoxContent").doc(contentId).get()
-      if (productBoxContentDoc.exists) {
-        contentData = productBoxContentDoc.data()
-        sourceCollection = "productBoxContent"
+      try {
+        console.log(`🔍 [Bundle Content] Searching uploads collection by id field: ${contentId}`)
+        const uploadsQuery = await db.collection("uploads").where("id", "==", contentId).limit(1).get()
+        if (!uploadsQuery.empty) {
+          contentData = uploadsQuery.docs[0].data()
+          sourceCollection = "uploads (by id field)"
+          console.log(`✅ [Bundle Content] Found in uploads by id field:`, {
+            docId: uploadsQuery.docs[0].id,
+            title: contentData?.title,
+            filename: contentData?.filename,
+            fileUrl: contentData?.fileUrl,
+            url: contentData?.url,
+          })
+        } else {
+          console.log(`❌ [Bundle Content] Not found in uploads by id field: ${contentId}`)
+        }
+      } catch (error) {
+        console.error(`❌ [Bundle Content] Error searching uploads by id field:`, error)
+      }
+    }
 
-        // If we have an uploadId, try to get the original upload data
-        if (contentData.uploadId) {
-          const originalUpload = await db.collection("uploads").doc(contentData.uploadId).get()
-          if (originalUpload.exists) {
-            const originalData = originalUpload.data()
-            contentData = { ...contentData, ...originalData }
-            sourceCollection = "uploads (via productBoxContent)"
-            console.log(`✅ [Bundle Content] Found original upload data via productBoxContent:`, {
-              title: originalData.title,
-              filename: originalData.filename,
-              url: originalData.url,
-            })
+    // 3. Try productBoxContent collection
+    if (!contentData) {
+      try {
+        console.log(`🔍 [Bundle Content] Checking productBoxContent: ${contentId}`)
+        const productBoxContentDoc = await db.collection("productBoxContent").doc(contentId).get()
+        if (productBoxContentDoc.exists) {
+          contentData = productBoxContentDoc.data()
+          sourceCollection = "productBoxContent"
+
+          // If we have an uploadId, try to get the original upload data
+          if (contentData?.uploadId) {
+            console.log(`🔍 [Bundle Content] Found uploadId, fetching original: ${contentData.uploadId}`)
+            try {
+              const originalUpload = await db.collection("uploads").doc(contentData.uploadId).get()
+              if (originalUpload.exists) {
+                const originalData = originalUpload.data()
+                contentData = { ...contentData, ...originalData }
+                sourceCollection = "uploads (via productBoxContent)"
+                console.log(`✅ [Bundle Content] Enhanced with original upload data:`, {
+                  title: originalData?.title,
+                  filename: originalData?.filename,
+                  fileUrl: originalData?.fileUrl,
+                  url: originalData?.url,
+                })
+              }
+            } catch (error) {
+              console.error(`❌ [Bundle Content] Error fetching original upload:`, error)
+            }
           }
         }
+      } catch (error) {
+        console.error(`❌ [Bundle Content] Error checking productBoxContent:`, error)
       }
     }
 
-    // 3. Try creatorUploads collection
+    // 4. Try creatorUploads collection
     if (!contentData) {
-      const creatorUploadsQuery = await db.collection("creatorUploads").where("id", "==", contentId).limit(1).get()
-      if (!creatorUploadsQuery.empty) {
-        contentData = creatorUploadsQuery.docs[0].data()
-        sourceCollection = "creatorUploads"
-      }
-    }
-
-    // 4. Try searching by ID in uploads collection with different field names
-    if (!contentData) {
-      const uploadsQuery = await db.collection("uploads").where("id", "==", contentId).limit(1).get()
-      if (!uploadsQuery.empty) {
-        contentData = uploadsQuery.docs[0].data()
-        sourceCollection = "uploads (by id field)"
+      try {
+        console.log(`🔍 [Bundle Content] Checking creatorUploads: ${contentId}`)
+        const creatorUploadsQuery = await db.collection("creatorUploads").where("id", "==", contentId).limit(1).get()
+        if (!creatorUploadsQuery.empty) {
+          contentData = creatorUploadsQuery.docs[0].data()
+          sourceCollection = "creatorUploads"
+          console.log(`✅ [Bundle Content] Found in creatorUploads`)
+        }
+      } catch (error) {
+        console.error(`❌ [Bundle Content] Error checking creatorUploads:`, error)
       }
     }
 
@@ -192,9 +233,9 @@ async function getDetailedContentMetadata(contentId: string): Promise<DetailedCo
 
     console.log(`✅ [Bundle Content] Found data in ${sourceCollection} for: ${contentId}`)
 
-    // Extract and normalize all available metadata
+    // Extract and normalize all available metadata with better field mapping
     const mimeType = contentData.mimeType || contentData.fileType || "application/octet-stream"
-    const fileSize = contentData.fileSize || contentData.size || 0
+    const fileSize = contentData.size || contentData.fileSize || 0
     const duration = contentData.duration || contentData.videoDuration || 0
 
     // Get the best available title and clean it
@@ -202,13 +243,20 @@ async function getDetailedContentMetadata(contentId: string): Promise<DetailedCo
       contentData.title || contentData.filename || contentData.originalFileName || contentData.name || "Untitled"
     const cleanTitle = rawTitle.replace(/\.(mp4|mov|avi|mkv|webm|m4v|mp3|wav|jpg|jpeg|png|gif|pdf)$/i, "")
 
-    // Get the best available URLs - prioritize different URL fields
-    const fileUrl = contentData.url || contentData.fileUrl || contentData.publicUrl || contentData.downloadUrl || ""
+    // Get the best available URLs - prioritize different URL fields based on what we see in the data
+    const fileUrl = contentData.fileUrl || contentData.publicUrl || contentData.url || contentData.downloadUrl || ""
+
     const thumbnailUrl = contentData.thumbnailUrl || contentData.previewUrl || ""
 
     // Validate URLs
     if (!fileUrl || !fileUrl.startsWith("http")) {
       console.warn(`⚠️ [Bundle Content] Invalid file URL for ${contentId}: ${fileUrl}`)
+      console.warn(`⚠️ [Bundle Content] Available URL fields:`, {
+        fileUrl: contentData.fileUrl,
+        publicUrl: contentData.publicUrl,
+        url: contentData.url,
+        downloadUrl: contentData.downloadUrl,
+      })
       return null
     }
 
@@ -264,7 +312,7 @@ async function getDetailedContentMetadata(contentId: string): Promise<DetailedCo
       uploadedAt: contentData.uploadedAt || contentData.createdAt || new Date(),
       createdAt: contentData.createdAt || contentData.uploadedAt || new Date(),
       updatedAt: contentData.updatedAt,
-      creatorId: contentData.creatorId || contentData.userId || "",
+      creatorId: contentData.creatorId || contentData.userId || contentData.uid || "",
 
       // Additional metadata
       description: contentData.description || "",
@@ -282,7 +330,8 @@ async function getDetailedContentMetadata(contentId: string): Promise<DetailedCo
       lastUpdated: new Date(),
     }
 
-    console.log(`📊 [Bundle Content] Detailed metadata extracted:`, {
+    console.log(`📊 [Bundle Content] Detailed metadata extracted successfully:`, {
+      id: detailedItem.id,
       title: detailedItem.displayTitle,
       duration: detailedItem.displayDuration,
       resolution: detailedItem.resolution,
@@ -291,6 +340,7 @@ async function getDetailedContentMetadata(contentId: string): Promise<DetailedCo
       fileUrl: detailedItem.fileUrl,
       thumbnailUrl: detailedItem.thumbnailUrl,
       source: sourceCollection,
+      hasValidUrl: !!detailedItem.fileUrl && detailedItem.fileUrl.startsWith("http"),
     })
 
     return detailedItem
@@ -333,6 +383,9 @@ export async function GET(request: NextRequest) {
         const detailedItem = await getDetailedContentMetadata(contentId)
         if (detailedItem) {
           detailedContentItems.push(detailedItem)
+          console.log(`✅ [Bundles API] Successfully added: ${detailedItem.displayTitle}`)
+        } else {
+          console.warn(`⚠️ [Bundles API] Failed to get metadata for: ${contentId}`)
         }
       }
 
@@ -440,6 +493,7 @@ export async function POST(request: NextRequest) {
     }
 
     console.log(`🔍 [Bundles API] Creating bundle for user: ${userId} with ${contentIds.length} content items`)
+    console.log(`🔍 [Bundles API] Content IDs to process:`, contentIds)
 
     // Get detailed metadata for initial content items if provided
     const detailedContentItems: DetailedContentItem[] = []
@@ -447,16 +501,21 @@ export async function POST(request: NextRequest) {
 
     if (contentIds.length > 0) {
       for (const contentId of contentIds) {
+        console.log(`🔍 [Bundles API] Processing content ID: ${contentId}`)
         const detailedItem = await getDetailedContentMetadata(contentId)
         if (detailedItem) {
           detailedContentItems.push(detailedItem)
           validContentIds.push(contentId)
-          console.log(`✅ [Bundles API] Added detailed metadata for: ${detailedItem.displayTitle}`)
+          console.log(`✅ [Bundles API] Successfully added detailed metadata for: ${detailedItem.displayTitle}`)
         } else {
           console.warn(`⚠️ [Bundles API] Skipping invalid content: ${contentId}`)
         }
       }
     }
+
+    console.log(
+      `📊 [Bundles API] Successfully processed ${detailedContentItems.length} out of ${contentIds.length} content items`,
+    )
 
     // Calculate bundle statistics
     const totalDuration = detailedContentItems.reduce((sum, item) => sum + (item.duration || 0), 0)
@@ -521,11 +580,17 @@ export async function POST(request: NextRequest) {
       `✅ [Bundles API] Created enhanced bundle: ${bundleId} with ${detailedContentItems.length} detailed content items`,
     )
 
+    // Log the content titles that were successfully added
+    const addedTitles = detailedContentItems.map((item) => item.displayTitle)
+    console.log(`📝 [Bundles API] Content titles added to bundle:`, addedTitles)
+
     return NextResponse.json({
       success: true,
       bundleId,
       message: "Bundle created successfully with comprehensive metadata",
       contentItemsAdded: detailedContentItems.length,
+      contentItemsRequested: contentIds.length,
+      addedContentTitles: addedTitles,
       bundleMetadata: bundleData.contentMetadata,
     })
   } catch (error) {
