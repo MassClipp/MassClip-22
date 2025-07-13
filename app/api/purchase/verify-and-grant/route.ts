@@ -29,6 +29,7 @@ export async function POST(request: NextRequest) {
       id: productBoxId,
       title: bundleData?.title,
       creatorId: bundleData?.creatorId,
+      price: bundleData?.price,
     })
 
     // Get creator details
@@ -51,77 +52,127 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Generate sample content items (since we don't have real content structure)
-    const sampleItems = [
-      {
-        id: "item_1",
-        title: "Premium Video Content",
-        fileUrl: "/api/content/download/video1.mp4",
-        thumbnailUrl: bundleData.customPreviewThumbnail || "/placeholder.svg?height=100&width=100",
-        fileSize: 52428800, // 50MB
-        duration: 1800, // 30 minutes
-        contentType: "video" as const,
-      },
-      {
-        id: "item_2",
-        title: "Bonus Audio Commentary",
-        fileUrl: "/api/content/download/audio1.mp3",
-        thumbnailUrl: "/placeholder.svg?height=100&width=100",
-        fileSize: 15728640, // 15MB
-        duration: 900, // 15 minutes
-        contentType: "audio" as const,
-      },
-      {
-        id: "item_3",
-        title: "Digital Resources Pack",
-        fileUrl: "/api/content/download/resources.zip",
-        thumbnailUrl: "/placeholder.svg?height=100&width=100",
-        fileSize: 10485760, // 10MB
-        duration: 0,
-        contentType: "document" as const,
-      },
-    ]
+    // Get actual bundle contents if available
+    let bundleContents: any[] = []
+    let totalSize = 0
+    let contentCount = 0
 
-    const totalSize = sampleItems.reduce((sum, item) => sum + item.fileSize, 0)
+    try {
+      // Try to get bundle contents from the bundle document
+      if (bundleData.contents && Array.isArray(bundleData.contents)) {
+        bundleContents = bundleData.contents
+        contentCount = bundleContents.length
+        totalSize = bundleContents.reduce((sum, item) => sum + (item.fileSize || 0), 0)
+        console.log(`✅ [Verify & Grant] Found ${contentCount} items in bundle contents`)
+      } else if (bundleData.items && Array.isArray(bundleData.items)) {
+        bundleContents = bundleData.items
+        contentCount = bundleContents.length
+        totalSize = bundleContents.reduce((sum, item) => sum + (item.fileSize || 0), 0)
+        console.log(`✅ [Verify & Grant] Found ${contentCount} items in bundle items`)
+      } else {
+        // Generate sample content if no real content found
+        bundleContents = [
+          {
+            id: "item_1",
+            title: "Premium Video Content",
+            fileUrl: "/api/content/download/video1.mp4",
+            thumbnailUrl: bundleData.customPreviewThumbnail || "/placeholder.svg?height=100&width=100",
+            fileSize: 52428800, // 50MB
+            duration: 1800, // 30 minutes
+            contentType: "video",
+          },
+          {
+            id: "item_2",
+            title: "Bonus Audio Commentary",
+            fileUrl: "/api/content/download/audio1.mp3",
+            thumbnailUrl: "/placeholder.svg?height=100&width=100",
+            fileSize: 15728640, // 15MB
+            duration: 900, // 15 minutes
+            contentType: "audio",
+          },
+        ]
+        contentCount = bundleContents.length
+        totalSize = bundleContents.reduce((sum, item) => sum + item.fileSize, 0)
+        console.log(`⚠️ [Verify & Grant] No bundle contents found, using sample data`)
+      }
+    } catch (error) {
+      console.warn(`⚠️ [Verify & Grant] Error processing bundle contents:`, error)
+    }
 
     // Generate access token
     const accessToken = `access_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+    const purchaseId = `purchase_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
 
-    // Prepare purchase data
-    const purchaseData = {
-      id: `purchase_${Date.now()}`,
-      productBoxId: productBoxId,
+    // Create bundlePurchases record with all necessary fields
+    const bundlePurchaseData = {
+      id: purchaseId,
+      bundleId: productBoxId,
+      productBoxId: productBoxId, // Keep both for compatibility
+      bundleTitle: bundleData.title || "Untitled Bundle",
       productBoxTitle: bundleData.title || "Untitled Bundle",
+      description: bundleData.description || "Premium content bundle",
       productBoxDescription: bundleData.description || "Premium content bundle",
+      thumbnailUrl:
+        bundleData.customPreviewThumbnail || bundleData.thumbnailUrl || "/placeholder.svg?height=200&width=200",
       productBoxThumbnail:
         bundleData.customPreviewThumbnail || bundleData.thumbnailUrl || "/placeholder.svg?height=200&width=200",
+
+      // Creator information
       creatorId: creatorIdToUse || "unknown",
       creatorName: creatorData.name,
       creatorUsername: creatorData.username,
+
+      // Purchase details
       amount: bundleData.price || 0,
       currency: "usd",
-      items: sampleItems,
-      totalItems: sampleItems.length,
-      totalSize: totalSize,
-      purchasedAt: new Date().toISOString(),
       status: "completed",
+
+      // Content information
+      contents: bundleContents,
+      items: bundleContents, // Keep both for compatibility
+      contentCount: contentCount,
+      totalItems: contentCount,
+      totalSize: totalSize,
+
+      // Timestamps
+      createdAt: new Date().toISOString(),
+      completedAt: new Date().toISOString(),
+      purchasedAt: new Date().toISOString(),
+      purchaseDate: new Date().toISOString(),
+
+      // Access control
       accessToken: accessToken,
       source: "direct_access",
+
+      // Anonymous purchase (no user ID required)
+      buyerUid: "anonymous",
+      userId: "anonymous",
     }
 
-    // Store in anonymous purchases collection
+    // Store in bundlePurchases collection
     try {
-      await db.collection("anonymousPurchases").add(purchaseData)
+      await db.collection("bundlePurchases").doc(purchaseId).set(bundlePurchaseData)
+      console.log(`✅ [Verify & Grant] Bundle purchase record created in bundlePurchases collection`)
+    } catch (error) {
+      console.error(`❌ [Verify & Grant] Error creating bundle purchase record:`, error)
+      throw error
+    }
+
+    // Also store in anonymous purchases for fallback
+    try {
+      await db.collection("anonymousPurchases").add(bundlePurchaseData)
       console.log(`✅ [Verify & Grant] Anonymous purchase record created`)
     } catch (error) {
-      console.error(`❌ [Verify & Grant] Error creating anonymous purchase:`, error)
+      console.warn(`⚠️ [Verify & Grant] Error creating anonymous purchase (non-critical):`, error)
     }
 
     // Set access token cookie
     const response = NextResponse.json({
       success: true,
-      purchase: purchaseData,
+      purchase: bundlePurchaseData,
       message: "Access granted successfully",
+      bundleId: productBoxId,
+      bundleTitle: bundleData.title,
     })
 
     response.cookies.set(`purchase_access_${productBoxId}`, accessToken, {
@@ -132,7 +183,7 @@ export async function POST(request: NextRequest) {
       path: "/",
     })
 
-    console.log(`🎉 [Verify & Grant] Purchase access granted successfully!`)
+    console.log(`🎉 [Verify & Grant] Purchase access granted successfully for bundle: ${bundleData.title}`)
 
     return response
   } catch (error: any) {
