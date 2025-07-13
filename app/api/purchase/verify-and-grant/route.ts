@@ -1,283 +1,195 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { db, auth } from "@/lib/firebase-admin"
+import { auth, db } from "@/lib/firebase-admin"
+import { FieldValue } from "firebase-admin/firestore"
 
 export async function POST(request: NextRequest) {
   try {
-    const { productBoxId, creatorId } = await request.json()
+    const body = await request.json()
+    const { productBoxId, creatorId, sessionId, userId, userEmail } = body
 
-    console.log(`🔍 [Verify & Grant] Received request:`, {
+    console.log("🔍 [Verify & Grant] Starting process", {
       productBoxId,
       creatorId,
+      sessionId,
+      userId,
+      userEmail,
     })
 
     if (!productBoxId) {
-      return NextResponse.json({ error: "Product Box ID is required" }, { status: 400 })
+      return NextResponse.json({ error: "Product box ID is required" }, { status: 400 })
     }
 
-    // Get authenticated user ID from Authorization header
-    let userId = "anonymous"
-    let userEmail = ""
-    let isAuthenticated = false
+    // Try to get authenticated user
+    let authenticatedUserId = userId
+    let authenticatedUserEmail = userEmail
 
-    try {
-      const authHeader = request.headers.get("authorization")
-      if (authHeader && authHeader.startsWith("Bearer ")) {
+    const authHeader = request.headers.get("authorization")
+    if (authHeader?.startsWith("Bearer ")) {
+      try {
         const idToken = authHeader.split("Bearer ")[1]
         const decodedToken = await auth.verifyIdToken(idToken)
-        userId = decodedToken.uid
-        userEmail = decodedToken.email || ""
-        isAuthenticated = true
-        console.log(`✅ [Verify & Grant] Authenticated user: ${userId} (${userEmail})`)
-      } else {
-        console.log(`⚠️ [Verify & Grant] No authentication provided, using anonymous access`)
+        authenticatedUserId = decodedToken.uid
+        authenticatedUserEmail = decodedToken.email || userEmail
+        console.log("✅ [Verify & Grant] Authenticated user:", {
+          uid: authenticatedUserId,
+          email: authenticatedUserEmail,
+        })
+      } catch (authError) {
+        console.warn("⚠️ [Verify & Grant] Auth token verification failed:", authError)
       }
-    } catch (authError) {
-      console.warn(`⚠️ [Verify & Grant] Auth verification failed, proceeding as anonymous:`, authError)
     }
 
-    console.log(`🔍 [Verify & Grant] Looking for bundle: ${productBoxId}`)
+    // Get bundle/product box information
+    let bundleData = null
+    let bundleTitle = "Unknown Bundle"
+    let bundleDescription = ""
+    let thumbnailUrl = ""
+    let creatorUsername = "Unknown Creator"
 
-    // Get bundle from bundles collection first, then try productBoxes
-    let bundleDoc = await db.collection("bundles").doc(productBoxId).get()
-    let bundleData: any = null
-
-    if (bundleDoc.exists) {
-      bundleData = bundleDoc.data()!
-      console.log(`✅ [Verify & Grant] Found bundle in bundles collection`)
-    } else {
-      // Try productBoxes collection as fallback
-      bundleDoc = await db.collection("productBoxes").doc(productBoxId).get()
+    // Try bundles collection first
+    try {
+      const bundleDoc = await db.collection("bundles").doc(productBoxId).get()
       if (bundleDoc.exists) {
-        bundleData = bundleDoc.data()!
-        console.log(`✅ [Verify & Grant] Found bundle in productBoxes collection`)
+        bundleData = bundleDoc.data()
+        bundleTitle = bundleData?.title || bundleTitle
+        bundleDescription = bundleData?.description || ""
+        thumbnailUrl = bundleData?.customPreviewThumbnail || bundleData?.thumbnailUrl || ""
+        creatorUsername = bundleData?.creatorUsername || creatorUsername
+        console.log("✅ [Verify & Grant] Found bundle data")
       }
+    } catch (bundleError) {
+      console.warn("⚠️ [Verify & Grant] Failed to fetch bundle:", bundleError)
     }
 
+    // Try productBoxes collection as fallback
     if (!bundleData) {
-      console.error(`❌ [Verify & Grant] Bundle not found: ${productBoxId}`)
-      return NextResponse.json({ error: "Bundle not found" }, { status: 404 })
-    }
-
-    console.log(`✅ [Verify & Grant] Found bundle:`, {
-      id: productBoxId,
-      title: bundleData?.title,
-      creatorId: bundleData?.creatorId,
-      price: bundleData?.price,
-    })
-
-    // Get creator details
-    let creatorData: any = { name: "Unknown Creator", username: "unknown" }
-    const creatorIdToUse = creatorId || bundleData.creatorId
-
-    if (creatorIdToUse) {
       try {
-        const creatorDoc = await db.collection("users").doc(creatorIdToUse).get()
-        if (creatorDoc.exists) {
-          const creator = creatorDoc.data()!
-          creatorData = {
-            name: creator.displayName || creator.name || creator.username || "Unknown Creator",
-            username: creator.username || "unknown",
-          }
-          console.log(`✅ [Verify & Grant] Creator found:`, creatorData)
+        const productBoxDoc = await db.collection("productBoxes").doc(productBoxId).get()
+        if (productBoxDoc.exists) {
+          bundleData = productBoxDoc.data()
+          bundleTitle = bundleData?.title || bundleTitle
+          bundleDescription = bundleData?.description || ""
+          thumbnailUrl = bundleData?.thumbnailUrl || ""
+          creatorUsername = bundleData?.creatorUsername || creatorUsername
+          console.log("✅ [Verify & Grant] Found product box data")
         }
-      } catch (error) {
-        console.warn(`⚠️ [Verify & Grant] Error fetching creator:`, error)
+      } catch (productBoxError) {
+        console.warn("⚠️ [Verify & Grant] Failed to fetch product box:", productBoxError)
       }
     }
 
-    // Get actual bundle contents if available
-    let bundleContents: any[] = []
-    let totalSize = 0
-    let contentCount = 0
+    // Get content items for this bundle
+    const contentQuery = await db.collection("productBoxContent").where("productBoxId", "==", productBoxId).get()
 
-    try {
-      // Try to get bundle contents from the bundle document
-      if (bundleData.contents && Array.isArray(bundleData.contents)) {
-        bundleContents = bundleData.contents
-        contentCount = bundleContents.length
-        totalSize = bundleContents.reduce((sum, item) => sum + (item.fileSize || 0), 0)
-        console.log(`✅ [Verify & Grant] Found ${contentCount} items in bundle contents`)
-      } else if (bundleData.items && Array.isArray(bundleData.items)) {
-        bundleContents = bundleData.items
-        contentCount = bundleContents.length
-        totalSize = bundleContents.reduce((sum, item) => sum + (item.fileSize || 0), 0)
-        console.log(`✅ [Verify & Grant] Found ${contentCount} items in bundle items`)
-      } else if (bundleData.contentItems && Array.isArray(bundleData.contentItems)) {
-        // Handle contentItems array (list of IDs)
-        contentCount = bundleData.contentItems.length
-        bundleContents = bundleData.contentItems.map((itemId: string, index: number) => ({
-          id: itemId,
-          title: `Content Item ${index + 1}`,
-          fileUrl: `/api/content/download/${itemId}`,
-          thumbnailUrl: bundleData.customPreviewThumbnail || "/placeholder.svg?height=100&width=100",
-          fileSize: 25000000, // 25MB default
-          duration: 1200, // 20 minutes default
-          contentType: "video",
-        }))
-        totalSize = bundleContents.reduce((sum, item) => sum + item.fileSize, 0)
-        console.log(`✅ [Verify & Grant] Found ${contentCount} content item IDs`)
-      } else {
-        // Generate sample content if no real content found
-        bundleContents = [
-          {
-            id: "item_1",
-            title: "Premium Video Content",
-            fileUrl: "/api/content/download/video1.mp4",
-            thumbnailUrl: bundleData.customPreviewThumbnail || "/placeholder.svg?height=100&width=100",
-            fileSize: 52428800, // 50MB
-            duration: 1800, // 30 minutes
-            contentType: "video",
-          },
-          {
-            id: "item_2",
-            title: "Bonus Audio Commentary",
-            fileUrl: "/api/content/download/audio1.mp3",
-            thumbnailUrl: "/placeholder.svg?height=100&width=100",
-            fileSize: 15728640, // 15MB
-            duration: 900, // 15 minutes
-            contentType: "audio",
-          },
-        ]
-        contentCount = bundleContents.length
-        totalSize = bundleContents.reduce((sum, item) => sum + item.fileSize, 0)
-        console.log(`⚠️ [Verify & Grant] No bundle contents found, using sample data`)
+    const contentItems = contentQuery.docs.map((doc) => {
+      const data = doc.data()
+      return {
+        id: doc.id,
+        contentId: doc.id,
+        title: data.title || data.filename || "Untitled",
+        originalTitle: data.originalTitle || data.title || data.filename || "Untitled",
+        filename: data.filename || data.title || "download",
+        fileUrl: data.fileUrl || data.downloadUrl || "",
+        downloadUrl: data.fileUrl || data.downloadUrl || "",
+        url: data.fileUrl || data.downloadUrl || "",
+        mimeType: data.mimeType || "application/octet-stream",
+        contentType: data.mimeType || "application/octet-stream",
+        fileSize: data.fileSize || 0,
+        thumbnailUrl: data.thumbnailUrl || "",
+        previewUrl: data.thumbnailUrl || "",
+        duration: data.duration,
+        description: data.description || "",
+        resolution: data.resolution || data.dimensions,
+        dimensions: data.resolution || data.dimensions,
       }
-    } catch (error) {
-      console.warn(`⚠️ [Verify & Grant] Error processing bundle contents:`, error)
-    }
+    })
 
-    // Generate access token and purchase ID
-    const accessToken = `access_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
-    const purchaseId = `purchase_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
-    const timestamp = new Date()
+    console.log(`✅ [Verify & Grant] Found ${contentItems.length} content items`)
 
-    // Create comprehensive bundlePurchases record
-    const bundlePurchaseData = {
-      id: purchaseId,
+    // Create purchase record data
+    const purchaseData = {
+      buyerUid: authenticatedUserId || "anonymous",
+      buyerEmail: authenticatedUserEmail || "unknown",
       bundleId: productBoxId,
-      productBoxId: productBoxId, // Keep both for compatibility
-      bundleTitle: bundleData.title || "Untitled Bundle",
-      productBoxTitle: bundleData.title || "Untitled Bundle",
-      description: bundleData.description || "Premium content bundle",
-      productBoxDescription: bundleData.description || "Premium content bundle",
-      thumbnailUrl:
-        bundleData.customPreviewThumbnail || bundleData.thumbnailUrl || "/placeholder.svg?height=200&width=200",
-      productBoxThumbnail:
-        bundleData.customPreviewThumbnail || bundleData.thumbnailUrl || "/placeholder.svg?height=200&width=200",
-
-      // Creator information
-      creatorId: creatorIdToUse || "unknown",
-      creatorName: creatorData.name,
-      creatorUsername: creatorData.username,
-
-      // Purchase details
-      amount: bundleData.price || 0,
-      currency: "usd",
+      productBoxId: productBoxId,
+      bundleTitle: bundleTitle,
+      bundleDescription: bundleDescription,
+      thumbnailUrl: thumbnailUrl,
+      creatorId: creatorId || "unknown",
+      creatorUsername: creatorUsername,
       status: "completed",
-
-      // Content information
-      contents: bundleContents,
-      items: bundleContents, // Keep both for compatibility
-      contentCount: contentCount,
-      totalItems: contentCount,
-      totalSize: totalSize,
-
-      // Timestamps
-      createdAt: timestamp,
-      completedAt: timestamp,
-      purchasedAt: timestamp,
-      purchaseDate: timestamp,
-
-      // Access control
-      accessToken: accessToken,
-      source: "direct_access",
-
-      // User information - CRITICAL: Use actual user ID
-      buyerUid: userId,
-      userId: userId,
-      userEmail: userEmail,
-      isAuthenticated: isAuthenticated,
-
-      // Additional metadata
-      grantedAt: timestamp,
-      verificationMethod: "direct_grant",
+      completedAt: FieldValue.serverTimestamp(),
+      createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+      contentCount: contentItems.length,
+      contents: contentItems,
+      sessionId: sessionId || null,
+      amount: bundleData?.price || 0,
+      currency: "usd",
+      paymentMethod: "stripe",
+      accessGranted: true,
+      accessToken: `access_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
     }
 
-    console.log(`📝 [Verify & Grant] Creating purchase record with buyerUid: ${userId}`)
+    // Store purchase in multiple locations for reliability
+    const batch = db.batch()
+    const purchaseId = `purchase_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
 
-    // Store in bundlePurchases collection with proper user ID
-    try {
-      await db.collection("bundlePurchases").doc(purchaseId).set(bundlePurchaseData)
-      console.log(`✅ [Verify & Grant] Bundle purchase record created in bundlePurchases collection`)
-    } catch (error) {
-      console.error(`❌ [Verify & Grant] Error creating bundle purchase record:`, error)
-      throw error
+    // 1. Main bundlePurchases collection
+    const bundlePurchaseRef = db.collection("bundlePurchases").doc(purchaseId)
+    batch.set(bundlePurchaseRef, purchaseData)
+
+    // 2. User's personal purchases (if authenticated)
+    if (authenticatedUserId && authenticatedUserId !== "anonymous") {
+      const userPurchaseRef = db
+        .collection("userPurchases")
+        .doc(authenticatedUserId)
+        .collection("purchases")
+        .doc(purchaseId)
+      batch.set(userPurchaseRef, purchaseData)
+
+      // 3. Also add to purchases collection for API compatibility
+      const purchaseRef = db.collection("purchases").doc(purchaseId)
+      batch.set(purchaseRef, {
+        ...purchaseData,
+        userId: authenticatedUserId,
+        type: "bundle",
+      })
     }
 
-    // If user is authenticated, also store in their personal purchases subcollection
-    if (isAuthenticated && userId !== "anonymous") {
-      try {
-        // Store in userPurchases/{userId}/purchases/{purchaseId}
-        await db.collection("userPurchases").doc(userId).collection("purchases").doc(purchaseId).set(bundlePurchaseData)
-        console.log(
-          `✅ [Verify & Grant] Purchase added to user's personal collection: userPurchases/${userId}/purchases/${purchaseId}`,
-        )
+    // Execute batch write
+    await batch.commit()
 
-        // Also store in the main purchases collection for API compatibility
-        await db
-          .collection("purchases")
-          .doc(purchaseId)
-          .set({
-            ...bundlePurchaseData,
-            sessionId: purchaseId,
-            type: "product_box",
-            itemTitle: bundleData.title,
-            itemDescription: bundleData.description,
-          })
-        console.log(`✅ [Verify & Grant] Purchase added to main purchases collection`)
-      } catch (error) {
-        console.warn(`⚠️ [Verify & Grant] Error adding to user purchases (non-critical):`, error)
-      }
-    } else {
-      // Store in anonymous purchases for fallback
-      try {
-        await db.collection("anonymousPurchases").add(bundlePurchaseData)
-        console.log(`✅ [Verify & Grant] Anonymous purchase record created`)
-      } catch (error) {
-        console.warn(`⚠️ [Verify & Grant] Error creating anonymous purchase (non-critical):`, error)
-      }
-    }
+    console.log("✅ [Verify & Grant] Purchase records created successfully", {
+      purchaseId,
+      buyerUid: purchaseData.buyerUid,
+      bundleTitle,
+      contentCount: contentItems.length,
+    })
 
-    // Set access token cookie
-    const response = NextResponse.json({
+    // Return success response
+    return NextResponse.json({
       success: true,
-      purchase: bundlePurchaseData,
       message: "Access granted successfully",
-      bundleId: productBoxId,
-      bundleTitle: bundleData.title,
-      isAuthenticated: isAuthenticated,
-      userId: userId,
+      purchaseId,
+      bundleTitle,
+      contentCount: contentItems.length,
+      redirectUrl: `/product-box/${productBoxId}/content`,
+      purchaseData: {
+        id: purchaseId,
+        bundleTitle,
+        contentCount: contentItems.length,
+        status: "completed",
+      },
     })
-
-    response.cookies.set(`purchase_access_${productBoxId}`, accessToken, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      maxAge: 60 * 60 * 24 * 365, // 1 year
-      path: "/",
-    })
-
-    console.log(
-      `🎉 [Verify & Grant] Purchase access granted successfully for bundle: ${bundleData.title} (User: ${userId}, Email: ${userEmail})`,
-    )
-
-    return response
   } catch (error: any) {
-    console.error(`❌ [Verify & Grant] Unexpected error:`, error)
+    console.error("❌ [Verify & Grant] Error:", error)
     return NextResponse.json(
       {
-        error: "Failed to grant access",
+        success: false,
+        error: "Failed to verify purchase and grant access",
         details: error.message,
+        timestamp: new Date().toISOString(),
       },
       { status: 500 },
     )

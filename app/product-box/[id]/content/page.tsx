@@ -10,6 +10,7 @@ import { ArrowLeft, Download, RefreshCw, Play, Pause } from "lucide-react"
 interface ContentItem {
   id: string
   title: string
+  originalTitle?: string
   fileUrl: string
   mimeType: string
   fileSize: number
@@ -19,7 +20,6 @@ interface ContentItem {
   filename: string
   displayTitle: string
   displaySize: string
-  originalTitle?: string
   name?: string
 }
 
@@ -124,10 +124,11 @@ export default function ProductBoxContentPage() {
             const contentData = await contentResponse.json()
             contentItems = Array.isArray(contentData) ? contentData : contentData.items || []
 
-            // Process content items to get proper titles
+            // Process content items to get proper titles and ensure video display
             contentItems = contentItems.map((item) => ({
               ...item,
               displayTitle: item.originalTitle || item.title || item.name || item.filename || "Untitled",
+              contentType: getContentTypeFromMimeType(item.mimeType),
             }))
           }
 
@@ -151,6 +152,13 @@ export default function ProductBoxContentPage() {
     } finally {
       setLoading(false)
     }
+  }
+
+  const getContentTypeFromMimeType = (mimeType: string): "video" | "audio" | "image" | "document" => {
+    if (mimeType?.startsWith("video/")) return "video"
+    if (mimeType?.startsWith("audio/")) return "audio"
+    if (mimeType?.startsWith("image/")) return "image"
+    return "document"
   }
 
   const handleDownload = async (item: ContentItem) => {
@@ -332,8 +340,11 @@ export default function ProductBoxContentPage() {
                           className="w-full h-full object-cover"
                           src={item.fileUrl}
                           loop
+                          muted
                           playsInline
                           data-video-id={item.id}
+                          poster={item.thumbnailUrl}
+                          preload="metadata"
                           onEnded={() => {
                             setCurrentlyPlayingVideo(null)
                           }}
@@ -377,11 +388,38 @@ export default function ProductBoxContentPage() {
                           </Button>
                         </div>
                       </div>
+                    ) : item.contentType === "image" ? (
+                      <div className="relative w-full h-full">
+                        <img
+                          src={item.fileUrl || "/placeholder.svg"}
+                          alt={item.displayTitle}
+                          className="w-full h-full object-cover"
+                          onError={(e) => {
+                            // Fallback to placeholder if image fails to load
+                            e.currentTarget.src = "/placeholder.svg?height=400&width=225&text=Image"
+                          }}
+                        />
+                        <div className="absolute bottom-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300">
+                          <Button
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              handleDownload(item)
+                            }}
+                            size="sm"
+                            disabled={downloadingItems.has(item.id)}
+                            className="h-8 w-8 p-0 bg-black/70 hover:bg-black/90 text-white border-0 rounded-full"
+                          >
+                            {downloadingItems.has(item.id) ? (
+                              <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                            ) : (
+                              <Download className="h-4 w-4" />
+                            )}
+                          </Button>
+                        </div>
+                      </div>
                     ) : (
                       <div className="w-full h-full flex flex-col items-center justify-center p-4">
-                        <div className="text-gray-500 text-4xl mb-3">
-                          {item.contentType === "audio" ? "🎵" : item.contentType === "image" ? "🖼️" : "📄"}
-                        </div>
+                        <div className="text-gray-500 text-4xl mb-3">{item.contentType === "audio" ? "🎵" : "📄"}</div>
                         <Button
                           onClick={() => handleDownload(item)}
                           size="sm"
