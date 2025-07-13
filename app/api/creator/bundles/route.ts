@@ -135,6 +135,12 @@ async function getDetailedContentMetadata(contentId: string): Promise<DetailedCo
     if (uploadsDoc.exists) {
       contentData = uploadsDoc.data()
       sourceCollection = "uploads"
+      console.log(`✅ [Bundle Content] Found in uploads collection:`, {
+        title: contentData.title,
+        filename: contentData.filename,
+        url: contentData.url,
+        fileType: contentData.fileType,
+      })
     }
 
     // 2. Try productBoxContent collection
@@ -148,8 +154,14 @@ async function getDetailedContentMetadata(contentId: string): Promise<DetailedCo
         if (contentData.uploadId) {
           const originalUpload = await db.collection("uploads").doc(contentData.uploadId).get()
           if (originalUpload.exists) {
-            contentData = { ...contentData, ...originalUpload.data() }
+            const originalData = originalUpload.data()
+            contentData = { ...contentData, ...originalData }
             sourceCollection = "uploads (via productBoxContent)"
+            console.log(`✅ [Bundle Content] Found original upload data via productBoxContent:`, {
+              title: originalData.title,
+              filename: originalData.filename,
+              url: originalData.url,
+            })
           }
         }
       }
@@ -161,6 +173,15 @@ async function getDetailedContentMetadata(contentId: string): Promise<DetailedCo
       if (!creatorUploadsQuery.empty) {
         contentData = creatorUploadsQuery.docs[0].data()
         sourceCollection = "creatorUploads"
+      }
+    }
+
+    // 4. Try searching by ID in uploads collection with different field names
+    if (!contentData) {
+      const uploadsQuery = await db.collection("uploads").where("id", "==", contentId).limit(1).get()
+      if (!uploadsQuery.empty) {
+        contentData = uploadsQuery.docs[0].data()
+        sourceCollection = "uploads (by id field)"
       }
     }
 
@@ -181,8 +202,8 @@ async function getDetailedContentMetadata(contentId: string): Promise<DetailedCo
       contentData.title || contentData.filename || contentData.originalFileName || contentData.name || "Untitled"
     const cleanTitle = rawTitle.replace(/\.(mp4|mov|avi|mkv|webm|m4v|mp3|wav|jpg|jpeg|png|gif|pdf)$/i, "")
 
-    // Get the best available URLs
-    const fileUrl = contentData.fileUrl || contentData.publicUrl || contentData.downloadUrl || ""
+    // Get the best available URLs - prioritize different URL fields
+    const fileUrl = contentData.url || contentData.fileUrl || contentData.publicUrl || contentData.downloadUrl || ""
     const thumbnailUrl = contentData.thumbnailUrl || contentData.previewUrl || ""
 
     // Validate URLs
