@@ -16,6 +16,7 @@ export async function POST(request: NextRequest) {
 
     // Get authenticated user ID from Authorization header
     let userId = "anonymous"
+    let userEmail = ""
     let isAuthenticated = false
 
     try {
@@ -24,8 +25,9 @@ export async function POST(request: NextRequest) {
         const idToken = authHeader.split("Bearer ")[1]
         const decodedToken = await auth.verifyIdToken(idToken)
         userId = decodedToken.uid
+        userEmail = decodedToken.email || ""
         isAuthenticated = true
-        console.log(`✅ [Verify & Grant] Authenticated user: ${userId}`)
+        console.log(`✅ [Verify & Grant] Authenticated user: ${userId} (${userEmail})`)
       } else {
         console.log(`⚠️ [Verify & Grant] No authentication provided, using anonymous access`)
       }
@@ -122,7 +124,7 @@ export async function POST(request: NextRequest) {
     const accessToken = `access_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
     const purchaseId = `purchase_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
 
-    // Create bundlePurchases record with proper user ID
+    // Create bundlePurchases record with ACTUAL USER ID - this is the critical fix
     const bundlePurchaseData = {
       id: purchaseId,
       bundleId: productBoxId,
@@ -163,9 +165,10 @@ export async function POST(request: NextRequest) {
       accessToken: accessToken,
       source: "direct_access",
 
-      // Use actual user ID if authenticated, otherwise anonymous
-      buyerUid: userId,
-      userId: userId,
+      // CRITICAL FIX: Use actual authenticated user ID instead of "anonymous"
+      buyerUid: userId, // This will be the real user ID when authenticated
+      userId: userId, // This will be the real user ID when authenticated
+      userEmail: userEmail,
       isAuthenticated: isAuthenticated,
     }
 
@@ -176,16 +179,6 @@ export async function POST(request: NextRequest) {
     } catch (error) {
       console.error(`❌ [Verify & Grant] Error creating bundle purchase record:`, error)
       throw error
-    }
-
-    // If user is authenticated, also store in their personal purchases subcollection
-    if (isAuthenticated && userId !== "anonymous") {
-      try {
-        await db.collection("userPurchases").doc(userId).collection("purchases").doc(purchaseId).set(bundlePurchaseData)
-        console.log(`✅ [Verify & Grant] Purchase added to user's personal collection`)
-      } catch (error) {
-        console.warn(`⚠️ [Verify & Grant] Error adding to user purchases (non-critical):`, error)
-      }
     }
 
     // Also store in anonymous purchases for fallback (only if not authenticated)

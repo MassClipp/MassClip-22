@@ -6,6 +6,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import {
   ShoppingBag,
   Eye,
@@ -19,9 +20,8 @@ import {
   AlertCircle,
   RefreshCw,
   Star,
-  CheckCircle,
-  Calendar,
-  Infinity,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react"
 import Link from "next/link"
 
@@ -60,6 +60,7 @@ export default function PurchasesPage() {
   const [purchases, setPurchases] = useState<Purchase[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [expandedPurchases, setExpandedPurchases] = useState<Set<string>>(new Set())
 
   useEffect(() => {
     fetchPurchases()
@@ -112,6 +113,18 @@ export default function PurchasesPage() {
     }
   }
 
+  const togglePurchaseExpansion = (purchaseId: string) => {
+    setExpandedPurchases((prev) => {
+      const newSet = new Set(prev)
+      if (newSet.has(purchaseId)) {
+        newSet.delete(purchaseId)
+      } else {
+        newSet.add(purchaseId)
+      }
+      return newSet
+    })
+  }
+
   const formatFileSize = (bytes: number): string => {
     if (bytes === 0) return "0 B"
     const k = 1024
@@ -137,29 +150,33 @@ export default function PurchasesPage() {
       case "image":
         return <ImageIcon className="h-4 w-4 text-purple-500" />
       default:
-        return <FileText className="h-4 w-4 text-orange-500" />
+        return <FileText className="h-4 w-4 text-gray-500" />
     }
   }
 
   // Loading state
   if (loading) {
     return (
-      <div className="min-h-screen bg-black text-white">
-        <div className="container mx-auto px-6 py-8">
-          <div className="mb-8">
-            <Skeleton className="h-10 w-64 mb-4 bg-gray-800" />
-            <Skeleton className="h-5 w-96 bg-gray-800" />
-          </div>
-          <div className="flex gap-8">
-            <Skeleton className="w-80 h-[500px] bg-gray-800 rounded-lg" />
-            <div className="flex-1">
-              <Skeleton className="h-[500px] w-full bg-gray-800 rounded-lg" />
-            </div>
-            <div className="w-48 space-y-4">
-              <Skeleton className="h-12 w-full bg-gray-800 rounded-lg" />
-              <Skeleton className="h-12 w-full bg-gray-800 rounded-lg" />
-            </div>
-          </div>
+      <div className="container mx-auto px-4 py-8">
+        <div className="mb-8">
+          <Skeleton className="h-8 w-48 mb-2 bg-white/10" />
+          <Skeleton className="h-4 w-96 bg-white/10" />
+        </div>
+        <div className="grid gap-6">
+          {[1, 2, 3].map((i) => (
+            <Card key={i} className="bg-black/40 backdrop-blur-xl border-white/10">
+              <CardContent className="p-6">
+                <div className="flex items-start space-x-4">
+                  <Skeleton className="w-20 h-20 rounded-lg bg-white/10" />
+                  <div className="flex-1 space-y-2">
+                    <Skeleton className="h-6 w-3/4 bg-white/10" />
+                    <Skeleton className="h-4 w-1/2 bg-white/10" />
+                    <Skeleton className="h-4 w-1/4 bg-white/10" />
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
         </div>
       </div>
     )
@@ -168,32 +185,30 @@ export default function PurchasesPage() {
   // Error state
   if (error) {
     return (
-      <div className="min-h-screen bg-black text-white">
-        <div className="container mx-auto px-6 py-8">
-          <div className="mb-8">
-            <h1 className="text-4xl font-bold mb-4 text-white">My Purchases</h1>
-            <p className="text-gray-400 text-lg">Access your purchased content and downloads</p>
-          </div>
+      <div className="container mx-auto px-4 py-8">
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold text-white mb-2">My Purchases</h1>
+          <p className="text-white/70">Access your purchased content and downloads</p>
+        </div>
 
-          <Alert variant="destructive" className="mb-6 bg-red-900/20 border-red-800 text-red-200">
-            <AlertCircle className="h-4 w-4" />
-            <AlertDescription>
-              <strong>Error loading purchases:</strong> {error}
-            </AlertDescription>
-          </Alert>
+        <Alert className="bg-red-500/10 border-red-500/20 mb-6">
+          <AlertCircle className="h-4 w-4 text-red-400" />
+          <AlertDescription className="text-red-200">
+            <strong>Error loading purchases:</strong> {error}
+          </AlertDescription>
+        </Alert>
 
-          <div className="flex space-x-4">
-            <Button onClick={fetchPurchases} className="bg-red-600 hover:bg-red-700 text-white">
-              <RefreshCw className="w-4 h-4 mr-2" />
-              Try Again
-            </Button>
-            <Button asChild variant="outline" className="border-gray-600 hover:bg-gray-800 bg-transparent text-white">
-              <Link href="/dashboard">
-                <Package className="w-4 h-4 mr-2" />
-                Back to Dashboard
-              </Link>
-            </Button>
-          </div>
+        <div className="flex space-x-4">
+          <Button onClick={fetchPurchases} className="bg-red-600 hover:bg-red-700">
+            <RefreshCw className="w-4 h-4 mr-2" />
+            Try Again
+          </Button>
+          <Button asChild variant="outline" className="border-white/20 text-white hover:bg-white/10 bg-transparent">
+            <Link href="/dashboard">
+              <Package className="w-4 h-4 mr-2" />
+              Back to Dashboard
+            </Link>
+          </Button>
         </div>
       </div>
     )
@@ -202,221 +217,201 @@ export default function PurchasesPage() {
   // Empty state
   if (purchases.length === 0) {
     return (
-      <div className="min-h-screen bg-black text-white">
-        <div className="container mx-auto px-6 py-8">
-          <div className="mb-8">
-            <h1 className="text-4xl font-bold mb-4 text-white">My Purchases</h1>
-            <p className="text-gray-400 text-lg">Access your purchased content and downloads</p>
-          </div>
-
-          <Card className="bg-gray-900 border-gray-800">
-            <CardContent className="p-12 text-center">
-              <ShoppingBag className="h-16 w-16 text-gray-400 mx-auto mb-6" />
-              <h2 className="text-2xl font-bold mb-4 text-white">No Purchases Yet</h2>
-              <p className="text-gray-400 mb-8 max-w-md mx-auto text-lg">
-                You haven't made any purchases yet. Explore our premium content library to find amazing content from
-                talented creators.
-              </p>
-              <div className="space-y-4">
-                <Button asChild className="bg-red-600 hover:bg-red-700 text-white px-8 py-3">
-                  <Link href="/dashboard/explore">
-                    <Star className="w-4 h-4 mr-2" />
-                    Explore Premium Content
-                  </Link>
-                </Button>
-                <Button
-                  asChild
-                  variant="outline"
-                  className="border-gray-600 hover:bg-gray-800 bg-transparent text-white px-8 py-3"
-                >
-                  <Link href="/dashboard">
-                    <Package className="w-4 h-4 mr-2" />
-                    Go to Dashboard
-                  </Link>
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      </div>
-    )
-  }
-
-  // Main purchases view - clean and simple design matching screenshot
-  return (
-    <div className="min-h-screen bg-black text-white">
-      <div className="container mx-auto px-6 py-8">
-        {/* Header */}
+      <div className="container mx-auto px-4 py-8">
         <div className="mb-8">
-          <h1 className="text-4xl font-bold mb-4 text-white">My Purchases</h1>
-          <p className="text-gray-400 text-lg">
-            {purchases.length} purchase{purchases.length !== 1 ? "s" : ""} • Lifetime access to all content
-          </p>
+          <h1 className="text-3xl font-bold text-white mb-2">My Purchases</h1>
+          <p className="text-white/70">Access your purchased content and downloads</p>
         </div>
 
-        {/* Purchase Layout */}
-        {purchases.map((purchase) => (
-          <div key={purchase.id} className="mb-12">
-            <div className="flex gap-8">
-              {/* Left: Large Thumbnail */}
-              <div className="w-80 h-[500px] bg-white rounded-lg flex-shrink-0 flex items-center justify-center">
-                {purchase.productBoxThumbnail ? (
-                  <img
-                    src={purchase.productBoxThumbnail || "/placeholder.svg"}
-                    alt={purchase.productBoxTitle}
-                    className="w-full h-full object-cover rounded-lg"
-                    onError={(e) => {
-                      const target = e.target as HTMLImageElement
-                      target.style.display = "none"
-                      const parent = target.parentElement
-                      if (parent) {
-                        parent.innerHTML = `
-                          <div class="text-gray-400 text-center">
-                            <svg class="h-16 w-16 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4"></path>
-                            </svg>
-                            <p class="text-sm">No Preview</p>
-                          </div>
-                        `
-                      }
-                    }}
-                  />
-                ) : (
-                  <div className="text-gray-400 text-center">
-                    <Package className="h-16 w-16 mx-auto mb-4" />
-                    <p className="text-sm">No Preview</p>
-                  </div>
-                )}
-              </div>
-
-              {/* Center: Content Details */}
-              <div className="flex-1">
-                {/* Tabs */}
-                <div className="mb-6">
-                  <div className="inline-flex bg-gray-800 rounded-lg p-1">
-                    <button className="px-4 py-2 text-sm font-medium text-green-400 bg-green-600/20 rounded-md flex items-center gap-2">
-                      <CheckCircle className="h-4 w-4" />
-                      Active
-                    </button>
-                    <button className="px-4 py-2 text-sm font-medium text-gray-400">Guest Access</button>
-                  </div>
-                </div>
-
-                {/* Title */}
-                <h2 className="text-3xl font-bold mb-6 text-white">{purchase.productBoxTitle}</h2>
-
-                {/* Purchase Info */}
-                <div className="flex items-center gap-8 text-gray-400 mb-8">
-                  <div className="flex items-center gap-2">
-                    <User className="h-4 w-4" />
-                    <span>Content Creator</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <Calendar className="h-4 w-4" />
-                    <span>{new Date(purchase.purchasedAt).toLocaleDateString()}</span>
-                  </div>
-                  <div className="flex items-center gap-2 text-green-400 font-semibold">
-                    <DollarSign className="h-4 w-4" />
-                    <span>
-                      ${purchase.amount.toFixed(2)} {purchase.currency.toUpperCase()}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Stats Box */}
-                <div className="bg-white rounded-lg p-6 mb-8">
-                  <div className="grid grid-cols-3 gap-8 text-center">
-                    <div>
-                      <div className="text-3xl font-bold text-black mb-1">
-                        {purchase.totalItems || purchase.items?.length || 3}
-                      </div>
-                      <div className="text-gray-600">Items</div>
-                    </div>
-                    <div>
-                      <div className="text-3xl font-bold text-black mb-1">
-                        {formatFileSize(purchase.totalSize || 78643200)}
-                      </div>
-                      <div className="text-gray-600">Total Size</div>
-                    </div>
-                    <div>
-                      <div className="text-3xl font-bold text-black mb-1 flex items-center justify-center">
-                        <Infinity className="h-8 w-8" />
-                      </div>
-                      <div className="text-gray-600">Lifetime</div>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Content Items */}
-                <div className="space-y-3">
-                  <div className="bg-white rounded-lg p-4 flex items-center gap-4">
-                    <Video className="h-5 w-5 text-blue-500" />
-                    <div className="flex-1">
-                      <div className="font-semibold text-black">Premium Video Content</div>
-                      <div className="text-gray-600 text-sm">50 MB • 30:00 • Video</div>
-                    </div>
-                    <div className="text-black">⚙️</div>
-                  </div>
-
-                  <div className="bg-white rounded-lg p-4 flex items-center gap-4">
-                    <Music className="h-5 w-5 text-green-500" />
-                    <div className="flex-1">
-                      <div className="font-semibold text-black">Bonus Audio Commentary</div>
-                      <div className="text-gray-600 text-sm">15 MB • 15:00 • Audio</div>
-                    </div>
-                    <div className="text-black">⚙️</div>
-                  </div>
-
-                  <div className="bg-white rounded-lg p-4 flex items-center gap-4">
-                    <FileText className="h-5 w-5 text-orange-500" />
-                    <div className="flex-1">
-                      <div className="font-semibold text-black">Digital Resources Pack</div>
-                      <div className="text-gray-600 text-sm">10 MB • Document</div>
-                    </div>
-                    <div className="text-black">⚙️</div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Right: Action Buttons */}
-              <div className="w-48 flex flex-col gap-4">
-                <Button asChild className="w-full bg-red-600 hover:bg-red-700 text-white py-3">
-                  <Link href={`/product-box/${purchase.productBoxId}/content`}>
-                    <Eye className="w-4 h-4 mr-2" />
-                    View Content
-                  </Link>
-                </Button>
-                <Button
-                  asChild
-                  variant="outline"
-                  className="w-full border-gray-600 hover:bg-gray-800 bg-transparent text-white py-3"
-                >
-                  <Link href={`/creator/${purchase.creatorUsername}`}>
-                    <User className="w-4 h-4 mr-2" />
-                    Creator Profile
-                  </Link>
-                </Button>
-              </div>
-            </div>
-          </div>
-        ))}
-
-        {/* Lifetime Access Info */}
-        <Card className="bg-blue-50 border-blue-200">
-          <CardContent className="p-6">
-            <div className="flex items-start gap-4">
-              <CheckCircle className="h-6 w-6 text-blue-600 mt-1 flex-shrink-0" />
-              <div>
-                <h3 className="font-bold text-blue-900 mb-2 text-lg">Lifetime Access Guaranteed</h3>
-                <p className="text-blue-800">
-                  All your purchases include lifetime access. You can download and re-download your content anytime.
-                  Guest purchases are automatically saved for easy access.
-                </p>
-              </div>
+        <Card className="bg-black/40 backdrop-blur-xl border-white/10">
+          <CardContent className="p-12 text-center">
+            <ShoppingBag className="h-16 w-16 text-white/30 mx-auto mb-4" />
+            <h2 className="text-2xl font-bold text-white mb-2">No Purchases Yet</h2>
+            <p className="text-white/60 mb-6 max-w-md mx-auto">
+              You haven't made any purchases yet. Explore our premium content library to find amazing content from
+              talented creators.
+            </p>
+            <div className="space-y-3">
+              <Button asChild className="bg-red-600 hover:bg-red-700">
+                <Link href="/dashboard/explore">
+                  <Star className="w-4 h-4 mr-2" />
+                  Explore Premium Content
+                </Link>
+              </Button>
+              <Button asChild variant="outline" className="bg-transparent border-white/20 text-white hover:bg-white/10">
+                <Link href="/dashboard">
+                  <Package className="w-4 h-4 mr-2" />
+                  Go to Dashboard
+                </Link>
+              </Button>
             </div>
           </CardContent>
         </Card>
       </div>
+    )
+  }
+
+  // Purchases list
+  return (
+    <div className="container mx-auto px-4 py-8">
+      {/* Header */}
+      <div className="mb-8">
+        <h1 className="text-3xl font-bold text-white mb-2">My Purchases</h1>
+        <p className="text-white/70">
+          {purchases.length} purchase{purchases.length !== 1 ? "s" : ""} • Lifetime access to all content
+        </p>
+      </div>
+
+      {/* Purchases Grid */}
+      <div className="grid gap-6">
+        {purchases.map((purchase, index) => {
+          const isExpanded = expandedPurchases.has(purchase.id)
+
+          return (
+            <Card
+              key={purchase.id}
+              className="bg-black/40 backdrop-blur-xl border-white/10 hover:border-white/20 transition-all duration-300 overflow-hidden"
+              style={{
+                animationDelay: `${index * 100}ms`,
+                animation: "fadeInUp 0.6s ease-out forwards",
+              }}
+            >
+              <CardContent className="p-6">
+                <div className="flex items-start space-x-4 mb-4">
+                  {/* Thumbnail */}
+                  <div className="w-20 h-20 bg-gray-800 rounded-lg overflow-hidden flex-shrink-0">
+                    {purchase.productBoxThumbnail ? (
+                      <img
+                        src={purchase.productBoxThumbnail || "/placeholder.svg"}
+                        alt={purchase.productBoxTitle}
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                          const target = e.target as HTMLImageElement
+                          target.src = "/placeholder.svg?height=80&width=80&text=No+Image"
+                        }}
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center">
+                        <Package className="h-8 w-8 text-gray-500" />
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Purchase Info */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-start justify-between mb-2">
+                      <div className="flex-1">
+                        <h3 className="text-xl font-bold text-white mb-1 line-clamp-1">{purchase.productBoxTitle}</h3>
+                        <p className="text-white/70 text-sm mb-2 line-clamp-2">{purchase.productBoxDescription}</p>
+                        <div className="flex items-center space-x-4 text-sm text-white/60">
+                          <span className="flex items-center">
+                            <User className="h-4 w-4 mr-1" />
+                            {purchase.creatorName}
+                          </span>
+                          <span className="flex items-center">
+                            <DollarSign className="h-4 w-4 mr-1" />${purchase.amount.toFixed(2)}{" "}
+                            {purchase.currency.toUpperCase()}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Content Summary */}
+                <div className="grid grid-cols-3 gap-4 p-4 bg-white/5 rounded-lg mb-4">
+                  <div className="text-center">
+                    <div className="text-lg font-bold text-white">{purchase.totalItems || 0}</div>
+                    <div className="text-sm text-white/60">Items</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-lg font-bold text-white">{formatFileSize(purchase.totalSize || 0)}</div>
+                    <div className="text-sm text-white/60">Total Size</div>
+                  </div>
+                  <div className="text-center">
+                    <div className="text-lg font-bold text-green-400">∞</div>
+                    <div className="text-sm text-white/60">Lifetime</div>
+                  </div>
+                </div>
+
+                {/* Collapsible Content Items */}
+                {purchase.items && purchase.items.length > 0 && (
+                  <Collapsible open={isExpanded} onOpenChange={() => togglePurchaseExpansion(purchase.id)}>
+                    <CollapsibleTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        className="w-full justify-between p-0 h-auto text-white/80 hover:text-white hover:bg-white/5 mb-2"
+                      >
+                        <h4 className="text-sm font-semibold flex items-center">
+                          <Package className="h-4 w-4 mr-1" />
+                          Content ({purchase.items.length} items)
+                        </h4>
+                        {isExpanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                      </Button>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent className="space-y-2 mb-4">
+                      <div className="max-h-48 overflow-y-auto">
+                        {purchase.items.map((item) => (
+                          <div key={item.id} className="flex items-center space-x-3 p-2 bg-white/5 rounded-lg">
+                            <div className="w-8 h-8 bg-white/10 rounded flex items-center justify-center">
+                              {getContentIcon(item.contentType)}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-white font-medium text-sm truncate">{item.title}</p>
+                              <div className="flex items-center space-x-2 text-xs text-white/60">
+                                <span>{formatFileSize(item.fileSize)}</span>
+                                {item.duration && item.duration > 0 && <span>• {formatDuration(item.duration)}</span>}
+                                <span>• {item.contentType}</span>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </CollapsibleContent>
+                  </Collapsible>
+                )}
+
+                {/* Action Buttons */}
+                <div className="flex space-x-3">
+                  <Button
+                    asChild
+                    variant="outline"
+                    className="bg-transparent border-white/20 text-white hover:bg-white/10 flex-1"
+                  >
+                    <Link href={`/product-box/${purchase.productBoxId}/content`}>
+                      <Eye className="w-4 h-4 mr-2" />
+                      View Content
+                    </Link>
+                  </Button>
+                  <Button
+                    asChild
+                    variant="outline"
+                    className="bg-transparent border-white/20 text-white hover:bg-white/10"
+                  >
+                    <Link href={`/creator/${purchase.creatorUsername}`}>
+                      <User className="w-4 h-4 mr-2" />
+                      Creator Profile
+                    </Link>
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          )
+        })}
+      </div>
+
+      <style jsx>{`
+       @keyframes fadeInUp {
+         from {
+           opacity: 0;
+           transform: translateY(20px);
+         }
+         to {
+           opacity: 1;
+           transform: translateY(0);
+         }
+       }
+     `}</style>
     </div>
   )
 }
