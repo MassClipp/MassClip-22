@@ -1,17 +1,48 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { db } from "@/lib/firebase-admin"
+import { db, auth } from "@/lib/firebase-admin"
 
 export async function POST(request: NextRequest) {
   try {
-    const { buyerUid, productBoxId, sessionId, amount, currency } = await request.json()
+    const { buyerUid, productBoxId, sessionId, amount, currency, userEmail } = await request.json()
 
-    console.log("🔍 [Purchase Complete] Processing:", { buyerUid, productBoxId })
+    console.log("🔍 [Purchase Complete] Processing:", { buyerUid, productBoxId, userEmail })
+
+    // Verify user authentication if UID is provided
+    let verifiedUser = null
+    if (buyerUid && buyerUid !== "anonymous") {
+      try {
+        verifiedUser = await auth.getUser(buyerUid)
+        console.log("✅ [Purchase Complete] User verified:", {
+          uid: verifiedUser.uid,
+          email: verifiedUser.email,
+          displayName: verifiedUser.displayName,
+        })
+      } catch (error) {
+        console.warn("⚠️ [Purchase Complete] Could not verify user:", error)
+      }
+    }
 
     // Get the product box and its content
     const productBoxDoc = await db.collection("productBoxes").doc(productBoxId).get()
 
     if (!productBoxDoc.exists()) {
-      return NextResponse.json({ error: "Product not found" }, { status: 404 })
+      // Try bundles collection as fallback
+      const bundleDoc = await db.collection("bundles").doc(productBoxId).get()
+      if (!bundleDoc.exists()) {
+        return NextResponse.json({ error: "Product not found" }, { status: 404 })
+      }
+
+      const bundleData = bundleDoc.data()!
+      return await handleBundlePurchase(request, {
+        buyerUid,
+        bundleId: productBoxId,
+        sessionId,
+        amount,
+        currency,
+        userEmail,
+        verifiedUser,
+        bundleData,
+      })
     }
 
     const productBox = productBoxDoc.data()!
@@ -101,19 +132,27 @@ export async function POST(request: NextRequest) {
       return `${minutes}:${remainingSeconds.toString().padStart(2, "0")}`
     }
 
-    // Create comprehensive purchase record
+    // Create comprehensive purchase record with proper user identification
     const purchaseData = {
+      // User identification - CRITICAL FIX
+      buyerUid: buyerUid || "anonymous",
+      userId: buyerUid || "anonymous",
+      userEmail: userEmail || verifiedUser?.email || "",
+      userName: verifiedUser?.displayName || verifiedUser?.email?.split("@")[0] || "Anonymous User",
+      isAuthenticated: !!(buyerUid && buyerUid !== "anonymous"),
+
       // Product information
       productBoxId,
       productTitle: productBox.title,
       productDescription: productBox.description,
 
-      // Complete content metadata
+      // Complete content metadata with proper names
       items: contentMetadata,
       contentItems: contentItems, // Keep for backward compatibility
+      itemNames: contentMetadata.map((item) => item.displayTitle), // Explicit content names
+      contentTitles: contentMetadata.map((item) => item.displayTitle), // Alternative field name
 
       // Purchase details
-      buyerUid,
       amount: amount || productBox.price,
       currency: currency || "usd",
       sessionId,
@@ -129,20 +168,52 @@ export async function POST(request: NextRequest) {
       createdAt: new Date(),
     }
 
-    console.log("💾 [Purchase Complete] Saving purchase data:", purchaseData)
+    console.log("💾 [Purchase Complete] Saving purchase data with user identification:", {
+      buyerUid: purchaseData.buyerUid,
+      userEmail: purchaseData.userEmail,
+      userName: purchaseData.userName,
+      isAuthenticated: purchaseData.isAuthenticated,
+      itemNames: purchaseData.itemNames,
+    })
 
     // Save to main purchases collection
     const purchaseRef = await db.collection("purchases").add(purchaseData)
 
-    // Also save to user's personal purchases with items subcollection
-    const userPurchaseRef = await db.collection("users").doc(buyerUid).collection("purchases").add(purchaseData)
-
-    // Store individual items in subcollection for easy access
-    for (const item of contentMetadata) {
-      await userPurchaseRef.collection("items").doc(item.id).set(item)
+    // Save to bundlePurchases collection with proper user identification
+    const bundlePurchaseData = {
+      ...purchaseData,
+      bundleId: productBoxId,
+      bundleTitle: productBox.title,
+      bundleDescription: productBox.description,
+      contents: contentMetadata,
+      contentCount: contentMetadata.length,
+      totalItems: contentMetadata.length,
+      totalSize: contentMetadata.reduce((sum, item) => sum + (item.fileSize || 0), 0),
     }
 
-    console.log("✅ [Purchase Complete] Purchase saved successfully")
+    await db.collection("bundlePurchases").doc(sessionId).set(bundlePurchaseData)
+
+    // Also save to user's personal purchases if authenticated
+    if (buyerUid && buyerUid !== "anonymous") {
+      const userPurchaseRef = await db.collection("users").doc(buyerUid).collection("purchases").add(purchaseData)
+
+      // Store individual items in subcollection for easy access
+      for (const item of contentMetadata) {
+        await userPurchaseRef.collection("items").doc(item.id).set(item)
+      }
+
+      // Update user profile with purchase info
+      await db
+        .collection("users")
+        .doc(buyerUid)
+        .update({
+          lastPurchaseAt: new Date(),
+          totalPurchases: db.FieldValue.increment(1),
+          totalSpent: db.FieldValue.increment(purchaseData.amount),
+        })
+    }
+
+    console.log("✅ [Purchase Complete] Purchase saved successfully with proper user identification")
 
     return NextResponse.json({
       success: true,
@@ -154,4 +225,107 @@ export async function POST(request: NextRequest) {
     console.error("❌ [Purchase Complete] Error:", error)
     return NextResponse.json({ error: "Failed to complete purchase" }, { status: 500 })
   }
+}
+
+// Handle bundle purchases specifically
+async function handleBundlePurchase(request: NextRequest, data: any) {
+  const { buyerUid, bundleId, sessionId, amount, currency, userEmail, verifiedUser, bundleData } = data
+
+  console.log("🎁 [Bundle Purchase] Processing bundle purchase:", { bundleId, buyerUid, userEmail })
+
+  // Get bundle contents with proper names
+  let bundleContents: any[] = []
+  if (bundleData.contents && Array.isArray(bundleData.contents)) {
+    bundleContents = bundleData.contents.map((item: any) => ({
+      ...item,
+      displayTitle: item.title || item.name || item.filename || "Untitled Content",
+      displaySize: item.fileSize ? formatFileSize(item.fileSize) : "Unknown Size",
+    }))
+  } else if (bundleData.items && Array.isArray(bundleData.items)) {
+    bundleContents = bundleData.items.map((item: any) => ({
+      ...item,
+      displayTitle: item.title || item.name || item.filename || "Untitled Content",
+      displaySize: item.fileSize ? formatFileSize(item.fileSize) : "Unknown Size",
+    }))
+  }
+
+  const bundlePurchaseData = {
+    // User identification - CRITICAL FIX
+    buyerUid: buyerUid || "anonymous",
+    userId: buyerUid || "anonymous",
+    userEmail: userEmail || verifiedUser?.email || "",
+    userName: verifiedUser?.displayName || verifiedUser?.email?.split("@")[0] || "Anonymous User",
+    isAuthenticated: !!(buyerUid && buyerUid !== "anonymous"),
+
+    // Bundle information
+    bundleId,
+    bundleTitle: bundleData.title || "Untitled Bundle",
+    bundleDescription: bundleData.description || "",
+    thumbnailUrl: bundleData.customPreviewThumbnail || bundleData.thumbnailUrl || "",
+
+    // Content information with proper names
+    contents: bundleContents,
+    items: bundleContents,
+    itemNames: bundleContents.map((item) => item.displayTitle),
+    contentTitles: bundleContents.map((item) => item.displayTitle),
+    contentCount: bundleContents.length,
+    totalItems: bundleContents.length,
+    totalSize: bundleContents.reduce((sum, item) => sum + (item.fileSize || 0), 0),
+
+    // Purchase details
+    amount: amount || bundleData.price || 0,
+    currency: currency || "usd",
+    sessionId,
+    status: "completed",
+    type: "bundle",
+
+    // Timestamps
+    purchasedAt: new Date(),
+    createdAt: new Date(),
+    completedAt: new Date(),
+  }
+
+  console.log("💾 [Bundle Purchase] Saving bundle purchase with user identification:", {
+    buyerUid: bundlePurchaseData.buyerUid,
+    userEmail: bundlePurchaseData.userEmail,
+    userName: bundlePurchaseData.userName,
+    itemNames: bundlePurchaseData.itemNames,
+  })
+
+  // Save to bundlePurchases collection
+  await db.collection("bundlePurchases").doc(sessionId).set(bundlePurchaseData)
+
+  // Save to main purchases collection
+  await db.collection("purchases").add(bundlePurchaseData)
+
+  // Save to user's personal purchases if authenticated
+  if (buyerUid && buyerUid !== "anonymous") {
+    await db.collection("users").doc(buyerUid).collection("purchases").add(bundlePurchaseData)
+
+    // Update user profile
+    await db
+      .collection("users")
+      .doc(buyerUid)
+      .update({
+        lastPurchaseAt: new Date(),
+        totalPurchases: db.FieldValue.increment(1),
+        totalSpent: db.FieldValue.increment(bundlePurchaseData.amount),
+      })
+  }
+
+  console.log("✅ [Bundle Purchase] Bundle purchase saved successfully")
+
+  return NextResponse.json({
+    success: true,
+    purchase: bundlePurchaseData,
+    message: "Bundle purchase completed and access granted",
+  })
+}
+
+function formatFileSize(bytes: number): string {
+  if (bytes === 0) return "0 Bytes"
+  const k = 1024
+  const sizes = ["Bytes", "KB", "MB", "GB"]
+  const i = Math.floor(Math.log(bytes) / Math.log(k))
+  return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + " " + sizes[i]
 }

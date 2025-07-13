@@ -61,11 +61,21 @@ export interface UnifiedPurchase {
   creatorId: string
   creatorName: string
   creatorUsername: string
+
+  // Enhanced user identification
+  buyerUid: string
+  userId: string
+  userEmail: string
+  userName: string
+  isAuthenticated: boolean
+
   purchasedAt: Date
   amount: number
   currency: string
   sessionId: string
   items: UnifiedPurchaseItem[]
+  itemNames: string[] // Explicit content names
+  contentTitles: string[] // Alternative field name
   totalItems: number
   totalSize: number
 }
@@ -82,10 +92,30 @@ export class UnifiedPurchaseService {
       amount: number
       currency: string
       creatorId: string
+      userEmail?: string
+      userName?: string
     },
   ): Promise<string> {
     try {
       console.log(`🔄 [Unified Purchase] Creating unified purchase for user ${userId}`)
+
+      // Get user details if authenticated
+      let userEmail = purchaseData.userEmail || ""
+      let userName = purchaseData.userName || "Anonymous User"
+      const isAuthenticated = userId !== "anonymous"
+
+      if (isAuthenticated && typeof window === "undefined") {
+        // Server-side: try to get user details from Firebase Auth
+        try {
+          const { auth } = await import("@/lib/firebase-admin")
+          const userRecord = await auth.getUser(userId)
+          userEmail = userRecord.email || userEmail
+          userName = userRecord.displayName || userRecord.email?.split("@")[0] || userName
+          console.log(`✅ [Unified Purchase] User details retrieved: ${userName} (${userEmail})`)
+        } catch (error) {
+          console.warn(`⚠️ [Unified Purchase] Could not retrieve user details:`, error)
+        }
+      }
 
       // Get product box details
       const productBoxDoc = await getDb().collection("productBoxes").doc(purchaseData.productBoxId).get()
@@ -103,7 +133,7 @@ export class UnifiedPurchaseService {
 
       console.log(`📦 [Unified Purchase] Found ${contentItems.length} content items`)
 
-      // Create unified purchase document
+      // Create unified purchase document with proper user identification
       const unifiedPurchase: UnifiedPurchase = {
         id: purchaseData.sessionId,
         productBoxId: purchaseData.productBoxId, // Primary field
@@ -114,20 +144,43 @@ export class UnifiedPurchaseService {
         creatorId: purchaseData.creatorId,
         creatorName: creatorData?.displayName || creatorData?.name || "Unknown Creator",
         creatorUsername: creatorData?.username || "",
+
+        // Enhanced user identification - CRITICAL FIX
+        buyerUid: userId,
+        userId: userId,
+        userEmail: userEmail,
+        userName: userName,
+        isAuthenticated: isAuthenticated,
+
         purchasedAt: new Date(),
         amount: purchaseData.amount,
         currency: purchaseData.currency,
         sessionId: purchaseData.sessionId,
         items: contentItems,
+        itemNames: contentItems.map((item) => item.displayTitle), // Explicit content names
+        contentTitles: contentItems.map((item) => item.displayTitle), // Alternative field
         totalItems: contentItems.length,
         totalSize: contentItems.reduce((sum, item) => sum + (item.fileSize || 0), 0),
       }
+
+      console.log(`💾 [Unified Purchase] Saving unified purchase with user identification:`, {
+        userId: unifiedPurchase.userId,
+        userEmail: unifiedPurchase.userEmail,
+        userName: unifiedPurchase.userName,
+        isAuthenticated: unifiedPurchase.isAuthenticated,
+        itemNames: unifiedPurchase.itemNames,
+      })
 
       // Save to userPurchases collection
       const purchaseRef = doc(getDb(), "userPurchases", userId, "purchases", purchaseData.sessionId)
       await setDoc(purchaseRef, unifiedPurchase)
 
-      console.log(`✅ [Unified Purchase] Created unified purchase ${purchaseData.sessionId} for user ${userId}`)
+      // Also save to bundlePurchases collection for easy access
+      await setDoc(doc(getDb(), "bundlePurchases", purchaseData.sessionId), unifiedPurchase)
+
+      console.log(
+        `✅ [Unified Purchase] Created unified purchase ${purchaseData.sessionId} for user ${userId} (${userName})`,
+      )
       return purchaseData.sessionId
     } catch (error) {
       console.error(`❌ [Unified Purchase] Error creating unified purchase:`, error)
@@ -207,6 +260,7 @@ export class UnifiedPurchaseService {
       }
 
       console.log(`✅ [Content Fetch] Total items found: ${items.length}`)
+      console.log(`📝 [Content Fetch] Item names: ${items.map((item) => item.displayTitle).join(", ")}`)
       return items
     } catch (error) {
       console.error(`❌ [Content Fetch] Error fetching content items:`, error)
@@ -239,7 +293,7 @@ export class UnifiedPurchaseService {
       // Format display values exactly as shown in UI
       const fileSize = data.fileSize || data.size || 0
       const displaySize = this.formatFileSize(fileSize)
-      const displayTitle = data.title || data.filename || data.originalFileName || "Untitled"
+      const displayTitle = data.title || data.filename || data.originalFileName || data.name || "Untitled"
       const displayResolution = data.resolution || (data.height ? `${data.height}p` : undefined)
       const displayDuration = data.duration ? this.formatDuration(data.duration) : undefined
 
@@ -338,7 +392,7 @@ export class UnifiedPurchaseService {
   }
 
   /**
-   * Get all purchases for a user
+   * Get all purchases for a user with proper identification
    */
   static async getUserPurchases(userId: string): Promise<UnifiedPurchase[]> {
     try {
@@ -354,6 +408,14 @@ export class UnifiedPurchaseService {
         purchases.push({
           ...data,
           purchasedAt: data.purchasedAt || new Date(),
+          // Ensure user identification fields are present
+          buyerUid: data.buyerUid || userId,
+          userId: data.userId || userId,
+          userEmail: data.userEmail || "",
+          userName: data.userName || "User",
+          isAuthenticated: data.isAuthenticated !== false,
+          itemNames: data.itemNames || data.items?.map((item) => item.displayTitle) || [],
+          contentTitles: data.contentTitles || data.items?.map((item) => item.displayTitle) || [],
         })
       })
 
@@ -381,6 +443,14 @@ export class UnifiedPurchaseService {
       return {
         ...data,
         purchasedAt: data.purchasedAt || new Date(),
+        // Ensure user identification fields are present
+        buyerUid: data.buyerUid || userId,
+        userId: data.userId || userId,
+        userEmail: data.userEmail || "",
+        userName: data.userName || "User",
+        isAuthenticated: data.isAuthenticated !== false,
+        itemNames: data.itemNames || data.items?.map((item) => item.displayTitle) || [],
+        contentTitles: data.contentTitles || data.items?.map((item) => item.displayTitle) || [],
       }
     } catch (error) {
       console.error(`❌ [Unified Purchase] Error fetching purchase ${purchaseId}:`, error)
