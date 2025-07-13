@@ -2,9 +2,12 @@
 
 import { useEffect, useState } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
-import { useAuth } from "@/contexts/auth-context"
+import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { CheckCircle, XCircle, Loader2, RefreshCw, AlertCircle } from "lucide-react"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { CheckCircle, AlertCircle, Package, Eye, User, Loader2 } from "lucide-react"
+import Link from "next/link"
+import { useAuth } from "@/contexts/auth-context"
 
 interface Purchase {
   id: string
@@ -25,206 +28,267 @@ export default function PurchaseSuccessPage() {
   const searchParams = useSearchParams()
   const router = useRouter()
   const { user } = useAuth()
-  const [status, setStatus] = useState<"loading" | "success" | "error">("loading")
-  const [message, setMessage] = useState("")
+  const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [retryCount, setRetryCount] = useState(0)
-  const [debugInfo, setDebugInfo] = useState<any>(null)
+  const [purchase, setPurchase] = useState<Purchase | null>(null)
 
   const productBoxId = searchParams.get("product_box_id")
   const creatorId = searchParams.get("creator_id")
-  const sessionId = searchParams.get("session_id")
 
   useEffect(() => {
     if (!productBoxId) {
-      setStatus("error")
-      setError("Missing product box ID")
+      setError("Missing bundle information")
+      setLoading(false)
       return
     }
 
-    // Wait for auth to be ready
-    if (user === undefined) {
-      return // Still loading auth
+    // Wait for auth to be ready, then grant access
+    const grantAccessWhenReady = async () => {
+      // Wait a bit for auth to initialize
+      await new Promise((resolve) => setTimeout(resolve, 1000))
+      await grantAccess()
     }
 
-    verifyAndGrantAccess()
-  }, [user, productBoxId, creatorId, sessionId, retryCount])
+    grantAccessWhenReady()
+  }, [productBoxId, creatorId, user])
 
-  const verifyAndGrantAccess = async () => {
+  const grantAccess = async () => {
     try {
-      setStatus("loading")
+      setLoading(true)
       setError(null)
-      setMessage("Verifying your purchase...")
 
-      console.log("🔍 [Purchase Success] Starting verification process", {
-        productBoxId,
-        creatorId,
-        sessionId,
-        userId: user?.uid,
-        userEmail: user?.email,
-      })
-
-      // Prepare request data
-      const requestData = {
-        productBoxId,
-        creatorId,
-        sessionId,
-        userId: user?.uid || null,
-        userEmail: user?.email || null,
-      }
+      console.log("🔄 [Purchase Success] Granting access for bundle:", productBoxId)
+      console.log("🔄 [Purchase Success] Current user:", user?.uid || "No user")
 
       // Prepare headers
-      const headers: Record<string, string> = {
+      const headers: any = {
         "Content-Type": "application/json",
       }
 
-      // Add auth token if user is logged in
+      // Add auth token if user is available
       if (user) {
         try {
           const idToken = await user.getIdToken()
-          headers.Authorization = `Bearer ${idToken}`
-          console.log("✅ [Purchase Success] Added auth token to request")
+          headers["Authorization"] = `Bearer ${idToken}`
+          console.log("🔐 [Purchase Success] Added auth token for user:", user.uid)
         } catch (tokenError) {
           console.warn("⚠️ [Purchase Success] Failed to get ID token:", tokenError)
         }
+      } else {
+        console.log("⚠️ [Purchase Success] No authenticated user, proceeding as anonymous")
       }
-
-      setMessage("Granting access to your content...")
 
       const response = await fetch("/api/purchase/verify-and-grant", {
         method: "POST",
         headers,
-        body: JSON.stringify(requestData),
+        body: JSON.stringify({
+          productBoxId,
+          creatorId,
+        }),
       })
+
+      console.log("📡 [Purchase Success] API response status:", response.status)
 
       const data = await response.json()
-      setDebugInfo(data)
+      console.log("📡 [Purchase Success] API response data:", data)
 
-      console.log("📋 [Purchase Success] API Response:", {
-        status: response.status,
-        data,
-      })
+      if (!response.ok) {
+        throw new Error(data.error || `API request failed with status ${response.status}`)
+      }
 
-      if (response.ok && data.success) {
-        setStatus("success")
-        setMessage("Access granted successfully!")
-
-        // Redirect to content after a short delay
-        setTimeout(() => {
-          if (data.redirectUrl) {
-            window.location.href = data.redirectUrl
-          } else {
-            router.push(`/product-box/${productBoxId}/content`)
-          }
-        }, 2000)
+      if (data.success && data.purchase) {
+        setPurchase(data.purchase)
+        console.log("✅ [Purchase Success] Access granted successfully:", data.purchase.bundleTitle)
+        console.log("✅ [Purchase Success] User ID in purchase:", data.purchase.buyerUid)
       } else {
-        throw new Error(data.error || data.message || "Failed to verify purchase")
+        throw new Error("Invalid response from server")
       }
     } catch (err: any) {
-      console.error("❌ [Purchase Success] Error:", err)
-      setStatus("error")
-      setError(err.message || "Failed to verify purchase")
-      setMessage("There was an issue verifying your purchase")
+      console.error("❌ [Purchase Success] Error granting access:", err)
+      setError(err.message || "Failed to grant access")
+    } finally {
+      setLoading(false)
     }
   }
 
-  const handleRetry = () => {
-    setRetryCount((prev) => prev + 1)
+  const formatFileSize = (bytes: number): string => {
+    if (bytes === 0) return "0 B"
+    const k = 1024
+    const sizes = ["B", "KB", "MB", "GB"]
+    const i = Math.floor(Math.log(bytes) / Math.log(k))
+    return Number.parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + " " + sizes[i]
   }
 
-  const handleGoToPurchases = () => {
-    router.push("/dashboard/purchases")
-  }
-
-  const handleGoToContent = () => {
-    router.push(`/product-box/${productBoxId}/content`)
-  }
-
-  if (status === "loading") {
+  // Loading state
+  if (loading) {
     return (
-      <div className="min-h-screen bg-black flex items-center justify-center">
-        <div className="text-center max-w-md px-6">
-          <Loader2 className="h-12 w-12 animate-spin text-white mx-auto mb-6" />
-          <h1 className="text-2xl font-bold text-white mb-4">Verifying Purchase...</h1>
-          <p className="text-gray-400 mb-6">{message}</p>
-          <div className="text-xs text-gray-500">{retryCount > 0 && <p>Retry attempt: {retryCount}</p>}</div>
-        </div>
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900 flex items-center justify-center p-4">
+        <Card className="w-full max-w-md bg-black/40 backdrop-blur-xl border-white/10">
+          <CardContent className="p-8 text-center">
+            <div className="mb-6">
+              <Loader2 className="h-16 w-16 text-red-500 mx-auto animate-spin" />
+            </div>
+            <h1 className="text-2xl font-bold text-white mb-2">Verifying Purchase</h1>
+            <p className="text-white/70">Setting up your premium content access...</p>
+            {user && <p className="text-white/50 text-sm mt-2">User: {user.email}</p>}
+          </CardContent>
+        </Card>
       </div>
     )
   }
 
-  if (status === "success") {
+  // Error state
+  if (error) {
     return (
-      <div className="min-h-screen bg-black flex items-center justify-center">
-        <div className="text-center max-w-md px-6">
-          <CheckCircle className="h-16 w-16 text-green-500 mx-auto mb-6" />
-          <h1 className="text-3xl font-bold text-white mb-4">Purchase Successful!</h1>
-          <p className="text-gray-400 mb-6">{message}</p>
-          <p className="text-sm text-gray-500 mb-8">Redirecting you to your content...</p>
-          <div className="space-y-3">
-            <Button onClick={handleGoToContent} className="w-full bg-white text-black hover:bg-gray-100">
-              View Content Now
-            </Button>
-            <Button
-              onClick={handleGoToPurchases}
-              variant="outline"
-              className="w-full border-gray-600 text-white hover:bg-gray-800 bg-transparent"
-            >
-              Go to My Purchases
-            </Button>
-          </div>
-        </div>
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900 flex items-center justify-center p-4">
+        <Card className="w-full max-w-md bg-black/40 backdrop-blur-xl border-white/10">
+          <CardContent className="p-8 text-center">
+            <div className="mb-6">
+              <AlertCircle className="h-16 w-16 text-red-500 mx-auto" />
+            </div>
+            <h1 className="text-2xl font-bold text-white mb-2">Access Grant Failed</h1>
+            <Alert className="bg-red-500/10 border-red-500/20 mb-6">
+              <AlertCircle className="h-4 w-4 text-red-400" />
+              <AlertDescription className="text-red-200">
+                <strong>Error:</strong> {error}
+              </AlertDescription>
+            </Alert>
+            <div className="space-y-3">
+              <Button onClick={grantAccess} className="w-full bg-red-600 hover:bg-red-700">
+                Try Again
+              </Button>
+              <Button
+                asChild
+                variant="outline"
+                className="w-full bg-transparent border-white/20 text-white hover:bg-white/10"
+              >
+                <Link href="/dashboard">Go to Dashboard</Link>
+              </Button>
+            </div>
+            {/* Debug info */}
+            <div className="mt-4 text-xs text-white/40">
+              <p>Bundle ID: {productBoxId}</p>
+              <p>User: {user?.uid || "Not authenticated"}</p>
+            </div>
+          </CardContent>
+        </Card>
       </div>
     )
   }
 
-  if (status === "error") {
+  // Success state
+  if (purchase) {
     return (
-      <div className="min-h-screen bg-black flex items-center justify-center">
-        <div className="text-center max-w-md px-6">
-          <XCircle className="h-16 w-16 text-red-500 mx-auto mb-6" />
-          <h1 className="text-3xl font-bold text-white mb-4">Verification Failed</h1>
-          <p className="text-gray-400 mb-2">{message}</p>
-          {error && (
-            <div className="bg-red-900/20 border border-red-800 rounded-lg p-4 mb-6">
-              <div className="flex items-start gap-3">
-                <AlertCircle className="h-5 w-5 text-red-400 flex-shrink-0 mt-0.5" />
-                <div className="text-left">
-                  <p className="text-red-400 font-medium mb-1">Error Details:</p>
-                  <p className="text-red-300 text-sm">{error}</p>
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900 flex items-center justify-center p-4">
+        <Card className="w-full max-w-lg bg-black/40 backdrop-blur-xl border-white/10">
+          <CardContent className="p-8">
+            {/* Success Header */}
+            <div className="text-center mb-8">
+              <div className="mb-4">
+                <CheckCircle className="h-16 w-16 text-green-500 mx-auto" />
+              </div>
+              <h1 className="text-3xl font-bold text-white mb-2">Access Granted!</h1>
+              <p className="text-white/70">Your premium content is now available</p>
+              {user && <p className="text-white/50 text-sm mt-1">Welcome, {user.email}</p>}
+            </div>
+
+            {/* Purchase Details */}
+            <div className="bg-white/5 rounded-lg p-6 mb-6">
+              <div className="flex items-start space-x-4">
+                {/* Thumbnail */}
+                <div className="w-16 h-16 bg-gray-800 rounded-lg overflow-hidden flex-shrink-0">
+                  {purchase.thumbnailUrl ? (
+                    <img
+                      src={purchase.thumbnailUrl || "/placeholder.svg"}
+                      alt={purchase.bundleTitle}
+                      className="w-full h-full object-cover"
+                      onError={(e) => {
+                        const target = e.target as HTMLImageElement
+                        target.src = "/placeholder.svg?height=64&width=64&text=Bundle"
+                      }}
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center">
+                      <Package className="h-6 w-6 text-gray-500" />
+                    </div>
+                  )}
+                </div>
+
+                {/* Bundle Info */}
+                <div className="flex-1">
+                  <h3 className="text-xl font-bold text-white mb-1">{purchase.bundleTitle}</h3>
+                  <p className="text-white/70 text-sm mb-2">{purchase.description}</p>
+                  <div className="flex items-center space-x-4 text-sm text-white/60">
+                    <span className="flex items-center">
+                      <User className="h-4 w-4 mr-1" />
+                      {purchase.creatorName}
+                    </span>
+                    <span>
+                      ${purchase.amount.toFixed(2)} {purchase.currency.toUpperCase()}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Content Stats */}
+              <div className="grid grid-cols-3 gap-4 mt-4 pt-4 border-t border-white/10">
+                <div className="text-center">
+                  <div className="text-lg font-bold text-white">{purchase.contentCount}</div>
+                  <div className="text-sm text-white/60">Items</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-lg font-bold text-white">{formatFileSize(purchase.totalSize)}</div>
+                  <div className="text-sm text-white/60">Total Size</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-lg font-bold text-green-400">∞</div>
+                  <div className="text-sm text-white/60">Lifetime</div>
                 </div>
               </div>
             </div>
-          )}
-          <div className="space-y-3">
-            <Button onClick={handleRetry} className="w-full bg-white text-black hover:bg-gray-100">
-              <RefreshCw className="h-4 w-4 mr-2" />
-              Try Again
-            </Button>
-            <Button
-              onClick={handleGoToContent}
-              variant="outline"
-              className="w-full border-gray-600 text-white hover:bg-gray-800 bg-transparent"
-            >
-              Try Accessing Content Directly
-            </Button>
-            <Button
-              onClick={handleGoToPurchases}
-              variant="outline"
-              className="w-full border-gray-600 text-white hover:bg-gray-800 bg-transparent"
-            >
-              Go to My Purchases
-            </Button>
-          </div>
-          {debugInfo && (
-            <details className="mt-6 text-left">
-              <summary className="text-gray-500 text-sm cursor-pointer hover:text-gray-400">Debug Info</summary>
-              <pre className="text-xs text-gray-600 mt-2 bg-gray-900 p-3 rounded overflow-auto">
-                {JSON.stringify(debugInfo, null, 2)}
-              </pre>
-            </details>
-          )}
-        </div>
+
+            {/* Action Buttons */}
+            <div className="space-y-3">
+              <Button asChild className="w-full bg-red-600 hover:bg-red-700">
+                <Link href={`/product-box/${purchase.bundleId}/content`}>
+                  <Eye className="w-4 h-4 mr-2" />
+                  View Content
+                </Link>
+              </Button>
+              <div className="grid grid-cols-2 gap-3">
+                <Button
+                  asChild
+                  variant="outline"
+                  className="bg-transparent border-white/20 text-white hover:bg-white/10"
+                >
+                  <Link href="/dashboard/purchases">
+                    <Package className="w-4 h-4 mr-2" />
+                    My Purchases
+                  </Link>
+                </Button>
+                <Button
+                  asChild
+                  variant="outline"
+                  className="bg-transparent border-white/20 text-white hover:bg-white/10"
+                >
+                  <Link href={`/creator/${purchase.creatorUsername}`}>
+                    <User className="w-4 h-4 mr-2" />
+                    Creator Profile
+                  </Link>
+                </Button>
+              </div>
+            </div>
+
+            {/* Debug info for development */}
+            {process.env.NODE_ENV === "development" && (
+              <div className="mt-4 p-3 bg-white/5 rounded text-xs text-white/40">
+                <p>Purchase ID: {purchase.id}</p>
+                <p>Bundle ID: {purchase.bundleId}</p>
+                <p>User ID: {user?.uid || "anonymous"}</p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
       </div>
     )
   }
