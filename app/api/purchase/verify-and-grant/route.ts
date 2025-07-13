@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { db } from "@/lib/firebase-admin"
+import { db, auth } from "@/lib/firebase-admin"
 
 export async function POST(request: NextRequest) {
   try {
@@ -12,6 +12,25 @@ export async function POST(request: NextRequest) {
 
     if (!productBoxId) {
       return NextResponse.json({ error: "Product Box ID is required" }, { status: 400 })
+    }
+
+    // Get authenticated user ID from Authorization header
+    let userId = "anonymous"
+    let isAuthenticated = false
+
+    try {
+      const authHeader = request.headers.get("authorization")
+      if (authHeader && authHeader.startsWith("Bearer ")) {
+        const idToken = authHeader.split("Bearer ")[1]
+        const decodedToken = await auth.verifyIdToken(idToken)
+        userId = decodedToken.uid
+        isAuthenticated = true
+        console.log(`✅ [Verify & Grant] Authenticated user: ${userId}`)
+      } else {
+        console.log(`⚠️ [Verify & Grant] No authentication provided, using anonymous access`)
+      }
+    } catch (authError) {
+      console.warn(`⚠️ [Verify & Grant] Auth verification failed, proceeding as anonymous:`, authError)
     }
 
     console.log(`🔍 [Verify & Grant] Looking for bundle: ${productBoxId}`)
@@ -103,7 +122,7 @@ export async function POST(request: NextRequest) {
     const accessToken = `access_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
     const purchaseId = `purchase_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
 
-    // Create bundlePurchases record with all necessary fields
+    // Create bundlePurchases record with proper user ID
     const bundlePurchaseData = {
       id: purchaseId,
       bundleId: productBoxId,
@@ -144,26 +163,39 @@ export async function POST(request: NextRequest) {
       accessToken: accessToken,
       source: "direct_access",
 
-      // Anonymous purchase (no user ID required)
-      buyerUid: "anonymous",
-      userId: "anonymous",
+      // Use actual user ID if authenticated, otherwise anonymous
+      buyerUid: userId,
+      userId: userId,
+      isAuthenticated: isAuthenticated,
     }
 
     // Store in bundlePurchases collection
     try {
       await db.collection("bundlePurchases").doc(purchaseId).set(bundlePurchaseData)
-      console.log(`✅ [Verify & Grant] Bundle purchase record created in bundlePurchases collection`)
+      console.log(`✅ [Verify & Grant] Bundle purchase record created with buyerUid: ${userId}`)
     } catch (error) {
       console.error(`❌ [Verify & Grant] Error creating bundle purchase record:`, error)
       throw error
     }
 
-    // Also store in anonymous purchases for fallback
-    try {
-      await db.collection("anonymousPurchases").add(bundlePurchaseData)
-      console.log(`✅ [Verify & Grant] Anonymous purchase record created`)
-    } catch (error) {
-      console.warn(`⚠️ [Verify & Grant] Error creating anonymous purchase (non-critical):`, error)
+    // If user is authenticated, also store in their personal purchases subcollection
+    if (isAuthenticated && userId !== "anonymous") {
+      try {
+        await db.collection("userPurchases").doc(userId).collection("purchases").doc(purchaseId).set(bundlePurchaseData)
+        console.log(`✅ [Verify & Grant] Purchase added to user's personal collection`)
+      } catch (error) {
+        console.warn(`⚠️ [Verify & Grant] Error adding to user purchases (non-critical):`, error)
+      }
+    }
+
+    // Also store in anonymous purchases for fallback (only if not authenticated)
+    if (!isAuthenticated) {
+      try {
+        await db.collection("anonymousPurchases").add(bundlePurchaseData)
+        console.log(`✅ [Verify & Grant] Anonymous purchase record created`)
+      } catch (error) {
+        console.warn(`⚠️ [Verify & Grant] Error creating anonymous purchase (non-critical):`, error)
+      }
     }
 
     // Set access token cookie
@@ -173,6 +205,8 @@ export async function POST(request: NextRequest) {
       message: "Access granted successfully",
       bundleId: productBoxId,
       bundleTitle: bundleData.title,
+      isAuthenticated: isAuthenticated,
+      userId: userId,
     })
 
     response.cookies.set(`purchase_access_${productBoxId}`, accessToken, {
@@ -183,7 +217,9 @@ export async function POST(request: NextRequest) {
       path: "/",
     })
 
-    console.log(`🎉 [Verify & Grant] Purchase access granted successfully for bundle: ${bundleData.title}`)
+    console.log(
+      `🎉 [Verify & Grant] Purchase access granted successfully for bundle: ${bundleData.title} (User: ${userId})`,
+    )
 
     return response
   } catch (error: any) {

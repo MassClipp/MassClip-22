@@ -78,10 +78,7 @@ export default function PurchasesPage() {
 
       if (anonymousResponse.ok) {
         const anonymousData = await anonymousResponse.json()
-        console.log("Anonymous purchases response:", anonymousData)
-
         if (anonymousData.purchases && anonymousData.purchases.length > 0) {
-          console.log(`Found ${anonymousData.purchases.length} anonymous purchases`)
           setPurchases(anonymousData.purchases)
           setLoading(false)
           return
@@ -263,13 +260,6 @@ export default function PurchasesPage() {
         <p className="text-white/70">
           {purchases.length} purchase{purchases.length !== 1 ? "s" : ""} • Lifetime access to all content
         </p>
-        {purchases.length > 0 && purchases[0]?.anonymousAccess && (
-          <div className="mt-2 p-2 bg-blue-500/10 border border-blue-500/20 rounded-lg">
-            <p className="text-blue-200 text-sm">
-              📱 Anonymous Access: Your purchases are stored locally. Sign up to sync across devices.
-            </p>
-          </div>
-        )}
       </div>
 
       {/* Purchases Grid */}
