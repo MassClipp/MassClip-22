@@ -30,6 +30,7 @@ const auth = getAuth()
 interface DetailedContentItem {
   id: string
   title: string
+  displayTitle: string
   filename: string
   fileUrl: string
   publicUrl: string
@@ -42,10 +43,12 @@ interface DetailedContentItem {
   fileType: string
   fileSize: number
   fileSizeFormatted: string
+  displaySize: string
 
   // Video/Audio specific
   duration?: number
   durationFormatted?: string
+  displayDuration?: string
   resolution?: string
   width?: number
   height?: number
@@ -80,6 +83,10 @@ interface DetailedContentItem {
   quality?: string
   encoding?: string
   format?: string
+
+  // Source tracking
+  sourceCollection?: string
+  lastUpdated?: any
 }
 
 // Helper function to format file size
@@ -123,19 +130,28 @@ async function getDetailedContentMetadata(contentId: string): Promise<DetailedCo
     let contentData: any = null
     let sourceCollection = ""
 
-    // 1. Try productBoxContent collection first
-    const productBoxContentDoc = await db.collection("productBoxContent").doc(contentId).get()
-    if (productBoxContentDoc.exists) {
-      contentData = productBoxContentDoc.data()
-      sourceCollection = "productBoxContent"
+    // 1. Try uploads collection first (most comprehensive)
+    const uploadsDoc = await db.collection("uploads").doc(contentId).get()
+    if (uploadsDoc.exists) {
+      contentData = uploadsDoc.data()
+      sourceCollection = "uploads"
     }
 
-    // 2. Try uploads collection
+    // 2. Try productBoxContent collection
     if (!contentData) {
-      const uploadsDoc = await db.collection("uploads").doc(contentId).get()
-      if (uploadsDoc.exists) {
-        contentData = uploadsDoc.data()
-        sourceCollection = "uploads"
+      const productBoxContentDoc = await db.collection("productBoxContent").doc(contentId).get()
+      if (productBoxContentDoc.exists) {
+        contentData = productBoxContentDoc.data()
+        sourceCollection = "productBoxContent"
+
+        // If we have an uploadId, try to get the original upload data
+        if (contentData.uploadId) {
+          const originalUpload = await db.collection("uploads").doc(contentData.uploadId).get()
+          if (originalUpload.exists) {
+            contentData = { ...contentData, ...originalUpload.data() }
+            sourceCollection = "uploads (via productBoxContent)"
+          }
+        }
       }
     }
 
@@ -160,29 +176,46 @@ async function getDetailedContentMetadata(contentId: string): Promise<DetailedCo
     const fileSize = contentData.fileSize || contentData.size || 0
     const duration = contentData.duration || contentData.videoDuration || 0
 
+    // Get the best available title and clean it
+    const rawTitle =
+      contentData.title || contentData.filename || contentData.originalFileName || contentData.name || "Untitled"
+    const cleanTitle = rawTitle.replace(/\.(mp4|mov|avi|mkv|webm|m4v|mp3|wav|jpg|jpeg|png|gif|pdf)$/i, "")
+
+    // Get the best available URLs
+    const fileUrl = contentData.fileUrl || contentData.publicUrl || contentData.downloadUrl || ""
+    const thumbnailUrl = contentData.thumbnailUrl || contentData.previewUrl || ""
+
+    // Validate URLs
+    if (!fileUrl || !fileUrl.startsWith("http")) {
+      console.warn(`⚠️ [Bundle Content] Invalid file URL for ${contentId}: ${fileUrl}`)
+      return null
+    }
+
     const detailedItem: DetailedContentItem = {
       // Basic identification
       id: contentId,
-      title:
-        contentData.title || contentData.filename || contentData.originalFileName || contentData.name || "Untitled",
+      title: cleanTitle,
+      displayTitle: cleanTitle,
       filename: contentData.filename || contentData.originalFileName || contentData.name || `${contentId}.file`,
 
-      // URLs - comprehensive coverage
-      fileUrl: contentData.fileUrl || contentData.publicUrl || contentData.downloadUrl || "",
-      publicUrl: contentData.publicUrl || contentData.fileUrl || contentData.downloadUrl || "",
-      downloadUrl: contentData.downloadUrl || contentData.fileUrl || contentData.publicUrl || "",
-      thumbnailUrl: contentData.thumbnailUrl || contentData.previewUrl || "",
-      previewUrl: contentData.previewUrl || contentData.thumbnailUrl || "",
+      // URLs - comprehensive coverage with validation
+      fileUrl: fileUrl,
+      publicUrl: contentData.publicUrl || fileUrl,
+      downloadUrl: contentData.downloadUrl || fileUrl,
+      thumbnailUrl: thumbnailUrl,
+      previewUrl: contentData.previewUrl || thumbnailUrl,
 
       // File metadata
       mimeType: mimeType,
       fileType: contentData.fileType || mimeType,
       fileSize: fileSize,
       fileSizeFormatted: formatFileSize(fileSize),
+      displaySize: formatFileSize(fileSize),
 
       // Video/Audio specific metadata
       duration: duration,
       durationFormatted: formatDuration(duration),
+      displayDuration: formatDuration(duration),
       resolution:
         contentData.resolution ||
         contentData.videoResolution ||
@@ -222,19 +255,21 @@ async function getDetailedContentMetadata(contentId: string): Promise<DetailedCo
       quality: contentData.quality || (contentData.height >= 1080 ? "HD" : contentData.height >= 720 ? "HD" : "SD"),
       encoding: contentData.encoding,
       format: contentData.format || contentData.videoFormat || mimeType.split("/")[1],
+
+      // Source tracking
+      sourceCollection: sourceCollection,
+      lastUpdated: new Date(),
     }
 
     console.log(`📊 [Bundle Content] Detailed metadata extracted:`, {
-      title: detailedItem.title,
-      duration: detailedItem.durationFormatted,
+      title: detailedItem.displayTitle,
+      duration: detailedItem.displayDuration,
       resolution: detailedItem.resolution,
-      size: detailedItem.fileSizeFormatted,
+      size: detailedItem.displaySize,
       contentType: detailedItem.contentType,
-      hasUrls: {
-        fileUrl: !!detailedItem.fileUrl,
-        publicUrl: !!detailedItem.publicUrl,
-        thumbnailUrl: !!detailedItem.thumbnailUrl,
-      },
+      fileUrl: detailedItem.fileUrl,
+      thumbnailUrl: detailedItem.thumbnailUrl,
+      source: sourceCollection,
     })
 
     return detailedItem
@@ -297,9 +332,12 @@ export async function GET(request: NextRequest) {
         coverImage: data.coverImage || data.customPreviewThumbnail || null,
         active: data.active !== false,
 
-        // Enhanced content metadata
+        // Enhanced content metadata - Store full details in Firestore
         contentItems: contentItemIds, // Keep original IDs for compatibility
         detailedContentItems: detailedContentItems, // Full detailed metadata
+        contents: detailedContentItems, // Alternative field name
+
+        // Content metadata summary
         contentMetadata: {
           totalItems: detailedContentItems.length,
           totalDuration: totalDuration,
@@ -319,10 +357,12 @@ export async function GET(request: NextRequest) {
           qualities: [...new Set(detailedContentItems.map((item) => item.quality).filter(Boolean))],
         },
 
-        // Content titles and descriptions for easy access
-        contentTitles: detailedContentItems.map((item) => item.title),
+        // Quick access arrays for easy querying
+        contentTitles: detailedContentItems.map((item) => item.displayTitle),
         contentDescriptions: detailedContentItems.map((item) => item.description || "").filter(Boolean),
         contentTags: [...new Set(detailedContentItems.flatMap((item) => item.tags || []))],
+        contentUrls: detailedContentItems.map((item) => item.fileUrl),
+        contentThumbnails: detailedContentItems.map((item) => item.thumbnailUrl).filter(Boolean),
 
         // Timestamps
         createdAt: data.createdAt,
@@ -372,15 +412,40 @@ export async function POST(request: NextRequest) {
     const userId = decodedToken.uid
 
     const body = await request.json()
-    const { title, description, price, currency = "usd", type = "one_time" } = body
+    const { title, description, price, currency = "usd", type = "one_time", contentIds = [] } = body
 
     if (!title || !price) {
       return NextResponse.json({ error: "Title and price are required" }, { status: 400 })
     }
 
-    console.log(`🔍 [Bundles API] Creating bundle for user: ${userId}`)
+    console.log(`🔍 [Bundles API] Creating bundle for user: ${userId} with ${contentIds.length} content items`)
 
-    // Create bundle document with enhanced structure and proper initialization
+    // Get detailed metadata for initial content items if provided
+    const detailedContentItems: DetailedContentItem[] = []
+    const validContentIds: string[] = []
+
+    if (contentIds.length > 0) {
+      for (const contentId of contentIds) {
+        const detailedItem = await getDetailedContentMetadata(contentId)
+        if (detailedItem) {
+          detailedContentItems.push(detailedItem)
+          validContentIds.push(contentId)
+          console.log(`✅ [Bundles API] Added detailed metadata for: ${detailedItem.displayTitle}`)
+        } else {
+          console.warn(`⚠️ [Bundles API] Skipping invalid content: ${contentId}`)
+        }
+      }
+    }
+
+    // Calculate bundle statistics
+    const totalDuration = detailedContentItems.reduce((sum, item) => sum + (item.duration || 0), 0)
+    const totalSize = detailedContentItems.reduce((sum, item) => sum + (item.fileSize || 0), 0)
+    const videoCount = detailedContentItems.filter((item) => item.contentType === "video").length
+    const audioCount = detailedContentItems.filter((item) => item.contentType === "audio").length
+    const imageCount = detailedContentItems.filter((item) => item.contentType === "image").length
+    const documentCount = detailedContentItems.filter((item) => item.contentType === "document").length
+
+    // Create bundle document with enhanced structure and comprehensive metadata
     const bundleData = {
       title: title.trim(),
       description: description?.trim() || "",
@@ -390,49 +455,57 @@ export async function POST(request: NextRequest) {
       creatorId: userId,
       active: true,
 
-      // Content arrays - Initialize as empty
-      contentItems: [], // Array of content IDs
-      detailedContentItems: [], // Array of detailed content metadata
+      // Content arrays with full metadata stored directly in Firestore
+      contentItems: validContentIds, // Array of content IDs for compatibility
+      detailedContentItems: detailedContentItems, // Full detailed metadata
+      contents: detailedContentItems, // Alternative field name
 
-      // Content metadata summary - Initialize with zeros
+      // Content metadata summary
       contentMetadata: {
-        totalItems: 0,
-        totalDuration: 0,
-        totalDurationFormatted: "0:00",
-        totalSize: 0,
-        totalSizeFormatted: "0 Bytes",
+        totalItems: detailedContentItems.length,
+        totalDuration: totalDuration,
+        totalDurationFormatted: formatDuration(totalDuration),
+        totalSize: totalSize,
+        totalSizeFormatted: formatFileSize(totalSize),
         contentBreakdown: {
-          videos: 0,
-          audio: 0,
-          images: 0,
-          documents: 0,
+          videos: videoCount,
+          audio: audioCount,
+          images: imageCount,
+          documents: documentCount,
         },
-        averageDuration: 0,
-        averageSize: 0,
-        resolutions: [],
-        formats: [],
-        qualities: [],
+        averageDuration: detailedContentItems.length > 0 ? totalDuration / detailedContentItems.length : 0,
+        averageSize: detailedContentItems.length > 0 ? totalSize / detailedContentItems.length : 0,
+        resolutions: [...new Set(detailedContentItems.map((item) => item.resolution).filter(Boolean))],
+        formats: [...new Set(detailedContentItems.map((item) => item.format).filter(Boolean))],
+        qualities: [...new Set(detailedContentItems.map((item) => item.quality).filter(Boolean))],
       },
 
-      // Quick access arrays - Initialize as empty
-      contentTitles: [],
-      contentDescriptions: [],
-      contentTags: [],
+      // Quick access arrays for easy querying and display
+      contentTitles: detailedContentItems.map((item) => item.displayTitle),
+      contentDescriptions: detailedContentItems.map((item) => item.description || "").filter(Boolean),
+      contentTags: [...new Set(detailedContentItems.flatMap((item) => item.tags || []))],
+      contentUrls: detailedContentItems.map((item) => item.fileUrl),
+      contentThumbnails: detailedContentItems.map((item) => item.thumbnailUrl).filter(Boolean),
 
       // Timestamps
       createdAt: new Date(),
       updatedAt: new Date(),
+      contentLastUpdated: new Date(),
     }
 
     const bundleRef = await db.collection("bundles").add(bundleData)
     const bundleId = bundleRef.id
 
-    console.log(`✅ [Bundles API] Created enhanced bundle: ${bundleId}`)
+    console.log(
+      `✅ [Bundles API] Created enhanced bundle: ${bundleId} with ${detailedContentItems.length} detailed content items`,
+    )
 
     return NextResponse.json({
       success: true,
       bundleId,
-      message: "Bundle created successfully with enhanced metadata structure",
+      message: "Bundle created successfully with comprehensive metadata",
+      contentItemsAdded: detailedContentItems.length,
+      bundleMetadata: bundleData.contentMetadata,
     })
   } catch (error) {
     console.error("❌ [Bundles API] Error creating bundle:", error)
