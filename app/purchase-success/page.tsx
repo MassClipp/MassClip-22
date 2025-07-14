@@ -1,297 +1,239 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { useSearchParams, useRouter } from "next/navigation"
+import { useSearchParams } from "next/navigation"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Alert, AlertDescription } from "@/components/ui/alert"
-import { CheckCircle, AlertCircle, Package, Eye, User, Loader2 } from "lucide-react"
+import { CheckCircle, Download, User, Package } from "lucide-react"
 import Link from "next/link"
-import { useAuth } from "@/contexts/auth-context"
+import { useAuth } from "@/hooks/use-firebase-auth"
 
-interface Purchase {
-  id: string
+interface PurchaseData {
   bundleId: string
   bundleTitle: string
-  description: string
-  thumbnailUrl: string
-  creatorName: string
-  creatorUsername: string
-  amount: number
-  currency: string
+  bundleDescription: string
   contentCount: number
   totalSize: number
-  buyerUid: string
+  items: Array<{
+    id: string
+    title: string
+    fileUrl: string
+    fileSize: number
+    contentType: string
+  }>
+  creatorName: string
+  amount: number
+  currency: string
 }
 
 export default function PurchaseSuccessPage() {
   const searchParams = useSearchParams()
-  const router = useRouter()
   const { user } = useAuth()
+  const [purchaseData, setPurchaseData] = useState<PurchaseData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [purchase, setPurchase] = useState<Purchase | null>(null)
 
+  const sessionId = searchParams.get("session_id")
   const productBoxId = searchParams.get("product_box_id")
-  const creatorId = searchParams.get("creator_id")
 
   useEffect(() => {
-    if (!productBoxId) {
-      setError("Missing bundle information")
-      setLoading(false)
-      return
-    }
-
-    // Wait for auth to be ready, then grant access
-    const grantAccessWhenReady = async () => {
-      // Wait a bit for auth to initialize
-      await new Promise((resolve) => setTimeout(resolve, 1000))
-      await grantAccess()
-    }
-
-    grantAccessWhenReady()
-  }, [productBoxId, creatorId, user])
-
-  const grantAccess = async () => {
-    try {
-      setLoading(true)
-      setError(null)
-
-      console.log("🔄 [Purchase Success] Granting access for bundle:", productBoxId)
-      console.log("🔄 [Purchase Success] Current user:", user?.uid || "No user")
-
-      // Prepare headers
-      const headers: any = {
-        "Content-Type": "application/json",
+    const completePurchase = async () => {
+      if (!sessionId || !productBoxId) {
+        setError("Missing purchase information")
+        setLoading(false)
+        return
       }
 
-      // Add auth token if user is available
-      if (user) {
-        try {
-          const idToken = await user.getIdToken()
-          headers["Authorization"] = `Bearer ${idToken}`
-          console.log("🔐 [Purchase Success] Added auth token for user:", user.uid)
-        } catch (tokenError) {
-          console.warn("⚠️ [Purchase Success] Failed to get ID token:", tokenError)
-        }
-      } else {
-        console.log("⚠️ [Purchase Success] No authenticated user, proceeding as anonymous")
-      }
-
-      const response = await fetch("/api/purchase/verify-and-grant", {
-        method: "POST",
-        headers,
-        body: JSON.stringify({
+      try {
+        console.log("🔄 [Purchase Success] Completing purchase:", {
+          sessionId,
           productBoxId,
-          creatorId,
-        }),
-      })
+          userId: user?.uid,
+          userEmail: user?.email,
+        })
 
-      console.log("📡 [Purchase Success] API response status:", response.status)
+        // First, complete the purchase with comprehensive data
+        const completionResponse = await fetch("/api/purchase/complete", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            buyerUid: user?.uid || "anonymous",
+            productBoxId,
+            sessionId,
+            userEmail: user?.email || "",
+            userName: user?.displayName || user?.email?.split("@")[0] || "Anonymous User",
+          }),
+        })
 
-      const data = await response.json()
-      console.log("📡 [Purchase Success] API response data:", data)
+        if (!completionResponse.ok) {
+          throw new Error(`Purchase completion failed: ${completionResponse.statusText}`)
+        }
 
-      if (!response.ok) {
-        throw new Error(data.error || `API request failed with status ${response.status}`)
+        const completionResult = await completionResponse.json()
+        console.log("✅ [Purchase Success] Purchase completed:", completionResult)
+
+        // Then fetch the purchase data to display
+        const purchaseResponse = await fetch(`/api/user/purchases/${sessionId}`, {
+          headers: {
+            Authorization: user ? `Bearer ${await user.getIdToken()}` : "",
+          },
+        })
+
+        if (purchaseResponse.ok) {
+          const purchase = await purchaseResponse.json()
+          setPurchaseData(purchase)
+          console.log("✅ [Purchase Success] Purchase data loaded:", purchase)
+        } else {
+          // Fallback: use the completion result data
+          if (completionResult.purchase) {
+            const fallbackData: PurchaseData = {
+              bundleId: completionResult.purchase.productBoxId || completionResult.purchase.bundleId,
+              bundleTitle:
+                completionResult.purchase.productTitle || completionResult.purchase.bundleTitle || "Your Purchase",
+              bundleDescription:
+                completionResult.purchase.productDescription || completionResult.purchase.bundleDescription || "",
+              contentCount: completionResult.purchase.items?.length || completionResult.purchase.contentCount || 0,
+              totalSize: completionResult.purchase.totalSize || 0,
+              items: completionResult.purchase.items || [],
+              creatorName: completionResult.purchase.creatorName || "Creator",
+              amount: completionResult.purchase.amount || 0,
+              currency: completionResult.purchase.currency || "usd",
+            }
+            setPurchaseData(fallbackData)
+            console.log("✅ [Purchase Success] Using fallback data:", fallbackData)
+          }
+        }
+      } catch (error) {
+        console.error("❌ [Purchase Success] Error:", error)
+        setError(error instanceof Error ? error.message : "Failed to complete purchase")
+      } finally {
+        setLoading(false)
       }
-
-      if (data.success && data.purchase) {
-        setPurchase(data.purchase)
-        console.log("✅ [Purchase Success] Access granted successfully:", data.purchase.bundleTitle)
-        console.log("✅ [Purchase Success] User ID in purchase:", data.purchase.buyerUid)
-      } else {
-        throw new Error("Invalid response from server")
-      }
-    } catch (err: any) {
-      console.error("❌ [Purchase Success] Error granting access:", err)
-      setError(err.message || "Failed to grant access")
-    } finally {
-      setLoading(false)
     }
-  }
+
+    completePurchase()
+  }, [sessionId, productBoxId, user])
 
   const formatFileSize = (bytes: number): string => {
     if (bytes === 0) return "0 B"
     const k = 1024
     const sizes = ["B", "KB", "MB", "GB"]
     const i = Math.floor(Math.log(bytes) / Math.log(k))
-    return Number.parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + " " + sizes[i]
+    return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + " " + sizes[i]
   }
 
-  // Loading state
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900 flex items-center justify-center p-4">
-        <Card className="w-full max-w-md bg-black/40 backdrop-blur-xl border-white/10">
+      <div className="min-h-screen bg-gradient-to-br from-green-50 to-blue-50 flex items-center justify-center p-4">
+        <Card className="w-full max-w-md">
           <CardContent className="p-8 text-center">
-            <div className="mb-6">
-              <Loader2 className="h-16 w-16 text-red-500 mx-auto animate-spin" />
-            </div>
-            <h1 className="text-2xl font-bold text-white mb-2">Verifying Purchase</h1>
-            <p className="text-white/70">Setting up your premium content access...</p>
-            {user && <p className="text-white/50 text-sm mt-2">User: {user.email}</p>}
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600 mx-auto mb-4"></div>
+            <h2 className="text-xl font-semibold mb-2">Processing Your Purchase</h2>
+            <p className="text-gray-600">Please wait while we set up your access...</p>
           </CardContent>
         </Card>
       </div>
     )
   }
 
-  // Error state
   if (error) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900 flex items-center justify-center p-4">
-        <Card className="w-full max-w-md bg-black/40 backdrop-blur-xl border-white/10">
+      <div className="min-h-screen bg-gradient-to-br from-red-50 to-orange-50 flex items-center justify-center p-4">
+        <Card className="w-full max-w-md">
           <CardContent className="p-8 text-center">
-            <div className="mb-6">
-              <AlertCircle className="h-16 w-16 text-red-500 mx-auto" />
+            <div className="text-red-600 mb-4">
+              <Package className="h-12 w-12 mx-auto" />
             </div>
-            <h1 className="text-2xl font-bold text-white mb-2">Access Grant Failed</h1>
-            <Alert className="bg-red-500/10 border-red-500/20 mb-6">
-              <AlertCircle className="h-4 w-4 text-red-400" />
-              <AlertDescription className="text-red-200">
-                <strong>Error:</strong> {error}
-              </AlertDescription>
-            </Alert>
-            <div className="space-y-3">
-              <Button onClick={grantAccess} className="w-full bg-red-600 hover:bg-red-700">
-                Try Again
-              </Button>
-              <Button
-                asChild
-                variant="outline"
-                className="w-full bg-transparent border-white/20 text-white hover:bg-white/10"
-              >
-                <Link href="/dashboard">Go to Dashboard</Link>
-              </Button>
-            </div>
-            {/* Debug info */}
-            <div className="mt-4 text-xs text-white/40">
-              <p>Bundle ID: {productBoxId}</p>
-              <p>User: {user?.uid || "Not authenticated"}</p>
-            </div>
+            <h2 className="text-xl font-semibold mb-2 text-red-800">Purchase Error</h2>
+            <p className="text-red-600 mb-4">{error}</p>
+            <Button asChild>
+              <Link href="/dashboard">Return to Dashboard</Link>
+            </Button>
           </CardContent>
         </Card>
       </div>
     )
   }
 
-  // Success state
-  if (purchase) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900 flex items-center justify-center p-4">
-        <Card className="w-full max-w-lg bg-black/40 backdrop-blur-xl border-white/10">
-          <CardContent className="p-8">
-            {/* Success Header */}
-            <div className="text-center mb-8">
-              <div className="mb-4">
-                <CheckCircle className="h-16 w-16 text-green-500 mx-auto" />
-              </div>
-              <h1 className="text-3xl font-bold text-white mb-2">Access Granted!</h1>
-              <p className="text-white/70">Your premium content is now available</p>
-              {user && <p className="text-white/50 text-sm mt-1">Welcome, {user.email}</p>}
-            </div>
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-green-50 to-blue-50 flex items-center justify-center p-4">
+      <Card className="w-full max-w-md">
+        <CardContent className="p-8 text-center">
+          {/* Success Icon */}
+          <div className="text-green-600 mb-6">
+            <CheckCircle className="h-16 w-16 mx-auto" />
+          </div>
 
-            {/* Purchase Details */}
-            <div className="bg-white/5 rounded-lg p-6 mb-6">
-              <div className="flex items-start space-x-4">
-                {/* Thumbnail */}
-                <div className="w-16 h-16 bg-gray-800 rounded-lg overflow-hidden flex-shrink-0">
-                  {purchase.thumbnailUrl ? (
-                    <img
-                      src={purchase.thumbnailUrl || "/placeholder.svg"}
-                      alt={purchase.bundleTitle}
-                      className="w-full h-full object-cover"
-                      onError={(e) => {
-                        const target = e.target as HTMLImageElement
-                        target.src = "/placeholder.svg?height=64&width=64&text=Bundle"
-                      }}
-                    />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center">
-                      <Package className="h-6 w-6 text-gray-500" />
-                    </div>
-                  )}
+          {/* Success Message */}
+          <h1 className="text-2xl font-bold text-gray-900 mb-2">Access Granted!</h1>
+          <p className="text-gray-600 mb-6">Your premium content is now available</p>
+
+          {/* User Info */}
+          <div className="text-sm text-gray-500 mb-6">Welcome, {user?.email || "valued customer"}</div>
+
+          {/* Purchase Details */}
+          {purchaseData && (
+            <div className="bg-white rounded-lg p-4 mb-6 border">
+              <div className="flex items-center space-x-3 mb-4">
+                <div className="w-12 h-12 bg-gray-200 rounded-lg flex items-center justify-center">
+                  <Package className="h-6 w-6 text-gray-600" />
                 </div>
-
-                {/* Bundle Info */}
-                <div className="flex-1">
-                  <h3 className="text-xl font-bold text-white mb-1">{purchase.bundleTitle}</h3>
-                  <p className="text-white/70 text-sm mb-2">{purchase.description}</p>
-                  <div className="flex items-center space-x-4 text-sm text-white/60">
-                    <span className="flex items-center">
-                      <User className="h-4 w-4 mr-1" />
-                      {purchase.creatorName}
-                    </span>
-                    <span>
-                      ${purchase.amount.toFixed(2)} {purchase.currency.toUpperCase()}
-                    </span>
-                  </div>
+                <div className="text-left">
+                  <h3 className="font-semibold text-gray-900">{purchaseData.bundleTitle}</h3>
+                  <p className="text-sm text-gray-600">by {purchaseData.creatorName}</p>
+                  <p className="text-sm font-medium text-green-600">
+                    ${purchaseData.amount.toFixed(2)} {purchaseData.currency.toUpperCase()}
+                  </p>
                 </div>
               </div>
 
               {/* Content Stats */}
-              <div className="grid grid-cols-3 gap-4 mt-4 pt-4 border-t border-white/10">
-                <div className="text-center">
-                  <div className="text-lg font-bold text-white">{purchase.contentCount}</div>
-                  <div className="text-sm text-white/60">Items</div>
+              <div className="grid grid-cols-3 gap-4 text-center py-4 border-t">
+                <div>
+                  <div className="text-2xl font-bold text-gray-900">{purchaseData.contentCount}</div>
+                  <div className="text-sm text-gray-600">Items</div>
                 </div>
-                <div className="text-center">
-                  <div className="text-lg font-bold text-white">{formatFileSize(purchase.totalSize)}</div>
-                  <div className="text-sm text-white/60">Total Size</div>
+                <div>
+                  <div className="text-2xl font-bold text-gray-900">{formatFileSize(purchaseData.totalSize)}</div>
+                  <div className="text-sm text-gray-600">Total Size</div>
                 </div>
-                <div className="text-center">
-                  <div className="text-lg font-bold text-green-400">∞</div>
-                  <div className="text-sm text-white/60">Lifetime</div>
+                <div>
+                  <div className="text-2xl font-bold text-gray-900">∞</div>
+                  <div className="text-sm text-gray-600">Lifetime</div>
                 </div>
               </div>
             </div>
+          )}
 
-            {/* Action Buttons */}
-            <div className="space-y-3">
-              <Button asChild className="w-full bg-red-600 hover:bg-red-700">
-                <Link href={`/product-box/${purchase.bundleId}/content`}>
-                  <Eye className="w-4 h-4 mr-2" />
-                  View Content
+          {/* Action Buttons */}
+          <div className="space-y-3">
+            <Button asChild className="w-full bg-red-600 hover:bg-red-700">
+              <Link href={`/product-box/${productBoxId}/content`}>
+                <Download className="h-4 w-4 mr-2" />
+                View Content
+              </Link>
+            </Button>
+
+            <div className="grid grid-cols-2 gap-3">
+              <Button variant="outline" asChild>
+                <Link href="/dashboard/purchases">
+                  <Package className="h-4 w-4 mr-2" />
+                  My Purchases
                 </Link>
               </Button>
-              <div className="grid grid-cols-2 gap-3">
-                <Button
-                  asChild
-                  variant="outline"
-                  className="bg-transparent border-white/20 text-white hover:bg-white/10"
-                >
-                  <Link href="/dashboard/purchases">
-                    <Package className="w-4 h-4 mr-2" />
-                    My Purchases
-                  </Link>
-                </Button>
-                <Button
-                  asChild
-                  variant="outline"
-                  className="bg-transparent border-white/20 text-white hover:bg-white/10"
-                >
-                  <Link href={`/creator/${purchase.creatorUsername}`}>
-                    <User className="w-4 h-4 mr-2" />
-                    Creator Profile
-                  </Link>
-                </Button>
-              </div>
+
+              <Button variant="outline" asChild>
+                <Link href={`/creator/${purchaseData?.creatorName || "creator"}`}>
+                  <User className="h-4 w-4 mr-2" />
+                  Creator Profile
+                </Link>
+              </Button>
             </div>
-
-            {/* Debug info for development */}
-            {process.env.NODE_ENV === "development" && (
-              <div className="mt-4 p-3 bg-white/5 rounded text-xs text-white/40">
-                <p>Purchase ID: {purchase.id}</p>
-                <p>Bundle ID: {purchase.bundleId}</p>
-                <p>User ID: {user?.uid || "anonymous"}</p>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-    )
-  }
-
-  return null
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  )
 }
