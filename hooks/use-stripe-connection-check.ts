@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { useFirebaseAuth } from "./use-firebase-auth"
+import { useAuth } from "@/contexts/auth-context"
 
 interface StripeConnectionStatus {
   isConnected: boolean
@@ -10,21 +10,27 @@ interface StripeConnectionStatus {
 }
 
 export function useStripeConnectionCheck(): StripeConnectionStatus {
-  const [isConnected, setIsConnected] = useState(false)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const { user } = useFirebaseAuth()
+  const [status, setStatus] = useState<StripeConnectionStatus>({
+    isConnected: false,
+    loading: true,
+    error: null,
+  })
+
+  const { user } = useAuth()
 
   useEffect(() => {
     if (!user) {
-      setLoading(false)
+      setStatus({
+        isConnected: false,
+        loading: false,
+        error: null,
+      })
       return
     }
 
     const checkStripeConnection = async () => {
       try {
-        setLoading(true)
-        setError(null)
+        setStatus((prev) => ({ ...prev, loading: true, error: null }))
 
         const response = await fetch("/api/stripe/connection-status", {
           method: "GET",
@@ -34,22 +40,28 @@ export function useStripeConnectionCheck(): StripeConnectionStatus {
         })
 
         if (!response.ok) {
-          throw new Error("Failed to check Stripe connection")
+          throw new Error("Failed to check Stripe connection status")
         }
 
         const data = await response.json()
-        setIsConnected(data.connected || false)
-      } catch (err) {
-        console.error("Error checking Stripe connection:", err)
-        setError(err instanceof Error ? err.message : "Unknown error")
-        setIsConnected(false)
-      } finally {
-        setLoading(false)
+
+        setStatus({
+          isConnected: data.connected || false,
+          loading: false,
+          error: null,
+        })
+      } catch (error) {
+        console.error("Error checking Stripe connection:", error)
+        setStatus({
+          isConnected: false,
+          loading: false,
+          error: error instanceof Error ? error.message : "Unknown error",
+        })
       }
     }
 
     checkStripeConnection()
   }, [user])
 
-  return { isConnected, loading, error }
+  return status
 }
