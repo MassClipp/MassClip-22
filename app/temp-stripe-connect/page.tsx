@@ -3,20 +3,10 @@
 import { useState, useEffect } from "react"
 import { useAuth } from "@/contexts/auth-context"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardHeader } from "@/components/ui/card"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import {
-  Loader2,
-  CheckCircle,
-  XCircle,
-  AlertCircle,
-  ExternalLink,
-  CreditCard,
-  Terminal,
-  Copy,
-  Users,
-} from "lucide-react"
+import { Loader2, CheckCircle, XCircle, AlertCircle, ExternalLink, Terminal, Copy, Users } from "lucide-react"
 import { useToast } from "@/components/ui/use-toast"
 import ManualStripeConnect from "@/components/manual-stripe-connect"
 
@@ -215,10 +205,7 @@ export default function TempStripeConnectPage() {
       <div className="flex items-center justify-center min-h-[400px]">
         <Card className="bg-zinc-900/60 border-zinc-800/50 max-w-md">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <AlertCircle className="h-5 w-5 text-yellow-500" />
-              Authentication Required
-            </CardTitle>
+            <h2 className="text-2xl font-bold">Authentication Required</h2>
           </CardHeader>
           <CardContent>
             <p className="text-zinc-400 mb-4">You need to be logged in to connect your Stripe account.</p>
@@ -243,11 +230,38 @@ export default function TempStripeConnectPage() {
   }
 
   return (
-    <div className="space-y-6 max-w-4xl mx-auto p-6">
-      <div>
-        <h1 className="text-3xl font-bold">MassClip Stripe Connect Setup</h1>
-        <p className="text-zinc-400 mt-1">Connect your account to the MassClip platform to receive payments</p>
-      </div>
+    <main className="container mx-auto my-8 space-y-8">
+      {/* Automatic flow is still available */}
+      <section>
+        <Card>
+          <CardHeader>
+            <h2 className="text-2xl font-bold">Automatic Stripe On-boarding</h2>
+          </CardHeader>
+          <CardContent>
+            <p className="mb-4">
+              Prefer the standard Stripe Express flow? Click below to create a brand-new test account on Stripe.
+            </p>
+            <Button onClick={createConnectedAccount} disabled={loading} size="lg" className="w-full">
+              {loading ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Creating Connected Account...
+                </>
+              ) : (
+                <>
+                  <Users className="h-4 w-4 mr-2" />
+                  Connect to MassClip Platform
+                </>
+              )}
+            </Button>
+          </CardContent>
+        </Card>
+      </section>
+
+      {/* NEW manual connect option */}
+      <section className="flex flex-col items-center">
+        <ManualStripeConnect />
+      </section>
 
       {/* Platform Info */}
       <Alert className="border-blue-600 bg-blue-600/10">
@@ -278,11 +292,8 @@ export default function TempStripeConnectPage() {
           {/* Connection Status */}
           <Card className="bg-zinc-900/60 border-zinc-800/50">
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <CreditCard className="h-5 w-5" />
-                Automatic Connection
-              </CardTitle>
-              <CardDescription>Create a new Stripe Express account through guided onboarding</CardDescription>
+              <h2 className="text-2xl font-bold">Automatic Connection</h2>
+              <p className="text-zinc-400 mt-1">Create a new Stripe Express account through guided onboarding</p>
             </CardHeader>
             <CardContent className="space-y-4">
               {!accountStatus?.connected ? (
@@ -304,20 +315,6 @@ export default function TempStripeConnectPage() {
                       <li>• Start receiving payments from your content sales</li>
                     </ul>
                   </div>
-
-                  <Button onClick={createConnectedAccount} disabled={loading} size="lg" className="w-full">
-                    {loading ? (
-                      <>
-                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                        Creating Connected Account...
-                      </>
-                    ) : (
-                      <>
-                        <Users className="h-4 w-4 mr-2" />
-                        Connect to MassClip Platform
-                      </>
-                    )}
-                  </Button>
                 </div>
               ) : (
                 <div className="space-y-4">
@@ -421,7 +418,7 @@ export default function TempStripeConnectPage() {
         </TabsContent>
 
         <TabsContent value="manual" className="space-y-4">
-          <ManualStripeConnect />
+          {/* Manual Stripe Connect Component */}
         </TabsContent>
       </Tabs>
 
@@ -429,7 +426,7 @@ export default function TempStripeConnectPage() {
       {accountStatus?.accountId && (
         <Card className="bg-zinc-900/60 border-zinc-800/50">
           <CardHeader>
-            <CardTitle className="text-sm">Account Details</CardTitle>
+            <h2 className="text-2xl font-bold">Account Details</h2>
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
@@ -467,12 +464,12 @@ export default function TempStripeConnectPage() {
       {debugInfo && (
         <Card className="bg-zinc-900/60 border-zinc-800/50">
           <CardHeader>
-            <CardTitle className="text-sm flex items-center justify-between">
+            <h2 className="text-2xl font-bold flex items-center justify-between">
               Debug Information
               <Button variant="ghost" size="sm" onClick={copyDebugInfo}>
                 <Copy className="h-4 w-4" />
               </Button>
-            </CardTitle>
+            </h2>
           </CardHeader>
           <CardContent>
             <pre className="text-xs bg-zinc-800 p-3 rounded overflow-auto max-h-40">
@@ -491,6 +488,6 @@ export default function TempStripeConnectPage() {
           Regular Connect Page
         </Button>
       </div>
-    </div>
+    </main>
   )
 }

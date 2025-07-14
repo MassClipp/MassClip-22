@@ -1,99 +1,41 @@
-import { type NextRequest, NextResponse } from "next/server"
+import { NextResponse, type NextRequest } from "next/server"
 import { stripe, isTestMode } from "@/lib/stripe"
 
-export async function POST(request: NextRequest) {
+export async function POST(req: NextRequest) {
+  const { accountId } = await req.json()
+
+  if (typeof accountId !== "string" || !accountId.startsWith("acct_")) {
+    return NextResponse.json({ success: false, error: "Account-ID must start with “acct_…”" }, { status: 400 })
+  }
+
   try {
-    const { accountId } = await request.json()
+    const account = await stripe.accounts.retrieve(accountId)
 
-    if (!accountId) {
-      return NextResponse.json({ error: "Account ID is required" }, { status: 400 })
-    }
+    const wrongEnv = (isTestMode && account.livemode) || (!isTestMode && !account.livemode)
 
-    // Validate account ID format
-    if (!accountId.startsWith("acct_")) {
-      return NextResponse.json({
-        valid: false,
-        error: "Invalid account ID format. Must start with 'acct_'",
-      })
-    }
-
-    console.log(`🔍 [Account Validation] Checking account: ${accountId}`)
-
-    try {
-      // Try to retrieve the account
-      const account = await stripe.accounts.retrieve(accountId)
-
-      // Check if account is in the correct mode
-      const accountIsTest = accountId.includes("_test_") || account.livemode === false
-      const modeMatch = isTestMode === accountIsTest
-
-      if (!modeMatch) {
-        return NextResponse.json({
-          valid: false,
-          error: `Account is in ${accountIsTest ? "test" : "live"} mode, but system is in ${isTestMode ? "test" : "live"} mode`,
-          accountInfo: {
-            id: account.id,
-            type: account.type,
-            country: account.country,
-            livemode: account.livemode,
-          },
-        })
-      }
-
-      console.log(`✅ [Account Validation] Account is valid:`, {
-        id: account.id,
-        type: account.type,
-        charges_enabled: account.charges_enabled,
-        payouts_enabled: account.payouts_enabled,
-      })
-
-      return NextResponse.json({
-        valid: true,
-        accountInfo: {
-          id: account.id,
-          type: account.type,
-          country: account.country,
-          email: account.email,
-          chargesEnabled: account.charges_enabled,
-          payoutsEnabled: account.payouts_enabled,
-          detailsSubmitted: account.details_submitted,
-          livemode: account.livemode,
-          requirementsCount:
-            (account.requirements?.currently_due?.length || 0) + (account.requirements?.past_due?.length || 0),
+    if (wrongEnv) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: `This account was created in ${account.livemode ? "LIVE" : "TEST"} mode and can’t be used here.`,
         },
-      })
-    } catch (stripeError: any) {
-      console.error("❌ [Account Validation] Stripe error:", stripeError)
-
-      if (stripeError.code === "resource_missing") {
-        return NextResponse.json({
-          valid: false,
-          error: "Account not found. Please check the account ID.",
-        })
-      }
-
-      if (stripeError.code === "permission_denied") {
-        return NextResponse.json({
-          valid: false,
-          error: "Cannot access this account. Make sure it's accessible from your platform.",
-        })
-      }
-
-      return NextResponse.json({
-        valid: false,
-        error: "Failed to validate account",
-        details: stripeError.message,
-      })
+        { status: 400 },
+      )
     }
-  } catch (error: any) {
-    console.error("❌ [Account Validation] Unexpected error:", error)
-    return NextResponse.json(
-      {
-        valid: false,
-        error: "Validation failed",
-        details: error.message,
+
+    return NextResponse.json({
+      success: true,
+      account: {
+        id: account.id,
+        email: account.email,
+        country: account.country,
+        type: account.type,
+        chargesEnabled: account.charges_enabled,
+        payoutsEnabled: account.payouts_enabled,
+        livemode: account.livemode,
       },
-      { status: 500 },
-    )
+    })
+  } catch (err: any) {
+    return NextResponse.json({ success: false, error: err.message }, { status: 400 })
   }
 }

@@ -2,16 +2,17 @@ import { type NextRequest, NextResponse } from "next/server"
 import { stripe, isTestMode } from "@/lib/stripe"
 import { db, auth } from "@/lib/firebase-admin"
 
+interface Body {
+  accountId: string
+  idToken: string
+}
+
 export async function POST(request: NextRequest) {
   try {
-    const { idToken, accountId } = await request.json()
+    const { idToken, accountId } = (await request.json()) as Body
 
-    if (!idToken) {
-      return NextResponse.json({ error: "ID token is required" }, { status: 400 })
-    }
-
-    if (!accountId) {
-      return NextResponse.json({ error: "Account ID is required" }, { status: 400 })
+    if (!accountId || !idToken) {
+      return NextResponse.json({ error: "accountId and idToken required" }, { status: 400 })
     }
 
     // Validate account ID format
@@ -70,22 +71,10 @@ export async function POST(request: NextRequest) {
 
     // Check if account is in the correct mode (test vs live)
     const accountIsTest = accountId.includes("_test_") || account.livemode === false
-    if (isTestMode && !accountIsTest) {
-      return NextResponse.json(
-        {
-          error: "Cannot connect live account in test mode. Please use a test account ID.",
-        },
-        { status: 400 },
-      )
-    }
+    const wrongEnv = (isTestMode && account.livemode) || (!isTestMode && !account.livemode)
 
-    if (!isTestMode && accountIsTest) {
-      return NextResponse.json(
-        {
-          error: "Cannot connect test account in live mode. Please use a live account ID.",
-        },
-        { status: 400 },
-      )
+    if (wrongEnv) {
+      return NextResponse.json({ error: "Account livemode flag doesn’t match current environment" }, { status: 400 })
     }
 
     // Check if account is already connected to another user
@@ -115,21 +104,11 @@ export async function POST(request: NextRequest) {
     const userData = userDoc.data()!
 
     // Update user document with the connected account
-    const updateData = isTestMode
-      ? {
-          stripeTestAccountId: accountId,
-          stripeTestAccountConnected: new Date(),
-          stripeTestAccountManuallyConnected: true,
-          // Also set as primary account ID in test mode
-          stripeAccountId: accountId,
-        }
-      : {
-          stripeAccountId: accountId,
-          stripeAccountConnected: new Date(),
-          stripeAccountManuallyConnected: true,
-        }
-
-    await db.collection("users").doc(userId).update(updateData)
+    const field = isTestMode ? "stripeTestAccountId" : "stripeAccountId"
+    await db
+      .collection("users")
+      .doc(userId)
+      .set({ [field]: account.id }, { merge: true })
 
     console.log(`✅ [Manual Connect] Successfully connected account ${accountId} to user ${userId}`)
 
