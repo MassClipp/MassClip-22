@@ -6,7 +6,7 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { CheckCircle, Download, User, Package } from "lucide-react"
 import Link from "next/link"
-import { useAuth } from "@/hooks/use-firebase-auth"
+import { useAuth } from "@/contexts/auth-context"
 
 interface PurchaseData {
   bundleId: string
