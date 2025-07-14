@@ -35,21 +35,30 @@ export async function callStripeWithAccount<T>(
 }
 
 /**
- * Validate that an account exists and is accessible
+ * Retrieve a checkout session with connected account context
  */
-export async function validateConnectedAccount(accountId: string): Promise<boolean> {
-  try {
-    await stripe.accounts.retrieve(accountId)
-    return true
-  } catch (error) {
-    console.error(`❌ [Stripe] Invalid connected account: ${accountId}`, error)
-    return false
+export async function retrieveSessionWithAccount(sessionId: string, accountId?: string) {
+  if (accountId) {
+    console.log(`🔍 [Stripe] Retrieving session ${sessionId} with account ${accountId}`)
+    return await callStripeWithAccount(accountId, (stripe) => stripe.checkout.sessions.retrieve(sessionId))
+  } else {
+    console.log(`🔍 [Stripe] Retrieving session ${sessionId} from platform account`)
+    return await stripe.checkout.sessions.retrieve(sessionId)
   }
 }
 
 /**
- * Get application fee amount (25% platform fee)
+ * Create a checkout session with connected account context
  */
-export function calculateApplicationFee(amount: number): number {
-  return Math.round(amount * 0.25) // 25% platform fee
+export async function createCheckoutSessionWithAccount(
+  params: Stripe.Checkout.SessionCreateParams,
+  accountId?: string,
+) {
+  if (accountId) {
+    console.log(`💳 [Stripe] Creating checkout session with account ${accountId}`)
+    return await callStripeWithAccount(accountId, (stripe) => stripe.checkout.sessions.create(params))
+  } else {
+    console.log(`💳 [Stripe] Creating checkout session on platform account`)
+    return await stripe.checkout.sessions.create(params)
+  }
 }

@@ -1,34 +1,31 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { stripe, isTestMode, calculateApplicationFee, validateConnectedAccount } from "@/lib/stripe"
+import { stripe, isTestMode, createCheckoutSessionWithAccount } from "@/lib/stripe"
 import { db, auth } from "@/lib/firebase-admin"
 
 export async function POST(request: NextRequest) {
   try {
-    const { productBoxId, idToken, successUrl, cancelUrl } = await request.json()
+    const { idToken, productBoxId, priceInCents, returnUrl } = await request.json()
 
-    if (!productBoxId || !idToken) {
-      return NextResponse.json({ error: "Missing required fields" }, { status: 400 })
+    if (!idToken) {
+      return NextResponse.json({ error: "Authentication required" }, { status: 401 })
     }
 
-    // Verify the Firebase ID token
+    // Verify Firebase token
     let decodedToken
     try {
       decodedToken = await auth.verifyIdToken(idToken)
-      console.log(`✅ [Checkout] Token verified for user: ${decodedToken.uid}`)
-    } catch (tokenError) {
-      console.error("❌ [Checkout] Token verification failed:", tokenError)
-      return NextResponse.json({ error: "Invalid or expired token" }, { status: 401 })
+    } catch (error) {
+      console.error("❌ [Checkout] Token verification failed:", error)
+      return NextResponse.json({ error: "Invalid authentication token" }, { status: 401 })
     }
 
     const userId = decodedToken.uid
-    console.log(
-      `🛒 [Checkout] Creating session for product box: ${productBoxId} (${isTestMode ? "TEST" : "LIVE"} mode)`,
-    )
+    console.log(`💳 [Checkout] Creating session for user: ${userId} (${isTestMode ? "TEST" : "LIVE"} mode)`)
 
     // Get product box details
     const productBoxDoc = await db.collection("productBoxes").doc(productBoxId).get()
     if (!productBoxDoc.exists) {
-      return NextResponse.json({ error: "Product box not found" }, { status: 404 })
+      return NextResponse.json({ error: "Product not found" }, { status: 404 })
     }
 
     const productBox = productBoxDoc.data()!
@@ -44,85 +41,75 @@ export async function POST(request: NextRequest) {
     const connectedAccountId = isTestMode ? creatorData.stripeTestAccountId : creatorData.stripeAccountId
 
     if (!connectedAccountId) {
-      return NextResponse.json({ error: "Creator has not connected their Stripe account" }, { status: 400 })
+      console.error(`❌ [Checkout] Creator ${creatorId} has no connected Stripe account`)
+      return NextResponse.json({ error: "Creator payment setup incomplete" }, { status: 400 })
     }
 
-    // Validate connected account
-    const isValidAccount = await validateConnectedAccount(connectedAccountId)
-    if (!isValidAccount) {
-      return NextResponse.json({ error: "Creator's Stripe account is invalid" }, { status: 400 })
+    // Verify connected account is active
+    try {
+      const account = await stripe.accounts.retrieve(connectedAccountId)
+      if (!account.charges_enabled) {
+        return NextResponse.json({ error: "Creator account not ready to accept payments" }, { status: 400 })
+      }
+    } catch (error) {
+      console.error(`❌ [Checkout] Connected account ${connectedAccountId} verification failed:`, error)
+      return NextResponse.json({ error: "Creator payment setup invalid" }, { status: 400 })
     }
 
-    console.log(`✅ [Checkout] Using connected account: ${connectedAccountId}`)
+    // Calculate application fee (25% platform fee)
+    const applicationFeeAmount = Math.round(priceInCents * 0.25)
 
-    // Calculate amounts
-    const priceInCents = Math.round(productBox.price * 100)
-    const applicationFee = calculateApplicationFee(priceInCents)
-
-    console.log(`💰 [Checkout] Price: $${productBox.price}, Application Fee: $${applicationFee / 100}`)
+    console.log(`💰 [Checkout] Price: $${priceInCents / 100}, Platform fee: $${applicationFeeAmount / 100}`)
 
     // Create checkout session with connected account
-    const session = await stripe.checkout.sessions.create(
-      {
-        payment_method_types: ["card"],
-        line_items: [
-          {
-            price_data: {
-              currency: "usd",
-              product_data: {
-                name: productBox.title,
-                description: productBox.description || `Premium content bundle from ${creatorData.username}`,
-                images: productBox.thumbnailUrl ? [productBox.thumbnailUrl] : [],
-                metadata: {
-                  productBoxId,
-                  creatorId,
-                  environment: isTestMode ? "test" : "live",
-                },
-              },
-              unit_amount: priceInCents,
+    const sessionParams: any = {
+      payment_method_types: ["card"],
+      line_items: [
+        {
+          price_data: {
+            currency: "usd",
+            product_data: {
+              name: productBox.title || "Premium Content Bundle",
+              description: productBox.description || "Access to premium content",
             },
-            quantity: 1,
+            unit_amount: priceInCents,
           },
-        ],
-        mode: "payment",
-        success_url:
-          successUrl || `${process.env.NEXT_PUBLIC_SITE_URL}/purchase-success?session_id={CHECKOUT_SESSION_ID}`,
-        cancel_url: cancelUrl || `${process.env.NEXT_PUBLIC_SITE_URL}/product-box/${productBoxId}`,
-        customer_email: decodedToken.email,
-        payment_intent_data: {
-          application_fee_amount: applicationFee,
-          metadata: {
-            productBoxId,
-            creatorId,
-            buyerId: userId,
-            environment: isTestMode ? "test" : "live",
-            connectedAccountId,
-          },
+          quantity: 1,
         },
+      ],
+      mode: "payment",
+      success_url: returnUrl || `${process.env.NEXT_PUBLIC_SITE_URL}/purchase-success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${process.env.NEXT_PUBLIC_SITE_URL}/product-box/${productBoxId}`,
+      metadata: {
+        userId,
+        productBoxId,
+        creatorId,
+        connectedAccountId,
+        environment: isTestMode ? "test" : "live",
+      },
+      payment_intent_data: {
+        application_fee_amount: applicationFeeAmount,
         metadata: {
+          userId,
           productBoxId,
           creatorId,
-          buyerId: userId,
-          environment: isTestMode ? "test" : "live",
           connectedAccountId,
         },
       },
-      {
-        stripeAccount: connectedAccountId,
-      },
-    )
+    }
+
+    const session = await createCheckoutSessionWithAccount(sessionParams, connectedAccountId)
 
     console.log(`✅ [Checkout] Created session: ${session.id} for connected account: ${connectedAccountId}`)
 
     return NextResponse.json({
-      success: true,
       sessionId: session.id,
       url: session.url,
       connectedAccountId,
       mode: isTestMode ? "test" : "live",
     })
   } catch (error: any) {
-    console.error("❌ [Checkout] Session creation error:", error)
+    console.error("❌ [Checkout] Session creation failed:", error)
     return NextResponse.json(
       {
         error: "Failed to create checkout session",

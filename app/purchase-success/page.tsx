@@ -3,24 +3,20 @@
 import { useEffect, useState } from "react"
 import { useSearchParams } from "next/navigation"
 import { useAuth } from "@/contexts/auth-context"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Badge } from "@/components/ui/badge"
-import { CheckCircle, AlertCircle, Copy, Package, CreditCard } from "lucide-react"
+import { CheckCircle, Loader2, AlertCircle, ExternalLink, Copy } from "lucide-react"
 import { useToast } from "@/components/ui/use-toast"
 
 interface PurchaseDetails {
-  success: boolean
-  purchaseId?: string
-  productBoxId?: string
-  creatorId?: string
-  buyerId?: string
-  amount?: number
-  environment?: string
+  sessionId: string
+  productBoxId: string
+  userId?: string
+  amount: number
+  currency: string
   connectedAccountId?: string
-  alreadyProcessed?: boolean
-  error?: string
+  mode: string
 }
 
 export default function PurchaseSuccessPage() {
@@ -28,8 +24,8 @@ export default function PurchaseSuccessPage() {
   const { user } = useAuth()
   const { toast } = useToast()
   const [loading, setLoading] = useState(true)
-  const [purchaseDetails, setPurchaseDetails] = useState<PurchaseDetails | null>(null)
-  const [debugInfo, setDebugInfo] = useState<any>(null)
+  const [purchase, setPurchase] = useState<PurchaseDetails | null>(null)
+  const [error, setError] = useState<string | null>(null)
 
   const sessionId = searchParams.get("session_id")
 
@@ -37,8 +33,8 @@ export default function PurchaseSuccessPage() {
     if (sessionId) {
       verifyPurchase()
     } else {
+      setError("No session ID provided")
       setLoading(false)
-      setPurchaseDetails({ success: false, error: "No session ID provided" })
     }
   }, [sessionId, user])
 
@@ -49,9 +45,17 @@ export default function PurchaseSuccessPage() {
     try {
       console.log("🔍 Verifying purchase for session:", sessionId)
 
-      let idToken = null
+      const requestBody: any = { sessionId }
+
+      // Include ID token if user is authenticated
       if (user) {
-        idToken = await user.getIdToken()
+        try {
+          const idToken = await user.getIdToken()
+          requestBody.idToken = idToken
+          console.log("✅ Added user token to verification request")
+        } catch (tokenError) {
+          console.warn("⚠️ Failed to get user token, proceeding without:", tokenError)
+        }
       }
 
       const response = await fetch("/api/purchase/verify-session", {
@@ -59,36 +63,25 @@ export default function PurchaseSuccessPage() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          sessionId,
-          idToken,
-        }),
+        body: JSON.stringify(requestBody),
       })
 
       const data = await response.json()
-      console.log("📊 Purchase verification response:", data)
-
-      setDebugInfo(data)
-      setPurchaseDetails(data)
 
       if (data.success) {
+        setPurchase(data.purchase)
+        console.log("✅ Purchase verified:", data.purchase)
         toast({
-          title: "Purchase Verified!",
-          description: data.alreadyProcessed
-            ? "Your purchase was already processed"
-            : "Your purchase has been successfully verified and access granted",
+          title: "Purchase Successful!",
+          description: "Your payment has been processed and access has been granted.",
         })
       } else {
-        toast({
-          title: "Verification Failed",
-          description: data.error || "Failed to verify your purchase",
-          variant: "destructive",
-        })
+        setError(data.error || "Failed to verify purchase")
+        console.error("❌ Purchase verification failed:", data)
       }
     } catch (error: any) {
       console.error("❌ Error verifying purchase:", error)
-      setPurchaseDetails({ success: false, error: error.message })
-      setDebugInfo({ error: error.message })
+      setError("Failed to verify purchase")
     } finally {
       setLoading(false)
     }
@@ -104,175 +97,211 @@ export default function PurchaseSuccessPage() {
     }
   }
 
-  const copyDebugInfo = () => {
-    navigator.clipboard.writeText(JSON.stringify(debugInfo, null, 2))
-    toast({
-      title: "Copied",
-      description: "Debug info copied to clipboard",
-    })
+  const formatAmount = (amount: number, currency: string) => {
+    return new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: currency.toUpperCase(),
+    }).format(amount / 100)
   }
 
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
           <p className="text-zinc-400">Verifying your purchase...</p>
         </div>
       </div>
     )
   }
 
-  return (
-    <div className="max-w-2xl mx-auto p-6 space-y-6">
-      <div className="text-center">
-        <h1 className="text-3xl font-bold mb-2">Purchase Complete</h1>
-        <p className="text-zinc-400">Thank you for your purchase!</p>
-      </div>
-
-      {/* Purchase Status */}
-      <Card className="bg-zinc-900/60 border-zinc-800/50">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            {purchaseDetails?.success ? (
-              <CheckCircle className="h-5 w-5 text-green-500" />
-            ) : (
-              <AlertCircle className="h-5 w-5 text-red-500" />
-            )}
-            Purchase Status
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {purchaseDetails?.success ? (
-            <div className="space-y-4">
-              <Alert className="border-green-600 bg-green-600/10">
-                <CheckCircle className="h-4 w-4" />
-                <AlertDescription>
-                  <strong>Success!</strong> Your purchase has been verified and access has been granted.
-                  {purchaseDetails.alreadyProcessed && " (This purchase was already processed)"}
-                </AlertDescription>
-              </Alert>
-
-              {/* Purchase Details Grid */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {purchaseDetails.amount && (
-                  <div className="bg-zinc-800/50 p-3 rounded-lg">
-                    <div className="text-xs text-zinc-400">Amount Paid</div>
-                    <div className="text-lg font-semibold">${purchaseDetails.amount.toFixed(2)}</div>
-                  </div>
-                )}
-
-                {purchaseDetails.environment && (
-                  <div className="bg-zinc-800/50 p-3 rounded-lg">
-                    <div className="text-xs text-zinc-400">Environment</div>
-                    <div className="text-sm">
-                      <Badge variant={purchaseDetails.environment === "test" ? "secondary" : "default"}>
-                        {purchaseDetails.environment === "test" ? "Test Mode" : "Live Mode"}
-                      </Badge>
-                    </div>
-                  </div>
-                )}
-
-                {purchaseDetails.purchaseId && (
-                  <div className="bg-zinc-800/50 p-3 rounded-lg">
-                    <div className="text-xs text-zinc-400">Purchase ID</div>
-                    <div className="font-mono text-sm">{purchaseDetails.purchaseId}</div>
-                  </div>
-                )}
-
-                {purchaseDetails.connectedAccountId && (
-                  <div className="bg-zinc-800/50 p-3 rounded-lg">
-                    <div className="text-xs text-zinc-400">Connected Account</div>
-                    <div className="font-mono text-sm">{purchaseDetails.connectedAccountId}</div>
-                  </div>
-                )}
-              </div>
-
-              {/* Action Buttons */}
-              <div className="flex gap-2">
-                {purchaseDetails.productBoxId && (
-                  <Button
-                    onClick={() => (window.location.href = `/product-box/${purchaseDetails.productBoxId}/content`)}
-                  >
-                    <Package className="h-4 w-4 mr-2" />
-                    Access Content
-                  </Button>
-                )}
-                <Button variant="outline" onClick={() => (window.location.href = "/dashboard/purchases")}>
-                  View All Purchases
-                </Button>
-              </div>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              <Alert className="border-red-600 bg-red-600/10">
-                <AlertCircle className="h-4 w-4" />
-                <AlertDescription>
-                  <strong>Verification Failed:</strong> {purchaseDetails?.error || "Unknown error occurred"}
-                </AlertDescription>
-              </Alert>
-
-              <div className="flex gap-2">
-                <Button onClick={verifyPurchase} variant="outline">
-                  Retry Verification
-                </Button>
-                <Button variant="outline" onClick={() => (window.location.href = "/dashboard")}>
-                  Go to Dashboard
-                </Button>
-              </div>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Session Details */}
-      {sessionId && (
-        <Card className="bg-zinc-900/60 border-zinc-800/50">
+  if (error) {
+    return (
+      <div className="max-w-2xl mx-auto p-6">
+        <Card className="bg-zinc-900/60 border-red-800/50">
           <CardHeader>
-            <CardTitle className="text-sm flex items-center gap-2">
-              <CreditCard className="h-4 w-4" />
-              Session Details
+            <CardTitle className="flex items-center gap-2 text-red-400">
+              <AlertCircle className="h-5 w-5" />
+              Purchase Verification Failed
             </CardTitle>
           </CardHeader>
           <CardContent>
+            <Alert className="border-red-600 bg-red-600/10 mb-4">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+
+            {sessionId && (
+              <div className="space-y-4">
+                <div>
+                  <div className="text-sm text-zinc-400">Session ID</div>
+                  <div className="font-mono text-sm flex items-center gap-2">
+                    {sessionId}
+                    <Button variant="ghost" size="sm" onClick={copySessionId}>
+                      <Copy className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="flex gap-2">
+                  <Button onClick={verifyPurchase} variant="outline">
+                    Retry Verification
+                  </Button>
+                  <Button onClick={() => (window.location.href = "/dashboard")} variant="outline">
+                    Go to Dashboard
+                  </Button>
+                </div>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  if (!purchase) {
+    return (
+      <div className="max-w-2xl mx-auto p-6">
+        <Card className="bg-zinc-900/60 border-zinc-800/50">
+          <CardHeader>
+            <CardTitle>No Purchase Found</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-zinc-400">Unable to find purchase details.</p>
+            <Button onClick={() => (window.location.href = "/dashboard")} className="mt-4">
+              Go to Dashboard
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  return (
+    <div className="max-w-2xl mx-auto p-6 space-y-6">
+      {/* Success Header */}
+      <Card className="bg-zinc-900/60 border-green-800/50">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-green-400">
+            <CheckCircle className="h-6 w-6" />
+            Purchase Successful!
+          </CardTitle>
+          <CardDescription>Your payment has been processed and access has been granted.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Alert className="border-green-600 bg-green-600/10">
+            <CheckCircle className="h-4 w-4" />
+            <AlertDescription>
+              <strong>Payment Complete:</strong> You now have access to your purchased content. Check your dashboard to
+              view your new content.
+            </AlertDescription>
+          </Alert>
+        </CardContent>
+      </Card>
+
+      {/* Purchase Details */}
+      <Card className="bg-zinc-900/60 border-zinc-800/50">
+        <CardHeader>
+          <CardTitle className="text-lg">Purchase Details</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <div className="text-sm text-zinc-400">Amount Paid</div>
+              <div className="text-xl font-semibold">{formatAmount(purchase.amount, purchase.currency)}</div>
+            </div>
+
+            <div>
+              <div className="text-sm text-zinc-400">Payment Mode</div>
+              <div className="text-sm">
+                <span
+                  className={`inline-flex items-center px-2 py-1 rounded-full text-xs ${
+                    purchase.mode === "test" ? "bg-blue-600/20 text-blue-400" : "bg-green-600/20 text-green-400"
+                  }`}
+                >
+                  {purchase.mode === "test" ? "Test Mode" : "Live Mode"}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          <div className="space-y-3">
             <div className="flex items-center justify-between">
               <div>
-                <div className="text-xs text-zinc-400">Checkout Session ID</div>
-                <div className="font-mono text-sm">{sessionId}</div>
+                <div className="text-sm text-zinc-400">Session ID</div>
+                <div className="font-mono text-sm">{purchase.sessionId}</div>
               </div>
               <Button variant="ghost" size="sm" onClick={copySessionId}>
                 <Copy className="h-4 w-4" />
               </Button>
             </div>
-          </CardContent>
-        </Card>
-      )}
 
-      {/* Debug Information */}
-      {debugInfo && (
-        <Card className="bg-zinc-900/60 border-zinc-800/50">
-          <CardHeader>
-            <CardTitle className="text-sm flex items-center justify-between">
-              Debug Information
-              <Button variant="ghost" size="sm" onClick={copyDebugInfo}>
-                <Copy className="h-4 w-4" />
-              </Button>
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <pre className="text-xs bg-zinc-800 p-3 rounded overflow-auto max-h-40">
-              {JSON.stringify(debugInfo, null, 2)}
-            </pre>
-          </CardContent>
-        </Card>
-      )}
+            {purchase.connectedAccountId && (
+              <div>
+                <div className="text-sm text-zinc-400">Connected Account</div>
+                <div className="font-mono text-sm">{purchase.connectedAccountId}</div>
+              </div>
+            )}
 
-      {/* Navigation */}
-      <div className="text-center">
-        <Button variant="outline" onClick={() => (window.location.href = "/dashboard")}>
-          Return to Dashboard
-        </Button>
-      </div>
+            <div>
+              <div className="text-sm text-zinc-400">Product Box ID</div>
+              <div className="font-mono text-sm">{purchase.productBoxId}</div>
+            </div>
+
+            {purchase.userId && (
+              <div>
+                <div className="text-sm text-zinc-400">User ID</div>
+                <div className="font-mono text-sm">{purchase.userId}</div>
+              </div>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Next Steps */}
+      <Card className="bg-zinc-900/60 border-zinc-800/50">
+        <CardHeader>
+          <CardTitle className="text-lg">What's Next?</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-2">
+            <p className="text-sm text-zinc-400">
+              Your purchase has been completed successfully. Here's what you can do:
+            </p>
+            <ul className="text-sm text-zinc-400 space-y-1 ml-4">
+              <li>• Access your purchased content from your dashboard</li>
+              <li>• Download any available files</li>
+              <li>• View your purchase history</li>
+              <li>• Contact support if you have any issues</li>
+            </ul>
+          </div>
+
+          <div className="flex gap-2">
+            <Button onClick={() => (window.location.href = "/dashboard/purchases")} className="flex-1">
+              <ExternalLink className="h-4 w-4 mr-2" />
+              View My Purchases
+            </Button>
+            <Button
+              onClick={() => (window.location.href = `/product-box/${purchase.productBoxId}/content`)}
+              variant="outline"
+              className="flex-1"
+            >
+              Access Content
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Test Mode Notice */}
+      {purchase.mode === "test" && (
+        <Alert className="border-blue-600 bg-blue-600/10">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>
+            <strong>Test Mode:</strong> This was a test transaction. No real money was charged. In live mode, this would
+            be a real payment.
+          </AlertDescription>
+        </Alert>
+      )}
     </div>
   )
 }
