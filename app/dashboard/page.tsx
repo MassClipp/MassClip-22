@@ -13,7 +13,6 @@ import { useVideoStatsAPI } from "@/hooks/use-video-stats-api"
 import { useStripeDashboardSales } from "@/hooks/use-stripe-dashboard-sales"
 import { SalesForecastCard } from "@/components/sales-forecast-card"
 import ProfileViewStats from "@/components/profile-view-stats"
-import { useStripeConnectionCheck } from "@/hooks/use-stripe-connection-check"
 
 export default function DashboardPage() {
   const { user } = useAuth()
@@ -28,9 +27,6 @@ export default function DashboardPage() {
 
   // Use live dashboard sales data
   const salesData = useStripeDashboardSales()
-
-  // Check Stripe connection status
-  const { isConnected: isStripeConnected, loading: stripeLoading } = useStripeConnectionCheck()
 
   // Manual refresh function
   const handleRefresh = async () => {
@@ -196,32 +192,21 @@ export default function DashboardPage() {
             </CardHeader>
             <CardContent className="space-y-3">
               <Button
-                onClick={() => router.push("/dashboard/bundles")}
+                onClick={() => router.push("/dashboard/uploads")}
                 className="w-full justify-start bg-zinc-900 hover:bg-zinc-800 border border-zinc-700"
               >
                 <Upload className="h-4 w-4 mr-2" />
-                Make a Bundle
+                Upload Content
               </Button>
 
               <Button
-                onClick={() => router.push("/dashboard/purchases")}
+                onClick={() => router.push("/dashboard/earnings")}
                 variant="outline"
                 className="w-full justify-start border-zinc-700 hover:bg-zinc-800"
               >
                 <DollarSign className="h-4 w-4 mr-2" />
-                My Purchases
+                View Earnings
               </Button>
-
-              {!stripeLoading && !isStripeConnected && (
-                <Button
-                  onClick={() => router.push("/dashboard/earnings")}
-                  variant="outline"
-                  className="w-full justify-start border-yellow-600 hover:bg-yellow-900/20 text-yellow-400 hover:text-yellow-300"
-                >
-                  <DollarSign className="h-4 w-4 mr-2" />
-                  Connect Stripe Account
-                </Button>
-              )}
 
               <Button
                 onClick={() => router.push("/dashboard/profile")}
