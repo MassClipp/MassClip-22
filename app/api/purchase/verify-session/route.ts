@@ -10,114 +10,137 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Session ID is required" }, { status: 400 })
     }
 
-    console.log(`🔍 [Purchase Verify] Verifying session: ${sessionId} (${isTestMode ? "TEST" : "LIVE"} mode)`)
-
-    let userId: string | null = null
-
-    // If idToken is provided, verify it
+    // Verify the Firebase ID token if provided
+    let userId = null
     if (idToken) {
       try {
         const decodedToken = await auth.verifyIdToken(idToken)
         userId = decodedToken.uid
         console.log(`✅ [Purchase Verify] Token verified for user: ${userId}`)
-      } catch (error) {
-        console.error("❌ [Purchase Verify] Token verification failed:", error)
-        // Continue without user ID for anonymous purchases
+      } catch (tokenError) {
+        console.error("❌ [Purchase Verify] Token verification failed:", tokenError)
+        return NextResponse.json({ error: "Invalid or expired token" }, { status: 401 })
       }
     }
 
-    // Try to retrieve session with connected account context first
-    let session: any = null
-    let connectedAccountId: string | null = null
+    console.log(`🔍 [Purchase Verify] Verifying session: ${sessionId}`)
+
+    // Try to retrieve the session
+    let session
+    let connectedAccountId = null
 
     try {
-      // First, try to get session from platform account to read metadata
-      const platformSession = await stripe.checkout.sessions.retrieve(sessionId)
-      connectedAccountId = platformSession.metadata?.connectedAccountId || null
+      // First try to retrieve from platform account
+      session = await stripe.checkout.sessions.retrieve(sessionId)
+      console.log(`✅ [Purchase Verify] Session retrieved from platform account`)
+    } catch (platformError: any) {
+      console.log(`⚠️ [Purchase Verify] Platform retrieval failed, trying connected accounts...`)
 
-      if (connectedAccountId) {
-        console.log(`🔍 [Purchase Verify] Retrieving session from connected account: ${connectedAccountId}`)
-        session = await retrieveSessionWithAccount(sessionId, connectedAccountId)
-      } else {
-        console.log(`🔍 [Purchase Verify] No connected account, using platform session`)
-        session = platformSession
+      // If session not found on platform, try to find it via connected account
+      // This requires checking the metadata or user's connected account
+      if (userId) {
+        const userDoc = await db.collection("users").doc(userId).get()
+        if (userDoc.exists) {
+          const userData = userDoc.data()!
+          connectedAccountId = isTestMode ? userData.stripeTestAccountId : userData.stripeAccountId
+
+          if (connectedAccountId) {
+            try {
+              session = await retrieveSessionWithAccount(sessionId, connectedAccountId)
+              console.log(`✅ [Purchase Verify] Session retrieved from connected account: ${connectedAccountId}`)
+            } catch (connectedError: any) {
+              console.error("❌ [Purchase Verify] Connected account retrieval failed:", connectedError)
+            }
+          }
+        }
       }
-    } catch (error: any) {
-      console.error("❌ [Purchase Verify] Session retrieval failed:", error)
-      return NextResponse.json({ error: "Session not found or invalid" }, { status: 404 })
+
+      if (!session) {
+        console.error("❌ [Purchase Verify] Session not found in any account")
+        return NextResponse.json({ error: "Session not found" }, { status: 404 })
+      }
     }
 
+    // Validate session
     if (session.payment_status !== "paid") {
-      console.log(`⚠️ [Purchase Verify] Session ${sessionId} payment not completed: ${session.payment_status}`)
-      return NextResponse.json({ error: "Payment not completed" }, { status: 400 })
+      return NextResponse.json(
+        {
+          error: "Payment not completed",
+          status: session.payment_status,
+        },
+        { status: 400 },
+      )
     }
 
-    // Extract purchase details
-    const productBoxId = session.metadata?.productBoxId
-    const sessionUserId = session.metadata?.userId
-    const creatorId = session.metadata?.creatorId
-    const customerEmail = session.customer_details?.email
+    // Extract metadata
+    const metadata = session.metadata || {}
+    const productBoxId = metadata.productBoxId
+    const sessionUserId = metadata.userId
+    const sessionConnectedAccountId = metadata.connectedAccountId
 
     if (!productBoxId) {
       return NextResponse.json({ error: "Invalid session metadata" }, { status: 400 })
     }
 
-    // Use session user ID if no token provided
-    const finalUserId = userId || sessionUserId
+    // Verify user matches if token provided
+    if (userId && sessionUserId && userId !== sessionUserId) {
+      return NextResponse.json({ error: "User mismatch" }, { status: 403 })
+    }
 
-    console.log(`💰 [Purchase Verify] Processing purchase:`, {
-      sessionId,
+    console.log(`✅ [Purchase Verify] Session verified:`, {
+      sessionId: session.id,
       productBoxId,
-      userId: finalUserId,
-      creatorId,
-      customerEmail,
-      connectedAccountId,
+      userId: sessionUserId,
+      connectedAccountId: sessionConnectedAccountId || connectedAccountId,
+      amount: session.amount_total,
+      mode: isTestMode ? "test" : "live",
     })
 
-    // Record the purchase
+    // Record the purchase in Firestore
     const purchaseData = {
-      sessionId,
+      sessionId: session.id,
       productBoxId,
-      userId: finalUserId,
-      creatorId,
-      customerEmail,
-      connectedAccountId,
+      userId: sessionUserId || userId,
       amount: session.amount_total,
       currency: session.currency,
       paymentStatus: session.payment_status,
-      mode: isTestMode ? "test" : "live",
+      connectedAccountId: sessionConnectedAccountId || connectedAccountId,
+      customerEmail: session.customer_details?.email,
       createdAt: new Date(),
-      stripeSessionId: sessionId,
       environment: isTestMode ? "test" : "live",
+      verifiedAt: new Date(),
     }
 
     // Save to purchases collection
     await db.collection("purchases").add(purchaseData)
 
-    // If user is authenticated, also save to user's purchases
-    if (finalUserId) {
-      await db
-        .collection("users")
-        .doc(finalUserId)
-        .collection("purchases")
-        .add({
-          ...purchaseData,
-          grantedAt: new Date(),
-        })
-    }
+    // Grant access to the product box content
+    if (sessionUserId || userId) {
+      const accessData = {
+        userId: sessionUserId || userId,
+        productBoxId,
+        grantedAt: new Date(),
+        sessionId: session.id,
+        purchaseAmount: session.amount_total,
+        environment: isTestMode ? "test" : "live",
+      }
 
-    console.log(`✅ [Purchase Verify] Purchase recorded successfully for session: ${sessionId}`)
+      await db.collection("userAccess").add(accessData)
+      console.log(`✅ [Purchase Verify] Access granted to user: ${sessionUserId || userId}`)
+    }
 
     return NextResponse.json({
       success: true,
-      purchase: {
-        sessionId,
-        productBoxId,
-        userId: finalUserId,
+      session: {
+        id: session.id,
         amount: session.amount_total,
         currency: session.currency,
-        connectedAccountId,
-        mode: isTestMode ? "test" : "live",
+        status: session.payment_status,
+      },
+      purchase: {
+        productBoxId,
+        userId: sessionUserId || userId,
+        connectedAccountId: sessionConnectedAccountId || connectedAccountId,
       },
     })
   } catch (error: any) {

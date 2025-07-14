@@ -5,6 +5,7 @@ import { useAuth } from "@/contexts/auth-context"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import {
   Loader2,
   CheckCircle,
@@ -17,6 +18,7 @@ import {
   Users,
 } from "lucide-react"
 import { useToast } from "@/components/ui/use-toast"
+import ManualStripeConnect from "@/components/manual-stripe-connect"
 
 interface StripeAccountStatus {
   connected: boolean
@@ -265,141 +267,163 @@ export default function TempStripeConnectPage() {
         </AlertDescription>
       </Alert>
 
-      {/* Connection Status */}
-      <Card className="bg-zinc-900/60 border-zinc-800/50">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <CreditCard className="h-5 w-5" />
-            Connection Status
-          </CardTitle>
-          <CardDescription>Your Stripe Connect account status with MassClip</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {!accountStatus?.connected ? (
-            <div className="space-y-4">
-              <Alert className="border-orange-600 bg-orange-600/10">
-                <AlertCircle className="h-4 w-4" />
-                <AlertDescription>
-                  <strong>Not Connected:</strong> You need to connect your account to start receiving payments on
-                  MassClip.
-                </AlertDescription>
-              </Alert>
+      {/* Connection Methods */}
+      <Tabs defaultValue="automatic" className="w-full">
+        <TabsList className="grid w-full grid-cols-2">
+          <TabsTrigger value="automatic">Automatic Setup</TabsTrigger>
+          <TabsTrigger value="manual">Manual Connection</TabsTrigger>
+        </TabsList>
 
-              <div className="bg-zinc-800/30 p-4 rounded-lg">
-                <h4 className="font-medium mb-2">What happens when you connect:</h4>
-                <ul className="text-sm text-zinc-400 space-y-1">
-                  <li>• Create a Stripe Express account linked to MassClip</li>
-                  <li>• Complete identity verification (required by Stripe)</li>
-                  <li>• Set up bank account for payouts</li>
-                  <li>• Start receiving payments from your content sales</li>
-                </ul>
-              </div>
+        <TabsContent value="automatic" className="space-y-4">
+          {/* Connection Status */}
+          <Card className="bg-zinc-900/60 border-zinc-800/50">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <CreditCard className="h-5 w-5" />
+                Automatic Connection
+              </CardTitle>
+              <CardDescription>Create a new Stripe Express account through guided onboarding</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {!accountStatus?.connected ? (
+                <div className="space-y-4">
+                  <Alert className="border-orange-600 bg-orange-600/10">
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertDescription>
+                      <strong>Not Connected:</strong> You need to connect your account to start receiving payments on
+                      MassClip.
+                    </AlertDescription>
+                  </Alert>
 
-              <Button onClick={createConnectedAccount} disabled={loading} size="lg" className="w-full">
-                {loading ? (
-                  <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Creating Connected Account...
-                  </>
-                ) : (
-                  <>
-                    <Users className="h-4 w-4 mr-2" />
-                    Connect to MassClip Platform
-                  </>
-                )}
-              </Button>
-            </div>
-          ) : (
-            <div className="space-y-4">
-              <Alert className="border-green-600 bg-green-600/10">
-                <CheckCircle className="h-4 w-4" />
-                <AlertDescription>
-                  <strong>Connected!</strong> Your account is connected to the MassClip platform and ready to receive
-                  payments.
-                </AlertDescription>
-              </Alert>
+                  <div className="bg-zinc-800/30 p-4 rounded-lg">
+                    <h4 className="font-medium mb-2">What happens when you connect:</h4>
+                    <ul className="text-sm text-zinc-400 space-y-1">
+                      <li>• Create a Stripe Express account linked to MassClip</li>
+                      <li>• Complete identity verification (required by Stripe)</li>
+                      <li>• Set up bank account for payouts</li>
+                      <li>• Start receiving payments from your content sales</li>
+                    </ul>
+                  </div>
 
-              {/* Account Status Grid */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div className="text-center p-3 bg-zinc-800/50 rounded-lg">
-                  <div className="flex items-center justify-center mb-2">
-                    {accountStatus.chargesEnabled ? (
-                      <CheckCircle className="h-5 w-5 text-green-500" />
+                  <Button onClick={createConnectedAccount} disabled={loading} size="lg" className="w-full">
+                    {loading ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Creating Connected Account...
+                      </>
                     ) : (
-                      <XCircle className="h-5 w-5 text-red-500" />
+                      <>
+                        <Users className="h-4 w-4 mr-2" />
+                        Connect to MassClip Platform
+                      </>
                     )}
-                  </div>
-                  <div className="text-sm font-medium">Accept Payments</div>
-                  <div className="text-xs text-zinc-400">{accountStatus.chargesEnabled ? "Enabled" : "Disabled"}</div>
+                  </Button>
                 </div>
+              ) : (
+                <div className="space-y-4">
+                  <Alert className="border-green-600 bg-green-600/10">
+                    <CheckCircle className="h-4 w-4" />
+                    <AlertDescription>
+                      <strong>Connected!</strong> Your account is connected to the MassClip platform and ready to
+                      receive payments.
+                    </AlertDescription>
+                  </Alert>
 
-                <div className="text-center p-3 bg-zinc-800/50 rounded-lg">
-                  <div className="flex items-center justify-center mb-2">
-                    {accountStatus.payoutsEnabled ? (
-                      <CheckCircle className="h-5 w-5 text-green-500" />
-                    ) : (
-                      <XCircle className="h-5 w-5 text-red-500" />
-                    )}
+                  {/* Account Status Grid */}
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div className="text-center p-3 bg-zinc-800/50 rounded-lg">
+                      <div className="flex items-center justify-center mb-2">
+                        {accountStatus.chargesEnabled ? (
+                          <CheckCircle className="h-5 w-5 text-green-500" />
+                        ) : (
+                          <XCircle className="h-5 w-5 text-red-500" />
+                        )}
+                      </div>
+                      <div className="text-sm font-medium">Accept Payments</div>
+                      <div className="text-xs text-zinc-400">
+                        {accountStatus.chargesEnabled ? "Enabled" : "Disabled"}
+                      </div>
+                    </div>
+
+                    <div className="text-center p-3 bg-zinc-800/50 rounded-lg">
+                      <div className="flex items-center justify-center mb-2">
+                        {accountStatus.payoutsEnabled ? (
+                          <CheckCircle className="h-5 w-5 text-green-500" />
+                        ) : (
+                          <XCircle className="h-5 w-5 text-red-500" />
+                        )}
+                      </div>
+                      <div className="text-sm font-medium">Receive Payouts</div>
+                      <div className="text-xs text-zinc-400">
+                        {accountStatus.payoutsEnabled ? "Enabled" : "Disabled"}
+                      </div>
+                    </div>
+
+                    <div className="text-center p-3 bg-zinc-800/50 rounded-lg">
+                      <div className="flex items-center justify-center mb-2">
+                        {accountStatus.detailsSubmitted ? (
+                          <CheckCircle className="h-5 w-5 text-green-500" />
+                        ) : (
+                          <AlertCircle className="h-5 w-5 text-yellow-500" />
+                        )}
+                      </div>
+                      <div className="text-sm font-medium">Verification</div>
+                      <div className="text-xs text-zinc-400">
+                        {accountStatus.detailsSubmitted ? "Complete" : "Pending"}
+                      </div>
+                    </div>
+
+                    <div className="text-center p-3 bg-zinc-800/50 rounded-lg">
+                      <div className="flex items-center justify-center mb-2">
+                        {accountStatus.requirementsCount === 0 ? (
+                          <CheckCircle className="h-5 w-5 text-green-500" />
+                        ) : (
+                          <AlertCircle className="h-5 w-5 text-yellow-500" />
+                        )}
+                      </div>
+                      <div className="text-sm font-medium">Requirements</div>
+                      <div className="text-xs text-zinc-400">
+                        {accountStatus.requirementsCount === 0
+                          ? "All done"
+                          : `${accountStatus.requirementsCount} pending`}
+                      </div>
+                    </div>
                   </div>
-                  <div className="text-sm font-medium">Receive Payouts</div>
-                  <div className="text-xs text-zinc-400">{accountStatus.payoutsEnabled ? "Enabled" : "Disabled"}</div>
+
+                  {/* Requirements Alert */}
+                  {accountStatus.requirementsCount > 0 && (
+                    <Alert className="border-yellow-600 bg-yellow-600/10">
+                      <AlertCircle className="h-4 w-4" />
+                      <AlertDescription>
+                        <strong>Action Required:</strong> You have {accountStatus.requirementsCount} pending
+                        requirements. Complete them to enable full functionality.
+                      </AlertDescription>
+                    </Alert>
+                  )}
+
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      onClick={() => (window.location.href = "/dashboard/earnings")}
+                      className="flex-1"
+                    >
+                      <ExternalLink className="h-4 w-4 mr-2" />
+                      View Earnings Dashboard
+                    </Button>
+                    <Button variant="outline" onClick={checkStripeStatus}>
+                      Refresh Status
+                    </Button>
+                  </div>
                 </div>
-
-                <div className="text-center p-3 bg-zinc-800/50 rounded-lg">
-                  <div className="flex items-center justify-center mb-2">
-                    {accountStatus.detailsSubmitted ? (
-                      <CheckCircle className="h-5 w-5 text-green-500" />
-                    ) : (
-                      <AlertCircle className="h-5 w-5 text-yellow-500" />
-                    )}
-                  </div>
-                  <div className="text-sm font-medium">Verification</div>
-                  <div className="text-xs text-zinc-400">{accountStatus.detailsSubmitted ? "Complete" : "Pending"}</div>
-                </div>
-
-                <div className="text-center p-3 bg-zinc-800/50 rounded-lg">
-                  <div className="flex items-center justify-center mb-2">
-                    {accountStatus.requirementsCount === 0 ? (
-                      <CheckCircle className="h-5 w-5 text-green-500" />
-                    ) : (
-                      <AlertCircle className="h-5 w-5 text-yellow-500" />
-                    )}
-                  </div>
-                  <div className="text-sm font-medium">Requirements</div>
-                  <div className="text-xs text-zinc-400">
-                    {accountStatus.requirementsCount === 0 ? "All done" : `${accountStatus.requirementsCount} pending`}
-                  </div>
-                </div>
-              </div>
-
-              {/* Requirements Alert */}
-              {accountStatus.requirementsCount > 0 && (
-                <Alert className="border-yellow-600 bg-yellow-600/10">
-                  <AlertCircle className="h-4 w-4" />
-                  <AlertDescription>
-                    <strong>Action Required:</strong> You have {accountStatus.requirementsCount} pending requirements.
-                    Complete them to enable full functionality.
-                  </AlertDescription>
-                </Alert>
               )}
+            </CardContent>
+          </Card>
+        </TabsContent>
 
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  onClick={() => (window.location.href = "/dashboard/earnings")}
-                  className="flex-1"
-                >
-                  <ExternalLink className="h-4 w-4 mr-2" />
-                  View Earnings Dashboard
-                </Button>
-                <Button variant="outline" onClick={checkStripeStatus}>
-                  Refresh Status
-                </Button>
-              </div>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+        <TabsContent value="manual" className="space-y-4">
+          <ManualStripeConnect />
+        </TabsContent>
+      </Tabs>
 
       {/* Account Details */}
       {accountStatus?.accountId && (
