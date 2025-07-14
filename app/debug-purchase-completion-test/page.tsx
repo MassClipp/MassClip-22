@@ -1,88 +1,108 @@
 "use client"
 
 import { useState } from "react"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Label } from "@/components/ui/label"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Textarea } from "@/components/ui/textarea"
 
 export default function DebugPurchaseCompletionTest() {
-  const [productBoxId, setProductBoxId] = useState("")
-  const [buyerUid, setBuyerUid] = useState("")
-  const [userEmail, setUserEmail] = useState("")
-  const [result, setResult] = useState<any>(null)
   const [loading, setLoading] = useState(false)
+  const [result, setResult] = useState<any>(null)
+  const [error, setError] = useState<string>("")
+  const [formData, setFormData] = useState({
+    productBoxId: "",
+    buyerUid: "",
+    sessionId: "",
+  })
 
-  const testPurchaseCompletion = async () => {
-    setLoading(true)
+  const handleTest = async () => {
     try {
+      setLoading(true)
+      setError("")
+      setResult(null)
+
       const response = await fetch("/api/debug/test-purchase-completion", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          productBoxId,
-          buyerUid,
-          userEmail,
-        }),
+        body: JSON.stringify(formData),
       })
 
       const data = await response.json()
-      setResult(data)
-    } catch (error) {
-      console.error("Error testing purchase completion:", error)
-      setResult({ error: error.message })
+
+      if (response.ok) {
+        setResult(data)
+      } else {
+        setError(data.error || "Test failed")
+      }
+    } catch (err: any) {
+      setError(err.message || "Network error")
     } finally {
       setLoading(false)
     }
   }
 
   return (
-    <div className="container mx-auto p-6">
-      <Card className="max-w-2xl mx-auto">
+    <div className="container mx-auto p-6 max-w-4xl">
+      <Card>
         <CardHeader>
           <CardTitle>Debug Purchase Completion Test</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <div>
-            <Label htmlFor="productBoxId">Product Box ID</Label>
-            <Input
-              id="productBoxId"
-              value={productBoxId}
-              onChange={(e) => setProductBoxId(e.target.value)}
-              placeholder="Enter product box ID"
-            />
+        <CardContent className="space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div>
+              <Label htmlFor="productBoxId">Product Box ID</Label>
+              <Input
+                id="productBoxId"
+                value={formData.productBoxId}
+                onChange={(e) => setFormData({ ...formData, productBoxId: e.target.value })}
+                placeholder="Enter product box ID"
+              />
+            </div>
+            <div>
+              <Label htmlFor="buyerUid">Buyer UID</Label>
+              <Input
+                id="buyerUid"
+                value={formData.buyerUid}
+                onChange={(e) => setFormData({ ...formData, buyerUid: e.target.value })}
+                placeholder="Enter buyer UID"
+              />
+            </div>
+            <div>
+              <Label htmlFor="sessionId">Session ID (optional)</Label>
+              <Input
+                id="sessionId"
+                value={formData.sessionId}
+                onChange={(e) => setFormData({ ...formData, sessionId: e.target.value })}
+                placeholder="Enter Stripe session ID"
+              />
+            </div>
           </div>
 
-          <div>
-            <Label htmlFor="buyerUid">Buyer UID</Label>
-            <Input
-              id="buyerUid"
-              value={buyerUid}
-              onChange={(e) => setBuyerUid(e.target.value)}
-              placeholder="Enter buyer UID"
-            />
-          </div>
-
-          <div>
-            <Label htmlFor="userEmail">User Email</Label>
-            <Input
-              id="userEmail"
-              value={userEmail}
-              onChange={(e) => setUserEmail(e.target.value)}
-              placeholder="Enter user email"
-            />
-          </div>
-
-          <Button onClick={testPurchaseCompletion} disabled={loading} className="w-full">
+          <Button onClick={handleTest} disabled={loading || !formData.productBoxId || !formData.buyerUid}>
             {loading ? "Testing..." : "Test Purchase Completion"}
           </Button>
 
+          {error && (
+            <Alert variant="destructive">
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
+
           {result && (
-            <div className="mt-6">
-              <h3 className="text-lg font-semibold mb-2">Result:</h3>
-              <pre className="bg-gray-100 p-4 rounded-lg overflow-auto text-sm">{JSON.stringify(result, null, 2)}</pre>
+            <div className="space-y-4">
+              <Alert>
+                <AlertDescription>Test completed! API Status: {result.apiStatus}</AlertDescription>
+              </Alert>
+
+              <div>
+                <Label>Test Result:</Label>
+                <Textarea value={JSON.stringify(result, null, 2)} readOnly className="h-96 font-mono text-sm" />
+              </div>
             </div>
           )}
         </CardContent>

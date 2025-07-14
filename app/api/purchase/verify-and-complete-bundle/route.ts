@@ -1,284 +1,316 @@
 import { type NextRequest, NextResponse } from "next/server"
+import Stripe from "stripe"
 import { db } from "@/lib/firebase-admin"
 import { verifyIdToken } from "@/lib/auth-utils"
+
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
+  apiVersion: "2024-06-20",
+})
 
 export async function POST(request: NextRequest) {
   try {
     const { sessionId, productBoxId, forceComplete } = await request.json()
 
-    console.log("🔍 [Bundle Verification] Starting comprehensive bundle purchase verification:", {
+    console.log("🔍 [Bundle Verification] Starting verification:", {
       sessionId,
       productBoxId,
       forceComplete,
     })
 
-    // Get user authentication from request headers
+    // Get authenticated user if available
     let authenticatedUser = null
     try {
       authenticatedUser = await verifyIdToken(request)
       console.log("✅ [Bundle Verification] Authenticated user:", authenticatedUser?.uid)
     } catch (error) {
-      console.log("ℹ️ [Bundle Verification] No authenticated user, proceeding as anonymous")
+      console.log("ℹ️ [Bundle Verification] No authenticated user")
     }
 
-    const buyerUid = authenticatedUser?.uid || "anonymous"
-    const userEmail = authenticatedUser?.email || ""
-    const userName = authenticatedUser?.name || authenticatedUser?.email?.split("@")[0] || "Anonymous User"
-
-    console.log("👤 [Bundle Verification] User details:", { buyerUid, userEmail, userName })
-
-    // Check if this purchase already exists
-    const existingPurchase = await db.collection("bundlePurchases").doc(sessionId).get()
-
-    if (existingPurchase.exists() && !forceComplete) {
-      const purchaseData = existingPurchase.data()!
-      console.log("✅ [Bundle Verification] Purchase already exists with content count:", purchaseData.contentCount)
-
-      // If content count is 0, we need to fix it
-      if (purchaseData.contentCount === 0 || !purchaseData.contents?.length) {
-        console.log("🔧 [Bundle Verification] Existing purchase has no content, fixing...")
-      } else {
-        return NextResponse.json({
-          success: true,
-          purchase: purchaseData,
-          message: "Purchase already completed",
+    // If we have a session ID, retrieve it from Stripe
+    let stripeSession = null
+    if (sessionId) {
+      try {
+        stripeSession = await stripe.checkout.sessions.retrieve(sessionId)
+        console.log("✅ [Bundle Verification] Retrieved Stripe session:", {
+          id: stripeSession.id,
+          payment_status: stripeSession.payment_status,
+          metadata: stripeSession.metadata,
         })
-      }
-    }
 
-    // Get the bundle/product box data
-    let bundleData = null
-    let bundleSource = ""
-
-    // Try bundles collection first
-    const bundleDoc = await db.collection("bundles").doc(productBoxId).get()
-    if (bundleDoc.exists()) {
-      bundleData = bundleDoc.data()!
-      bundleSource = "bundles"
-      console.log("📦 [Bundle Verification] Found bundle data:", {
-        title: bundleData.title,
-        contentItems: bundleData.contentItems?.length || 0,
-        detailedContentItems: bundleData.detailedContentItems?.length || 0,
-      })
-    } else {
-      // Try productBoxes collection
-      const productBoxDoc = await db.collection("productBoxes").doc(productBoxId).get()
-      if (productBoxDoc.exists()) {
-        bundleData = productBoxDoc.data()!
-        bundleSource = "productBoxes"
-        console.log("📦 [Bundle Verification] Found product box data:", {
-          title: bundleData.title,
-          contentItems: bundleData.contentItems?.length || 0,
-        })
-      }
-    }
-
-    if (!bundleData) {
-      throw new Error(`Bundle/Product box ${productBoxId} not found`)
-    }
-
-    // Extract comprehensive bundle content metadata
-    console.log("🔍 [Bundle Verification] Extracting comprehensive bundle content...")
-
-    const bundleContents: any[] = []
-
-    // Method 1: Use detailedContentItems if available (most comprehensive)
-    if (bundleData.detailedContentItems && Array.isArray(bundleData.detailedContentItems)) {
-      console.log("✅ [Bundle Verification] Using detailedContentItems from bundle")
-      bundleContents.push(...bundleData.detailedContentItems.map((item: any) => enhanceContentItem(item)))
-    }
-    // Method 2: Use contentItems and fetch from uploads
-    else if (bundleData.contentItems && Array.isArray(bundleData.contentItems)) {
-      console.log(`🔍 [Bundle Verification] Fetching content for ${bundleData.contentItems.length} content items`)
-
-      for (const contentId of bundleData.contentItems) {
-        try {
-          console.log(`📄 [Bundle Verification] Fetching content: ${contentId}`)
-
-          // Try uploads collection first
-          const uploadDoc = await db.collection("uploads").doc(contentId).get()
-          if (uploadDoc.exists()) {
-            const uploadData = uploadDoc.data()!
-            const enhancedItem = enhanceContentItem({
-              id: contentId,
-              ...uploadData,
-            })
-            bundleContents.push(enhancedItem)
-            console.log(`✅ [Bundle Verification] Added from uploads: ${enhancedItem.displayTitle}`)
-            continue
-          }
-
-          // Try productBoxContent as fallback
-          let contentData = null
-          const contentDoc = await db.collection("productBoxContent").doc(contentId).get()
-          if (contentDoc.exists()) {
-            contentData = contentDoc.data()!
-
-            // If we have an uploadId, get the original upload data
-            if (contentData.uploadId) {
-              const originalUpload = await db.collection("uploads").doc(contentData.uploadId).get()
-              if (originalUpload.exists()) {
-                const originalData = originalUpload.data()!
-                contentData = { ...contentData, ...originalData }
-              }
-            }
-
-            const enhancedItem = enhanceContentItem({
-              id: contentId,
-              ...contentData,
-            })
-            bundleContents.push(enhancedItem)
-            console.log(`✅ [Bundle Verification] Added from productBoxContent: ${enhancedItem.displayTitle}`)
-          } else {
-            console.warn(`⚠️ [Bundle Verification] Content not found: ${contentId}`)
-          }
-        } catch (error) {
-          console.error(`❌ [Bundle Verification] Error fetching content ${contentId}:`, error)
+        // Validate payment was successful
+        if (stripeSession.payment_status !== "paid") {
+          return NextResponse.json(
+            { error: `Payment not completed. Status: ${stripeSession.payment_status}` },
+            { status: 400 },
+          )
+        }
+      } catch (stripeError) {
+        console.error("❌ [Bundle Verification] Failed to retrieve Stripe session:", stripeError)
+        if (!forceComplete) {
+          return NextResponse.json({ error: "Invalid session ID" }, { status: 404 })
         }
       }
     }
 
-    // Helper function to enhance content items with proper metadata
-    function enhanceContentItem(item: any): any {
-      const title = item.title || item.filename || item.originalFileName || item.name || "Untitled"
-      const displayTitle = title.replace(/\.(mp4|mov|avi|mkv|webm|m4v|mp3|wav|jpg|jpeg|png|gif|pdf)$/i, "")
+    // Extract purchase details
+    const bundleId = productBoxId || stripeSession?.metadata?.productBoxId || stripeSession?.metadata?.bundleId
+    const buyerUid = authenticatedUser?.uid || stripeSession?.metadata?.buyerUid || stripeSession?.client_reference_id
+    const userEmail =
+      authenticatedUser?.email || stripeSession?.customer_details?.email || stripeSession?.metadata?.userEmail
+    const amount = stripeSession?.amount_total ? stripeSession.amount_total / 100 : 0
+    const currency = stripeSession?.currency || "usd"
 
-      return {
-        id: item.id || item.uploadId || "",
-        title: displayTitle,
-        displayTitle,
-        filename: item.filename || item.originalFileName || `${displayTitle}.file`,
-        fileUrl: item.fileUrl || item.publicUrl || item.url || item.downloadUrl || "",
-        thumbnailUrl: item.thumbnailUrl || item.previewUrl || "",
+    console.log("📊 [Bundle Verification] Extracted details:", {
+      bundleId,
+      buyerUid,
+      userEmail,
+      amount,
+      currency,
+    })
 
-        // File metadata
-        mimeType: item.mimeType || item.fileType || "application/octet-stream",
-        fileSize: item.fileSize || item.size || 0,
-        displaySize: formatFileSize(item.fileSize || item.size || 0),
+    if (!bundleId) {
+      return NextResponse.json({ error: "Bundle ID not found" }, { status: 400 })
+    }
 
-        // Video/Audio metadata
-        duration: item.duration || item.videoDuration || 0,
-        displayDuration: item.duration ? formatDuration(item.duration) : null,
-        resolution: item.resolution || item.videoResolution || (item.height ? `${item.height}p` : null),
-        width: item.width || item.videoWidth,
-        height: item.height || item.videoHeight,
+    if (!buyerUid) {
+      return NextResponse.json({ error: "User identification not found" }, { status: 400 })
+    }
 
-        // Content classification
-        contentType: getContentType(item.mimeType || item.fileType || "application/octet-stream"),
-        category: item.category || item.tag,
-        tags: item.tags || (item.tag ? [item.tag] : []),
+    // Check if purchase already exists
+    const existingPurchaseQuery = await db
+      .collection("bundlePurchases")
+      .where("buyerUid", "==", buyerUid)
+      .where("bundleId", "==", bundleId)
+      .limit(1)
+      .get()
 
-        // Additional metadata
-        description: item.description || "",
-        creatorId: item.creatorId || item.userId || bundleData.creatorId,
-        uploadedAt: item.uploadedAt || item.createdAt || new Date(),
-        isPublic: item.isPublic !== false,
+    if (!existingPurchaseQuery.empty && !forceComplete) {
+      const existingPurchase = existingPurchaseQuery.docs[0]
+      const purchaseData = existingPurchase.data()
+
+      console.log("✅ [Bundle Verification] Purchase already exists:", existingPurchase.id)
+
+      return NextResponse.json({
+        success: true,
+        purchase: {
+          id: existingPurchase.id,
+          bundleId: purchaseData.bundleId,
+          bundleTitle: purchaseData.bundleTitle,
+          description: purchaseData.description,
+          thumbnailUrl: purchaseData.thumbnailUrl,
+          creatorName: purchaseData.creatorName,
+          creatorUsername: purchaseData.creatorUsername,
+          amount: purchaseData.amount,
+          currency: purchaseData.currency,
+          contentCount: purchaseData.contentCount,
+          totalSize: purchaseData.totalSize,
+          buyerUid: purchaseData.buyerUid,
+          itemNames: purchaseData.itemNames || [],
+          contents: purchaseData.contents || [],
+        },
+      })
+    }
+
+    // Get bundle data
+    let bundleData = null
+    let bundleSource = ""
+
+    // Try bundles collection first
+    const bundleDoc = await db.collection("bundles").doc(bundleId).get()
+    if (bundleDoc.exists()) {
+      bundleData = bundleDoc.data()!
+      bundleSource = "bundles"
+    } else {
+      // Try productBoxes collection
+      const productBoxDoc = await db.collection("productBoxes").doc(bundleId).get()
+      if (productBoxDoc.exists()) {
+        bundleData = productBoxDoc.data()!
+        bundleSource = "productBoxes"
       }
     }
 
-    // Helper functions
-    function formatFileSize(bytes: number): string {
-      if (bytes === 0) return "0 Bytes"
-      const k = 1024
-      const sizes = ["Bytes", "KB", "MB", "GB"]
-      const i = Math.floor(Math.log(bytes) / Math.log(k))
-      return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + " " + sizes[i]
+    if (!bundleData) {
+      return NextResponse.json({ error: "Bundle not found" }, { status: 404 })
     }
 
-    function formatDuration(seconds: number): string {
-      if (!seconds || seconds <= 0) return "0:00"
-      const minutes = Math.floor(seconds / 60)
-      const remainingSeconds = Math.floor(seconds % 60)
-      return `${minutes}:${remainingSeconds.toString().padStart(2, "0")}`
-    }
-
-    function getContentType(mimeType: string): "video" | "audio" | "image" | "document" {
-      if (mimeType.startsWith("video/")) return "video"
-      if (mimeType.startsWith("audio/")) return "audio"
-      if (mimeType.startsWith("image/")) return "image"
-      return "document"
-    }
-
-    console.log(`📊 [Bundle Verification] Extracted ${bundleContents.length} content items`)
-    console.log(
-      `📝 [Bundle Verification] Content details:`,
-      bundleContents.map((item) => ({
-        title: item.displayTitle,
-        fileUrl: !!item.fileUrl,
-        size: item.displaySize,
-        contentType: item.contentType,
-      })),
-    )
-
-    // Create comprehensive bundle purchase record
-    const bundlePurchaseData = {
-      // User identification
-      buyerUid,
-      userId: buyerUid,
-      userEmail,
-      userName,
-      isAuthenticated: buyerUid !== "anonymous",
-
-      // Bundle information
-      bundleId: productBoxId,
-      bundleTitle: bundleData.title || "Untitled Bundle",
-      bundleDescription: bundleData.description || "",
-      thumbnailUrl: bundleData.customPreviewThumbnail || bundleData.thumbnailUrl || bundleData.coverImage || "",
-
-      // Content information with comprehensive metadata
-      contents: bundleContents,
-      items: bundleContents,
-      itemNames: bundleContents.map((item) => item.displayTitle),
-      contentTitles: bundleContents.map((item) => item.displayTitle),
-      contentUrls: bundleContents.map((item) => item.fileUrl).filter(Boolean),
-      contentCount: bundleContents.length,
-      totalItems: bundleContents.length,
-      totalSize: bundleContents.reduce((sum, item) => sum + (item.fileSize || 0), 0),
-
-      // Purchase details
-      amount: bundleData.price || 0,
-      currency: "usd",
-      sessionId,
-      status: "completed",
-      type: bundleSource === "bundles" ? "bundle" : "product_box",
-
-      // Creator information
-      creatorId: bundleData.creatorId || "",
-      creatorName: bundleData.creatorName || "",
-      creatorUsername: bundleData.creatorUsername || "",
-
-      // Timestamps
-      purchasedAt: new Date(),
-      createdAt: new Date(),
-      completedAt: new Date(),
-      verifiedAt: new Date(),
-    }
-
-    console.log("💾 [Bundle Verification] Saving comprehensive bundle purchase:", {
-      buyerUid: bundlePurchaseData.buyerUid,
-      bundleTitle: bundlePurchaseData.bundleTitle,
-      contentCount: bundlePurchaseData.contentCount,
-      itemNames: bundlePurchaseData.itemNames.slice(0, 3),
-      totalUrls: bundlePurchaseData.contentUrls.length,
+    console.log("📦 [Bundle Verification] Found bundle:", {
+      title: bundleData.title,
+      source: bundleSource,
     })
 
-    // Save to bundlePurchases collection
-    await db.collection("bundlePurchases").doc(sessionId).set(bundlePurchaseData)
-
-    // Also save to user's personal purchases if authenticated
-    if (buyerUid !== "anonymous") {
-      await db.collection("users").doc(buyerUid).collection("purchases").doc(sessionId).set(bundlePurchaseData)
+    // Get creator data
+    let creatorData = null
+    const creatorId = bundleData.creatorId
+    if (creatorId) {
+      const creatorDoc = await db.collection("users").doc(creatorId).get()
+      if (creatorDoc.exists()) {
+        creatorData = creatorDoc.data()!
+      }
     }
 
-    console.log("✅ [Bundle Verification] Bundle purchase verified and saved successfully")
+    // Get bundle content
+    let contentItems = []
+    let contentCount = 0
+    let totalSize = 0
+    let itemNames = []
+    let contents = []
+
+    try {
+      // Try to get content from multiple sources
+      if (bundleData.detailedContentItems && bundleData.detailedContentItems.length > 0) {
+        contentItems = bundleData.detailedContentItems
+        console.log("📄 [Bundle Verification] Using detailedContentItems:", contentItems.length)
+      } else if (bundleData.contents && bundleData.contents.length > 0) {
+        contentItems = bundleData.contents
+        console.log("📄 [Bundle Verification] Using contents array:", contentItems.length)
+      } else if (bundleData.contentItems && bundleData.contentItems.length > 0) {
+        // Fetch detailed content from uploads collection
+        console.log("📄 [Bundle Verification] Fetching content from uploads collection")
+        const contentPromises = bundleData.contentItems.map(async (itemId: string) => {
+          try {
+            const uploadDoc = await db.collection("uploads").doc(itemId).get()
+            if (uploadDoc.exists()) {
+              const uploadData = uploadDoc.data()!
+              return {
+                id: itemId,
+                title: uploadData.title || uploadData.name || "Untitled",
+                fileUrl: uploadData.fileUrl || uploadData.url || "",
+                thumbnailUrl: uploadData.thumbnailUrl || "",
+                fileSize: uploadData.fileSize || 0,
+                duration: uploadData.duration || 0,
+                type: uploadData.type || "video",
+              }
+            }
+            return null
+          } catch (error) {
+            console.warn(`⚠️ [Bundle Verification] Failed to fetch content ${itemId}:`, error)
+            return null
+          }
+        })
+
+        const resolvedContent = await Promise.all(contentPromises)
+        contentItems = resolvedContent.filter((item) => item !== null)
+        console.log("📄 [Bundle Verification] Fetched content items:", contentItems.length)
+      }
+
+      // Process content items
+      contentCount = contentItems.length
+      totalSize = contentItems.reduce((sum, item) => sum + (item.fileSize || 0), 0)
+      itemNames = contentItems.map((item) => item.title || item.name || "Untitled")
+      contents = contentItems.map((item) => ({
+        id: item.id,
+        title: item.title || item.name || "Untitled",
+        fileUrl: item.fileUrl || item.url || "",
+        thumbnailUrl: item.thumbnailUrl || "",
+        fileSize: item.fileSize || 0,
+        duration: item.duration || 0,
+        type: item.type || "video",
+      }))
+
+      console.log("📊 [Bundle Verification] Content summary:", {
+        contentCount,
+        totalSize,
+        itemNamesCount: itemNames.length,
+      })
+    } catch (error) {
+      console.error("❌ [Bundle Verification] Error processing content:", error)
+    }
+
+    // Create comprehensive purchase record
+    const purchaseData = {
+      id: sessionId || `purchase_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      sessionId: sessionId || null,
+      bundleId,
+      buyerUid,
+      userEmail: userEmail || "",
+      amount,
+      currency,
+      bundleTitle: bundleData.title || "Untitled Bundle",
+      description: bundleData.description || "",
+      thumbnailUrl: bundleData.thumbnailUrl || "",
+      creatorId: creatorId || "",
+      creatorName: creatorData?.displayName || creatorData?.name || "",
+      creatorUsername: creatorData?.username || "",
+      contentCount,
+      totalSize,
+      itemNames,
+      contents,
+      items: contents, // Duplicate for compatibility
+      createdAt: new Date(),
+      completedAt: new Date(),
+      status: "completed",
+      isAuthenticated: !!authenticatedUser,
+      bundleSource,
+    }
+
+    // Save to bundlePurchases collection
+    const purchaseRef = db.collection("bundlePurchases").doc(purchaseData.id)
+    await purchaseRef.set(purchaseData)
+
+    console.log("✅ [Bundle Verification] Purchase record created:", purchaseData.id)
+
+    // Also save to user's purchases subcollection for easy access
+    if (buyerUid !== "anonymous") {
+      await db.collection("users").doc(buyerUid).collection("purchases").doc(purchaseData.id).set(purchaseData)
+
+      console.log("✅ [Bundle Verification] Added to user's purchases subcollection")
+    }
+
+    // Update bundle sales stats
+    try {
+      await db
+        .collection(bundleSource)
+        .doc(bundleId)
+        .update({
+          totalSales: db.FieldValue.increment(1),
+          totalRevenue: db.FieldValue.increment(amount),
+          lastPurchaseAt: new Date(),
+        })
+
+      console.log("✅ [Bundle Verification] Updated bundle sales stats")
+    } catch (error) {
+      console.warn("⚠️ [Bundle Verification] Failed to update bundle stats:", error)
+    }
+
+    // Update creator stats
+    if (creatorId) {
+      try {
+        await db
+          .collection("users")
+          .doc(creatorId)
+          .update({
+            totalSales: db.FieldValue.increment(1),
+            totalRevenue: db.FieldValue.increment(amount * 0.75), // 75% to creator
+            lastSaleAt: new Date(),
+          })
+
+        console.log("✅ [Bundle Verification] Updated creator stats")
+      } catch (error) {
+        console.warn("⚠️ [Bundle Verification] Failed to update creator stats:", error)
+      }
+    }
 
     return NextResponse.json({
       success: true,
-      purchase: bundlePurchaseData,
-      message: "Bundle purchase verified and completed successfully",
+      purchase: {
+        id: purchaseData.id,
+        bundleId: purchaseData.bundleId,
+        bundleTitle: purchaseData.bundleTitle,
+        description: purchaseData.description,
+        thumbnailUrl: purchaseData.thumbnailUrl,
+        creatorName: purchaseData.creatorName,
+        creatorUsername: purchaseData.creatorUsername,
+        amount: purchaseData.amount,
+        currency: purchaseData.currency,
+        contentCount: purchaseData.contentCount,
+        totalSize: purchaseData.totalSize,
+        buyerUid: purchaseData.buyerUid,
+        itemNames: purchaseData.itemNames,
+        contents: purchaseData.contents,
+      },
     })
   } catch (error) {
     console.error("❌ [Bundle Verification] Error:", error)
-    return NextResponse.json({ error: error.message }, { status: 500 })
+    return NextResponse.json({ error: "Bundle verification failed" }, { status: 500 })
   }
 }
