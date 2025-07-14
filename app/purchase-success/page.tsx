@@ -1,155 +1,118 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { useSearchParams } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
+import { useFirebaseAuth } from "@/hooks/use-firebase-auth"
 import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { CheckCircle, Download, User, Package } from "lucide-react"
-import Link from "next/link"
-import { useAuth } from "@/contexts/auth-context"
+import { CheckCircle, AlertCircle, Eye, User, ShoppingBag } from "lucide-react"
 
-interface PurchaseData {
-  bundleId: string
-  bundleTitle: string
-  bundleDescription: string
-  contentCount: number
-  totalSize: number
-  items: Array<{
-    id: string
-    title: string
-    fileUrl: string
-    fileSize: number
-    contentType: string
-  }>
-  creatorName: string
-  amount: number
-  currency: string
-}
-
-export default function PurchaseSuccessPage() {
+export default function PurchaseSuccess() {
   const searchParams = useSearchParams()
-  const { user } = useAuth()
-  const [purchaseData, setPurchaseData] = useState<PurchaseData | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  const router = useRouter()
+  const { user, loading: authLoading } = useFirebaseAuth()
+  const [verificationStatus, setVerificationStatus] = useState<"loading" | "success" | "error">("loading")
+  const [purchaseData, setPurchaseData] = useState<any>(null)
+  const [error, setError] = useState<string>("")
 
   const sessionId = searchParams.get("session_id")
   const productBoxId = searchParams.get("product_box_id")
 
   useEffect(() => {
-    const completePurchase = async () => {
-      if (!sessionId || !productBoxId) {
-        setError("Missing purchase information")
-        setLoading(false)
-        return
-      }
-
-      try {
-        console.log("🔄 [Purchase Success] Completing purchase:", {
-          sessionId,
-          productBoxId,
-          userId: user?.uid,
-          userEmail: user?.email,
-        })
-
-        // First, complete the purchase with comprehensive data
-        const completionResponse = await fetch("/api/purchase/complete", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            buyerUid: user?.uid || "anonymous",
-            productBoxId,
-            sessionId,
-            userEmail: user?.email || "",
-            userName: user?.displayName || user?.email?.split("@")[0] || "Anonymous User",
-          }),
-        })
-
-        if (!completionResponse.ok) {
-          throw new Error(`Purchase completion failed: ${completionResponse.statusText}`)
-        }
-
-        const completionResult = await completionResponse.json()
-        console.log("✅ [Purchase Success] Purchase completed:", completionResult)
-
-        // Then fetch the purchase data to display
-        const purchaseResponse = await fetch(`/api/user/purchases/${sessionId}`, {
-          headers: {
-            Authorization: user ? `Bearer ${await user.getIdToken()}` : "",
-          },
-        })
-
-        if (purchaseResponse.ok) {
-          const purchase = await purchaseResponse.json()
-          setPurchaseData(purchase)
-          console.log("✅ [Purchase Success] Purchase data loaded:", purchase)
-        } else {
-          // Fallback: use the completion result data
-          if (completionResult.purchase) {
-            const fallbackData: PurchaseData = {
-              bundleId: completionResult.purchase.productBoxId || completionResult.purchase.bundleId,
-              bundleTitle:
-                completionResult.purchase.productTitle || completionResult.purchase.bundleTitle || "Your Purchase",
-              bundleDescription:
-                completionResult.purchase.productDescription || completionResult.purchase.bundleDescription || "",
-              contentCount: completionResult.purchase.items?.length || completionResult.purchase.contentCount || 0,
-              totalSize: completionResult.purchase.totalSize || 0,
-              items: completionResult.purchase.items || [],
-              creatorName: completionResult.purchase.creatorName || "Creator",
-              amount: completionResult.purchase.amount || 0,
-              currency: completionResult.purchase.currency || "usd",
-            }
-            setPurchaseData(fallbackData)
-            console.log("✅ [Purchase Success] Using fallback data:", fallbackData)
-          }
-        }
-      } catch (error) {
-        console.error("❌ [Purchase Success] Error:", error)
-        setError(error instanceof Error ? error.message : "Failed to complete purchase")
-      } finally {
-        setLoading(false)
-      }
+    if (!sessionId || !productBoxId) {
+      setError("Missing purchase information")
+      setVerificationStatus("error")
+      return
     }
 
-    completePurchase()
+    verifyAndCompletePurchase()
   }, [sessionId, productBoxId, user])
 
-  const formatFileSize = (bytes: number): string => {
-    if (bytes === 0) return "0 B"
-    const k = 1024
-    const sizes = ["B", "KB", "MB", "GB"]
-    const i = Math.floor(Math.log(bytes) / Math.log(k))
-    return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + " " + sizes[i]
+  const verifyAndCompletePurchase = async () => {
+    try {
+      console.log("🔍 [Purchase Success] Verifying purchase:", { sessionId, productBoxId })
+
+      // Get auth token if user is authenticated
+      const authToken = user ? await user.getIdToken() : null
+
+      const headers: any = {
+        "Content-Type": "application/json",
+      }
+
+      if (authToken) {
+        headers.Authorization = `Bearer ${authToken}`
+      }
+
+      const response = await fetch("/api/purchase/verify-and-complete-bundle", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          sessionId,
+          productBoxId,
+          forceComplete: true, // Force completion to fix any missing data
+        }),
+      })
+
+      const result = await response.json()
+
+      if (result.success) {
+        setPurchaseData(result.purchase)
+        setVerificationStatus("success")
+        console.log("✅ [Purchase Success] Purchase verified successfully:", {
+          contentCount: result.purchase.contentCount,
+          bundleTitle: result.purchase.bundleTitle,
+          buyerUid: result.purchase.buyerUid,
+        })
+      } else {
+        throw new Error(result.error || "Purchase verification failed")
+      }
+    } catch (error) {
+      console.error("❌ [Purchase Success] Verification error:", error)
+      setError(error.message)
+      setVerificationStatus("error")
+    }
   }
 
-  if (loading) {
+  const handleViewContent = () => {
+    if (productBoxId) {
+      router.push(`/product-box/${productBoxId}/content`)
+    }
+  }
+
+  const handleViewPurchases = () => {
+    router.push("/dashboard/purchases")
+  }
+
+  const handleViewCreatorProfile = () => {
+    if (purchaseData?.creatorUsername) {
+      router.push(`/creator/${purchaseData.creatorUsername}`)
+    }
+  }
+
+  if (authLoading || verificationStatus === "loading") {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-green-50 to-blue-50 flex items-center justify-center p-4">
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <Card className="w-full max-w-md">
-          <CardContent className="p-8 text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600 mx-auto mb-4"></div>
-            <h2 className="text-xl font-semibold mb-2">Processing Your Purchase</h2>
-            <p className="text-gray-600">Please wait while we set up your access...</p>
+          <CardContent className="flex flex-col items-center justify-center p-8">
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600 mb-4"></div>
+            <h2 className="text-xl font-semibold text-gray-900 mb-2">Processing Purchase</h2>
+            <p className="text-gray-600 text-center">Verifying your purchase and setting up access...</p>
           </CardContent>
         </Card>
       </div>
     )
   }
 
-  if (error) {
+  if (verificationStatus === "error") {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-red-50 to-orange-50 flex items-center justify-center p-4">
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <Card className="w-full max-w-md">
-          <CardContent className="p-8 text-center">
-            <div className="text-red-600 mb-4">
-              <Package className="h-12 w-12 mx-auto" />
-            </div>
-            <h2 className="text-xl font-semibold mb-2 text-red-800">Purchase Error</h2>
-            <p className="text-red-600 mb-4">{error}</p>
-            <Button asChild>
-              <Link href="/dashboard">Return to Dashboard</Link>
+          <CardContent className="flex flex-col items-center justify-center p-8">
+            <AlertCircle className="h-12 w-12 text-red-600 mb-4" />
+            <h2 className="text-xl font-semibold text-gray-900 mb-2">Purchase Error</h2>
+            <p className="text-gray-600 text-center mb-4">{error}</p>
+            <Button onClick={() => router.push("/")} variant="outline">
+              Return Home
             </Button>
           </CardContent>
         </Card>
@@ -158,82 +121,89 @@ export default function PurchaseSuccessPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-green-50 to-blue-50 flex items-center justify-center p-4">
-      <Card className="w-full max-w-md">
-        <CardContent className="p-8 text-center">
-          {/* Success Icon */}
-          <div className="text-green-600 mb-6">
-            <CheckCircle className="h-16 w-16 mx-auto" />
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
+      <Card className="w-full max-w-lg">
+        <CardContent className="p-8">
+          {/* Success Header */}
+          <div className="text-center mb-6">
+            <CheckCircle className="h-16 w-16 text-green-600 mx-auto mb-4" />
+            <h1 className="text-2xl font-bold text-gray-900 mb-2">Access Granted!</h1>
+            <p className="text-gray-600">Your premium content is now available</p>
+            {user && <p className="text-sm text-gray-500 mt-2">Welcome, {user.email}</p>}
           </div>
-
-          {/* Success Message */}
-          <h1 className="text-2xl font-bold text-gray-900 mb-2">Access Granted!</h1>
-          <p className="text-gray-600 mb-6">Your premium content is now available</p>
-
-          {/* User Info */}
-          <div className="text-sm text-gray-500 mb-6">Welcome, {user?.email || "valued customer"}</div>
 
           {/* Purchase Details */}
           {purchaseData && (
-            <div className="bg-white rounded-lg p-4 mb-6 border">
-              <div className="flex items-center space-x-3 mb-4">
-                <div className="w-12 h-12 bg-gray-200 rounded-lg flex items-center justify-center">
-                  <Package className="h-6 w-6 text-gray-600" />
-                </div>
-                <div className="text-left">
-                  <h3 className="font-semibold text-gray-900">{purchaseData.bundleTitle}</h3>
-                  <p className="text-sm text-gray-600">by {purchaseData.creatorName}</p>
-                  <p className="text-sm font-medium text-green-600">
-                    ${purchaseData.amount.toFixed(2)} {purchaseData.currency.toUpperCase()}
-                  </p>
+            <div className="bg-gray-50 rounded-lg p-4 mb-6">
+              <div className="flex items-start space-x-4">
+                {purchaseData.thumbnailUrl && (
+                  <img
+                    src={purchaseData.thumbnailUrl || "/placeholder.svg"}
+                    alt={purchaseData.bundleTitle}
+                    className="w-16 h-16 rounded-lg object-cover flex-shrink-0"
+                  />
+                )}
+                <div className="flex-1 min-w-0">
+                  <h3 className="font-semibold text-gray-900 truncate">{purchaseData.bundleTitle}</h3>
+                  {purchaseData.creatorName && <p className="text-sm text-gray-600">by {purchaseData.creatorName}</p>}
+                  <div className="flex items-center space-x-4 mt-2 text-sm text-gray-500">
+                    <span>{purchaseData.contentCount || 0} Items</span>
+                    <span>{purchaseData.totalSize ? formatFileSize(purchaseData.totalSize) : "0 B"} Total Size</span>
+                    <span>Lifetime</span>
+                  </div>
                 </div>
               </div>
 
-              {/* Content Stats */}
-              <div className="grid grid-cols-3 gap-4 text-center py-4 border-t">
-                <div>
-                  <div className="text-2xl font-bold text-gray-900">{purchaseData.contentCount}</div>
-                  <div className="text-sm text-gray-600">Items</div>
+              {/* Content Preview */}
+              {purchaseData.itemNames && purchaseData.itemNames.length > 0 && (
+                <div className="mt-4 pt-4 border-t border-gray-200">
+                  <p className="text-sm font-medium text-gray-700 mb-2">Content Included:</p>
+                  <div className="space-y-1">
+                    {purchaseData.itemNames.slice(0, 3).map((itemName: string, index: number) => (
+                      <p key={index} className="text-sm text-gray-600 truncate">
+                        • {itemName}
+                      </p>
+                    ))}
+                    {purchaseData.itemNames.length > 3 && (
+                      <p className="text-sm text-gray-500">+ {purchaseData.itemNames.length - 3} more items</p>
+                    )}
+                  </div>
                 </div>
-                <div>
-                  <div className="text-2xl font-bold text-gray-900">{formatFileSize(purchaseData.totalSize)}</div>
-                  <div className="text-sm text-gray-600">Total Size</div>
-                </div>
-                <div>
-                  <div className="text-2xl font-bold text-gray-900">∞</div>
-                  <div className="text-sm text-gray-600">Lifetime</div>
-                </div>
-              </div>
+              )}
             </div>
           )}
 
           {/* Action Buttons */}
           <div className="space-y-3">
-            <Button asChild className="w-full bg-red-600 hover:bg-red-700">
-              <Link href={`/product-box/${productBoxId}/content`}>
-                <Download className="h-4 w-4 mr-2" />
-                View Content
-              </Link>
+            <Button onClick={handleViewContent} className="w-full" size="lg">
+              <Eye className="h-4 w-4 mr-2" />
+              View Content
             </Button>
 
             <div className="grid grid-cols-2 gap-3">
-              <Button variant="outline" asChild>
-                <Link href="/dashboard/purchases">
-                  <Package className="h-4 w-4 mr-2" />
-                  My Purchases
-                </Link>
+              <Button onClick={handleViewPurchases} variant="outline" size="sm">
+                <ShoppingBag className="h-4 w-4 mr-2" />
+                My Purchases
               </Button>
 
-              <Button variant="outline" asChild>
-                <Link href={`/creator/${purchaseData?.creatorName || "creator"}`}>
+              {purchaseData?.creatorUsername && (
+                <Button onClick={handleViewCreatorProfile} variant="outline" size="sm">
                   <User className="h-4 w-4 mr-2" />
                   Creator Profile
-                </Link>
-              </Button>
+                </Button>
+              )}
             </div>
           </div>
         </CardContent>
       </Card>
     </div>
   )
+}
+
+function formatFileSize(bytes: number): string {
+  if (bytes === 0) return "0 Bytes"
+  const k = 1024
+  const sizes = ["Bytes", "KB", "MB", "GB"]
+  const i = Math.floor(Math.log(bytes) / Math.log(k))
+  return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + " " + sizes[i]
 }
