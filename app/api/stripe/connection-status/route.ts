@@ -1,7 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { stripe, isTestMode } from "@/lib/stripe"
-import { db } from "@/lib/firebase-admin"
-import { verifyIdToken } from "@/lib/auth-utils"
+import { db, auth } from "@/lib/firebase-admin"
 
 export async function POST(request: NextRequest) {
   try {
@@ -12,8 +11,12 @@ export async function POST(request: NextRequest) {
     }
 
     // Verify the Firebase ID token
-    const decodedToken = await verifyIdToken(request)
-    if (!decodedToken) {
+    let decodedToken
+    try {
+      decodedToken = await auth.verifyIdToken(idToken)
+      console.log(`✅ [Stripe Status] Token verified for user: ${decodedToken.uid}`)
+    } catch (tokenError) {
+      console.error("❌ [Stripe Status] Token verification failed:", tokenError)
       return NextResponse.json({ error: "Invalid or expired token" }, { status: 401 })
     }
 

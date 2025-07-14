@@ -41,15 +41,25 @@ export default function TempStripeConnectPage() {
   useEffect(() => {
     if (user) {
       checkStripeStatus()
+    } else {
+      setChecking(false)
+      setDebugInfo({ error: "User not authenticated" })
     }
   }, [user])
 
   const checkStripeStatus = async () => {
-    if (!user) return
+    if (!user) {
+      setDebugInfo({ error: "User not authenticated" })
+      setChecking(false)
+      return
+    }
 
     setChecking(true)
     try {
-      const token = await user.getIdToken()
+      console.log("🔍 Getting ID token...")
+      const token = await user.getIdToken(true) // Force refresh token
+      console.log("✅ Got ID token, checking status...")
+
       const response = await fetch("/api/stripe/connection-status", {
         method: "POST",
         headers: {
@@ -59,6 +69,7 @@ export default function TempStripeConnectPage() {
       })
 
       const data = await response.json()
+      console.log("📊 Status response:", data)
       setDebugInfo(data)
 
       if (data.success) {
@@ -73,9 +84,11 @@ export default function TempStripeConnectPage() {
           pastDue: data.accountStatus?.pastDue || [],
           platformAccountId: "acct_1RFLa9Dheyb0pkWF",
         })
+      } else {
+        console.error("❌ Status check failed:", data)
       }
-    } catch (error) {
-      console.error("Error checking Stripe status:", error)
+    } catch (error: any) {
+      console.error("❌ Error checking Stripe status:", error)
       setDebugInfo({ error: error.message })
     } finally {
       setChecking(false)
@@ -83,11 +96,21 @@ export default function TempStripeConnectPage() {
   }
 
   const createConnectedAccount = async () => {
-    if (!user) return
+    if (!user) {
+      toast({
+        title: "Authentication Required",
+        description: "Please log in to connect your Stripe account",
+        variant: "destructive",
+      })
+      return
+    }
 
     setLoading(true)
     try {
-      const token = await user.getIdToken()
+      console.log("🔗 Starting Stripe Connect onboarding...")
+      const token = await user.getIdToken(true) // Force refresh token
+      console.log("✅ Got fresh ID token")
+
       const response = await fetch("/api/stripe/connect/onboard", {
         method: "POST",
         headers: {
@@ -101,32 +124,41 @@ export default function TempStripeConnectPage() {
       })
 
       const data = await response.json()
-      console.log("Onboard response:", data)
+      console.log("📊 Onboard response:", data)
 
-      if (data.onboardingComplete) {
-        toast({
-          title: "Success",
-          description: "Stripe Connect account already set up! Checking status...",
-        })
-        await checkStripeStatus()
-      } else if (data.onboardingUrl) {
-        toast({
-          title: "Redirecting to Stripe",
-          description: "Setting up your connected account with MassClip platform...",
-        })
-        // Add a small delay to show the toast
-        setTimeout(() => {
-          window.location.href = data.onboardingUrl
-        }, 1000)
+      if (data.success) {
+        if (data.onboardingComplete) {
+          toast({
+            title: "Success",
+            description: "Stripe Connect account already set up! Checking status...",
+          })
+          await checkStripeStatus()
+        } else if (data.onboardingUrl) {
+          toast({
+            title: "Redirecting to Stripe",
+            description: "Setting up your connected account with MassClip platform...",
+          })
+          // Add a small delay to show the toast
+          setTimeout(() => {
+            window.location.href = data.onboardingUrl
+          }, 1000)
+        } else {
+          toast({
+            title: "Error",
+            description: data.error || "Failed to create connected account",
+            variant: "destructive",
+          })
+        }
       } else {
+        console.error("❌ Onboarding failed:", data)
         toast({
           title: "Error",
           description: data.error || "Failed to create connected account",
           variant: "destructive",
         })
       }
-    } catch (error) {
-      console.error("Error:", error)
+    } catch (error: any) {
+      console.error("❌ Error:", error)
       toast({
         title: "Error",
         description: "Failed to connect to Stripe",
@@ -163,7 +195,9 @@ export default function TempStripeConnectPage() {
         title: "Welcome back!",
         description: "Checking your Stripe Connect status...",
       })
-      checkStripeStatus()
+      if (user) {
+        checkStripeStatus()
+      }
     } else if (urlParams.get("refresh") === "true") {
       toast({
         title: "Setup incomplete",
@@ -171,7 +205,29 @@ export default function TempStripeConnectPage() {
         variant: "destructive",
       })
     }
-  }, [])
+  }, [user])
+
+  // Show authentication required message if no user
+  if (!user) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <Card className="bg-zinc-900/60 border-zinc-800/50 max-w-md">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <AlertCircle className="h-5 w-5 text-yellow-500" />
+              Authentication Required
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-zinc-400 mb-4">You need to be logged in to connect your Stripe account.</p>
+            <Button onClick={() => (window.location.href = "/login")} className="w-full">
+              Go to Login
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
 
   if (checking) {
     return (

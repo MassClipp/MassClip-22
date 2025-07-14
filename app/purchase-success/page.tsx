@@ -1,414 +1,278 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { useSearchParams, useRouter } from "next/navigation"
-import { Card, CardContent } from "@/components/ui/card"
+import { useSearchParams } from "next/navigation"
+import { useAuth } from "@/contexts/auth-context"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { CheckCircle, AlertCircle, Package, Eye, User, Loader2 } from "lucide-react"
-import Link from "next/link"
-import { useAuth } from "@/contexts/auth-context"
+import { Badge } from "@/components/ui/badge"
+import { CheckCircle, AlertCircle, Copy, Package, CreditCard } from "lucide-react"
+import { useToast } from "@/components/ui/use-toast"
 
-interface Purchase {
-  id: string
-  bundleId: string
-  bundleTitle: string
-  description: string
-  thumbnailUrl: string
-  creatorName: string
-  creatorUsername: string
-  amount: number
-  currency: string
-  contentCount: number
-  totalSize: number
-  buyerUid: string
-  itemNames: string[]
-  contents: any[]
-  mode: string
+interface PurchaseDetails {
+  success: boolean
+  purchaseId?: string
+  productBoxId?: string
+  creatorId?: string
+  buyerId?: string
+  amount?: number
+  environment?: string
   connectedAccountId?: string
+  alreadyProcessed?: boolean
+  error?: string
 }
 
 export default function PurchaseSuccessPage() {
   const searchParams = useSearchParams()
-  const router = useRouter()
-  const { user, loading: authLoading } = useAuth()
+  const { user } = useAuth()
+  const { toast } = useToast()
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [purchase, setPurchase] = useState<Purchase | null>(null)
-  const [authRetryCount, setAuthRetryCount] = useState(0)
+  const [purchaseDetails, setPurchaseDetails] = useState<PurchaseDetails | null>(null)
+  const [debugInfo, setDebugInfo] = useState<any>(null)
 
-  // Extract parameters from URL
   const sessionId = searchParams.get("session_id")
-  const productBoxId = searchParams.get("product_box_id")
-  const creatorId = searchParams.get("creator_id")
-  const buyerUid = searchParams.get("buyer_uid")
-  const connectedAccountId = searchParams.get("connected_account")
-
-  console.log("🔍 [Purchase Success] URL Parameters:", {
-    sessionId,
-    productBoxId,
-    creatorId,
-    buyerUid,
-    connectedAccountId,
-    hasUser: !!user,
-    userUid: user?.uid,
-  })
 
   useEffect(() => {
-    // Wait for auth to initialize, then process purchase
-    if (!authLoading) {
-      processPurchase()
+    if (sessionId) {
+      verifyPurchase()
+    } else {
+      setLoading(false)
+      setPurchaseDetails({ success: false, error: "No session ID provided" })
     }
-  }, [authLoading, user, sessionId, productBoxId])
+  }, [sessionId, user])
 
-  // Retry auth state if needed
-  useEffect(() => {
-    if (!authLoading && !user && authRetryCount < 3) {
-      console.log(`🔄 [Purchase Success] Retrying auth state check (${authRetryCount + 1}/3)`)
-      const timer = setTimeout(() => {
-        setAuthRetryCount((prev) => prev + 1)
-      }, 1000)
-      return () => clearTimeout(timer)
-    }
-  }, [authLoading, user, authRetryCount])
+  const verifyPurchase = async () => {
+    if (!sessionId) return
 
-  const processPurchase = async () => {
+    setLoading(true)
     try {
-      setLoading(true)
-      setError(null)
+      console.log("🔍 Verifying purchase for session:", sessionId)
 
-      console.log("🔄 [Purchase Success] Processing purchase...")
-
-      // Validate required parameters
-      if (!sessionId && !productBoxId) {
-        throw new Error("Missing purchase information. Please check your email for purchase confirmation.")
+      let idToken = null
+      if (user) {
+        idToken = await user.getIdToken()
       }
 
-      // If we have sessionId, use the comprehensive verification
-      if (sessionId) {
-        await verifyWithSessionId()
-      } else if (productBoxId) {
-        // Fallback: try to verify with product box ID and buyer UID
-        await verifyWithProductBoxId()
+      const response = await fetch("/api/purchase/verify-session", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          sessionId,
+          idToken,
+        }),
+      })
+
+      const data = await response.json()
+      console.log("📊 Purchase verification response:", data)
+
+      setDebugInfo(data)
+      setPurchaseDetails(data)
+
+      if (data.success) {
+        toast({
+          title: "Purchase Verified!",
+          description: data.alreadyProcessed
+            ? "Your purchase was already processed"
+            : "Your purchase has been successfully verified and access granted",
+        })
       } else {
-        throw new Error("Insufficient purchase information")
+        toast({
+          title: "Verification Failed",
+          description: data.error || "Failed to verify your purchase",
+          variant: "destructive",
+        })
       }
-    } catch (err: any) {
-      console.error("❌ [Purchase Success] Error processing purchase:", err)
-      setError(err.message || "Failed to process purchase")
+    } catch (error: any) {
+      console.error("❌ Error verifying purchase:", error)
+      setPurchaseDetails({ success: false, error: error.message })
+      setDebugInfo({ error: error.message })
     } finally {
       setLoading(false)
     }
   }
 
-  const verifyWithSessionId = async () => {
-    console.log("🔍 [Purchase Success] Verifying with session ID:", sessionId)
-
-    // Prepare headers
-    const headers: any = {
-      "Content-Type": "application/json",
-    }
-
-    // Add auth token if user is available
-    if (user) {
-      try {
-        const idToken = await user.getIdToken()
-        headers["Authorization"] = `Bearer ${idToken}`
-        console.log("🔐 [Purchase Success] Added auth token for user:", user.uid)
-      } catch (tokenError) {
-        console.warn("⚠️ [Purchase Success] Failed to get ID token:", tokenError)
-      }
-    }
-
-    const response = await fetch("/api/purchase/verify-and-complete-bundle", {
-      method: "POST",
-      headers,
-      body: JSON.stringify({
-        sessionId,
-        productBoxId,
-        connectedAccountId, // Pass connected account ID for proper session retrieval
-        forceComplete: true,
-      }),
-    })
-
-    const data = await response.json()
-    console.log("📡 [Purchase Success] API response:", data)
-
-    if (!response.ok) {
-      throw new Error(data.error || `API request failed with status ${response.status}`)
-    }
-
-    if (data.success && data.purchase) {
-      setPurchase(data.purchase)
-      console.log("✅ [Purchase Success] Purchase verified successfully:", {
-        bundleTitle: data.purchase.bundleTitle,
-        contentCount: data.purchase.contentCount,
-        buyerUid: data.purchase.buyerUid,
-        mode: data.purchase.mode,
-        connectedAccountId: data.purchase.connectedAccountId,
+  const copySessionId = () => {
+    if (sessionId) {
+      navigator.clipboard.writeText(sessionId)
+      toast({
+        title: "Copied",
+        description: "Session ID copied to clipboard",
       })
-    } else {
-      throw new Error("Invalid response from server")
     }
   }
 
-  const verifyWithProductBoxId = async () => {
-    console.log("🔍 [Purchase Success] Verifying with product box ID:", productBoxId)
-
-    // This is a fallback method when we don't have session_id
-    // We'll try to find a recent purchase for this product box
-    const headers: any = {
-      "Content-Type": "application/json",
-    }
-
-    if (user) {
-      try {
-        const idToken = await user.getIdToken()
-        headers["Authorization"] = `Bearer ${idToken}`
-      } catch (tokenError) {
-        console.warn("⚠️ [Purchase Success] Failed to get ID token:", tokenError)
-      }
-    }
-
-    const response = await fetch("/api/purchase/verify-recent-purchase", {
-      method: "POST",
-      headers,
-      body: JSON.stringify({
-        productBoxId,
-        buyerUid: user?.uid || buyerUid,
-        creatorId,
-        connectedAccountId,
-      }),
+  const copyDebugInfo = () => {
+    navigator.clipboard.writeText(JSON.stringify(debugInfo, null, 2))
+    toast({
+      title: "Copied",
+      description: "Debug info copied to clipboard",
     })
-
-    const data = await response.json()
-
-    if (!response.ok) {
-      throw new Error(data.error || "Failed to verify purchase")
-    }
-
-    if (data.success && data.purchase) {
-      setPurchase(data.purchase)
-    } else {
-      throw new Error("No recent purchase found for this product")
-    }
   }
 
-  const formatFileSize = (bytes: number): string => {
-    if (bytes === 0) return "0 B"
-    const k = 1024
-    const sizes = ["B", "KB", "MB", "GB"]
-    const i = Math.floor(Math.log(bytes) / Math.log(k))
-    return Number.parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + " " + sizes[i]
-  }
-
-  // Loading state
-  if (authLoading || loading) {
+  if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900 flex items-center justify-center p-4">
-        <Card className="w-full max-w-md bg-black/40 backdrop-blur-xl border-white/10">
-          <CardContent className="p-8 text-center">
-            <div className="mb-6">
-              <Loader2 className="h-16 w-16 text-red-500 mx-auto animate-spin" />
-            </div>
-            <h1 className="text-2xl font-bold text-white mb-2">Processing Purchase</h1>
-            <p className="text-white/70">Verifying your purchase and setting up access...</p>
-            {user && <p className="text-white/50 text-sm mt-2">User: {user.email}</p>}
-            {!user && authRetryCount > 0 && (
-              <p className="text-white/50 text-sm mt-2">Checking authentication... ({authRetryCount}/3)</p>
-            )}
-            {sessionId && (
-              <p className="text-white/40 text-xs mt-2 font-mono">Session: {sessionId.substring(0, 20)}...</p>
-            )}
-          </CardContent>
-        </Card>
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-zinc-400">Verifying your purchase...</p>
+        </div>
       </div>
     )
   }
 
-  // Error state
-  if (error) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900 flex items-center justify-center p-4">
-        <Card className="w-full max-w-md bg-black/40 backdrop-blur-xl border-white/10">
-          <CardContent className="p-8 text-center">
-            <div className="mb-6">
-              <AlertCircle className="h-16 w-16 text-red-500 mx-auto" />
-            </div>
-            <h1 className="text-2xl font-bold text-white mb-2">Purchase Error</h1>
-            <Alert className="bg-red-500/10 border-red-500/20 mb-6">
-              <AlertCircle className="h-4 w-4 text-red-400" />
-              <AlertDescription className="text-red-200">
-                <strong>Error:</strong> {error}
-              </AlertDescription>
-            </Alert>
-            <div className="space-y-3">
-              <Button onClick={processPurchase} className="w-full bg-red-600 hover:bg-red-700">
-                Try Again
-              </Button>
-              <Button
-                asChild
-                variant="outline"
-                className="w-full bg-transparent border-white/20 text-white hover:bg-white/10"
-              >
-                <Link href="/dashboard">Go to Dashboard</Link>
-              </Button>
-            </div>
-            {/* Debug info */}
-            <div className="mt-4 text-xs text-white/40">
-              <p>Session ID: {sessionId || "Not provided"}</p>
-              <p>Product Box ID: {productBoxId || "Not provided"}</p>
-              <p>Connected Account: {connectedAccountId || "Not provided"}</p>
-              <p>User: {user?.uid || "Not authenticated"}</p>
-            </div>
-          </CardContent>
-        </Card>
+  return (
+    <div className="max-w-2xl mx-auto p-6 space-y-6">
+      <div className="text-center">
+        <h1 className="text-3xl font-bold mb-2">Purchase Complete</h1>
+        <p className="text-zinc-400">Thank you for your purchase!</p>
       </div>
-    )
-  }
 
-  // Success state
-  if (purchase) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-black to-gray-900 flex items-center justify-center p-4">
-        <Card className="w-full max-w-lg bg-black/40 backdrop-blur-xl border-white/10">
-          <CardContent className="p-8">
-            {/* Success Header */}
-            <div className="text-center mb-8">
-              <div className="mb-4">
-                <CheckCircle className="h-16 w-16 text-green-500 mx-auto" />
-              </div>
-              <h1 className="text-3xl font-bold text-white mb-2">Access Granted!</h1>
-              <p className="text-white/70">Your premium content is now available</p>
-              {user && <p className="text-white/50 text-sm mt-1">Welcome, {user.email}</p>}
-              {purchase.mode && (
-                <p className="text-white/40 text-xs mt-1">
-                  {purchase.mode === "test" ? "🧪 Test Mode" : "🔴 Live Mode"}
-                </p>
-              )}
-            </div>
+      {/* Purchase Status */}
+      <Card className="bg-zinc-900/60 border-zinc-800/50">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            {purchaseDetails?.success ? (
+              <CheckCircle className="h-5 w-5 text-green-500" />
+            ) : (
+              <AlertCircle className="h-5 w-5 text-red-500" />
+            )}
+            Purchase Status
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {purchaseDetails?.success ? (
+            <div className="space-y-4">
+              <Alert className="border-green-600 bg-green-600/10">
+                <CheckCircle className="h-4 w-4" />
+                <AlertDescription>
+                  <strong>Success!</strong> Your purchase has been verified and access has been granted.
+                  {purchaseDetails.alreadyProcessed && " (This purchase was already processed)"}
+                </AlertDescription>
+              </Alert>
 
-            {/* Purchase Details */}
-            <div className="bg-white/5 rounded-lg p-6 mb-6">
-              <div className="flex items-start space-x-4">
-                {/* Thumbnail */}
-                <div className="w-16 h-16 bg-gray-800 rounded-lg overflow-hidden flex-shrink-0">
-                  {purchase.thumbnailUrl ? (
-                    <img
-                      src={purchase.thumbnailUrl || "/placeholder.svg"}
-                      alt={purchase.bundleTitle}
-                      className="w-full h-full object-cover"
-                      onError={(e) => {
-                        const target = e.target as HTMLImageElement
-                        target.src = "/placeholder.svg?height=64&width=64&text=Bundle"
-                      }}
-                    />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center">
-                      <Package className="h-6 w-6 text-gray-500" />
+              {/* Purchase Details Grid */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {purchaseDetails.amount && (
+                  <div className="bg-zinc-800/50 p-3 rounded-lg">
+                    <div className="text-xs text-zinc-400">Amount Paid</div>
+                    <div className="text-lg font-semibold">${purchaseDetails.amount.toFixed(2)}</div>
+                  </div>
+                )}
+
+                {purchaseDetails.environment && (
+                  <div className="bg-zinc-800/50 p-3 rounded-lg">
+                    <div className="text-xs text-zinc-400">Environment</div>
+                    <div className="text-sm">
+                      <Badge variant={purchaseDetails.environment === "test" ? "secondary" : "default"}>
+                        {purchaseDetails.environment === "test" ? "Test Mode" : "Live Mode"}
+                      </Badge>
                     </div>
-                  )}
-                </div>
-
-                {/* Bundle Info */}
-                <div className="flex-1">
-                  <h3 className="text-xl font-bold text-white mb-1">{purchase.bundleTitle}</h3>
-                  <p className="text-white/70 text-sm mb-2">{purchase.description}</p>
-                  <div className="flex items-center space-x-4 text-sm text-white/60">
-                    <span className="flex items-center">
-                      <User className="h-4 w-4 mr-1" />
-                      {purchase.creatorName}
-                    </span>
-                    <span>
-                      ${purchase.amount.toFixed(2)} {purchase.currency.toUpperCase()}
-                    </span>
                   </div>
-                </div>
+                )}
+
+                {purchaseDetails.purchaseId && (
+                  <div className="bg-zinc-800/50 p-3 rounded-lg">
+                    <div className="text-xs text-zinc-400">Purchase ID</div>
+                    <div className="font-mono text-sm">{purchaseDetails.purchaseId}</div>
+                  </div>
+                )}
+
+                {purchaseDetails.connectedAccountId && (
+                  <div className="bg-zinc-800/50 p-3 rounded-lg">
+                    <div className="text-xs text-zinc-400">Connected Account</div>
+                    <div className="font-mono text-sm">{purchaseDetails.connectedAccountId}</div>
+                  </div>
+                )}
               </div>
 
-              {/* Content Stats */}
-              <div className="grid grid-cols-3 gap-4 mt-4 pt-4 border-t border-white/10">
-                <div className="text-center">
-                  <div className="text-lg font-bold text-white">{purchase.contentCount}</div>
-                  <div className="text-sm text-white/60">Items</div>
-                </div>
-                <div className="text-center">
-                  <div className="text-lg font-bold text-white">{formatFileSize(purchase.totalSize)}</div>
-                  <div className="text-sm text-white/60">Total Size</div>
-                </div>
-                <div className="text-center">
-                  <div className="text-lg font-bold text-green-400">∞</div>
-                  <div className="text-sm text-white/60">Lifetime</div>
-                </div>
+              {/* Action Buttons */}
+              <div className="flex gap-2">
+                {purchaseDetails.productBoxId && (
+                  <Button
+                    onClick={() => (window.location.href = `/product-box/${purchaseDetails.productBoxId}/content`)}
+                  >
+                    <Package className="h-4 w-4 mr-2" />
+                    Access Content
+                  </Button>
+                )}
+                <Button variant="outline" onClick={() => (window.location.href = "/dashboard/purchases")}>
+                  View All Purchases
+                </Button>
               </div>
-
-              {/* Content Preview */}
-              {purchase.itemNames && purchase.itemNames.length > 0 && (
-                <div className="mt-4 pt-4 border-t border-white/10">
-                  <p className="text-sm font-medium text-white/80 mb-2">Content Included:</p>
-                  <div className="space-y-1">
-                    {purchase.itemNames.slice(0, 3).map((itemName: string, index: number) => (
-                      <p key={index} className="text-sm text-white/60 truncate">
-                        • {itemName}
-                      </p>
-                    ))}
-                    {purchase.itemNames.length > 3 && (
-                      <p className="text-sm text-white/50">+ {purchase.itemNames.length - 3} more items</p>
-                    )}
-                  </div>
-                </div>
-              )}
             </div>
+          ) : (
+            <div className="space-y-4">
+              <Alert className="border-red-600 bg-red-600/10">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>
+                  <strong>Verification Failed:</strong> {purchaseDetails?.error || "Unknown error occurred"}
+                </AlertDescription>
+              </Alert>
 
-            {/* Action Buttons */}
-            <div className="space-y-3">
-              <Button asChild className="w-full bg-red-600 hover:bg-red-700">
-                <Link href={`/product-box/${purchase.bundleId}/content`}>
-                  <Eye className="w-4 h-4 mr-2" />
-                  View Content
-                </Link>
+              <div className="flex gap-2">
+                <Button onClick={verifyPurchase} variant="outline">
+                  Retry Verification
+                </Button>
+                <Button variant="outline" onClick={() => (window.location.href = "/dashboard")}>
+                  Go to Dashboard
+                </Button>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Session Details */}
+      {sessionId && (
+        <Card className="bg-zinc-900/60 border-zinc-800/50">
+          <CardHeader>
+            <CardTitle className="text-sm flex items-center gap-2">
+              <CreditCard className="h-4 w-4" />
+              Session Details
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-xs text-zinc-400">Checkout Session ID</div>
+                <div className="font-mono text-sm">{sessionId}</div>
+              </div>
+              <Button variant="ghost" size="sm" onClick={copySessionId}>
+                <Copy className="h-4 w-4" />
               </Button>
-              <div className="grid grid-cols-2 gap-3">
-                <Button
-                  asChild
-                  variant="outline"
-                  className="bg-transparent border-white/20 text-white hover:bg-white/10"
-                >
-                  <Link href="/dashboard/purchases">
-                    <Package className="w-4 h-4 mr-2" />
-                    My Purchases
-                  </Link>
-                </Button>
-                <Button
-                  asChild
-                  variant="outline"
-                  className="bg-transparent border-white/20 text-white hover:bg-white/10"
-                >
-                  <Link href={`/creator/${purchase.creatorUsername}`}>
-                    <User className="w-4 h-4 mr-2" />
-                    Creator Profile
-                  </Link>
-                </Button>
-              </div>
             </div>
-
-            {/* Debug info for development */}
-            {process.env.NODE_ENV === "development" && (
-              <div className="mt-4 p-3 bg-white/5 rounded text-xs text-white/40">
-                <p>Purchase ID: {purchase.id}</p>
-                <p>Bundle ID: {purchase.bundleId}</p>
-                <p>Session ID: {sessionId}</p>
-                <p>Connected Account: {purchase.connectedAccountId || "N/A"}</p>
-                <p>Mode: {purchase.mode || "unknown"}</p>
-                <p>User ID: {user?.uid || "anonymous"}</p>
-                <p>Buyer UID: {purchase.buyerUid}</p>
-              </div>
-            )}
           </CardContent>
         </Card>
-      </div>
-    )
-  }
+      )}
 
-  return null
+      {/* Debug Information */}
+      {debugInfo && (
+        <Card className="bg-zinc-900/60 border-zinc-800/50">
+          <CardHeader>
+            <CardTitle className="text-sm flex items-center justify-between">
+              Debug Information
+              <Button variant="ghost" size="sm" onClick={copyDebugInfo}>
+                <Copy className="h-4 w-4" />
+              </Button>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <pre className="text-xs bg-zinc-800 p-3 rounded overflow-auto max-h-40">
+              {JSON.stringify(debugInfo, null, 2)}
+            </pre>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Navigation */}
+      <div className="text-center">
+        <Button variant="outline" onClick={() => (window.location.href = "/dashboard")}>
+          Return to Dashboard
+        </Button>
+      </div>
+    </div>
+  )
 }

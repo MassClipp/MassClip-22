@@ -1,49 +1,55 @@
 import Stripe from "stripe"
 
-// Force test mode for all environments except explicit production
-const forceTestMode = process.env.STRIPE_FORCE_TEST !== "false"
-const isExplicitProduction = process.env.NODE_ENV === "production" && process.env.STRIPE_FORCE_TEST === "false"
-
-const useTestMode = forceTestMode || !isExplicitProduction
-
-// Get the appropriate key
-const stripeKey = useTestMode ? process.env.STRIPE_SECRET_KEY_TEST : process.env.STRIPE_SECRET_KEY
-
-if (!stripeKey) {
-  throw new Error(`Missing Stripe ${useTestMode ? "test" : "live"} secret key`)
+if (!process.env.STRIPE_SECRET_KEY) {
+  throw new Error("STRIPE_SECRET_KEY is not set")
 }
 
-console.log(`🔧 [Stripe] FORCING ${useTestMode ? "TEST" : "LIVE"} mode`)
-console.log(`🔑 [Stripe] Using key: ${stripeKey.substring(0, 12)}...`)
-
-export const stripe = new Stripe(stripeKey, {
-  apiVersion: "2024-06-20",
-  typescript: true,
+export const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
+  apiVersion: "2023-10-16",
 })
 
-export const isTestMode = useTestMode
+// Check if we're in test mode
+export const isTestMode = process.env.STRIPE_SECRET_KEY?.startsWith("sk_test_") || false
 
-// Helper function to create Stripe instance with connected account context
-export function createStripeWithAccount(connectedAccountId: string) {
-  return new Stripe(stripeKey, {
-    apiVersion: "2024-06-20",
-    typescript: true,
-    stripeAccount: connectedAccountId,
+console.log(`🔧 [Stripe] Initialized in ${isTestMode ? "TEST" : "LIVE"} mode`)
+
+/**
+ * Create a Stripe instance configured for a connected account
+ */
+export function createStripeWithAccount(accountId: string) {
+  return new Stripe(process.env.STRIPE_SECRET_KEY!, {
+    apiVersion: "2023-10-16",
+    stripeAccount: accountId,
   })
 }
 
-// Helper function to make API calls with connected account context
+/**
+ * Execute a Stripe operation with connected account context
+ */
 export async function callStripeWithAccount<T>(
-  connectedAccountId: string,
+  accountId: string,
   operation: (stripe: Stripe) => Promise<T>,
 ): Promise<T> {
-  const stripeWithAccount = createStripeWithAccount(connectedAccountId)
+  const stripeWithAccount = createStripeWithAccount(accountId)
   return await operation(stripeWithAccount)
 }
 
-// Log the mode clearly
-if (useTestMode) {
-  console.log("🧪 [Stripe] TEST MODE ACTIVE - Using test keys and test checkout sessions")
-} else {
-  console.log("🔴 [Stripe] LIVE MODE ACTIVE - Using live keys and live checkout sessions")
+/**
+ * Validate that an account exists and is accessible
+ */
+export async function validateConnectedAccount(accountId: string): Promise<boolean> {
+  try {
+    await stripe.accounts.retrieve(accountId)
+    return true
+  } catch (error) {
+    console.error(`❌ [Stripe] Invalid connected account: ${accountId}`, error)
+    return false
+  }
+}
+
+/**
+ * Get application fee amount (25% platform fee)
+ */
+export function calculateApplicationFee(amount: number): number {
+  return Math.round(amount * 0.25) // 25% platform fee
 }
