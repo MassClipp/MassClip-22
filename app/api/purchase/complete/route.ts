@@ -227,26 +227,158 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// Handle bundle purchases specifically
+// Handle bundle purchases specifically - ENHANCED VERSION
 async function handleBundlePurchase(request: NextRequest, data: any) {
   const { buyerUid, bundleId, sessionId, amount, currency, userEmail, verifiedUser, bundleData } = data
 
   console.log("🎁 [Bundle Purchase] Processing bundle purchase:", { bundleId, buyerUid, userEmail })
+  console.log("🎁 [Bundle Purchase] Bundle data received:", {
+    title: bundleData.title,
+    contentItems: bundleData.contentItems?.length || 0,
+    detailedContentItems: bundleData.detailedContentItems?.length || 0,
+    contents: bundleData.contents?.length || 0,
+  })
 
-  // Get bundle contents with proper names
+  // Get bundle contents with comprehensive metadata extraction
   let bundleContents: any[] = []
-  if (bundleData.contents && Array.isArray(bundleData.contents)) {
+
+  // Method 1: Use detailedContentItems if available (most comprehensive)
+  if (bundleData.detailedContentItems && Array.isArray(bundleData.detailedContentItems)) {
+    console.log("✅ [Bundle Purchase] Using detailedContentItems from bundle")
+    bundleContents = bundleData.detailedContentItems.map((item: any) => ({
+      ...item,
+      displayTitle: item.displayTitle || item.title || item.name || item.filename || "Untitled Content",
+      displaySize: item.displaySize || (item.fileSize ? formatFileSize(item.fileSize) : "Unknown Size"),
+    }))
+  }
+  // Method 2: Use contents array if available
+  else if (bundleData.contents && Array.isArray(bundleData.contents)) {
+    console.log("✅ [Bundle Purchase] Using contents array from bundle")
     bundleContents = bundleData.contents.map((item: any) => ({
       ...item,
-      displayTitle: item.title || item.name || item.filename || "Untitled Content",
-      displaySize: item.fileSize ? formatFileSize(item.fileSize) : "Unknown Size",
+      displayTitle: item.displayTitle || item.title || item.name || item.filename || "Untitled Content",
+      displaySize: item.displaySize || (item.fileSize ? formatFileSize(item.fileSize) : "Unknown Size"),
     }))
-  } else if (bundleData.items && Array.isArray(bundleData.items)) {
-    bundleContents = bundleData.items.map((item: any) => ({
-      ...item,
-      displayTitle: item.title || item.name || item.filename || "Untitled Content",
-      displaySize: item.fileSize ? formatFileSize(item.fileSize) : "Unknown Size",
-    }))
+  }
+  // Method 3: Use contentItems array and fetch detailed metadata
+  else if (bundleData.contentItems && Array.isArray(bundleData.contentItems)) {
+    console.log("🔍 [Bundle Purchase] Fetching detailed metadata for contentItems")
+
+    for (const contentId of bundleData.contentItems) {
+      try {
+        console.log(`🔍 [Bundle Purchase] Fetching metadata for: ${contentId}`)
+
+        // Try uploads collection first
+        let contentData = null
+        const uploadDoc = await db.collection("uploads").doc(contentId).get()
+
+        if (uploadDoc.exists) {
+          contentData = uploadDoc.data()
+          console.log(`✅ [Bundle Purchase] Found in uploads:`, {
+            title: contentData?.title,
+            filename: contentData?.filename,
+            fileUrl: contentData?.fileUrl,
+            fileSize: contentData?.fileSize || contentData?.size,
+          })
+        } else {
+          // Try productBoxContent as fallback
+          const productBoxContentDoc = await db.collection("productBoxContent").doc(contentId).get()
+          if (productBoxContentDoc.exists) {
+            contentData = productBoxContentDoc.data()
+            console.log(`✅ [Bundle Purchase] Found in productBoxContent`)
+
+            // If we have an uploadId, get the original upload data
+            if (contentData?.uploadId) {
+              const originalUpload = await db.collection("uploads").doc(contentData.uploadId).get()
+              if (originalUpload.exists) {
+                const originalData = originalUpload.data()
+                contentData = { ...contentData, ...originalData }
+                console.log(`✅ [Bundle Purchase] Enhanced with original upload data`)
+              }
+            }
+          }
+        }
+
+        if (contentData) {
+          const enhancedItem = {
+            id: contentId,
+            title: contentData.title || contentData.filename || contentData.originalFileName || "Untitled",
+            displayTitle: contentData.title || contentData.filename || contentData.originalFileName || "Untitled",
+            filename: contentData.filename || contentData.originalFileName || `${contentId}.file`,
+            fileUrl: contentData.fileUrl || contentData.publicUrl || contentData.url || contentData.downloadUrl || "",
+            thumbnailUrl: contentData.thumbnailUrl || contentData.previewUrl || "",
+
+            // File metadata
+            mimeType: contentData.mimeType || contentData.fileType || "application/octet-stream",
+            fileSize: contentData.fileSize || contentData.size || 0,
+            displaySize: formatFileSize(contentData.fileSize || contentData.size || 0),
+
+            // Video/Audio metadata
+            duration: contentData.duration || contentData.videoDuration || 0,
+            displayDuration: contentData.duration ? formatDuration(contentData.duration) : null,
+            resolution:
+              contentData.resolution ||
+              contentData.videoResolution ||
+              (contentData.height ? `${contentData.height}p` : null),
+            width: contentData.width || contentData.videoWidth,
+            height: contentData.height || contentData.videoHeight,
+
+            // Content classification
+            contentType: getContentType(contentData.mimeType || contentData.fileType || "application/octet-stream"),
+            category: contentData.category || contentData.tag,
+            tags: contentData.tags || (contentData.tag ? [contentData.tag] : []),
+
+            // Additional metadata
+            description: contentData.description || "",
+            creatorId: contentData.creatorId || contentData.userId || bundleData.creatorId,
+            uploadedAt: contentData.uploadedAt || contentData.createdAt || new Date(),
+            isPublic: contentData.isPublic !== false,
+          }
+
+          console.log(`✅ [Bundle Purchase] Enhanced item:`, {
+            title: enhancedItem.displayTitle,
+            fileUrl: enhancedItem.fileUrl,
+            fileSize: enhancedItem.displaySize,
+            contentType: enhancedItem.contentType,
+          })
+
+          bundleContents.push(enhancedItem)
+        } else {
+          console.warn(`⚠️ [Bundle Purchase] No data found for content: ${contentId}`)
+        }
+      } catch (error) {
+        console.error(`❌ [Bundle Purchase] Error fetching content ${contentId}:`, error)
+      }
+    }
+  }
+
+  console.log(`📊 [Bundle Purchase] Final bundle contents: ${bundleContents.length} items`)
+  console.log(
+    `📝 [Bundle Purchase] Content titles:`,
+    bundleContents.map((item) => item.displayTitle),
+  )
+
+  // Helper functions
+  function formatFileSize(bytes: number): string {
+    if (bytes === 0) return "0 Bytes"
+    const k = 1024
+    const sizes = ["Bytes", "KB", "MB", "GB"]
+    const i = Math.floor(Math.log(bytes) / Math.log(k))
+    return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + " " + sizes[i]
+  }
+
+  function formatDuration(seconds: number): string {
+    if (!seconds || seconds <= 0) return "0:00"
+    const minutes = Math.floor(seconds / 60)
+    const remainingSeconds = Math.floor(seconds % 60)
+    return `${minutes}:${remainingSeconds.toString().padStart(2, "0")}`
+  }
+
+  function getContentType(mimeType: string): "video" | "audio" | "image" | "document" {
+    if (mimeType.startsWith("video/")) return "video"
+    if (mimeType.startsWith("audio/")) return "audio"
+    if (mimeType.startsWith("image/")) return "image"
+    return "document"
   }
 
   const bundlePurchaseData = {
@@ -261,13 +393,14 @@ async function handleBundlePurchase(request: NextRequest, data: any) {
     bundleId,
     bundleTitle: bundleData.title || "Untitled Bundle",
     bundleDescription: bundleData.description || "",
-    thumbnailUrl: bundleData.customPreviewThumbnail || bundleData.thumbnailUrl || "",
+    thumbnailUrl: bundleData.customPreviewThumbnail || bundleData.thumbnailUrl || bundleData.coverImage || "",
 
-    // Content information with proper names
+    // Content information with comprehensive metadata
     contents: bundleContents,
     items: bundleContents,
     itemNames: bundleContents.map((item) => item.displayTitle),
     contentTitles: bundleContents.map((item) => item.displayTitle),
+    contentUrls: bundleContents.map((item) => item.fileUrl).filter(Boolean),
     contentCount: bundleContents.length,
     totalItems: bundleContents.length,
     totalSize: bundleContents.reduce((sum, item) => sum + (item.fileSize || 0), 0),
@@ -279,17 +412,25 @@ async function handleBundlePurchase(request: NextRequest, data: any) {
     status: "completed",
     type: "bundle",
 
+    // Creator information
+    creatorId: bundleData.creatorId || "",
+    creatorName: bundleData.creatorName || "",
+    creatorUsername: bundleData.creatorUsername || "",
+
     // Timestamps
     purchasedAt: new Date(),
     createdAt: new Date(),
     completedAt: new Date(),
   }
 
-  console.log("💾 [Bundle Purchase] Saving bundle purchase with user identification:", {
+  console.log("💾 [Bundle Purchase] Saving comprehensive bundle purchase:", {
     buyerUid: bundlePurchaseData.buyerUid,
     userEmail: bundlePurchaseData.userEmail,
     userName: bundlePurchaseData.userName,
+    bundleTitle: bundlePurchaseData.bundleTitle,
+    contentCount: bundlePurchaseData.contentCount,
     itemNames: bundlePurchaseData.itemNames,
+    contentUrls: bundlePurchaseData.contentUrls.length,
   })
 
   // Save to bundlePurchases collection
@@ -313,7 +454,7 @@ async function handleBundlePurchase(request: NextRequest, data: any) {
       })
   }
 
-  console.log("✅ [Bundle Purchase] Bundle purchase saved successfully")
+  console.log("✅ [Bundle Purchase] Bundle purchase saved successfully with comprehensive metadata")
 
   return NextResponse.json({
     success: true,
