@@ -110,11 +110,6 @@ const NAV: RawNavSection[] = [
         icon: <Upload className="h-4 w-4 mr-2" />,
       },
       {
-        title: "Product Boxes",
-        url: "/dashboard/product-boxes",
-        icon: <Package className="h-4 w-4 mr-2" />,
-      },
-      {
         title: "Bundles",
         url: "/dashboard/bundles",
         icon: <Package className="h-4 w-4 mr-2" />,

@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { useAuth } from "@/contexts/auth-context"
+import { useFirebaseAuth } from "./use-firebase-auth"
 
 interface StripeConnectionStatus {
   isConnected: boolean
@@ -10,21 +10,22 @@ interface StripeConnectionStatus {
 }
 
 export function useStripeConnectionCheck(): StripeConnectionStatus {
-  const { user } = useAuth()
-  const [status, setStatus] = useState<StripeConnectionStatus>({
-    isConnected: false,
-    loading: true,
-    error: null,
-  })
+  const [isConnected, setIsConnected] = useState(false)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const { user } = useFirebaseAuth()
 
   useEffect(() => {
-    const checkStripeConnection = async () => {
-      if (!user) {
-        setStatus({ isConnected: false, loading: false, error: null })
-        return
-      }
+    if (!user) {
+      setLoading(false)
+      return
+    }
 
+    const checkStripeConnection = async () => {
       try {
+        setLoading(true)
+        setError(null)
+
         const response = await fetch("/api/stripe/connection-status", {
           method: "GET",
           headers: {
@@ -37,24 +38,18 @@ export function useStripeConnectionCheck(): StripeConnectionStatus {
         }
 
         const data = await response.json()
-
-        setStatus({
-          isConnected: data.connected || false,
-          loading: false,
-          error: null,
-        })
-      } catch (error) {
-        console.error("Error checking Stripe connection:", error)
-        setStatus({
-          isConnected: false,
-          loading: false,
-          error: error instanceof Error ? error.message : "Unknown error",
-        })
+        setIsConnected(data.connected || false)
+      } catch (err) {
+        console.error("Error checking Stripe connection:", err)
+        setError(err instanceof Error ? err.message : "Unknown error")
+        setIsConnected(false)
+      } finally {
+        setLoading(false)
       }
     }
 
     checkStripeConnection()
   }, [user])
 
-  return status
+  return { isConnected, loading, error }
 }
