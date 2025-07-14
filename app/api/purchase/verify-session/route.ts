@@ -1,17 +1,19 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { stripe } from "@/lib/stripe"
+import { stripe, isTestMode, callStripeWithAccount } from "@/lib/stripe"
 import { db } from "@/lib/firebase-admin"
 import { UnifiedPurchaseService } from "@/lib/unified-purchase-service"
 
 export async function POST(request: NextRequest) {
   try {
-    const { sessionId, userId } = await request.json()
+    const { sessionId, userId, connectedAccountId } = await request.json()
 
     if (!sessionId || !userId) {
       return NextResponse.json({ error: "Missing sessionId or userId" }, { status: 400 })
     }
 
-    console.log(`🔍 [Purchase Verify] Verifying session ${sessionId} for user ${userId}`)
+    console.log(
+      `🔍 [Purchase Verify] Verifying session ${sessionId} for user ${userId} (${isTestMode ? "TEST" : "LIVE"} mode)`,
+    )
 
     // Check if we've already processed this purchase
     const existingPurchase = await UnifiedPurchaseService.getUserPurchase(userId, sessionId)
@@ -27,10 +29,32 @@ export async function POST(request: NextRequest) {
     // Retrieve the session from Stripe
     let session
     try {
-      session = await stripe.checkout.sessions.retrieve(sessionId)
+      if (connectedAccountId) {
+        // Use connected account context to retrieve session
+        console.log(`🔍 [Purchase Verify] Retrieving session with connected account: ${connectedAccountId}`)
+        session = await callStripeWithAccount(connectedAccountId, async (stripeWithAccount) => {
+          return await stripeWithAccount.checkout.sessions.retrieve(sessionId)
+        })
+      } else {
+        // Fallback to platform account
+        console.log(`🔍 [Purchase Verify] Retrieving session with platform account`)
+        session = await stripe.checkout.sessions.retrieve(sessionId)
+      }
     } catch (stripeError: any) {
       console.error(`❌ [Purchase Verify] Stripe session retrieval failed:`, stripeError)
-      return NextResponse.json({ error: "Invalid session ID or session not found" }, { status: 404 })
+
+      // If session not found with connected account, try platform account
+      if (connectedAccountId && stripeError.code === "resource_missing") {
+        console.log(`🔄 [Purchase Verify] Retrying with platform account`)
+        try {
+          session = await stripe.checkout.sessions.retrieve(sessionId)
+        } catch (platformError: any) {
+          console.error(`❌ [Purchase Verify] Platform session retrieval also failed:`, platformError)
+          return NextResponse.json({ error: "Invalid session ID or session not found" }, { status: 404 })
+        }
+      } else {
+        return NextResponse.json({ error: "Invalid session ID or session not found" }, { status: 404 })
+      }
     }
 
     console.log(`🔍 [Purchase Verify] Session retrieved:`, {
@@ -38,8 +62,24 @@ export async function POST(request: NextRequest) {
       payment_status: session.payment_status,
       status: session.status,
       amount_total: session.amount_total,
+      mode: session.mode,
+      livemode: session.livemode,
       metadata: session.metadata,
     })
+
+    // Validate the session mode matches our current mode
+    const sessionIsTest = !session.livemode
+    if (sessionIsTest !== isTestMode) {
+      console.error(
+        `❌ [Purchase Verify] Mode mismatch. Session: ${sessionIsTest ? "test" : "live"}, API: ${isTestMode ? "test" : "live"}`,
+      )
+      return NextResponse.json(
+        {
+          error: `Session mode mismatch. Expected ${isTestMode ? "test" : "live"} mode session.`,
+        },
+        { status: 400 },
+      )
+    }
 
     // Validate the session
     if (session.payment_status !== "paid") {
@@ -53,7 +93,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Validate metadata
-    const { productBoxId, buyerUid, creatorUid } = session.metadata || {}
+    const { productBoxId, buyerUid, creatorUid, connectedAccountId: metadataAccountId } = session.metadata || {}
     if (!productBoxId || !buyerUid) {
       console.error(`❌ [Purchase Verify] Missing required metadata:`, session.metadata)
       return NextResponse.json({ error: "Invalid session metadata" }, { status: 400 })
@@ -90,6 +130,8 @@ export async function POST(request: NextRequest) {
       amount: session.amount_total ? session.amount_total / 100 : 0,
       currency: session.currency || "usd",
       creatorId: creatorId || "",
+      connectedAccountId: metadataAccountId || connectedAccountId,
+      mode: isTestMode ? "test" : "live",
     })
 
     // Also write to main purchases collection for API compatibility
@@ -117,6 +159,8 @@ export async function POST(request: NextRequest) {
       accessUrl: `/product-box/${productBoxId}/content`,
       verificationMethod: "direct_api", // Mark as directly verified
       verifiedAt: new Date(),
+      connectedAccountId: metadataAccountId || connectedAccountId,
+      mode: isTestMode ? "test" : "live",
     }
 
     // Write to main purchases collection with document ID as sessionId
@@ -142,6 +186,9 @@ export async function POST(request: NextRequest) {
 
     // Record the sale for the creator
     if (creatorId) {
+      const applicationFee = session.amount_total ? (session.amount_total * 0.25) / 100 : 0
+      const netAmount = session.amount_total ? (session.amount_total * 0.75) / 100 : 0
+
       await db
         .collection("users")
         .doc(creatorId)
@@ -151,13 +198,15 @@ export async function POST(request: NextRequest) {
           buyerUid,
           sessionId: session.id,
           amount: session.amount_total ? session.amount_total / 100 : 0,
-          platformFee: session.amount_total ? (session.amount_total * 0.25) / 100 : 0,
-          netAmount: session.amount_total ? (session.amount_total * 0.75) / 100 : 0,
+          platformFee: applicationFee,
+          netAmount: netAmount,
           purchasedAt: new Date(),
           status: "completed",
           productTitle: productBoxData.title || "Untitled Product Box",
           buyerEmail: session.customer_email || "",
           verificationMethod: "direct_api",
+          connectedAccountId: metadataAccountId || connectedAccountId,
+          mode: isTestMode ? "test" : "live",
         })
 
       // Increment the creator's total sales
@@ -166,7 +215,7 @@ export async function POST(request: NextRequest) {
         .doc(creatorId)
         .update({
           totalSales: db.FieldValue.increment(1),
-          totalRevenue: db.FieldValue.increment(session.amount_total ? session.amount_total / 100 : 0),
+          totalRevenue: db.FieldValue.increment(netAmount),
           lastSaleAt: new Date(),
         })
     }
@@ -185,6 +234,8 @@ export async function POST(request: NextRequest) {
         currency: session.currency,
         payment_status: session.payment_status,
         status: session.status,
+        mode: isTestMode ? "test" : "live",
+        livemode: session.livemode,
       },
       productBox: {
         id: productBoxId,
@@ -197,6 +248,7 @@ export async function POST(request: NextRequest) {
             id: creatorId,
             name: creatorData.displayName || creatorData.name,
             username: creatorData.username,
+            connectedAccountId: metadataAccountId || connectedAccountId,
           }
         : null,
     })

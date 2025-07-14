@@ -23,6 +23,24 @@ export const stripe = new Stripe(stripeKey, {
 
 export const isTestMode = useTestMode
 
+// Helper function to create Stripe instance with connected account context
+export function createStripeWithAccount(connectedAccountId: string) {
+  return new Stripe(stripeKey, {
+    apiVersion: "2024-06-20",
+    typescript: true,
+    stripeAccount: connectedAccountId,
+  })
+}
+
+// Helper function to make API calls with connected account context
+export async function callStripeWithAccount<T>(
+  connectedAccountId: string,
+  operation: (stripe: Stripe) => Promise<T>,
+): Promise<T> {
+  const stripeWithAccount = createStripeWithAccount(connectedAccountId)
+  return await operation(stripeWithAccount)
+}
+
 // Log the mode clearly
 if (useTestMode) {
   console.log("🧪 [Stripe] TEST MODE ACTIVE - Using test keys and test checkout sessions")

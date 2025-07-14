@@ -24,6 +24,8 @@ interface Purchase {
   buyerUid: string
   itemNames: string[]
   contents: any[]
+  mode: string
+  connectedAccountId?: string
 }
 
 export default function PurchaseSuccessPage() {
@@ -40,12 +42,14 @@ export default function PurchaseSuccessPage() {
   const productBoxId = searchParams.get("product_box_id")
   const creatorId = searchParams.get("creator_id")
   const buyerUid = searchParams.get("buyer_uid")
+  const connectedAccountId = searchParams.get("connected_account")
 
   console.log("🔍 [Purchase Success] URL Parameters:", {
     sessionId,
     productBoxId,
     creatorId,
     buyerUid,
+    connectedAccountId,
     hasUser: !!user,
     userUid: user?.uid,
   })
@@ -122,6 +126,7 @@ export default function PurchaseSuccessPage() {
       body: JSON.stringify({
         sessionId,
         productBoxId,
+        connectedAccountId, // Pass connected account ID for proper session retrieval
         forceComplete: true,
       }),
     })
@@ -139,6 +144,8 @@ export default function PurchaseSuccessPage() {
         bundleTitle: data.purchase.bundleTitle,
         contentCount: data.purchase.contentCount,
         buyerUid: data.purchase.buyerUid,
+        mode: data.purchase.mode,
+        connectedAccountId: data.purchase.connectedAccountId,
       })
     } else {
       throw new Error("Invalid response from server")
@@ -170,6 +177,7 @@ export default function PurchaseSuccessPage() {
         productBoxId,
         buyerUid: user?.uid || buyerUid,
         creatorId,
+        connectedAccountId,
       }),
     })
 
@@ -209,6 +217,9 @@ export default function PurchaseSuccessPage() {
             {!user && authRetryCount > 0 && (
               <p className="text-white/50 text-sm mt-2">Checking authentication... ({authRetryCount}/3)</p>
             )}
+            {sessionId && (
+              <p className="text-white/40 text-xs mt-2 font-mono">Session: {sessionId.substring(0, 20)}...</p>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -247,6 +258,7 @@ export default function PurchaseSuccessPage() {
             <div className="mt-4 text-xs text-white/40">
               <p>Session ID: {sessionId || "Not provided"}</p>
               <p>Product Box ID: {productBoxId || "Not provided"}</p>
+              <p>Connected Account: {connectedAccountId || "Not provided"}</p>
               <p>User: {user?.uid || "Not authenticated"}</p>
             </div>
           </CardContent>
@@ -269,6 +281,11 @@ export default function PurchaseSuccessPage() {
               <h1 className="text-3xl font-bold text-white mb-2">Access Granted!</h1>
               <p className="text-white/70">Your premium content is now available</p>
               {user && <p className="text-white/50 text-sm mt-1">Welcome, {user.email}</p>}
+              {purchase.mode && (
+                <p className="text-white/40 text-xs mt-1">
+                  {purchase.mode === "test" ? "🧪 Test Mode" : "🔴 Live Mode"}
+                </p>
+              )}
             </div>
 
             {/* Purchase Details */}
@@ -381,6 +398,8 @@ export default function PurchaseSuccessPage() {
                 <p>Purchase ID: {purchase.id}</p>
                 <p>Bundle ID: {purchase.bundleId}</p>
                 <p>Session ID: {sessionId}</p>
+                <p>Connected Account: {purchase.connectedAccountId || "N/A"}</p>
+                <p>Mode: {purchase.mode || "unknown"}</p>
                 <p>User ID: {user?.uid || "anonymous"}</p>
                 <p>Buyer UID: {purchase.buyerUid}</p>
               </div>
