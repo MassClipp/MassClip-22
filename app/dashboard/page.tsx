@@ -214,7 +214,7 @@ export default function DashboardPage() {
 
               {!stripeLoading && !isStripeConnected && (
                 <Button
-                  onClick={() => router.push("/dashboard/connect-stripe")}
+                  onClick={() => router.push("/dashboard/earnings")}
                   variant="outline"
                   className="w-full justify-start border-yellow-600 hover:bg-yellow-900/20 text-yellow-400 hover:text-yellow-300"
                 >
