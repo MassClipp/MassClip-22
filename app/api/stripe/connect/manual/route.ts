@@ -94,52 +94,58 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // For test mode, we need to create an account link to establish the connection
-    // This is the missing piece that makes accounts show up in Stripe Dashboard
+    // THIS IS THE KEY PART: Create a Connect relationship with the account
     try {
-      if (isTestMode) {
-        console.log(`🔗 [Manual Connect] Creating account link for test account ${accountId}`)
+      // For Stripe Connect to work properly, we need to create a platform relationship
+      // This is done by creating a login link or OAuth link, but first we need to
+      // ensure the account is properly set up for Connect
 
-        // Create an account link to establish the connection relationship
-        const accountLink = await stripe.accountLinks.create({
-          account: accountId,
-          refresh_url: `${process.env.NEXT_PUBLIC_SITE_URL}/temp-stripe-connect?refresh=true`,
-          return_url: `${process.env.NEXT_PUBLIC_SITE_URL}/temp-stripe-connect?success=true`,
-          type: "account_onboarding",
-        })
+      // 1. Update the account to add it to our platform
+      await stripe.accounts.update(accountId, {
+        metadata: {
+          platform_connected: "true",
+          platform_connected_at: new Date().toISOString(),
+          platform_user_id: userId,
+          platform_environment: isTestMode ? "test" : "live",
+        },
+        settings: {
+          payouts: {
+            schedule: {
+              interval: "manual",
+            },
+          },
+        },
+      })
 
-        console.log(`✅ [Manual Connect] Account link created:`, accountLink.url)
+      console.log(`✅ [Manual Connect] Account updated with platform metadata`)
+
+      // 2. Create a login link to establish the connection
+      const loginLink = await stripe.accounts.createLoginLink(accountId)
+      console.log(`✅ [Manual Connect] Login link created: ${loginLink.url}`)
+
+      // 3. For test accounts, we may need to explicitly add capabilities
+      if (isTestMode && account.type === "standard") {
+        try {
+          await stripe.accounts.update(accountId, {
+            capabilities: {
+              card_payments: { requested: true },
+              transfers: { requested: true },
+            },
+          })
+          console.log(`✅ [Manual Connect] Added capabilities to test account`)
+        } catch (capError) {
+          console.warn(`⚠️ [Manual Connect] Could not update capabilities:`, capError)
+          // Continue anyway - not all account types support this
+        }
       }
-
-      // For both test and live, we also need to ensure the account is properly associated
-      // Check if account needs onboarding completion
-      if (!account.details_submitted || !account.charges_enabled) {
-        console.log(`⚠️ [Manual Connect] Account ${accountId} needs additional setup`)
-
-        // Create account link for completion
-        const accountLink = await stripe.accountLinks.create({
-          account: accountId,
-          refresh_url: `${process.env.NEXT_PUBLIC_SITE_URL}/temp-stripe-connect?refresh=true&account=${accountId}`,
-          return_url: `${process.env.NEXT_PUBLIC_SITE_URL}/temp-stripe-connect?success=true&account=${accountId}`,
-          type: "account_onboarding",
-        })
-
-        return NextResponse.json({
-          success: true,
-          requiresOnboarding: true,
-          accountId: account.id,
-          onboardingUrl: accountLink.url,
-          message: "Account found but requires onboarding completion",
-        })
-      }
-    } catch (linkError: any) {
-      console.error("❌ [Manual Connect] Failed to create account link:", linkError)
-      // Continue anyway - the account might already be connected
+    } catch (connectError: any) {
+      console.error("❌ [Manual Connect] Failed to establish Connect relationship:", connectError)
+      // We'll continue anyway and save the account ID to Firestore
     }
 
     // Save the connection to Firestore
     const accountIdField = isTestMode ? "stripeTestAccountId" : "stripeAccountId"
-    const connectedField = `${accountIdField}Connected`
+    const connectedField = isTestMode ? "stripeTestConnected" : "stripeConnected"
 
     try {
       await db
@@ -147,7 +153,8 @@ export async function POST(request: NextRequest) {
         .doc(userId)
         .update({
           [accountIdField]: accountId,
-          [connectedField]: new Date().toISOString(),
+          [connectedField]: true,
+          [`${accountIdField}ConnectedAt`]: new Date().toISOString(),
           [`${accountIdField}Details`]: {
             country: account.country,
             email: account.email,

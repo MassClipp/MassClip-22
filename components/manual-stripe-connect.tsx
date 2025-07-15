@@ -47,6 +47,8 @@ export default function ManualStripeConnect() {
   const [validating, setValidating] = useState(false)
   const [connecting, setConnecting] = useState(false)
   const [error, setError] = useState("")
+  const [oauthUrl, setOauthUrl] = useState("")
+  const [oauthLoading, setOauthLoading] = useState(false)
 
   // Monitor authentication state
   useEffect(() => {
@@ -171,20 +173,10 @@ export default function ManualStripeConnect() {
       const data = await response.json()
 
       if (data.success) {
-        if (data.requiresOnboarding && data.onboardingUrl) {
-          toast({
-            title: "Onboarding Required",
-            description: "Account found but needs to complete onboarding process",
-          })
-
-          // Open onboarding URL in new tab
-          window.open(data.onboardingUrl, "_blank")
-        } else {
-          toast({
-            title: "Connected Successfully! 🎉",
-            description: `Account ${data.accountId} is now connected to MassClip`,
-          })
-        }
+        toast({
+          title: "Connected Successfully! 🎉",
+          description: `Account ${data.accountId} is now connected to MassClip`,
+        })
 
         // Reset form and refresh status
         setAccountId("")
@@ -209,13 +201,13 @@ export default function ManualStripeConnect() {
     }
   }
 
-  const startOnboarding = async () => {
+  const startOAuthFlow = async () => {
     if (!user) return
 
-    setLoading(true)
+    setOauthLoading(true)
     try {
       const idToken = await user.getIdToken(true)
-      const response = await fetch("/api/stripe/connect/onboard", {
+      const response = await fetch("/api/stripe/connect/oauth", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ idToken }),
@@ -223,30 +215,32 @@ export default function ManualStripeConnect() {
 
       const data = await response.json()
 
-      if (data.success && data.onboardingUrl) {
-        toast({
-          title: "Starting Onboarding",
-          description: "Opening Stripe onboarding in new tab",
-        })
+      if (data.success && data.oauthUrl) {
+        setOauthUrl(data.oauthUrl)
 
-        // Open onboarding URL in new tab
-        window.open(data.onboardingUrl, "_blank")
+        // Open OAuth URL in new window
+        window.open(data.oauthUrl, "_blank")
+
+        toast({
+          title: "OAuth Started",
+          description: "Follow the Stripe Connect flow to complete the connection",
+        })
       } else {
         toast({
-          title: "Onboarding Failed",
-          description: data.error || "Failed to start onboarding",
+          title: "OAuth Failed",
+          description: data.error || "Failed to start OAuth flow",
           variant: "destructive",
         })
       }
     } catch (error: any) {
-      console.error("Onboarding error:", error)
+      console.error("OAuth error:", error)
       toast({
-        title: "Onboarding Error",
-        description: "Failed to start onboarding",
+        title: "OAuth Error",
+        description: "Failed to start OAuth flow",
         variant: "destructive",
       })
     } finally {
-      setLoading(false)
+      setOauthLoading(false)
     }
   }
 
@@ -338,29 +332,49 @@ export default function ManualStripeConnect() {
         </Alert>
       )}
 
-      {/* Automatic Onboarding Option */}
+      {/* OAuth Connect Option */}
       {user && !connectionStatus?.isConnected && (
         <Card className="max-w-2xl border-blue-600/20">
           <CardHeader>
-            <h3 className="text-lg font-semibold">Automatic Setup (Recommended)</h3>
-            <p className="text-sm text-muted-foreground">
-              Let Stripe guide you through creating and connecting a new account
-            </p>
+            <h3 className="text-lg font-semibold">Connect with OAuth (Recommended)</h3>
+            <p className="text-sm text-muted-foreground">The most reliable way to connect your Stripe account</p>
           </CardHeader>
-          <CardContent>
-            <Button onClick={startOnboarding} disabled={loading} className="w-full" size="lg">
-              {loading ? (
+          <CardContent className="space-y-4">
+            <Alert className="border-blue-600 bg-blue-600/10">
+              <Info className="h-4 w-4" />
+              <AlertDescription>
+                <strong>OAuth Connection:</strong> This method establishes a proper Connect relationship that will
+                appear in your Stripe Dashboard.
+              </AlertDescription>
+            </Alert>
+
+            <Button onClick={startOAuthFlow} disabled={oauthLoading || !user} className="w-full" size="lg">
+              {oauthLoading ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Starting Onboarding...
+                  Starting OAuth Flow...
                 </>
               ) : (
                 <>
                   <ExternalLink className="h-4 w-4 mr-2" />
-                  Start Stripe Onboarding
+                  Connect with Stripe OAuth
                 </>
               )}
             </Button>
+
+            {oauthUrl && (
+              <div className="p-3 bg-muted rounded-lg">
+                <p className="text-sm font-medium mb-2">OAuth URL Created:</p>
+                <Button
+                  variant="outline"
+                  className="w-full bg-transparent"
+                  onClick={() => window.open(oauthUrl, "_blank")}
+                >
+                  <ExternalLink className="h-4 w-4 mr-2" />
+                  Open OAuth Connection Page
+                </Button>
+              </div>
+            )}
           </CardContent>
         </Card>
       )}
