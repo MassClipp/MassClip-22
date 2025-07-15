@@ -1,4 +1,3 @@
-// Centralised Stripe helpers --------------------------------------------------
 import Stripe from "stripe"
 
 const secretKey = process.env.STRIPE_SECRET_KEY_TEST || process.env.STRIPE_SECRET_KEY
@@ -13,15 +12,11 @@ export const stripe = new Stripe(secretKey, {
 export const isTestMode = process.env.NODE_ENV !== "production" || secretKey.startsWith("sk_test_")
 
 /**
- * 25 % platform fee – returns fee in **cents**
+ * 25% platform fee – returns fee in cents
  */
 export function calculateApplicationFee(amountInCents: number) {
   return Math.round(amountInCents * 0.25)
 }
-
-/* -------------------------------------------------------------------------- */
-/*                Connected-account convenience helpers                       */
-/* -------------------------------------------------------------------------- */
 
 /**
  * Create a Stripe instance scoped to a connected account
@@ -50,4 +45,20 @@ export async function retrieveSessionWithAccount(sessionId: string, accountId?: 
     return callStripeWithAccount(accountId, (s) => s.checkout.sessions.retrieve(sessionId))
   }
   return stripe.checkout.sessions.retrieve(sessionId)
+}
+
+/**
+ * Create a checkout session with connected account context
+ */
+export async function createCheckoutSessionWithAccount(
+  params: Stripe.Checkout.SessionCreateParams,
+  accountId?: string,
+) {
+  if (accountId) {
+    console.log(`💳 [Stripe] Creating checkout session with account ${accountId}`)
+    return await callStripeWithAccount(accountId, (stripe) => stripe.checkout.sessions.create(params))
+  } else {
+    console.log(`💳 [Stripe] Creating checkout session on platform account`)
+    return await stripe.checkout.sessions.create(params)
+  }
 }

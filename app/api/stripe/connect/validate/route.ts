@@ -32,7 +32,7 @@ export async function POST(request: NextRequest) {
 
     console.log(`🔍 [Validate] Checking account ${accountId} in ${isTestMode ? "TEST" : "LIVE"} mode`)
 
-    // Retrieve the account from Stripe
+    // Retrieve account from Stripe
     let account
     try {
       account = await stripe.accounts.retrieve(accountId)
@@ -71,14 +71,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         {
           success: false,
-          error: `Stripe API error: ${stripeError.message}`,
+          error: "Failed to validate account with Stripe",
+          details: stripeError.message,
         },
         { status: 400 },
       )
     }
 
     // Check if account mode matches our environment
-    const accountIsTest = !account.livemode
     const environmentMismatch = (isTestMode && account.livemode) || (!isTestMode && !account.livemode)
 
     if (environmentMismatch) {
@@ -87,19 +87,17 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         {
           success: false,
-          error: `Account mode mismatch. Expected ${expectedMode} mode account, but got ${actualMode} mode account.`,
+          error: `Cannot validate ${actualMode} mode account in ${expectedMode} environment.`,
         },
         { status: 400 },
       )
     }
 
-    // Check account requirements
+    // Check requirements
     const requirements = account.requirements || {}
     const currentlyDue = requirements.currently_due || []
     const pastDue = requirements.past_due || []
     const requirementsCount = currentlyDue.length + pastDue.length
-
-    console.log(`✅ [Validate] Account validation successful for ${account.id}`)
 
     return NextResponse.json({
       success: true,
@@ -115,13 +113,7 @@ export async function POST(request: NextRequest) {
         requirementsCount,
         currentlyDue,
         pastDue,
-        // Raw account data for debugging
-        rawAccount: {
-          business_type: account.business_type,
-          created: account.created,
-          default_currency: account.default_currency,
-          capabilities: account.capabilities,
-        },
+        rawAccount: account, // Include full account object for debugging
       },
     })
   } catch (error: any) {
@@ -129,7 +121,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       {
         success: false,
-        error: "Internal server error during validation",
+        error: "Failed to validate account",
         details: error.message,
       },
       { status: 500 },

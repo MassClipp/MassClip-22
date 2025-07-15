@@ -8,8 +8,8 @@ import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { toast } from "@/hooks/use-toast"
-import { Loader2, CheckCircle, XCircle, AlertCircle, Info, Copy, RefreshCw } from "lucide-react"
-import { getAuth } from "firebase/auth"
+import { Loader2, CheckCircle, XCircle, AlertCircle, Info, Copy, RefreshCw, User } from "lucide-react"
+import { getAuth, onAuthStateChanged, type User as FirebaseUser } from "firebase/auth"
 import { app } from "@/firebase/firebase"
 
 interface AccountInfo {
@@ -34,9 +34,12 @@ interface ConnectionStatus {
   mode: string
   accountStatus?: any
   message: string
+  error?: string
 }
 
 export default function ManualStripeConnect() {
+  const [user, setUser] = useState<FirebaseUser | null>(null)
+  const [authLoading, setAuthLoading] = useState(true)
   const [accountId, setAccountId] = useState("")
   const [validatedAccount, setValidatedAccount] = useState<AccountInfo | null>(null)
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus | null>(null)
@@ -45,18 +48,44 @@ export default function ManualStripeConnect() {
   const [connecting, setConnecting] = useState(false)
   const [error, setError] = useState("")
 
-  // Check connection status on component mount
+  // Monitor authentication state
   useEffect(() => {
-    checkConnectionStatus()
+    const auth = getAuth(app)
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      console.log("Auth state changed:", user ? `User: ${user.uid}` : "No user")
+      setUser(user)
+      setAuthLoading(false)
+      if (user) {
+        checkConnectionStatus(user)
+      } else {
+        setConnectionStatus({
+          success: true,
+          isConnected: false,
+          accountId: null,
+          mode: "test",
+          message: "User not authenticated",
+        })
+      }
+    })
+
+    return () => unsubscribe()
   }, [])
 
-  const checkConnectionStatus = async () => {
+  const checkConnectionStatus = async (currentUser?: FirebaseUser) => {
     try {
-      const auth = getAuth(app)
-      const user = auth.currentUser
-      if (!user) return
+      const authUser = currentUser || user
+      if (!authUser) {
+        setConnectionStatus({
+          success: true,
+          isConnected: false,
+          accountId: null,
+          mode: "test",
+          message: "User not authenticated",
+        })
+        return
+      }
 
-      const idToken = await user.getIdToken()
+      const idToken = await authUser.getIdToken()
       const response = await fetch("/api/stripe/connect/status", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -68,6 +97,13 @@ export default function ManualStripeConnect() {
       console.log("Connection status:", data)
     } catch (error) {
       console.error("Failed to check connection status:", error)
+      setConnectionStatus({
+        success: false,
+        isConnected: false,
+        accountId: null,
+        mode: "test",
+        message: "Failed to check connection status",
+      })
     }
   }
 
@@ -118,16 +154,10 @@ export default function ManualStripeConnect() {
   }
 
   const connectAccount = async () => {
-    if (!validatedAccount) return
+    if (!validatedAccount || !user) return
 
     setConnecting(true)
     try {
-      const auth = getAuth(app)
-      const user = auth.currentUser
-      if (!user) {
-        throw new Error("User not authenticated")
-      }
-
       const idToken = await user.getIdToken(true)
       const response = await fetch("/api/stripe/connect/manual", {
         method: "POST",
@@ -183,8 +213,36 @@ export default function ManualStripeConnect() {
     setValidatedAccount(null)
   }
 
+  if (authLoading) {
+    return (
+      <div className="flex items-center justify-center p-8">
+        <Loader2 className="h-8 w-8 animate-spin" />
+        <span className="ml-2">Loading authentication...</span>
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-6">
+      {/* Authentication Status */}
+      <Alert className={user ? "border-green-600 bg-green-600/10" : "border-red-600 bg-red-600/10"}>
+        {user ? <CheckCircle className="h-4 w-4" /> : <XCircle className="h-4 w-4" />}
+        <AlertDescription>
+          <div className="flex items-center justify-between">
+            <div>
+              <strong>Authentication:</strong> {user ? `Logged in as ${user.email}` : "Not authenticated"}
+              {user && <div className="text-xs text-muted-foreground mt-1">User ID: {user.uid}</div>}
+            </div>
+            {user && (
+              <div className="flex items-center gap-2">
+                <User className="h-4 w-4" />
+                <Badge variant="outline">Authenticated</Badge>
+              </div>
+            )}
+          </div>
+        </AlertDescription>
+      </Alert>
+
       {/* Connection Status */}
       {connectionStatus && (
         <Alert
@@ -211,10 +269,20 @@ export default function ManualStripeConnect() {
                   </div>
                 )}
               </div>
-              <Button variant="ghost" size="sm" onClick={checkConnectionStatus}>
+              <Button variant="ghost" size="sm" onClick={() => checkConnectionStatus()}>
                 <RefreshCw className="h-4 w-4" />
               </Button>
             </div>
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {!user && (
+        <Alert className="border-yellow-600 bg-yellow-600/10">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>
+            <strong>Authentication Required:</strong> Please log in to connect your Stripe account. You can use the
+            login form or navigate to the authentication page.
           </AlertDescription>
         </Alert>
       )}
@@ -247,11 +315,11 @@ export default function ManualStripeConnect() {
                 value={accountId}
                 onChange={(e) => handleInputChange(e.target.value)}
                 className="font-mono"
-                disabled={validating || connecting}
+                disabled={!user || validating || connecting}
               />
               <Button
                 onClick={validateAccount}
-                disabled={!accountId.trim() || validating || connecting}
+                disabled={!user || !accountId.trim() || validating || connecting}
                 variant="outline"
               >
                 {validating ? <Loader2 className="h-4 w-4 animate-spin" /> : "Validate"}
@@ -352,10 +420,27 @@ export default function ManualStripeConnect() {
               </div>
             </div>
           )}
+
+          {/* Debug Information */}
+          <div className="bg-muted/20 p-4 rounded-lg">
+            <h4 className="font-semibold mb-2">Debug Information</h4>
+            <div className="space-y-1 text-sm">
+              <div>
+                <strong>Status:</strong> {connectionStatus?.isConnected ? "Connected" : "Not Connected"}
+              </div>
+              <div>
+                <strong>Mode:</strong> {connectionStatus?.mode || "test"}
+              </div>
+              <div>
+                <strong>Message:</strong>
+              </div>
+              <div className="text-muted-foreground">{connectionStatus?.message || "Loading..."}</div>
+            </div>
+          </div>
         </CardContent>
 
         <CardFooter>
-          {validatedAccount && (
+          {validatedAccount && user && (
             <Button onClick={connectAccount} disabled={connecting} className="w-full" size="lg">
               {connecting ? (
                 <>
