@@ -24,7 +24,7 @@ interface AccountInfo {
   requirementsCount: number
   currentlyDue: string[]
   pastDue: string[]
-  rawAccount?: any
+  belongsToPlatform?: boolean
 }
 
 interface ConnectionStatus {
@@ -88,14 +88,34 @@ export default function ManualStripeConnect() {
       }
 
       const idToken = await authUser.getIdToken()
-      const response = await fetch("/api/stripe/connect/status", {
+      const response = await fetch("/api/stripe/connect/status-from-stripe", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ idToken }),
       })
 
       const data = await response.json()
-      setConnectionStatus(data)
+
+      if (data.success) {
+        setConnectionStatus({
+          success: true,
+          isConnected: data.is_connected,
+          accountId: data.account_id,
+          mode: data.environment.mode,
+          message: data.message,
+          accountStatus: data.account_details,
+        })
+      } else {
+        setConnectionStatus({
+          success: false,
+          isConnected: false,
+          accountId: null,
+          mode: "test",
+          message: data.error || "Failed to check connection status",
+          error: data.error,
+        })
+      }
+
       console.log("Connection status:", data)
     } catch (error) {
       console.error("Failed to check connection status:", error)
@@ -152,6 +172,7 @@ export default function ManualStripeConnect() {
             (account.requirements?.currently_due?.length || 0) + (account.requirements?.past_due?.length || 0),
           currentlyDue: account.requirements?.currently_due || [],
           pastDue: account.requirements?.past_due || [],
+          belongsToPlatform: data.belongs_to_platform,
         })
         toast({
           title: "Account Validated ✅",
@@ -538,6 +559,15 @@ export default function ManualStripeConnect() {
                     </AlertDescription>
                   </Alert>
                 )}
+
+                {validatedAccount.belongsToPlatform && (
+                  <Alert className="border-blue-600 bg-blue-600/10">
+                    <Info className="h-4 w-4" />
+                    <AlertDescription>
+                      <strong>Already Connected:</strong> This account is already connected to the MassClip platform.
+                    </AlertDescription>
+                  </Alert>
+                )}
               </div>
             </div>
           )}
@@ -566,7 +596,7 @@ export default function ManualStripeConnect() {
         </CardContent>
 
         <CardFooter>
-          {validatedAccount && user && (
+          {validatedAccount && user && !validatedAccount.belongsToPlatform && (
             <Button onClick={connectAccount} disabled={connecting} className="w-full" size="lg">
               {connecting ? (
                 <>
