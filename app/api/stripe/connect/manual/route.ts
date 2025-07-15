@@ -83,6 +83,24 @@ export async function POST(request: NextRequest) {
         payouts_enabled: account.payouts_enabled,
       })
 
+      // Update account metadata to mark it as connected to our platform
+      try {
+        await stripe.accounts.update(accountId, {
+          metadata: {
+            platform_connected: "true",
+            platform_connected_at: new Date().toISOString(),
+            platform_user_id: userId,
+            platform_environment: isTestMode ? "test" : "live",
+            created_by_platform: "massclip",
+            firebase_uid: userId,
+          },
+        })
+        console.log(`✅ [Manual Connect] Account metadata updated`)
+      } catch (metadataError) {
+        console.warn(`⚠️ [Manual Connect] Could not update account metadata:`, metadataError)
+        // Continue anyway - metadata update is not critical for basic functionality
+      }
+
       // Determine which fields to update based on mode
       const updateData = isTestMode
         ? {
@@ -132,6 +150,7 @@ export async function POST(request: NextRequest) {
           connected_at: new Date().toISOString(),
           user_id: userId,
           environment: isTestMode ? "test" : "live",
+          platform_account: "acct_1RFLa9Dheyb0pkWF",
         },
       })
     } catch (stripeError: any) {

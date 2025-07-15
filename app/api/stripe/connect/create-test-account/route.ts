@@ -4,31 +4,13 @@ import { stripe, isTestMode } from "@/lib/stripe"
 
 interface CreateTestAccountBody {
   idToken: string
-}
-
-// Safe date formatting helper
-function safeFormatDate(timestamp: number | null | undefined): string {
-  if (!timestamp || typeof timestamp !== "number") {
-    return new Date().toISOString()
-  }
-
-  try {
-    // Stripe timestamps are in seconds, convert to milliseconds
-    const date = new Date(timestamp * 1000)
-    if (isNaN(date.getTime())) {
-      console.warn(`Invalid timestamp: ${timestamp}`)
-      return new Date().toISOString()
-    }
-    return date.toISOString()
-  } catch (error) {
-    console.warn(`Error formatting timestamp ${timestamp}:`, error)
-    return new Date().toISOString()
-  }
+  email?: string
+  country?: string
 }
 
 export async function POST(request: NextRequest) {
   try {
-    const { idToken } = (await request.json()) as CreateTestAccountBody
+    const { idToken, email, country = "US" } = (await request.json()) as CreateTestAccountBody
 
     if (!idToken) {
       return NextResponse.json(
@@ -37,17 +19,6 @@ export async function POST(request: NextRequest) {
           error: "Authentication token is required",
         },
         { status: 401 },
-      )
-    }
-
-    // Only allow test account creation in test mode
-    if (!isTestMode) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Test account creation is only available in test mode",
-        },
-        { status: 400 },
       )
     }
 
@@ -68,76 +39,70 @@ export async function POST(request: NextRequest) {
     }
 
     const userId = decodedToken.uid
-    const userEmail = decodedToken.email
 
-    // Check if user already has a test account
-    const userDoc = await db.collection("users").doc(userId).get()
-    const userData = userDoc.exists ? userDoc.data() : {}
-
-    if (userData?.stripeTestAccountId) {
-      console.log(`⚠️ [Create Test Account] User ${userId} already has test account: ${userData.stripeTestAccountId}`)
-
-      // Verify the existing account still exists
-      try {
-        const existingAccount = await stripe.accounts.retrieve(userData.stripeTestAccountId)
-        return NextResponse.json({
-          success: true,
-          account_id: existingAccount.id,
-          message: "Test account already exists",
-          account_details: {
-            id: existingAccount.id,
-            type: existingAccount.type,
-            email: existingAccount.email,
-            country: existingAccount.country,
-            charges_enabled: existingAccount.charges_enabled,
-            payouts_enabled: existingAccount.payouts_enabled,
-            created: safeFormatDate(existingAccount.created),
-          },
-        })
-      } catch (stripeError) {
-        console.log(`🔄 [Create Test Account] Existing account not found, creating new one`)
-        // Continue to create new account if existing one is not found
-      }
+    if (!isTestMode) {
+      return NextResponse.json({
+        success: false,
+        error: "Test account creation is only available in test mode",
+        current_mode: "live",
+      })
     }
+
+    console.log(`🏗️ [Create Test Account] Creating test account for user ${userId}`)
 
     try {
       // Create a new Stripe Connect account
       const account = await stripe.accounts.create({
         type: "standard",
-        country: "US",
-        email: userEmail,
+        country: country,
+        email: email || decodedToken.email || undefined,
         metadata: {
-          firebase_uid: userId,
           created_by_platform: "massclip",
-          environment: "test",
+          firebase_uid: userId,
           created_at: new Date().toISOString(),
+          platform_environment: "test",
+        },
+        capabilities: {
+          card_payments: { requested: true },
+          transfers: { requested: true },
+        },
+        business_type: "individual",
+        settings: {
+          payouts: {
+            schedule: {
+              interval: "manual",
+            },
+          },
         },
       })
 
-      console.log(`✅ [Create Test Account] Created Stripe account:`, {
+      console.log(`✅ [Create Test Account] Account created:`, {
         id: account.id,
         type: account.type,
         email: account.email,
         country: account.country,
       })
 
-      // Save the account ID to Firestore
-      await db.collection("users").doc(userId).set(
-        {
-          stripeTestAccountId: account.id,
-          stripeTestConnected: true,
-          stripeTestConnectedAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        },
-        { merge: true },
-      )
+      // Save the test account to Firestore
+      const updateData = {
+        stripeTestAccountId: account.id,
+        stripeTestConnected: true,
+        stripeTestConnectedAt: new Date().toISOString(),
+        stripeTestAccountType: account.type,
+        stripeTestAccountEmail: account.email,
+        stripeTestAccountCountry: account.country,
+        updatedAt: new Date().toISOString(),
+      }
+
+      await db.collection("users").doc(userId).set(updateData, { merge: true })
 
       console.log(`💾 [Create Test Account] Saved to Firestore for user ${userId}`)
 
       return NextResponse.json({
         success: true,
+        account_created: true,
         account_id: account.id,
-        message: "Test account created successfully",
+        message: "Test Stripe account created and connected successfully",
         account_details: {
           id: account.id,
           type: account.type,
@@ -146,29 +111,27 @@ export async function POST(request: NextRequest) {
           charges_enabled: account.charges_enabled,
           payouts_enabled: account.payouts_enabled,
           details_submitted: account.details_submitted,
-          created: safeFormatDate(account.created),
-          requirements: {
-            currently_due: account.requirements?.currently_due || [],
-            past_due: account.requirements?.past_due || [],
-          },
+          livemode: account.livemode,
+        },
+        connection_info: {
+          connected_at: new Date().toISOString(),
+          user_id: userId,
+          environment: "test",
         },
         next_steps: [
-          "Complete account onboarding",
+          "Complete account onboarding in Stripe Dashboard",
           "Submit required business information",
-          "Verify identity documents",
+          "Verify identity documents if required",
         ],
       })
     } catch (stripeError: any) {
       console.error("❌ [Create Test Account] Stripe error:", stripeError)
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Failed to create Stripe test account",
-          details: stripeError.message,
-          stripe_error_code: stripeError.code,
-        },
-        { status: 500 },
-      )
+      return NextResponse.json({
+        success: false,
+        error: "Failed to create test account",
+        details: stripeError.message,
+        stripe_error_code: stripeError.code,
+      })
     }
   } catch (error: any) {
     console.error("❌ [Create Test Account] Unexpected error:", error)

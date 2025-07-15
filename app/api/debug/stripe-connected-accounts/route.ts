@@ -35,8 +35,11 @@ export async function GET(request: NextRequest) {
     // Filter and format accounts with safe timestamp handling
     const platformAccounts = connectedAccounts.data
       .filter((account) => {
-        // Filter for accounts created by our platform
-        const isPlatformAccount = account.metadata?.created_by_platform === "massclip" || account.metadata?.firebase_uid
+        // Filter for accounts created by our platform or with our metadata
+        const isPlatformAccount =
+          account.metadata?.created_by_platform === "massclip" ||
+          account.metadata?.firebase_uid ||
+          account.metadata?.platform_connected === "true"
 
         console.log(`Checking account ${account.id}:`, {
           isPlatformAccount,
@@ -109,6 +112,7 @@ export async function GET(request: NextRequest) {
         stripe_key_prefix: process.env.STRIPE_SECRET_KEY?.substring(0, 12) + "...",
         is_test_mode: isTestMode,
         timestamp: new Date().toISOString(),
+        platform_account_id: "acct_1RFLa9Dheyb0pkWF", // Your platform account
       },
     })
   } catch (error: any) {
@@ -121,6 +125,7 @@ export async function GET(request: NextRequest) {
         debug_info: {
           stripe_key_prefix: process.env.STRIPE_SECRET_KEY?.substring(0, 12) + "...",
           is_test_mode: isTestMode,
+          platform_account_id: "acct_1RFLa9Dheyb0pkWF",
         },
       },
       { status: 500 },

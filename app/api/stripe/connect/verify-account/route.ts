@@ -1,71 +1,64 @@
 import { type NextRequest, NextResponse } from "next/server"
+import { auth } from "@/lib/firebase-admin"
 import { stripe, isTestMode } from "@/lib/stripe"
 
 interface VerifyAccountBody {
   account_id: string
-  idToken?: string
-}
-
-// Safe date formatting helper
-function safeFormatDate(timestamp: number | null | undefined): string {
-  if (!timestamp || typeof timestamp !== "number") {
-    return new Date().toISOString()
-  }
-
-  try {
-    // Stripe timestamps are in seconds, convert to milliseconds
-    const date = new Date(timestamp * 1000)
-    if (isNaN(date.getTime())) {
-      console.warn(`Invalid timestamp: ${timestamp}`)
-      return new Date().toISOString()
-    }
-    return date.toISOString()
-  } catch (error) {
-    console.warn(`Error formatting timestamp ${timestamp}:`, error)
-    return new Date().toISOString()
-  }
+  idToken: string
 }
 
 export async function POST(request: NextRequest) {
   try {
     const { account_id, idToken } = (await request.json()) as VerifyAccountBody
 
-    if (!account_id) {
+    if (!account_id || !idToken) {
       return NextResponse.json(
         {
           success: false,
-          error: "Account ID is required",
+          error: "Account ID and authentication token are required",
         },
         { status: 400 },
+      )
+    }
+
+    // Verify Firebase ID token
+    let decodedToken
+    try {
+      decodedToken = await auth.verifyIdToken(idToken)
+      console.log(`✅ [Verify Account] Token verified for user: ${decodedToken.uid}`)
+    } catch (tokenError) {
+      console.error("❌ [Verify Account] Token verification failed:", tokenError)
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Invalid or expired authentication token",
+        },
+        { status: 401 },
       )
     }
 
     // Validate account ID format
     if (!account_id.startsWith("acct_")) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Invalid account ID format. Must start with 'acct_'",
-        },
-        { status: 400 },
-      )
+      return NextResponse.json({
+        success: false,
+        account_exists: false,
+        error: "Invalid account ID format. Must start with 'acct_'",
+      })
     }
 
     console.log(`🔍 [Verify Account] Checking account ${account_id} in ${isTestMode ? "TEST" : "LIVE"} mode`)
 
     try {
-      // Retrieve account from Stripe
+      // First, try to retrieve the account directly
       const account = await stripe.accounts.retrieve(account_id)
 
-      console.log(`✅ [Verify Account] Account retrieved successfully:`, {
+      console.log(`✅ [Verify Account] Account found:`, {
         id: account.id,
         type: account.type,
-        country: account.country,
+        email: account.email,
         livemode: account.livemode,
         charges_enabled: account.charges_enabled,
         payouts_enabled: account.payouts_enabled,
-        details_submitted: account.details_submitted,
-        created: account.created,
       })
 
       // Check if account mode matches our environment
@@ -75,9 +68,10 @@ export async function POST(request: NextRequest) {
         const expectedMode = isTestMode ? "test" : "live"
         const actualMode = account.livemode ? "live" : "test"
         return NextResponse.json({
-          success: false,
+          success: true,
           account_exists: true,
-          error: `Cannot verify ${actualMode} mode account in ${expectedMode} environment`,
+          account_accessible: false,
+          error: `Account is in ${actualMode} mode, but platform is in ${expectedMode} mode`,
           account_details: {
             id: account.id,
             livemode: account.livemode,
@@ -86,93 +80,67 @@ export async function POST(request: NextRequest) {
         })
       }
 
-      // Safely format account details with proper timestamp handling
-      const accountDetails = {
-        id: account.id,
-        object: account.object,
-        business_profile: account.business_profile,
-        business_type: account.business_type,
-        capabilities: account.capabilities,
-        charges_enabled: account.charges_enabled,
-        country: account.country,
-        created: account.created, // Keep as Unix timestamp for Stripe compatibility
-        created_formatted: safeFormatDate(account.created),
-        default_currency: account.default_currency,
-        details_submitted: account.details_submitted,
-        email: account.email,
-        external_accounts: account.external_accounts,
-        future_requirements: account.future_requirements,
-        livemode: account.livemode,
-        metadata: account.metadata,
-        payouts_enabled: account.payouts_enabled,
-        requirements: {
-          currently_due: account.requirements?.currently_due || [],
-          disabled_reason: account.requirements?.disabled_reason,
-          errors: account.requirements?.errors || [],
-          eventually_due: account.requirements?.eventually_due || [],
-          past_due: account.requirements?.past_due || [],
-          pending_verification: account.requirements?.pending_verification || [],
-        },
-        settings: account.settings,
-        tos_acceptance: account.tos_acceptance
-          ? {
-              date: account.tos_acceptance.date,
-              date_formatted: safeFormatDate(account.tos_acceptance.date),
-              ip: account.tos_acceptance.ip,
-              user_agent: account.tos_acceptance.user_agent,
-            }
-          : null,
-        type: account.type,
-      }
+      // Check if this account belongs to our platform
+      // For Stripe Connect, we need to check if we can access it as a connected account
+      let belongsToPlatform = false
+      let platformError = null
 
-      // Calculate requirements count
-      const requirementsCount =
-        (account.requirements?.currently_due?.length || 0) + (account.requirements?.past_due?.length || 0)
+      try {
+        // Try to access the account as a connected account
+        // This will work if the account is connected to our platform
+        const connectedAccount = await stripe.accounts.retrieve(account_id)
+
+        // Check if account has platform metadata or if we can access it
+        belongsToPlatform = true // If we can retrieve it, it's accessible
+
+        console.log(`✅ [Verify Account] Account is accessible to platform`)
+      } catch (platformAccessError: any) {
+        console.log(`⚠️ [Verify Account] Account not connected to platform:`, platformAccessError.message)
+        belongsToPlatform = false
+        platformError = platformAccessError.message
+      }
 
       return NextResponse.json({
         success: true,
         account_exists: true,
-        account_id: account.id,
-        mode: isTestMode ? "test" : "live",
-        account_details: accountDetails,
-        summary: {
+        account_accessible: true,
+        belongs_to_platform: belongsToPlatform,
+        account_details: {
           id: account.id,
           type: account.type,
-          country: account.country,
           email: account.email,
+          country: account.country,
+          livemode: account.livemode,
           charges_enabled: account.charges_enabled,
           payouts_enabled: account.payouts_enabled,
           details_submitted: account.details_submitted,
-          livemode: account.livemode,
-          requirements_count: requirementsCount,
-          created_at: safeFormatDate(account.created),
+          requirements: {
+            currently_due: account.requirements?.currently_due || [],
+            past_due: account.requirements?.past_due || [],
+            eventually_due: account.requirements?.eventually_due || [],
+          },
+          capabilities: account.capabilities,
+          metadata: account.metadata,
         },
-        message: `Account ${account.id} verified successfully in ${isTestMode ? "test" : "live"} mode`,
+        platform_info: {
+          belongs_to_platform: belongsToPlatform,
+          platform_error: platformError,
+          can_connect: !belongsToPlatform, // Can connect if not already connected
+        },
+        environment: {
+          is_test_mode: isTestMode,
+          account_mode: account.livemode ? "live" : "test",
+          mode_compatible: !environmentMismatch,
+        },
       })
     } catch (stripeError: any) {
-      console.error("❌ [Verify Account] Stripe API error:", {
-        code: stripeError.code,
-        type: stripeError.type,
-        message: stripeError.message,
-        account_id,
-        mode: isTestMode ? "test" : "live",
-      })
+      console.error("❌ [Verify Account] Stripe error:", stripeError)
 
-      // Handle specific Stripe error types
       if (stripeError.code === "resource_missing") {
         return NextResponse.json({
-          success: false,
+          success: true,
           account_exists: false,
           error: `Account ${account_id} not found in ${isTestMode ? "test" : "live"} mode`,
-          details: stripeError.message,
-        })
-      }
-
-      if (stripeError.code === "invalid_request_error") {
-        return NextResponse.json({
-          success: false,
-          account_exists: false,
-          error: "Invalid account ID format or request",
           details: stripeError.message,
         })
       }
@@ -190,7 +158,6 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       {
         success: false,
-        account_exists: false,
         error: "Internal server error during account verification",
         details: error.message,
       },
