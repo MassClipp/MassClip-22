@@ -9,6 +9,7 @@ export async function POST(request: NextRequest) {
     const decodedToken = await requireAuth(request)
     const userId = decodedToken.uid
     console.log(`🔍 [Status From Stripe] Request from user: ${userId}`)
+    console.log(`🔍 [Status From Stripe] User email: ${decodedToken.email}`)
 
     // Get user's stored account IDs from Firestore
     const userDoc = await db.collection("users").doc(userId).get()
@@ -17,12 +18,28 @@ export async function POST(request: NextRequest) {
     const storedTestAccountId = userData?.stripeTestAccountId
     const storedLiveAccountId = userData?.stripeAccountId
 
+    console.log(`📊 [Status From Stripe] Stored account IDs:`, {
+      test: storedTestAccountId,
+      live: storedLiveAccountId,
+    })
+
     // Get all connected accounts from Stripe
     const connectedAccounts = await stripe.accounts.list({
       limit: 100,
     })
 
     console.log(`📊 [Status From Stripe] Found ${connectedAccounts.data.length} connected accounts in Stripe`)
+
+    // Log all accounts for debugging
+    connectedAccounts.data.forEach((account, index) => {
+      console.log(`Account ${index + 1}:`, {
+        id: account.id,
+        email: account.email,
+        type: account.type,
+        metadata: account.metadata,
+        created: new Date(account.created * 1000).toISOString(),
+      })
+    })
 
     // Check if any of our stored account IDs are actually connected
     const testAccountInStripe = storedTestAccountId
@@ -32,10 +49,23 @@ export async function POST(request: NextRequest) {
       ? connectedAccounts.data.find((acc) => acc.id === storedLiveAccountId)
       : null
 
-    // Find accounts that might belong to this user based on metadata
-    const userAccountsInStripe = connectedAccounts.data.filter(
-      (acc) => acc.metadata?.firebase_uid === userId || acc.email === decodedToken.email,
-    )
+    // Find accounts that might belong to this user based on metadata and email
+    const userAccountsInStripe = connectedAccounts.data.filter((acc) => {
+      const hasPlatformMetadata = acc.metadata?.created_by_platform === "massclip"
+      const hasUserMetadata = acc.metadata?.firebase_uid === userId
+      const hasMatchingEmail = acc.email === decodedToken.email
+
+      console.log(`Checking account ${acc.id}:`, {
+        hasPlatformMetadata,
+        hasUserMetadata,
+        hasMatchingEmail,
+        metadata: acc.metadata,
+      })
+
+      return hasPlatformMetadata && (hasUserMetadata || hasMatchingEmail)
+    })
+
+    console.log(`🎯 [Status From Stripe] Found ${userAccountsInStripe.length} user accounts`)
 
     // Determine actual connection status
     const hasTestConnection = !!testAccountInStripe
@@ -104,6 +134,13 @@ export async function POST(request: NextRequest) {
         payouts_enabled: acc.payouts_enabled,
         metadata: acc.metadata,
       })),
+      debug_info: {
+        user_id: userId,
+        user_email: decodedToken.email,
+        stripe_key_prefix: process.env.STRIPE_SECRET_KEY?.substring(0, 12) + "...",
+        expected_platform_account: "acct_1RFLa9Dheyb0pkWF",
+        total_accounts_in_stripe: connectedAccounts.data.length,
+      },
       message: hasAnyConnection
         ? `Connected to Stripe account: ${primaryAccount?.id}`
         : "No Stripe accounts connected to this platform",
@@ -116,6 +153,10 @@ export async function POST(request: NextRequest) {
         error: error.message,
         type: error.type,
         code: error.code,
+        debug_info: {
+          stripe_key_prefix: process.env.STRIPE_SECRET_KEY?.substring(0, 12) + "...",
+          expected_platform_account: "acct_1RFLa9Dheyb0pkWF",
+        },
       },
       { status: 500 },
     )

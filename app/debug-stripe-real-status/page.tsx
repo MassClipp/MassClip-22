@@ -18,9 +18,12 @@ import {
   Users,
   FolderSyncIcon as Sync,
   Plus,
+  ExternalLink,
+  Search,
 } from "lucide-react"
 import Link from "next/link"
 import { toast } from "@/hooks/use-toast"
+import { Input } from "@/components/ui/input"
 
 interface ConnectedAccount {
   id: string
@@ -65,13 +68,35 @@ interface StripeStatus {
   }
   account_details: ConnectedAccount | null
   all_user_accounts: ConnectedAccount[]
+  debug_info: {
+    user_id: string
+    user_email: string
+    stripe_key_prefix: string
+    expected_platform_account: string
+    total_accounts_in_stripe: number
+  }
   message: string
 }
 
 interface AllConnectedAccounts {
   success: boolean
   total_accounts: number
+  platform_accounts: number
   accounts: ConnectedAccount[]
+  all_accounts_debug: any[]
+  debug_info: any
+}
+
+interface VerifyAccountResult {
+  success: boolean
+  account_exists: boolean
+  belongs_to_platform?: boolean
+  account_details?: ConnectedAccount
+  verification_checks?: {
+    has_platform_metadata: boolean
+    has_user_metadata: boolean
+    email_matches: boolean
+  }
 }
 
 export default function DebugStripeRealStatusPage() {
@@ -81,6 +106,9 @@ export default function DebugStripeRealStatusPage() {
   const [loading, setLoading] = useState(false)
   const [syncing, setSyncing] = useState(false)
   const [creating, setCreating] = useState(false)
+  const [verifying, setVerifying] = useState(false)
+  const [verifyAccountId, setVerifyAccountId] = useState("")
+  const [verifyResult, setVerifyResult] = useState<VerifyAccountResult | null>(null)
 
   useEffect(() => {
     if (user) {
@@ -209,7 +237,7 @@ export default function DebugStripeRealStatusPage() {
         body: JSON.stringify({
           email: user.email,
           country: "US",
-          type: "standard",
+          type: "express",
         }),
       })
 
@@ -219,6 +247,12 @@ export default function DebugStripeRealStatusPage() {
           title: "Test Account Created! 🎉",
           description: `Created account: ${data.account_id}`,
         })
+
+        // Open onboarding URL in new tab
+        if (data.onboarding_url) {
+          window.open(data.onboarding_url, "_blank")
+        }
+
         await loadStripeStatus()
         await loadAllConnectedAccounts()
       } else {
@@ -241,6 +275,60 @@ export default function DebugStripeRealStatusPage() {
     }
   }
 
+  const verifyAccount = async () => {
+    if (!user || !verifyAccountId.trim()) return
+
+    try {
+      setVerifying(true)
+      const token = await user.getIdToken()
+
+      const response = await fetch("/api/stripe/connect/verify-account", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          account_id: verifyAccountId.trim(),
+        }),
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        setVerifyResult(data)
+
+        if (data.account_exists) {
+          toast({
+            title: "Account Verified",
+            description: `Account ${verifyAccountId} ${data.belongs_to_platform ? "belongs to your platform" : "exists but may not belong to you"}`,
+          })
+        } else {
+          toast({
+            title: "Account Not Found",
+            description: `Account ${verifyAccountId} does not exist in Stripe`,
+            variant: "destructive",
+          })
+        }
+      } else {
+        const errorData = await response.json()
+        toast({
+          title: "Verification Failed",
+          description: errorData.error || "Failed to verify account",
+          variant: "destructive",
+        })
+      }
+    } catch (error) {
+      console.error("Error verifying account:", error)
+      toast({
+        title: "Verification Error",
+        description: "Failed to verify account",
+        variant: "destructive",
+      })
+    } finally {
+      setVerifying(false)
+    }
+  }
+
   const getStatusIcon = (success: boolean) => {
     return success ? <CheckCircle className="h-4 w-4 text-green-500" /> : <XCircle className="h-4 w-4 text-red-500" />
   }
@@ -260,7 +348,7 @@ export default function DebugStripeRealStatusPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-black via-gray-900 to-gray-800 p-4">
-      <div className="max-w-6xl mx-auto space-y-6">
+      <div className="max-w-7xl mx-auto space-y-6">
         {/* Header */}
         <div className="flex items-center gap-4 mb-6">
           <Button asChild variant="outline" size="sm" className="border-gray-600 bg-transparent">
@@ -290,9 +378,9 @@ export default function DebugStripeRealStatusPage() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* User Connection Status */}
-          <Card className="bg-gray-800/30 border-gray-700/50 backdrop-blur-sm">
+          <Card className="bg-gray-800/30 border-gray-700/50 backdrop-blur-sm lg:col-span-2">
             <CardHeader>
               <div className="flex items-center gap-2">
                 <Users className="h-5 w-5 text-blue-400" />
@@ -321,6 +409,20 @@ export default function DebugStripeRealStatusPage() {
                       <strong>Status:</strong> {stripeStatus.message}
                     </AlertDescription>
                   </Alert>
+
+                  {/* Debug Info */}
+                  {stripeStatus.debug_info && (
+                    <div className="bg-gray-700/30 p-3 rounded-lg text-xs space-y-1">
+                      <div className="text-gray-400 font-medium">Debug Information:</div>
+                      <div className="grid grid-cols-2 gap-2 text-gray-300">
+                        <div>User ID: {stripeStatus.debug_info.user_id}</div>
+                        <div>Email: {stripeStatus.debug_info.user_email}</div>
+                        <div>Stripe Key: {stripeStatus.debug_info.stripe_key_prefix}</div>
+                        <div>Expected Platform: {stripeStatus.debug_info.expected_platform_account}</div>
+                        <div>Total in Stripe: {stripeStatus.debug_info.total_accounts_in_stripe}</div>
+                      </div>
+                    </div>
+                  )}
 
                   {/* Connection Details */}
                   <div className="space-y-3">
@@ -427,68 +529,193 @@ export default function DebugStripeRealStatusPage() {
             </CardContent>
           </Card>
 
-          {/* All Connected Accounts */}
+          {/* Account Verification Tool */}
           <Card className="bg-gray-800/30 border-gray-700/50 backdrop-blur-sm">
             <CardHeader>
               <div className="flex items-center gap-2">
-                <Database className="h-5 w-5 text-green-400" />
-                <CardTitle className="text-white">All Platform Accounts</CardTitle>
+                <Search className="h-5 w-5 text-purple-400" />
+                <CardTitle className="text-white">Verify Account</CardTitle>
               </div>
-              <CardDescription>All accounts connected to MassClip platform</CardDescription>
+              <CardDescription>Check if a specific account ID exists in Stripe</CardDescription>
             </CardHeader>
-            <CardContent>
-              {allAccounts ? (
-                <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                    <span className="text-white font-medium">Total Accounts: {allAccounts.total_accounts}</span>
-                    <Button variant="ghost" size="sm" onClick={loadAllConnectedAccounts}>
-                      <RefreshCw className="h-4 w-4" />
-                    </Button>
-                  </div>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Input
+                  placeholder="acct_1RlAsqDBEjdom8Co"
+                  value={verifyAccountId}
+                  onChange={(e) => setVerifyAccountId(e.target.value)}
+                  className="bg-gray-700/30 border-gray-600 text-white"
+                />
+                <Button
+                  onClick={verifyAccount}
+                  disabled={verifying || !verifyAccountId.trim()}
+                  className="w-full bg-purple-600 hover:bg-purple-700"
+                >
+                  {verifying ? (
+                    <RefreshCw className="h-4 w-4 animate-spin mr-2" />
+                  ) : (
+                    <Search className="h-4 w-4 mr-2" />
+                  )}
+                  Verify Account
+                </Button>
+              </div>
 
-                  {allAccounts.total_accounts > 0 ? (
-                    <ScrollArea className="h-96 w-full">
-                      <div className="space-y-3">
-                        {allAccounts.accounts.map((account, index) => (
-                          <div key={account.id} className="p-3 bg-gray-700/30 rounded-lg">
-                            <div className="flex items-center justify-between mb-2">
-                              <span className="text-white font-mono text-sm">{account.id}</span>
-                              <Badge variant="outline">{account.type}</Badge>
+              {verifyResult && (
+                <div className="space-y-3">
+                  <Separator className="bg-gray-700" />
+                  <Alert
+                    className={
+                      verifyResult.account_exists ? "border-green-600 bg-green-600/10" : "border-red-600 bg-red-600/10"
+                    }
+                  >
+                    {getStatusIcon(verifyResult.account_exists)}
+                    <AlertDescription>
+                      Account {verifyResult.account_exists ? "exists" : "not found"} in Stripe
+                    </AlertDescription>
+                  </Alert>
+
+                  {verifyResult.account_exists && verifyResult.account_details && (
+                    <div className="bg-gray-700/30 p-3 rounded-lg text-sm space-y-2">
+                      <div className="flex justify-between">
+                        <span className="text-gray-400">Type:</span>
+                        <Badge variant="outline">{verifyResult.account_details.type}</Badge>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-400">Email:</span>
+                        <span className="text-white text-xs">{verifyResult.account_details.email}</span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span className="text-gray-400">Belongs to Platform:</span>
+                        {getStatusIcon(verifyResult.belongs_to_platform || false)}
+                      </div>
+
+                      {verifyResult.verification_checks && (
+                        <div className="mt-3 pt-2 border-t border-gray-600">
+                          <div className="text-xs text-gray-400 mb-2">Verification Checks:</div>
+                          <div className="space-y-1 text-xs">
+                            <div className="flex justify-between">
+                              <span>Platform Metadata:</span>
+                              {getStatusIcon(verifyResult.verification_checks.has_platform_metadata)}
                             </div>
-                            <div className="text-xs text-gray-400 space-y-1">
-                              <div>Email: {account.email || "Not provided"}</div>
-                              <div>Country: {account.country}</div>
-                              <div className="flex gap-2 mt-2">
-                                <Badge variant={account.charges_enabled ? "default" : "secondary"} className="text-xs">
-                                  Charges: {account.charges_enabled ? "✓" : "✗"}
-                                </Badge>
-                                <Badge variant={account.payouts_enabled ? "default" : "secondary"} className="text-xs">
-                                  Payouts: {account.payouts_enabled ? "✓" : "✗"}
-                                </Badge>
-                              </div>
+                            <div className="flex justify-between">
+                              <span>User Metadata:</span>
+                              {getStatusIcon(verifyResult.verification_checks.has_user_metadata)}
+                            </div>
+                            <div className="flex justify-between">
+                              <span>Email Match:</span>
+                              {getStatusIcon(verifyResult.verification_checks.email_matches)}
                             </div>
                           </div>
-                        ))}
-                      </div>
-                    </ScrollArea>
-                  ) : (
-                    <Alert className="border-yellow-600 bg-yellow-600/10">
-                      <AlertCircle className="h-4 w-4" />
-                      <AlertDescription>
-                        No connected accounts found in Stripe. Create a test account to get started.
-                      </AlertDescription>
-                    </Alert>
+                        </div>
+                      )}
+                    </div>
                   )}
-                </div>
-              ) : (
-                <div className="flex items-center justify-center py-8">
-                  <RefreshCw className="h-6 w-6 animate-spin text-gray-400" />
-                  <span className="ml-2 text-gray-400">Loading accounts...</span>
                 </div>
               )}
             </CardContent>
           </Card>
         </div>
+
+        {/* All Connected Accounts */}
+        <Card className="bg-gray-800/30 border-gray-700/50 backdrop-blur-sm">
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <Database className="h-5 w-5 text-green-400" />
+              <CardTitle className="text-white">All Platform Accounts</CardTitle>
+            </div>
+            <CardDescription>All accounts connected to MassClip platform</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {allAccounts ? (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="space-y-1">
+                    <div className="text-white font-medium">
+                      Platform Accounts: {allAccounts.platform_accounts} / {allAccounts.total_accounts}
+                    </div>
+                    {allAccounts.debug_info && (
+                      <div className="text-xs text-gray-400">
+                        Stripe Key: {allAccounts.debug_info.stripe_context?.api_key_prefix} | Test Mode:{" "}
+                        {allAccounts.debug_info.stripe_context?.test_mode ? "Yes" : "No"}
+                      </div>
+                    )}
+                  </div>
+                  <Button variant="ghost" size="sm" onClick={loadAllConnectedAccounts}>
+                    <RefreshCw className="h-4 w-4" />
+                  </Button>
+                </div>
+
+                {allAccounts.platform_accounts > 0 ? (
+                  <ScrollArea className="h-96 w-full">
+                    <div className="space-y-3">
+                      {allAccounts.accounts.map((account, index) => (
+                        <div key={account.id} className="p-3 bg-gray-700/30 rounded-lg">
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-white font-mono text-sm">{account.id}</span>
+                            <div className="flex gap-2">
+                              <Badge variant="outline">{account.type}</Badge>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => setVerifyAccountId(account.id)}
+                                className="h-6 px-2"
+                              >
+                                <ExternalLink className="h-3 w-3" />
+                              </Button>
+                            </div>
+                          </div>
+                          <div className="text-xs text-gray-400 space-y-1">
+                            <div>Email: {account.email || "Not provided"}</div>
+                            <div>Country: {account.country}</div>
+                            <div>Created: {new Date(account.created).toLocaleDateString()}</div>
+                            <div className="flex gap-2 mt-2">
+                              <Badge variant={account.charges_enabled ? "default" : "secondary"} className="text-xs">
+                                Charges: {account.charges_enabled ? "✓" : "✗"}
+                              </Badge>
+                              <Badge variant={account.payouts_enabled ? "default" : "secondary"} className="text-xs">
+                                Payouts: {account.payouts_enabled ? "✓" : "✗"}
+                              </Badge>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </ScrollArea>
+                ) : (
+                  <Alert className="border-yellow-600 bg-yellow-600/10">
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertDescription>
+                      No platform accounts found in Stripe. Create a test account to get started.
+                    </AlertDescription>
+                  </Alert>
+                )}
+
+                {/* Debug: All Accounts */}
+                {allAccounts.all_accounts_debug && allAccounts.all_accounts_debug.length > 0 && (
+                  <details className="mt-4">
+                    <summary className="text-gray-400 text-sm cursor-pointer hover:text-white">
+                      Debug: All {allAccounts.total_accounts} accounts in Stripe
+                    </summary>
+                    <div className="mt-2 bg-gray-700/20 p-3 rounded text-xs">
+                      <ScrollArea className="h-32">
+                        {allAccounts.all_accounts_debug.map((account, index) => (
+                          <div key={account.id} className="py-1 border-b border-gray-600/30 last:border-0">
+                            <span className="font-mono">{account.id}</span> - {account.email} ({account.type})
+                          </div>
+                        ))}
+                      </ScrollArea>
+                    </div>
+                  </details>
+                )}
+              </div>
+            ) : (
+              <div className="flex items-center justify-center py-8">
+                <RefreshCw className="h-6 w-6 animate-spin text-gray-400" />
+                <span className="ml-2 text-gray-400">Loading accounts...</span>
+              </div>
+            )}
+          </CardContent>
+        </Card>
       </div>
     </div>
   )

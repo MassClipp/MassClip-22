@@ -10,7 +10,8 @@ export async function POST(request: NextRequest) {
   try {
     // Verify authentication
     const decodedToken = await requireAuth(request)
-    console.log(`🔍 [Verify Account] Request from user: ${decodedToken.uid}`)
+    const userId = decodedToken.uid
+    console.log(`🔍 [Verify Account] Request from user: ${userId}`)
 
     const body = (await request.json()) as VerifyAccountBody
     const { account_id } = body
@@ -19,21 +20,39 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         {
           success: false,
-          error: "account_id is required",
+          error: "Account ID is required",
         },
         { status: 400 },
       )
     }
 
+    console.log(`🔍 [Verify Account] Checking account: ${account_id}`)
+
     // Try to retrieve the account from Stripe
     try {
       const account = await stripe.accounts.retrieve(account_id)
 
-      console.log(`✅ [Verify Account] Found account: ${account.id}`)
+      console.log(`✅ [Verify Account] Account found:`, {
+        id: account.id,
+        type: account.type,
+        email: account.email,
+        country: account.country,
+        charges_enabled: account.charges_enabled,
+        payouts_enabled: account.payouts_enabled,
+        details_submitted: account.details_submitted,
+        metadata: account.metadata,
+      })
+
+      // Check if this account belongs to our platform
+      const belongsToPlatform =
+        account.metadata?.created_by_platform === "massclip" ||
+        account.metadata?.firebase_uid === userId ||
+        account.email === decodedToken.email
 
       return NextResponse.json({
         success: true,
-        exists: true,
+        account_exists: true,
+        belongs_to_platform: belongsToPlatform,
         account_details: {
           id: account.id,
           type: account.type,
@@ -53,15 +72,20 @@ export async function POST(request: NextRequest) {
           metadata: account.metadata,
           business_profile: account.business_profile,
         },
+        verification_checks: {
+          has_platform_metadata: account.metadata?.created_by_platform === "massclip",
+          has_user_metadata: account.metadata?.firebase_uid === userId,
+          email_matches: account.email === decodedToken.email,
+        },
       })
     } catch (stripeError: any) {
       if (stripeError.code === "resource_missing") {
         console.log(`❌ [Verify Account] Account not found: ${account_id}`)
         return NextResponse.json({
           success: true,
-          exists: false,
-          account_id,
+          account_exists: false,
           error: "Account not found in Stripe",
+          account_id,
         })
       }
       throw stripeError

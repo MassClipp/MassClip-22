@@ -10,11 +10,14 @@ interface CreateAccountBody {
 }
 
 export async function POST(request: NextRequest) {
+  let decodedToken: any // Declare decodedToken variable
   try {
     // Verify authentication
-    const decodedToken = await requireAuth(request)
+    decodedToken = await requireAuth(request)
     const userId = decodedToken.uid
     console.log(`🔧 [Create Test Account] Request from user: ${userId}`)
+    console.log(`🔧 [Create Test Account] User email: ${decodedToken.email}`)
+    console.log(`🔧 [Create Test Account] Stripe API Key: ${process.env.STRIPE_SECRET_KEY?.substring(0, 12)}...`)
 
     const body = (await request.json()) as CreateAccountBody
     const { email, country = "US", type = "express" } = body
@@ -27,30 +30,37 @@ export async function POST(request: NextRequest) {
       metadata: {
         created_by_platform: "massclip",
         firebase_uid: userId,
+        user_email: decodedToken.email,
         created_at: new Date().toISOString(),
-        environment: "test",
+        environment: process.env.NODE_ENV || "development",
+        platform_account_id: "acct_1RFLa9Dheyb0pkWF", // Your actual MassClip account ID
       },
       capabilities: {
         card_payments: { requested: true },
         transfers: { requested: true },
       },
-      // For Express accounts, we don't pre-fill personal information
-      // The user will complete this during onboarding
       business_profile: {
         mcc: "5734", // Computer software stores
-        product_description: "Digital content creation",
+        product_description: "Digital content creation and distribution",
         support_email: email || decodedToken.email,
         url: `${process.env.NEXT_PUBLIC_SITE_URL}/creator/${userId}`,
       },
     })
 
     console.log(`✅ [Create Test Account] Created Express account: ${account.id}`)
+    console.log(`✅ [Create Test Account] Account details:`, {
+      id: account.id,
+      type: account.type,
+      email: account.email,
+      country: account.country,
+      metadata: account.metadata,
+    })
 
     // Create an account link for onboarding
     const accountLink = await stripe.accountLinks.create({
       account: account.id,
-      refresh_url: `${process.env.NEXT_PUBLIC_SITE_URL}/debug-stripe-real-status?refresh=true`,
-      return_url: `${process.env.NEXT_PUBLIC_SITE_URL}/debug-stripe-real-status?success=true`,
+      refresh_url: `${process.env.NEXT_PUBLIC_SITE_URL}/debug-stripe-real-status?refresh=true&account=${account.id}`,
+      return_url: `${process.env.NEXT_PUBLIC_SITE_URL}/debug-stripe-real-status?success=true&account=${account.id}`,
       type: "account_onboarding",
     })
 
@@ -96,10 +106,17 @@ export async function POST(request: NextRequest) {
         capabilities: account.capabilities,
         metadata: account.metadata,
       },
+      debug_info: {
+        user_id: userId,
+        user_email: decodedToken.email,
+        stripe_key_prefix: process.env.STRIPE_SECRET_KEY?.substring(0, 12) + "...",
+        platform_account_id: "acct_1RFLa9Dheyb0pkWF",
+      },
       next_steps: [
-        "Account created successfully",
+        "Account created successfully with proper metadata",
         "Complete onboarding using the provided URL",
         "Account will be fully functional after onboarding",
+        "Account will appear in your Stripe Dashboard after onboarding",
       ],
     })
   } catch (error: any) {
@@ -111,6 +128,11 @@ export async function POST(request: NextRequest) {
         type: error.type,
         code: error.code,
         details: error.raw || error,
+        debug_info: {
+          stripe_key_prefix: process.env.STRIPE_SECRET_KEY?.substring(0, 12) + "...",
+          user_id: decodedToken?.uid,
+          user_email: decodedToken?.email,
+        },
         solution:
           error.code === "account_invalid"
             ? "Try using Express account type instead of Standard"
