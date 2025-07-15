@@ -15,8 +15,8 @@ export async function GET(request: NextRequest) {
 
     console.log(`📊 [Debug Connected Accounts] Found ${connectedAccounts.data.length} connected accounts`)
 
-    // Format the response with detailed account information
-    const accountsData = connectedAccounts.data.map((account) => ({
+    // Format account data for response
+    const formattedAccounts = connectedAccounts.data.map((account) => ({
       id: account.id,
       type: account.type,
       country: account.country,
@@ -34,16 +34,12 @@ export async function GET(request: NextRequest) {
       capabilities: account.capabilities,
       metadata: account.metadata,
       business_profile: account.business_profile,
-      settings: account.settings,
-      tos_acceptance: account.tos_acceptance,
     }))
 
     return NextResponse.json({
       success: true,
       total_accounts: connectedAccounts.data.length,
-      has_more: connectedAccounts.has_more,
-      accounts: accountsData,
-      raw_response: connectedAccounts,
+      accounts: formattedAccounts,
     })
   } catch (error: any) {
     console.error("❌ [Debug Connected Accounts] Error:", error)

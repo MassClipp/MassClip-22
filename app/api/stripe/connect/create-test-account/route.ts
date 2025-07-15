@@ -6,7 +6,7 @@ import { db } from "@/lib/firebase-admin"
 interface CreateAccountBody {
   email?: string
   country?: string
-  type?: "standard" | "express" | "custom"
+  type?: "express" | "custom"
 }
 
 export async function POST(request: NextRequest) {
@@ -17,11 +17,11 @@ export async function POST(request: NextRequest) {
     console.log(`🔧 [Create Test Account] Request from user: ${userId}`)
 
     const body = (await request.json()) as CreateAccountBody
-    const { email, country = "US", type = "standard" } = body
+    const { email, country = "US", type = "express" } = body
 
-    // Create a new connected account through Stripe
+    // Create a new Express connected account (allows platform to handle onboarding)
     const account = await stripe.accounts.create({
-      type,
+      type, // Use Express instead of Standard
       country,
       email: email || decodedToken.email,
       metadata: {
@@ -34,41 +34,27 @@ export async function POST(request: NextRequest) {
         card_payments: { requested: true },
         transfers: { requested: true },
       },
-      business_type: "individual",
-      individual: {
-        email: email || decodedToken.email,
-        first_name: "Test",
-        last_name: "User",
-        dob: {
-          day: 1,
-          month: 1,
-          year: 1990,
-        },
-        address: {
-          line1: "123 Test Street",
-          city: "Test City",
-          state: "CA",
-          postal_code: "12345",
-          country: "US",
-        },
-        phone: "+15555551234",
-        ssn_last_4: "0000",
-      },
+      // For Express accounts, we don't pre-fill personal information
+      // The user will complete this during onboarding
       business_profile: {
         mcc: "5734", // Computer software stores
-        name: "Test Creator Account",
         product_description: "Digital content creation",
         support_email: email || decodedToken.email,
         url: `${process.env.NEXT_PUBLIC_SITE_URL}/creator/${userId}`,
       },
-      tos_acceptance: {
-        date: Math.floor(Date.now() / 1000),
-        ip: request.headers.get("x-forwarded-for") || "127.0.0.1",
-        user_agent: request.headers.get("user-agent") || "MassClip Platform",
-      },
     })
 
-    console.log(`✅ [Create Test Account] Created account: ${account.id}`)
+    console.log(`✅ [Create Test Account] Created Express account: ${account.id}`)
+
+    // Create an account link for onboarding
+    const accountLink = await stripe.accountLinks.create({
+      account: account.id,
+      refresh_url: `${process.env.NEXT_PUBLIC_SITE_URL}/debug-stripe-real-status?refresh=true`,
+      return_url: `${process.env.NEXT_PUBLIC_SITE_URL}/debug-stripe-real-status?success=true`,
+      type: "account_onboarding",
+    })
+
+    console.log(`🔗 [Create Test Account] Created onboarding link: ${accountLink.url}`)
 
     // Save the account to Firestore
     await db
@@ -78,6 +64,7 @@ export async function POST(request: NextRequest) {
         stripeTestAccountId: account.id,
         stripeTestConnected: true,
         stripeTestAccountCreatedAt: new Date().toISOString(),
+        stripeTestOnboardingUrl: accountLink.url,
         stripeTestAccountDetails: {
           type: account.type,
           country: account.country,
@@ -99,6 +86,7 @@ export async function POST(request: NextRequest) {
       payouts_enabled: account.payouts_enabled,
       details_submitted: account.details_submitted,
       requirements: account.requirements,
+      onboarding_url: accountLink.url,
       account_details: {
         id: account.id,
         type: account.type,
@@ -108,6 +96,11 @@ export async function POST(request: NextRequest) {
         capabilities: account.capabilities,
         metadata: account.metadata,
       },
+      next_steps: [
+        "Account created successfully",
+        "Complete onboarding using the provided URL",
+        "Account will be fully functional after onboarding",
+      ],
     })
   } catch (error: any) {
     console.error("❌ [Create Test Account] Error:", error)
@@ -118,6 +111,10 @@ export async function POST(request: NextRequest) {
         type: error.type,
         code: error.code,
         details: error.raw || error,
+        solution:
+          error.code === "account_invalid"
+            ? "Try using Express account type instead of Standard"
+            : "Check Stripe dashboard for more details",
       },
       { status: 500 },
     )
