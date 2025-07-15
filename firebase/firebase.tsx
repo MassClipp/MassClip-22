@@ -1,5 +1,3 @@
-"use client"
-
 import { initializeApp, getApps } from "firebase/app"
 import { getAuth } from "firebase/auth"
 import { getFirestore } from "firebase/firestore"
@@ -15,8 +13,9 @@ const firebaseConfig = {
 }
 
 // Initialize Firebase only if it hasn't been initialized already
-export const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0]
+const app = getApps().length === 0 ? initializeApp(firebaseConfig) : getApps()[0]
+
+export { app }
 export const auth = getAuth(app)
 export const db = getFirestore(app)
-
 export default app

@@ -2,37 +2,26 @@ import { type NextRequest, NextResponse } from "next/server"
 import { stripe, isTestMode } from "@/lib/stripe"
 import { db, auth } from "@/lib/firebase-admin"
 
-interface ConnectBody {
-  accountId: string
+interface ManualConnectBody {
   idToken: string
+  accountId: string
 }
 
 export async function POST(request: NextRequest) {
   try {
-    const { idToken, accountId } = (await request.json()) as ConnectBody
+    const { idToken, accountId } = (await request.json()) as ManualConnectBody
 
-    if (!accountId || !idToken) {
+    if (!idToken || !accountId) {
       return NextResponse.json(
         {
           success: false,
-          error: "Both accountId and idToken are required",
+          error: "Authentication token and account ID are required",
         },
         { status: 400 },
       )
     }
 
-    // Validate account ID format
-    if (!accountId.startsWith("acct_")) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Invalid account ID format. Must start with 'acct_'",
-        },
-        { status: 400 },
-      )
-    }
-
-    // Verify the Firebase ID token
+    // Verify Firebase ID token
     let decodedToken
     try {
       decodedToken = await auth.verifyIdToken(idToken)
@@ -49,11 +38,23 @@ export async function POST(request: NextRequest) {
     }
 
     const userId = decodedToken.uid
+
+    // Validate account ID format
+    if (!accountId.startsWith("acct_")) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Invalid account ID format. Must start with 'acct_'",
+        },
+        { status: 400 },
+      )
+    }
+
     console.log(
-      `🔗 [Manual Connect] Connecting account ${accountId} for user: ${userId} in ${isTestMode ? "TEST" : "LIVE"} mode`,
+      `🔗 [Manual Connect] Connecting account ${accountId} for user ${userId} in ${isTestMode ? "TEST" : "LIVE"} mode`,
     )
 
-    // Verify the account exists and is accessible
+    // Retrieve and validate the account from Stripe
     let account
     try {
       account = await stripe.accounts.retrieve(accountId)
@@ -64,6 +65,7 @@ export async function POST(request: NextRequest) {
         livemode: account.livemode,
         charges_enabled: account.charges_enabled,
         payouts_enabled: account.payouts_enabled,
+        details_submitted: account.details_submitted,
       })
     } catch (stripeError: any) {
       console.error("❌ [Manual Connect] Failed to retrieve account:", stripeError)
@@ -72,7 +74,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json(
           {
             success: false,
-            error: "Account not found. Please check the account ID.",
+            error: "Account not found. Please verify the account ID is correct.",
           },
           { status: 404 },
         )
@@ -82,7 +84,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json(
           {
             success: false,
-            error: "Cannot access this account. Ensure it's accessible from your platform.",
+            error: "Cannot access this account. Make sure it's accessible from your platform.",
           },
           { status: 403 },
         )
@@ -91,8 +93,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         {
           success: false,
-          error: "Failed to verify account with Stripe",
-          details: stripeError.message,
+          error: `Stripe API error: ${stripeError.message}`,
         },
         { status: 400 },
       )
@@ -107,101 +108,67 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         {
           success: false,
-          error: `Cannot connect ${actualMode} mode account in ${expectedMode} environment.`,
+          error: `Environment mismatch: Cannot connect ${actualMode} mode account in ${expectedMode} environment.`,
         },
         { status: 400 },
       )
     }
 
-    // Check if account is already connected to another user
-    const fieldToCheck = isTestMode ? "stripeTestAccountId" : "stripeAccountId"
-    const existingUserQuery = await db.collection("users").where(fieldToCheck, "==", accountId).get()
-
-    if (!existingUserQuery.empty) {
-      const existingUser = existingUserQuery.docs[0]
-      if (existingUser.id !== userId) {
-        return NextResponse.json(
-          {
-            success: false,
-            error: "This account is already connected to another user.",
-          },
-          { status: 409 },
-        )
-      }
-      // Account is already connected to this user
-      console.log(`ℹ️ [Manual Connect] Account ${accountId} already connected to user ${userId}`)
+    // Check if account is ready for transactions
+    if (!account.details_submitted) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Account setup is incomplete. Please complete your Stripe account setup first.",
+        },
+        { status: 400 },
+      )
     }
 
-    // Get or create user document
-    const userDocRef = db.collection("users").doc(userId)
-    const userDoc = await userDocRef.get()
+    // Determine which field to update based on mode
+    const accountIdField = isTestMode ? "stripeTestAccountId" : "stripeAccountId"
+    const connectedField = isTestMode ? "stripeTestConnected" : "stripeConnected"
 
-    if (!userDoc.exists) {
-      // Create user document if it doesn't exist
-      await userDocRef.set({
-        uid: userId,
-        email: decodedToken.email,
-        createdAt: new Date(),
-      })
-      console.log(`📝 [Manual Connect] Created user document for ${userId}`)
+    // Save the account ID to the user's Firestore document
+    try {
+      await db
+        .collection("users")
+        .doc(userId)
+        .update({
+          [accountIdField]: account.id,
+          [connectedField]: true,
+          [`${accountIdField}ConnectedAt`]: new Date(),
+          [`${accountIdField}Country`]: account.country,
+          [`${accountIdField}Email`]: account.email,
+          [`${accountIdField}Type`]: account.type,
+        })
+
+      console.log(`✅ [Manual Connect] Account ${account.id} connected to user ${userId}`)
+    } catch (firestoreError) {
+      console.error("❌ [Manual Connect] Failed to save to Firestore:", firestoreError)
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Failed to save connection to database",
+        },
+        { status: 500 },
+      )
     }
-
-    // Update user document with the connected account
-    const updateData = isTestMode
-      ? {
-          stripeTestAccountId: accountId,
-          stripeTestAccountConnected: new Date(),
-          stripeTestAccountManuallyConnected: true,
-          // Also update the primary account ID field for test mode
-          stripeAccountId: accountId,
-          stripeAccountConnected: new Date(),
-          lastUpdated: new Date(),
-        }
-      : {
-          stripeAccountId: accountId,
-          stripeAccountConnected: new Date(),
-          stripeAccountManuallyConnected: true,
-          lastUpdated: new Date(),
-        }
-
-    await userDocRef.update(updateData)
-
-    console.log(`✅ [Manual Connect] Successfully connected account ${accountId} to user ${userId}`)
-
-    // Check requirements and account status
-    const requirements = account.requirements || {}
-    const currentlyDue = requirements.currently_due || []
-    const pastDue = requirements.past_due || []
-    const requirementsCount = currentlyDue.length + pastDue.length
-
-    const isFullyOperational = account.charges_enabled && account.payouts_enabled && account.details_submitted
 
     return NextResponse.json({
       success: true,
       accountConnected: true,
       accountId: account.id,
       mode: isTestMode ? "test" : "live",
-      accountStatus: {
+      message: `${isTestMode ? "Test" : "Live"} account connected successfully`,
+      accountDetails: {
+        id: account.id,
+        email: account.email,
+        country: account.country,
+        type: account.type,
         chargesEnabled: account.charges_enabled,
         payoutsEnabled: account.payouts_enabled,
         detailsSubmitted: account.details_submitted,
-        requirementsCount,
-        currentlyDue,
-        pastDue,
-        country: account.country,
-        email: account.email,
-        type: account.type,
-        livemode: account.livemode,
-        fullyOperational: isFullyOperational,
-      },
-      message: isFullyOperational
-        ? "Account successfully connected and fully operational!"
-        : "Account connected but may require additional setup to process payments.",
-      debugInfo: {
-        userId,
-        fieldUpdated: fieldToCheck,
-        environmentMode: isTestMode ? "test" : "live",
-        accountMode: account.livemode ? "live" : "test",
       },
     })
   } catch (error: any) {
@@ -209,7 +176,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       {
         success: false,
-        error: "Failed to connect account due to internal error",
+        error: "Internal server error during connection",
         details: error.message,
       },
       { status: 500 },
