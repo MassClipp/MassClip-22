@@ -6,99 +6,92 @@ export async function GET(request: NextRequest) {
   try {
     // Verify authentication
     const decodedToken = await requireAuth(request)
-    const userId = decodedToken.uid
-    console.log(`🔍 [Debug Connected Accounts] Request from user: ${userId}`)
+    console.log(`🔍 [Connected Accounts] Request from user: ${decodedToken.uid}`)
 
     // Get all connected accounts from Stripe
     const connectedAccounts = await stripe.accounts.list({
       limit: 100,
     })
 
-    console.log(`📊 [Debug Connected Accounts] Found ${connectedAccounts.data.length} total accounts in Stripe`)
+    console.log(`📊 [Connected Accounts] Found ${connectedAccounts.data.length} total accounts`)
 
-    // Log each account for debugging
-    connectedAccounts.data.forEach((account, index) => {
-      console.log(`Account ${index + 1}:`, {
-        id: account.id,
-        email: account.email,
-        type: account.type,
-        country: account.country,
-        created: new Date(account.created * 1000).toISOString(),
-        metadata: account.metadata,
-        charges_enabled: account.charges_enabled,
-        payouts_enabled: account.payouts_enabled,
-      })
-    })
+    // Helper function to safely format timestamps
+    const safeFormatDate = (timestamp: number | null | undefined): string => {
+      if (!timestamp || typeof timestamp !== "number") {
+        return "Unknown"
+      }
+      try {
+        return new Date(timestamp * 1000).toISOString()
+      } catch (error) {
+        console.warn(`Invalid timestamp: ${timestamp}`)
+        return "Invalid Date"
+      }
+    }
 
-    // Filter accounts that might belong to our platform
+    // Filter accounts that belong to our platform
     const platformAccounts = connectedAccounts.data.filter((account) => {
-      // Check if account has our platform metadata
-      const hasPlatformMetadata = account.metadata?.created_by_platform === "massclip"
-
-      // Check if account metadata contains our user ID
-      const hasUserMetadata = account.metadata?.firebase_uid === userId
-
-      // Check if account email matches user email
-      const hasMatchingEmail = account.email === decodedToken.email
-
-      console.log(`Account ${account.id} filters:`, {
-        hasPlatformMetadata,
-        hasUserMetadata,
-        hasMatchingEmail,
-        metadata: account.metadata,
-      })
-
-      return hasPlatformMetadata || hasUserMetadata || hasMatchingEmail
+      return account.metadata?.created_by_platform === "massclip"
     })
 
-    console.log(`🎯 [Debug Connected Accounts] Found ${platformAccounts.length} platform-related accounts`)
+    console.log(`🎯 [Connected Accounts] Found ${platformAccounts.length} platform accounts`)
+
+    // Format account data safely
+    const formattedAccounts = platformAccounts.map((account) => ({
+      id: account.id,
+      type: account.type,
+      country: account.country || "Unknown",
+      email: account.email || "Not provided",
+      created: safeFormatDate(account.created),
+      charges_enabled: account.charges_enabled || false,
+      payouts_enabled: account.payouts_enabled || false,
+      details_submitted: account.details_submitted || false,
+      requirements: {
+        currently_due: account.requirements?.currently_due || [],
+        past_due: account.requirements?.past_due || [],
+        pending_verification: account.requirements?.pending_verification || [],
+        disabled_reason: account.requirements?.disabled_reason || null,
+      },
+      capabilities: account.capabilities || {},
+      metadata: account.metadata || {},
+      business_profile: account.business_profile || {},
+    }))
+
+    // Format all accounts for debug
+    const allAccountsDebug = connectedAccounts.data.map((account) => ({
+      id: account.id,
+      email: account.email || "Not provided",
+      type: account.type,
+      created: safeFormatDate(account.created),
+      metadata: account.metadata || {},
+    }))
 
     return NextResponse.json({
       success: true,
       total_accounts: connectedAccounts.data.length,
       platform_accounts: platformAccounts.length,
-      user_id: userId,
-      user_email: decodedToken.email,
-      stripe_context: {
-        api_key_prefix: process.env.STRIPE_SECRET_KEY?.substring(0, 12) + "...",
-        test_mode: process.env.STRIPE_SECRET_KEY?.includes("test"),
-      },
-      accounts: platformAccounts.map((account) => ({
-        id: account.id,
-        type: account.type,
-        country: account.country,
-        email: account.email,
-        created: new Date(account.created * 1000).toISOString(),
-        charges_enabled: account.charges_enabled,
-        payouts_enabled: account.payouts_enabled,
-        details_submitted: account.details_submitted,
-        metadata: account.metadata,
-        requirements: {
-          currently_due: account.requirements?.currently_due || [],
-          past_due: account.requirements?.past_due || [],
-          pending_verification: account.requirements?.pending_verification || [],
-          disabled_reason: account.requirements?.disabled_reason,
+      accounts: formattedAccounts,
+      all_accounts_debug: allAccountsDebug,
+      debug_info: {
+        stripe_context: {
+          api_key_prefix: process.env.STRIPE_SECRET_KEY?.substring(0, 12) + "...",
+          test_mode: process.env.STRIPE_SECRET_KEY?.startsWith("sk_test_") || false,
         },
-      })),
-      all_accounts_debug: connectedAccounts.data.map((account) => ({
-        id: account.id,
-        email: account.email,
-        type: account.type,
-        metadata: account.metadata,
-        created: new Date(account.created * 1000).toISOString(),
-      })),
+        query_time: new Date().toISOString(),
+      },
     })
   } catch (error: any) {
-    console.error("❌ [Debug Connected Accounts] Error:", error)
+    console.error("❌ [Connected Accounts] Error:", error)
     return NextResponse.json(
       {
         success: false,
         error: error.message,
         type: error.type,
         code: error.code,
-        stripe_context: {
-          api_key_prefix: process.env.STRIPE_SECRET_KEY?.substring(0, 12) + "...",
-          test_mode: process.env.STRIPE_SECRET_KEY?.includes("test"),
+        debug_info: {
+          stripe_context: {
+            api_key_prefix: process.env.STRIPE_SECRET_KEY?.substring(0, 12) + "...",
+            test_mode: process.env.STRIPE_SECRET_KEY?.startsWith("sk_test_") || false,
+          },
         },
       },
       { status: 500 },

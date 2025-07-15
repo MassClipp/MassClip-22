@@ -15,7 +15,20 @@ export async function POST(request: NextRequest) {
       limit: 100,
     })
 
-    console.log(`📊 [Sync with Stripe] Found ${connectedAccounts.data.length} total accounts in Stripe`)
+    console.log(`📊 [Sync with Stripe] Found ${connectedAccounts.data.length} connected accounts in Stripe`)
+
+    // Helper function to safely format timestamps
+    const safeFormatDate = (timestamp: number | null | undefined): string => {
+      if (!timestamp || typeof timestamp !== "number") {
+        return new Date().toISOString() // Fallback to current time
+      }
+      try {
+        return new Date(timestamp * 1000).toISOString()
+      } catch (error) {
+        console.warn(`Invalid timestamp: ${timestamp}`)
+        return new Date().toISOString()
+      }
+    }
 
     // Find accounts that belong to this user
     const userAccountsInStripe = connectedAccounts.data.filter((acc) => {
@@ -28,84 +41,59 @@ export async function POST(request: NextRequest) {
 
     console.log(`🎯 [Sync with Stripe] Found ${userAccountsInStripe.length} user accounts`)
 
-    // Get current user data from Firestore
-    const userDoc = await db.collection("users").doc(userId).get()
-    const userData = userDoc.exists ? userDoc.data() : {}
-
-    // Determine which accounts to sync
-    const testAccounts = userAccountsInStripe.filter((acc) => acc.livemode === false)
-    const liveAccounts = userAccountsInStripe.filter((acc) => acc.livemode === true)
-
-    const primaryTestAccount = testAccounts[0]
-    const primaryLiveAccount = liveAccounts[0]
-
-    // Update Firestore with the synced data
+    // Update Firestore with the found accounts
     const updateData: any = {
-      updatedAt: new Date().toISOString(),
       lastStripeSync: new Date().toISOString(),
+      stripeSyncResults: {
+        totalAccountsFound: connectedAccounts.data.length,
+        userAccountsFound: userAccountsInStripe.length,
+        syncedAt: new Date().toISOString(),
+      },
     }
 
-    if (primaryTestAccount) {
-      updateData.stripeTestAccountId = primaryTestAccount.id
-      updateData.stripeTestConnected = true
-      updateData.stripeTestAccountDetails = {
-        type: primaryTestAccount.type,
-        country: primaryTestAccount.country,
-        email: primaryTestAccount.email,
-        charges_enabled: primaryTestAccount.charges_enabled,
-        payouts_enabled: primaryTestAccount.payouts_enabled,
-        details_submitted: primaryTestAccount.details_submitted,
+    // If we found user accounts, update the stored IDs
+    if (userAccountsInStripe.length > 0) {
+      const primaryAccount = userAccountsInStripe[0]
+
+      // Determine if it's test or live mode
+      const isTestAccount = primaryAccount.livemode === false
+
+      if (isTestAccount) {
+        updateData.stripeTestAccountId = primaryAccount.id
+        updateData.stripeTestConnected = true
+        updateData.stripeTestAccountSynced = safeFormatDate(primaryAccount.created)
+      } else {
+        updateData.stripeAccountId = primaryAccount.id
+        updateData.stripeConnected = true
+        updateData.stripeAccountSynced = safeFormatDate(primaryAccount.created)
       }
+
+      console.log(`💾 [Sync with Stripe] Updating ${isTestAccount ? "test" : "live"} account: ${primaryAccount.id}`)
     }
 
-    if (primaryLiveAccount) {
-      updateData.stripeAccountId = primaryLiveAccount.id
-      updateData.stripeConnected = true
-      updateData.stripeAccountDetails = {
-        type: primaryLiveAccount.type,
-        country: primaryLiveAccount.country,
-        email: primaryLiveAccount.email,
-        charges_enabled: primaryLiveAccount.charges_enabled,
-        payouts_enabled: primaryLiveAccount.payouts_enabled,
-        details_submitted: primaryLiveAccount.details_submitted,
-      }
+    // Update Firestore
+    try {
+      await db.collection("users").doc(userId).update(updateData)
+      console.log(`✅ [Sync with Stripe] Updated Firestore successfully`)
+    } catch (firestoreError) {
+      console.warn(`⚠️ [Sync with Stripe] Failed to update Firestore:`, firestoreError)
     }
-
-    // If no accounts found, clear the connection flags
-    if (userAccountsInStripe.length === 0) {
-      updateData.stripeTestConnected = false
-      updateData.stripeConnected = false
-    }
-
-    await db.collection("users").doc(userId).update(updateData)
-
-    console.log(`💾 [Sync with Stripe] Updated Firestore for user: ${userId}`)
 
     return NextResponse.json({
       success: true,
       sync_results: {
         total_accounts_in_stripe: connectedAccounts.data.length,
         user_accounts_found: userAccountsInStripe.length,
-        test_accounts_found: testAccounts.length,
-        live_accounts_found: liveAccounts.length,
-        primary_test_account: primaryTestAccount?.id || null,
-        primary_live_account: primaryLiveAccount?.id || null,
+        accounts_synced: userAccountsInStripe.map((acc) => ({
+          id: acc.id,
+          type: acc.type,
+          email: acc.email,
+          test_mode: acc.livemode === false,
+          created: safeFormatDate(acc.created),
+        })),
       },
-      updated_data: updateData,
-      user_accounts: userAccountsInStripe.map((acc) => ({
-        id: acc.id,
-        type: acc.type,
-        email: acc.email,
-        livemode: acc.livemode,
-        charges_enabled: acc.charges_enabled,
-        payouts_enabled: acc.payouts_enabled,
-        metadata: acc.metadata,
-      })),
-      debug_info: {
-        user_id: userId,
-        user_email: decodedToken.email,
-        stripe_key_prefix: process.env.STRIPE_SECRET_KEY?.substring(0, 12) + "...",
-      },
+      firestore_updated: true,
+      message: `Sync complete. Found ${userAccountsInStripe.length} accounts belonging to you.`,
     })
   } catch (error: any) {
     console.error("❌ [Sync with Stripe] Error:", error)
