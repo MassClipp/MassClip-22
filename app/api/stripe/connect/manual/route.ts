@@ -2,22 +2,34 @@ import { type NextRequest, NextResponse } from "next/server"
 import { stripe, isTestMode } from "@/lib/stripe"
 import { db, auth } from "@/lib/firebase-admin"
 
-interface Body {
+interface ConnectBody {
   accountId: string
   idToken: string
 }
 
 export async function POST(request: NextRequest) {
   try {
-    const { idToken, accountId } = (await request.json()) as Body
+    const { idToken, accountId } = (await request.json()) as ConnectBody
 
     if (!accountId || !idToken) {
-      return NextResponse.json({ error: "accountId and idToken required" }, { status: 400 })
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Both accountId and idToken are required",
+        },
+        { status: 400 },
+      )
     }
 
     // Validate account ID format
     if (!accountId.startsWith("acct_")) {
-      return NextResponse.json({ error: "Invalid account ID format. Must start with 'acct_'" }, { status: 400 })
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Invalid account ID format. Must start with 'acct_'",
+        },
+        { status: 400 },
+      )
     }
 
     // Verify the Firebase ID token
@@ -27,11 +39,19 @@ export async function POST(request: NextRequest) {
       console.log(`✅ [Manual Connect] Token verified for user: ${decodedToken.uid}`)
     } catch (tokenError) {
       console.error("❌ [Manual Connect] Token verification failed:", tokenError)
-      return NextResponse.json({ error: "Invalid or expired token" }, { status: 401 })
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Invalid or expired authentication token",
+        },
+        { status: 401 },
+      )
     }
 
     const userId = decodedToken.uid
-    console.log(`🔗 [Manual Connect] Attempting to connect account ${accountId} for user: ${userId}`)
+    console.log(
+      `🔗 [Manual Connect] Connecting account ${accountId} for user: ${userId} in ${isTestMode ? "TEST" : "LIVE"} mode`,
+    )
 
     // Verify the account exists and is accessible
     let account
@@ -41,6 +61,7 @@ export async function POST(request: NextRequest) {
         id: account.id,
         type: account.type,
         country: account.country,
+        livemode: account.livemode,
         charges_enabled: account.charges_enabled,
         payouts_enabled: account.payouts_enabled,
       })
@@ -48,13 +69,20 @@ export async function POST(request: NextRequest) {
       console.error("❌ [Manual Connect] Failed to retrieve account:", stripeError)
 
       if (stripeError.code === "resource_missing") {
-        return NextResponse.json({ error: "Account not found. Please check the account ID." }, { status: 404 })
+        return NextResponse.json(
+          {
+            success: false,
+            error: "Account not found. Please check the account ID.",
+          },
+          { status: 404 },
+        )
       }
 
       if (stripeError.code === "permission_denied") {
         return NextResponse.json(
           {
-            error: "Cannot access this account. Make sure you're using the correct account ID and it's accessible.",
+            success: false,
+            error: "Cannot access this account. Ensure it's accessible from your platform.",
           },
           { status: 403 },
         )
@@ -62,65 +90,97 @@ export async function POST(request: NextRequest) {
 
       return NextResponse.json(
         {
-          error: "Failed to verify account",
+          success: false,
+          error: "Failed to verify account with Stripe",
           details: stripeError.message,
         },
         { status: 400 },
       )
     }
 
-    // Check if account is in the correct mode (test vs live)
-    const accountIsTest = accountId.includes("_test_") || account.livemode === false
-    const wrongEnv = (isTestMode && account.livemode) || (!isTestMode && !account.livemode)
+    // Check if account mode matches our environment
+    const environmentMismatch = (isTestMode && account.livemode) || (!isTestMode && !account.livemode)
 
-    if (wrongEnv) {
-      return NextResponse.json({ error: "Account livemode flag doesn’t match current environment" }, { status: 400 })
+    if (environmentMismatch) {
+      const expectedMode = isTestMode ? "test" : "live"
+      const actualMode = account.livemode ? "live" : "test"
+      return NextResponse.json(
+        {
+          success: false,
+          error: `Cannot connect ${actualMode} mode account in ${expectedMode} environment.`,
+        },
+        { status: 400 },
+      )
     }
 
     // Check if account is already connected to another user
-    const existingUserQuery = await db
-      .collection("users")
-      .where(isTestMode ? "stripeTestAccountId" : "stripeAccountId", "==", accountId)
-      .get()
+    const fieldToCheck = isTestMode ? "stripeTestAccountId" : "stripeAccountId"
+    const existingUserQuery = await db.collection("users").where(fieldToCheck, "==", accountId).get()
 
     if (!existingUserQuery.empty) {
       const existingUser = existingUserQuery.docs[0]
       if (existingUser.id !== userId) {
         return NextResponse.json(
           {
+            success: false,
             error: "This account is already connected to another user.",
           },
           { status: 409 },
         )
       }
+      // Account is already connected to this user
+      console.log(`ℹ️ [Manual Connect] Account ${accountId} already connected to user ${userId}`)
     }
 
-    // Get user data
-    const userDoc = await db.collection("users").doc(userId).get()
+    // Get or create user document
+    const userDocRef = db.collection("users").doc(userId)
+    const userDoc = await userDocRef.get()
+
     if (!userDoc.exists) {
-      return NextResponse.json({ error: "User not found" }, { status: 404 })
+      // Create user document if it doesn't exist
+      await userDocRef.set({
+        uid: userId,
+        email: decodedToken.email,
+        createdAt: new Date(),
+      })
+      console.log(`📝 [Manual Connect] Created user document for ${userId}`)
     }
-
-    const userData = userDoc.data()!
 
     // Update user document with the connected account
-    const field = isTestMode ? "stripeTestAccountId" : "stripeAccountId"
-    await db
-      .collection("users")
-      .doc(userId)
-      .set({ [field]: account.id }, { merge: true })
+    const updateData = isTestMode
+      ? {
+          stripeTestAccountId: accountId,
+          stripeTestAccountConnected: new Date(),
+          stripeTestAccountManuallyConnected: true,
+          // Also update the primary account ID field for test mode
+          stripeAccountId: accountId,
+          stripeAccountConnected: new Date(),
+          lastUpdated: new Date(),
+        }
+      : {
+          stripeAccountId: accountId,
+          stripeAccountConnected: new Date(),
+          stripeAccountManuallyConnected: true,
+          lastUpdated: new Date(),
+        }
+
+    await userDocRef.update(updateData)
 
     console.log(`✅ [Manual Connect] Successfully connected account ${accountId} to user ${userId}`)
 
-    // Check requirements
+    // Check requirements and account status
     const requirements = account.requirements || {}
     const currentlyDue = requirements.currently_due || []
     const pastDue = requirements.past_due || []
     const requirementsCount = currentlyDue.length + pastDue.length
 
+    const isFullyOperational = account.charges_enabled && account.payouts_enabled && account.details_submitted
+
     return NextResponse.json({
       success: true,
+      accountConnected: true,
       accountId: account.id,
+      mode: isTestMode ? "test" : "live",
       accountStatus: {
         chargesEnabled: account.charges_enabled,
         payoutsEnabled: account.payouts_enabled,
@@ -132,17 +192,24 @@ export async function POST(request: NextRequest) {
         email: account.email,
         type: account.type,
         livemode: account.livemode,
+        fullyOperational: isFullyOperational,
       },
-      message:
-        account.charges_enabled && account.payouts_enabled
-          ? "Account successfully connected and operational"
-          : "Account connected but may require additional setup",
+      message: isFullyOperational
+        ? "Account successfully connected and fully operational!"
+        : "Account connected but may require additional setup to process payments.",
+      debugInfo: {
+        userId,
+        fieldUpdated: fieldToCheck,
+        environmentMode: isTestMode ? "test" : "live",
+        accountMode: account.livemode ? "live" : "test",
+      },
     })
   } catch (error: any) {
     console.error("❌ [Manual Connect] Unexpected error:", error)
     return NextResponse.json(
       {
-        error: "Failed to connect account",
+        success: false,
+        error: "Failed to connect account due to internal error",
         details: error.message,
       },
       { status: 500 },

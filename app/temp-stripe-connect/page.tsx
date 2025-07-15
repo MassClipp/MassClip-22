@@ -1,280 +1,144 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { useAuth } from "@/contexts/auth-context"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader } from "@/components/ui/card"
-import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Loader2, CheckCircle, XCircle, AlertCircle, ExternalLink, Terminal, Copy, Users } from "lucide-react"
-import { useToast } from "@/components/ui/use-toast"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Badge } from "@/components/ui/badge"
+import { Loader2, ExternalLink, Info, RefreshCw } from "lucide-react"
+import { toast } from "@/hooks/use-toast"
+import { getAuth } from "firebase/auth"
+import { app } from "@/firebase/firebase"
 import ManualStripeConnect from "@/components/manual-stripe-connect"
 
-interface StripeAccountStatus {
-  connected: boolean
-  accountId?: string
-  chargesEnabled: boolean
-  payoutsEnabled: boolean
-  detailsSubmitted: boolean
-  requirementsCount: number
-  currentlyDue: string[]
-  pastDue: string[]
-  platformAccountId?: string
+interface DebugInfo {
+  success: boolean
+  isConnected: boolean
+  accountId: string | null
+  mode: string
+  message: string
+  accountStatus?: any
 }
 
 export default function TempStripeConnectPage() {
-  const { user } = useAuth()
-  const { toast } = useToast()
+  const [debugInfo, setDebugInfo] = useState<DebugInfo | null>(null)
   const [loading, setLoading] = useState(false)
-  const [checking, setChecking] = useState(true)
-  const [accountStatus, setAccountStatus] = useState<StripeAccountStatus | null>(null)
-  const [debugInfo, setDebugInfo] = useState<any>(null)
+  const [onboardingUrl, setOnboardingUrl] = useState("")
+  const [creatingOnboarding, setCreatingOnboarding] = useState(false)
 
   useEffect(() => {
-    if (user) {
-      checkStripeStatus()
-    } else {
-      setChecking(false)
-      setDebugInfo({ error: "User not authenticated" })
-    }
-  }, [user])
+    fetchDebugInfo()
+  }, [])
 
-  const checkStripeStatus = async () => {
-    if (!user) {
-      setDebugInfo({ error: "User not authenticated" })
-      setChecking(false)
-      return
-    }
-
-    setChecking(true)
-    try {
-      console.log("🔍 Getting ID token...")
-      const token = await user.getIdToken(true) // Force refresh token
-      console.log("✅ Got ID token, checking status...")
-
-      const response = await fetch("/api/stripe/connection-status", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ idToken: token }),
-      })
-
-      const data = await response.json()
-      console.log("📊 Status response:", data)
-      setDebugInfo(data)
-
-      if (data.success) {
-        setAccountStatus({
-          connected: data.isConnected,
-          accountId: data.accountId,
-          chargesEnabled: data.accountStatus?.chargesEnabled || false,
-          payoutsEnabled: data.accountStatus?.payoutsEnabled || false,
-          detailsSubmitted: data.accountStatus?.detailsSubmitted || false,
-          requirementsCount: data.accountStatus?.requirementsCount || 0,
-          currentlyDue: data.accountStatus?.currentlyDue || [],
-          pastDue: data.accountStatus?.pastDue || [],
-          platformAccountId: "acct_1RFLa9Dheyb0pkWF",
-        })
-      } else {
-        console.error("❌ Status check failed:", data)
-      }
-    } catch (error: any) {
-      console.error("❌ Error checking Stripe status:", error)
-      setDebugInfo({ error: error.message })
-    } finally {
-      setChecking(false)
-    }
-  }
-
-  const createConnectedAccount = async () => {
-    if (!user) {
-      toast({
-        title: "Authentication Required",
-        description: "Please log in to connect your Stripe account",
-        variant: "destructive",
-      })
-      return
-    }
-
+  const fetchDebugInfo = async () => {
     setLoading(true)
     try {
-      console.log("🔗 Starting Stripe Connect onboarding...")
-      const token = await user.getIdToken(true) // Force refresh token
-      console.log("✅ Got fresh ID token")
+      const auth = getAuth(app)
+      const user = auth.currentUser
+      if (!user) {
+        setDebugInfo({
+          success: false,
+          isConnected: false,
+          accountId: null,
+          mode: "test",
+          message: "User not authenticated",
+        })
+        return
+      }
 
-      const response = await fetch("/api/stripe/connect/onboard", {
+      const idToken = await user.getIdToken()
+      const response = await fetch("/api/stripe/connect/status", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          idToken: token,
-          returnUrl: `${window.location.origin}/temp-stripe-connect?success=true`,
-          refreshUrl: `${window.location.origin}/temp-stripe-connect?refresh=true`,
-        }),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ idToken }),
       })
 
       const data = await response.json()
-      console.log("📊 Onboard response:", data)
-
-      if (data.success) {
-        if (data.onboardingComplete) {
-          toast({
-            title: "Success",
-            description: "Stripe Connect account already set up! Checking status...",
-          })
-          await checkStripeStatus()
-        } else if (data.onboardingUrl) {
-          toast({
-            title: "Redirecting to Stripe",
-            description: "Setting up your connected account with MassClip platform...",
-          })
-          // Add a small delay to show the toast
-          setTimeout(() => {
-            window.location.href = data.onboardingUrl
-          }, 1000)
-        } else {
-          toast({
-            title: "Error",
-            description: data.error || "Failed to create connected account",
-            variant: "destructive",
-          })
-        }
-      } else {
-        console.error("❌ Onboarding failed:", data)
-        toast({
-          title: "Error",
-          description: data.error || "Failed to create connected account",
-          variant: "destructive",
-        })
-      }
-    } catch (error: any) {
-      console.error("❌ Error:", error)
-      toast({
-        title: "Error",
-        description: "Failed to connect to Stripe",
-        variant: "destructive",
+      setDebugInfo(data)
+      console.log("Debug info:", data)
+    } catch (error) {
+      console.error("Failed to fetch debug info:", error)
+      setDebugInfo({
+        success: false,
+        isConnected: false,
+        accountId: null,
+        mode: "test",
+        message: "Failed to fetch connection status",
       })
     } finally {
       setLoading(false)
     }
   }
 
-  const copyDebugInfo = () => {
-    navigator.clipboard.writeText(JSON.stringify(debugInfo, null, 2))
-    toast({
-      title: "Copied",
-      description: "Debug info copied to clipboard",
-    })
-  }
-
-  const copyAccountId = () => {
-    if (accountStatus?.accountId) {
-      navigator.clipboard.writeText(accountStatus.accountId)
-      toast({
-        title: "Copied",
-        description: "Account ID copied to clipboard",
-      })
-    }
-  }
-
-  // Check for URL parameters
-  useEffect(() => {
-    const urlParams = new URLSearchParams(window.location.search)
-    if (urlParams.get("success") === "true") {
-      toast({
-        title: "Welcome back!",
-        description: "Checking your Stripe Connect status...",
-      })
-      if (user) {
-        checkStripeStatus()
+  const createOnboardingLink = async () => {
+    setCreatingOnboarding(true)
+    try {
+      const auth = getAuth(app)
+      const user = auth.currentUser
+      if (!user) {
+        toast({
+          title: "Authentication Required",
+          description: "Please log in to create onboarding link",
+          variant: "destructive",
+        })
+        return
       }
-    } else if (urlParams.get("refresh") === "true") {
+
+      const idToken = await user.getIdToken()
+      const response = await fetch("/api/stripe/connect/onboard", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ idToken }),
+      })
+
+      const data = await response.json()
+
+      if (data.success && data.url) {
+        setOnboardingUrl(data.url)
+        toast({
+          title: "Onboarding Link Created",
+          description: "Click the link below to complete Stripe onboarding",
+        })
+      } else {
+        toast({
+          title: "Failed to Create Link",
+          description: data.error || "Unknown error occurred",
+          variant: "destructive",
+        })
+      }
+    } catch (error) {
+      console.error("Failed to create onboarding link:", error)
       toast({
-        title: "Setup incomplete",
-        description: "Please complete the Stripe Connect setup to continue.",
+        title: "Error",
+        description: "Failed to create onboarding link",
         variant: "destructive",
       })
+    } finally {
+      setCreatingOnboarding(false)
     }
-  }, [user])
-
-  // Show authentication required message if no user
-  if (!user) {
-    return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <Card className="bg-zinc-900/60 border-zinc-800/50 max-w-md">
-          <CardHeader>
-            <h2 className="text-2xl font-bold">Authentication Required</h2>
-          </CardHeader>
-          <CardContent>
-            <p className="text-zinc-400 mb-4">You need to be logged in to connect your Stripe account.</p>
-            <Button onClick={() => (window.location.href = "/login")} className="w-full">
-              Go to Login
-            </Button>
-          </CardContent>
-        </Card>
-      </div>
-    )
-  }
-
-  if (checking) {
-    return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <div className="text-center">
-          <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
-          <p className="text-zinc-400">Checking Stripe Connect status...</p>
-        </div>
-      </div>
-    )
   }
 
   return (
-    <main className="container mx-auto my-8 space-y-8">
-      {/* Automatic flow is still available */}
-      <section>
-        <Card>
-          <CardHeader>
-            <h2 className="text-2xl font-bold">Automatic Stripe On-boarding</h2>
-          </CardHeader>
-          <CardContent>
-            <p className="mb-4">
-              Prefer the standard Stripe Express flow? Click below to create a brand-new test account on Stripe.
-            </p>
-            <Button onClick={createConnectedAccount} disabled={loading} size="lg" className="w-full">
-              {loading ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Creating Connected Account...
-                </>
-              ) : (
-                <>
-                  <Users className="h-4 w-4 mr-2" />
-                  Connect to MassClip Platform
-                </>
-              )}
-            </Button>
-          </CardContent>
-        </Card>
-      </section>
-
-      {/* NEW manual connect option */}
-      <section className="flex flex-col items-center">
-        <ManualStripeConnect />
-      </section>
+    <div className="container mx-auto py-8 space-y-6">
+      <div className="text-center space-y-2">
+        <h1 className="text-3xl font-bold">Stripe Connect Integration</h1>
+        <p className="text-muted-foreground">
+          Connect your Stripe account to receive payments through the MassClip platform
+        </p>
+      </div>
 
       {/* Platform Info */}
       <Alert className="border-blue-600 bg-blue-600/10">
-        <Users className="h-4 w-4" />
+        <Info className="h-4 w-4" />
         <AlertDescription>
           <strong>Platform Connection:</strong> This will connect your account to the MassClip platform
           (acct_1RFLa9Dheyb0pkWF) in test mode. You'll be able to receive payments through the MassClip marketplace.
         </AlertDescription>
       </Alert>
 
-      {/* Test Environment Notice */}
+      {/* Test Environment Warning */}
       <Alert className="border-yellow-600 bg-yellow-600/10">
-        <Terminal className="h-4 w-4" />
         <AlertDescription>
           <strong>Test Environment:</strong> All transactions will be simulated. Use test card numbers for testing
           payments.
@@ -282,212 +146,116 @@ export default function TempStripeConnectPage() {
       </Alert>
 
       {/* Connection Methods */}
-      <Tabs defaultValue="automatic" className="w-full">
+      <Tabs defaultValue="manual" className="w-full">
         <TabsList className="grid w-full grid-cols-2">
           <TabsTrigger value="automatic">Automatic Setup</TabsTrigger>
           <TabsTrigger value="manual">Manual Connection</TabsTrigger>
         </TabsList>
 
         <TabsContent value="automatic" className="space-y-4">
-          {/* Connection Status */}
-          <Card className="bg-zinc-900/60 border-zinc-800/50">
+          <Card>
             <CardHeader>
-              <h2 className="text-2xl font-bold">Automatic Connection</h2>
-              <p className="text-zinc-400 mt-1">Create a new Stripe Express account through guided onboarding</p>
+              <CardTitle>Automatic Stripe Onboarding</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              {!accountStatus?.connected ? (
-                <div className="space-y-4">
-                  <Alert className="border-orange-600 bg-orange-600/10">
-                    <AlertCircle className="h-4 w-4" />
-                    <AlertDescription>
-                      <strong>Not Connected:</strong> You need to connect your account to start receiving payments on
-                      MassClip.
-                    </AlertDescription>
-                  </Alert>
+              <p className="text-sm text-muted-foreground">
+                Create a new Stripe Express account or connect an existing one through Stripe's onboarding flow.
+              </p>
 
-                  <div className="bg-zinc-800/30 p-4 rounded-lg">
-                    <h4 className="font-medium mb-2">What happens when you connect:</h4>
-                    <ul className="text-sm text-zinc-400 space-y-1">
-                      <li>• Create a Stripe Express account linked to MassClip</li>
-                      <li>• Complete identity verification (required by Stripe)</li>
-                      <li>• Set up bank account for payouts</li>
-                      <li>• Start receiving payments from your content sales</li>
-                    </ul>
-                  </div>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  <Alert className="border-green-600 bg-green-600/10">
-                    <CheckCircle className="h-4 w-4" />
-                    <AlertDescription>
-                      <strong>Connected!</strong> Your account is connected to the MassClip platform and ready to
-                      receive payments.
-                    </AlertDescription>
-                  </Alert>
-
-                  {/* Account Status Grid */}
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <div className="text-center p-3 bg-zinc-800/50 rounded-lg">
-                      <div className="flex items-center justify-center mb-2">
-                        {accountStatus.chargesEnabled ? (
-                          <CheckCircle className="h-5 w-5 text-green-500" />
-                        ) : (
-                          <XCircle className="h-5 w-5 text-red-500" />
-                        )}
-                      </div>
-                      <div className="text-sm font-medium">Accept Payments</div>
-                      <div className="text-xs text-zinc-400">
-                        {accountStatus.chargesEnabled ? "Enabled" : "Disabled"}
-                      </div>
-                    </div>
-
-                    <div className="text-center p-3 bg-zinc-800/50 rounded-lg">
-                      <div className="flex items-center justify-center mb-2">
-                        {accountStatus.payoutsEnabled ? (
-                          <CheckCircle className="h-5 w-5 text-green-500" />
-                        ) : (
-                          <XCircle className="h-5 w-5 text-red-500" />
-                        )}
-                      </div>
-                      <div className="text-sm font-medium">Receive Payouts</div>
-                      <div className="text-xs text-zinc-400">
-                        {accountStatus.payoutsEnabled ? "Enabled" : "Disabled"}
-                      </div>
-                    </div>
-
-                    <div className="text-center p-3 bg-zinc-800/50 rounded-lg">
-                      <div className="flex items-center justify-center mb-2">
-                        {accountStatus.detailsSubmitted ? (
-                          <CheckCircle className="h-5 w-5 text-green-500" />
-                        ) : (
-                          <AlertCircle className="h-5 w-5 text-yellow-500" />
-                        )}
-                      </div>
-                      <div className="text-sm font-medium">Verification</div>
-                      <div className="text-xs text-zinc-400">
-                        {accountStatus.detailsSubmitted ? "Complete" : "Pending"}
-                      </div>
-                    </div>
-
-                    <div className="text-center p-3 bg-zinc-800/50 rounded-lg">
-                      <div className="flex items-center justify-center mb-2">
-                        {accountStatus.requirementsCount === 0 ? (
-                          <CheckCircle className="h-5 w-5 text-green-500" />
-                        ) : (
-                          <AlertCircle className="h-5 w-5 text-yellow-500" />
-                        )}
-                      </div>
-                      <div className="text-sm font-medium">Requirements</div>
-                      <div className="text-xs text-zinc-400">
-                        {accountStatus.requirementsCount === 0
-                          ? "All done"
-                          : `${accountStatus.requirementsCount} pending`}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Requirements Alert */}
-                  {accountStatus.requirementsCount > 0 && (
-                    <Alert className="border-yellow-600 bg-yellow-600/10">
-                      <AlertCircle className="h-4 w-4" />
-                      <AlertDescription>
-                        <strong>Action Required:</strong> You have {accountStatus.requirementsCount} pending
-                        requirements. Complete them to enable full functionality.
-                      </AlertDescription>
-                    </Alert>
+              <div className="space-y-2">
+                <Button onClick={createOnboardingLink} disabled={creatingOnboarding} className="w-full">
+                  {creatingOnboarding ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Creating Onboarding Link...
+                    </>
+                  ) : (
+                    "Start Stripe Onboarding"
                   )}
+                </Button>
 
-                  <div className="flex gap-2">
+                {onboardingUrl && (
+                  <div className="p-3 bg-muted rounded-lg">
+                    <p className="text-sm font-medium mb-2">Onboarding Link Created:</p>
                     <Button
                       variant="outline"
-                      onClick={() => (window.location.href = "/dashboard/earnings")}
-                      className="flex-1"
+                      className="w-full bg-transparent"
+                      onClick={() => window.open(onboardingUrl, "_blank")}
                     >
                       <ExternalLink className="h-4 w-4 mr-2" />
-                      View Earnings Dashboard
-                    </Button>
-                    <Button variant="outline" onClick={checkStripeStatus}>
-                      Refresh Status
+                      Complete Stripe Onboarding
                     </Button>
                   </div>
-                </div>
-              )}
+                )}
+              </div>
             </CardContent>
           </Card>
         </TabsContent>
 
         <TabsContent value="manual" className="space-y-4">
-          {/* Manual Stripe Connect Component */}
+          <ManualStripeConnect />
         </TabsContent>
       </Tabs>
 
-      {/* Account Details */}
-      {accountStatus?.accountId && (
-        <Card className="bg-zinc-900/60 border-zinc-800/50">
-          <CardHeader>
-            <h2 className="text-2xl font-bold">Account Details</h2>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <div>
-                  <div className="text-xs text-zinc-400">Connected Account ID</div>
-                  <div className="font-mono text-sm">{accountStatus.accountId}</div>
-                </div>
-                <Button variant="ghost" size="sm" onClick={copyAccountId}>
-                  <Copy className="h-4 w-4" />
-                </Button>
+      {/* Debug Information */}
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <CardTitle>Debug Information</CardTitle>
+          <Button variant="ghost" size="sm" onClick={fetchDebugInfo} disabled={loading}>
+            {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
+          </Button>
+        </CardHeader>
+        <CardContent>
+          {debugInfo ? (
+            <div className="space-y-2">
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-medium">Status:</span>
+                <Badge variant={debugInfo.isConnected ? "default" : "secondary"}>
+                  {debugInfo.isConnected ? "Connected" : "Not Connected"}
+                </Badge>
               </div>
 
-              <div className="flex items-center justify-between">
-                <div>
-                  <div className="text-xs text-zinc-400">Platform Account</div>
-                  <div className="font-mono text-sm">acct_1RFLa9Dheyb0pkWF</div>
+              {debugInfo.accountId && (
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium">Account ID:</span>
+                  <code className="text-sm bg-muted px-2 py-1 rounded">{debugInfo.accountId}</code>
                 </div>
+              )}
+
+              <div className="flex items-center gap-2">
+                <span className="text-sm font-medium">Mode:</span>
+                <Badge variant="outline">{debugInfo.mode}</Badge>
               </div>
 
               <div>
-                <div className="text-xs text-zinc-400">Environment</div>
-                <div className="text-sm">
-                  <span className="inline-flex items-center px-2 py-1 rounded-full text-xs bg-blue-600/20 text-blue-400">
-                    Test Mode
-                  </span>
-                </div>
+                <span className="text-sm font-medium">Message:</span>
+                <p className="text-sm text-muted-foreground mt-1">{debugInfo.message}</p>
               </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
 
-      {/* Debug Information */}
-      {debugInfo && (
-        <Card className="bg-zinc-900/60 border-zinc-800/50">
-          <CardHeader>
-            <h2 className="text-2xl font-bold flex items-center justify-between">
-              Debug Information
-              <Button variant="ghost" size="sm" onClick={copyDebugInfo}>
-                <Copy className="h-4 w-4" />
-              </Button>
-            </h2>
-          </CardHeader>
-          <CardContent>
-            <pre className="text-xs bg-zinc-800 p-3 rounded overflow-auto max-h-40">
-              {JSON.stringify(debugInfo, null, 2)}
-            </pre>
-          </CardContent>
-        </Card>
-      )}
+              {debugInfo.accountStatus && (
+                <div className="mt-4 p-3 bg-muted/50 rounded-lg">
+                  <p className="text-sm font-medium mb-2">Account Status:</p>
+                  <pre className="text-xs overflow-auto">{JSON.stringify(debugInfo.accountStatus, null, 2)}</pre>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="flex items-center justify-center py-4">
+              <Loader2 className="h-6 w-6 animate-spin" />
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Navigation */}
-      <div className="flex gap-2">
-        <Button variant="outline" onClick={() => (window.location.href = "/dashboard")}>
+      <div className="flex justify-center gap-4">
+        <Button variant="outline" onClick={() => window.history.back()}>
           Back to Dashboard
         </Button>
-        <Button variant="outline" onClick={() => (window.location.href = "/dashboard/connect-stripe")}>
+        <Button variant="outline" onClick={() => (window.location.href = "/dashboard/stripe/success")}>
           Regular Connect Page
         </Button>
       </div>
-    </main>
+    </div>
   )
 }
