@@ -94,85 +94,68 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // THIS IS THE KEY PART: Create a Connect relationship with the account
+    // Update the account metadata to mark it as connected to our platform
     try {
-      // For Stripe Connect to work properly, we need to create a platform relationship
-      // This is done by creating a login link or OAuth link, but first we need to
-      // ensure the account is properly set up for Connect
-
-      // 1. Update the account to add it to our platform
       await stripe.accounts.update(accountId, {
         metadata: {
           platform_connected: "true",
           platform_connected_at: new Date().toISOString(),
           platform_user_id: userId,
           platform_environment: isTestMode ? "test" : "live",
-        },
-        settings: {
-          payouts: {
-            schedule: {
-              interval: "manual",
-            },
-          },
+          massclip_connected: "true",
         },
       })
-
-      console.log(`✅ [Manual Connect] Account updated with platform metadata`)
-
-      // 2. Create a login link to establish the connection
-      const loginLink = await stripe.accounts.createLoginLink(accountId)
-      console.log(`✅ [Manual Connect] Login link created: ${loginLink.url}`)
-
-      // 3. For test accounts, we may need to explicitly add capabilities
-      if (isTestMode && account.type === "standard") {
-        try {
-          await stripe.accounts.update(accountId, {
-            capabilities: {
-              card_payments: { requested: true },
-              transfers: { requested: true },
-            },
-          })
-          console.log(`✅ [Manual Connect] Added capabilities to test account`)
-        } catch (capError) {
-          console.warn(`⚠️ [Manual Connect] Could not update capabilities:`, capError)
-          // Continue anyway - not all account types support this
-        }
-      }
-    } catch (connectError: any) {
-      console.error("❌ [Manual Connect] Failed to establish Connect relationship:", connectError)
-      // We'll continue anyway and save the account ID to Firestore
+      console.log(`✅ [Manual Connect] Account metadata updated`)
+    } catch (metadataError) {
+      console.warn(`⚠️ [Manual Connect] Could not update account metadata:`, metadataError)
+      // Continue anyway - metadata update is not critical
     }
 
-    // Save the connection to Firestore
+    // Save the connection to Firestore - THIS IS THE KEY PART
     const accountIdField = isTestMode ? "stripeTestAccountId" : "stripeAccountId"
     const connectedField = isTestMode ? "stripeTestConnected" : "stripeConnected"
+    const connectedAtField = isTestMode ? "stripeTestConnectedAt" : "stripeConnectedAt"
+    const detailsField = isTestMode ? "stripeTestAccountDetails" : "stripeAccountDetails"
 
     try {
-      await db
-        .collection("users")
-        .doc(userId)
-        .update({
-          [accountIdField]: accountId,
-          [connectedField]: true,
-          [`${accountIdField}ConnectedAt`]: new Date().toISOString(),
-          [`${accountIdField}Details`]: {
-            country: account.country,
-            email: account.email,
-            type: account.type,
-            chargesEnabled: account.charges_enabled,
-            payoutsEnabled: account.payouts_enabled,
-            detailsSubmitted: account.details_submitted,
-          },
-          updatedAt: new Date().toISOString(),
-        })
+      const userRef = db.collection("users").doc(userId)
 
-      console.log(`✅ [Manual Connect] Account ${accountId} connected and saved to Firestore`)
+      // Get current user data to preserve existing fields
+      const userDoc = await userRef.get()
+      const existingData = userDoc.exists ? userDoc.data() : {}
+
+      const updateData = {
+        ...existingData,
+        [accountIdField]: accountId,
+        [connectedField]: true,
+        [connectedAtField]: new Date().toISOString(),
+        [detailsField]: {
+          country: account.country,
+          email: account.email,
+          type: account.type,
+          chargesEnabled: account.charges_enabled,
+          payoutsEnabled: account.payouts_enabled,
+          detailsSubmitted: account.details_submitted,
+          livemode: account.livemode,
+        },
+        updatedAt: new Date().toISOString(),
+      }
+
+      await userRef.set(updateData, { merge: true })
+
+      console.log(`✅ [Manual Connect] Account ${accountId} connected and saved to Firestore for user ${userId}`)
+      console.log(`📝 [Manual Connect] Saved fields:`, {
+        [accountIdField]: accountId,
+        [connectedField]: true,
+        [connectedAtField]: updateData[connectedAtField],
+      })
     } catch (firestoreError) {
       console.error("❌ [Manual Connect] Failed to save to Firestore:", firestoreError)
       return NextResponse.json(
         {
           success: false,
           error: "Failed to save connection to database",
+          details: firestoreError instanceof Error ? firestoreError.message : "Unknown error",
         },
         { status: 500 },
       )
@@ -192,6 +175,15 @@ export async function POST(request: NextRequest) {
         chargesEnabled: account.charges_enabled,
         payoutsEnabled: account.payouts_enabled,
         detailsSubmitted: account.details_submitted,
+        livemode: account.livemode,
+      },
+      debug: {
+        userId,
+        savedFields: {
+          [accountIdField]: accountId,
+          [connectedField]: true,
+        },
+        environment: isTestMode ? "test" : "live",
       },
     })
   } catch (error: any) {

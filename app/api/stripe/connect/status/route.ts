@@ -42,6 +42,7 @@ export async function POST(request: NextRequest) {
     const userDoc = await db.collection("users").doc(userId).get()
 
     if (!userDoc.exists) {
+      console.log(`❌ [Status] User profile not found for ${userId}`)
       return NextResponse.json({
         success: true,
         isConnected: false,
@@ -53,7 +54,18 @@ export async function POST(request: NextRequest) {
 
     const userData = userDoc.data()!
     const accountIdField = isTestMode ? "stripeTestAccountId" : "stripeAccountId"
+    const connectedField = isTestMode ? "stripeTestConnected" : "stripeConnected"
     const connectedAccountId = userData[accountIdField]
+    const isConnectedFlag = userData[connectedField]
+
+    console.log(`🔍 [Status] Checking connection for user ${userId}:`, {
+      mode: isTestMode ? "test" : "live",
+      accountIdField,
+      connectedField,
+      accountId: connectedAccountId,
+      isConnected: isConnectedFlag,
+      allUserData: Object.keys(userData),
+    })
 
     if (!connectedAccountId) {
       return NextResponse.json({
@@ -62,10 +74,16 @@ export async function POST(request: NextRequest) {
         accountId: null,
         mode: isTestMode ? "test" : "live",
         message: `No ${isTestMode ? "test" : "live"} Stripe account connected`,
+        debug: {
+          userId,
+          checkedField: accountIdField,
+          availableFields: Object.keys(userData),
+          userData: userData,
+        },
       })
     }
 
-    // Verify the account still exists and is accessible
+    // Verify the account still exists and is accessible in Stripe
     try {
       const account = await stripe.accounts.retrieve(connectedAccountId)
       console.log(`✅ [Status] Connected account verified: ${account.id}`)
@@ -82,8 +100,15 @@ export async function POST(request: NextRequest) {
           country: account.country,
           email: account.email,
           type: account.type,
+          livemode: account.livemode,
         },
         message: `${isTestMode ? "Test" : "Live"} Stripe account connected and operational`,
+        debug: {
+          userId,
+          checkedField: accountIdField,
+          foundAccountId: connectedAccountId,
+          stripeVerified: true,
+        },
       })
     } catch (stripeError: any) {
       console.error("❌ [Status] Failed to verify connected account:", stripeError)
@@ -94,6 +119,11 @@ export async function POST(request: NextRequest) {
         mode: isTestMode ? "test" : "live",
         message: "Connected account is no longer accessible",
         error: stripeError.message,
+        debug: {
+          userId,
+          storedAccountId: connectedAccountId,
+          stripeError: stripeError.code,
+        },
       })
     }
   } catch (error: any) {

@@ -120,19 +120,42 @@ export default function ManualStripeConnect() {
     setValidatedAccount(null)
 
     try {
-      const response = await fetch("/api/stripe/connect/validate", {
+      if (!user) {
+        setError("Please log in first")
+        return
+      }
+
+      const idToken = await user.getIdToken()
+      const response = await fetch("/api/stripe/connect/verify-account", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ accountId: accountId.trim() }),
+        body: JSON.stringify({
+          account_id: accountId.trim(),
+          idToken,
+        }),
       })
 
       const data = await response.json()
 
-      if (data.success && data.account) {
-        setValidatedAccount(data.account)
+      if (data.success && data.account_exists && data.account_details) {
+        const account = data.account_details
+        setValidatedAccount({
+          id: account.id,
+          email: account.email,
+          country: account.country,
+          type: account.type,
+          chargesEnabled: account.charges_enabled,
+          payoutsEnabled: account.payouts_enabled,
+          detailsSubmitted: account.details_submitted,
+          livemode: account.livemode,
+          requirementsCount:
+            (account.requirements?.currently_due?.length || 0) + (account.requirements?.past_due?.length || 0),
+          currentlyDue: account.requirements?.currently_due || [],
+          pastDue: account.requirements?.past_due || [],
+        })
         toast({
           title: "Account Validated ✅",
-          description: `Account ${data.account.id} is valid and ready to connect`,
+          description: `Account ${account.id} is valid and ready to connect`,
         })
       } else {
         setError(data.error || "Failed to validate account")
@@ -182,12 +205,18 @@ export default function ManualStripeConnect() {
         setAccountId("")
         setValidatedAccount(null)
         await checkConnectionStatus()
+
+        // Refresh the page to show updated connection status
+        setTimeout(() => {
+          window.location.reload()
+        }, 2000)
       } else {
         toast({
           title: "Connection Failed",
           description: data.error || "Failed to connect account",
           variant: "destructive",
         })
+        console.error("Connection failed:", data)
       }
     } catch (error: any) {
       console.error("Connection error:", error)
