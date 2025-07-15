@@ -1,14 +1,15 @@
 import { type NextRequest, NextResponse } from "next/server"
+import { auth, db } from "@/lib/firebase-admin"
 import { stripe, isTestMode } from "@/lib/stripe"
-import { db, auth } from "@/lib/firebase-admin"
 
 interface OnboardBody {
   idToken: string
+  accountId?: string
 }
 
 export async function POST(request: NextRequest) {
   try {
-    const { idToken } = (await request.json()) as OnboardBody
+    const { idToken, accountId } = (await request.json()) as OnboardBody
 
     if (!idToken) {
       return NextResponse.json(
@@ -24,6 +25,7 @@ export async function POST(request: NextRequest) {
     let decodedToken
     try {
       decodedToken = await auth.verifyIdToken(idToken)
+      console.log(`✅ [Onboard] Token verified for user: ${decodedToken.uid}`)
     } catch (tokenError) {
       console.error("❌ [Onboard] Token verification failed:", tokenError)
       return NextResponse.json(
@@ -36,99 +38,85 @@ export async function POST(request: NextRequest) {
     }
 
     const userId = decodedToken.uid
-    console.log(`🚀 [Onboard] Starting onboarding for user: ${userId} in ${isTestMode ? "TEST" : "LIVE"} mode`)
+    let targetAccountId = accountId
 
-    // Check if user already has a connected account for this mode
-    const userDoc = await db.collection("users").doc(userId).get()
-    const userData = userDoc.data()
-    const accountIdField = isTestMode ? "stripeTestAccountId" : "stripeAccountId"
-    const existingAccountId = userData?.[accountIdField]
-
-    if (existingAccountId) {
-      // Verify the existing account is still valid
-      try {
-        const existingAccount = await stripe.accounts.retrieve(existingAccountId)
-        if (existingAccount.charges_enabled && existingAccount.payouts_enabled) {
-          return NextResponse.json({
-            success: true,
-            accountId: existingAccount.id,
-            message: `${isTestMode ? "Test" : "Live"} account already connected and operational`,
-            alreadyConnected: true,
-          })
-        }
-      } catch (error) {
-        console.log(`⚠️ [Onboard] Existing account ${existingAccountId} is no longer valid, creating new one`)
+    // If no account ID provided, check if user has one stored
+    if (!targetAccountId) {
+      const userDoc = await db.collection("users").doc(userId).get()
+      if (userDoc.exists) {
+        const userData = userDoc.data()!
+        const accountIdField = isTestMode ? "stripeTestAccountId" : "stripeAccountId"
+        targetAccountId = userData[accountIdField]
       }
     }
 
-    // Create a new Stripe Connect account
-    let account
-    try {
-      account = await stripe.accounts.create({
-        type: "express",
-        country: "US", // Default to US, can be changed during onboarding
-        email: decodedToken.email || undefined,
-        capabilities: {
-          card_payments: { requested: true },
-          transfers: { requested: true },
-        },
-        business_type: "individual", // Default to individual
-        settings: {
-          payouts: {
-            schedule: {
-              interval: "daily",
-            },
-          },
-        },
-      })
+    // Create new account if none exists
+    if (!targetAccountId) {
+      console.log(`🆕 [Onboard] Creating new Stripe account for user ${userId}`)
 
-      console.log(`✅ [Onboard] Created Stripe account: ${account.id}`)
-    } catch (stripeError: any) {
-      console.error("❌ [Onboard] Failed to create Stripe account:", stripeError)
-      return NextResponse.json(
-        {
-          success: false,
-          error: `Failed to create Stripe account: ${stripeError.message}`,
-        },
-        { status: 400 },
-      )
+      try {
+        const account = await stripe.accounts.create({
+          type: "express",
+          country: "US", // Default to US, can be changed during onboarding
+          email: decodedToken.email,
+          capabilities: {
+            card_payments: { requested: true },
+            transfers: { requested: true },
+          },
+        })
+
+        targetAccountId = account.id
+        console.log(`✅ [Onboard] Created new account: ${targetAccountId}`)
+
+        // Save the new account ID
+        const accountIdField = isTestMode ? "stripeTestAccountId" : "stripeAccountId"
+        await db
+          .collection("users")
+          .doc(userId)
+          .update({
+            [accountIdField]: targetAccountId,
+            updatedAt: new Date().toISOString(),
+          })
+      } catch (createError: any) {
+        console.error("❌ [Onboard] Failed to create account:", createError)
+        return NextResponse.json(
+          {
+            success: false,
+            error: "Failed to create Stripe account",
+            details: createError.message,
+          },
+          { status: 500 },
+        )
+      }
     }
 
     // Create account link for onboarding
     try {
       const accountLink = await stripe.accountLinks.create({
-        account: account.id,
-        refresh_url: `${process.env.NEXT_PUBLIC_SITE_URL}/dashboard/connect-stripe?refresh=true`,
-        return_url: `${process.env.NEXT_PUBLIC_SITE_URL}/dashboard/stripe/success`,
+        account: targetAccountId,
+        refresh_url: `${process.env.NEXT_PUBLIC_SITE_URL}/temp-stripe-connect?refresh=true&account=${targetAccountId}`,
+        return_url: `${process.env.NEXT_PUBLIC_SITE_URL}/temp-stripe-connect?success=true&account=${targetAccountId}`,
         type: "account_onboarding",
       })
 
-      // Save the account ID to Firestore (even before completion)
-      await db
-        .collection("users")
-        .doc(userId)
-        .update({
-          [accountIdField]: account.id,
-          [`${accountIdField}CreatedAt`]: new Date(),
-          [`${accountIdField}OnboardingStarted`]: true,
-        })
-
-      console.log(`✅ [Onboard] Account link created for ${account.id}`)
+      console.log(`✅ [Onboard] Account link created for ${targetAccountId}`)
 
       return NextResponse.json({
         success: true,
-        accountId: account.id,
+        accountId: targetAccountId,
         onboardingUrl: accountLink.url,
-        message: `${isTestMode ? "Test" : "Live"} account created, redirecting to onboarding`,
+        mode: isTestMode ? "test" : "live",
+        message: "Onboarding link created successfully",
       })
     } catch (linkError: any) {
       console.error("❌ [Onboard] Failed to create account link:", linkError)
       return NextResponse.json(
         {
           success: false,
-          error: `Failed to create onboarding link: ${linkError.message}`,
+          error: "Failed to create onboarding link",
+          details: linkError.message,
         },
-        { status: 400 },
+        { status: 500 },
       )
     }
   } catch (error: any) {
@@ -136,7 +124,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       {
         success: false,
-        error: "Internal server error during onboarding",
+        error: "Failed to start onboarding process",
         details: error.message,
       },
       { status: 500 },

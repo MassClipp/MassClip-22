@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { toast } from "@/hooks/use-toast"
-import { Loader2, CheckCircle, XCircle, AlertCircle, Info, Copy, RefreshCw, User } from "lucide-react"
+import { Loader2, CheckCircle, XCircle, AlertCircle, Info, Copy, RefreshCw, User, ExternalLink } from "lucide-react"
 import { getAuth, onAuthStateChanged, type User as FirebaseUser } from "firebase/auth"
 import { app } from "@/firebase/firebase"
 
@@ -171,10 +171,20 @@ export default function ManualStripeConnect() {
       const data = await response.json()
 
       if (data.success) {
-        toast({
-          title: "Connected Successfully! 🎉",
-          description: `Account ${data.accountId} is now connected to MassClip`,
-        })
+        if (data.requiresOnboarding && data.onboardingUrl) {
+          toast({
+            title: "Onboarding Required",
+            description: "Account found but needs to complete onboarding process",
+          })
+
+          // Open onboarding URL in new tab
+          window.open(data.onboardingUrl, "_blank")
+        } else {
+          toast({
+            title: "Connected Successfully! 🎉",
+            description: `Account ${data.accountId} is now connected to MassClip`,
+          })
+        }
 
         // Reset form and refresh status
         setAccountId("")
@@ -196,6 +206,47 @@ export default function ManualStripeConnect() {
       })
     } finally {
       setConnecting(false)
+    }
+  }
+
+  const startOnboarding = async () => {
+    if (!user) return
+
+    setLoading(true)
+    try {
+      const idToken = await user.getIdToken(true)
+      const response = await fetch("/api/stripe/connect/onboard", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ idToken }),
+      })
+
+      const data = await response.json()
+
+      if (data.success && data.onboardingUrl) {
+        toast({
+          title: "Starting Onboarding",
+          description: "Opening Stripe onboarding in new tab",
+        })
+
+        // Open onboarding URL in new tab
+        window.open(data.onboardingUrl, "_blank")
+      } else {
+        toast({
+          title: "Onboarding Failed",
+          description: data.error || "Failed to start onboarding",
+          variant: "destructive",
+        })
+      }
+    } catch (error: any) {
+      console.error("Onboarding error:", error)
+      toast({
+        title: "Onboarding Error",
+        description: "Failed to start onboarding",
+        variant: "destructive",
+      })
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -285,6 +336,33 @@ export default function ManualStripeConnect() {
             login form or navigate to the authentication page.
           </AlertDescription>
         </Alert>
+      )}
+
+      {/* Automatic Onboarding Option */}
+      {user && !connectionStatus?.isConnected && (
+        <Card className="max-w-2xl border-blue-600/20">
+          <CardHeader>
+            <h3 className="text-lg font-semibold">Automatic Setup (Recommended)</h3>
+            <p className="text-sm text-muted-foreground">
+              Let Stripe guide you through creating and connecting a new account
+            </p>
+          </CardHeader>
+          <CardContent>
+            <Button onClick={startOnboarding} disabled={loading} className="w-full" size="lg">
+              {loading ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Starting Onboarding...
+                </>
+              ) : (
+                <>
+                  <ExternalLink className="h-4 w-4 mr-2" />
+                  Start Stripe Onboarding
+                </>
+              )}
+            </Button>
+          </CardContent>
+        </Card>
       )}
 
       <Card className="max-w-2xl">
@@ -423,7 +501,12 @@ export default function ManualStripeConnect() {
 
           {/* Debug Information */}
           <div className="bg-muted/20 p-4 rounded-lg">
-            <h4 className="font-semibold mb-2">Debug Information</h4>
+            <div className="flex items-center justify-between mb-2">
+              <h4 className="font-semibold">Debug Information</h4>
+              <Button variant="ghost" size="sm" onClick={() => checkConnectionStatus()}>
+                <RefreshCw className="h-4 w-4" />
+              </Button>
+            </div>
             <div className="space-y-1 text-sm">
               <div>
                 <strong>Status:</strong> {connectionStatus?.isConnected ? "Connected" : "Not Connected"}
