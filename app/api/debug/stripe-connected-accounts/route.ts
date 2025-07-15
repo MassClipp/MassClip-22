@@ -1,5 +1,4 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { db } from "@/lib/firebase-admin"
 import { stripe, isTestMode } from "@/lib/stripe"
 
 // Safe date formatting helper
@@ -24,89 +23,105 @@ function safeFormatDate(timestamp: number | null | undefined): string {
 
 export async function GET(request: NextRequest) {
   try {
-    console.log(`🔍 [Debug Connected Accounts] Checking all connected accounts in ${isTestMode ? "TEST" : "LIVE"} mode`)
+    console.log(`🔍 [Debug Connected Accounts] Fetching accounts in ${isTestMode ? "TEST" : "LIVE"} mode`)
 
-    // Get all users with connected Stripe accounts
-    const accountIdField = isTestMode ? "stripeTestAccountId" : "stripeAccountId"
-    const connectedField = isTestMode ? "stripeTestConnected" : "stripeConnected"
+    // Get all connected accounts from Stripe
+    const connectedAccounts = await stripe.accounts.list({
+      limit: 100,
+    })
 
-    const usersSnapshot = await db.collection("users").where(connectedField, "==", true).get()
+    console.log(`📊 [Debug Connected Accounts] Found ${connectedAccounts.data.length} total accounts`)
 
-    if (usersSnapshot.empty) {
-      return NextResponse.json({
-        success: true,
-        connected_accounts: [],
-        mode: isTestMode ? "test" : "live",
-        message: `No ${isTestMode ? "test" : "live"} connected accounts found`,
-        total_count: 0,
-      })
-    }
+    // Filter and format accounts with safe timestamp handling
+    const platformAccounts = connectedAccounts.data
+      .filter((account) => {
+        // Filter for accounts created by our platform
+        const isPlatformAccount = account.metadata?.created_by_platform === "massclip" || account.metadata?.firebase_uid
 
-    const connectedAccounts = []
-    const errors = []
-
-    for (const userDoc of usersSnapshot.docs) {
-      const userData = userDoc.data()
-      const userId = userDoc.id
-      const accountId = userData[accountIdField]
-
-      if (!accountId) {
-        errors.push({
-          user_id: userId,
-          error: `User marked as connected but no ${accountIdField} found`,
-        })
-        continue
-      }
-
-      try {
-        // Verify account still exists in Stripe
-        const account = await stripe.accounts.retrieve(accountId)
-
-        connectedAccounts.push({
-          user_id: userId,
-          user_email: userData.email || "Unknown",
-          account_id: account.id,
-          account_email: account.email,
-          account_type: account.type,
-          country: account.country,
-          charges_enabled: account.charges_enabled,
-          payouts_enabled: account.payouts_enabled,
-          details_submitted: account.details_submitted,
+        console.log(`Checking account ${account.id}:`, {
+          isPlatformAccount,
+          metadata: account.metadata,
           livemode: account.livemode,
-          created: account.created,
-          created_formatted: safeFormatDate(account.created),
-          requirements_count:
-            (account.requirements?.currently_due?.length || 0) + (account.requirements?.past_due?.length || 0),
-          status: account.charges_enabled && account.payouts_enabled ? "active" : "pending",
-          connected_at: userData[`${accountIdField}ConnectedAt`] || "Unknown",
         })
-      } catch (stripeError: any) {
-        console.error(`❌ [Debug Connected Accounts] Failed to verify account ${accountId}:`, stripeError)
-        errors.push({
-          user_id: userId,
-          account_id: accountId,
-          error: `Stripe error: ${stripeError.message}`,
-          error_code: stripeError.code,
-        })
-      }
-    }
+
+        return isPlatformAccount
+      })
+      .map((account) => {
+        try {
+          return {
+            id: account.id,
+            type: account.type,
+            email: account.email,
+            country: account.country,
+            livemode: account.livemode,
+            charges_enabled: account.charges_enabled,
+            payouts_enabled: account.payouts_enabled,
+            details_submitted: account.details_submitted,
+            created: account.created,
+            created_formatted: safeFormatDate(account.created),
+            requirements: {
+              currently_due: account.requirements?.currently_due || [],
+              past_due: account.requirements?.past_due || [],
+              disabled_reason: account.requirements?.disabled_reason,
+            },
+            metadata: account.metadata || {},
+            business_profile: account.business_profile,
+            capabilities: account.capabilities,
+            tos_acceptance: account.tos_acceptance
+              ? {
+                  date: account.tos_acceptance.date,
+                  date_formatted: safeFormatDate(account.tos_acceptance.date),
+                  ip: account.tos_acceptance.ip,
+                }
+              : null,
+          }
+        } catch (formatError) {
+          console.error(`Error formatting account ${account.id}:`, formatError)
+          return {
+            id: account.id,
+            type: account.type,
+            email: account.email,
+            error: "Failed to format account data",
+            raw_created: account.created,
+          }
+        }
+      })
+
+    // Separate test and live accounts
+    const testAccounts = platformAccounts.filter((acc) => !acc.livemode)
+    const liveAccounts = platformAccounts.filter((acc) => acc.livemode)
 
     return NextResponse.json({
       success: true,
-      connected_accounts: connectedAccounts,
-      errors: errors,
       mode: isTestMode ? "test" : "live",
-      total_count: connectedAccounts.length,
-      error_count: errors.length,
-      message: `Found ${connectedAccounts.length} ${isTestMode ? "test" : "live"} connected accounts`,
+      summary: {
+        total_stripe_accounts: connectedAccounts.data.length,
+        platform_accounts: platformAccounts.length,
+        test_accounts: testAccounts.length,
+        live_accounts: liveAccounts.length,
+      },
+      accounts: {
+        test: testAccounts,
+        live: liveAccounts,
+        all_platform: platformAccounts,
+      },
+      debug_info: {
+        stripe_key_prefix: process.env.STRIPE_SECRET_KEY?.substring(0, 12) + "...",
+        is_test_mode: isTestMode,
+        timestamp: new Date().toISOString(),
+      },
     })
   } catch (error: any) {
-    console.error("❌ [Debug Connected Accounts] Unexpected error:", error)
+    console.error("❌ [Debug Connected Accounts] Error:", error)
     return NextResponse.json(
       {
         success: false,
-        error: "Failed to retrieve connected accounts",
+        error: "Failed to fetch connected accounts",
         details: error.message,
+        debug_info: {
+          stripe_key_prefix: process.env.STRIPE_SECRET_KEY?.substring(0, 12) + "...",
+          is_test_mode: isTestMode,
+        },
       },
       { status: 500 },
     )

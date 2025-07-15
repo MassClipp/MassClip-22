@@ -1,116 +1,182 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { stripe } from "@/lib/stripe"
-import { requireAuth } from "@/lib/auth-utils"
-import { db } from "@/lib/firebase-admin"
+import { auth, db } from "@/lib/firebase-admin"
+import { stripe, isTestMode } from "@/lib/stripe"
 
 interface CreateTestAccountBody {
-  email: string
-  country: string
-  type: "express" | "standard"
+  idToken: string
+}
+
+// Safe date formatting helper
+function safeFormatDate(timestamp: number | null | undefined): string {
+  if (!timestamp || typeof timestamp !== "number") {
+    return new Date().toISOString()
+  }
+
+  try {
+    // Stripe timestamps are in seconds, convert to milliseconds
+    const date = new Date(timestamp * 1000)
+    if (isNaN(date.getTime())) {
+      console.warn(`Invalid timestamp: ${timestamp}`)
+      return new Date().toISOString()
+    }
+    return date.toISOString()
+  } catch (error) {
+    console.warn(`Error formatting timestamp ${timestamp}:`, error)
+    return new Date().toISOString()
+  }
 }
 
 export async function POST(request: NextRequest) {
   try {
-    // Verify authentication
-    const decodedToken = await requireAuth(request)
-    const userId = decodedToken.uid
-    console.log(`🔧 [Create Test Account] Request from user: ${userId}`)
+    const { idToken } = (await request.json()) as CreateTestAccountBody
 
-    const body = (await request.json()) as CreateTestAccountBody
-    const { email, country = "US", type = "express" } = body
-
-    if (!email) {
+    if (!idToken) {
       return NextResponse.json(
         {
           success: false,
-          error: "Email is required",
+          error: "Authentication token is required",
+        },
+        { status: 401 },
+      )
+    }
+
+    // Only allow test account creation in test mode
+    if (!isTestMode) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Test account creation is only available in test mode",
         },
         { status: 400 },
       )
     }
 
-    console.log(`🔧 [Create Test Account] Creating ${type} account for: ${email}`)
-
-    // Create Express account (easier to set up than Standard)
-    const account = await stripe.accounts.create({
-      type: type,
-      country: country,
-      email: email,
-      metadata: {
-        created_by_platform: "massclip",
-        firebase_uid: userId,
-        created_at: Math.floor(Date.now() / 1000).toString(), // Unix timestamp as string
-        user_email: email,
-      },
-      capabilities: {
-        card_payments: { requested: true },
-        transfers: { requested: true },
-      },
-    })
-
-    console.log(`✅ [Create Test Account] Created account: ${account.id}`)
-
-    // Create account link for onboarding
-    const accountLink = await stripe.accountLinks.create({
-      account: account.id,
-      refresh_url: `${process.env.NEXT_PUBLIC_SITE_URL}/debug-stripe-real-status`,
-      return_url: `${process.env.NEXT_PUBLIC_SITE_URL}/debug-stripe-real-status`,
-      type: "account_onboarding",
-    })
-
-    // Store the account ID in Firestore
+    // Verify Firebase ID token
+    let decodedToken
     try {
-      await db.collection("users").doc(userId).update({
-        stripeTestAccountId: account.id,
-        stripeTestConnected: true,
-        stripeTestAccountCreated: new Date().toISOString(),
-      })
-      console.log(`💾 [Create Test Account] Stored account ID in Firestore`)
-    } catch (firestoreError) {
-      console.warn(`⚠️ [Create Test Account] Failed to store in Firestore:`, firestoreError)
-      // Don't fail the request if Firestore update fails
+      decodedToken = await auth.verifyIdToken(idToken)
+      console.log(`✅ [Create Test Account] Token verified for user: ${decodedToken.uid}`)
+    } catch (tokenError) {
+      console.error("❌ [Create Test Account] Token verification failed:", tokenError)
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Invalid or expired authentication token",
+        },
+        { status: 401 },
+      )
     }
 
-    return NextResponse.json({
-      success: true,
-      account_id: account.id,
-      account_type: account.type,
-      onboarding_url: accountLink.url,
-      account_details: {
+    const userId = decodedToken.uid
+    const userEmail = decodedToken.email
+
+    // Check if user already has a test account
+    const userDoc = await db.collection("users").doc(userId).get()
+    const userData = userDoc.exists ? userDoc.data() : {}
+
+    if (userData?.stripeTestAccountId) {
+      console.log(`⚠️ [Create Test Account] User ${userId} already has test account: ${userData.stripeTestAccountId}`)
+
+      // Verify the existing account still exists
+      try {
+        const existingAccount = await stripe.accounts.retrieve(userData.stripeTestAccountId)
+        return NextResponse.json({
+          success: true,
+          account_id: existingAccount.id,
+          message: "Test account already exists",
+          account_details: {
+            id: existingAccount.id,
+            type: existingAccount.type,
+            email: existingAccount.email,
+            country: existingAccount.country,
+            charges_enabled: existingAccount.charges_enabled,
+            payouts_enabled: existingAccount.payouts_enabled,
+            created: safeFormatDate(existingAccount.created),
+          },
+        })
+      } catch (stripeError) {
+        console.log(`🔄 [Create Test Account] Existing account not found, creating new one`)
+        // Continue to create new account if existing one is not found
+      }
+    }
+
+    try {
+      // Create a new Stripe Connect account
+      const account = await stripe.accounts.create({
+        type: "standard",
+        country: "US",
+        email: userEmail,
+        metadata: {
+          firebase_uid: userId,
+          created_by_platform: "massclip",
+          environment: "test",
+          created_at: new Date().toISOString(),
+        },
+      })
+
+      console.log(`✅ [Create Test Account] Created Stripe account:`, {
         id: account.id,
         type: account.type,
-        country: account.country,
         email: account.email,
-        created: new Date(account.created * 1000).toISOString(),
-        charges_enabled: account.charges_enabled,
-        payouts_enabled: account.payouts_enabled,
-        details_submitted: account.details_submitted,
-        metadata: account.metadata,
-      },
-      message: `${type} account created successfully! Complete onboarding to activate.`,
-    })
-  } catch (error: any) {
-    console.error("❌ [Create Test Account] Error:", error)
+        country: account.country,
+      })
 
-    // Handle specific Stripe errors
-    if (error.type === "StripeInvalidRequestError") {
+      // Save the account ID to Firestore
+      await db.collection("users").doc(userId).set(
+        {
+          stripeTestAccountId: account.id,
+          stripeTestConnected: true,
+          stripeTestConnectedAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        },
+        { merge: true },
+      )
+
+      console.log(`💾 [Create Test Account] Saved to Firestore for user ${userId}`)
+
+      return NextResponse.json({
+        success: true,
+        account_id: account.id,
+        message: "Test account created successfully",
+        account_details: {
+          id: account.id,
+          type: account.type,
+          email: account.email,
+          country: account.country,
+          charges_enabled: account.charges_enabled,
+          payouts_enabled: account.payouts_enabled,
+          details_submitted: account.details_submitted,
+          created: safeFormatDate(account.created),
+          requirements: {
+            currently_due: account.requirements?.currently_due || [],
+            past_due: account.requirements?.past_due || [],
+          },
+        },
+        next_steps: [
+          "Complete account onboarding",
+          "Submit required business information",
+          "Verify identity documents",
+        ],
+      })
+    } catch (stripeError: any) {
+      console.error("❌ [Create Test Account] Stripe error:", stripeError)
       return NextResponse.json(
         {
           success: false,
-          error: `Stripe Error: ${error.message}`,
-          code: error.code,
-          param: error.param,
+          error: "Failed to create Stripe test account",
+          details: stripeError.message,
+          stripe_error_code: stripeError.code,
         },
-        { status: 400 },
+        { status: 500 },
       )
     }
-
+  } catch (error: any) {
+    console.error("❌ [Create Test Account] Unexpected error:", error)
     return NextResponse.json(
       {
         success: false,
-        error: error.message,
-        type: error.type,
-        code: error.code,
+        error: "Internal server error during test account creation",
+        details: error.message,
       },
       { status: 500 },
     )
