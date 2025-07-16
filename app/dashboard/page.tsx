@@ -6,7 +6,7 @@ import { useProfileInitialization } from "@/hooks/use-profile-initialization"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
-import { DollarSign, Upload, TrendingUp, Video, RefreshCw, Activity, Calendar } from "lucide-react"
+import { DollarSign, Package, TrendingUp, Video, RefreshCw, Activity, Calendar } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useToast } from "@/components/ui/use-toast"
 import { useVideoStatsAPI } from "@/hooks/use-video-stats-api"
@@ -192,11 +192,11 @@ export default function DashboardPage() {
             </CardHeader>
             <CardContent className="space-y-3">
               <Button
-                onClick={() => router.push("/dashboard/uploads")}
+                onClick={() => router.push("/dashboard/bundles")}
                 className="w-full justify-start bg-zinc-900 hover:bg-zinc-800 border border-zinc-700"
               >
-                <Upload className="h-4 w-4 mr-2" />
-                Upload Content
+                <Package className="h-4 w-4 mr-2" />
+                Make a Bundle
               </Button>
 
               <Button
