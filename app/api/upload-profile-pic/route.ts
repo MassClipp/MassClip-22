@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { S3Client, PutObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3"
 import { db } from "@/lib/firebase-admin"
+import { getAuth } from "firebase-admin/auth"
 
 const s3Client = new S3Client({
   region: "auto",
@@ -11,9 +12,40 @@ const s3Client = new S3Client({
   },
 })
 
+async function verifyAuthToken(request: NextRequest) {
+  try {
+    const authorization = request.headers.get("authorization")
+
+    if (!authorization?.startsWith("Bearer ")) {
+      console.log("❌ [Auth] No Bearer token found")
+      return null
+    }
+
+    const token = authorization.split("Bearer ")[1]
+    if (!token) {
+      console.log("❌ [Auth] Empty token")
+      return null
+    }
+
+    const decodedToken = await getAuth().verifyIdToken(token)
+    console.log("✅ [Auth] Token verified for user:", decodedToken.uid)
+    return decodedToken
+  } catch (error) {
+    console.error("❌ [Auth] Token verification failed:", error)
+    return null
+  }
+}
+
 export async function POST(request: NextRequest) {
   try {
-    console.log("Starting profile picture upload...")
+    console.log("🔄 Starting profile picture upload...")
+
+    // Verify authentication
+    const user = await verifyAuthToken(request)
+    if (!user) {
+      console.log("❌ Unauthorized request")
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
 
     const formData = await request.formData()
     const file = formData.get("file") as File
@@ -24,7 +56,13 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Missing file or userId" }, { status: 400 })
     }
 
-    console.log(`Uploading file: ${file.name}, size: ${file.size}, type: ${file.type}`)
+    // Verify the user is updating their own profile
+    if (user.uid !== userId) {
+      console.error("User trying to update different user's profile")
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+    }
+
+    console.log(`📸 Uploading file: ${file.name}, size: ${file.size}, type: ${file.type}`)
 
     // Validate file size (5MB limit)
     if (file.size > 5 * 1024 * 1024) {
@@ -44,8 +82,6 @@ export async function POST(request: NextRequest) {
       const userDoc = await db.collection("users").doc(userId).get()
       if (userDoc.exists) {
         const userData = userDoc.data()
-
-        // Check both fields to find the old Cloudflare R2 URL
         const oldProfilePic = userData?.profilePic
 
         if (
@@ -58,13 +94,12 @@ export async function POST(request: NextRequest) {
           const keyIndex = urlParts.findIndex((part) => part === "profile_pics")
           if (keyIndex !== -1 && keyIndex + 1 < urlParts.length) {
             oldProfilePicKey = `profile_pics/${urlParts[keyIndex + 1].split("?")[0]}` // Remove query params
-            console.log("Found old profile pic to delete:", oldProfilePicKey)
+            console.log("🗑️ Found old profile pic to delete:", oldProfilePicKey)
           }
         }
       }
     } catch (error) {
       console.warn("Could not fetch old profile picture for deletion:", error)
-      // Continue with upload even if we can't delete the old one
     }
 
     // Create unique filename with timestamp for cache busting
@@ -72,12 +107,12 @@ export async function POST(request: NextRequest) {
     const fileExtension = file.name.split(".").pop() || "jpg"
     const fileName = `profile_pics/${userId}_${timestamp}.${fileExtension}`
 
-    console.log("Converting file to buffer...")
+    console.log("📦 Converting file to buffer...")
     // Convert file to buffer
     const bytes = await file.arrayBuffer()
     const buffer = Buffer.from(bytes)
 
-    console.log("Uploading to Cloudflare R2...")
+    console.log("☁️ Uploading to Cloudflare R2...")
     // Upload to Cloudflare R2
     const uploadCommand = new PutObjectCommand({
       Bucket: process.env.CLOUDFLARE_R2_BUCKET_NAME!,
@@ -93,19 +128,20 @@ export async function POST(request: NextRequest) {
     })
 
     await s3Client.send(uploadCommand)
+    console.log("✅ Upload to R2 successful")
 
     // Delete old profile picture after successful upload
     if (oldProfilePicKey) {
       try {
-        console.log("Deleting old profile picture:", oldProfilePicKey)
+        console.log("🗑️ Deleting old profile picture:", oldProfilePicKey)
         const deleteCommand = new DeleteObjectCommand({
           Bucket: process.env.CLOUDFLARE_R2_BUCKET_NAME!,
           Key: oldProfilePicKey,
         })
         await s3Client.send(deleteCommand)
-        console.log("Successfully deleted old profile picture")
+        console.log("✅ Successfully deleted old profile picture")
       } catch (deleteError) {
-        console.warn("Failed to delete old profile picture:", deleteError)
+        console.warn("⚠️ Failed to delete old profile picture:", deleteError)
         // Don't fail the upload if deletion fails
       }
     }
@@ -113,10 +149,22 @@ export async function POST(request: NextRequest) {
     // Construct the public URL with cache busting
     const publicUrl = `${process.env.CLOUDFLARE_R2_PUBLIC_URL}/${fileName}?v=${timestamp}`
 
-    console.log("Upload successful, URL:", publicUrl)
+    // Update the user's profile in Firestore with the new profile picture URL
+    try {
+      await db.collection("users").doc(userId).update({
+        profilePic: publicUrl,
+        updatedAt: new Date(),
+      })
+      console.log("✅ Updated user profile with new picture URL")
+    } catch (firestoreError) {
+      console.error("❌ Failed to update Firestore with new profile pic URL:", firestoreError)
+      // Don't fail the upload if Firestore update fails
+    }
+
+    console.log("🎉 Upload successful, URL:", publicUrl)
     return NextResponse.json({ url: publicUrl })
   } catch (error) {
-    console.error("Error uploading profile picture:", error)
+    console.error("❌ Error uploading profile picture:", error)
 
     // Provide more specific error messages
     if (error instanceof Error) {

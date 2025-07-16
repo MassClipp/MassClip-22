@@ -12,7 +12,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { updateProfile } from "firebase/auth"
-import { doc, getDoc, updateDoc, collection, query, where, getDocs, setDoc } from "firebase/firestore"
+import { doc, getDoc, updateDoc, collection, query, where, getDocs, setDoc, serverTimestamp } from "firebase/firestore"
 import { db } from "@/lib/firebase"
 import { Loader2, User, AtSign, FileText, ArrowLeft, Save } from "lucide-react"
 
@@ -37,24 +37,31 @@ export default function EditProfilePage() {
 
     const fetchUserProfile = async () => {
       try {
+        console.log("🔍 Fetching user profile for edit page:", user.uid)
         const userDocRef = doc(db, "users", user.uid)
         const userDoc = await getDoc(userDocRef)
 
         if (userDoc.exists()) {
           const userData = userDoc.data()
+          console.log("✅ User data loaded for edit:", userData)
+
           setDisplayName(userData.displayName || user.displayName || "")
           setUsername(userData.username || "")
           setOriginalUsername(userData.username || "")
           setBio(userData.bio || "")
-          setXHandle(userData.xHandle || "")
-          setTiktokHandle(userData.tiktokHandle || "")
-          setInstagramHandle(userData.instagramHandle || "")
+
+          // Handle social links from both old and new structure
+          const socialLinks = userData.socialLinks || {}
+          setXHandle(socialLinks.twitter || userData.xHandle || "")
+          setTiktokHandle(socialLinks.tiktok || userData.tiktokHandle || "")
+          setInstagramHandle(socialLinks.instagram || userData.instagramHandle || "")
         } else {
           // If user doc doesn't exist, initialize with auth data
+          console.log("⚠️ No user document found, initializing with auth data")
           setDisplayName(user.displayName || "")
         }
       } catch (error) {
-        console.error("Error fetching user profile:", error)
+        console.error("❌ Error fetching user profile:", error)
         setMessage({
           type: "error",
           text: "Failed to load profile data. Please try again.",
@@ -105,6 +112,8 @@ export default function EditProfilePage() {
     setMessage(null)
 
     try {
+      console.log("🔄 Starting profile update...")
+
       // Check username availability if it changed
       if (username !== originalUsername) {
         const isAvailable = await checkUsernameAvailability(username)
@@ -122,35 +131,71 @@ export default function EditProfilePage() {
       await updateProfile(user, {
         displayName: displayName,
       })
+      console.log("✅ Firebase Auth profile updated")
+
+      // Prepare profile data
+      const profileData = {
+        displayName: displayName.trim(),
+        username: username.toLowerCase().trim(),
+        bio: bio.trim(),
+        socialLinks: {
+          instagram: instagramHandle.trim(),
+          twitter: xHandle.trim(),
+          tiktok: tiktokHandle.trim(),
+        },
+        email: user.email,
+        updatedAt: serverTimestamp(),
+      }
 
       // Update Firestore document in users collection
       const userDocRef = doc(db, "users", user.uid)
-      await updateDoc(userDocRef, {
-        displayName: displayName,
-        username: username.toLowerCase(),
-        bio: bio,
-        instagramHandle: instagramHandle,
-        xHandle: xHandle,
-        tiktokHandle: tiktokHandle,
-        updatedAt: new Date(),
-      })
+      const userDoc = await getDoc(userDocRef)
 
-      // Check if creator profile exists
-      const creatorsRef = collection(db, "creators")
-      const creatorQuery = query(creatorsRef, where("uid", "==", user.uid))
-      const creatorSnapshot = await getDocs(creatorQuery)
-
-      if (!creatorSnapshot.empty) {
-        // Update creator profile with new username
-        const creatorDoc = creatorSnapshot.docs[0]
-        await updateDoc(doc(db, "creators", creatorDoc.id), {
-          username: username.toLowerCase(),
-          displayName: displayName,
-          bio: bio,
-          updatedAt: new Date(),
+      if (userDoc.exists()) {
+        await updateDoc(userDocRef, profileData)
+        console.log("✅ User document updated")
+      } else {
+        await setDoc(userDocRef, {
+          ...profileData,
+          uid: user.uid,
+          createdAt: serverTimestamp(),
         })
+        console.log("✅ User document created")
+      }
 
-        console.log("Updated creator profile with new username")
+      // Check if creator profile exists and update it
+      if (username.trim()) {
+        try {
+          const creatorDocRef = doc(db, "creators", username.toLowerCase().trim())
+          const creatorDoc = await getDoc(creatorDocRef)
+
+          const creatorData = {
+            uid: user.uid,
+            username: username.toLowerCase().trim(),
+            displayName: displayName.trim(),
+            bio: bio.trim(),
+            email: user.email,
+            updatedAt: serverTimestamp(),
+          }
+
+          if (creatorDoc.exists()) {
+            await updateDoc(creatorDocRef, creatorData)
+          } else {
+            await setDoc(creatorDocRef, {
+              ...creatorData,
+              totalVideos: 0,
+              totalDownloads: 0,
+              totalEarnings: 0,
+              isVerified: false,
+              createdAt: serverTimestamp(),
+            })
+          }
+
+          console.log("✅ Creator profile updated")
+        } catch (creatorError) {
+          console.error("⚠️ Creator profile update failed:", creatorError)
+          // Don't fail the whole operation
+        }
       }
 
       // If username changed, update the username document in the usernames collection
@@ -158,9 +203,10 @@ export default function EditProfilePage() {
         // Delete old username reservation
         if (originalUsername) {
           try {
-            await updateDoc(doc(db, "usernames", originalUsername.toLowerCase()), {
+            const oldUsernameRef = doc(db, "usernames", originalUsername.toLowerCase())
+            await updateDoc(oldUsernameRef, {
               active: false,
-              updatedAt: new Date(),
+              updatedAt: serverTimestamp(),
             })
           } catch (error) {
             console.error("Error updating old username reservation:", error)
@@ -168,23 +214,20 @@ export default function EditProfilePage() {
         }
 
         // Create new username reservation
-        try {
-          await updateDoc(doc(db, "usernames", username.toLowerCase()), {
-            uid: user.uid,
-            active: true,
-            createdAt: new Date(),
-          })
-        } catch (error) {
-          // If document doesn't exist, create it
+        if (username.trim()) {
           try {
-            const usernamesRef = collection(db, "usernames")
-            await setDoc(doc(usernamesRef, username.toLowerCase()), {
-              uid: user.uid,
-              active: true,
-              createdAt: new Date(),
-            })
-          } catch (innerError) {
-            console.error("Error creating new username reservation:", innerError)
+            const newUsernameRef = doc(db, "usernames", username.toLowerCase().trim())
+            await setDoc(
+              newUsernameRef,
+              {
+                uid: user.uid,
+                active: true,
+                createdAt: serverTimestamp(),
+              },
+              { merge: true },
+            )
+          } catch (error) {
+            console.error("Error creating new username reservation:", error)
           }
         }
       }
@@ -202,7 +245,7 @@ export default function EditProfilePage() {
         router.refresh()
       }, 1000)
     } catch (error) {
-      console.error("Error updating profile:", error)
+      console.error("❌ Error updating profile:", error)
       setMessage({
         type: "error",
         text: "Failed to update profile. Please try again.",
@@ -268,6 +311,7 @@ export default function EditProfilePage() {
                   onChange={(e) => setDisplayName(e.target.value)}
                   className="border-zinc-700 bg-zinc-800/70 text-white focus-visible:ring-crimson"
                   placeholder="Your display name"
+                  required
                 />
                 <p className="text-xs text-zinc-500">This is the name that will be displayed on your profile.</p>
               </div>
@@ -283,6 +327,7 @@ export default function EditProfilePage() {
                   onChange={(e) => setUsername(e.target.value)}
                   className="border-zinc-700 bg-zinc-800/70 text-white focus-visible:ring-crimson"
                   placeholder="your_username"
+                  required
                 />
                 <p className="text-xs text-zinc-500">
                   Your unique username for your profile URL: massclip.pro/creator/username
@@ -357,7 +402,11 @@ export default function EditProfilePage() {
               </div>
 
               <div className="flex justify-end">
-                <Button type="submit" className="bg-crimson hover:bg-crimson/90" disabled={isUpdating}>
+                <Button
+                  type="submit"
+                  className="bg-crimson hover:bg-crimson/90"
+                  disabled={isUpdating || !displayName.trim() || !username.trim()}
+                >
                   {isUpdating ? (
                     <>
                       <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Updating...
