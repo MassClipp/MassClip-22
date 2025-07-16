@@ -10,7 +10,8 @@ export function middleware(request: NextRequest) {
     pathname.startsWith("/api/") ||
     pathname.startsWith("/static/") ||
     pathname.includes(".") ||
-    pathname === "/favicon.ico"
+    pathname === "/favicon.ico" ||
+    pathname === "/purchase-success" // Allow anonymous access to purchase success page
   ) {
     return NextResponse.next()
   }
@@ -22,7 +23,7 @@ export function middleware(request: NextRequest) {
   // TODO: Re-enable auth checks once redirect is working
   /*
   const authRoutes = ["/login", "/signup", "/forgot-password", "/reset-password", "/login-success"]
-  const publicRoutes = ["/", "/pricing", "/terms", "/privacy"]
+  const publicRoutes = ["/", "/pricing", "/terms", "/privacy", "/purchase-success"]
 
   if (authRoutes.includes(pathname) || publicRoutes.includes(pathname)) {
     return NextResponse.next()

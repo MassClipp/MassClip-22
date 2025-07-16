@@ -7,163 +7,155 @@ export async function POST(request: NextRequest) {
   try {
     const { sessionId, productBoxId, idToken } = await request.json()
 
-    if (!sessionId || !productBoxId) {
-      return NextResponse.json({ error: "Session ID and Product Box ID are required" }, { status: 400 })
+    if (!sessionId) {
+      return NextResponse.json({ error: "Session ID is required" }, { status: 400 })
     }
 
-    // Verify Firebase ID token if provided
-    let userId: string | null = null
-    let userEmail: string | null = null
-
-    if (idToken) {
-      try {
-        const decodedToken = await auth.verifyIdToken(idToken)
-        userId = decodedToken.uid
-        userEmail = decodedToken.email || null
-        console.log(`✅ [Purchase Verify] Token verified for user: ${userId}`)
-      } catch (tokenError) {
-        console.error("❌ [Purchase Verify] Token verification failed:", tokenError)
-        // Continue without user ID for guest purchases
-      }
+    if (!productBoxId) {
+      return NextResponse.json({ error: "Product Box ID is required" }, { status: 400 })
     }
 
-    // Retrieve the Stripe session
+    console.log(`🔍 [Purchase Verify] Starting verification for session: ${sessionId}`)
+
+    // Retrieve the checkout session from Stripe
     let session
     try {
       session = await stripe.checkout.sessions.retrieve(sessionId, {
         expand: ["payment_intent", "customer"],
       })
-      console.log(`✅ [Purchase Verify] Stripe session retrieved: ${session.id}`)
-    } catch (stripeError) {
+      console.log(`✅ [Purchase Verify] Session retrieved:`, {
+        id: session.id,
+        status: session.payment_status,
+        amount: session.amount_total,
+        customer: session.customer_email,
+      })
+    } catch (stripeError: any) {
       console.error("❌ [Purchase Verify] Failed to retrieve Stripe session:", stripeError)
-      return NextResponse.json({ error: "Invalid or expired session ID" }, { status: 400 })
+      return NextResponse.json(
+        {
+          error: "Invalid session ID or session not found",
+          details: stripeError.message,
+        },
+        { status: 400 },
+      )
     }
 
-    // Verify session is completed
+    // Verify the session was completed successfully
     if (session.payment_status !== "paid") {
-      return NextResponse.json({ error: "Payment not completed" }, { status: 400 })
+      return NextResponse.json(
+        {
+          error: "Payment not completed",
+          status: session.payment_status,
+        },
+        { status: 400 },
+      )
     }
 
-    // Verify the product box ID matches
-    const sessionProductBoxId = session.metadata?.productBoxId
-    if (sessionProductBoxId !== productBoxId) {
-      return NextResponse.json({ error: "Product Box ID mismatch" }, { status: 400 })
-    }
+    // Get user information if authenticated
+    let userId = null
+    let userEmail = null
 
-    // Get customer email from Stripe if not from token
-    const customerEmail =
-      userEmail ||
-      (typeof session.customer_details?.email === "string" ? session.customer_details.email : null) ||
-      (session.customer && typeof session.customer === "object" && "email" in session.customer
-        ? session.customer.email
-        : null)
-
-    // If we have a user ID, match it with the session
-    if (userId && session.metadata?.userId && session.metadata.userId !== userId) {
-      console.warn(`⚠️ [Purchase Verify] User ID mismatch: token=${userId}, session=${session.metadata.userId}`)
-    }
-
-    // Use the user ID from the session metadata if available, otherwise use token user ID
-    const finalUserId = userId || session.metadata?.userId || null
-
-    // Get product box details
-    let productBoxDoc
-    try {
-      productBoxDoc = await db.collection("productBoxes").doc(productBoxId).get()
-      if (!productBoxDoc.exists) {
-        return NextResponse.json({ error: "Product box not found" }, { status: 404 })
+    if (idToken) {
+      try {
+        const decodedToken = await auth.verifyIdToken(idToken)
+        userId = decodedToken.uid
+        userEmail = decodedToken.email
+        console.log(`✅ [Purchase Verify] User authenticated: ${userId}`)
+      } catch (authError) {
+        console.log("⚠️ [Purchase Verify] Token verification failed, proceeding as anonymous")
       }
-    } catch (dbError) {
-      console.error("❌ [Purchase Verify] Failed to get product box:", dbError)
-      return NextResponse.json({ error: "Failed to verify product" }, { status: 500 })
+    }
+
+    // Use customer email from Stripe if no authenticated user
+    if (!userEmail && session.customer_email) {
+      userEmail = session.customer_email
+    }
+
+    // Verify the product box exists
+    const productBoxRef = db.collection("productBoxes").doc(productBoxId)
+    const productBoxDoc = await productBoxRef.get()
+
+    if (!productBoxDoc.exists) {
+      return NextResponse.json({ error: "Product box not found" }, { status: 404 })
     }
 
     const productBoxData = productBoxDoc.data()
+    console.log(`✅ [Purchase Verify] Product box found: ${productBoxData?.title}`)
 
-    // Check if purchase already exists
+    // Check if purchase already exists to prevent duplicates
     const existingPurchaseQuery = await db.collection("purchases").where("sessionId", "==", sessionId).limit(1).get()
 
-    let purchaseId: string
-    let purchaseData: any
-
+    let purchaseId
     if (!existingPurchaseQuery.empty) {
-      // Purchase already exists
-      const existingPurchase = existingPurchaseQuery.docs[0]
-      purchaseId = existingPurchase.id
-      purchaseData = existingPurchase.data()
-      console.log(`✅ [Purchase Verify] Existing purchase found: ${purchaseId}`)
+      purchaseId = existingPurchaseQuery.docs[0].id
+      console.log(`ℹ️ [Purchase Verify] Purchase already exists: ${purchaseId}`)
     } else {
       // Create new purchase record
-      const purchaseRef = db.collection("purchases").doc()
-      purchaseId = purchaseRef.id
-
-      purchaseData = {
-        id: purchaseId,
-        sessionId: session.id,
-        paymentIntentId:
-          typeof session.payment_intent === "string" ? session.payment_intent : session.payment_intent?.id,
+      const purchaseData = {
+        sessionId,
         productBoxId,
-        userId: finalUserId,
-        customerEmail,
+        userId: userId || null,
+        userEmail: userEmail || null,
         amount: session.amount_total || 0,
         currency: session.currency || "usd",
         status: "completed",
+        paymentIntentId:
+          typeof session.payment_intent === "string" ? session.payment_intent : session.payment_intent?.id || null,
+        customerEmail: session.customer_email,
         createdAt: FieldValue.serverTimestamp(),
         updatedAt: FieldValue.serverTimestamp(),
         metadata: {
-          stripeSessionId: session.id,
+          stripeSessionId: sessionId,
           productBoxTitle: productBoxData?.title,
           creatorId: productBoxData?.creatorId,
-          connectedAccountId: session.metadata?.connectedAccountId,
+          environment: process.env.NODE_ENV,
         },
       }
 
-      try {
-        await purchaseRef.set(purchaseData)
-        console.log(`✅ [Purchase Verify] Purchase record created: ${purchaseId}`)
-      } catch (dbError) {
-        console.error("❌ [Purchase Verify] Failed to create purchase record:", dbError)
-        return NextResponse.json({ error: "Failed to record purchase" }, { status: 500 })
-      }
+      const purchaseRef = await db.collection("purchases").add(purchaseData)
+      purchaseId = purchaseRef.id
+      console.log(`✅ [Purchase Verify] Purchase record created: ${purchaseId}`)
     }
 
-    // Grant access to the user if we have a user ID
-    if (finalUserId) {
-      try {
-        const userRef = db.collection("users").doc(finalUserId)
-        await userRef.update({
-          [`productBoxAccess.${productBoxId}`]: {
-            purchaseId,
-            sessionId: session.id,
-            grantedAt: FieldValue.serverTimestamp(),
-            amount: session.amount_total || 0,
-            currency: session.currency || "usd",
-          },
-          updatedAt: FieldValue.serverTimestamp(),
-        })
-        console.log(`✅ [Purchase Verify] Access granted to user: ${finalUserId}`)
-      } catch (accessError) {
-        console.error("❌ [Purchase Verify] Failed to grant access:", accessError)
-        // Don't fail the entire request if access granting fails
-      }
+    // Grant access to the user if authenticated
+    if (userId) {
+      const userRef = db.collection("users").doc(userId)
+
+      // Add to user's purchases
+      await userRef.update({
+        [`purchases.${productBoxId}`]: {
+          purchaseId,
+          sessionId,
+          purchasedAt: FieldValue.serverTimestamp(),
+          amount: session.amount_total,
+          status: "active",
+        },
+        updatedAt: FieldValue.serverTimestamp(),
+      })
+
+      console.log(`✅ [Purchase Verify] Access granted to user: ${userId}`)
     }
 
-    // Update product box sales stats
-    try {
-      await db
-        .collection("productBoxes")
-        .doc(productBoxId)
-        .update({
-          "stats.totalSales": FieldValue.increment(1),
-          "stats.totalRevenue": FieldValue.increment(session.amount_total || 0),
-          "stats.lastSaleAt": FieldValue.serverTimestamp(),
-          updatedAt: FieldValue.serverTimestamp(),
-        })
-      console.log(`✅ [Purchase Verify] Product box stats updated`)
-    } catch (statsError) {
-      console.error("❌ [Purchase Verify] Failed to update stats:", statsError)
-      // Don't fail the entire request if stats update fails
+    // Update product box stats
+    await productBoxRef.update({
+      "stats.totalSales": FieldValue.increment(1),
+      "stats.totalRevenue": FieldValue.increment(session.amount_total || 0),
+      "stats.lastSaleAt": FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp(),
+    })
+
+    // Update creator stats if creator exists
+    if (productBoxData?.creatorId) {
+      const creatorRef = db.collection("users").doc(productBoxData.creatorId)
+      await creatorRef.update({
+        "stats.totalSales": FieldValue.increment(1),
+        "stats.totalRevenue": FieldValue.increment(session.amount_total || 0),
+        "stats.lastSaleAt": FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
+      })
     }
+
+    console.log(`🎉 [Purchase Verify] Purchase completed successfully`)
 
     // Return success response
     return NextResponse.json({
@@ -173,15 +165,15 @@ export async function POST(request: NextRequest) {
         amount: session.amount_total || 0,
         currency: session.currency || "usd",
         status: session.payment_status,
-        customer_email: customerEmail,
+        customer_email: session.customer_email,
         payment_intent:
           typeof session.payment_intent === "string" ? session.payment_intent : session.payment_intent?.id,
       },
       purchase: {
         productBoxId,
-        userId: finalUserId,
-        connectedAccountId: session.metadata?.connectedAccountId,
+        userId: userId || null,
         purchaseId,
+        connectedAccountId: session.metadata?.connectedAccountId,
       },
       productBox: {
         title: productBoxData?.title,
@@ -193,7 +185,7 @@ export async function POST(request: NextRequest) {
     console.error("❌ [Purchase Verify] Verification failed:", error)
     return NextResponse.json(
       {
-        error: "Failed to verify and complete purchase",
+        error: "Purchase verification failed",
         details: error.message,
       },
       { status: 500 },
