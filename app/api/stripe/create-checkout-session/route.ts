@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { stripe, isTestMode, calculateApplicationFee } from "@/lib/stripe"
+import { stripe, isTestMode, isLiveMode, calculateApplicationFee } from "@/lib/stripe"
 import { auth } from "@/lib/firebase-admin"
 
 export async function POST(request: NextRequest) {
@@ -26,6 +26,26 @@ export async function POST(request: NextRequest) {
     if (connectedAccountId) {
       try {
         const account = await stripe.accounts.retrieve(connectedAccountId)
+
+        // Verify account mode matches our environment
+        const accountIsLive = account.livemode
+        if (isLiveMode && !accountIsLive) {
+          return NextResponse.json(
+            {
+              error: "Account mode mismatch: Live environment requires live Stripe account",
+            },
+            { status: 400 },
+          )
+        }
+        if (isTestMode && accountIsLive) {
+          return NextResponse.json(
+            {
+              error: "Account mode mismatch: Test environment requires test Stripe account",
+            },
+            { status: 400 },
+          )
+        }
+
         if (!account.charges_enabled) {
           return NextResponse.json(
             {
@@ -34,7 +54,9 @@ export async function POST(request: NextRequest) {
             { status: 400 },
           )
         }
-        console.log(`✅ [Checkout] Using connected account: ${connectedAccountId}`)
+        console.log(
+          `✅ [Checkout] Using connected account: ${connectedAccountId} in ${isLiveMode ? "LIVE" : "TEST"} mode`,
+        )
       } catch (error) {
         console.error("❌ [Checkout] Invalid connected account:", error)
         return NextResponse.json(
@@ -54,7 +76,8 @@ export async function POST(request: NextRequest) {
       priceInCents,
       applicationFee,
       connectedAccountId,
-      mode: isTestMode ? "test" : "live",
+      mode: isLiveMode ? "LIVE" : "TEST",
+      environment: process.env.NODE_ENV,
     })
 
     // Create checkout session
@@ -69,6 +92,8 @@ export async function POST(request: NextRequest) {
               metadata: {
                 productBoxId,
                 userId,
+                environment: process.env.NODE_ENV,
+                stripeMode: isLiveMode ? "live" : "test",
               },
             },
             unit_amount: priceInCents,
@@ -83,7 +108,9 @@ export async function POST(request: NextRequest) {
         productBoxId,
         userId,
         connectedAccountId: connectedAccountId || "",
-        environment: isTestMode ? "test" : "live",
+        environment: process.env.NODE_ENV,
+        stripeMode: isLiveMode ? "live" : "test",
+        createdAt: new Date().toISOString(),
       },
     }
 
@@ -91,6 +118,14 @@ export async function POST(request: NextRequest) {
     if (connectedAccountId) {
       sessionParams.payment_intent_data = {
         application_fee_amount: applicationFee,
+        metadata: {
+          productBoxId,
+          userId,
+          environment: process.env.NODE_ENV,
+          stripeMode: isLiveMode ? "live" : "test",
+          platformFee: applicationFee,
+          creatorAmount: priceInCents - applicationFee,
+        },
       }
     }
 
@@ -104,11 +139,13 @@ export async function POST(request: NextRequest) {
       session = await stripe.checkout.sessions.create(sessionParams)
     }
 
-    console.log(`✅ [Checkout] Session created: ${session.id}`)
+    console.log(`✅ [Checkout] Session created: ${session.id} in ${isLiveMode ? "LIVE" : "TEST"} mode`)
 
     return NextResponse.json({
       sessionId: session.id,
       url: session.url,
+      mode: isLiveMode ? "live" : "test",
+      environment: process.env.NODE_ENV,
     })
   } catch (error: any) {
     console.error("❌ [Checkout] Session creation failed:", error)
@@ -116,6 +153,8 @@ export async function POST(request: NextRequest) {
       {
         error: "Failed to create checkout session",
         details: error.message,
+        mode: isLiveMode ? "live" : "test",
+        environment: process.env.NODE_ENV,
       },
       { status: 500 },
     )

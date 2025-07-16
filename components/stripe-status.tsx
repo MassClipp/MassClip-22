@@ -8,7 +8,6 @@ import { Button } from "@/components/ui/button"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Loader2, CheckCircle, AlertCircle, ExternalLink, RefreshCw, XCircle, Clock, AlertTriangle } from "lucide-react"
 import StripeConnectButton from "./stripe-connect-button"
-import SSNCompletionPrompt from "./ssn-completion-prompt"
 
 interface StripeStatusProps {
   className?: string
@@ -20,6 +19,8 @@ interface StripeAccountStatus {
   accountId?: string
   detailedStatus: string
   message: string
+  mode?: "live" | "test"
+  environment?: string
   capabilities?: {
     chargesEnabled: boolean
     payoutsEnabled: boolean
@@ -30,6 +31,9 @@ interface StripeAccountStatus {
     eventually_due: string[]
     past_due: string[]
     pending_verification: string[]
+  }
+  accountStatus?: {
+    livemode?: boolean
   }
   isConnected?: boolean
 }
@@ -54,12 +58,13 @@ export default function StripeStatus({ className }: StripeStatusProps) {
     try {
       setIsLoading(true)
 
+      const idToken = await user.getIdToken()
       const response = await fetch("/api/stripe/connect/status", {
-        method: "GET",
+        method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        credentials: "include",
+        body: JSON.stringify({ idToken }),
       })
 
       if (!response.ok) {
@@ -77,6 +82,8 @@ export default function StripeStatus({ className }: StripeStatusProps) {
         canReceivePayments: false,
         detailedStatus: "error",
         message: "Failed to check account status",
+        mode: "test",
+        environment: "development",
       })
     } finally {
       setIsLoading(false)
@@ -243,6 +250,11 @@ export default function StripeStatus({ className }: StripeStatusProps) {
     }
   }
 
+  // Check for environment mismatch
+  const isProduction = status?.environment === "production"
+  const accountIsLive = status?.accountStatus?.livemode
+  const environmentMismatch = status && ((isProduction && !accountIsLive) || (!isProduction && accountIsLive))
+
   // If loading, show loading state
   if (isLoading) {
     return (
@@ -278,10 +290,32 @@ export default function StripeStatus({ className }: StripeStatusProps) {
           <CardTitle className="flex items-center gap-2">
             {getStatusIcon(status.detailedStatus, status.requirementsSummary)}
             Payment Setup
+            <Badge variant="outline" className="ml-auto">
+              {status.mode?.toUpperCase()} • {status.environment}
+            </Badge>
           </CardTitle>
           <CardDescription>Stripe Connect integration for receiving payments</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
+          {/* Environment Mismatch Warning */}
+          {environmentMismatch && (
+            <Alert className="bg-yellow-500/10 text-yellow-500 border-yellow-500/20">
+              <AlertTriangle className="h-4 w-4" />
+              <AlertDescription>
+                <div className="font-medium mb-1">Environment Mismatch Detected</div>
+                <div className="text-sm">
+                  Your app is running in {isProduction ? "PRODUCTION" : "DEVELOPMENT"} mode but your Stripe account is in {accountIsLive ? "LIVE" : "TEST"} mode.
+                </div>
+                <div className="text-sm mt-1">
+                  {isProduction 
+                    ? "Please connect a live Stripe account for production use."
+                    : "Please use a test Stripe account for development."
+                  }
+                </div>
+              </AlertDescription>
+            </Alert>
+          )}
+
           {/* Status Alert */}
           <Alert className={getStatusColor(status.detailedStatus, status.requirementsSummary)}>
             <AlertDescription className="flex items-center gap-2">
@@ -337,38 +371,4 @@ export default function StripeStatus({ className }: StripeStatusProps) {
                 )}
                 {status.requirementsSummary.pending_verification.length > 0 && (
                   <div className="flex items-center gap-2 text-blue-500">
-                    <Clock className="h-4 w-4" />
-                    <span>{status.requirementsSummary.pending_verification.length} pending verification</span>
-                  </div>
-                )}
-                {status.requirementsSummary.eventually_due.length > 0 && (
-                  <div className="flex items-center gap-2 text-gray-500">
-                    <AlertCircle className="h-4 w-4" />
-                    <span>{status.requirementsSummary.eventually_due.length} eventually due</span>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* Action Buttons */}
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={refreshStatus}
-              disabled={isRefreshing}
-              className="flex-shrink-0 bg-transparent"
-            >
-              {isRefreshing ? <Loader2 className="h-4 w-4 animate-spin" /> : <RefreshCw className="h-4 w-4" />}
-            </Button>
-            <div className="flex-1">{getActionButton()}</div>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* SSN Completion Prompt - Only show if connected */}
-      {status.isConnected && status.accountId && <SSNCompletionPrompt accountId={status.accountId} />}
-    </div>
-  )
-}
+                \
