@@ -50,6 +50,26 @@ export async function POST(request: NextRequest) {
     const productBox = productBoxDoc.data()!
     console.log("✅ [Checkout API] Product box found:", productBox.title)
 
+    // Get the current domain from the request
+    const host = request.headers.get("host")
+    const protocol = request.headers.get("x-forwarded-proto") || "https"
+    const currentDomain = `${protocol}://${host}`
+
+    console.log("🌐 [Checkout API] Current domain:", currentDomain)
+    console.log("🌐 [Checkout API] Request headers:", {
+      host: request.headers.get("host"),
+      "x-forwarded-proto": request.headers.get("x-forwarded-proto"),
+      "x-forwarded-host": request.headers.get("x-forwarded-host"),
+      origin: request.headers.get("origin"),
+    })
+
+    // Use the current domain for success/cancel URLs to maintain authentication
+    const successUrl = `${currentDomain}/purchase-success?session_id={CHECKOUT_SESSION_ID}`
+    const cancelUrl = `${currentDomain}/product-box/${productBoxId}`
+
+    console.log("🔗 [Checkout API] Success URL:", successUrl)
+    console.log("🔗 [Checkout API] Cancel URL:", cancelUrl)
+
     // Create Stripe checkout session
     console.log("💳 [Checkout API] Creating Stripe session...")
     const sessionParams = {
@@ -68,12 +88,13 @@ export async function POST(request: NextRequest) {
         },
       ],
       mode: "payment" as const,
-      success_url: `${process.env.NEXT_PUBLIC_SITE_URL}/purchase-success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${process.env.NEXT_PUBLIC_SITE_URL}/product-box/${productBoxId}`,
+      success_url: successUrl,
+      cancel_url: cancelUrl,
       metadata: {
         userId,
         productBoxId,
         creatorId: productBox.creatorId || "",
+        domain: currentDomain, // Store the domain for debugging
       },
     }
 
@@ -91,6 +112,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       sessionId: session.id,
       url: session.url,
+      domain: currentDomain, // Return domain for debugging
     })
   } catch (error: any) {
     console.error("❌ [Checkout API] Session creation failed:", error)

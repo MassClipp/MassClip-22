@@ -4,8 +4,29 @@ import { useEffect, useState } from "react"
 import { useAuth } from "@/contexts/auth-context"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { CheckCircle, XCircle, Loader2, RefreshCw } from "lucide-react"
+import { CheckCircle, XCircle, Loader2, RefreshCw, ExternalLink, Copy } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
+
+interface PurchaseDetails {
+  session: {
+    id: string
+    amount: number
+    currency: string
+    status: string
+    customerEmail?: string
+  }
+  purchase: {
+    id: string
+    productBoxId: string
+    userId: string
+    amount: number
+  }
+  productBox: {
+    title: string
+    description?: string
+  }
+  alreadyProcessed?: boolean
+}
 
 export default function PurchaseSuccessPage() {
   const { user } = useAuth()
@@ -13,19 +34,18 @@ export default function PurchaseSuccessPage() {
   const [verificationStatus, setVerificationStatus] = useState<"loading" | "success" | "error">("loading")
   const [errorMessage, setErrorMessage] = useState("")
   const [sessionId, setSessionId] = useState<string | null>(null)
+  const [purchaseDetails, setPurchaseDetails] = useState<PurchaseDetails | null>(null)
   const [isRetrying, setIsRetrying] = useState(false)
 
   const verifyPurchase = async (sessionId: string) => {
-    if (!user) {
-      setVerificationStatus("error")
-      setErrorMessage("Please log in to verify your purchase")
-      return
-    }
-
     try {
       console.log("🔍 [Purchase Success] Starting verification for session:", sessionId)
+      console.log("🌐 [Purchase Success] Current domain:", window.location.origin)
+      console.log("👤 [Purchase Success] User authenticated:", !!user)
 
-      const idToken = await user.getIdToken()
+      // Get auth token if user is available
+      const idToken = user ? await user.getIdToken(true) : null
+      console.log("🔐 [Purchase Success] Auth token available:", !!idToken)
 
       const response = await fetch("/api/purchase/verify-session", {
         method: "POST",
@@ -38,13 +58,16 @@ export default function PurchaseSuccessPage() {
         }),
       })
 
+      console.log("📊 [Purchase Success] Verification response status:", response.status)
+
       const data = await response.json()
       console.log("📊 [Purchase Success] Verification response:", data)
 
       if (data.success) {
         setVerificationStatus("success")
+        setPurchaseDetails(data)
         toast({
-          title: "Purchase Verified!",
+          title: data.alreadyProcessed ? "Purchase Already Processed" : "Purchase Verified!",
           description: "Your access has been granted successfully.",
         })
       } else {
@@ -67,12 +90,30 @@ export default function PurchaseSuccessPage() {
     setIsRetrying(false)
   }
 
+  const copySessionId = () => {
+    if (sessionId) {
+      navigator.clipboard.writeText(sessionId)
+      toast({
+        title: "Copied",
+        description: "Session ID copied to clipboard",
+      })
+    }
+  }
+
+  const formatAmount = (amount: number, currency: string) => {
+    return new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: currency.toUpperCase(),
+    }).format(amount / 100)
+  }
+
   useEffect(() => {
     // Get session ID from URL
     const urlParams = new URLSearchParams(window.location.search)
     const sessionIdFromUrl = urlParams.get("session_id")
 
     console.log("🔗 [Purchase Success] Session ID from URL:", sessionIdFromUrl)
+    console.log("🔗 [Purchase Success] Full URL:", window.location.href)
 
     if (!sessionIdFromUrl) {
       setVerificationStatus("error")
@@ -82,10 +123,8 @@ export default function PurchaseSuccessPage() {
 
     setSessionId(sessionIdFromUrl)
 
-    // Wait for user to be loaded before verifying
-    if (user) {
-      verifyPurchase(sessionIdFromUrl)
-    }
+    // Start verification immediately (works with or without user)
+    verifyPurchase(sessionIdFromUrl)
   }, [user])
 
   if (!sessionId) {
@@ -100,6 +139,9 @@ export default function PurchaseSuccessPage() {
           </CardHeader>
           <CardContent>
             <p className="text-gray-600">This purchase verification link is invalid or expired.</p>
+            <Button onClick={() => (window.location.href = "/dashboard")} className="w-full mt-4">
+              Go to Dashboard
+            </Button>
           </CardContent>
         </Card>
       </div>
@@ -107,8 +149,8 @@ export default function PurchaseSuccessPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50">
-      <Card className="w-full max-w-md">
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
+      <Card className="w-full max-w-2xl">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             {verificationStatus === "loading" && (
@@ -136,39 +178,122 @@ export default function PurchaseSuccessPage() {
             {verificationStatus === "error" && "There was an issue verifying your purchase."}
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-6">
           {verificationStatus === "loading" && (
             <div className="text-center">
               <div className="animate-pulse text-gray-600">Processing your payment verification...</div>
+              <div className="text-sm text-gray-500 mt-2">Session: {sessionId}</div>
             </div>
           )}
 
-          {verificationStatus === "success" && (
-            <div className="text-center space-y-4">
-              <p className="text-green-600 font-medium">🎉 Success! You now have access to your purchased content.</p>
-              <Button onClick={() => (window.location.href = "/dashboard/purchases")} className="w-full">
-                View My Purchases
-              </Button>
+          {verificationStatus === "success" && purchaseDetails && (
+            <div className="space-y-6">
+              <div className="text-center">
+                <p className="text-green-600 font-medium text-lg">
+                  🎉 {purchaseDetails.alreadyProcessed ? "Purchase Confirmed!" : "Payment Successful!"}
+                </p>
+                <p className="text-gray-600 mt-2">You now have access to your purchased content.</p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="bg-gray-50 p-4 rounded-lg">
+                  <h3 className="font-semibold text-gray-900 mb-2">Purchase Details</h3>
+                  <div className="space-y-2 text-sm">
+                    <div>
+                      <span className="text-gray-600">Product:</span>{" "}
+                      <span className="font-medium">{purchaseDetails.productBox.title}</span>
+                    </div>
+                    <div>
+                      <span className="text-gray-600">Amount:</span>{" "}
+                      <span className="font-medium">
+                        {formatAmount(purchaseDetails.session.amount, purchaseDetails.session.currency)}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-gray-600">Status:</span>{" "}
+                      <span className="font-medium text-green-600">{purchaseDetails.session.status}</span>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-gray-50 p-4 rounded-lg">
+                  <h3 className="font-semibold text-gray-900 mb-2">Session Info</h3>
+                  <div className="space-y-2 text-sm">
+                    <div>
+                      <span className="text-gray-600">Purchase ID:</span>{" "}
+                      <span className="font-mono text-xs">{purchaseDetails.purchase.id}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-gray-600">Session ID:</span>
+                      <Button variant="ghost" size="sm" onClick={copySessionId} className="h-6 px-2">
+                        <Copy className="h-3 w-3" />
+                      </Button>
+                    </div>
+                    <div className="font-mono text-xs text-gray-500 break-all">{sessionId}</div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex gap-3">
+                <Button
+                  onClick={() =>
+                    (window.location.href = `/product-box/${purchaseDetails.purchase.productBoxId}/content`)
+                  }
+                  className="flex-1"
+                >
+                  <ExternalLink className="h-4 w-4 mr-2" />
+                  View Content
+                </Button>
+                <Button
+                  onClick={() => (window.location.href = "/dashboard/purchases")}
+                  variant="outline"
+                  className="flex-1"
+                >
+                  My Purchases
+                </Button>
+              </div>
             </div>
           )}
 
           {verificationStatus === "error" && (
             <div className="space-y-4">
-              <p className="text-red-600 text-sm bg-red-50 p-3 rounded">{errorMessage}</p>
-              <Button onClick={handleRetry} disabled={isRetrying} className="w-full bg-transparent" variant="outline">
-                {isRetrying ? (
-                  <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Retrying...
-                  </>
-                ) : (
-                  <>
-                    <RefreshCw className="h-4 w-4 mr-2" />
-                    Retry Verification
-                  </>
-                )}
-              </Button>
-              <div className="text-xs text-gray-500 text-center">Session ID: {sessionId}</div>
+              <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                <p className="text-red-600 text-sm">{errorMessage}</p>
+              </div>
+
+              <div className="bg-gray-50 p-4 rounded-lg">
+                <h3 className="font-semibold text-gray-900 mb-2">Debug Information</h3>
+                <div className="space-y-2 text-sm text-gray-600">
+                  <div>Current Domain: {window.location.origin}</div>
+                  <div>User Authenticated: {user ? "Yes" : "No"}</div>
+                  <div className="flex items-center gap-2">
+                    <span>Session ID:</span>
+                    <Button variant="ghost" size="sm" onClick={copySessionId} className="h-6 px-2">
+                      <Copy className="h-3 w-3" />
+                    </Button>
+                  </div>
+                  <div className="font-mono text-xs break-all">{sessionId}</div>
+                </div>
+              </div>
+
+              <div className="flex gap-3">
+                <Button onClick={handleRetry} disabled={isRetrying} className="flex-1 bg-transparent" variant="outline">
+                  {isRetrying ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Retrying...
+                    </>
+                  ) : (
+                    <>
+                      <RefreshCw className="h-4 w-4 mr-2" />
+                      Retry Verification
+                    </>
+                  )}
+                </Button>
+                <Button onClick={() => (window.location.href = "/dashboard")} variant="outline">
+                  Go to Dashboard
+                </Button>
+              </div>
             </div>
           )}
         </CardContent>

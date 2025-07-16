@@ -1,63 +1,54 @@
 "use client"
 
 import { useState } from "react"
-import { Button } from "@/components/ui/button"
-import { Loader2, Lock, DollarSign } from "lucide-react"
 import { useAuth } from "@/contexts/auth-context"
+import { Button } from "@/components/ui/button"
+import { Loader2, ShoppingCart } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 
 interface VideoPurchaseButtonProps {
   productBoxId: string
-  priceInCents: number
-  title: string
-  hasAccess: boolean
+  price: number
+  title?: string
+  disabled?: boolean
   className?: string
 }
 
 export default function VideoPurchaseButton({
   productBoxId,
-  priceInCents,
-  title,
-  hasAccess,
-  className,
+  price,
+  title = "Buy Now",
+  disabled = false,
+  className = "",
 }: VideoPurchaseButtonProps) {
   const { user } = useAuth()
   const { toast } = useToast()
   const [isLoading, setIsLoading] = useState(false)
 
-  const formatPrice = (cents: number) => {
-    return new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency: "USD",
-    }).format(cents / 100)
-  }
-
   const handlePurchase = async () => {
     if (!user) {
       toast({
         title: "Authentication Required",
-        description: "Please log in to purchase content",
+        description: "Please log in to make a purchase.",
         variant: "destructive",
       })
       return
     }
 
-    if (hasAccess) {
-      toast({
-        title: "Already Owned",
-        description: "You already have access to this content",
-      })
-      return
-    }
+    setIsLoading(true)
 
     try {
-      setIsLoading(true)
-      console.log("🛒 [Purchase Button] Starting purchase for product:", productBoxId)
+      console.log("🛒 [Purchase Button] Starting purchase process...")
+      console.log("📦 [Purchase Button] Product Box ID:", productBoxId)
+      console.log("💰 [Purchase Button] Price:", price)
 
-      const idToken = await user.getIdToken()
-      console.log("🔑 [Purchase Button] Got auth token")
+      // Get fresh auth token
+      console.log("🔐 [Purchase Button] Getting auth token...")
+      const idToken = await user.getIdToken(true)
+      console.log("✅ [Purchase Button] Auth token obtained")
 
-      console.log("📡 [Purchase Button] Making API call to create checkout session...")
+      // Create checkout session
+      console.log("💳 [Purchase Button] Creating checkout session...")
       const response = await fetch("/api/stripe/create-checkout-session", {
         method: "POST",
         headers: {
@@ -66,46 +57,49 @@ export default function VideoPurchaseButton({
         body: JSON.stringify({
           idToken,
           productBoxId,
-          priceInCents,
+          priceInCents: Math.round(price * 100), // Convert to cents
         }),
       })
 
-      console.log("📊 [Purchase Button] API response status:", response.status)
+      console.log("📊 [Purchase Button] Checkout response status:", response.status)
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        console.error("❌ [Purchase Button] Checkout failed:", errorData)
+        throw new Error(errorData.error || "Failed to create checkout session")
+      }
 
       const data = await response.json()
-      console.log("📋 [Purchase Button] API response data:", data)
+      console.log("✅ [Purchase Button] Checkout session created:", {
+        sessionId: data.sessionId,
+        domain: data.domain,
+        hasUrl: !!data.url,
+      })
 
-      if (response.ok && data.url) {
-        console.log("✅ [Purchase Button] Redirecting to Stripe checkout:", data.url)
-        // Redirect to Stripe Checkout
-        window.location.href = data.url
-      } else {
-        console.error("❌ [Purchase Button] API error:", data)
-        throw new Error(data.error || "Failed to create checkout session")
+      if (!data.url) {
+        throw new Error("No checkout URL received")
       }
-    } catch (error) {
-      console.error("❌ [Purchase Button] Purchase error:", error)
+
+      // Redirect to Stripe Checkout
+      console.log("🔗 [Purchase Button] Redirecting to Stripe...")
+      window.location.href = data.url
+    } catch (error: any) {
+      console.error("❌ [Purchase Button] Purchase failed:", error)
       toast({
-        title: "Purchase Error",
-        description: error instanceof Error ? error.message : "Failed to start purchase process",
+        title: "Purchase Failed",
+        description: error.message || "Unable to start checkout process. Please try again.",
         variant: "destructive",
       })
-    } finally {
       setIsLoading(false)
     }
   }
 
-  if (hasAccess) {
-    return (
-      <Button variant="outline" disabled className={className}>
-        <Lock className="h-4 w-4 mr-2" />
-        Owned
-      </Button>
-    )
-  }
-
   return (
-    <Button onClick={handlePurchase} disabled={isLoading} className={`bg-green-600 hover:bg-green-700 ${className}`}>
+    <Button
+      onClick={handlePurchase}
+      disabled={disabled || isLoading || !user}
+      className={`${className} ${isLoading ? "cursor-not-allowed" : ""}`}
+    >
       {isLoading ? (
         <>
           <Loader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -113,8 +107,8 @@ export default function VideoPurchaseButton({
         </>
       ) : (
         <>
-          <DollarSign className="h-4 w-4 mr-2" />
-          Buy for {formatPrice(priceInCents)}
+          <ShoppingCart className="h-4 w-4 mr-2" />
+          {title} ${price.toFixed(2)}
         </>
       )}
     </Button>
