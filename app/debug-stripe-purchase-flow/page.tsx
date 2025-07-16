@@ -484,38 +484,6 @@ export default function StripeDebugPurchaseFlowPage() {
     }
   }
 
-  // Show warning if not in development
-  // Show warning if not in development or preview
-  const isDevelopmentEnvironment = () => {
-    // Allow in local development
-    if (process.env.NODE_ENV === "development") return true
-
-    // Allow in Vercel preview deployments
-    if (process.env.VERCEL_ENV === "preview") return true
-
-    // Allow if explicitly enabled via environment variable
-    if (process.env.ENABLE_DEBUG_PAGES === "true") return true
-
-    // Block in production
-    return false
-  }
-
-  if (!isDevelopmentEnvironment()) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <Alert className="max-w-md border-red-600 bg-red-600/10">
-          <XCircle className="h-4 w-4" />
-          <AlertDescription className="text-red-200">
-            This debug page is only available in development and preview environments.
-            <div className="mt-2 text-xs text-red-300">
-              Current environment: {process.env.VERCEL_ENV || process.env.NODE_ENV || "unknown"}
-            </div>
-          </AlertDescription>
-        </Alert>
-      </div>
-    )
-  }
-
   return (
     <div className="space-y-6 p-6">
       <div className="flex justify-between items-center">
@@ -526,7 +494,7 @@ export default function StripeDebugPurchaseFlowPage() {
           </h1>
           <p className="text-zinc-400 mt-1">Test and debug Stripe checkout sessions and purchase verification</p>
           <Badge variant="outline" className="mt-2 border-yellow-600 text-yellow-400">
-            Development Only
+            Debug Tool
           </Badge>
         </div>
         <div className="flex gap-3">
