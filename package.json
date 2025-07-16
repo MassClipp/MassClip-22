@@ -6,7 +6,8 @@
     "build": "next build",
     "dev": "next dev",
     "lint": "next lint",
-    "start": "next start"
+    "start": "next start",
+    "vercel-build": "pnpm install --no-frozen-lockfile && next build"
   },
   "dependencies": {
     "@ai-sdk/openai": "^0.0.66",
