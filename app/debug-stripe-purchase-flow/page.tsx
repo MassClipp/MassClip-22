@@ -185,13 +185,15 @@ export default function StripeDebugPurchaseFlowPage() {
       })
 
       try {
-        const verifyResponse = await fetch("/api/purchase/verify-session", {
+        // Use mock verification endpoint for mock sessions
+        const verifyResponse = await fetch("/api/purchase/verify-mock-session", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
             sessionId: mockSession.id,
+            bundleId: mockSession.metadata.bundleId,
             idToken: token,
           }),
         })
@@ -203,7 +205,7 @@ export default function StripeDebugPurchaseFlowPage() {
           addResult({
             step: "Session Verification",
             status: "success",
-            message: "Session verification completed successfully",
+            message: "Mock session verification completed successfully",
             data: verifyData,
           })
         } else {
@@ -230,7 +232,7 @@ export default function StripeDebugPurchaseFlowPage() {
       })
 
       try {
-        const accessResponse = await fetch("/api/bundle/grant-access", {
+        const accessResponse = await fetch("/api/user/product-box-access", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -238,25 +240,24 @@ export default function StripeDebugPurchaseFlowPage() {
             "x-user-id": user.uid,
           },
           body: JSON.stringify({
-            bundleId: mockSession.metadata.bundleId,
-            userId: user.uid,
+            productBoxId: mockSession.metadata.bundleId,
           }),
         })
 
         const accessData = await accessResponse.json()
 
-        if (accessResponse.ok && accessData.success) {
+        if (accessResponse.ok && accessData.hasAccess) {
           addResult({
             step: "Bundle Access Check",
             status: "success",
-            message: "Bundle access granted successfully",
+            message: "User has access to bundle",
             data: accessData,
           })
         } else {
           addResult({
             step: "Bundle Access Check",
             status: "warning",
-            message: "Bundle access check failed (expected for mock session)",
+            message: "User does not have access (expected for mock session)",
             data: accessData,
           })
         }
@@ -445,17 +446,15 @@ export default function StripeDebugPurchaseFlowPage() {
     try {
       const token = await user.getIdToken()
 
-      const checkoutResponse = await fetch("/api/stripe/checkout", {
+      const checkoutResponse = await fetch("/api/stripe/create-checkout-session", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-          "x-user-id": user.uid,
         },
         body: JSON.stringify({
-          bundleId: sessionParams.bundleId,
-          successUrl: `${window.location.origin}/debug-stripe-purchase-flow?test=success`,
-          cancelUrl: `${window.location.origin}/debug-stripe-purchase-flow?test=cancel`,
+          idToken: token,
+          productBoxId: sessionParams.bundleId,
+          priceInCents: sessionParams.amount,
         }),
       })
 
