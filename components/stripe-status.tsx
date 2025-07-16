@@ -304,13 +304,13 @@ export default function StripeStatus({ className }: StripeStatusProps) {
               <AlertDescription>
                 <div className="font-medium mb-1">Environment Mismatch Detected</div>
                 <div className="text-sm">
-                  Your app is running in {isProduction ? "PRODUCTION" : "DEVELOPMENT"} mode but your Stripe account is in {accountIsLive ? "LIVE" : "TEST"} mode.
+                  Your app is running in {isProduction ? "PRODUCTION" : "DEVELOPMENT"} mode but your Stripe account is
+                  in {accountIsLive ? "LIVE" : "TEST"} mode.
                 </div>
                 <div className="text-sm mt-1">
-                  {isProduction 
+                  {isProduction
                     ? "Please connect a live Stripe account for production use."
-                    : "Please use a test Stripe account for development."
-                  }
+                    : "Please use a test Stripe account for development."}
                 </div>
               </AlertDescription>
             </Alert>
@@ -371,4 +371,18 @@ export default function StripeStatus({ className }: StripeStatusProps) {
                 )}
                 {status.requirementsSummary.pending_verification.length > 0 && (
                   <div className="flex items-center gap-2 text-blue-500">
-                \
+                    <Clock className="h-4 w-4" />
+                    <span>{status.requirementsSummary.pending_verification.length} pending verification</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Action Button */}
+          {getActionButton()}
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
