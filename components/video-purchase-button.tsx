@@ -52,8 +52,12 @@ export default function VideoPurchaseButton({
 
     try {
       setIsLoading(true)
-      const idToken = await user.getIdToken()
+      console.log("🛒 [Purchase Button] Starting purchase for product:", productBoxId)
 
+      const idToken = await user.getIdToken()
+      console.log("🔑 [Purchase Button] Got auth token")
+
+      console.log("📡 [Purchase Button] Making API call to create checkout session...")
       const response = await fetch("/api/stripe/create-checkout-session", {
         method: "POST",
         headers: {
@@ -66,16 +70,21 @@ export default function VideoPurchaseButton({
         }),
       })
 
+      console.log("📊 [Purchase Button] API response status:", response.status)
+
       const data = await response.json()
+      console.log("📋 [Purchase Button] API response data:", data)
 
       if (response.ok && data.url) {
+        console.log("✅ [Purchase Button] Redirecting to Stripe checkout:", data.url)
         // Redirect to Stripe Checkout
         window.location.href = data.url
       } else {
+        console.error("❌ [Purchase Button] API error:", data)
         throw new Error(data.error || "Failed to create checkout session")
       }
     } catch (error) {
-      console.error("Purchase error:", error)
+      console.error("❌ [Purchase Button] Purchase error:", error)
       toast({
         title: "Purchase Error",
         description: error instanceof Error ? error.message : "Failed to start purchase process",
