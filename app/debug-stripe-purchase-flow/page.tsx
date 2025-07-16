@@ -37,7 +37,7 @@ interface MockSession {
     name?: string
   }
   metadata: {
-    productBoxId: string
+    bundleId: string
     creatorUid?: string
   }
   livemode: boolean
@@ -70,7 +70,7 @@ export default function StripeDebugPurchaseFlowPage() {
   // State for mock session generation
   const [mockSession, setMockSession] = useState<MockSession | null>(null)
   const [sessionParams, setSessionParams] = useState({
-    productBoxId: "product-viral-clips-bundle",
+    bundleId: "bundle-viral-clips-pack",
     amount: 2999, // $29.99
     currency: "usd",
     customerEmail: "",
@@ -120,7 +120,7 @@ export default function StripeDebugPurchaseFlowPage() {
         name: sessionParams.customerName || user?.displayName || "Test User",
       },
       metadata: {
-        productBoxId: sessionParams.productBoxId,
+        bundleId: sessionParams.bundleId,
         creatorUid: sessionParams.creatorUid || undefined,
       },
       livemode: sessionParams.livemode,
@@ -222,15 +222,15 @@ export default function StripeDebugPurchaseFlowPage() {
         })
       }
 
-      // Step 3: Test purchase access
+      // Step 3: Test bundle access
       addResult({
-        step: "Purchase Access Check",
+        step: "Bundle Access Check",
         status: "loading",
-        message: "Checking purchase access...",
+        message: "Checking bundle access...",
       })
 
       try {
-        const accessResponse = await fetch("/api/user/product-box-access", {
+        const accessResponse = await fetch("/api/bundle/grant-access", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -238,36 +238,77 @@ export default function StripeDebugPurchaseFlowPage() {
             "x-user-id": user.uid,
           },
           body: JSON.stringify({
-            productBoxId: mockSession.metadata.productBoxId,
+            bundleId: mockSession.metadata.bundleId,
+            userId: user.uid,
           }),
         })
 
         const accessData = await accessResponse.json()
 
-        if (accessResponse.ok && accessData.hasAccess) {
+        if (accessResponse.ok && accessData.success) {
           addResult({
-            step: "Purchase Access Check",
+            step: "Bundle Access Check",
             status: "success",
-            message: "User has access to product box",
+            message: "Bundle access granted successfully",
             data: accessData,
           })
         } else {
           addResult({
-            step: "Purchase Access Check",
+            step: "Bundle Access Check",
             status: "warning",
-            message: "User does not have access (expected for mock session)",
+            message: "Bundle access check failed (expected for mock session)",
             data: accessData,
           })
         }
       } catch (error) {
         addResult({
-          step: "Purchase Access Check",
+          step: "Bundle Access Check",
           status: "error",
-          message: `Access check error: ${error}`,
+          message: `Bundle access error: ${error}`,
         })
       }
 
-      // Step 4: Test unified purchase lookup
+      // Step 4: Test bundle lookup
+      addResult({
+        step: "Bundle Lookup",
+        status: "loading",
+        message: "Looking up bundle information...",
+      })
+
+      try {
+        const bundleResponse = await fetch(`/api/bundles/${mockSession.metadata.bundleId}`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "x-user-id": user.uid,
+          },
+        })
+
+        const bundleData = await bundleResponse.json()
+
+        if (bundleResponse.ok) {
+          addResult({
+            step: "Bundle Lookup",
+            status: "success",
+            message: "Bundle found successfully",
+            data: bundleData,
+          })
+        } else {
+          addResult({
+            step: "Bundle Lookup",
+            status: "warning",
+            message: "Bundle not found (expected for mock bundle ID)",
+            data: bundleData,
+          })
+        }
+      } catch (error) {
+        addResult({
+          step: "Bundle Lookup",
+          status: "error",
+          message: `Bundle lookup error: ${error}`,
+        })
+      }
+
+      // Step 5: Test unified purchase lookup
       addResult({
         step: "Unified Purchase Lookup",
         status: "loading",
@@ -286,7 +327,7 @@ export default function StripeDebugPurchaseFlowPage() {
 
         if (purchasesResponse.ok) {
           const mockPurchase = purchasesData.purchases?.find(
-            (p: any) => p.sessionId === mockSession.id || p.productBoxId === mockSession.metadata.productBoxId,
+            (p: any) => p.sessionId === mockSession.id || p.bundleId === mockSession.metadata.bundleId,
           )
 
           addResult({
@@ -412,7 +453,7 @@ export default function StripeDebugPurchaseFlowPage() {
           "x-user-id": user.uid,
         },
         body: JSON.stringify({
-          productBoxId: sessionParams.productBoxId,
+          bundleId: sessionParams.bundleId,
           successUrl: `${window.location.origin}/debug-stripe-purchase-flow?test=success`,
           cancelUrl: `${window.location.origin}/debug-stripe-purchase-flow?test=cancel`,
         }),
@@ -528,18 +569,18 @@ export default function StripeDebugPurchaseFlowPage() {
                 Mock Session Generator
               </CardTitle>
               <CardDescription>
-                Generate mock Stripe checkout sessions for testing purchase verification
+                Generate mock Stripe checkout sessions for testing bundle purchase verification
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <Label htmlFor="productBoxId">Product Box ID</Label>
+                  <Label htmlFor="bundleId">Bundle ID</Label>
                   <Input
-                    id="productBoxId"
-                    value={sessionParams.productBoxId}
-                    onChange={(e) => setSessionParams((prev) => ({ ...prev, productBoxId: e.target.value }))}
-                    placeholder="product-viral-clips-bundle"
+                    id="bundleId"
+                    value={sessionParams.bundleId}
+                    onChange={(e) => setSessionParams((prev) => ({ ...prev, bundleId: e.target.value }))}
+                    placeholder="bundle-viral-clips-pack"
                   />
                 </div>
                 <div>
@@ -694,7 +735,7 @@ export default function StripeDebugPurchaseFlowPage() {
                   id="customSessionData"
                   value={customSessionData}
                   onChange={(e) => setCustomSessionData(e.target.value)}
-                  placeholder='{"payment_status": "paid", "amount_total": 2999, ...}'
+                  placeholder='{"payment_status": "paid", "amount_total": 2999, "metadata": {"bundleId": "bundle-test"}}'
                   rows={6}
                 />
               </div>
@@ -734,11 +775,11 @@ export default function StripeDebugPurchaseFlowPage() {
               </Alert>
 
               <div>
-                <Label>Product Box ID for Real Checkout</Label>
+                <Label>Bundle ID for Real Checkout</Label>
                 <Input
-                  value={sessionParams.productBoxId}
-                  onChange={(e) => setSessionParams((prev) => ({ ...prev, productBoxId: e.target.value }))}
-                  placeholder="product-viral-clips-bundle"
+                  value={sessionParams.bundleId}
+                  onChange={(e) => setSessionParams((prev) => ({ ...prev, bundleId: e.target.value }))}
+                  placeholder="bundle-viral-clips-pack"
                 />
               </div>
 
