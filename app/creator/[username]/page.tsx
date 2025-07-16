@@ -15,6 +15,9 @@ function serializeData(data: any) {
   if (plainData.createdAt && typeof plainData.createdAt.toDate === "function") {
     plainData.createdAt = plainData.createdAt.toDate().toISOString()
   }
+  if (plainData.updatedAt && typeof plainData.updatedAt.toDate === "function") {
+    plainData.updatedAt = plainData.updatedAt.toDate().toISOString()
+  }
 
   return plainData
 }
@@ -29,13 +32,28 @@ export async function generateMetadata({ params }: { params: { username: string 
 
     console.log(`[Metadata] Looking for user with username: ${username}`)
 
-    // Query users collection to find the user with the given username (case insensitive)
+    // First try users collection for most up-to-date data
     const usersRef = db.collection("users")
-    const querySnapshot = await usersRef.where("username", "==", username.toLowerCase()).get()
+    let querySnapshot = await usersRef.where("username", "==", username.toLowerCase()).get()
 
-    console.log(`[Metadata] Query results: ${querySnapshot.size} documents found`)
+    let userData = null
 
-    if (querySnapshot.empty) {
+    if (!querySnapshot.empty) {
+      userData = querySnapshot.docs[0].data()
+      console.log(`[Metadata] Found user in users collection`)
+    } else {
+      // Fallback to creators collection
+      console.log(`[Metadata] User not found in users collection, checking creators`)
+      const creatorsRef = db.collection("creators")
+      querySnapshot = await creatorsRef.where("username", "==", username.toLowerCase()).get()
+
+      if (!querySnapshot.empty) {
+        userData = querySnapshot.docs[0].data()
+        console.log(`[Metadata] Found user in creators collection`)
+      }
+    }
+
+    if (!userData) {
       console.log(`[Metadata] Creator not found for username: ${username}`)
       return {
         title: "Creator Not Found | MassClip",
@@ -43,7 +61,6 @@ export async function generateMetadata({ params }: { params: { username: string 
       }
     }
 
-    const userData = querySnapshot.docs[0].data()
     console.log(
       `[Metadata] Found user data:`,
       JSON.stringify({
@@ -95,73 +112,97 @@ export default async function CreatorProfilePage({ params }: { params: { usernam
     // Initialize Firebase Admin
     initializeFirebaseAdmin()
 
-    // First try to find the user in the users collection
+    let userData = null
+    let uid = null
+
+    // First try to find the user in the users collection (most up-to-date data)
+    console.log(`[Page] Checking users collection for username: ${username}`)
     const usersRef = db.collection("users")
     let querySnapshot = await usersRef.where("username", "==", username.toLowerCase()).get()
 
-    // If no results, try case-insensitive match
-    if (querySnapshot.empty) {
+    if (!querySnapshot.empty) {
+      const userDoc = querySnapshot.docs[0]
+      userData = userDoc.data()
+      uid = userData.uid || userDoc.id
+      console.log(`[Page] Found user in users collection with UID: ${uid}`)
+    } else {
+      // Fallback: try case-insensitive match in users collection
       console.log(`[Page] No exact match found in users collection, trying case-insensitive match`)
-
-      // Get all users and filter manually (not efficient but works for small datasets)
       const allUsersSnapshot = await usersRef.get()
       const matchingDocs = allUsersSnapshot.docs.filter((doc) => {
-        const userData = doc.data()
-        return userData.username && userData.username.toLowerCase() === username.toLowerCase()
+        const data = doc.data()
+        return data.username && data.username.toLowerCase() === username.toLowerCase()
       })
 
       if (matchingDocs.length > 0) {
-        querySnapshot = {
-          empty: false,
-          docs: matchingDocs,
-          size: matchingDocs.length,
-        } as any
+        userData = matchingDocs[0].data()
+        uid = userData.uid || matchingDocs[0].id
+        console.log(`[Page] Found user via case-insensitive match with UID: ${uid}`)
       }
     }
 
-    // If still not found, try the creators collection directly
-    if (querySnapshot.empty) {
+    // If still not found, try creators collection
+    if (!userData) {
       console.log(`[Page] User not found in users collection, checking creators collection`)
       const creatorsRef = db.collection("creators")
 
       // Try exact match on username
       querySnapshot = await creatorsRef.where("username", "==", username.toLowerCase()).get()
 
-      // If still not found, try by UID
-      if (querySnapshot.empty) {
+      if (!querySnapshot.empty) {
+        userData = querySnapshot.docs[0].data()
+        uid = userData.uid || querySnapshot.docs[0].id
+        console.log(`[Page] Found creator by username with UID: ${uid}`)
+      } else {
+        // Try by document ID
         console.log(`[Page] Creator not found by username, checking by document ID`)
         const creatorDoc = await creatorsRef.doc(username.toLowerCase()).get()
 
         if (creatorDoc.exists) {
-          querySnapshot = {
-            empty: false,
-            docs: [creatorDoc],
-            size: 1,
-          } as any
+          userData = creatorDoc.data()
+          uid = userData.uid || creatorDoc.id
+          console.log(`[Page] Found creator by document ID with UID: ${uid}`)
         }
       }
     }
 
-    console.log(`[Page] Final query results: ${querySnapshot?.size || 0} documents found`)
-
-    if (!querySnapshot || querySnapshot.empty) {
+    if (!userData || !uid) {
       console.log(`[Page] Creator profile not found for username: ${username}`)
       notFound()
     }
 
-    // Get the user document
-    const userDoc = querySnapshot.docs[0]
-    const userData = userDoc.data()
-    const uid = userData.uid || userDoc.id
+    // If we found the user in creators collection but not users, try to get fresh data from users
+    if (uid && !userData.email) {
+      console.log(`[Page] Attempting to get fresh user data from users collection for UID: ${uid}`)
+      try {
+        const freshUserDoc = await db.collection("users").doc(uid).get()
+        if (freshUserDoc.exists) {
+          const freshUserData = freshUserDoc.data()
+          console.log(`[Page] Found fresh user data, merging with creator data`)
 
-    console.log(`[Page] Creator profile found for username: ${username} with UID: ${uid}`)
+          // Merge fresh user data with existing creator data, prioritizing user data
+          userData = {
+            ...userData,
+            ...freshUserData,
+            // Ensure we keep the UID
+            uid: uid,
+          }
+        }
+      } catch (error) {
+        console.warn(`[Page] Could not fetch fresh user data for UID ${uid}:`, error)
+      }
+    }
+
     console.log(
-      `[Page] User data:`,
+      `[Page] Final user data:`,
       JSON.stringify({
-        displayName: userData.displayName,
+        uid: uid,
         username: userData.username,
-        hasPhotoURL: !!userData.photoURL,
+        displayName: userData.displayName,
         hasProfilePic: !!userData.profilePic,
+        hasPhotoURL: !!userData.photoURL,
+        hasBio: !!userData.bio,
+        hasSocialLinks: !!userData.socialLinks,
       }),
     )
 
@@ -180,7 +221,22 @@ export default async function CreatorProfilePage({ params }: { params: { usernam
       profilePic: profilePicture,
       createdAt: serializedData.createdAt || new Date().toISOString(),
       socialLinks: serializedData.socialLinks || {},
+      // Add additional fields that might be useful
+      email: serializedData.email || "",
+      updatedAt: serializedData.updatedAt || new Date().toISOString(),
     }
+
+    console.log(
+      `[Page] Passing creator data to component:`,
+      JSON.stringify({
+        uid: creatorData.uid,
+        username: creatorData.username,
+        displayName: creatorData.displayName,
+        hasProfilePic: !!creatorData.profilePic,
+        hasBio: !!creatorData.bio,
+        hasSocialLinks: Object.keys(creatorData.socialLinks).length > 0,
+      }),
+    )
 
     return (
       <>

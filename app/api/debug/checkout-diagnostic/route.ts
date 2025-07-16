@@ -1,292 +1,151 @@
 import { type NextRequest, NextResponse } from "next/server"
+import { verifyIdToken } from "@/lib/auth-utils"
 import { db } from "@/lib/firebase-admin"
-import Stripe from "stripe"
+import { stripe } from "@/lib/stripe"
 
 export async function POST(request: NextRequest) {
   try {
-    const { productBoxId } = await request.json()
+    const body = await request.json()
+    const { bundleId } = body
 
-    console.log("🔍 [Diagnostic] Starting checkout diagnostic for:", productBoxId)
+    console.log(`🔍 [Checkout Diagnostic] Checking bundle: ${bundleId}`)
 
-    const diagnostics = {
-      timestamp: new Date().toISOString(),
-      productBoxId,
-      checks: {} as any,
-      summary: {
-        passed: 0,
-        failed: 0,
-        issues: [] as string[],
-      },
-    }
-
-    // Check 1: Environment Variables
-    const hasStripeKey = !!process.env.STRIPE_SECRET_KEY
-    const hasFirebaseConfig = !!process.env.FIREBASE_PROJECT_ID
-
-    diagnostics.checks.environment = {
-      hasStripeKey,
-      stripeKeyLength: process.env.STRIPE_SECRET_KEY?.length || 0,
-      hasFirebaseConfig,
-      firebaseProjectId: process.env.FIREBASE_PROJECT_ID,
-      status: hasStripeKey && hasFirebaseConfig ? "PASS" : "FAIL",
-    }
-
-    if (!hasStripeKey) diagnostics.summary.issues.push("Missing STRIPE_SECRET_KEY")
-    if (!hasFirebaseConfig) diagnostics.summary.issues.push("Missing Firebase config")
-
-    if (diagnostics.checks.environment.status === "PASS") {
-      diagnostics.summary.passed++
-    } else {
-      diagnostics.summary.failed++
-    }
-
-    // Check 2: Stripe Initialization
-    try {
-      const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-        apiVersion: "2024-06-20",
-      })
-      diagnostics.checks.stripe = {
-        initialized: true,
-        version: "2024-06-20",
-        status: "PASS",
-      }
-      diagnostics.summary.passed++
-    } catch (error) {
-      diagnostics.checks.stripe = {
-        initialized: false,
-        error: error instanceof Error ? error.message : "Unknown error",
-        status: "FAIL",
-      }
-      diagnostics.summary.failed++
-      diagnostics.summary.issues.push("Stripe initialization failed")
-    }
-
-    // Check 3: Firestore Connection
-    try {
-      console.log("🔍 [Diagnostic] Testing Firestore connection...")
-      const testDoc = await db.collection("test").doc("connection-test").get()
-
-      diagnostics.checks.firestore = {
-        connected: true,
-        status: "PASS",
-      }
-      diagnostics.summary.passed++
-      console.log("✅ [Diagnostic] Firestore connection successful")
-    } catch (error) {
-      console.error("❌ [Diagnostic] Firestore connection failed:", error)
-      diagnostics.checks.firestore = {
-        connected: false,
-        error: error instanceof Error ? error.message : "Unknown error",
-        status: "FAIL",
-      }
-      diagnostics.summary.failed++
-      diagnostics.summary.issues.push("Firestore connection failed")
-
-      // If Firestore is down, skip remaining checks
-      console.log("📊 [Diagnostic] Summary:", diagnostics.summary)
+    // Check authentication
+    const decodedToken = await verifyIdToken(request)
+    if (!decodedToken) {
       return NextResponse.json({
-        success: true,
-        diagnostics,
+        success: false,
+        error: "Authentication required",
+        step: "auth_check",
       })
     }
 
-    // Check 4: Product Box Data
+    const userId = decodedToken.uid
+    console.log(`✅ [Checkout Diagnostic] User authenticated: ${userId}`)
+
+    // Check bundle exists
+    let bundleDoc = await db.collection("bundles").doc(bundleId).get()
+    if (!bundleDoc.exists) {
+      bundleDoc = await db.collection("productBoxes").doc(bundleId).get()
+    }
+
+    if (!bundleDoc.exists) {
+      return NextResponse.json({
+        success: false,
+        error: "Bundle not found",
+        step: "bundle_check",
+        bundleId,
+      })
+    }
+
+    const bundleData = bundleDoc.data()
+    console.log(`✅ [Checkout Diagnostic] Bundle found: ${bundleData?.title}`)
+
+    // Check creator exists
+    const creatorDoc = await db.collection("users").doc(bundleData?.creatorId).get()
+    if (!creatorDoc.exists) {
+      return NextResponse.json({
+        success: false,
+        error: "Creator not found",
+        step: "creator_check",
+        creatorId: bundleData?.creatorId,
+      })
+    }
+
+    const creatorData = creatorDoc.data()
+    console.log(`✅ [Checkout Diagnostic] Creator found: ${creatorData?.username}`)
+
+    // Check Stripe account
+    if (!creatorData?.stripeAccountId) {
+      return NextResponse.json({
+        success: false,
+        error: "Creator has no Stripe account",
+        step: "stripe_account_check",
+        creator: creatorData?.username,
+        recommendation: "Creator needs to complete Stripe onboarding",
+      })
+    }
+
+    // Test Stripe connection
     try {
-      console.log("🔍 [Diagnostic] Fetching product box:", productBoxId)
-      const productBoxDoc = await db.collection("productBoxes").doc(productBoxId).get()
-
-      if (productBoxDoc.exists()) {
-        const data = productBoxDoc.data()
-        console.log("✅ [Diagnostic] Product box data:", {
-          title: data?.title,
-          active: data?.active,
-          priceId: data?.priceId,
-          creatorId: data?.creatorId,
-        })
-
-        const hasRequiredFields =
-          data?.active && data?.title && typeof data?.price === "number" && data?.priceId && data?.creatorId
-
-        diagnostics.checks.productBox = {
-          exists: true,
-          active: data?.active,
-          hasTitle: !!data?.title,
-          hasPrice: typeof data?.price === "number",
-          hasPriceId: !!data?.priceId,
-          hasCreatorId: !!data?.creatorId,
-          type: data?.type,
-          priceId: data?.priceId,
-          price: data?.price,
-          creatorId: data?.creatorId,
-          status: hasRequiredFields ? "PASS" : "FAIL",
-        }
-
-        if (!data?.active) diagnostics.summary.issues.push("Product box is not active")
-        if (!data?.priceId) diagnostics.summary.issues.push("Product box missing Stripe price ID")
-        if (!data?.creatorId) diagnostics.summary.issues.push("Product box missing creator ID")
-
-        if (hasRequiredFields) {
-          diagnostics.summary.passed++
-        } else {
-          diagnostics.summary.failed++
-        }
-      } else {
-        console.error("❌ [Diagnostic] Product box not found:", productBoxId)
-        diagnostics.checks.productBox = {
-          exists: false,
-          status: "FAIL",
-        }
-        diagnostics.summary.failed++
-        diagnostics.summary.issues.push("Product box not found")
-      }
-    } catch (error) {
-      console.error("❌ [Diagnostic] Product box access error:", error)
-
-      // Enhanced error logging
-      const errorDetails =
-        error instanceof Error
-          ? {
-              name: error.name,
-              message: error.message,
-              stack: error.stack?.split("\n").slice(0, 3).join("\n"),
-            }
-          : "Unknown error type"
-
-      console.error("❌ [Diagnostic] Detailed error:", errorDetails)
-
-      diagnostics.checks.productBox = {
-        error: error instanceof Error ? error.message : "Unknown error",
-        errorType: error instanceof Error ? error.name : "Unknown",
-        errorDetails: errorDetails,
-        status: "FAIL",
-      }
-      diagnostics.summary.failed++
-      diagnostics.summary.issues.push(
-        `Database error accessing product box: ${error instanceof Error ? error.message : "Unknown error"}`,
-      )
+      await stripe.accounts.retrieve(creatorData.stripeAccountId)
+      console.log(`✅ [Checkout Diagnostic] Stripe account verified`)
+    } catch (stripeError: any) {
+      return NextResponse.json({
+        success: false,
+        error: "Stripe account error",
+        step: "stripe_connection_test",
+        details: stripeError.message,
+        stripeAccountId: creatorData.stripeAccountId,
+      })
     }
 
-    // Check 5: Creator Data
-    if (diagnostics.checks.productBox?.exists && diagnostics.checks.productBox?.creatorId) {
-      try {
-        console.log("🔍 [Diagnostic] Fetching creator:", diagnostics.checks.productBox.creatorId)
-        const creatorDoc = await db.collection("users").doc(diagnostics.checks.productBox.creatorId).get()
+    // Check environment configuration
+    const vercelEnv = process.env.VERCEL_ENV || "development"
+    const stripeKey = process.env.STRIPE_SECRET_KEY
+    const stripeTestKey = process.env.STRIPE_SECRET_KEY_TEST
 
-        if (creatorDoc.exists()) {
-          const creatorData = creatorDoc.data()
-          const hasStripeAccount = !!creatorData?.stripeAccountId
-
-          console.log("✅ [Diagnostic] Creator data:", {
-            username: creatorData?.username,
-            hasStripeAccount,
-          })
-
-          diagnostics.checks.creator = {
-            exists: true,
-            hasStripeAccount,
-            stripeAccountId: creatorData?.stripeAccountId,
-            username: creatorData?.username,
-            status: hasStripeAccount ? "PASS" : "FAIL",
-          }
-
-          if (!hasStripeAccount) {
-            diagnostics.summary.issues.push("Creator not connected to Stripe")
-            diagnostics.summary.failed++
-          } else {
-            diagnostics.summary.passed++
-          }
-        } else {
-          console.error("❌ [Diagnostic] Creator not found:", diagnostics.checks.productBox.creatorId)
-          diagnostics.checks.creator = {
-            exists: false,
-            status: "FAIL",
-          }
-          diagnostics.summary.failed++
-          diagnostics.summary.issues.push("Creator not found")
-        }
-      } catch (error) {
-        console.error("❌ [Diagnostic] Creator access error:", error)
-        diagnostics.checks.creator = {
-          error: error instanceof Error ? error.message : "Unknown error",
-          status: "FAIL",
-        }
-        diagnostics.summary.failed++
-        diagnostics.summary.issues.push("Database error accessing creator")
-      }
+    let activeKey: string | undefined
+    if (vercelEnv === "production") {
+      activeKey = stripeKey
+    } else {
+      activeKey = stripeTestKey || stripeKey
     }
 
-    // Check 6: Stripe Account Validation
-    if (diagnostics.checks.creator?.hasStripeAccount) {
-      try {
-        console.log("🔍 [Diagnostic] Validating Stripe account:", diagnostics.checks.creator.stripeAccountId)
-        const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-          apiVersion: "2024-06-20",
-        })
-
-        const account = await stripe.accounts.retrieve(diagnostics.checks.creator.stripeAccountId)
-        const isValid = account.charges_enabled && account.details_submitted
-
-        console.log("✅ [Diagnostic] Stripe account status:", {
-          chargesEnabled: account.charges_enabled,
-          detailsSubmitted: account.details_submitted,
-        })
-
-        diagnostics.checks.stripeAccount = {
-          valid: true,
-          chargesEnabled: account.charges_enabled,
-          detailsSubmitted: account.details_submitted,
-          payoutsEnabled: account.payouts_enabled,
-          country: account.country,
-          type: account.type,
-          status: isValid ? "PASS" : "FAIL",
-        }
-
-        if (!account.charges_enabled) {
-          diagnostics.summary.issues.push("Stripe account charges not enabled")
-        }
-        if (!account.details_submitted) {
-          diagnostics.summary.issues.push("Stripe account details not submitted")
-        }
-
-        if (isValid) {
-          diagnostics.summary.passed++
-        } else {
-          diagnostics.summary.failed++
-        }
-      } catch (error) {
-        console.error("❌ [Diagnostic] Stripe account validation error:", error)
-        diagnostics.checks.stripeAccount = {
-          valid: false,
-          error: error instanceof Error ? error.message : "Unknown error",
-          status: "FAIL",
-        }
-        diagnostics.summary.failed++
-        diagnostics.summary.issues.push("Stripe account validation failed")
-      }
-    }
-
-    // Log detailed results
-    console.log("✅ [Diagnostic] Completed checkout diagnostic:")
-    console.log("📊 Summary:", diagnostics.summary)
-    console.log("🔍 Environment:", diagnostics.checks.environment)
-    console.log("🔍 Stripe:", diagnostics.checks.stripe)
-    console.log("🔍 Firestore:", diagnostics.checks.firestore)
-    console.log("🔍 Product Box:", diagnostics.checks.productBox)
-    console.log("🔍 Creator:", diagnostics.checks.creator)
-    console.log("🔍 Stripe Account:", diagnostics.checks.stripeAccount)
+    const keyType = activeKey?.startsWith("sk_live_") ? "live" : "test"
 
     return NextResponse.json({
       success: true,
-      diagnostics,
+      diagnostic: {
+        bundle: {
+          id: bundleId,
+          title: bundleData?.title,
+          price: bundleData?.price,
+          active: bundleData?.active,
+        },
+        creator: {
+          id: bundleData?.creatorId,
+          username: creatorData?.username,
+          hasStripeAccount: !!creatorData?.stripeAccountId,
+          stripeOnboardingComplete: creatorData?.stripeOnboardingComplete,
+        },
+        environment: {
+          vercelEnv,
+          keyType,
+          hasMainKey: !!stripeKey,
+          hasTestKey: !!stripeTestKey,
+        },
+        checks: {
+          auth: "✅ Passed",
+          bundle: "✅ Found",
+          creator: "✅ Found",
+          stripeAccount: "✅ Valid",
+          stripeConnection: "✅ Connected",
+        },
+      },
     })
-  } catch (error) {
-    console.error("❌ [Diagnostic] Error:", error)
+  } catch (error: any) {
+    console.error(`❌ [Checkout Diagnostic] Error:`, error)
     return NextResponse.json(
       {
+        success: false,
         error: "Diagnostic failed",
-        details: error instanceof Error ? error.message : "Unknown error",
+        details: error.message,
+        step: "unexpected_error",
       },
       { status: 500 },
     )
   }
+}
+
+export async function GET() {
+  return NextResponse.json({
+    message: "Use POST method to run checkout diagnostic",
+    usage: {
+      method: "POST",
+      body: {
+        bundleId: "bundle_id_here",
+      },
+    },
+  })
 }

@@ -70,15 +70,19 @@ export default function ProfilePage() {
 
       try {
         setLoading(true)
+        console.log("🔍 Fetching user profile for:", user.uid)
+
         const userDoc = await getDoc(doc(db, "users", user.uid))
 
         if (userDoc.exists()) {
           const userData = userDoc.data()
+          console.log("✅ User data loaded:", userData)
+
           setDisplayName(userData.displayName || "")
           setUsername(userData.username || "")
           setBio(userData.bio || "")
 
-          // Only use profilePic field, ignore photoURL
+          // Handle profile picture
           const profilePicUrl = userData.profilePic
           if (profilePicUrl) {
             const cacheBustedUrl = profilePicUrl.includes("?")
@@ -89,13 +93,41 @@ export default function ProfilePage() {
             setProfilePic(null)
           }
 
-          // Social links
-          setInstagramHandle(userData.socialLinks?.instagram || "")
-          setTwitterHandle(userData.socialLinks?.twitter || "")
-          setWebsiteUrl(userData.socialLinks?.website || "")
+          // Social links - handle both old and new structure
+          const socialLinks = userData.socialLinks || {}
+          setInstagramHandle(socialLinks.instagram || userData.instagramHandle || "")
+          setTwitterHandle(socialLinks.twitter || userData.twitterHandle || "")
+          setWebsiteUrl(socialLinks.website || userData.websiteUrl || "")
+        } else {
+          console.log("❌ No user document found, creating one...")
+          // Create initial user document
+          const initialData = {
+            uid: user.uid,
+            email: user.email,
+            displayName: user.displayName || "",
+            username: "",
+            bio: "",
+            profilePic: user.photoURL || null,
+            socialLinks: {
+              instagram: "",
+              twitter: "",
+              website: "",
+            },
+            createdAt: serverTimestamp(),
+            updatedAt: serverTimestamp(),
+          }
+
+          await setDoc(doc(db, "users", user.uid), initialData)
+          console.log("✅ Initial user document created")
+
+          // Set the state with initial data
+          setDisplayName(initialData.displayName)
+          setUsername(initialData.username)
+          setBio(initialData.bio)
+          setProfilePic(initialData.profilePic)
         }
       } catch (error) {
-        console.error("Error fetching user profile:", error)
+        console.error("❌ Error fetching user profile:", error)
         toast({
           title: "Error",
           description: "Failed to load profile data. Please try again.",
@@ -107,7 +139,7 @@ export default function ProfilePage() {
     }
 
     fetchUserProfile()
-  }, [user])
+  }, [user, toast])
 
   const handleProfilePicChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -239,115 +271,129 @@ export default function ProfilePage() {
       return
     }
 
+    if (!isOnline) {
+      toast({
+        title: "No internet connection",
+        description: "Please check your connection and try again.",
+        variant: "destructive",
+      })
+      return
+    }
+
     try {
       setSaving(true)
+      console.log("🔄 Starting profile update for user:", user.uid)
 
       let profilePicUrl = profilePic
 
-      // Upload new profile pic if cropped with retry logic
+      // Upload new profile pic if cropped
       if (croppedImageBlob) {
-        const maxRetries = 3
-        let uploadSuccess = false
+        console.log("📸 Uploading new profile picture...")
 
-        for (let attempt = 1; attempt <= maxRetries; attempt++) {
-          try {
-            const formData = new FormData()
-            formData.append("file", croppedImageBlob, "profile.jpg")
-            formData.append("userId", user.uid)
+        try {
+          // Get fresh auth token
+          const idToken = await user.getIdToken(true)
 
-            const uploadResponse = await fetch("/api/upload-profile-pic", {
-              method: "POST",
-              body: formData,
-            })
+          const formData = new FormData()
+          formData.append("file", croppedImageBlob, "profile.jpg")
+          formData.append("userId", user.uid)
 
-            if (!uploadResponse.ok) {
-              const errorText = await uploadResponse.text()
-              throw new Error(`Upload failed: ${errorText}`)
-            }
+          const uploadResponse = await fetch("/api/upload-profile-pic", {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${idToken}`,
+            },
+            body: formData,
+          })
 
-            const uploadResult = await uploadResponse.json()
-            profilePicUrl = uploadResult.url
-            uploadSuccess = true
-            break
-          } catch (uploadError) {
-            console.error(`Upload attempt ${attempt} failed:`, uploadError)
-
-            if (attempt === maxRetries) {
-              throw new Error(`Failed to upload profile picture after ${maxRetries} attempts`)
-            }
-
-            // Wait before retrying
-            await new Promise((resolve) => setTimeout(resolve, 1000 * attempt))
+          if (!uploadResponse.ok) {
+            const errorText = await uploadResponse.text()
+            throw new Error(`Upload failed: ${errorText}`)
           }
-        }
 
-        if (!uploadSuccess) {
-          throw new Error("Failed to upload profile picture")
+          const uploadResult = await uploadResponse.json()
+          profilePicUrl = uploadResult.url
+          console.log("✅ Profile picture uploaded:", profilePicUrl)
+        } catch (uploadError) {
+          console.error("❌ Profile picture upload failed:", uploadError)
+          toast({
+            title: "Upload failed",
+            description: "Failed to upload profile picture. Continuing with other updates.",
+            variant: "destructive",
+          })
+          // Continue with other updates even if image upload fails
         }
       }
 
-      // Prepare profile data with serverTimestamp
+      // Prepare profile data
       const profileData = {
-        displayName,
-        username: username.toLowerCase(),
-        bio,
+        displayName: displayName.trim(),
+        username: username.toLowerCase().trim(),
+        bio: bio.trim(),
         profilePic: profilePicUrl,
         socialLinks: {
-          instagram: instagramHandle,
-          twitter: twitterHandle,
-          website: websiteUrl,
+          instagram: instagramHandle.trim(),
+          twitter: twitterHandle.trim(),
+          website: websiteUrl.trim(),
         },
-        userId: user.uid,
         email: user.email,
-        updatedAt: serverTimestamp(), // Use serverTimestamp instead of new Date()
+        updatedAt: serverTimestamp(),
       }
 
-      console.log("Updating user profile with data:", profileData)
+      console.log("💾 Updating user profile with data:", profileData)
 
-      // Update user profile in Firestore using setDoc with merge
+      // Update user profile in Firestore
       const userDocRef = doc(db, "users", user.uid)
-      await setDoc(
-        userDocRef,
-        {
+
+      // Check if document exists first
+      const userDoc = await getDoc(userDocRef)
+
+      if (userDoc.exists()) {
+        // Update existing document
+        await updateDoc(userDocRef, profileData)
+        console.log("✅ User profile updated successfully")
+      } else {
+        // Create new document with createdAt timestamp
+        await setDoc(userDocRef, {
           ...profileData,
-          createdAt: serverTimestamp(), // This will only be set if document doesn't exist
-        },
-        { merge: true },
-      )
-
-      // If photoURL exists, remove it to avoid confusion
-      try {
-        const userDoc = await getDoc(userDocRef)
-        if (userDoc.exists() && userDoc.data().photoURL) {
-          await updateDoc(userDocRef, {
-            photoURL: null, // Remove the photoURL field
-          })
-          console.log("✅ Removed photoURL field to avoid profile picture confusion")
-        }
-      } catch (error) {
-        console.warn("Could not remove photoURL field:", error)
-        // Don't fail the operation if this cleanup fails
+          uid: user.uid,
+          createdAt: serverTimestamp(),
+        })
+        console.log("✅ User profile created successfully")
       }
-
-      console.log("✅ User profile updated successfully")
 
       // Also update the creators collection if username exists
-      if (username) {
+      if (username.trim()) {
         try {
-          const creatorDocRef = doc(db, "creators", username.toLowerCase())
-          await setDoc(
-            creatorDocRef,
-            {
-              ...profileData,
-              username: username.toLowerCase(),
-              createdAt: serverTimestamp(), // This will only be set if document doesn't exist
-            },
-            { merge: true },
-          )
+          const creatorDocRef = doc(db, "creators", username.toLowerCase().trim())
+          const creatorData = {
+            uid: user.uid,
+            username: username.toLowerCase().trim(),
+            displayName: displayName.trim(),
+            bio: bio.trim(),
+            profilePic: profilePicUrl,
+            email: user.email,
+            updatedAt: serverTimestamp(),
+          }
+
+          const creatorDoc = await getDoc(creatorDocRef)
+
+          if (creatorDoc.exists()) {
+            await updateDoc(creatorDocRef, creatorData)
+          } else {
+            await setDoc(creatorDocRef, {
+              ...creatorData,
+              totalVideos: 0,
+              totalDownloads: 0,
+              totalEarnings: 0,
+              isVerified: false,
+              createdAt: serverTimestamp(),
+            })
+          }
 
           console.log("✅ Creator profile updated successfully")
         } catch (creatorError) {
-          console.error("Error updating creator profile:", creatorError)
+          console.error("⚠️ Creator profile update failed:", creatorError)
           // Don't fail the whole operation if creator update fails
         }
       }
@@ -356,7 +402,7 @@ export default function ProfilePage() {
       setCroppedImageBlob(null)
       setProfilePicPreview(null)
 
-      // Update the profile pic state with the new URL (already has cache busting)
+      // Update the profile pic state with the new URL
       setProfilePic(profilePicUrl)
 
       // Show success message
@@ -367,10 +413,15 @@ export default function ProfilePage() {
         title: "Profile updated",
         description: "Your profile has been updated successfully",
       })
+
+      // Refresh the page data
+      setTimeout(() => {
+        window.location.reload()
+      }, 1500)
     } catch (error) {
-      console.error("Error updating profile:", error)
+      console.error("❌ Error updating profile:", error)
       toast({
-        title: "Error",
+        title: "Update failed",
         description: error instanceof Error ? error.message : "Failed to update profile. Please try again.",
         variant: "destructive",
       })
@@ -381,7 +432,6 @@ export default function ProfilePage() {
 
   const handleViewProfile = () => {
     if (username) {
-      // Add updated parameter to trigger refresh on creator profile
       window.open(`/creator/${username}?updated=true`, "_blank")
     }
   }
@@ -434,10 +484,9 @@ export default function ProfilePage() {
                           src={profilePicPreview || profilePic || ""}
                           alt={displayName || "Profile"}
                           className="w-full h-full object-cover"
-                          key={profilePicPreview || profilePic} // Force re-render when URL changes
+                          key={profilePicPreview || profilePic}
                           onError={(e) => {
                             console.error("Failed to load profile image:", e)
-                            // Fallback to default if image fails to load
                             setProfilePic(null)
                           }}
                         />
@@ -471,6 +520,7 @@ export default function ProfilePage() {
                       onChange={(e) => setDisplayName(e.target.value)}
                       className="bg-zinc-800/50 border-zinc-700 focus:border-red-500 text-white mt-1.5"
                       placeholder="Your display name"
+                      required
                     />
                   </div>
 
@@ -483,6 +533,7 @@ export default function ProfilePage() {
                       onChange={(e) => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ""))}
                       className="bg-zinc-800/50 border-zinc-700 focus:border-red-500 text-white mt-1.5"
                       placeholder="username"
+                      required
                     />
                     <p className="text-xs text-zinc-500 mt-1.5">
                       This will be your profile URL: massclip.pro/creator/{username || "username"}
@@ -557,7 +608,11 @@ export default function ProfilePage() {
                 </CardContent>
 
                 <CardFooter className="border-t border-zinc-800/50 pt-6">
-                  <Button type="submit" disabled={saving} className="ml-auto bg-red-600 hover:bg-red-700">
+                  <Button
+                    type="submit"
+                    disabled={saving || !displayName.trim() || !username.trim()}
+                    className="ml-auto bg-red-600 hover:bg-red-700"
+                  >
                     {saving ? (
                       <>
                         <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -593,7 +648,7 @@ export default function ProfilePage() {
                         src={profilePicPreview || profilePic || ""}
                         alt={displayName || "Profile"}
                         className="w-full h-full object-cover"
-                        key={profilePicPreview || profilePic} // Force re-render when URL changes
+                        key={profilePicPreview || profilePic}
                         onError={(e) => {
                           console.error("Failed to load preview image:", e)
                         }}
@@ -635,7 +690,7 @@ export default function ProfilePage() {
                 {username && (
                   <Button
                     variant="outline"
-                    className="w-full mt-6 border-zinc-700 hover:bg-zinc-800"
+                    className="w-full mt-6 border-zinc-700 hover:bg-zinc-800 bg-transparent"
                     onClick={handleViewProfile}
                   >
                     <ExternalLink className="h-4 w-4 mr-2" />
@@ -647,6 +702,7 @@ export default function ProfilePage() {
           </div>
         </TabsContent>
       </Tabs>
+
       {/* Image Crop Modal */}
       {showCropModal && imageToCrop && (
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">

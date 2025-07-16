@@ -3,11 +3,34 @@ import Stripe from "stripe"
 import { db } from "@/lib/firebase-admin"
 import { UnifiedPurchaseService } from "@/lib/unified-purchase-service"
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: "2023-10-16",
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY_LIVE || process.env.STRIPE_SECRET_KEY!, {
+  apiVersion: "2024-06-20",
 })
 
-const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET!
+// Determine which webhook secret to use based on environment and Stripe key
+const stripeSecretKey = process.env.STRIPE_SECRET_KEY_LIVE || process.env.STRIPE_SECRET_KEY!
+const isProduction = process.env.NODE_ENV === "production"
+const usingLiveKey = stripeSecretKey?.startsWith("sk_live_")
+const usingTestKey = stripeSecretKey?.startsWith("sk_test_")
+
+let webhookSecret: string
+if (isProduction && usingLiveKey) {
+  webhookSecret = process.env.STRIPE_WEBHOOK_SECRET_LIVE!
+  console.log("🔴 [Stripe Webhook] Using LIVE webhook secret for PRODUCTION")
+} else if (!isProduction && usingTestKey) {
+  webhookSecret = process.env.STRIPE_WEBHOOK_SECRET_TEST || process.env.STRIPE_WEBHOOK_SECRET!
+  console.log("🟢 [Stripe Webhook] Using TEST webhook secret for DEVELOPMENT")
+} else {
+  // Fallback to general webhook secret
+  webhookSecret = process.env.STRIPE_WEBHOOK_SECRET!
+  console.log("⚠️ [Stripe Webhook] Using general webhook secret - verify environment configuration")
+}
+
+if (!webhookSecret) {
+  throw new Error(
+    "Stripe webhook secret is missing. Please set STRIPE_WEBHOOK_SECRET_LIVE for production or STRIPE_WEBHOOK_SECRET_TEST for development",
+  )
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -18,12 +41,23 @@ export async function POST(request: NextRequest) {
 
     try {
       event = stripe.webhooks.constructEvent(body, signature, webhookSecret)
-    } catch (err) {
-      console.error("⚠️ Webhook signature verification failed:", err)
+      console.log(
+        `✅ [Stripe Webhook] Signature verified for event: ${event.type} in ${usingLiveKey ? "LIVE" : "TEST"} mode`,
+      )
+    } catch (err: any) {
+      console.error(`❌ [Stripe Webhook] Webhook signature verification failed:`, {
+        error: err.message,
+        environment: process.env.NODE_ENV,
+        usingLiveKey,
+        usingTestKey,
+        webhookSecretLength: webhookSecret?.length,
+      })
       return NextResponse.json({ error: "Invalid signature" }, { status: 400 })
     }
 
-    // Handle checkout.session.completed event
+    console.log(`🔔 [Stripe Webhook] Processing event: ${event.type} (${usingLiveKey ? "LIVE" : "TEST"} mode)`)
+
+    // Handle checkout.session.completed event (backup to direct verification)
     if (event.type === "checkout.session.completed") {
       const session = event.data.object as Stripe.Checkout.Session
       await handleCheckoutSessionCompleted(session)
@@ -31,7 +65,7 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({ received: true })
   } catch (error) {
-    console.error("Error handling webhook:", error)
+    console.error("❌ [Stripe Webhook] Error handling webhook:", error)
     return NextResponse.json({ error: "Webhook handler failed" }, { status: 500 })
   }
 }
@@ -50,10 +84,10 @@ async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session) 
 
     console.log("✅ [Webhook] Session metadata:", { productBoxId, buyerUid, creatorUid })
 
-    // Check if this purchase has already been processed
+    // Check if this purchase has already been processed (likely by direct verification)
     const existingPurchase = await UnifiedPurchaseService.getUserPurchase(buyerUid, session.id)
     if (existingPurchase) {
-      console.log("⚠️ [Webhook] Purchase already processed for session:", session.id)
+      console.log("⚠️ [Webhook] Purchase already processed (likely via direct verification):", session.id)
       return
     }
 
@@ -105,12 +139,13 @@ async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session) 
       creatorName: creatorData?.displayName || creatorData?.name || "",
       creatorUsername: creatorData?.username || "",
       accessUrl: `/product-box/${productBoxId}/content`,
+      verificationMethod: "webhook_backup", // Mark as webhook backup
+      webhookProcessedAt: new Date(),
+      environment: usingLiveKey ? "live" : "test", // Track which environment processed this
     }
 
     // Write to main purchases collection with document ID as sessionId for easy lookup
     await db.collection("purchases").doc(session.id).set(mainPurchaseData)
-
-    console.log("✅ [Webhook] Purchase written to main collection with ID:", session.id)
 
     // Also record in legacy purchases collection for backward compatibility
     const legacyPurchaseData = {
@@ -132,6 +167,8 @@ async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session) 
       creatorName: creatorData?.displayName || creatorData?.name || "",
       creatorUsername: creatorData?.username || "",
       accessUrl: `/product-box/${productBoxId}/content`,
+      verificationMethod: "webhook_backup",
+      environment: usingLiveKey ? "live" : "test",
     }
 
     await db.collection("users").doc(buyerUid).collection("purchases").add(legacyPurchaseData)
@@ -168,6 +205,8 @@ async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session) 
           status: "completed",
           productTitle: productBoxData.title || "Untitled Product Box",
           buyerEmail: session.customer_email || "",
+          verificationMethod: "webhook_backup",
+          environment: usingLiveKey ? "live" : "test",
         })
 
       // Increment the creator's total sales
@@ -181,7 +220,9 @@ async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session) 
         })
     }
 
-    console.log("✅ [Webhook] Successfully processed webhook for session:", session.id)
+    console.log(
+      `✅ [Webhook] Successfully processed webhook for session: ${session.id} in ${usingLiveKey ? "LIVE" : "TEST"} mode`,
+    )
   } catch (error) {
     console.error("❌ [Webhook] Error handling checkout.session.completed:", error)
     throw error

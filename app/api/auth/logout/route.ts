@@ -6,16 +6,34 @@ export const dynamic = "force-dynamic"
 
 export async function POST() {
   try {
-    // Clear the session cookie
-    cookies().delete("session")
+    const cookieStore = cookies()
 
-    // Clear any other auth-related cookies
-    cookies().delete("firebase-auth-token")
-    cookies().delete("__session")
+    // Clear all auth-related cookies
+    const authCookies = [
+      "session",
+      "firebase-auth-token",
+      "__session",
+      "next-auth.session-token",
+      "next-auth.csrf-token",
+      "next-auth.callback-url",
+    ]
 
-    return NextResponse.json({ success: true })
+    authCookies.forEach((cookieName) => {
+      cookieStore.delete(cookieName)
+    })
+
+    return NextResponse.json({
+      success: true,
+      message: "Successfully logged out",
+    })
   } catch (error) {
     console.error("Error clearing session:", error)
-    return NextResponse.json({ error: "Failed to clear session" }, { status: 500 })
+    return NextResponse.json(
+      {
+        error: "Failed to clear session",
+        success: false,
+      },
+      { status: 500 },
+    )
   }
 }

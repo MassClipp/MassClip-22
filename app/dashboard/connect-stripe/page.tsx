@@ -25,7 +25,6 @@ export default function ConnectStripePage() {
   const [loading, setLoading] = useState(false)
   const [checking, setChecking] = useState(true)
   const [accountStatus, setAccountStatus] = useState<StripeAccountStatus | null>(null)
-  const [onboardingUrl, setOnboardingUrl] = useState<string | null>(null)
 
   useEffect(() => {
     if (user) {
@@ -39,16 +38,26 @@ export default function ConnectStripePage() {
     setChecking(true)
     try {
       const token = await user.getIdToken()
-      const response = await fetch("/api/stripe/connect/status", {
+      const response = await fetch("/api/stripe/connection-status", {
+        method: "POST",
         headers: {
-          Authorization: `Bearer ${token}`,
-          "x-user-id": user.uid,
+          "Content-Type": "application/json",
         },
+        body: JSON.stringify({ idToken: token }),
       })
 
       const data = await response.json()
       if (data.success) {
-        setAccountStatus(data.data)
+        setAccountStatus({
+          connected: data.isConnected,
+          accountId: data.accountId,
+          chargesEnabled: data.accountStatus?.chargesEnabled || false,
+          payoutsEnabled: data.accountStatus?.payoutsEnabled || false,
+          detailsSubmitted: data.accountStatus?.detailsSubmitted || false,
+          requirementsCount: data.accountStatus?.requirementsCount || 0,
+          currentlyDue: [],
+          pastDue: [],
+        })
       } else {
         console.error("Failed to check Stripe status:", data.error)
       }
@@ -68,20 +77,24 @@ export default function ConnectStripePage() {
       const response = await fetch("/api/stripe/connect/onboard", {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${token}`,
-          "x-user-id": user.uid,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          returnUrl: `${window.location.origin}/dashboard/connect-stripe?success=true`,
-          refreshUrl: `${window.location.origin}/dashboard/connect-stripe`,
-        }),
+        body: JSON.stringify({ idToken: token }),
       })
 
       const data = await response.json()
-      if (data.success && data.url) {
-        // Redirect to Stripe onboarding
-        window.location.href = data.url
+      if (data.onboardingComplete) {
+        toast({
+          title: "Success",
+          description: "Stripe account already connected! Redirecting to earnings...",
+        })
+        // Redirect to earnings page
+        setTimeout(() => {
+          window.location.href = "/dashboard/earnings"
+        }, 1500)
+      } else if (data.onboardingUrl) {
+        // Redirect to Stripe Connect onboarding
+        window.location.href = data.onboardingUrl
       } else {
         toast({
           title: "Error",
@@ -109,13 +122,11 @@ export default function ConnectStripePage() {
       const response = await fetch("/api/stripe/create-account-link", {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${token}`,
-          "x-user-id": user.uid,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
           accountId: accountStatus.accountId,
-          returnUrl: `${window.location.origin}/dashboard/connect-stripe?success=true`,
+          returnUrl: `${window.location.origin}/dashboard/earnings`,
           refreshUrl: `${window.location.origin}/dashboard/connect-stripe`,
         }),
       })
@@ -141,48 +152,6 @@ export default function ConnectStripePage() {
     }
   }
 
-  const syncAccountData = async () => {
-    if (!user) return
-
-    setLoading(true)
-    try {
-      const token = await user.getIdToken()
-      const response = await fetch("/api/dashboard/earnings", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "x-user-id": user.uid,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ action: "sync_stripe" }),
-      })
-
-      const data = await response.json()
-      if (data.success) {
-        toast({
-          title: "Success",
-          description: "Stripe data synchronized successfully",
-        })
-        // Refresh status
-        await checkStripeStatus()
-      } else {
-        toast({
-          title: "Error",
-          description: data.error || "Failed to sync data",
-          variant: "destructive",
-        })
-      }
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to sync data",
-        variant: "destructive",
-      })
-    } finally {
-      setLoading(false)
-    }
-  }
-
   if (checking) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
@@ -200,6 +169,15 @@ export default function ConnectStripePage() {
         <h1 className="text-3xl font-bold">Connect Stripe Account</h1>
         <p className="text-zinc-400 mt-1">Set up payments to start earning from your content</p>
       </div>
+
+      {/* Test Environment Notice */}
+      <Alert className="border-blue-600 bg-blue-600/10">
+        <AlertCircle className="h-4 w-4" />
+        <AlertDescription>
+          <strong>Test Environment:</strong> This will connect your account to Stripe's test environment. All
+          transactions will be simulated and no real money will be processed.
+        </AlertDescription>
+      </Alert>
 
       {/* Account Status Card */}
       <Card className="bg-zinc-900/60 border-zinc-800/50">
@@ -277,11 +255,6 @@ export default function ConnectStripePage() {
               <AlertCircle className="h-4 w-4" />
               <AlertDescription>
                 Your Stripe account needs additional information to enable full functionality.
-                {accountStatus.currentlyDue.length > 0 && (
-                  <div className="mt-2">
-                    <strong>Required:</strong> {accountStatus.currentlyDue.join(", ")}
-                  </div>
-                )}
               </AlertDescription>
             </Alert>
           )}
@@ -300,7 +273,7 @@ export default function ConnectStripePage() {
             ) : (
               <>
                 <CreditCard className="h-4 w-4 mr-2" />
-                Connect Stripe Account
+                Connect Stripe Account (Test Mode)
               </>
             )}
           </Button>
@@ -322,19 +295,12 @@ export default function ConnectStripePage() {
               </Button>
             )}
 
-            <Button variant="outline" onClick={syncAccountData} disabled={loading}>
-              {loading ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Syncing...
-                </>
-              ) : (
-                "Sync Data"
-              )}
-            </Button>
-
             <Button variant="outline" onClick={checkStripeStatus} disabled={loading}>
               Refresh Status
+            </Button>
+
+            <Button variant="outline" onClick={() => (window.location.href = "/dashboard/earnings")}>
+              Go to Earnings
             </Button>
           </>
         )}

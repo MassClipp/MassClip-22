@@ -16,22 +16,48 @@ export async function GET(request: NextRequest, { params }: { params: { creatorI
       )
     }
 
-    // Use a simpler query to avoid indexing issues
-    // First get all product boxes for the creator
-    const creatorQuery = await db.collection("productBoxes").where("creatorId", "==", creatorId).get()
+    // First try bundles collection (new structure)
+    let bundlesQuery = await db.collection("bundles").where("creatorId", "==", creatorId).get()
 
-    // Then filter for active ones and sort in memory
-    const productBoxes = creatorQuery.docs
-      .map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
-      }))
-      .filter((box: any) => box.active === true)
-      .sort((a: any, b: any) => {
-        const aTime = a.createdAt?.seconds || 0
-        const bTime = b.createdAt?.seconds || 0
-        return bTime - aTime
-      })
+    // If no results, try with userId field
+    if (bundlesQuery.empty) {
+      bundlesQuery = await db.collection("bundles").where("userId", "==", creatorId).get()
+    }
+
+    let productBoxes: any[] = []
+
+    if (!bundlesQuery.empty) {
+      console.log(`✅ [Creator Product Boxes API] Found ${bundlesQuery.size} bundles`)
+
+      productBoxes = bundlesQuery.docs
+        .map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        }))
+        .filter((box: any) => box.active === true) // Only show active bundles
+        .sort((a: any, b: any) => {
+          const aTime = a.createdAt?.seconds || 0
+          const bTime = b.createdAt?.seconds || 0
+          return bTime - aTime
+        })
+    } else {
+      // Fallback to productBoxes collection (legacy)
+      console.log("🔄 [Creator Product Boxes API] No bundles found, trying productBoxes collection")
+
+      const productBoxesQuery = await db.collection("productBoxes").where("creatorId", "==", creatorId).get()
+
+      productBoxes = productBoxesQuery.docs
+        .map((doc) => ({
+          id: doc.id,
+          ...doc.data(),
+        }))
+        .filter((box: any) => box.active === true)
+        .sort((a: any, b: any) => {
+          const aTime = a.createdAt?.seconds || 0
+          const bTime = b.createdAt?.seconds || 0
+          return bTime - aTime
+        })
+    }
 
     console.log(`✅ [Creator Product Boxes API] Found ${productBoxes.length} active product boxes`)
 

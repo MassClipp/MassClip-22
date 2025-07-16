@@ -1,7 +1,7 @@
 "use client"
 
 import type React from "react"
-import { useState, useRef } from "react"
+import { useState, useRef, useEffect } from "react"
 import { Play, Pause, Download, Heart } from "lucide-react"
 import { formatFileSize } from "@/lib/utils"
 
@@ -32,8 +32,67 @@ export default function EnhancedVideoCard({
 }: EnhancedVideoCardProps) {
   const [isHovered, setIsHovered] = useState(false)
   const [isFavorite, setIsFavorite] = useState(false)
-  const videoRef = useRef<HTMLVideoElement>(null)
   const [isPlaying, setIsPlaying] = useState(false)
+  const [generatedThumbnail, setGeneratedThumbnail] = useState<string | null>(null)
+  const [thumbnailError, setThumbnailError] = useState(false)
+  const videoRef = useRef<HTMLVideoElement>(null)
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+
+  // Generate thumbnail from video for Safari compatibility
+  useEffect(() => {
+    if (!fileUrl || generatedThumbnail || thumbnailUrl) return
+
+    const generateThumbnail = () => {
+      const video = document.createElement("video")
+      video.crossOrigin = "anonymous"
+      video.muted = true
+      video.playsInline = true
+      video.preload = "metadata"
+
+      video.onloadedmetadata = () => {
+        // Seek to 1 second or 10% of video duration, whichever is smaller
+        const seekTime = Math.min(1, video.duration * 0.1)
+        video.currentTime = seekTime
+      }
+
+      video.onseeked = () => {
+        try {
+          const canvas = document.createElement("canvas")
+          const ctx = canvas.getContext("2d")
+
+          if (!ctx) return
+
+          // Set canvas dimensions to match video
+          canvas.width = video.videoWidth || 320
+          canvas.height = video.videoHeight || 180
+
+          // Draw video frame to canvas
+          ctx.drawImage(video, 0, 0, canvas.width, canvas.height)
+
+          // Convert to data URL
+          const thumbnailDataUrl = canvas.toDataURL("image/jpeg", 0.8)
+          setGeneratedThumbnail(thumbnailDataUrl)
+
+          // Clean up
+          video.remove()
+        } catch (error) {
+          console.error("Error generating thumbnail:", error)
+          setThumbnailError(true)
+        }
+      }
+
+      video.onerror = () => {
+        console.error("Error loading video for thumbnail")
+        setThumbnailError(true)
+      }
+
+      video.src = fileUrl
+    }
+
+    // Small delay to ensure DOM is ready
+    const timer = setTimeout(generateThumbnail, 100)
+    return () => clearTimeout(timer)
+  }, [fileUrl, generatedThumbnail, thumbnailUrl])
 
   // Handle play/pause
   const togglePlay = (e: React.MouseEvent) => {
@@ -88,11 +147,9 @@ export default function EnhancedVideoCard({
   const aspectRatioClass =
     aspectRatio === "square" ? "aspect-square" : aspectRatio === "wide" ? "aspect-video" : "aspect-[9/16]"
 
-  // Add fallback thumbnail handling
-  const handleThumbnailError = (e: React.SyntheticEvent<HTMLVideoElement>) => {
-    console.log("🖼️ [VideoCard] Thumbnail fallback for:", title)
-    // The video element will handle this automatically by showing the first frame
-  }
+  // Get the best available thumbnail
+  const displayThumbnail =
+    thumbnailUrl || generatedThumbnail || `/placeholder.svg?height=720&width=1280&query=${encodeURIComponent(title)}`
 
   return (
     <div className={`flex-shrink-0 w-full ${className}`}>
@@ -102,30 +159,41 @@ export default function EnhancedVideoCard({
         onMouseLeave={() => setIsHovered(false)}
         onClick={onClick}
       >
-        {/* Direct Video Player */}
-        <video
-          ref={videoRef}
-          className="w-full h-full object-cover"
-          preload="metadata"
-          onClick={togglePlay}
-          onEnded={() => setIsPlaying(false)}
-          onError={handleThumbnailError}
-          poster={thumbnailUrl || `/placeholder.svg?height=720&width=1280&query=${encodeURIComponent(title)}`}
-        >
-          <source src={fileUrl} type={mimeType} />
-        </video>
+        {/* Thumbnail Image - Always visible */}
+        <div className="absolute inset-0">
+          <img
+            src={displayThumbnail || "/placeholder.svg"}
+            alt={title}
+            className="w-full h-full object-cover"
+            onError={() => setThumbnailError(true)}
+          />
+        </div>
+
+        {/* Video Player - Only visible when playing */}
+        {isPlaying && (
+          <video
+            ref={videoRef}
+            className="absolute inset-0 w-full h-full object-cover z-10"
+            preload="metadata"
+            onEnded={() => setIsPlaying(false)}
+            muted
+            playsInline
+          >
+            <source src={fileUrl} type={mimeType} />
+          </video>
+        )}
 
         {/* Border that appears on hover */}
-        <div className="absolute inset-0 border border-white/0 group-hover:border-white/40 rounded-lg transition-all duration-200"></div>
+        <div className="absolute inset-0 border border-white/0 group-hover:border-white/40 rounded-lg transition-all duration-200 z-20"></div>
 
         {/* Play/Pause Button Overlay - Only visible on hover */}
         {showControls && (
-          <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+          <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200 z-30">
             <button
               onClick={togglePlay}
-              className="w-10 h-10 rounded-full bg-black/50 flex items-center justify-center"
+              className="w-12 h-12 rounded-full bg-black/70 hover:bg-black/90 flex items-center justify-center transition-all duration-200"
             >
-              {isPlaying ? <Pause className="h-4 w-4 text-white" /> : <Play className="h-4 w-4 text-white" />}
+              {isPlaying ? <Pause className="h-5 w-5 text-white" /> : <Play className="h-5 w-5 text-white ml-0.5" />}
             </button>
           </div>
         )}
@@ -133,7 +201,7 @@ export default function EnhancedVideoCard({
         {/* Action buttons - only visible on hover */}
         {showControls && (
           <>
-            <div className="absolute bottom-2 right-2 z-20 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+            <div className="absolute bottom-2 right-2 z-40 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
               <button
                 className="bg-black/70 hover:bg-black/90 p-1.5 rounded-full transition-all duration-300"
                 onClick={handleDownload}
@@ -144,7 +212,7 @@ export default function EnhancedVideoCard({
               </button>
             </div>
 
-            <div className="absolute bottom-2 left-2 z-20 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
+            <div className="absolute bottom-2 left-2 z-40 opacity-0 group-hover:opacity-100 transition-opacity duration-200">
               <button
                 className={`bg-black/70 hover:bg-black/90 p-1.5 rounded-full transition-all duration-300 ${
                   isFavorite ? "text-red-500" : "text-white"
@@ -158,6 +226,13 @@ export default function EnhancedVideoCard({
             </div>
           </>
         )}
+
+        {/* Loading indicator while generating thumbnail */}
+        {!thumbnailUrl && !generatedThumbnail && !thumbnailError && (
+          <div className="absolute inset-0 flex items-center justify-center bg-zinc-800 z-5">
+            <div className="w-6 h-6 border-2 border-zinc-600 border-t-white rounded-full animate-spin"></div>
+          </div>
+        )}
       </div>
 
       {/* File info below video */}
@@ -165,6 +240,9 @@ export default function EnhancedVideoCard({
         <span className="text-xs text-zinc-400 truncate max-w-[70%]">{title}</span>
         {fileSize > 0 && <span className="text-xs text-zinc-400">{formatFileSize(fileSize)}</span>}
       </div>
+
+      {/* Hidden canvas for thumbnail generation */}
+      <canvas ref={canvasRef} className="hidden" />
     </div>
   )
 }

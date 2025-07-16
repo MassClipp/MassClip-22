@@ -1,12 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
 import OpenAI from "openai"
 
-// Initialize OpenAI client with timeout
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-  timeout: 120000, // 2 minute timeout
-})
-
 export async function POST(request: NextRequest) {
   console.log("🎤 [Transcribe API] Starting transcription request")
   const startTime = Date.now()
@@ -26,6 +20,12 @@ export async function POST(request: NextRequest) {
     }
 
     console.log("✅ [Transcribe API] OpenAI API key found")
+
+    // Safe to create the client now that the key is confirmed
+    const openai = new OpenAI({
+      apiKey: process.env.OPENAI_API_KEY!,
+      timeout: 120000, // 2-minute timeout
+    })
 
     // Check content length before parsing
     const contentLength = request.headers.get("content-length")

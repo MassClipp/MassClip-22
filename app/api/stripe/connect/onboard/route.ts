@@ -1,109 +1,133 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { auth, db } from "@/lib/firebase/firebaseAdmin"
-import Stripe from "stripe"
+import { auth, db } from "@/lib/firebase-admin"
+import { stripe, isTestMode } from "@/lib/stripe"
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: "2023-10-16",
-})
+interface OnboardBody {
+  idToken: string
+  accountId?: string
+}
 
 export async function POST(request: NextRequest) {
   try {
-    const { idToken } = await request.json()
+    const { idToken, accountId } = (await request.json()) as OnboardBody
 
     if (!idToken) {
-      return NextResponse.json({ error: "ID token is required" }, { status: 400 })
-    }
-
-    // Verify the Firebase ID token
-    const decodedToken = await auth.verifyIdToken(idToken)
-    const uid = decodedToken.uid
-
-    // Get user data
-    const userDoc = await db.collection("users").doc(uid).get()
-    if (!userDoc.exists) {
-      return NextResponse.json({ error: "User not found" }, { status: 404 })
-    }
-
-    const userData = userDoc.data()!
-    let stripeAccountId = userData.stripeAccountId
-
-    // Create Stripe Connect account if it doesn't exist
-    if (!stripeAccountId) {
-      const account = await stripe.accounts.create({
-        type: "express",
-        country: "US", // You might want to make this configurable
-        email: userData.email,
-        metadata: {
-          firebaseUid: uid,
-          username: userData.username || "",
-        },
-        capabilities: {
-          card_payments: { requested: true },
-          transfers: { requested: true },
-        },
-        business_type: "individual", // or "company" based on your needs
-      })
-
-      stripeAccountId = account.id
-
-      // Update user document with Stripe account ID
-      await db.collection("users").doc(uid).update({
-        stripeAccountId: stripeAccountId,
-        stripeAccountCreated: new Date(),
-      })
-    }
-
-    // Check if account is already fully onboarded
-    const account = await stripe.accounts.retrieve(stripeAccountId)
-
-    if (account.details_submitted && account.charges_enabled) {
-      // Update user status
-      await db
-        .collection("users")
-        .doc(uid)
-        .update({
-          stripeOnboardingComplete: true,
-          stripeOnboarded: true,
-          chargesEnabled: account.charges_enabled,
-          payoutsEnabled: account.payouts_enabled,
-          stripeCanReceivePayments: account.charges_enabled && account.payouts_enabled,
-          stripeStatusLastChecked: new Date(),
-        })
-
-      return NextResponse.json({
-        onboardingComplete: true,
-        accountId: stripeAccountId,
-        message: "Account is already fully set up",
-      })
-    }
-
-    // Create onboarding link
-    const accountLink = await stripe.accountLinks.create({
-      account: stripeAccountId,
-      refresh_url: `${process.env.NEXT_PUBLIC_SITE_URL}/dashboard/stripe/refresh`,
-      return_url: `${process.env.NEXT_PUBLIC_SITE_URL}/dashboard/stripe/success`,
-      type: "account_onboarding",
-    })
-
-    return NextResponse.json({
-      onboardingComplete: false,
-      onboardingUrl: accountLink.url,
-      accountId: stripeAccountId,
-    })
-  } catch (error) {
-    console.error("Error creating Stripe Connect onboarding:", error)
-
-    if (error instanceof Stripe.errors.StripeError) {
       return NextResponse.json(
         {
-          error: "Stripe error",
-          details: error.message,
-          code: error.code,
+          success: false,
+          error: "Authentication token is required",
         },
         { status: 400 },
       )
     }
 
-    return NextResponse.json({ error: "Failed to create onboarding session" }, { status: 500 })
+    // Verify Firebase ID token
+    let decodedToken
+    try {
+      decodedToken = await auth.verifyIdToken(idToken)
+      console.log(`✅ [Onboard] Token verified for user: ${decodedToken.uid}`)
+    } catch (tokenError) {
+      console.error("❌ [Onboard] Token verification failed:", tokenError)
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Invalid or expired authentication token",
+        },
+        { status: 401 },
+      )
+    }
+
+    const userId = decodedToken.uid
+    let targetAccountId = accountId
+
+    // If no account ID provided, check if user has one stored
+    if (!targetAccountId) {
+      const userDoc = await db.collection("users").doc(userId).get()
+      if (userDoc.exists) {
+        const userData = userDoc.data()!
+        const accountIdField = isTestMode ? "stripeTestAccountId" : "stripeAccountId"
+        targetAccountId = userData[accountIdField]
+      }
+    }
+
+    // Create new account if none exists
+    if (!targetAccountId) {
+      console.log(`🆕 [Onboard] Creating new Stripe account for user ${userId}`)
+
+      try {
+        const account = await stripe.accounts.create({
+          type: "express",
+          country: "US", // Default to US, can be changed during onboarding
+          email: decodedToken.email,
+          capabilities: {
+            card_payments: { requested: true },
+            transfers: { requested: true },
+          },
+        })
+
+        targetAccountId = account.id
+        console.log(`✅ [Onboard] Created new account: ${targetAccountId}`)
+
+        // Save the new account ID
+        const accountIdField = isTestMode ? "stripeTestAccountId" : "stripeAccountId"
+        await db
+          .collection("users")
+          .doc(userId)
+          .update({
+            [accountIdField]: targetAccountId,
+            updatedAt: new Date().toISOString(),
+          })
+      } catch (createError: any) {
+        console.error("❌ [Onboard] Failed to create account:", createError)
+        return NextResponse.json(
+          {
+            success: false,
+            error: "Failed to create Stripe account",
+            details: createError.message,
+          },
+          { status: 500 },
+        )
+      }
+    }
+
+    // Create account link for onboarding
+    try {
+      const accountLink = await stripe.accountLinks.create({
+        account: targetAccountId,
+        refresh_url: `${process.env.NEXT_PUBLIC_SITE_URL}/temp-stripe-connect?refresh=true&account=${targetAccountId}`,
+        return_url: `${process.env.NEXT_PUBLIC_SITE_URL}/temp-stripe-connect?success=true&account=${targetAccountId}`,
+        type: "account_onboarding",
+      })
+
+      console.log(`✅ [Onboard] Account link created for ${targetAccountId}`)
+
+      return NextResponse.json({
+        success: true,
+        accountId: targetAccountId,
+        onboardingUrl: accountLink.url,
+        mode: isTestMode ? "test" : "live",
+        message: "Onboarding link created successfully",
+      })
+    } catch (linkError: any) {
+      console.error("❌ [Onboard] Failed to create account link:", linkError)
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Failed to create onboarding link",
+          details: linkError.message,
+        },
+        { status: 500 },
+      )
+    }
+  } catch (error: any) {
+    console.error("❌ [Onboard] Unexpected error:", error)
+    return NextResponse.json(
+      {
+        success: false,
+        error: "Failed to start onboarding process",
+        details: error.message,
+      },
+      { status: 500 },
+    )
   }
 }

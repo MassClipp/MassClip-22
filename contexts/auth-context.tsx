@@ -1,31 +1,57 @@
 "use client"
 
 import type React from "react"
-import { createContext, useContext } from "react"
-import { useFirebaseAuth } from "@/hooks/use-firebase-auth"
+import { createContext, useContext, useEffect, useState } from "react"
+import { type User, onAuthStateChanged, signOut as firebaseSignOut } from "firebase/auth"
+import { auth } from "@/lib/firebase"
 
 interface AuthContextType {
-  user: any | null // Replace 'any' with a more specific type if possible
-  signInWithGoogle: () => Promise<void>
-  signOut: () => Promise<void>
+  user: User | null
   loading: boolean
+  signOut: () => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const auth = useFirebaseAuth()
+  const [user, setUser] = useState<User | null>(null)
+  const [loading, setLoading] = useState(true)
 
-  return <AuthContext.Provider value={auth}>{children}</AuthContext.Provider>
+  useEffect(() => {
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      setUser(user)
+      setLoading(false)
+    })
+
+    return () => unsubscribe()
+  }, [])
+
+  const signOut = async () => {
+    try {
+      await firebaseSignOut(auth)
+      setUser(null)
+    } catch (error) {
+      console.error("Error signing out:", error)
+      throw error
+    }
+  }
+
+  const value = {
+    user,
+    loading,
+    signOut,
+  }
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }
 
 export function useAuth() {
   const context = useContext(AuthContext)
-  if (!context) {
+  if (context === undefined) {
     throw new Error("useAuth must be used within an AuthProvider")
   }
   return context
 }
 
-// Add this export at the end of the file
+// Named export for compatibility
 export const useAuthContext = useAuth

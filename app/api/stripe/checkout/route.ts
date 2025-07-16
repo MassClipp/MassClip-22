@@ -89,7 +89,7 @@ export async function POST(request: NextRequest) {
       })
     }
 
-    // Create a Checkout session
+    // Create a Checkout session - UPDATED SUCCESS URL
     const session = await stripe.checkout.sessions.create({
       payment_method_types: ["card"],
       line_items: [
@@ -99,7 +99,7 @@ export async function POST(request: NextRequest) {
         },
       ],
       mode: "payment",
-      success_url: `${process.env.NEXT_PUBLIC_SITE_URL}/purchase/success?session_id={CHECKOUT_SESSION_ID}&video_id=${videoId}`,
+      success_url: `${process.env.NEXT_PUBLIC_SITE_URL}/payment-success?session_id={CHECKOUT_SESSION_ID}&video_id=${videoId}`,
       cancel_url: `${process.env.NEXT_PUBLIC_SITE_URL}/creator/${videoData.username}`,
       payment_intent_data: {
         application_fee_amount: applicationFee, // 25% platform fee

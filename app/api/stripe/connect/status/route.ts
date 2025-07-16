@@ -1,156 +1,169 @@
 import { type NextRequest, NextResponse } from "next/server"
-import Stripe from "stripe"
-import { auth, db } from "@/lib/firebase/firebaseAdmin"
+import { auth, db } from "@/lib/firebase-admin"
+import { stripe, isTestMode, isLiveMode } from "@/lib/stripe"
 
-export const runtime = "nodejs"
+interface StatusBody {
+  idToken: string
+}
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: "2023-10-16",
-})
-
-export async function GET(request: NextRequest) {
+export async function POST(request: NextRequest) {
   try {
-    // Get the session cookie
-    const sessionCookie = request.cookies.get("session")?.value
+    const { idToken } = (await request.json()) as StatusBody
 
-    if (!sessionCookie) {
-      return NextResponse.json({ error: "Not authenticated" }, { status: 401 })
+    if (!idToken) {
+      return NextResponse.json({
+        success: true,
+        isConnected: false,
+        accountId: null,
+        mode: isLiveMode ? "live" : "test",
+        environment: process.env.NODE_ENV,
+        message: "User not authenticated",
+      })
     }
 
-    // Verify the session cookie
-    const decodedClaims = await auth.verifySessionCookie(sessionCookie)
-    const uid = decodedClaims.uid
+    // Verify Firebase ID token
+    let decodedToken
+    try {
+      decodedToken = await auth.verifyIdToken(idToken)
+      console.log(`✅ [Status] Token verified for user: ${decodedToken.uid}`)
+    } catch (tokenError) {
+      console.error("❌ [Status] Token verification failed:", tokenError)
+      return NextResponse.json({
+        success: true,
+        isConnected: false,
+        accountId: null,
+        mode: isLiveMode ? "live" : "test",
+        environment: process.env.NODE_ENV,
+        message: "Invalid authentication token",
+      })
+    }
 
-    // Get the user's Stripe account ID from Firestore
-    const userDoc = await db.collection("users").doc(uid).get()
+    const userId = decodedToken.uid
+
+    // Get user document from Firestore
+    const userDoc = await db.collection("users").doc(userId).get()
 
     if (!userDoc.exists) {
-      return NextResponse.json({ error: "User not found" }, { status: 404 })
-    }
-
-    const userData = userDoc.data()
-    const stripeAccountId = userData?.stripeAccountId
-
-    if (!stripeAccountId) {
+      console.log(`❌ [Status] User profile not found for ${userId}`)
       return NextResponse.json({
-        isOnboarded: false,
-        canReceivePayments: false,
+        success: true,
+        isConnected: false,
         accountId: null,
-        isConnected: false,
-        detailedStatus: "no_account",
-        message: "No Stripe account connected. Please connect your Stripe account first.",
-        capabilities: {
-          chargesEnabled: false,
-          payoutsEnabled: false,
-          detailsSubmitted: false,
-        },
-        requirementsSummary: {
-          currently_due: [],
-          eventually_due: [],
-          past_due: [],
-          pending_verification: [],
-        },
+        mode: isLiveMode ? "live" : "test",
+        environment: process.env.NODE_ENV,
+        message: "User profile not found",
       })
     }
 
-    // Retrieve the Stripe account with detailed information
-    const account = await stripe.accounts.retrieve(stripeAccountId)
+    const userData = userDoc.data()!
 
-    // Detailed status analysis
-    const chargesEnabled = account.charges_enabled || false
-    const payoutsEnabled = account.payouts_enabled || false
-    const detailsSubmitted = account.details_submitted || false
-    const isOnboarded = detailsSubmitted && chargesEnabled
-    const canReceivePayments = chargesEnabled && payoutsEnabled
+    // In production/live mode, use live account fields
+    // In development/test mode, use test account fields
+    const accountIdField = isLiveMode ? "stripeAccountId" : "stripeTestAccountId"
+    const connectedField = isLiveMode ? "stripeConnected" : "stripeTestConnected"
+    const connectedAccountId = userData[accountIdField]
+    const isConnectedFlag = userData[connectedField]
 
-    // Analyze requirements
-    const currentlyDue = account.requirements?.currently_due || []
-    const eventuallyDue = account.requirements?.eventually_due || []
-    const pastDue = account.requirements?.past_due || []
-    const pendingVerification = account.requirements?.pending_verification || []
-
-    // Determine detailed status and message
-    let detailedStatus = "unknown"
-    let message = "Account status unclear"
-
-    if (!detailsSubmitted) {
-      detailedStatus = "onboarding_incomplete"
-      message = "Stripe onboarding process not completed. Please complete the setup process."
-    } else if (pastDue.length > 0) {
-      detailedStatus = "past_due_requirements"
-      message = `Urgent: ${pastDue.length} requirement(s) are past due and must be resolved immediately.`
-    } else if (currentlyDue.length > 0) {
-      detailedStatus = "current_requirements"
-      message = `${currentlyDue.length} requirement(s) need to be completed to enable payments.`
-    } else if (pendingVerification.length > 0) {
-      detailedStatus = "pending_verification"
-      message = `${pendingVerification.length} item(s) are pending verification by Stripe.`
-    } else if (!chargesEnabled) {
-      detailedStatus = "charges_disabled"
-      message = "Charges are disabled on this account. Contact Stripe support."
-    } else if (!payoutsEnabled) {
-      detailedStatus = "payouts_disabled"
-      message = "Payouts are disabled. You can accept payments but cannot receive payouts yet."
-    } else if (eventuallyDue.length > 0) {
-      detailedStatus = "eventually_due_only"
-      message = `Account is active and accepting payments. ${eventuallyDue.length} requirement(s) will be needed for higher volume processing.`
-    } else if (canReceivePayments) {
-      detailedStatus = "fully_enabled"
-      message = "Account is fully set up and can receive payments."
-    }
-
-    // Update user document with latest status
-    await db
-      .collection("users")
-      .doc(uid)
-      .update({
-        stripeAccountId: stripeAccountId,
-        chargesEnabled,
-        payoutsEnabled,
-        stripeOnboardingComplete: isOnboarded,
-        stripeCanReceivePayments: canReceivePayments,
-        stripeStatusLastChecked: new Date(),
-        stripeRequirements: {
-          currently_due: currentlyDue,
-          eventually_due: eventuallyDue,
-          past_due: pastDue,
-          pending_verification: pendingVerification,
-        },
-        stripeDetailedStatus: detailedStatus,
-        isConnected: true,
-      })
-
-    return NextResponse.json({
-      isOnboarded,
-      canReceivePayments,
-      accountId: stripeAccountId,
-      isConnected: true,
-      requirements: account.requirements,
-      detailedStatus,
-      message,
-      capabilities: {
-        chargesEnabled,
-        payoutsEnabled,
-        detailsSubmitted,
-      },
-      requirementsSummary: {
-        currently_due: currentlyDue,
-        eventually_due: eventuallyDue,
-        past_due: pastDue,
-        pending_verification: pendingVerification,
-      },
+    console.log(`🔍 [Status] Checking connection for user ${userId}:`, {
+      mode: isLiveMode ? "live" : "test",
+      environment: process.env.NODE_ENV,
+      accountIdField,
+      connectedField,
+      accountId: connectedAccountId,
+      isConnected: isConnectedFlag,
     })
-  } catch (error) {
-    console.error("Error checking Stripe status:", error)
-    return NextResponse.json(
-      {
-        error: "Failed to check Stripe status",
-        details: error instanceof Error ? error.message : "Unknown error",
-        detailedStatus: "error",
-        message: "Unable to check account status. Please try again later.",
+
+    if (!connectedAccountId) {
+      return NextResponse.json({
+        success: true,
         isConnected: false,
-      },
-      { status: 500 },
-    )
+        accountId: null,
+        mode: isLiveMode ? "live" : "test",
+        environment: process.env.NODE_ENV,
+        message: `No ${isLiveMode ? "live" : "test"} Stripe account connected`,
+        debug: {
+          userId,
+          checkedField: accountIdField,
+          availableFields: Object.keys(userData),
+        },
+      })
+    }
+
+    // Verify the account still exists and is accessible in Stripe
+    try {
+      const account = await stripe.accounts.retrieve(connectedAccountId)
+      console.log(`✅ [Status] Connected account verified: ${account.id}`)
+
+      // Verify account mode matches our environment
+      const accountIsLive = account.livemode
+      if (isLiveMode && !accountIsLive) {
+        console.warn(`⚠️ [Status] Environment mismatch: Using live keys but account is in test mode`)
+      }
+      if (isTestMode && accountIsLive) {
+        console.warn(`⚠️ [Status] Environment mismatch: Using test keys but account is in live mode`)
+      }
+
+      return NextResponse.json({
+        success: true,
+        isConnected: true,
+        accountId: account.id,
+        mode: isLiveMode ? "live" : "test",
+        environment: process.env.NODE_ENV,
+        accountStatus: {
+          chargesEnabled: account.charges_enabled,
+          payoutsEnabled: account.payouts_enabled,
+          detailsSubmitted: account.details_submitted,
+          country: account.country,
+          email: account.email,
+          type: account.type,
+          livemode: account.livemode,
+        },
+        message: `${isLiveMode ? "Live" : "Test"} Stripe account connected and operational`,
+        debug: {
+          userId,
+          checkedField: accountIdField,
+          foundAccountId: connectedAccountId,
+          stripeVerified: true,
+          environmentMatch: (isLiveMode && accountIsLive) || (isTestMode && !accountIsLive),
+        },
+      })
+    } catch (stripeError: any) {
+      console.error("❌ [Status] Failed to verify connected account:", stripeError)
+      return NextResponse.json({
+        success: true,
+        isConnected: false,
+        accountId: connectedAccountId,
+        mode: isLiveMode ? "live" : "test",
+        environment: process.env.NODE_ENV,
+        message: "Connected account is no longer accessible",
+        error: stripeError.message,
+        debug: {
+          userId,
+          storedAccountId: connectedAccountId,
+          stripeError: stripeError.code,
+        },
+      })
+    }
+  } catch (error: any) {
+    console.error("❌ [Status] Unexpected error:", error)
+    return NextResponse.json({
+      success: false,
+      isConnected: false,
+      accountId: null,
+      mode: isLiveMode ? "live" : "test",
+      environment: process.env.NODE_ENV,
+      message: "Failed to check connection status",
+      error: error.message,
+    })
   }
+}
+
+// Add GET method for status checking without authentication
+export async function GET(request: NextRequest) {
+  return NextResponse.json({
+    mode: isLiveMode ? "live" : "test",
+    environment: process.env.NODE_ENV,
+    stripeConfigured: !!process.env.STRIPE_SECRET_KEY_LIVE || !!process.env.STRIPE_SECRET_KEY,
+    message: `Stripe is configured in ${isLiveMode ? "LIVE" : "TEST"} mode`,
+  })
 }
