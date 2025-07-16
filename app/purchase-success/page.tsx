@@ -27,11 +27,19 @@ interface PurchaseDetails {
     amount: number
     currency: string
     status: string
+    customer_email?: string
+    payment_intent?: string
   }
   purchase: {
     productBoxId: string
     userId: string
     connectedAccountId?: string
+    purchaseId?: string
+  }
+  productBox?: {
+    title?: string
+    description?: string
+    creatorId?: string
   }
 }
 
@@ -41,76 +49,38 @@ export default function PurchaseSuccessPage() {
   const searchParams = useSearchParams()
   const sessionId = searchParams.get("session_id")
   const productBoxId = searchParams.get("product_box_id")
-  const creatorId = searchParams.get("creator_id")
 
   const [loading, setLoading] = useState(true)
   const [purchaseDetails, setPurchaseDetails] = useState<PurchaseDetails | null>(null)
   const [error, setError] = useState("")
 
   useEffect(() => {
-    if (sessionId) {
-      verifyPurchase()
-    } else if (productBoxId) {
-      // Handle case where we have product_box_id but no session_id
-      // This might happen with direct purchases or other payment methods
-      handleDirectPurchaseVerification()
+    if (sessionId && productBoxId) {
+      verifyStripeSession()
     } else {
-      setError("No purchase information provided")
+      setError("Missing session ID or product box ID in URL")
       setLoading(false)
     }
   }, [sessionId, productBoxId, user])
 
-  const handleDirectPurchaseVerification = async () => {
+  const verifyStripeSession = async () => {
+    if (!sessionId || !productBoxId) return
+
     setLoading(true)
+    setError("")
+
     try {
       const token = user ? await user.getIdToken(true) : null
 
-      // Try to verify purchase using product box ID and user ID
-      const response = await fetch("/api/purchase/verify-recent-purchase", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          productBoxId,
-          creatorId,
-          idToken: token,
-        }),
-      })
-
-      const data = await response.json()
-
-      if (data.success) {
-        setPurchaseDetails(data)
-        toast({
-          title: "Purchase Verified!",
-          description: "Your purchase has been successfully processed and access granted.",
-        })
-      } else {
-        setError(data.error || "Unable to verify purchase")
-      }
-    } catch (error: any) {
-      console.error("Purchase verification error:", error)
-      setError("Failed to verify purchase")
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const verifyPurchase = async () => {
-    if (!sessionId) return
-
-    setLoading(true)
-    try {
-      const token = user ? await user.getIdToken(true) : null
-
-      const response = await fetch("/api/purchase/verify-session", {
+      // Call our API to verify the Stripe session and process the purchase
+      const response = await fetch("/api/purchase/verify-and-complete", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
           sessionId,
+          productBoxId,
           idToken: token,
         }),
       })
@@ -128,7 +98,7 @@ export default function PurchaseSuccessPage() {
       }
     } catch (error: any) {
       console.error("Purchase verification error:", error)
-      setError("Failed to verify purchase")
+      setError("Failed to verify purchase with Stripe")
     } finally {
       setLoading(false)
     }
@@ -157,7 +127,8 @@ export default function PurchaseSuccessPage() {
         <Card className="w-full max-w-md bg-white/5 backdrop-blur-sm border-white/10 shadow-2xl">
           <CardContent className="flex flex-col items-center justify-center p-8">
             <Loader2 className="h-12 w-12 animate-spin text-white/60 mb-4" />
-            <p className="text-white/80 text-center">Verifying your purchase...</p>
+            <p className="text-white/80 text-center">Verifying your purchase with Stripe...</p>
+            <p className="text-white/50 text-sm text-center mt-2">This may take a few moments</p>
           </CardContent>
         </Card>
       </div>
@@ -182,23 +153,22 @@ export default function PurchaseSuccessPage() {
               </AlertDescription>
             </Alert>
 
-            {(sessionId || productBoxId) && (
+            {sessionId && (
               <div className="p-3 bg-white/5 rounded-lg">
-                <div className="text-xs text-white/60 mb-1">{sessionId ? "Session ID" : "Product Box ID"}</div>
+                <div className="text-xs text-white/60 mb-1">Session ID</div>
                 <div className="font-mono text-sm text-white/80 flex items-center justify-between">
-                  {sessionId || productBoxId}
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => {
-                      navigator.clipboard.writeText(sessionId || productBoxId || "")
-                      toast({ title: "Copied", description: "ID copied to clipboard" })
-                    }}
-                    className="text-white/60 hover:text-white"
-                  >
+                  {sessionId}
+                  <Button variant="ghost" size="sm" onClick={copySessionId} className="text-white/60 hover:text-white">
                     <Copy className="h-4 w-4" />
                   </Button>
                 </div>
+              </div>
+            )}
+
+            {productBoxId && (
+              <div className="p-3 bg-white/5 rounded-lg">
+                <div className="text-xs text-white/60 mb-1">Product Box ID</div>
+                <div className="font-mono text-sm text-white/80">{productBoxId}</div>
               </div>
             )}
 
@@ -210,10 +180,7 @@ export default function PurchaseSuccessPage() {
               >
                 Go to Dashboard
               </Button>
-              <Button
-                onClick={sessionId ? verifyPurchase : handleDirectPurchaseVerification}
-                className="flex-1 bg-white text-black hover:bg-white/90"
-              >
+              <Button onClick={verifyStripeSession} className="flex-1 bg-white text-black hover:bg-white/90">
                 Retry Verification
               </Button>
             </div>
@@ -285,15 +252,23 @@ export default function PurchaseSuccessPage() {
                     {purchaseDetails.session.status}
                   </Badge>
                 </div>
+
+                {purchaseDetails.session.customer_email && (
+                  <div>
+                    <div className="text-xs text-white/50 mb-1">Customer Email</div>
+                    <div className="text-sm text-white/80">{purchaseDetails.session.customer_email}</div>
+                  </div>
+                )}
               </div>
 
               <div className="space-y-4">
                 <div>
-                  <div className="text-xs text-white/50 mb-1">Product Box ID</div>
-                  <div className="font-mono text-sm flex items-center gap-2 text-white/80">
+                  <div className="text-xs text-white/50 mb-1">Product</div>
+                  <div className="flex items-center gap-2 text-white/80">
                     <Package className="h-4 w-4" />
-                    {purchaseDetails.purchase.productBoxId}
+                    <span>{purchaseDetails.productBox?.title || "Product Box"}</span>
                   </div>
+                  <div className="text-xs text-white/50 mt-1">ID: {purchaseDetails.purchase.productBoxId}</div>
                 </div>
 
                 {purchaseDetails.purchase.userId && (
@@ -305,18 +280,33 @@ export default function PurchaseSuccessPage() {
                     </div>
                   </div>
                 )}
+
+                {purchaseDetails.purchase.purchaseId && (
+                  <div>
+                    <div className="text-xs text-white/50 mb-1">Purchase ID</div>
+                    <div className="font-mono text-xs text-white/60">{purchaseDetails.purchase.purchaseId}</div>
+                  </div>
+                )}
               </div>
             </div>
 
             {/* Session ID */}
-            {sessionId && (
+            <div className="border-t border-white/10 pt-4">
+              <div className="text-xs text-white/50 mb-2">Stripe Session ID</div>
+              <div className="font-mono text-sm bg-white/5 p-3 rounded-lg flex items-center justify-between">
+                <span className="text-white/80">{purchaseDetails.session.id}</span>
+                <Button variant="ghost" size="sm" onClick={copySessionId} className="text-white/60 hover:text-white">
+                  <Copy className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+
+            {/* Payment Intent */}
+            {purchaseDetails.session.payment_intent && (
               <div className="border-t border-white/10 pt-4">
-                <div className="text-xs text-white/50 mb-2">Session ID</div>
-                <div className="font-mono text-sm bg-white/5 p-3 rounded-lg flex items-center justify-between">
-                  <span className="text-white/80">{purchaseDetails.session.id}</span>
-                  <Button variant="ghost" size="sm" onClick={copySessionId} className="text-white/60 hover:text-white">
-                    <Copy className="h-4 w-4" />
-                  </Button>
+                <div className="text-xs text-white/50 mb-2">Payment Intent ID</div>
+                <div className="font-mono text-xs bg-white/5 p-3 rounded-lg text-white/60">
+                  {purchaseDetails.session.payment_intent}
                 </div>
               </div>
             )}
