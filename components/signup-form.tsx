@@ -12,7 +12,7 @@ import { useAuth } from "@/contexts/auth-context"
 import { Loader2 } from "lucide-react"
 import Link from "next/link"
 
-export default function SignupForm() {
+function SignupForm() {
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [confirmPassword, setConfirmPassword] = useState("")
@@ -377,3 +377,6 @@ export default function SignupForm() {
     </div>
   )
 }
+
+export { SignupForm }
+export default SignupForm
