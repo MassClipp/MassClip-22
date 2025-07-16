@@ -3,258 +3,138 @@
 import { useEffect, useState } from "react"
 import { useAuth } from "@/contexts/auth-context"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Loader2, CheckCircle, AlertCircle, ExternalLink, RefreshCw, XCircle, Clock, AlertTriangle } from "lucide-react"
-import StripeConnectButton from "./stripe-connect-button"
+import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
+import { CheckCircle, XCircle, Loader2, AlertTriangle, CreditCard, ExternalLink } from "lucide-react"
 
-interface StripeStatusProps {
-  className?: string
-}
-
-interface StripeAccountStatus {
-  isOnboarded: boolean
-  canReceivePayments: boolean
+interface StripeConnectionStatus {
+  isConnected: boolean
   accountId?: string
-  detailedStatus: string
-  message: string
-  mode?: "live" | "test"
-  environment?: string
-  capabilities?: {
-    chargesEnabled: boolean
-    payoutsEnabled: boolean
-    detailsSubmitted: boolean
-  }
-  requirementsSummary?: {
+  chargesEnabled: boolean
+  payoutsEnabled: boolean
+  requiresAction: boolean
+  requirements?: {
     currently_due: string[]
     eventually_due: string[]
     past_due: string[]
-    pending_verification: string[]
   }
-  accountStatus?: {
-    livemode?: boolean
+  capabilities?: {
+    card_payments: string
+    transfers: string
   }
-  isConnected?: boolean
+  loading: boolean
+  error?: string
 }
 
-export default function StripeStatus({ className }: StripeStatusProps) {
+export default function StripeStatus() {
   const { user } = useAuth()
-  const [status, setStatus] = useState<StripeAccountStatus | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
-  const [isRefreshing, setIsRefreshing] = useState(false)
-
-  /* ------------------------------------------------------------------ */
-  /* Helpers                                                            */
-  /* ------------------------------------------------------------------ */
-
-  const getStatusIcon = (detailedStatus: string, requirements?: StripeAccountStatus["requirementsSummary"]) => {
-    // Edge-case: only eventually_due requirements
-    if (
-      requirements &&
-      requirements.eventually_due.length > 0 &&
-      requirements.currently_due.length === 0 &&
-      requirements.past_due.length === 0
-    ) {
-      return <CheckCircle className="h-5 w-5 text-green-500" />
-    }
-
-    switch (detailedStatus) {
-      case "fully_enabled":
-        return <CheckCircle className="h-5 w-5 text-green-500" />
-      case "no_account":
-      case "onboarding_incomplete":
-        return <AlertCircle className="h-5 w-5 text-amber-500" />
-      case "past_due_requirements":
-      case "charges_disabled":
-        return <XCircle className="h-5 w-5 text-red-500" />
-      case "current_requirements":
-      case "payouts_disabled":
-        return <AlertTriangle className="h-5 w-5 text-orange-500" />
-      case "pending_verification":
-        return <Clock className="h-5 w-5 text-blue-500" />
-      default:
-        return <AlertCircle className="h-5 w-5 text-gray-500" />
-    }
-  }
-
-  const getStatusColor = (detailedStatus: string, requirements?: StripeAccountStatus["requirementsSummary"]) => {
-    // Edge-case: only eventually_due requirements
-    if (
-      requirements &&
-      requirements.eventually_due.length > 0 &&
-      requirements.currently_due.length === 0 &&
-      requirements.past_due.length === 0
-    ) {
-      return "bg-green-500/10 text-green-500 border-green-500/20"
-    }
-
-    switch (detailedStatus) {
-      case "fully_enabled":
-        return "bg-green-500/10 text-green-500 border-green-500/20"
-      case "no_account":
-      case "onboarding_incomplete":
-        return "bg-amber-500/10 text-amber-500 border-amber-500/20"
-      case "past_due_requirements":
-      case "charges_disabled":
-        return "bg-red-500/10 text-red-500 border-red-500/20"
-      case "current_requirements":
-      case "payouts_disabled":
-        return "bg-orange-500/10 text-orange-500 border-orange-500/20"
-      case "pending_verification":
-        return "bg-blue-500/10 text-blue-500 border-blue-500/20"
-      default:
-        return "bg-gray-500/10 text-gray-500 border-gray-500/20"
-    }
-  }
-
-  const getActionButton = () => {
-    if (!status) return null
-
-    switch (status.detailedStatus) {
-      case "no_account":
-        return <StripeConnectButton className="w-full" />
-
-      case "onboarding_incomplete":
-      case "past_due_requirements":
-      case "current_requirements":
-      case "charges_disabled":
-      case "payouts_disabled":
-        return (
-          <Button onClick={createAccountLink} className="w-full bg-blue-600 hover:bg-blue-700">
-            <ExternalLink className="mr-2 h-4 w-4" />
-            Complete Stripe Setup
-          </Button>
-        )
-
-      case "pending_verification":
-        return (
-          <Button variant="outline" className="w-full bg-transparent" disabled>
-            <Clock className="mr-2 h-4 w-4" />
-            Waiting for Verification
-          </Button>
-        )
-
-      case "fully_enabled":
-        return (
-          <Button variant="outline" onClick={openStripeDashboard} className="w-full bg-transparent">
-            <ExternalLink className="mr-2 h-4 w-4" />
-            View Stripe Dashboard
-          </Button>
-        )
-
-      default:
-        return (
-          <Button onClick={refreshStatus} variant="outline" className="w-full bg-transparent">
-            <RefreshCw className="mr-2 h-4 w-4" />
-            Check Status
-          </Button>
-        )
-    }
-  }
-
-  /* ------------------------------------------------------------------ */
-  /* Network requests                                                   */
-  /* ------------------------------------------------------------------ */
-
-  const checkStripeStatus = async () => {
-    if (!user) return
-    try {
-      setIsLoading(true)
-      const idToken = await user.getIdToken()
-
-      const res = await fetch("/api/stripe/connect/status", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ idToken }),
-      })
-      if (!res.ok) throw new Error("Request failed")
-
-      const data: StripeAccountStatus = await res.json()
-      data.isConnected = Boolean(data.accountId)
-      setStatus(data)
-    } catch (err) {
-      console.error(err)
-      setStatus({
-        isOnboarded: false,
-        canReceivePayments: false,
-        detailedStatus: "error",
-        message: "Failed to check account status",
-        mode: "test",
-        environment: "development",
-      })
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
-  const refreshStatus = async () => {
-    if (!user) return
-    setIsRefreshing(true)
-    await checkStripeStatus()
-    setIsRefreshing(false)
-  }
-
-  const createAccountLink = async () => {
-    if (!user || !status?.accountId) return
-    try {
-      const token = await user.getIdToken()
-      const res = await fetch("/api/stripe/create-account-link", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          accountId: status.accountId,
-          returnUrl: `${window.location.origin}/dashboard/stripe/success`,
-          refreshUrl: `${window.location.origin}/dashboard/connect-stripe`,
-        }),
-      })
-      const data = await res.json()
-      if (data.success && data.url) window.location.href = data.url
-    } catch (err) {
-      console.error("Error creating account link:", err)
-    }
-  }
-
-  const openStripeDashboard = () => {
-    if (!status?.accountId) return
-    const expressUrl = `https://dashboard.stripe.com/connect/accounts/${status.accountId}`
-    window.open(expressUrl, "_blank")
-  }
-
-  /* ------------------------------------------------------------------ */
-  /* Effects                                                             */
-  /* ------------------------------------------------------------------ */
+  const [status, setStatus] = useState<StripeConnectionStatus>({
+    isConnected: false,
+    chargesEnabled: false,
+    payoutsEnabled: false,
+    requiresAction: false,
+    loading: true,
+  })
 
   useEffect(() => {
-    if (user) checkStripeStatus()
+    if (user) {
+      checkStripeStatus()
+    }
   }, [user])
 
-  /* ------------------------------------------------------------------ */
-  /* Render                                                              */
-  /* ------------------------------------------------------------------ */
+  const checkStripeStatus = async () => {
+    try {
+      setStatus((prev) => ({ ...prev, loading: true, error: undefined }))
 
-  if (isLoading) {
+      const token = await user?.getIdToken()
+      const response = await fetch("/api/stripe/connect/status", {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
+
+      if (!response.ok) {
+        throw new Error("Failed to fetch Stripe status")
+      }
+
+      const data = await response.json()
+      setStatus({
+        isConnected: data.isConnected || false,
+        accountId: data.accountId,
+        chargesEnabled: data.chargesEnabled || false,
+        payoutsEnabled: data.payoutsEnabled || false,
+        requiresAction: data.requiresAction || false,
+        requirements: data.requirements,
+        capabilities: data.capabilities,
+        loading: false,
+      })
+    } catch (error: any) {
+      console.error("Error checking Stripe status:", error)
+      setStatus((prev) => ({
+        ...prev,
+        loading: false,
+        error: error.message || "Failed to check Stripe status",
+      }))
+    }
+  }
+
+  const handleConnectStripe = async () => {
+    try {
+      const token = await user?.getIdToken()
+      const response = await fetch("/api/stripe/connect/onboard", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      })
+
+      if (!response.ok) {
+        throw new Error("Failed to create onboarding link")
+      }
+
+      const data = await response.json()
+      if (data.url) {
+        window.location.href = data.url
+      }
+    } catch (error: any) {
+      console.error("Error connecting Stripe:", error)
+      setStatus((prev) => ({
+        ...prev,
+        error: error.message || "Failed to connect Stripe",
+      }))
+    }
+  }
+
+  if (status.loading) {
     return (
-      <Card className={className}>
-        <CardContent className="flex items-center justify-center pt-6">
-          <Loader2 className="mr-2 h-5 w-5 animate-spin text-muted-foreground" />
-          <span className="text-muted-foreground">Checking payment setup…</span>
+      <Card className="bg-zinc-900/60 border-zinc-800/50">
+        <CardContent className="flex items-center justify-center p-6">
+          <div className="flex items-center gap-2">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            <span className="text-sm text-zinc-400">Checking Stripe status...</span>
+          </div>
         </CardContent>
       </Card>
     )
   }
 
-  if (!status) {
+  if (status.error) {
     return (
-      <Card className={className}>
-        <CardContent className="pt-6 text-center">
-          <AlertCircle className="mx-auto mb-2 h-8 w-8 text-red-500" />
-          <p className="text-sm text-muted-foreground">Failed to check payment status</p>
-          <Button onClick={refreshStatus} variant="outline" size="sm" className="mt-2 bg-transparent">
-            <RefreshCw className="mr-2 h-4 w-4" />
+      <Card className="bg-zinc-900/60 border-red-800/50">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-red-400">
+            <XCircle className="h-5 w-5" />
+            Stripe Status Error
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Alert className="border-red-600 bg-red-600/10">
+            <XCircle className="h-4 w-4" />
+            <AlertDescription>{status.error}</AlertDescription>
+          </Alert>
+          <Button onClick={checkStripeStatus} className="mt-4 bg-transparent" variant="outline">
             Retry
           </Button>
         </CardContent>
@@ -262,113 +142,90 @@ export default function StripeStatus({ className }: StripeStatusProps) {
     )
   }
 
-  /* ---------- Environment mismatch warning ---------- */
-  const isProduction = status.environment === "production"
-  const accountIsLive = status.accountStatus?.livemode
-  const environmentMismatch = (isProduction && !accountIsLive) || (!isProduction && accountIsLive)
-
-  return (
-    <div className={`space-y-4 ${className ?? ""}`}>
-      <Card>
+  if (!status.isConnected) {
+    return (
+      <Card className="bg-zinc-900/60 border-zinc-800/50">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            {getStatusIcon(status.detailedStatus, status.requirementsSummary)}
-            Payment Setup
-            <Badge variant="outline" className="ml-auto">
-              {status.mode?.toUpperCase()} • {status.environment}
-            </Badge>
+            <CreditCard className="h-5 w-5" />
+            Connect Stripe Account
           </CardTitle>
-          <CardDescription>Stripe Connect integration for receiving payments</CardDescription>
+          <CardDescription>Connect your Stripe account to start receiving payments for your content.</CardDescription>
         </CardHeader>
-
-        <CardContent className="space-y-4">
-          {/* Environment Mismatch Warning */}
-          {environmentMismatch && (
-            <Alert className="border-yellow-500/20 bg-yellow-500/10 text-yellow-500">
-              <AlertTriangle className="h-4 w-4" />
-              <AlertDescription>
-                <p className="font-medium">Environment Mismatch Detected</p>
-                <p className="text-sm">
-                  App is running in {isProduction ? "PRODUCTION" : "DEVELOPMENT"} but your Stripe account is in{" "}
-                  {accountIsLive ? "LIVE" : "TEST"} mode.
-                </p>
-              </AlertDescription>
-            </Alert>
-          )}
-
-          {/* Status Alert */}
-          <Alert className={getStatusColor(status.detailedStatus, status.requirementsSummary)}>
-            <AlertDescription className="flex items-center gap-2">
-              {getStatusIcon(status.detailedStatus, status.requirementsSummary)}
-              {status.message}
-            </AlertDescription>
-          </Alert>
-
-          {/* Account ID */}
-          {status.accountId && (
-            <div className="rounded bg-muted p-2 font-mono text-xs text-muted-foreground">
-              Account ID: {status.accountId}
-            </div>
-          )}
-
-          {/* Capabilities */}
-          {status.capabilities && (
-            <div className="space-y-2">
-              <h4 className="text-sm font-medium">Account Capabilities</h4>
-              <div className="grid grid-cols-2 gap-2 text-sm">
-                <div className="flex items-center justify-between">
-                  <span>Charges</span>
-                  <Badge variant={status.capabilities.chargesEnabled ? "default" : "secondary"}>
-                    {status.capabilities.chargesEnabled ? "Enabled" : "Disabled"}
-                  </Badge>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span>Payouts</span>
-                  <Badge variant={status.capabilities.payoutsEnabled ? "default" : "secondary"}>
-                    {status.capabilities.payoutsEnabled ? "Enabled" : "Disabled"}
-                  </Badge>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Requirements Summary */}
-          {status.requirementsSummary && (
-            <div className="space-y-2">
-              <h4 className="text-sm font-medium">Requirements Status</h4>
-              <div className="space-y-1 text-sm">
-                {status.requirementsSummary.past_due.length > 0 && (
-                  <div className="flex items-center gap-2 text-red-500">
-                    <XCircle className="h-4 w-4" />
-                    <span>{status.requirementsSummary.past_due.length} past due</span>
-                  </div>
-                )}
-                {status.requirementsSummary.currently_due.length > 0 && (
-                  <div className="flex items-center gap-2 text-orange-500">
-                    <AlertTriangle className="h-4 w-4" />
-                    <span>{status.requirementsSummary.currently_due.length} currently due</span>
-                  </div>
-                )}
-                {status.requirementsSummary.pending_verification.length > 0 && (
-                  <div className="flex items-center gap-2 text-blue-500">
-                    <Clock className="h-4 w-4" />
-                    <span>{status.requirementsSummary.pending_verification.length} pending verification</span>
-                  </div>
-                )}
-                {status.requirementsSummary.eventually_due.length > 0 && (
-                  <div className="flex items-center gap-2 text-green-500">
-                    <CheckCircle className="h-4 w-4" />
-                    <span>{status.requirementsSummary.eventually_due.length} eventually due</span>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* Action Button */}
-          {getActionButton()}
+        <CardContent>
+          <Button onClick={handleConnectStripe} className="w-full">
+            <ExternalLink className="h-4 w-4 mr-2" />
+            Connect Stripe
+          </Button>
         </CardContent>
       </Card>
-    </div>
+    )
+  }
+
+  return (
+    <Card className="bg-zinc-900/60 border-zinc-800/50">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <CheckCircle className="h-5 w-5 text-green-400" />
+          Stripe Account Connected
+        </CardTitle>
+        <CardDescription>Your Stripe account is connected and ready to receive payments.</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="grid grid-cols-2 gap-4">
+          <div className="space-y-2">
+            <div className="text-sm text-zinc-400">Charges</div>
+            <Badge variant={status.chargesEnabled ? "default" : "destructive"}>
+              {status.chargesEnabled ? "Enabled" : "Disabled"}
+            </Badge>
+          </div>
+          <div className="space-y-2">
+            <div className="text-sm text-zinc-400">Payouts</div>
+            <Badge variant={status.payoutsEnabled ? "default" : "destructive"}>
+              {status.payoutsEnabled ? "Enabled" : "Disabled"}
+            </Badge>
+          </div>
+        </div>
+
+        {status.accountId && (
+          <div className="space-y-2">
+            <div className="text-sm text-zinc-400">Account ID</div>
+            <div className="font-mono text-sm bg-zinc-800/50 p-2 rounded">{status.accountId}</div>
+          </div>
+        )}
+
+        {status.requiresAction && status.requirements && (
+          <Alert className="border-yellow-600 bg-yellow-600/10">
+            <AlertTriangle className="h-4 w-4" />
+            <AlertDescription>
+              <div className="space-y-2">
+                <div className="font-medium">Action Required</div>
+                {status.requirements.currently_due.length > 0 && (
+                  <div>
+                    <div className="text-sm font-medium">Currently Due:</div>
+                    <ul className="text-sm list-disc list-inside">
+                      {status.requirements.currently_due.map((req, index) => (
+                        <li key={index}>{req.replace(/_/g, " ")}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            </AlertDescription>
+          </Alert>
+        )}
+
+        <div className="flex gap-2">
+          <Button onClick={checkStripeStatus} variant="outline" size="sm">
+            Refresh Status
+          </Button>
+          {status.requiresAction && (
+            <Button onClick={handleConnectStripe} size="sm">
+              Complete Setup
+            </Button>
+          )}
+        </div>
+      </CardContent>
+    </Card>
   )
 }
