@@ -44,114 +44,17 @@ export default function StripeStatus({ className }: StripeStatusProps) {
   const [isLoading, setIsLoading] = useState(true)
   const [isRefreshing, setIsRefreshing] = useState(false)
 
-  // Fetch Stripe status on component mount
-  useEffect(() => {
-    if (user) {
-      checkStripeStatus()
-    }
-  }, [user])
+  /* ------------------------------------------------------------------ */
+  /* Helpers                                                            */
+  /* ------------------------------------------------------------------ */
 
-  // Check Stripe Connect status
-  const checkStripeStatus = async () => {
-    if (!user) return
-
-    try {
-      setIsLoading(true)
-
-      const idToken = await user.getIdToken()
-      const response = await fetch("/api/stripe/connect/status", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ idToken }),
-      })
-
-      if (!response.ok) {
-        throw new Error("Failed to check Stripe Connect status")
-      }
-
-      const data = await response.json()
-      // Ensure isConnected is set properly
-      data.isConnected = data.accountId ? true : false
-      setStatus(data)
-    } catch (error) {
-      console.error("Error checking Stripe status:", error)
-      setStatus({
-        isOnboarded: false,
-        canReceivePayments: false,
-        detailedStatus: "error",
-        message: "Failed to check account status",
-        mode: "test",
-        environment: "development",
-      })
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
-  // Refresh Stripe status
-  const refreshStatus = async () => {
-    if (!user) return
-
-    try {
-      setIsRefreshing(true)
-      await checkStripeStatus()
-    } finally {
-      setIsRefreshing(false)
-    }
-  }
-
-  // Create account link for onboarding
-  const createAccountLink = async () => {
-    if (!user || !status?.accountId) return
-
-    try {
-      const token = await user.getIdToken()
-      const response = await fetch("/api/stripe/create-account-link", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          accountId: status.accountId,
-          returnUrl: `${window.location.origin}/dashboard/stripe/success`,
-          refreshUrl: `${window.location.origin}/dashboard/connect-stripe`,
-        }),
-      })
-
-      const data = await response.json()
-      if (data.success && data.url) {
-        window.location.href = data.url
-      } else {
-        console.error("Failed to create account link:", data.error)
-      }
-    } catch (error) {
-      console.error("Error creating account link:", error)
-    }
-  }
-
-  // Open Stripe Express Dashboard
-  const openStripeDashboard = () => {
-    if (!status?.accountId) return
-
-    // For Stripe Connect Express accounts, use the login link
-    const dashboardUrl = `https://connect.stripe.com/express/oauth/authorize?redirect_uri=${encodeURIComponent(window.location.origin)}&client_id=ca_32D88BD1qLklliziD7gYQvctJIhWBSQ7&state=${status.accountId}&stripe_user[email]=${encodeURIComponent(user?.email || "")}&stripe_user[business_type]=individual`
-
-    // Alternative: Use Stripe's Express Dashboard direct link
-    const expressUrl = `https://dashboard.stripe.com/connect/accounts/${status.accountId}`
-
-    window.open(expressUrl, "_blank")
-  }
-
-  const getStatusIcon = (detailedStatus: string, requirementsSummary?: any) => {
-    // If only eventually_due requirements and no current/past due, show as active
+  const getStatusIcon = (detailedStatus: string, requirements?: StripeAccountStatus["requirementsSummary"]) => {
+    // Edge-case: only eventually_due requirements
     if (
-      requirementsSummary &&
-      requirementsSummary.eventually_due.length > 0 &&
-      requirementsSummary.currently_due.length === 0 &&
-      requirementsSummary.past_due.length === 0
+      requirements &&
+      requirements.eventually_due.length > 0 &&
+      requirements.currently_due.length === 0 &&
+      requirements.past_due.length === 0
     ) {
       return <CheckCircle className="h-5 w-5 text-green-500" />
     }
@@ -175,13 +78,13 @@ export default function StripeStatus({ className }: StripeStatusProps) {
     }
   }
 
-  const getStatusColor = (detailedStatus: string, requirementsSummary?: any) => {
-    // If only eventually_due requirements, show as success
+  const getStatusColor = (detailedStatus: string, requirements?: StripeAccountStatus["requirementsSummary"]) => {
+    // Edge-case: only eventually_due requirements
     if (
-      requirementsSummary &&
-      requirementsSummary.eventually_due.length > 0 &&
-      requirementsSummary.currently_due.length === 0 &&
-      requirementsSummary.past_due.length === 0
+      requirements &&
+      requirements.eventually_due.length > 0 &&
+      requirements.currently_due.length === 0 &&
+      requirements.past_due.length === 0
     ) {
       return "bg-green-500/10 text-green-500 border-green-500/20"
     }
@@ -219,7 +122,7 @@ export default function StripeStatus({ className }: StripeStatusProps) {
       case "payouts_disabled":
         return (
           <Button onClick={createAccountLink} className="w-full bg-blue-600 hover:bg-blue-700">
-            <ExternalLink className="h-4 w-4 mr-2" />
+            <ExternalLink className="mr-2 h-4 w-4" />
             Complete Stripe Setup
           </Button>
         )
@@ -227,7 +130,7 @@ export default function StripeStatus({ className }: StripeStatusProps) {
       case "pending_verification":
         return (
           <Button variant="outline" className="w-full bg-transparent" disabled>
-            <Clock className="h-4 w-4 mr-2" />
+            <Clock className="mr-2 h-4 w-4" />
             Waiting for Verification
           </Button>
         )
@@ -235,7 +138,7 @@ export default function StripeStatus({ className }: StripeStatusProps) {
       case "fully_enabled":
         return (
           <Button variant="outline" onClick={openStripeDashboard} className="w-full bg-transparent">
-            <ExternalLink className="h-4 w-4 mr-2" />
+            <ExternalLink className="mr-2 h-4 w-4" />
             View Stripe Dashboard
           </Button>
         )
@@ -243,25 +146,102 @@ export default function StripeStatus({ className }: StripeStatusProps) {
       default:
         return (
           <Button onClick={refreshStatus} variant="outline" className="w-full bg-transparent">
-            <RefreshCw className="h-4 w-4 mr-2" />
+            <RefreshCw className="mr-2 h-4 w-4" />
             Check Status
           </Button>
         )
     }
   }
 
-  // Check for environment mismatch
-  const isProduction = status?.environment === "production"
-  const accountIsLive = status?.accountStatus?.livemode
-  const environmentMismatch = status && ((isProduction && !accountIsLive) || (!isProduction && accountIsLive))
+  /* ------------------------------------------------------------------ */
+  /* Network requests                                                   */
+  /* ------------------------------------------------------------------ */
 
-  // If loading, show loading state
+  const checkStripeStatus = async () => {
+    if (!user) return
+    try {
+      setIsLoading(true)
+      const idToken = await user.getIdToken()
+
+      const res = await fetch("/api/stripe/connect/status", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ idToken }),
+      })
+      if (!res.ok) throw new Error("Request failed")
+
+      const data: StripeAccountStatus = await res.json()
+      data.isConnected = Boolean(data.accountId)
+      setStatus(data)
+    } catch (err) {
+      console.error(err)
+      setStatus({
+        isOnboarded: false,
+        canReceivePayments: false,
+        detailedStatus: "error",
+        message: "Failed to check account status",
+        mode: "test",
+        environment: "development",
+      })
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const refreshStatus = async () => {
+    if (!user) return
+    setIsRefreshing(true)
+    await checkStripeStatus()
+    setIsRefreshing(false)
+  }
+
+  const createAccountLink = async () => {
+    if (!user || !status?.accountId) return
+    try {
+      const token = await user.getIdToken()
+      const res = await fetch("/api/stripe/create-account-link", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          accountId: status.accountId,
+          returnUrl: `${window.location.origin}/dashboard/stripe/success`,
+          refreshUrl: `${window.location.origin}/dashboard/connect-stripe`,
+        }),
+      })
+      const data = await res.json()
+      if (data.success && data.url) window.location.href = data.url
+    } catch (err) {
+      console.error("Error creating account link:", err)
+    }
+  }
+
+  const openStripeDashboard = () => {
+    if (!status?.accountId) return
+    const expressUrl = `https://dashboard.stripe.com/connect/accounts/${status.accountId}`
+    window.open(expressUrl, "_blank")
+  }
+
+  /* ------------------------------------------------------------------ */
+  /* Effects                                                             */
+  /* ------------------------------------------------------------------ */
+
+  useEffect(() => {
+    if (user) checkStripeStatus()
+  }, [user])
+
+  /* ------------------------------------------------------------------ */
+  /* Render                                                              */
+  /* ------------------------------------------------------------------ */
+
   if (isLoading) {
     return (
       <Card className={className}>
-        <CardContent className="pt-6 flex items-center justify-center">
-          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground mr-2" />
-          <span className="text-muted-foreground">Checking payment setup...</span>
+        <CardContent className="flex items-center justify-center pt-6">
+          <Loader2 className="mr-2 h-5 w-5 animate-spin text-muted-foreground" />
+          <span className="text-muted-foreground">Checking payment setup…</span>
         </CardContent>
       </Card>
     )
@@ -271,10 +251,10 @@ export default function StripeStatus({ className }: StripeStatusProps) {
     return (
       <Card className={className}>
         <CardContent className="pt-6 text-center">
-          <AlertCircle className="h-8 w-8 text-red-500 mx-auto mb-2" />
+          <AlertCircle className="mx-auto mb-2 h-8 w-8 text-red-500" />
           <p className="text-sm text-muted-foreground">Failed to check payment status</p>
           <Button onClick={refreshStatus} variant="outline" size="sm" className="mt-2 bg-transparent">
-            <RefreshCw className="h-4 w-4 mr-2" />
+            <RefreshCw className="mr-2 h-4 w-4" />
             Retry
           </Button>
         </CardContent>
@@ -282,10 +262,14 @@ export default function StripeStatus({ className }: StripeStatusProps) {
     )
   }
 
+  /* ---------- Environment mismatch warning ---------- */
+  const isProduction = status.environment === "production"
+  const accountIsLive = status.accountStatus?.livemode
+  const environmentMismatch = (isProduction && !accountIsLive) || (!isProduction && accountIsLive)
+
   return (
-    <div className="space-y-4">
-      {/* Main Stripe Status Card */}
-      <Card className={className}>
+    <div className={`space-y-4 ${className ?? ""}`}>
+      <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             {getStatusIcon(status.detailedStatus, status.requirementsSummary)}
@@ -296,22 +280,18 @@ export default function StripeStatus({ className }: StripeStatusProps) {
           </CardTitle>
           <CardDescription>Stripe Connect integration for receiving payments</CardDescription>
         </CardHeader>
+
         <CardContent className="space-y-4">
           {/* Environment Mismatch Warning */}
           {environmentMismatch && (
-            <Alert className="bg-yellow-500/10 text-yellow-500 border-yellow-500/20">
+            <Alert className="border-yellow-500/20 bg-yellow-500/10 text-yellow-500">
               <AlertTriangle className="h-4 w-4" />
               <AlertDescription>
-                <div className="font-medium mb-1">Environment Mismatch Detected</div>
-                <div className="text-sm">
-                  Your app is running in {isProduction ? "PRODUCTION" : "DEVELOPMENT"} mode but your Stripe account is in {accountIsLive ? "LIVE" : "TEST"} mode.
-                </div>
-                <div className="text-sm mt-1">
-                  {isProduction 
-                    ? "Please connect a live Stripe account for production use."
-                    : "Please use a test Stripe account for development."
-                  }
-                </div>
+                <p className="font-medium">Environment Mismatch Detected</p>
+                <p className="text-sm">
+                  App is running in {isProduction ? "PRODUCTION" : "DEVELOPMENT"} but your Stripe account is in{" "}
+                  {accountIsLive ? "LIVE" : "TEST"} mode.
+                </p>
               </AlertDescription>
             </Alert>
           )}
@@ -324,14 +304,14 @@ export default function StripeStatus({ className }: StripeStatusProps) {
             </AlertDescription>
           </Alert>
 
-          {/* Account ID Display */}
+          {/* Account ID */}
           {status.accountId && (
-            <div className="text-xs font-mono text-muted-foreground bg-muted p-2 rounded">
+            <div className="rounded bg-muted p-2 font-mono text-xs text-muted-foreground">
               Account ID: {status.accountId}
             </div>
           )}
 
-          {/* Capabilities Overview */}
+          {/* Capabilities */}
           {status.capabilities && (
             <div className="space-y-2">
               <h4 className="text-sm font-medium">Account Capabilities</h4>
@@ -371,4 +351,24 @@ export default function StripeStatus({ className }: StripeStatusProps) {
                 )}
                 {status.requirementsSummary.pending_verification.length > 0 && (
                   <div className="flex items-center gap-2 text-blue-500">
-                \
+                    <Clock className="h-4 w-4" />
+                    <span>{status.requirementsSummary.pending_verification.length} pending verification</span>
+                  </div>
+                )}
+                {status.requirementsSummary.eventually_due.length > 0 && (
+                  <div className="flex items-center gap-2 text-green-500">
+                    <CheckCircle className="h-4 w-4" />
+                    <span>{status.requirementsSummary.eventually_due.length} eventually due</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Action Button */}
+          {getActionButton()}
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
