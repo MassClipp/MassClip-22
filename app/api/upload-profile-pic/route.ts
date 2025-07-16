@@ -1,190 +1,202 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { S3Client, PutObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3"
-import { db } from "@/lib/firebase-admin"
-import { getAuth } from "firebase-admin/auth"
+import { initializeFirebaseAdmin, db } from "@/lib/firebase-admin"
+import { syncUserAndCreatorProfiles } from "@/lib/profile-sync"
 
-const s3Client = new S3Client({
+// Initialize Firebase Admin
+initializeFirebaseAdmin()
+
+// Configure R2 client
+const r2Client = new S3Client({
   region: "auto",
-  endpoint: process.env.CLOUDFLARE_R2_ENDPOINT,
+  endpoint: process.env.CLOUDFLARE_R2_ENDPOINT || process.env.R2_ENDPOINT,
   credentials: {
-    accessKeyId: process.env.CLOUDFLARE_R2_ACCESS_KEY_ID!,
-    secretAccessKey: process.env.CLOUDFLARE_R2_SECRET_ACCESS_KEY!,
+    accessKeyId: process.env.CLOUDFLARE_R2_ACCESS_KEY_ID || process.env.R2_ACCESS_KEY_ID || "",
+    secretAccessKey: process.env.CLOUDFLARE_R2_SECRET_ACCESS_KEY || process.env.R2_SECRET_ACCESS_KEY || "",
   },
 })
 
-async function verifyAuthToken(request: NextRequest) {
-  try {
-    const authorization = request.headers.get("authorization")
-
-    if (!authorization?.startsWith("Bearer ")) {
-      console.log("❌ [Auth] No Bearer token found")
-      return null
-    }
-
-    const token = authorization.split("Bearer ")[1]
-    if (!token) {
-      console.log("❌ [Auth] Empty token")
-      return null
-    }
-
-    const decodedToken = await getAuth().verifyIdToken(token)
-    console.log("✅ [Auth] Token verified for user:", decodedToken.uid)
-    return decodedToken
-  } catch (error) {
-    console.error("❌ [Auth] Token verification failed:", error)
-    return null
-  }
-}
+const BUCKET_NAME = process.env.CLOUDFLARE_R2_BUCKET_NAME || process.env.R2_BUCKET_NAME || ""
+const PUBLIC_URL = process.env.CLOUDFLARE_R2_PUBLIC_URL || process.env.R2_PUBLIC_URL || ""
 
 export async function POST(request: NextRequest) {
   try {
-    console.log("🔄 Starting profile picture upload...")
+    console.log("🔍 [Upload Profile Pic] Starting upload process")
 
     // Verify authentication
-    const user = await verifyAuthToken(request)
-    if (!user) {
-      console.log("❌ Unauthorized request")
+    const authHeader = request.headers.get("authorization")
+    if (!authHeader?.startsWith("Bearer ")) {
+      console.log("❌ [Upload Profile Pic] No valid authorization header")
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
+    const token = authHeader.split("Bearer ")[1]
+    if (!token) {
+      console.log("❌ [Upload Profile Pic] No token provided")
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
+
+    // Verify Firebase token
+    let decodedToken
+    try {
+      const { getAuth } = await import("firebase-admin/auth")
+      decodedToken = await getAuth().verifyIdToken(token)
+      console.log("✅ [Upload Profile Pic] Token verified for user:", decodedToken.uid)
+    } catch (error) {
+      console.error("❌ [Upload Profile Pic] Token verification failed:", error)
+      return NextResponse.json({ error: "Invalid token" }, { status: 401 })
+    }
+
+    const uid = decodedToken.uid
+
+    // Parse form data
     const formData = await request.formData()
     const file = formData.get("file") as File
-    const userId = formData.get("userId") as string
 
-    if (!file || !userId) {
-      console.error("Missing file or userId in request")
-      return NextResponse.json({ error: "Missing file or userId" }, { status: 400 })
+    if (!file) {
+      console.log("❌ [Upload Profile Pic] No file provided")
+      return NextResponse.json({ error: "No file provided" }, { status: 400 })
     }
 
-    // Verify the user is updating their own profile
-    if (user.uid !== userId) {
-      console.error("User trying to update different user's profile")
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 })
-    }
+    console.log(`🔍 [Upload Profile Pic] Processing file: ${file.name}, size: ${file.size}`)
 
-    console.log(`📸 Uploading file: ${file.name}, size: ${file.size}, type: ${file.type}`)
+    // Validate file type
+    const allowedTypes = ["image/jpeg", "image/jpg", "image/png", "image/webp"]
+    if (!allowedTypes.includes(file.type)) {
+      console.log(`❌ [Upload Profile Pic] Invalid file type: ${file.type}`)
+      return NextResponse.json({ error: "Invalid file type. Only JPEG, PNG, and WebP are allowed." }, { status: 400 })
+    }
 
     // Validate file size (5MB limit)
-    if (file.size > 5 * 1024 * 1024) {
-      console.error("File too large:", file.size)
+    const maxSize = 5 * 1024 * 1024 // 5MB
+    if (file.size > maxSize) {
+      console.log(`❌ [Upload Profile Pic] File too large: ${file.size} bytes`)
       return NextResponse.json({ error: "File too large. Maximum size is 5MB." }, { status: 400 })
     }
 
-    // Validate file type
-    if (!file.type.startsWith("image/")) {
-      console.error("Invalid file type:", file.type)
-      return NextResponse.json({ error: "Invalid file type. Please upload an image." }, { status: 400 })
-    }
-
-    // Get current profile picture to delete old one
-    let oldProfilePicKey: string | null = null
+    // Get current user data to check for existing profile picture
+    let currentProfilePic = null
     try {
-      const userDoc = await db.collection("users").doc(userId).get()
+      const userDoc = await db.collection("users").doc(uid).get()
       if (userDoc.exists) {
         const userData = userDoc.data()
-        const oldProfilePic = userData?.profilePic
-
-        if (
-          oldProfilePic &&
-          typeof oldProfilePic === "string" &&
-          oldProfilePic.includes(process.env.CLOUDFLARE_R2_PUBLIC_URL!)
-        ) {
-          // Extract the key from the old URL
-          const urlParts = oldProfilePic.split("/")
-          const keyIndex = urlParts.findIndex((part) => part === "profile_pics")
-          if (keyIndex !== -1 && keyIndex + 1 < urlParts.length) {
-            oldProfilePicKey = `profile_pics/${urlParts[keyIndex + 1].split("?")[0]}` // Remove query params
-            console.log("🗑️ Found old profile pic to delete:", oldProfilePicKey)
-          }
-        }
+        currentProfilePic = userData?.profilePic
+        console.log(`🔍 [Upload Profile Pic] Current profile pic: ${currentProfilePic}`)
       }
     } catch (error) {
-      console.warn("Could not fetch old profile picture for deletion:", error)
+      console.warn("⚠️ [Upload Profile Pic] Could not fetch current user data:", error)
     }
 
-    // Create unique filename with timestamp for cache busting
+    // Generate unique filename
     const timestamp = Date.now()
-    const fileExtension = file.name.split(".").pop() || "jpg"
-    const fileName = `profile_pics/${userId}_${timestamp}.${fileExtension}`
+    const fileExtension = file.name.split(".").pop()
+    const fileName = `profile-pics/${uid}/${timestamp}.${fileExtension}`
 
-    console.log("📦 Converting file to buffer...")
+    console.log(`🔍 [Upload Profile Pic] Uploading to: ${fileName}`)
+
     // Convert file to buffer
-    const bytes = await file.arrayBuffer()
-    const buffer = Buffer.from(bytes)
+    const arrayBuffer = await file.arrayBuffer()
+    const buffer = Buffer.from(arrayBuffer)
 
-    console.log("☁️ Uploading to Cloudflare R2...")
-    // Upload to Cloudflare R2
+    // Upload to R2
     const uploadCommand = new PutObjectCommand({
-      Bucket: process.env.CLOUDFLARE_R2_BUCKET_NAME!,
+      Bucket: BUCKET_NAME,
       Key: fileName,
       Body: buffer,
       ContentType: file.type,
-      CacheControl: "public, max-age=31536000", // Cache for 1 year since we use unique filenames
-      Metadata: {
-        uploadedAt: new Date().toISOString(),
-        originalName: file.name,
-        userId: userId,
-      },
+      CacheControl: "public, max-age=31536000", // 1 year cache
     })
 
-    await s3Client.send(uploadCommand)
-    console.log("✅ Upload to R2 successful")
+    await r2Client.send(uploadCommand)
+    console.log("✅ [Upload Profile Pic] File uploaded to R2 successfully")
 
-    // Delete old profile picture after successful upload
-    if (oldProfilePicKey) {
-      try {
-        console.log("🗑️ Deleting old profile picture:", oldProfilePicKey)
-        const deleteCommand = new DeleteObjectCommand({
-          Bucket: process.env.CLOUDFLARE_R2_BUCKET_NAME!,
-          Key: oldProfilePicKey,
-        })
-        await s3Client.send(deleteCommand)
-        console.log("✅ Successfully deleted old profile picture")
-      } catch (deleteError) {
-        console.warn("⚠️ Failed to delete old profile picture:", deleteError)
-        // Don't fail the upload if deletion fails
-      }
-    }
+    // Construct public URL
+    const profilePicUrl = `${PUBLIC_URL}/${fileName}`
+    console.log(`🔍 [Upload Profile Pic] Public URL: ${profilePicUrl}`)
 
-    // Construct the public URL with cache busting
-    const publicUrl = `${process.env.CLOUDFLARE_R2_PUBLIC_URL}/${fileName}?v=${timestamp}`
-
-    // Update the user's profile in Firestore with the new profile picture URL
+    // Update user profile in Firestore
     try {
-      await db.collection("users").doc(userId).update({
-        profilePic: publicUrl,
-        updatedAt: new Date(),
-      })
-      console.log("✅ Updated user profile with new picture URL")
+      const userRef = db.collection("users").doc(uid)
+      const userDoc = await userRef.get()
+
+      if (userDoc.exists) {
+        // Update existing document
+        await userRef.update({
+          profilePic: profilePicUrl,
+          updatedAt: new Date(),
+        })
+        console.log("✅ [Upload Profile Pic] Updated existing user document")
+      } else {
+        // Create new document (shouldn't happen, but just in case)
+        await userRef.set({
+          uid: uid,
+          profilePic: profilePicUrl,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        })
+        console.log("✅ [Upload Profile Pic] Created new user document")
+      }
+
+      // Get updated user data for sync
+      const updatedUserDoc = await userRef.get()
+      const userData = updatedUserDoc.data()
+
+      // Sync with creator profile if username exists
+      if (userData?.username) {
+        console.log(`🔄 [Upload Profile Pic] Syncing creator profile for username: ${userData.username}`)
+        const syncResult = await syncUserAndCreatorProfiles(uid, userData.username)
+
+        if (syncResult.success) {
+          console.log("✅ [Upload Profile Pic] Creator profile synced successfully")
+        } else {
+          console.warn("⚠️ [Upload Profile Pic] Creator profile sync failed:", syncResult.error)
+        }
+      } else {
+        console.log("ℹ️ [Upload Profile Pic] No username found, skipping creator profile sync")
+      }
     } catch (firestoreError) {
-      console.error("❌ Failed to update Firestore with new profile pic URL:", firestoreError)
-      // Don't fail the upload if Firestore update fails
+      console.error("❌ [Upload Profile Pic] Firestore update failed:", firestoreError)
+
+      // Clean up uploaded file if Firestore update fails
+      try {
+        const deleteCommand = new DeleteObjectCommand({
+          Bucket: BUCKET_NAME,
+          Key: fileName,
+        })
+        await r2Client.send(deleteCommand)
+        console.log("🧹 [Upload Profile Pic] Cleaned up uploaded file after Firestore error")
+      } catch (cleanupError) {
+        console.error("❌ [Upload Profile Pic] Failed to clean up file:", cleanupError)
+      }
+
+      return NextResponse.json({ error: "Failed to update profile. Please try again." }, { status: 500 })
     }
 
-    console.log("🎉 Upload successful, URL:", publicUrl)
-    return NextResponse.json({ url: publicUrl })
+    // Clean up old profile picture if it exists and is different
+    if (currentProfilePic && currentProfilePic !== profilePicUrl && currentProfilePic.includes(PUBLIC_URL)) {
+      try {
+        const oldFileName = currentProfilePic.replace(`${PUBLIC_URL}/`, "")
+        const deleteCommand = new DeleteObjectCommand({
+          Bucket: BUCKET_NAME,
+          Key: oldFileName,
+        })
+        await r2Client.send(deleteCommand)
+        console.log("🧹 [Upload Profile Pic] Cleaned up old profile picture")
+      } catch (cleanupError) {
+        console.warn("⚠️ [Upload Profile Pic] Failed to clean up old profile picture:", cleanupError)
+        // Don't fail the request if cleanup fails
+      }
+    }
+
+    console.log("✅ [Upload Profile Pic] Upload process completed successfully")
+
+    return NextResponse.json({
+      success: true,
+      profilePicUrl: profilePicUrl,
+      message: "Profile picture updated successfully",
+    })
   } catch (error) {
-    console.error("❌ Error uploading profile picture:", error)
-
-    // Provide more specific error messages
-    if (error instanceof Error) {
-      if (error.message.includes("AccessDenied")) {
-        return NextResponse.json({ error: "Access denied. Please check R2 credentials." }, { status: 403 })
-      }
-      if (error.message.includes("NoSuchBucket")) {
-        return NextResponse.json({ error: "Storage bucket not found." }, { status: 404 })
-      }
-      if (error.message.includes("network")) {
-        return NextResponse.json({ error: "Network error. Please check your connection." }, { status: 503 })
-      }
-    }
-
-    return NextResponse.json(
-      {
-        error: "Failed to upload profile picture. Please try again.",
-        details: error instanceof Error ? error.message : "Unknown error",
-      },
-      { status: 500 },
-    )
+    console.error("❌ [Upload Profile Pic] Unexpected error:", error)
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }
