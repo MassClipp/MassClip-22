@@ -102,7 +102,7 @@ export async function POST(request: NextRequest) {
         },
       ],
       mode: "payment",
-      success_url: `${process.env.NEXT_PUBLIC_SITE_URL}/purchase-success?session_id={CHECKOUT_SESSION_ID}&product_box_id=${productBoxId}`,
+      success_url: `${process.env.NEXT_PUBLIC_SITE_URL}/purchase-success?session_id={CHECKOUT_SESSION_ID}&product_box_id=${productBoxId}&user_id=${userId}`,
       cancel_url: `${process.env.NEXT_PUBLIC_SITE_URL}/product-box/${productBoxId}`,
       metadata: {
         productBoxId,
@@ -140,6 +140,9 @@ export async function POST(request: NextRequest) {
     }
 
     console.log(`✅ [Checkout] Session created: ${session.id} in ${isLiveMode ? "LIVE" : "TEST"} mode`)
+    console.log(
+      `🔗 [Checkout] Success URL will be: ${process.env.NEXT_PUBLIC_SITE_URL}/purchase-success?session_id=${session.id}&product_box_id=${productBoxId}&user_id=${userId}`,
+    )
 
     return NextResponse.json({
       sessionId: session.id,
