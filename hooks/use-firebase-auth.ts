@@ -225,3 +225,9 @@ export function useFirebaseAuth() {
     signOut,
   }
 }
+
+/**
+ * Alias so components can `import { useAuth } from "@/hooks/use-firebase-auth"`
+ * without breaking older imports that use `useFirebaseAuth`.
+ */
+export { useFirebaseAuth as useAuth }
