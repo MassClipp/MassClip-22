@@ -1,7 +1,6 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { useSearchParams } from "next/navigation"
 import { useAuth } from "@/contexts/auth-context"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Alert, AlertDescription } from "@/components/ui/alert"
@@ -15,9 +14,9 @@ import {
   Copy,
   CreditCard,
   Package,
-  User,
   DollarSign,
   AlertTriangle,
+  RefreshCw,
 } from "lucide-react"
 import { useToast } from "@/components/ui/use-toast"
 
@@ -27,67 +26,60 @@ interface PurchaseDetails {
     amount: number
     currency: string
     status: string
-    customer_email?: string
-    payment_intent?: string
+    customerEmail?: string
   }
   purchase: {
+    id: string
     productBoxId: string
-    userId: string | null
-    connectedAccountId?: string
-    purchaseId?: string
+    userId: string
+    amount: number
   }
-  productBox?: {
-    title?: string
+  productBox: {
+    title: string
     description?: string
-    creatorId?: string
   }
+  alreadyProcessed?: boolean
 }
 
 export default function PurchaseSuccessPage() {
   const { user } = useAuth()
   const { toast } = useToast()
-  const searchParams = useSearchParams()
-  const sessionId = searchParams.get("session_id")
-  const productBoxId = searchParams.get("product_box_id")
 
   const [loading, setLoading] = useState(true)
   const [purchaseDetails, setPurchaseDetails] = useState<PurchaseDetails | null>(null)
   const [error, setError] = useState("")
+  const [sessionId, setSessionId] = useState<string | null>(null)
 
   useEffect(() => {
-    if (sessionId && productBoxId) {
-      verifyStripeSession()
+    // Get session_id from URL
+    const urlParams = new URLSearchParams(window.location.search)
+    const sessionIdFromUrl = urlParams.get("session_id")
+
+    if (sessionIdFromUrl) {
+      setSessionId(sessionIdFromUrl)
+      verifyPurchase(sessionIdFromUrl)
     } else {
-      const missingParams = []
-      if (!sessionId) missingParams.push("session_id")
-      if (!productBoxId) missingParams.push("product_box_id")
-      setError(`Missing required parameters: ${missingParams.join(", ")}`)
+      setError("No session ID found in URL")
       setLoading(false)
     }
-  }, [sessionId, productBoxId, user])
+  }, [user])
 
-  const verifyStripeSession = async () => {
-    if (!sessionId || !productBoxId) return
-
+  const verifyPurchase = async (sessionId: string) => {
     setLoading(true)
     setError("")
 
     try {
       // Get auth token if user is logged in
-      const token = user ? await user.getIdToken(true) : null
+      const idToken = user ? await user.getIdToken(true) : null
 
-      console.log("🔍 Verifying purchase with:", { sessionId, productBoxId, hasToken: !!token })
-
-      // Call our API to verify the Stripe session and process the purchase
-      const response = await fetch("/api/purchase/verify-and-complete", {
+      const response = await fetch("/api/purchase/verify-session", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
           sessionId,
-          productBoxId,
-          idToken: token,
+          idToken,
         }),
       })
 
@@ -96,18 +88,23 @@ export default function PurchaseSuccessPage() {
       if (data.success) {
         setPurchaseDetails(data)
         toast({
-          title: "Purchase Verified!",
-          description: "Your purchase has been successfully processed and access granted.",
+          title: data.alreadyProcessed ? "Purchase Already Processed" : "Purchase Verified!",
+          description: "Your payment has been confirmed and access has been granted.",
         })
       } else {
-        console.error("Purchase verification failed:", data)
         setError(data.error || "Failed to verify purchase")
       }
     } catch (error: any) {
       console.error("Purchase verification error:", error)
-      setError("Failed to verify purchase with Stripe")
+      setError("Failed to verify purchase")
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handleRetryVerification = () => {
+    if (sessionId) {
+      verifyPurchase(sessionId)
     }
   }
 
@@ -134,8 +131,8 @@ export default function PurchaseSuccessPage() {
         <Card className="w-full max-w-md bg-white/5 backdrop-blur-sm border-white/10 shadow-2xl">
           <CardContent className="flex flex-col items-center justify-center p-8">
             <Loader2 className="h-12 w-12 animate-spin text-white/60 mb-4" />
-            <p className="text-white/80 text-center">Verifying your purchase with Stripe...</p>
-            <p className="text-white/50 text-sm text-center mt-2">This may take a few moments</p>
+            <p className="text-white/80 text-center">Verifying your purchase...</p>
+            <p className="text-white/50 text-sm text-center mt-2">Please wait while we confirm your payment</p>
           </CardContent>
         </Card>
       </div>
@@ -149,7 +146,7 @@ export default function PurchaseSuccessPage() {
           <CardHeader className="text-center">
             <CardTitle className="flex items-center justify-center gap-2 text-red-400">
               <XCircle className="h-6 w-6" />
-              Purchase Verification Failed
+              Verification Failed
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -160,31 +157,17 @@ export default function PurchaseSuccessPage() {
               </AlertDescription>
             </Alert>
 
-            <div className="space-y-3">
-              {sessionId && (
-                <div className="p-3 bg-white/5 rounded-lg">
-                  <div className="text-xs text-white/60 mb-1">Session ID</div>
-                  <div className="font-mono text-sm text-white/80 flex items-center justify-between">
-                    {sessionId}
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={copySessionId}
-                      className="text-white/60 hover:text-white"
-                    >
-                      <Copy className="h-4 w-4" />
-                    </Button>
-                  </div>
+            {sessionId && (
+              <div className="p-3 bg-white/5 rounded-lg">
+                <div className="text-xs text-white/60 mb-1">Session ID</div>
+                <div className="font-mono text-sm text-white/80 flex items-center justify-between">
+                  {sessionId}
+                  <Button variant="ghost" size="sm" onClick={copySessionId} className="text-white/60 hover:text-white">
+                    <Copy className="h-4 w-4" />
+                  </Button>
                 </div>
-              )}
-
-              {productBoxId && (
-                <div className="p-3 bg-white/5 rounded-lg">
-                  <div className="text-xs text-white/60 mb-1">Product Box ID</div>
-                  <div className="font-mono text-sm text-white/80">{productBoxId}</div>
-                </div>
-              )}
-            </div>
+              </div>
+            )}
 
             <div className="flex gap-2">
               <Button
@@ -194,7 +177,12 @@ export default function PurchaseSuccessPage() {
               >
                 Go to Dashboard
               </Button>
-              <Button onClick={verifyStripeSession} className="flex-1 bg-white text-black hover:bg-white/90">
+              <Button
+                onClick={handleRetryVerification}
+                className="flex-1 bg-white text-black hover:bg-white/90"
+                disabled={!sessionId}
+              >
+                <RefreshCw className="h-4 w-4 mr-2" />
                 Retry Verification
               </Button>
             </div>
@@ -212,12 +200,14 @@ export default function PurchaseSuccessPage() {
             <CardTitle className="text-white">No Purchase Details</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-white/60 text-center">Unable to load purchase details.</p>
+            <p className="text-white/60 text-center mb-4">Unable to load purchase details.</p>
             <Button
-              onClick={() => (window.location.href = "/dashboard")}
-              className="w-full mt-4 bg-white text-black hover:bg-white/90"
+              onClick={handleRetryVerification}
+              className="w-full bg-white text-black hover:bg-white/90"
+              disabled={!sessionId}
             >
-              Go to Dashboard
+              <RefreshCw className="h-4 w-4 mr-2" />
+              Retry Verification
             </Button>
           </CardContent>
         </Card>
@@ -233,10 +223,12 @@ export default function PurchaseSuccessPage() {
           <CardHeader className="text-center">
             <CardTitle className="flex items-center justify-center gap-3 text-green-400 text-2xl">
               <CheckCircle className="h-8 w-8" />
-              Purchase Successful!
+              {purchaseDetails.alreadyProcessed ? "Purchase Confirmed!" : "Purchase Successful!"}
             </CardTitle>
             <CardDescription className="text-white/70 text-lg">
-              Your payment has been processed and access has been granted to your content.
+              {purchaseDetails.alreadyProcessed
+                ? "Your purchase has been confirmed and access is available."
+                : "Your payment has been processed and access has been granted."}
             </CardDescription>
           </CardHeader>
         </Card>
@@ -267,10 +259,10 @@ export default function PurchaseSuccessPage() {
                   </Badge>
                 </div>
 
-                {purchaseDetails.session.customer_email && (
+                {purchaseDetails.session.customerEmail && (
                   <div>
                     <div className="text-xs text-white/50 mb-1">Customer Email</div>
-                    <div className="text-sm text-white/80">{purchaseDetails.session.customer_email}</div>
+                    <div className="text-sm text-white/80">{purchaseDetails.session.customerEmail}</div>
                   </div>
                 )}
               </div>
@@ -280,33 +272,23 @@ export default function PurchaseSuccessPage() {
                   <div className="text-xs text-white/50 mb-1">Product</div>
                   <div className="flex items-center gap-2 text-white/80">
                     <Package className="h-4 w-4" />
-                    <span>{purchaseDetails.productBox?.title || "Product Box"}</span>
+                    <span>{purchaseDetails.productBox.title}</span>
                   </div>
-                  <div className="text-xs text-white/50 mt-1">ID: {purchaseDetails.purchase.productBoxId}</div>
+                  {purchaseDetails.productBox.description && (
+                    <div className="text-xs text-white/50 mt-1">{purchaseDetails.productBox.description}</div>
+                  )}
                 </div>
 
-                {purchaseDetails.purchase.userId && (
-                  <div>
-                    <div className="text-xs text-white/50 mb-1">User ID</div>
-                    <div className="font-mono text-sm flex items-center gap-2 text-white/80">
-                      <User className="h-4 w-4" />
-                      {purchaseDetails.purchase.userId.substring(0, 12)}...
-                    </div>
-                  </div>
-                )}
-
-                {purchaseDetails.purchase.purchaseId && (
-                  <div>
-                    <div className="text-xs text-white/50 mb-1">Purchase ID</div>
-                    <div className="font-mono text-xs text-white/60">{purchaseDetails.purchase.purchaseId}</div>
-                  </div>
-                )}
+                <div>
+                  <div className="text-xs text-white/50 mb-1">Purchase ID</div>
+                  <div className="font-mono text-xs text-white/60">{purchaseDetails.purchase.id}</div>
+                </div>
               </div>
             </div>
 
             {/* Session ID */}
             <div className="border-t border-white/10 pt-4">
-              <div className="text-xs text-white/50 mb-2">Stripe Session ID</div>
+              <div className="text-xs text-white/50 mb-2">Session ID</div>
               <div className="font-mono text-sm bg-white/5 p-3 rounded-lg flex items-center justify-between">
                 <span className="text-white/80">{purchaseDetails.session.id}</span>
                 <Button variant="ghost" size="sm" onClick={copySessionId} className="text-white/60 hover:text-white">
@@ -314,27 +296,17 @@ export default function PurchaseSuccessPage() {
                 </Button>
               </div>
             </div>
-
-            {/* Payment Intent */}
-            {purchaseDetails.session.payment_intent && (
-              <div className="border-t border-white/10 pt-4">
-                <div className="text-xs text-white/50 mb-2">Payment Intent ID</div>
-                <div className="font-mono text-xs bg-white/5 p-3 rounded-lg text-white/60">
-                  {purchaseDetails.session.payment_intent}
-                </div>
-              </div>
-            )}
           </CardContent>
         </Card>
 
         {/* Next Steps */}
         <Card className="bg-white/5 backdrop-blur-sm border-white/10 shadow-2xl">
           <CardHeader>
-            <CardTitle className="text-white">What's Next?</CardTitle>
+            <CardTitle className="text-white">Access Your Content</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
             <p className="text-white/70">
-              You now have access to the purchased content. You can view it in your dashboard or access it directly.
+              You now have access to the purchased content. You can view it directly or find it in your purchases.
             </p>
 
             <div className="flex gap-3">
@@ -350,7 +322,7 @@ export default function PurchaseSuccessPage() {
                 variant="outline"
                 className="bg-white/10 border-white/20 text-white hover:bg-white/20"
               >
-                View Purchases
+                My Purchases
               </Button>
             </div>
           </CardContent>

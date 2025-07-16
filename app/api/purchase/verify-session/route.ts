@@ -1,80 +1,27 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { stripe, isLiveMode } from "@/lib/stripe"
+import { stripe } from "@/lib/stripe"
 import { auth, db } from "@/lib/firebase-admin"
-import { UnifiedPurchaseService } from "@/lib/unified-purchase-service"
+import { FieldValue } from "firebase-admin/firestore"
 
 export async function POST(request: NextRequest) {
   try {
     const { sessionId, idToken } = await request.json()
 
-    if (!sessionId || !idToken) {
-      return NextResponse.json({ error: "Session ID and ID token are required" }, { status: 400 })
-    }
-
-    // Verify Firebase ID token
-    let decodedToken
-    try {
-      decodedToken = await auth.verifyIdToken(idToken)
-      console.log(`✅ [Verify Session] Token verified for user: ${decodedToken.uid}`)
-    } catch (tokenError) {
-      console.error("❌ [Verify Session] Token verification failed:", tokenError)
-      return NextResponse.json({ error: "Invalid or expired token" }, { status: 401 })
-    }
-
-    const userId = decodedToken.uid
-
-    console.log(
-      `🔍 [Verify Session] Verifying session ${sessionId} for user ${userId} in ${isLiveMode ? "LIVE" : "TEST"} mode`,
-    )
-
-    // Check if purchase already exists
-    const existingPurchase = await UnifiedPurchaseService.getUserPurchase(userId, sessionId)
-    if (existingPurchase) {
-      console.log("✅ [Verify Session] Purchase already exists:", sessionId)
-      return NextResponse.json({
-        success: true,
-        alreadyProcessed: true,
-        purchase: existingPurchase,
-        environment: process.env.NODE_ENV,
-        stripeMode: isLiveMode ? "live" : "test",
-      })
+    if (!sessionId) {
+      return NextResponse.json({ error: "Session ID is required" }, { status: 400 })
     }
 
     // Retrieve session from Stripe
     let session
     try {
       session = await stripe.checkout.sessions.retrieve(sessionId, {
-        expand: ["payment_intent", "customer"],
+        expand: ["payment_intent"],
       })
-      console.log(`✅ [Verify Session] Session retrieved from Stripe:`, {
-        id: session.id,
-        status: session.payment_status,
-        amount: session.amount_total,
-        mode: session.livemode ? "live" : "test",
-      })
-    } catch (stripeError: any) {
-      console.error("❌ [Verify Session] Failed to retrieve session from Stripe:", stripeError)
+    } catch (error: any) {
       return NextResponse.json(
         {
-          error: "Failed to verify session with Stripe",
-          details: stripeError.message,
-          environment: process.env.NODE_ENV,
-          stripeMode: isLiveMode ? "live" : "test",
-        },
-        { status: 400 },
-      )
-    }
-
-    // Verify session mode matches our environment
-    const sessionIsLive = session.livemode
-    if (isLiveMode && !sessionIsLive) {
-      console.error("❌ [Verify Session] Environment mismatch: Live environment but test session")
-      return NextResponse.json(
-        {
-          error: "Session mode mismatch: Live environment requires live session",
-          environment: process.env.NODE_ENV,
-          stripeMode: isLiveMode ? "live" : "test",
-          sessionMode: sessionIsLive ? "live" : "test",
+          error: "Invalid session ID",
+          details: error.message,
         },
         { status: 400 },
       )
@@ -82,179 +29,146 @@ export async function POST(request: NextRequest) {
 
     // Check if payment was successful
     if (session.payment_status !== "paid") {
-      console.log(`⚠️ [Verify Session] Session payment not completed:`, {
-        sessionId,
-        paymentStatus: session.payment_status,
-        mode: sessionIsLive ? "live" : "test",
-      })
-      return NextResponse.json({
-        success: false,
-        error: "Payment not completed",
-        paymentStatus: session.payment_status,
-        environment: process.env.NODE_ENV,
-        stripeMode: isLiveMode ? "live" : "test",
-      })
-    }
-
-    // Extract metadata
-    const { productBoxId, creatorUid } = session.metadata || {}
-
-    if (!productBoxId) {
-      console.error("❌ [Verify Session] Missing product box ID in session metadata")
       return NextResponse.json(
         {
-          error: "Invalid session: missing product information",
-          environment: process.env.NODE_ENV,
-          stripeMode: isLiveMode ? "live" : "test",
+          error: "Payment not completed",
+          status: session.payment_status,
         },
         { status: 400 },
       )
     }
 
+    const { userId, productBoxId, creatorId } = session.metadata!
+
+    // Verify user if token provided
+    let authenticatedUserId = null
+    if (idToken) {
+      try {
+        const decodedToken = await auth.verifyIdToken(idToken)
+        authenticatedUserId = decodedToken.uid
+
+        // Ensure the session belongs to the authenticated user
+        if (authenticatedUserId !== userId) {
+          return NextResponse.json({ error: "Session does not belong to authenticated user" }, { status: 403 })
+        }
+      } catch (error) {
+        console.warn("Token verification failed, proceeding without authentication")
+      }
+    }
+
+    // Check if purchase already exists
+    const existingPurchase = await db.collection("purchases").where("sessionId", "==", sessionId).limit(1).get()
+
+    if (!existingPurchase.empty) {
+      const purchaseData = existingPurchase.docs[0].data()
+      return NextResponse.json({
+        success: true,
+        alreadyProcessed: true,
+        purchase: {
+          id: existingPurchase.docs[0].id,
+          productBoxId: purchaseData.productBoxId,
+          amount: purchaseData.amount,
+          status: purchaseData.status,
+        },
+      })
+    }
+
     // Get product box details
     const productBoxDoc = await db.collection("productBoxes").doc(productBoxId).get()
     if (!productBoxDoc.exists) {
-      console.error("❌ [Verify Session] Product box not found:", productBoxId)
-      return NextResponse.json(
-        {
-          error: "Product not found",
-          environment: process.env.NODE_ENV,
-          stripeMode: isLiveMode ? "live" : "test",
-        },
-        { status: 404 },
-      )
+      return NextResponse.json({ error: "Product not found" }, { status: 404 })
     }
 
-    const productBoxData = productBoxDoc.data()!
+    const productBox = productBoxDoc.data()!
 
-    // Get creator details
-    const creatorId = creatorUid || productBoxData.creatorId
-    let creatorData = null
-    if (creatorId) {
-      const creatorDoc = await db.collection("users").doc(creatorId).get()
-      creatorData = creatorDoc.exists ? creatorDoc.data() : null
-    }
-
-    console.log(`✅ [Verify Session] Processing purchase:`, {
+    // Create purchase record
+    const purchaseData = {
       sessionId,
       productBoxId,
-      userId,
-      creatorId,
-      amount: session.amount_total ? session.amount_total / 100 : 0,
-      environment: process.env.NODE_ENV,
-      stripeMode: isLiveMode ? "live" : "test",
-    })
-
-    // Create unified purchase record
-    const unifiedPurchase = await UnifiedPurchaseService.createUnifiedPurchase(userId, {
-      productBoxId,
-      sessionId: session.id,
-      amount: session.amount_total ? session.amount_total / 100 : 0,
+      userId: authenticatedUserId || userId,
+      amount: session.amount_total || 0,
       currency: session.currency || "usd",
-      creatorId: creatorId || "",
-    })
-
-    // Create main purchase record
-    const mainPurchaseData = {
-      userId,
-      buyerUid: userId,
-      productBoxId,
-      itemId: productBoxId,
-      sessionId: session.id,
-      paymentIntentId: session.payment_intent,
-      amount: session.amount_total ? session.amount_total / 100 : 0,
-      currency: session.currency || "usd",
-      timestamp: new Date(),
-      createdAt: new Date(),
-      purchasedAt: new Date(),
       status: "completed",
-      type: "product_box",
-      itemTitle: productBoxData.title || "Untitled Product Box",
-      itemDescription: productBoxData.description || "",
-      thumbnailUrl: productBoxData.thumbnailUrl || "",
-      customPreviewThumbnail: productBoxData.customPreviewThumbnail || "",
-      creatorId: creatorId,
-      creatorName: creatorData?.displayName || creatorData?.name || "",
-      creatorUsername: creatorData?.username || "",
-      accessUrl: `/product-box/${productBoxId}/content`,
-      verificationMethod: "direct_verification",
-      environment: process.env.NODE_ENV,
-      stripeMode: isLiveMode ? "live" : "test",
-      sessionMode: sessionIsLive ? "live" : "test",
-      verifiedAt: new Date(),
+      paymentIntentId:
+        typeof session.payment_intent === "string" ? session.payment_intent : session.payment_intent?.id || null,
+      customerEmail: session.customer_email,
+      createdAt: FieldValue.serverTimestamp(),
+      metadata: {
+        productTitle: productBox.title,
+        creatorId: creatorId || productBox.creatorId,
+      },
     }
 
-    // Write to purchases collection
-    await db.collection("purchases").doc(session.id).set(mainPurchaseData)
+    const purchaseRef = await db.collection("purchases").add(purchaseData)
 
-    // Update product box sales counter
+    // Grant access to user if authenticated
+    if (authenticatedUserId) {
+      await db
+        .collection("users")
+        .doc(authenticatedUserId)
+        .update({
+          [`purchases.${productBoxId}`]: {
+            purchaseId: purchaseRef.id,
+            sessionId,
+            purchasedAt: FieldValue.serverTimestamp(),
+            amount: session.amount_total,
+            status: "active",
+          },
+          updatedAt: FieldValue.serverTimestamp(),
+        })
+    }
+
+    // Update product box stats
     await db
       .collection("productBoxes")
       .doc(productBoxId)
       .update({
-        totalSales: db.FieldValue.increment(1),
-        totalRevenue: db.FieldValue.increment(session.amount_total ? session.amount_total / 100 : 0),
-        lastPurchaseAt: new Date(),
+        "stats.totalSales": FieldValue.increment(1),
+        "stats.totalRevenue": FieldValue.increment(session.amount_total || 0),
+        "stats.lastSaleAt": FieldValue.serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
       })
 
-    // Record the sale for the creator
-    if (creatorId) {
+    // Update creator stats
+    if (creatorId || productBox.creatorId) {
+      const targetCreatorId = creatorId || productBox.creatorId
       await db
         .collection("users")
-        .doc(creatorId)
-        .collection("sales")
-        .add({
-          productBoxId,
-          buyerUid: userId,
-          sessionId: session.id,
-          amount: session.amount_total ? session.amount_total / 100 : 0,
-          platformFee: session.amount_total ? (session.amount_total * 0.25) / 100 : 0,
-          netAmount: session.amount_total ? (session.amount_total * 0.75) / 100 : 0,
-          purchasedAt: new Date(),
-          status: "completed",
-          productTitle: productBoxData.title || "Untitled Product Box",
-          buyerEmail: session.customer_details?.email || "",
-          verificationMethod: "direct_verification",
-          environment: process.env.NODE_ENV,
-          stripeMode: isLiveMode ? "live" : "test",
-        })
-
-      // Increment the creator's total sales
-      await db
-        .collection("users")
-        .doc(creatorId)
+        .doc(targetCreatorId)
         .update({
-          totalSales: db.FieldValue.increment(1),
-          totalRevenue: db.FieldValue.increment(session.amount_total ? session.amount_total / 100 : 0),
-          lastSaleAt: new Date(),
+          "stats.totalSales": FieldValue.increment(1),
+          "stats.totalRevenue": FieldValue.increment(session.amount_total || 0),
+          "stats.lastSaleAt": FieldValue.serverTimestamp(),
+          updatedAt: FieldValue.serverTimestamp(),
         })
     }
 
-    console.log(`✅ [Verify Session] Purchase verification completed successfully for session: ${sessionId}`)
-
     return NextResponse.json({
       success: true,
-      purchase: {
+      session: {
         id: session.id,
-        productBoxId,
-        amount: session.amount_total ? session.amount_total / 100 : 0,
+        amount: session.amount_total,
         currency: session.currency,
-        status: "completed",
-        accessUrl: `/product-box/${productBoxId}/content`,
-        environment: process.env.NODE_ENV,
-        stripeMode: isLiveMode ? "live" : "test",
-        sessionMode: sessionIsLive ? "live" : "test",
+        status: session.payment_status,
+        customerEmail: session.customer_email,
       },
-      unifiedPurchase,
+      purchase: {
+        id: purchaseRef.id,
+        productBoxId,
+        userId: authenticatedUserId || userId,
+        amount: session.amount_total,
+      },
+      productBox: {
+        title: productBox.title,
+        description: productBox.description,
+      },
     })
   } catch (error: any) {
-    console.error("❌ [Verify Session] Error:", error)
+    console.error("Purchase verification failed:", error)
     return NextResponse.json(
       {
-        error: "Failed to verify purchase",
+        error: "Purchase verification failed",
         details: error.message,
-        environment: process.env.NODE_ENV,
-        stripeMode: isLiveMode ? "live" : "test",
       },
       { status: 500 },
     )

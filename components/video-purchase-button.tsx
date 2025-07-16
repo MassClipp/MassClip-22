@@ -2,26 +2,21 @@
 
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
-import { Loader2, Lock, DollarSign, Calendar } from "lucide-react"
+import { Loader2, Lock, DollarSign } from "lucide-react"
 import { useAuth } from "@/contexts/auth-context"
 import { useToast } from "@/hooks/use-toast"
-import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 
 interface VideoPurchaseButtonProps {
-  videoId: string
-  flatPrice: number
-  subscriptionPrice: number
-  pricingModel: "flat" | "subscription" | null
+  productBoxId: string
+  priceInCents: number
   title: string
   hasAccess: boolean
   className?: string
 }
 
 export default function VideoPurchaseButton({
-  videoId,
-  flatPrice,
-  subscriptionPrice,
-  pricingModel,
+  productBoxId,
+  priceInCents,
   title,
   hasAccess,
   className,
@@ -29,13 +24,19 @@ export default function VideoPurchaseButton({
   const { user } = useAuth()
   const { toast } = useToast()
   const [isLoading, setIsLoading] = useState(false)
-  const [selectedModel, setSelectedModel] = useState<"flat" | "subscription">(pricingModel || "flat")
 
-  const handlePurchase = async (model: "flat" | "subscription" = selectedModel) => {
+  const formatPrice = (cents: number) => {
+    return new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: "USD",
+    }).format(cents / 100)
+  }
+
+  const handlePurchase = async () => {
     if (!user) {
       toast({
         title: "Authentication Required",
-        description: "Please log in to purchase videos",
+        description: "Please log in to purchase content",
         variant: "destructive",
       })
       return
@@ -44,7 +45,7 @@ export default function VideoPurchaseButton({
     if (hasAccess) {
       toast({
         title: "Already Owned",
-        description: "You already have access to this video",
+        description: "You already have access to this content",
       })
       return
     }
@@ -60,22 +61,21 @@ export default function VideoPurchaseButton({
         },
         body: JSON.stringify({
           idToken,
-          videoId,
-          pricingModel: model,
+          productBoxId,
+          priceInCents,
         }),
       })
 
-      if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.error || "Failed to create checkout session")
+      const data = await response.json()
+
+      if (response.ok && data.url) {
+        // Redirect to Stripe Checkout
+        window.location.href = data.url
+      } else {
+        throw new Error(data.error || "Failed to create checkout session")
       }
-
-      const { url } = await response.json()
-
-      // Redirect to Stripe Checkout
-      window.location.href = url
     } catch (error) {
-      console.error("Error creating checkout session:", error)
+      console.error("Purchase error:", error)
       toast({
         title: "Purchase Error",
         description: error instanceof Error ? error.message : "Failed to start purchase process",
@@ -95,62 +95,19 @@ export default function VideoPurchaseButton({
     )
   }
 
-  // If creator only offers one pricing model, show a simple button
-  if (pricingModel) {
-    return (
-      <Button
-        onClick={() => handlePurchase(pricingModel)}
-        disabled={isLoading}
-        className={`bg-green-600 hover:bg-green-700 ${className}`}
-      >
-        {isLoading ? (
-          <>
-            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-            Processing...
-          </>
-        ) : pricingModel === "flat" ? (
-          <>
-            <DollarSign className="h-4 w-4 mr-2" />
-            Buy for ${flatPrice.toFixed(2)}
-          </>
-        ) : (
-          <>
-            <Calendar className="h-4 w-4 mr-2" />
-            Subscribe for ${subscriptionPrice.toFixed(2)}/month
-          </>
-        )}
-      </Button>
-    )
-  }
-
-  // If creator offers both pricing models, show a dropdown
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button disabled={isLoading} className={`bg-green-600 hover:bg-green-700 ${className}`}>
-          {isLoading ? (
-            <>
-              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              Processing...
-            </>
-          ) : (
-            <>
-              <DollarSign className="h-4 w-4 mr-2" />
-              Purchase Options
-            </>
-          )}
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end">
-        <DropdownMenuItem onClick={() => handlePurchase("flat")}>
+    <Button onClick={handlePurchase} disabled={isLoading} className={`bg-green-600 hover:bg-green-700 ${className}`}>
+      {isLoading ? (
+        <>
+          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+          Processing...
+        </>
+      ) : (
+        <>
           <DollarSign className="h-4 w-4 mr-2" />
-          One-time payment: ${flatPrice.toFixed(2)}
-        </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => handlePurchase("subscription")}>
-          <Calendar className="h-4 w-4 mr-2" />
-          Monthly subscription: ${subscriptionPrice.toFixed(2)}/month
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
+          Buy for {formatPrice(priceInCents)}
+        </>
+      )}
+    </Button>
   )
 }
