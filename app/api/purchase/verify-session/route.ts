@@ -16,7 +16,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Session ID is required" }, { status: 400 })
     }
 
-    // Verify Firebase token if provided (user might not be logged in for anonymous purchases)
+    console.log("🔍 [Verify Session] Processing session:", sessionId)
+
+    // Verify Firebase token if provided
     let userId = null
     if (idToken) {
       try {
@@ -26,7 +28,8 @@ export async function POST(request: NextRequest) {
         console.log("✅ [Verify Session] Token verified for user:", userId)
       } catch (error) {
         console.error("❌ [Verify Session] Token verification failed:", error)
-        return NextResponse.json({ error: "Invalid authentication token" }, { status: 401 })
+        // Don't return error here - allow anonymous verification
+        console.log("⚠️ [Verify Session] Continuing without authentication...")
       }
     }
 
@@ -34,15 +37,17 @@ export async function POST(request: NextRequest) {
     console.log("💳 [Verify Session] Retrieving Stripe session:", sessionId)
     let session
     try {
-      session = await stripe.checkout.sessions.retrieve(sessionId)
-      console.log("✅ [Verify Session] Session retrieved:", {
-        id: session.id,
-        payment_status: session.payment_status,
-        status: session.status,
-        amount_total: session.amount_total,
-        currency: session.currency,
-        customer_email: session.customer_details?.email,
+      session = await stripe.checkout.sessions.retrieve(sessionId, {
+        expand: ["payment_intent"],
       })
+      console.log("✅ [Verify Session] Session retrieved successfully:")
+      console.log("   ID:", session.id)
+      console.log("   Payment Status:", session.payment_status)
+      console.log("   Status:", session.status)
+      console.log("   Amount:", session.amount_total)
+      console.log("   Currency:", session.currency)
+      console.log("   Customer Email:", session.customer_details?.email)
+      console.log("   Metadata:", session.metadata)
     } catch (error: any) {
       console.error("❌ [Verify Session] Failed to retrieve session:", error)
       return NextResponse.json(
@@ -61,6 +66,7 @@ export async function POST(request: NextRequest) {
         {
           error: "Payment not completed",
           paymentStatus: session.payment_status,
+          sessionStatus: session.status,
         },
         { status: 400 },
       )
@@ -68,23 +74,25 @@ export async function POST(request: NextRequest) {
 
     const productBoxId = session.metadata?.productBoxId
     const sessionUserId = session.metadata?.userId
+    const creatorId = session.metadata?.creatorId
 
     if (!productBoxId) {
       console.error("❌ [Verify Session] Missing productBoxId in session metadata")
       return NextResponse.json({ error: "Invalid session metadata" }, { status: 400 })
     }
 
-    // Use userId from token if available, otherwise use session metadata
+    // Use authenticated user ID if available, otherwise use session metadata
     const finalUserId = userId || sessionUserId
 
-    console.log("📦 [Verify Session] Processing purchase:", {
-      productBoxId,
-      userId: finalUserId,
-      sessionUserId,
-      amount: session.amount_total,
-    })
+    console.log("📦 [Verify Session] Processing purchase:")
+    console.log("   Product Box ID:", productBoxId)
+    console.log("   User ID (auth):", userId)
+    console.log("   User ID (session):", sessionUserId)
+    console.log("   Final User ID:", finalUserId)
+    console.log("   Creator ID:", creatorId)
 
     // Check if purchase already exists
+    console.log("🔍 [Verify Session] Checking for existing purchase...")
     const existingPurchaseQuery = await db.collection("purchases").where("sessionId", "==", sessionId).limit(1).get()
 
     let purchaseId
@@ -101,23 +109,28 @@ export async function POST(request: NextRequest) {
         sessionId,
         productBoxId,
         userId: finalUserId,
+        creatorId: creatorId || null,
         amount: session.amount_total || 0,
         currency: session.currency || "usd",
         status: "completed",
-        customerEmail: session.customer_details?.email || null,
-        createdAt: new Date(),
-        stripeSessionId: sessionId,
         paymentStatus: session.payment_status,
+        customerEmail: session.customer_details?.email || null,
+        paymentIntentId:
+          typeof session.payment_intent === "string" ? session.payment_intent : session.payment_intent?.id || null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+        stripeSessionId: sessionId,
       }
 
       const purchaseRef = await db.collection("purchases").add(purchaseData)
       purchaseId = purchaseRef.id
       console.log("✅ [Verify Session] Purchase record created:", purchaseId)
 
-      // Grant user access to product box if user is authenticated
+      // Grant user access if we have a user ID
       if (finalUserId) {
         console.log("🔓 [Verify Session] Granting user access...")
         try {
+          // Add to user's purchases subcollection
           await db.collection("users").doc(finalUserId).collection("purchases").doc(purchaseId).set({
             productBoxId,
             purchaseId,
@@ -126,14 +139,46 @@ export async function POST(request: NextRequest) {
             purchasedAt: new Date(),
             status: "active",
           })
+
+          // Also update user's main document with purchase info
+          await db
+            .collection("users")
+            .doc(finalUserId)
+            .update({
+              [`productBoxAccess.${productBoxId}`]: {
+                purchaseId,
+                sessionId,
+                grantedAt: new Date(),
+                accessType: "purchased",
+              },
+              updatedAt: new Date(),
+            })
+
           console.log("✅ [Verify Session] User access granted")
         } catch (error) {
           console.error("❌ [Verify Session] Failed to grant user access:", error)
+          // Don't fail the whole verification if access granting fails
         }
+      }
+
+      // Update product box stats
+      try {
+        await db
+          .collection("productBoxes")
+          .doc(productBoxId)
+          .update({
+            "stats.totalSales": db.FieldValue.increment(1),
+            "stats.totalRevenue": db.FieldValue.increment(session.amount_total || 0),
+            "stats.lastSaleAt": new Date(),
+            updatedAt: new Date(),
+          })
+        console.log("✅ [Verify Session] Product box stats updated")
+      } catch (error) {
+        console.error("❌ [Verify Session] Failed to update product box stats:", error)
       }
     }
 
-    // Get product box details
+    // Get product box details for response
     const productBoxDoc = await db.collection("productBoxes").doc(productBoxId).get()
     const productBox = productBoxDoc.exists ? productBoxDoc.data() : {}
 

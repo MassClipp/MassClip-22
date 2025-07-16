@@ -39,8 +39,9 @@ export default function VideoPurchaseButton({
 
     try {
       console.log("🛒 [Purchase Button] Starting purchase process...")
-      console.log("📦 [Purchase Button] Product Box ID:", productBoxId)
-      console.log("💰 [Purchase Button] Price:", price)
+      console.log("   Product Box ID:", productBoxId)
+      console.log("   Price:", price)
+      console.log("   Current domain:", window.location.origin)
 
       // Get fresh auth token
       console.log("🔐 [Purchase Button] Getting auth token...")
@@ -70,11 +71,11 @@ export default function VideoPurchaseButton({
       }
 
       const data = await response.json()
-      console.log("✅ [Purchase Button] Checkout session created:", {
-        sessionId: data.sessionId,
-        domain: data.domain,
-        hasUrl: !!data.url,
-      })
+      console.log("✅ [Purchase Button] Checkout session created:")
+      console.log("   Session ID:", data.sessionId)
+      console.log("   Domain used:", data.domain)
+      console.log("   Success URL:", data.successUrl)
+      console.log("   Checkout URL:", data.url)
 
       if (!data.url) {
         throw new Error("No checkout URL received")

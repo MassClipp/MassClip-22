@@ -50,25 +50,57 @@ export async function POST(request: NextRequest) {
     const productBox = productBoxDoc.data()!
     console.log("✅ [Checkout API] Product box found:", productBox.title)
 
-    // Get the current domain from the request
+    // Get the current domain from multiple sources
     const host = request.headers.get("host")
+    const forwardedHost = request.headers.get("x-forwarded-host")
+    const origin = request.headers.get("origin")
+    const referer = request.headers.get("referer")
     const protocol = request.headers.get("x-forwarded-proto") || "https"
-    const currentDomain = `${protocol}://${host}`
 
-    console.log("🌐 [Checkout API] Current domain:", currentDomain)
-    console.log("🌐 [Checkout API] Request headers:", {
-      host: request.headers.get("host"),
-      "x-forwarded-proto": request.headers.get("x-forwarded-proto"),
-      "x-forwarded-host": request.headers.get("x-forwarded-host"),
-      origin: request.headers.get("origin"),
+    console.log("🌐 [Checkout API] Domain detection headers:", {
+      host,
+      forwardedHost,
+      origin,
+      referer,
+      protocol,
     })
 
-    // Use the current domain for success/cancel URLs to maintain authentication
-    const successUrl = `${currentDomain}/purchase-success?session_id={CHECKOUT_SESSION_ID}`
+    // Determine the correct domain to use
+    let currentDomain: string
+
+    if (origin) {
+      // Use origin header if available (most reliable)
+      currentDomain = origin
+      console.log("✅ [Checkout API] Using origin header:", currentDomain)
+    } else if (referer) {
+      // Extract domain from referer
+      try {
+        const refererUrl = new URL(referer)
+        currentDomain = `${refererUrl.protocol}//${refererUrl.host}`
+        console.log("✅ [Checkout API] Using referer header:", currentDomain)
+      } catch {
+        currentDomain = `${protocol}://${host}`
+        console.log("⚠️ [Checkout API] Referer parsing failed, using host:", currentDomain)
+      }
+    } else {
+      // Fallback to host header
+      currentDomain = `${protocol}://${forwardedHost || host}`
+      console.log("⚠️ [Checkout API] Using fallback host:", currentDomain)
+    }
+
+    // For v0 preview environments, ensure we use the correct domain format
+    if (host && host.includes("vercel.app") && !currentDomain.includes("vercel.app")) {
+      currentDomain = `${protocol}://${host}`
+      console.log("🔧 [Checkout API] Corrected for Vercel preview:", currentDomain)
+    }
+
+    // Create success/cancel URLs with the detected domain
+    const successUrl = `${currentDomain}/purchase-success?session_id={CHECKOUT_SESSION_ID}&product_box_id=${productBoxId}`
     const cancelUrl = `${currentDomain}/product-box/${productBoxId}`
 
-    console.log("🔗 [Checkout API] Success URL:", successUrl)
-    console.log("🔗 [Checkout API] Cancel URL:", cancelUrl)
+    console.log("🔗 [Checkout API] Final URLs:")
+    console.log("   Success:", successUrl)
+    console.log("   Cancel:", cancelUrl)
 
     // Create Stripe checkout session
     console.log("💳 [Checkout API] Creating Stripe session...")
@@ -94,25 +126,23 @@ export async function POST(request: NextRequest) {
         userId,
         productBoxId,
         creatorId: productBox.creatorId || "",
-        domain: currentDomain, // Store the domain for debugging
+        originalDomain: currentDomain,
+        timestamp: new Date().toISOString(),
       },
     }
 
-    console.log("🔧 [Checkout API] Session params:", {
-      ...sessionParams,
-      success_url: sessionParams.success_url,
-      cancel_url: sessionParams.cancel_url,
-    })
-
     const session = await stripe.checkout.sessions.create(sessionParams)
 
-    console.log("✅ [Checkout API] Session created successfully:", session.id)
-    console.log("🔗 [Checkout API] Checkout URL:", session.url)
+    console.log("✅ [Checkout API] Session created successfully:")
+    console.log("   Session ID:", session.id)
+    console.log("   Checkout URL:", session.url)
+    console.log("   Success URL will redirect to:", successUrl.replace("{CHECKOUT_SESSION_ID}", session.id))
 
     return NextResponse.json({
       sessionId: session.id,
       url: session.url,
-      domain: currentDomain, // Return domain for debugging
+      domain: currentDomain,
+      successUrl: successUrl.replace("{CHECKOUT_SESSION_ID}", session.id),
     })
   } catch (error: any) {
     console.error("❌ [Checkout API] Session creation failed:", error)
