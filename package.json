@@ -15,6 +15,7 @@
     "@auth/firebase-adapter": "^1.0.12",
     "@aws-sdk/client-s3": "latest",
     "@aws-sdk/s3-request-presigner": "latest",
+    "@chakra-ui/icons": "latest",
     "@chakra-ui/react": "latest",
     "@emotion/is-prop-valid": "latest",
     "@emotion/react": "latest",

@@ -38,14 +38,15 @@ export function CreatorProfile({ creator, freeContent, premiumContent, bundles }
 
   const handleShare = async () => {
     try {
-      await navigator.clipboard.writeText(currentUrl)
+      await navigator.clipboard.writeText(window.location.href)
       toast({
         title: "Link copied!",
-        description: "Profile link has been copied to clipboard",
+        description: "Profile URL copied to clipboard",
       })
-    } catch (err) {
+    } catch (error) {
+      console.error("Clipboard copy failed:", error)
       toast({
-        title: "Failed to copy",
+        title: "Copy failed",
         description: "Could not copy link to clipboard",
         variant: "destructive",
       })
