@@ -1,13 +1,8 @@
-/**
- * Server Component wrapper for the deploy admin page.
- * It imports a Client Component (DeploymentAdminWrapper) which itself
- * handles dynamic loading and disables SSR.
- */
-
 import DeploymentAdminWrapper from "./DeploymentAdminWrapper"
 
+// Force dynamic rendering to avoid build-time issues
 export const dynamic = "force-dynamic"
 
-export default function DeploymentAdminPage() {
+export default function DeployPage() {
   return <DeploymentAdminWrapper />
 }

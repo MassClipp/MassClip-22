@@ -1,37 +1,34 @@
 "use client"
 
-import type React from "react"
-
-/**
- * Original client-side implementation extracted from the previous
- * app/admin/deploy/page.tsx file.
- */
-
 import { useState } from "react"
-import { useRouter } from "next/navigation"
 import { useAuth } from "@/contexts/auth-context"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Textarea } from "@/components/ui/textarea"
+import { Label } from "@/components/ui/label"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Loader2, Upload, CheckCircle, XCircle } from "lucide-react"
 
 export default function DeploymentAdminClient() {
-  const [branch, setBranch] = useState<string>("v0dev")
-  const [filePath, setFilePath] = useState<string>("")
-  const [fileContent, setFileContent] = useState<string>("")
-  const [commitMessage, setCommitMessage] = useState<string>("")
-  const [isLoading, setIsLoading] = useState<boolean>(false)
-  const [result, setResult] = useState<{ success?: boolean; message?: string; error?: string } | null>(null)
+  const { user } = useAuth()
+  const [code, setCode] = useState("")
+  const [isDeploying, setIsDeploying] = useState(false)
+  const [deployResult, setDeployResult] = useState<{
+    success: boolean
+    message: string
+  } | null>(null)
 
-  const router = useRouter()
-  const { user, loading } = useAuth()
+  const handleDeploy = async () => {
+    if (!code.trim()) {
+      setDeployResult({
+        success: false,
+        message: "Please enter code to deploy",
+      })
+      return
+    }
 
-  // Protect this page – redirect if not authenticated
-  if (typeof window !== "undefined" && !loading && !user) {
-    router.push("/login?redirect=/admin/deploy")
-    return null
-  }
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setIsLoading(true)
-    setResult(null)
+    setIsDeploying(true)
+    setDeployResult(null)
 
     try {
       const response = await fetch("/api/deploy-ai-code", {
@@ -39,128 +36,101 @@ export default function DeploymentAdminClient() {
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          branch,
-          file_path: filePath,
-          file_content: fileContent,
-          commit_message: commitMessage,
-        }),
+        body: JSON.stringify({ code: code.trim() }),
       })
 
-      const data = await response.json()
+      const result = await response.json()
 
       if (response.ok) {
-        setResult({
+        setDeployResult({
           success: true,
-          message: data.message || "Deployment triggered successfully!",
+          message: result.message || "Code deployed successfully!",
         })
+        setCode("") // Clear the textarea on success
       } else {
-        setResult({
+        setDeployResult({
           success: false,
-          error: data.error || "Failed to trigger deployment",
+          message: result.error || "Deployment failed",
         })
       }
     } catch (error) {
-      setResult({
+      setDeployResult({
         success: false,
-        error: error instanceof Error ? error.message : "An unknown error occurred",
+        message: "Network error occurred during deployment",
       })
     } finally {
-      setIsLoading(false)
+      setIsDeploying(false)
     }
   }
 
+  if (!user) {
+    return (
+      <div className="flex items-center justify-center min-h-screen">
+        <Card className="w-full max-w-md">
+          <CardHeader>
+            <CardTitle>Access Denied</CardTitle>
+            <CardDescription>You must be logged in to access this page.</CardDescription>
+          </CardHeader>
+        </Card>
+      </div>
+    )
+  }
+
   return (
-    <div className="min-h-screen bg-gray-100 py-12 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-3xl mx-auto">
-        <div className="bg-white shadow-md rounded-lg p-6">
-          <h1 className="text-2xl font-bold mb-6 text-center">AI Code Deployment</h1>
+    <div className="container mx-auto py-8 px-4">
+      <Card className="max-w-4xl mx-auto">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Upload className="h-5 w-5" />
+            AI Code Deployment
+          </CardTitle>
+          <CardDescription>
+            Deploy AI-generated code to the application. Use with caution in production.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <div className="space-y-2">
+            <Label htmlFor="code">Code to Deploy</Label>
+            <Textarea
+              id="code"
+              placeholder="Paste your AI-generated code here..."
+              value={code}
+              onChange={(e) => setCode(e.target.value)}
+              rows={12}
+              className="font-mono text-sm"
+            />
+          </div>
 
-          {user && <div className="mb-4 text-sm text-gray-600 text-center">Logged in as: {user.email}</div>}
-
-          {result && (
-            <div
-              className={`mb-6 p-4 rounded-md ${
-                result.success ? "bg-green-50 text-green-800" : "bg-red-50 text-red-800"
-              }`}
-            >
-              {result.success ? result.message : result.error}
-            </div>
+          {deployResult && (
+            <Alert className={deployResult.success ? "border-green-500" : "border-red-500"}>
+              <div className="flex items-center gap-2">
+                {deployResult.success ? (
+                  <CheckCircle className="h-4 w-4 text-green-600" />
+                ) : (
+                  <XCircle className="h-4 w-4 text-red-600" />
+                )}
+                <AlertDescription className={deployResult.success ? "text-green-700" : "text-red-700"}>
+                  {deployResult.message}
+                </AlertDescription>
+              </div>
+            </Alert>
           )}
 
-          <form onSubmit={handleSubmit} className="space-y-6">
-            <div>
-              <label htmlFor="branch" className="block text-sm font-medium text-gray-700">
-                Target Branch
-              </label>
-              <select
-                id="branch"
-                value={branch}
-                onChange={(e) => setBranch(e.target.value)}
-                className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md"
-                required
-              >
-                <option value="v0dev">Preview (v0dev)</option>
-                <option value="main">Production (main)</option>
-              </select>
-            </div>
-
-            <div>
-              <label htmlFor="filePath" className="block text-sm font-medium text-gray-700">
-                File Path
-              </label>
-              <input
-                type="text"
-                id="filePath"
-                value={filePath}
-                onChange={(e) => setFilePath(e.target.value)}
-                placeholder="e.g., app/layout.tsx"
-                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                required
-              />
-            </div>
-
-            <div>
-              <label htmlFor="commitMessage" className="block text-sm font-medium text-gray-700">
-                Commit Message
-              </label>
-              <input
-                type="text"
-                id="commitMessage"
-                value={commitMessage}
-                onChange={(e) => setCommitMessage(e.target.value)}
-                placeholder="e.g., Update layout styling"
-                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
-                required
-              />
-            </div>
-
-            <div>
-              <label htmlFor="fileContent" className="block text-sm font-medium text-gray-700">
-                File Content
-              </label>
-              <textarea
-                id="fileContent"
-                value={fileContent}
-                onChange={(e) => setFileContent(e.target.value)}
-                rows={10}
-                className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm font-mono"
-                required
-              />
-            </div>
-
-            <div>
-              <button
-                type="submit"
-                disabled={isLoading}
-                className="w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-50"
-              >
-                {isLoading ? "Deploying..." : "Deploy Code"}
-              </button>
-            </div>
-          </form>
-        </div>
-      </div>
+          <Button onClick={handleDeploy} disabled={isDeploying || !code.trim()} className="w-full">
+            {isDeploying ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Deploying...
+              </>
+            ) : (
+              <>
+                <Upload className="mr-2 h-4 w-4" />
+                Deploy Code
+              </>
+            )}
+          </Button>
+        </CardContent>
+      </Card>
     </div>
   )
 }
