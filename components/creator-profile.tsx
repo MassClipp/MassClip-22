@@ -79,6 +79,7 @@ export default function CreatorProfile({ creator: initialCreator }: { creator: C
   const [refreshing, setRefreshing] = useState(false)
   const isOwner = user && user.uid === creator.uid
   const router = useRouter()
+  const { toast } = useToast()
 
   const [freeClips, setFreeClips] = useState<FreeContentItem[]>([])
   const [loading, setLoading] = useState(true)
@@ -229,20 +230,19 @@ export default function CreatorProfile({ creator: initialCreator }: { creator: C
   }, [creator])
 
   const handleShare = async () => {
-    if (navigator.share) {
-      try {
-        await navigator.share({
-          title: `${creator.displayName} on MassClip`,
-          text: `Check out ${creator.displayName}'s content on MassClip`,
-          url: window.location.href,
-        })
-      } catch (error) {
-        console.error("Error sharing:", error)
-      }
-    } else {
-      // Fallback for browsers that don't support the Web Share API
-      navigator.clipboard.writeText(window.location.href)
-      alert("Profile link copied to clipboard!")
+    try {
+      await navigator.clipboard.writeText(window.location.href)
+      toast({
+        title: "Link copied!",
+        description: "Profile link copied to clipboard",
+      })
+    } catch (error) {
+      console.error("Error copying to clipboard:", error)
+      toast({
+        title: "Error",
+        description: "Failed to copy link to clipboard",
+        variant: "destructive",
+      })
     }
   }
 
@@ -270,7 +270,6 @@ export default function CreatorProfile({ creator: initialCreator }: { creator: C
     const [isCheckingFavorite, setIsCheckingFavorite] = useState(true)
     const [hasTrackedView, setHasTrackedView] = useState(false)
 
-    const { toast } = useToast()
     const { planData } = useUserPlan()
     const { hasReachedLimit, isProUser, forceRefresh } = useDownloadLimit()
 

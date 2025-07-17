@@ -60,7 +60,6 @@ export async function GET(request: NextRequest) {
         {
           error: "Unauthorized",
           details: "Valid authentication token required",
-          uploads: [], // Return empty array instead of failing
         },
         { status: 401 },
       )
@@ -73,22 +72,9 @@ export async function GET(request: NextRequest) {
     console.log(`🔍 [Uploads API] Fetching uploads for user: ${user.uid}`)
 
     try {
-      // Check if Firebase is properly initialized
-      if (!db) {
-        console.error("❌ [Uploads API] Firestore not initialized")
-        return NextResponse.json(
-          {
-            error: "Database not available",
-            details: "Firestore connection failed",
-            uploads: [],
-          },
-          { status: 500 },
-        )
-      }
-
       // Simple query by UID only to avoid index requirements
       const uploadsRef = db.collection("uploads")
-      const query = uploadsRef.where("uid", "==", user.uid).limit(100) // Add limit to prevent large queries
+      const query = uploadsRef.where("uid", "==", user.uid)
 
       const snapshot = await query.get()
       console.log(`🔍 [Uploads API] Found ${snapshot.docs.length} documents`)
@@ -98,7 +84,7 @@ export async function GET(request: NextRequest) {
         return {
           id: doc.id,
           ...data,
-          createdAt: data.createdAt?.toDate?.() || data.createdAt || new Date(),
+          createdAt: data.createdAt?.toDate?.() || data.createdAt,
         }
       })
 
@@ -123,23 +109,15 @@ export async function GET(request: NextRequest) {
       })
 
       console.log(`✅ [Uploads API] Returning ${uploads.length} uploads`)
-      return NextResponse.json({
-        uploads,
-        success: true,
-        total: uploads.length,
-      })
+      return NextResponse.json({ uploads })
     } catch (firestoreError) {
       console.error("❌ [Uploads API] Firestore error:", firestoreError)
-
-      // Return partial success with empty data instead of complete failure
       return NextResponse.json(
         {
-          error: "Database query failed",
+          error: "Database error",
           details: firestoreError instanceof Error ? firestoreError.message : "Unknown database error",
-          uploads: [], // Still return empty array so dashboard doesn't crash
-          success: false,
         },
-        { status: 200 }, // Return 200 so dashboard can handle gracefully
+        { status: 500 },
       )
     }
   } catch (error) {
@@ -148,10 +126,8 @@ export async function GET(request: NextRequest) {
       {
         error: "Failed to fetch uploads",
         details: error instanceof Error ? error.message : "Unknown error",
-        uploads: [], // Always return uploads array
-        success: false,
       },
-      { status: 200 }, // Return 200 so dashboard can handle gracefully
+      { status: 500 },
     )
   }
 }
@@ -186,18 +162,6 @@ export async function POST(request: NextRequest) {
 
     if (!filename) {
       return NextResponse.json({ error: "Missing required field: filename" }, { status: 400 })
-    }
-
-    // Check if Firebase is properly initialized
-    if (!db) {
-      console.error("❌ [Uploads API] Firestore not initialized")
-      return NextResponse.json(
-        {
-          error: "Database not available",
-          details: "Firestore connection failed",
-        },
-        { status: 500 },
-      )
     }
 
     // Generate proper public URL
@@ -248,7 +212,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({
         id: docRef.id,
         ...metadata,
-        success: true,
       })
     } catch (firestoreError) {
       console.error("❌ [Uploads API] Firestore error:", firestoreError)
