@@ -1,7 +1,8 @@
 "use client"
 
-import * as React from "react"
-import { usePathname, useRouter } from "next/navigation"
+import type * as React from "react"
+import Link from "next/link"
+import { usePathname } from "next/navigation"
 import {
   LayoutDashboard,
   Compass,
@@ -13,10 +14,8 @@ import {
   Package,
   DollarSign,
   User,
-  Menu,
-  ChevronDown,
-  ChevronRight,
 } from "lucide-react"
+import { cn } from "@/lib/utils"
 
 import { Button } from "@/components/ui/button"
 import {
@@ -26,115 +25,100 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuItem,
-  DropdownMenuSub,
-  DropdownMenuSubTrigger,
-  DropdownMenuSubContent,
-  DropdownMenuGroup,
-  DropdownMenuPortal,
 } from "@/components/ui/dropdown-menu"
-
-import { cn } from "@/lib/utils"
 
 /* -------------------------------------------------------------------------- */
 /*                                   TYPES                                    */
 /* -------------------------------------------------------------------------- */
 
-interface RawNavSectionItem {
+interface NavItem {
   title: string
-  url: string
-  icon?: React.ReactNode
-  external?: boolean
-  alert?: boolean
+  href?: string
+  icon?: React.ComponentType<{ className?: string }>
+  children?: NavItem[]
 }
 
-interface RawNavSection {
-  title: string
-  url: string | "#"
-  items: RawNavSectionItem[]
+interface NavDropdownProps {
+  item: NavItem
+  level?: number
 }
 
 /* -------------------------------------------------------------------------- */
 /*                              NAV DATA (static)                             */
 /* -------------------------------------------------------------------------- */
 
-const NAV: RawNavSection[] = [
+const NAV: NavItem[] = [
   {
     title: "Dashboard",
-    url: "/dashboard",
-    items: [
-      {
-        title: "Overview",
-        url: "/dashboard",
-        icon: <LayoutDashboard className="h-4 w-4 mr-2" />,
-      },
-    ],
+    href: "/dashboard",
+    icon: () => <LayoutDashboard className="h-4 w-4 mr-2" />,
   },
   {
     title: "Explore",
-    url: "#",
-    items: [
+    icon: () => <Compass className="h-4 w-4 mr-2" />,
+    children: [
       {
         title: "Discover Content",
-        url: "/dashboard/explore",
-        icon: <Compass className="h-4 w-4 mr-2" />,
+        href: "/dashboard/explore",
+        icon: () => <Compass className="h-4 w-4 mr-2" />,
       },
       {
         title: "My Purchases",
-        url: "/dashboard/purchases",
-        icon: <ShoppingBag className="h-4 w-4 mr-2" />,
+        href: "/dashboard/purchases",
+        icon: () => <ShoppingBag className="h-4 w-4 mr-2" />,
       },
       {
         title: "Favorites",
-        url: "/dashboard/favorites",
-        icon: <Heart className="h-4 w-4 mr-2" />,
+        href: "/dashboard/favorites",
+        icon: () => <Heart className="h-4 w-4 mr-2" />,
       },
       {
         title: "Memberships",
-        url: "/dashboard/membership",
-        icon: <Crown className="h-4 w-4 mr-2" />,
+        href: "/dashboard/membership",
+        icon: () => <Crown className="h-4 w-4 mr-2" />,
       },
     ],
   },
   {
     title: "Content Management",
-    url: "#",
-    items: [
+    icon: () => <Film className="h-4 w-4 mr-2" />,
+    children: [
       {
         title: "Free Content",
-        url: "/dashboard/free-content",
-        icon: <Film className="h-4 w-4 mr-2" />,
+        href: "/dashboard/free-content",
+        icon: () => <Film className="h-4 w-4 mr-2" />,
       },
       {
         title: "Upload Content",
-        url: "/dashboard/upload",
-        icon: <Upload className="h-4 w-4 mr-2" />,
+        href: "/dashboard/upload",
+        icon: () => <Upload className="h-4 w-4 mr-2" />,
       },
       {
         title: "Bundles",
-        url: "/dashboard/bundles",
-        icon: <Package className="h-4 w-4 mr-2" />,
+        href: "/dashboard/bundles",
+        icon: () => <Package className="h-4 w-4 mr-2" />,
       },
     ],
   },
   {
     title: "Business",
-    url: "#",
-    items: [
+    icon: () => <DollarSign className="h-4 w-4 mr-2" />,
+    children: [
       {
         title: "Earnings",
-        url: "/dashboard/earnings",
-        icon: <DollarSign className="h-4 w-4 mr-2" />,
+        href: "/dashboard/earnings",
+        icon: () => <DollarSign className="h-4 w-4 mr-2" />,
       },
     ],
   },
   {
     title: "Settings",
-    url: "#",
-    items: [
+    icon: () => <User className="h-4 w-4 mr-2" />,
+    children: [
       {
         title: "Profile Settings",
-        url: "/dashboard/profile",
-        icon: <User className="h-4 w-4 mr-2" />,
+        href: "/dashboard/profile",
+        icon: () => <User className="h-4 w-4 mr-2" />,
       },
     ],
   },
@@ -144,29 +128,18 @@ const NAV: RawNavSection[] = [
 /*                                COMPONENT                                   */
 /* -------------------------------------------------------------------------- */
 
-function NavDropdown() {
-  const [open, setOpen] = React.useState(false)
+function NavDropdown({ item, level = 0 }: NavDropdownProps) {
   const pathname = usePathname()
-  const router = useRouter()
-
-  const go = (href: string, external = false) => {
-    setOpen(false)
-    if (external) {
-      window.open(href, "_blank")
-    } else {
-      router.push(href)
-    }
-  }
 
   return (
-    <DropdownMenu open={open} onOpenChange={setOpen}>
+    <DropdownMenu>
       <DropdownMenuTrigger asChild>
         <Button
           variant="ghost"
           size="icon"
           className="relative h-9 w-9 rounded-full bg-zinc-900 hover:bg-zinc-800 border border-zinc-800"
         >
-          <Menu className="h-4 w-4 text-zinc-400" />
+          {item.icon && <item.icon className="h-4 w-4 text-zinc-400" />}
           <span className="sr-only">Navigation</span>
         </Button>
       </DropdownMenuTrigger>
@@ -175,78 +148,22 @@ function NavDropdown() {
         sideOffset={8}
         className="w-72 bg-zinc-900/95 backdrop-blur-md border border-zinc-800 shadow-xl rounded-xl p-2"
       >
-        <DropdownMenuLabel className="px-2 py-1.5 text-xs font-normal text-zinc-500">NAVIGATION</DropdownMenuLabel>
-        <DropdownMenuSeparator className="bg-zinc-800" />
-
-        <DropdownMenuGroup>
-          {NAV.map((section) => {
-            const firstIcon = section.items[0]?.icon
-            const hasSubmenu = section.url === "#"
-            if (hasSubmenu) {
-              return (
-                <DropdownMenuSub key={section.title}>
-                  <DropdownMenuSubTrigger
-                    className={cn(
-                      "px-2 py-1.5 rounded-lg text-sm cursor-pointer flex items-center justify-between",
-                      "hover:bg-zinc-800 data-[state=open]:bg-zinc-800",
-                    )}
-                  >
-                    <span className="flex items-center">
-                      {firstIcon}
-                      {section.title}
-                    </span>
-                    {open ? (
-                      <ChevronDown className="h-4 w-4 ml-1 text-zinc-500" />
-                    ) : (
-                      <ChevronRight className="h-4 w-4 ml-1 text-zinc-500" />
-                    )}
-                  </DropdownMenuSubTrigger>
-                  <DropdownMenuPortal>
-                    <DropdownMenuSubContent
-                      className="bg-zinc-900/95 backdrop-blur-md border border-zinc-800 shadow-xl rounded-xl p-2 min-w-[180px]"
-                      sideOffset={8}
-                    >
-                      {section.items.map((item) => {
-                        const active = pathname === item.url
-                        return (
-                          <DropdownMenuItem
-                            key={item.title}
-                            onClick={() => go(item.url, item.external)}
-                            className={cn(
-                              "px-2 py-1.5 rounded-lg text-sm cursor-pointer flex items-center justify-between",
-                              active ? "bg-red-600/10 text-red-500" : "hover:bg-zinc-800 focus:bg-zinc-800",
-                            )}
-                          >
-                            <div className="flex items-center">
-                              {item.icon}
-                              <span>{item.title}</span>
-                            </div>
-                          </DropdownMenuItem>
-                        )
-                      })}
-                    </DropdownMenuSubContent>
-                  </DropdownMenuPortal>
-                </DropdownMenuSub>
-              )
-            }
-
-            // no submenu
-            const active = pathname === section.url
-            return (
-              <DropdownMenuItem
-                key={section.title}
-                onClick={() => go(section.url)}
-                className={cn(
-                  "px-2 py-1.5 rounded-lg text-sm cursor-pointer flex items-center",
-                  active ? "bg-red-600/10 text-red-500" : "hover:bg-zinc-800 focus:bg-zinc-800",
-                )}
-              >
-                {firstIcon}
-                <span>{section.title}</span>
-              </DropdownMenuItem>
-            )
-          })}
-        </DropdownMenuGroup>
+        {item.children ? (
+          <>
+            <DropdownMenuLabel className="px-2 py-1.5 text-xs font-normal text-zinc-500">
+              {item.title}
+            </DropdownMenuLabel>
+            <DropdownMenuSeparator className="bg-zinc-800" />
+            {item.children.map((child, index) => (
+              <NavDropdown key={index} item={child} level={level + 1} />
+            ))}
+          </>
+        ) : (
+          <DropdownMenuItem className={cn(level === 0 && pathname === item.href && "bg-zinc-800 text-zinc-50")}>
+            {item.icon && <item.icon className="h-4 w-4 mr-2" />}
+            <Link href={item.href || "#"}>{item.title}</Link>
+          </DropdownMenuItem>
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
   )

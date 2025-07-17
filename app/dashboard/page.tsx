@@ -81,7 +81,7 @@ export default function DashboardPage() {
   }
 
   // Show error state if profile initialization failed
-  if (error || videoStats.error) {
+  if (error && !videoStats.loading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
         <Card className="w-full max-w-md bg-zinc-900/50 border-zinc-800/50">
@@ -90,14 +90,29 @@ export default function DashboardPage() {
             <CardDescription>There was an issue loading your dashboard</CardDescription>
           </CardHeader>
           <CardContent>
-            <p className="text-sm text-zinc-400 mb-4">{error || videoStats.error}</p>
-            <Button onClick={() => window.location.reload()} className="w-full">
-              Try Again
-            </Button>
+            <p className="text-sm text-zinc-400 mb-4">{error}</p>
+            <div className="space-y-2">
+              <Button onClick={() => window.location.reload()} className="w-full">
+                Try Again
+              </Button>
+              <Button
+                onClick={() => router.push("/dashboard/upload")}
+                variant="outline"
+                className="w-full border-zinc-700 hover:bg-zinc-800"
+              >
+                Go to Upload
+              </Button>
+            </div>
           </CardContent>
         </Card>
       </div>
     )
+  }
+
+  // Show dashboard with fallback data if there are API errors but we have some data
+  if (videoStats.error && !videoStats.loading) {
+    console.warn("Video stats API error:", videoStats.error)
+    // Continue rendering with fallback data
   }
 
   return (
