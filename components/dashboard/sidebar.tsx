@@ -14,7 +14,6 @@ import {
   Tags,
   DollarSign,
   Package,
-  Box,
   Settings,
   User,
   CreditCard,
@@ -66,7 +65,6 @@ const navItems: NavItem[] = [
     children: [
       { title: "Earnings", href: "/dashboard/earnings", icon: DollarSign },
       { title: "Bundles", href: "/dashboard/bundles", icon: Package },
-      { title: "Product Boxes", href: "/dashboard/product-boxes", icon: Box },
     ],
   },
   {
