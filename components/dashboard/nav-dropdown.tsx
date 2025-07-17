@@ -1,260 +1,182 @@
 "use client"
 
-import * as React from "react"
-import { usePathname, useRouter } from "next/navigation"
+import type React from "react"
+import { useState } from "react"
+import Link from "next/link"
+import { usePathname } from "next/navigation"
 import {
   LayoutDashboard,
-  Compass,
-  ShoppingBag,
-  Heart,
-  Crown,
-  Film,
+  Search,
   Upload,
-  Package,
+  FileVideo,
+  Gift,
+  Tags,
   DollarSign,
+  Package,
+  Settings,
   User,
-  Menu,
+  CreditCard,
+  Lock,
+  Crown,
   ChevronDown,
   ChevronRight,
+  Menu,
+  X,
 } from "lucide-react"
-
 import { Button } from "@/components/ui/button"
-import {
-  DropdownMenu,
-  DropdownMenuTrigger,
-  DropdownMenuContent,
-  DropdownMenuLabel,
-  DropdownMenuSeparator,
-  DropdownMenuItem,
-  DropdownMenuSub,
-  DropdownMenuSubTrigger,
-  DropdownMenuSubContent,
-  DropdownMenuGroup,
-  DropdownMenuPortal,
-} from "@/components/ui/dropdown-menu"
-
+import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import { cn } from "@/lib/utils"
 
-/* -------------------------------------------------------------------------- */
-/*                                   TYPES                                    */
-/* -------------------------------------------------------------------------- */
-
-interface RawNavSectionItem {
+interface NavItem {
   title: string
-  url: string
-  icon?: React.ReactNode
-  external?: boolean
-  alert?: boolean
+  href?: string
+  icon: React.ComponentType<{ className?: string }>
+  children?: NavItem[]
 }
 
-interface RawNavSection {
-  title: string
-  url: string | "#"
-  items: RawNavSectionItem[]
-}
-
-/* -------------------------------------------------------------------------- */
-/*                              NAV DATA (static)                             */
-/* -------------------------------------------------------------------------- */
-
-const NAV: RawNavSection[] = [
+const navItems: NavItem[] = [
   {
     title: "Dashboard",
-    url: "/dashboard",
-    items: [
-      {
-        title: "Overview",
-        url: "/dashboard",
-        icon: <LayoutDashboard className="h-4 w-4 mr-2" />,
-      },
-    ],
+    href: "/dashboard",
+    icon: LayoutDashboard,
   },
   {
     title: "Explore",
-    url: "#",
-    items: [
-      {
-        title: "Discover Content",
-        url: "/dashboard/explore",
-        icon: <Compass className="h-4 w-4 mr-2" />,
-      },
-      {
-        title: "My Purchases",
-        url: "/dashboard/purchases",
-        icon: <ShoppingBag className="h-4 w-4 mr-2" />,
-      },
-      {
-        title: "Favorites",
-        url: "/dashboard/favorites",
-        icon: <Heart className="h-4 w-4 mr-2" />,
-      },
-      {
-        title: "Memberships",
-        url: "/dashboard/membership",
-        icon: <Crown className="h-4 w-4 mr-2" />,
-      },
+    icon: Search,
+    children: [
+      { title: "Browse All", href: "/category/browse-all", icon: Search },
+      { title: "Recently Added", href: "/category/recently-added", icon: Search },
+      { title: "Cinema", href: "/category/cinema", icon: Search },
+      { title: "Hustle Mentality", href: "/category/hustle-mentality", icon: Search },
+      { title: "Introspection", href: "/category/introspection", icon: Search },
     ],
   },
   {
     title: "Content Management",
-    url: "#",
-    items: [
-      {
-        title: "Free Content",
-        url: "/dashboard/free-content",
-        icon: <Film className="h-4 w-4 mr-2" />,
-      },
-      {
-        title: "Upload Content",
-        url: "/dashboard/upload",
-        icon: <Upload className="h-4 w-4 mr-2" />,
-      },
-      {
-        title: "Product Boxes",
-        url: "/dashboard/product-boxes",
-        icon: <Package className="h-4 w-4 mr-2" />,
-      },
-      {
-        title: "Bundles",
-        url: "/dashboard/bundles",
-        icon: <Package className="h-4 w-4 mr-2" />,
-      },
+    icon: FileVideo,
+    children: [
+      { title: "Upload", href: "/dashboard/upload", icon: Upload },
+      { title: "My Uploads", href: "/dashboard/uploads", icon: FileVideo },
+      { title: "Free Content", href: "/dashboard/free-content", icon: Gift },
+      { title: "Categories", href: "/dashboard/categories", icon: Tags },
     ],
   },
   {
     title: "Business",
-    url: "#",
-    items: [
-      {
-        title: "Earnings",
-        url: "/dashboard/earnings",
-        icon: <DollarSign className="h-4 w-4 mr-2" />,
-      },
+    icon: DollarSign,
+    children: [
+      { title: "Earnings", href: "/dashboard/earnings", icon: DollarSign },
+      { title: "Bundles", href: "/dashboard/bundles", icon: Package },
     ],
   },
   {
     title: "Settings",
-    url: "#",
-    items: [
-      {
-        title: "Profile Settings",
-        url: "/dashboard/profile",
-        icon: <User className="h-4 w-4 mr-2" />,
-      },
+    icon: Settings,
+    children: [
+      { title: "Profile", href: "/dashboard/profile", icon: User },
+      { title: "Stripe", href: "/dashboard/settings/stripe", icon: CreditCard },
+      { title: "Password", href: "/dashboard/password", icon: Lock },
+      { title: "Membership", href: "/dashboard/membership", icon: Crown },
     ],
   },
 ]
 
-/* -------------------------------------------------------------------------- */
-/*                                COMPONENT                                   */
-/* -------------------------------------------------------------------------- */
+interface NavDropdownProps {
+  className?: string
+}
 
-function NavDropdown() {
-  const [open, setOpen] = React.useState(false)
+export function NavDropdown({ className }: NavDropdownProps) {
   const pathname = usePathname()
-  const router = useRouter()
+  const [expandedItems, setExpandedItems] = useState<string[]>([])
+  const [isOpen, setIsOpen] = useState(false)
 
-  const go = (href: string, external = false) => {
-    setOpen(false)
-    if (external) {
-      window.open(href, "_blank")
-    } else {
-      router.push(href)
-    }
+  const toggleExpanded = (title: string) => {
+    setExpandedItems((prev) => (prev.includes(title) ? prev.filter((item) => item !== title) : [...prev, title]))
+  }
+
+  const renderNavItem = (item: NavItem, level = 0) => {
+    const isExpanded = expandedItems.includes(item.title)
+    const hasChildren = item.children && item.children.length > 0
+    const isActive = item.href === pathname
+
+    return (
+      <div key={item.title} className={cn("", level > 0 && "ml-4")}>
+        {item.href ? (
+          <Link
+            href={item.href}
+            onClick={() => setIsOpen(false)}
+            className={cn(
+              "flex items-center gap-3 px-3 py-2 text-sm rounded-md transition-colors",
+              isActive ? "bg-red-600 text-white" : "text-zinc-300 hover:text-white hover:bg-zinc-800",
+            )}
+          >
+            <item.icon className="h-4 w-4" />
+            {item.title}
+          </Link>
+        ) : (
+          <Button
+            variant="ghost"
+            onClick={() => toggleExpanded(item.title)}
+            className={cn(
+              "w-full justify-between px-3 py-2 text-sm text-zinc-300 hover:text-white hover:bg-zinc-800",
+              level === 0 && "font-medium",
+            )}
+          >
+            <span className="flex items-center gap-3">
+              <item.icon className="h-4 w-4" />
+              {item.title}
+            </span>
+            {hasChildren && (isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />)}
+          </Button>
+        )}
+
+        {hasChildren && isExpanded && (
+          <div className="mt-1 space-y-1">{item.children!.map((child) => renderNavItem(child, level + 1))}</div>
+        )}
+      </div>
+    )
   }
 
   return (
-    <DropdownMenu open={open} onOpenChange={setOpen}>
-      <DropdownMenuTrigger asChild>
+    <Sheet open={isOpen} onOpenChange={setIsOpen}>
+      <SheetTrigger asChild>
         <Button
           variant="ghost"
           size="icon"
-          className="relative h-9 w-9 rounded-full bg-zinc-900 hover:bg-zinc-800 border border-zinc-800"
+          className={cn("h-9 w-9 text-zinc-300 hover:text-white hover:bg-zinc-800", className)}
         >
-          <Menu className="h-4 w-4 text-zinc-400" />
-          <span className="sr-only">Navigation</span>
+          <Menu className="h-5 w-5" />
+          <span className="sr-only">Toggle navigation menu</span>
         </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent
-        align="start"
-        sideOffset={8}
-        className="w-72 bg-zinc-900/95 backdrop-blur-md border border-zinc-800 shadow-xl rounded-xl p-2"
-      >
-        <DropdownMenuLabel className="px-2 py-1.5 text-xs font-normal text-zinc-500">NAVIGATION</DropdownMenuLabel>
-        <DropdownMenuSeparator className="bg-zinc-800" />
+      </SheetTrigger>
+      <SheetContent side="left" className="w-80 bg-zinc-900 border-zinc-800 p-0">
+        <div className="flex flex-col h-full">
+          {/* Header */}
+          <div className="flex items-center justify-between p-4 border-b border-zinc-800">
+            <div className="flex items-center gap-2">
+              <div className="text-xl font-bold text-white">MassClip</div>
+            </div>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => setIsOpen(false)}
+              className="h-8 w-8 text-zinc-400 hover:text-white"
+            >
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
 
-        <DropdownMenuGroup>
-          {NAV.map((section) => {
-            const firstIcon = section.items[0]?.icon
-            const hasSubmenu = section.url === "#"
-            if (hasSubmenu) {
-              return (
-                <DropdownMenuSub key={section.title}>
-                  <DropdownMenuSubTrigger
-                    className={cn(
-                      "px-2 py-1.5 rounded-lg text-sm cursor-pointer flex items-center justify-between",
-                      "hover:bg-zinc-800 data-[state=open]:bg-zinc-800",
-                    )}
-                  >
-                    <span className="flex items-center">
-                      {firstIcon}
-                      {section.title}
-                    </span>
-                    {open ? (
-                      <ChevronDown className="h-4 w-4 ml-1 text-zinc-500" />
-                    ) : (
-                      <ChevronRight className="h-4 w-4 ml-1 text-zinc-500" />
-                    )}
-                  </DropdownMenuSubTrigger>
-                  <DropdownMenuPortal>
-                    <DropdownMenuSubContent
-                      className="bg-zinc-900/95 backdrop-blur-md border border-zinc-800 shadow-xl rounded-xl p-2 min-w-[180px]"
-                      sideOffset={8}
-                    >
-                      {section.items.map((item) => {
-                        const active = pathname === item.url
-                        return (
-                          <DropdownMenuItem
-                            key={item.title}
-                            onClick={() => go(item.url, item.external)}
-                            className={cn(
-                              "px-2 py-1.5 rounded-lg text-sm cursor-pointer flex items-center justify-between",
-                              active ? "bg-red-600/10 text-red-500" : "hover:bg-zinc-800 focus:bg-zinc-800",
-                            )}
-                          >
-                            <div className="flex items-center">
-                              {item.icon}
-                              <span>{item.title}</span>
-                            </div>
-                          </DropdownMenuItem>
-                        )
-                      })}
-                    </DropdownMenuSubContent>
-                  </DropdownMenuPortal>
-                </DropdownMenuSub>
-              )
-            }
+          {/* Navigation Header */}
+          <div className="px-4 py-2 border-b border-zinc-800">
+            <h2 className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">NAVIGATION</h2>
+          </div>
 
-            // no submenu
-            const active = pathname === section.url
-            return (
-              <DropdownMenuItem
-                key={section.title}
-                onClick={() => go(section.url)}
-                className={cn(
-                  "px-2 py-1.5 rounded-lg text-sm cursor-pointer flex items-center",
-                  active ? "bg-red-600/10 text-red-500" : "hover:bg-zinc-800 focus:bg-zinc-800",
-                )}
-              >
-                {firstIcon}
-                <span>{section.title}</span>
-              </DropdownMenuItem>
-            )
-          })}
-        </DropdownMenuGroup>
-      </DropdownMenuContent>
-    </DropdownMenu>
+          {/* Navigation Items */}
+          <div className="flex-1 overflow-y-auto">
+            <nav className="flex-1 space-y-1 p-4">{navItems.map((item) => renderNavItem(item))}</nav>
+          </div>
+        </div>
+      </SheetContent>
+    </Sheet>
   )
 }
-
-export default NavDropdown
