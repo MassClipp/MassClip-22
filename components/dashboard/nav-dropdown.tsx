@@ -15,8 +15,8 @@ import {
   DollarSign,
   User,
 } from "lucide-react"
-import { cn } from "@/lib/utils"
 
+import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import {
   DropdownMenu,
@@ -30,106 +30,74 @@ import {
 /* -------------------------------------------------------------------------- */
 /*                                   TYPES                                    */
 /* -------------------------------------------------------------------------- */
-
-interface NavItem {
+export interface NavItem {
   title: string
   href?: string
   icon?: React.ComponentType<{ className?: string }>
   children?: NavItem[]
 }
 
-interface NavDropdownProps {
-  item: NavItem
+export interface NavDropdownProps {
+  item?: NavItem
   level?: number
 }
 
 /* -------------------------------------------------------------------------- */
 /*                              NAV DATA (static)                             */
 /* -------------------------------------------------------------------------- */
-
-const NAV: NavItem[] = [
+export const NAV: NavItem[] = [
   {
     title: "Dashboard",
     href: "/dashboard",
-    icon: () => <LayoutDashboard className="h-4 w-4 mr-2" />,
+    icon: LayoutDashboard,
   },
   {
     title: "Explore",
-    icon: () => <Compass className="h-4 w-4 mr-2" />,
+    icon: Compass,
     children: [
-      {
-        title: "Discover Content",
-        href: "/dashboard/explore",
-        icon: () => <Compass className="h-4 w-4 mr-2" />,
-      },
-      {
-        title: "My Purchases",
-        href: "/dashboard/purchases",
-        icon: () => <ShoppingBag className="h-4 w-4 mr-2" />,
-      },
-      {
-        title: "Favorites",
-        href: "/dashboard/favorites",
-        icon: () => <Heart className="h-4 w-4 mr-2" />,
-      },
-      {
-        title: "Memberships",
-        href: "/dashboard/membership",
-        icon: () => <Crown className="h-4 w-4 mr-2" />,
-      },
+      { title: "Discover Content", href: "/dashboard/explore", icon: Compass },
+      { title: "My Purchases", href: "/dashboard/purchases", icon: ShoppingBag },
+      { title: "Favorites", href: "/dashboard/favorites", icon: Heart },
+      { title: "Memberships", href: "/dashboard/membership", icon: Crown },
     ],
   },
   {
     title: "Content Management",
-    icon: () => <Film className="h-4 w-4 mr-2" />,
+    icon: Film,
     children: [
-      {
-        title: "Free Content",
-        href: "/dashboard/free-content",
-        icon: () => <Film className="h-4 w-4 mr-2" />,
-      },
-      {
-        title: "Upload Content",
-        href: "/dashboard/upload",
-        icon: () => <Upload className="h-4 w-4 mr-2" />,
-      },
-      {
-        title: "Bundles",
-        href: "/dashboard/bundles",
-        icon: () => <Package className="h-4 w-4 mr-2" />,
-      },
+      { title: "Free Content", href: "/dashboard/free-content", icon: Film },
+      { title: "Upload Content", href: "/dashboard/upload", icon: Upload },
+      { title: "Bundles", href: "/dashboard/bundles", icon: Package },
     ],
   },
   {
     title: "Business",
-    icon: () => <DollarSign className="h-4 w-4 mr-2" />,
-    children: [
-      {
-        title: "Earnings",
-        href: "/dashboard/earnings",
-        icon: () => <DollarSign className="h-4 w-4 mr-2" />,
-      },
-    ],
+    icon: DollarSign,
+    children: [{ title: "Earnings", href: "/dashboard/earnings", icon: DollarSign }],
   },
   {
     title: "Settings",
-    icon: () => <User className="h-4 w-4 mr-2" />,
-    children: [
-      {
-        title: "Profile Settings",
-        href: "/dashboard/profile",
-        icon: () => <User className="h-4 w-4 mr-2" />,
-      },
-    ],
+    icon: User,
+    children: [{ title: "Profile Settings", href: "/dashboard/profile", icon: User }],
   },
 ]
 
 /* -------------------------------------------------------------------------- */
 /*                                COMPONENT                                   */
 /* -------------------------------------------------------------------------- */
-
-function NavDropdown({ item, level = 0 }: NavDropdownProps) {
+function InternalNavDropdown({ item, level = 0 }: NavDropdownProps) {
   const pathname = usePathname()
+
+  // GUARD: Return null if item is undefined or null
+  if (!item) {
+    return null
+  }
+
+  // GUARD: Ensure we have a valid icon, fallback to LayoutDashboard
+  const Icon = item.icon || LayoutDashboard
+
+  // GUARD: Ensure we have a valid title
+  const title = item.title || "Untitled"
 
   return (
     <DropdownMenu>
@@ -139,29 +107,30 @@ function NavDropdown({ item, level = 0 }: NavDropdownProps) {
           size="icon"
           className="relative h-9 w-9 rounded-full bg-zinc-900 hover:bg-zinc-800 border border-zinc-800"
         >
-          {item.icon && <item.icon className="h-4 w-4 text-zinc-400" />}
-          <span className="sr-only">Navigation</span>
+          <Icon className="h-4 w-4 text-zinc-400" />
+          <span className="sr-only">{title}</span>
         </Button>
       </DropdownMenuTrigger>
+
       <DropdownMenuContent
         align="start"
         sideOffset={8}
         className="w-72 bg-zinc-900/95 backdrop-blur-md border border-zinc-800 shadow-xl rounded-xl p-2"
       >
-        {item.children ? (
+        {item.children && Array.isArray(item.children) ? (
           <>
-            <DropdownMenuLabel className="px-2 py-1.5 text-xs font-normal text-zinc-500">
-              {item.title}
-            </DropdownMenuLabel>
+            <DropdownMenuLabel className="px-2 py-1.5 text-xs font-normal text-zinc-500">{title}</DropdownMenuLabel>
             <DropdownMenuSeparator className="bg-zinc-800" />
-            {item.children.map((child, index) => (
-              <NavDropdown key={index} item={child} level={level + 1} />
-            ))}
+            {item.children.map((child, idx) => {
+              // GUARD: Only render valid children
+              if (!child) return null
+              return <InternalNavDropdown key={`${child.title || idx}`} item={child} level={level + 1} />
+            })}
           </>
         ) : (
           <DropdownMenuItem className={cn(level === 0 && pathname === item.href && "bg-zinc-800 text-zinc-50")}>
-            {item.icon && <item.icon className="h-4 w-4 mr-2" />}
-            <Link href={item.href || "#"}>{item.title}</Link>
+            <Icon className="h-4 w-4 mr-2" />
+            {item.href ? <Link href={item.href}>{title}</Link> : <span>{title}</span>}
           </DropdownMenuItem>
         )}
       </DropdownMenuContent>
@@ -169,8 +138,24 @@ function NavDropdown({ item, level = 0 }: NavDropdownProps) {
   )
 }
 
-export default NavDropdown
+/**
+ * Root component: renders the full navigation bar (all top-level items).
+ * This is kept as the default export because most code imports it as
+ *   `import NavDropdown from ".../nav-dropdown"`
+ */
+export default function NavDropdownBar() {
+  return (
+    <div className="flex items-center gap-2">
+      {NAV.filter(Boolean).map((item, idx) => {
+        // GUARD: Only render valid items
+        if (!item) return null
+        return <InternalNavDropdown key={`${item.title || idx}`} item={item} />
+      })}
+    </div>
+  )
+}
 
-// NEW: also export it as a named export for consumers using
-// `import { NavDropdown } from "@/components/dashboard/nav-dropdown"`
-export { NavDropdown }
+/* -------------------------------------------------------------------------- */
+/*                        NAMED EXPORT FOR LEGACY IMPORTS                     */
+/* -------------------------------------------------------------------------- */
+export const NavDropdown = InternalNavDropdown
