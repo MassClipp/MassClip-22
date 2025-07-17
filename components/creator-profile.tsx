@@ -236,3 +236,5 @@ export function CreatorProfile({ creator, freeContent, premiumContent, bundles }
     </div>
   )
 }
+
+export default CreatorProfile
