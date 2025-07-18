@@ -170,3 +170,4 @@ function NavDropdown({ item, level = 0 }: NavDropdownProps) {
 }
 
 export default NavDropdown
+export { NavDropdown }
