@@ -1,11 +1,7 @@
-"use client"
-import dynamic from "next/dynamic"
+export const dynamic = "force-dynamic"
 
-// Load the original client component only in the browser
-const StripeTestClientPage = dynamic(() => import("./StripeTestClientPage"), { ssr: false })
+import StripeTestClientPage from "./StripeTestClientPage"
 
-export default function Page() {
+export default function StripeTestPage() {
   return <StripeTestClientPage />
 }
-
-// StripeTestClientPage component can be defined here if needed
