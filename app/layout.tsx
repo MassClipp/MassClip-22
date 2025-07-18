@@ -29,7 +29,6 @@ export default function RootLayout({
   return (
     <html lang="en" className="prevent-zoom">
       <body className={`${inter.className} prevent-zoom`}>
-        {/* Global providers */}
         <Providers>
           <AuthProvider>
             <DownloadLimitProvider>
@@ -40,11 +39,7 @@ export default function RootLayout({
             </DownloadLimitProvider>
           </AuthProvider>
         </Providers>
-
-        {/* Toasts */}
         <Toaster />
-
-        {/* Maintenance overlay – rendered last so it sits on top */}
       </body>
     </html>
   )
