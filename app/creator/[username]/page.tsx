@@ -1,8 +1,25 @@
 import { notFound } from "next/navigation"
 import type { Metadata } from "next"
-import { initializeFirebaseAdmin, db } from "@/lib/firebase-admin"
 import CreatorProfileWithSidebar from "@/components/creator-profile-with-sidebar"
 import ProfileViewTracker from "@/components/profile-view-tracker"
+
+// Mock data for development when Firebase isn't configured
+const mockCreatorData = {
+  uid: "mock-uid-123",
+  username: "take",
+  displayName: "Take",
+  bio: "Content creator and developer",
+  profilePic: "/placeholder.svg?height=200&width=200",
+  createdAt: new Date().toISOString(),
+  socialLinks: {
+    instagram: "https://instagram.com/take",
+    twitter: "https://twitter.com/take",
+    youtube: "https://youtube.com/@take",
+    website: "https://take.dev",
+  },
+  email: "take@example.com",
+  updatedAt: new Date().toISOString(),
+}
 
 // Helper function to convert Firestore data to plain objects
 function serializeData(data: any) {
@@ -27,7 +44,36 @@ export async function generateMetadata({ params }: { params: { username: string 
   const { username } = params
 
   try {
+    // Try to initialize Firebase Admin only if environment variables are available
+    const hasFirebaseConfig =
+      process.env.FIREBASE_PROJECT_ID && process.env.FIREBASE_CLIENT_EMAIL && process.env.FIREBASE_PRIVATE_KEY
+
+    if (!hasFirebaseConfig) {
+      console.log(`[Metadata] Firebase not configured, using mock data for ${username}`)
+      return {
+        title: `${mockCreatorData.displayName} | MassClip`,
+        description: mockCreatorData.bio,
+        openGraph: {
+          title: `${mockCreatorData.displayName} | MassClip`,
+          description: mockCreatorData.bio,
+          url: `https://massclip.pro/creator/${username}`,
+          siteName: "MassClip",
+          images: [
+            {
+              url: mockCreatorData.profilePic,
+              width: 1200,
+              height: 630,
+              alt: mockCreatorData.displayName,
+            },
+          ],
+          locale: "en_US",
+          type: "website",
+        },
+      }
+    }
+
     // Initialize Firebase Admin
+    const { initializeFirebaseAdmin, db } = await import("@/lib/firebase-admin")
     initializeFirebaseAdmin()
 
     console.log(`[Metadata] Looking for user with username: ${username}`)
@@ -109,7 +155,29 @@ export default async function CreatorProfilePage({ params }: { params: { usernam
   try {
     console.log(`[Page] Fetching creator profile for username: ${username}`)
 
+    // Check if Firebase is configured
+    const hasFirebaseConfig =
+      process.env.FIREBASE_PROJECT_ID && process.env.FIREBASE_CLIENT_EMAIL && process.env.FIREBASE_PRIVATE_KEY
+
+    if (!hasFirebaseConfig) {
+      console.log(`[Page] Firebase not configured, using mock data for ${username}`)
+
+      // Return mock data for development
+      if (username.toLowerCase() === "take") {
+        return (
+          <>
+            <ProfileViewTracker profileUserId={mockCreatorData.uid} />
+            <CreatorProfileWithSidebar creator={mockCreatorData} />
+          </>
+        )
+      } else {
+        // For other usernames, show not found
+        notFound()
+      }
+    }
+
     // Initialize Firebase Admin
+    const { initializeFirebaseAdmin, db } = await import("@/lib/firebase-admin")
     initializeFirebaseAdmin()
 
     let userData = null
@@ -246,6 +314,18 @@ export default async function CreatorProfilePage({ params }: { params: { usernam
     )
   } catch (error) {
     console.error(`[Page] Error fetching creator profile for ${username}:`, error)
+
+    // If it's the 'take' user and there's an error, show mock data
+    if (username.toLowerCase() === "take") {
+      console.log(`[Page] Showing mock data for ${username} due to error`)
+      return (
+        <>
+          <ProfileViewTracker profileUserId={mockCreatorData.uid} />
+          <CreatorProfileWithSidebar creator={mockCreatorData} />
+        </>
+      )
+    }
+
     notFound()
   }
 }

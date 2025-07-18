@@ -4,5 +4,3 @@ export function MaintenanceCover() {
   // Always return null to disable maintenance mode
   return null
 }
-
-export default MaintenanceCover
