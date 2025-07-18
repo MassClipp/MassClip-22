@@ -1,7 +1,6 @@
 import type React from "react"
 import type { Metadata } from "next"
 import { Inter } from "next/font/google"
-import { MaintenanceCover } from "@/components/maintenance-cover"
 import { Providers } from "@/components/providers"
 import { AuthProvider } from "@/contexts/auth-context"
 import { DownloadLimitProvider } from "@/contexts/download-limit-context"
@@ -46,7 +45,6 @@ export default function RootLayout({
         <Toaster />
 
         {/* Maintenance overlay – rendered last so it sits on top */}
-        <MaintenanceCover />
       </body>
     </html>
   )
