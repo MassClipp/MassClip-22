@@ -1,90 +1,53 @@
 import { type NextRequest, NextResponse } from "next/server"
+import { db } from "@/lib/firebase-admin"
 import { headers } from "next/headers"
-import { initializeFirebaseAdmin, db } from "@/lib/firebase/firebaseAdmin"
 
-// Initialize Firebase Admin
-initializeFirebaseAdmin()
+async function getUserIdFromHeader(): Promise<string | null> {
+  const headersList = headers()
+  const authorization = headersList.get("authorization")
 
-async function verifyAuthToken(request: NextRequest) {
+  if (!authorization || !authorization.startsWith("Bearer ")) {
+    return null
+  }
+
+  const token = authorization.split("Bearer ")[1]
   try {
-    const headersList = headers()
-    const authorization = headersList.get("authorization")
-
-    if (!authorization?.startsWith("Bearer ")) {
-      console.log("❌ [Auth] No Bearer token found")
-      return null
-    }
-
-    const token = authorization.split("Bearer ")[1]
-    if (!token) {
-      console.log("❌ [Auth] Empty token")
-      return null
-    }
-
-    // Import auth here to avoid initialization issues
     const { getAuth } = await import("firebase-admin/auth")
     const decodedToken = await getAuth().verifyIdToken(token)
-    console.log("✅ [Auth] Token verified for user:", decodedToken.uid)
-    return decodedToken
+    return decodedToken.uid
   } catch (error) {
-    console.error("❌ [Auth] Token verification failed:", error)
+    console.error("❌ [User Profile API] Token verification failed:", error)
     return null
   }
 }
 
 export async function GET(request: NextRequest) {
   try {
-    console.log("🔍 [User Profile API] GET request received")
+    const userId = await getUserIdFromHeader()
 
-    // Verify authentication
-    const user = await verifyAuthToken(request)
-    if (!user) {
-      console.log("❌ [User Profile API] Unauthorized request")
-      return NextResponse.json(
-        {
-          error: "Unauthorized",
-          details: "Valid authentication token required",
-        },
-        { status: 401 },
-      )
+    if (!userId) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    // Get UID from query params or use authenticated user's UID
-    const { searchParams } = new URL(request.url)
-    const uid = searchParams.get("uid") || user.uid
+    console.log(`🔍 [User Profile API] Fetching profile for user: ${userId}`)
 
-    console.log(`🔍 [User Profile API] Fetching profile for UID: ${uid}`)
+    const doc = await db.collection("users").doc(userId).get()
 
-    // Get user profile from Firestore
-    const userDocRef = db.collection("users").doc(uid)
-    const userDoc = await userDocRef.get()
-
-    if (!userDoc || !userDoc.exists) {
-      console.log(`❌ [User Profile API] User profile not found for UID: ${uid}`)
-      return NextResponse.json(
-        {
-          error: "Not Found",
-          details: "User profile not found",
-        },
-        { status: 404 },
-      )
+    if (!doc.exists) {
+      return NextResponse.json({ error: "User not found" }, { status: 404 })
     }
 
-    const userData = userDoc.data() || {}
-    console.log(`✅ [User Profile API] User profile found:`, userData)
-
-    // Return user profile data
     return NextResponse.json({
-      uid: uid,
-      username: userData.username,
-      displayName: userData.displayName,
-      email: userData.email,
-      createdAt: userData.createdAt,
+      success: true,
+      profile: doc.data(),
     })
   } catch (error) {
     console.error("❌ [User Profile API] Error:", error)
     return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Unknown error occurred" },
+      {
+        error: "Failed to fetch user profile",
+        details: error instanceof Error ? error.message : "Unknown error",
+      },
       { status: 500 },
     )
   }

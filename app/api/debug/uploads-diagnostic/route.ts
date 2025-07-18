@@ -21,26 +21,30 @@ if (!getApps().length) {
 
 const db = getFirestore()
 
+async function getUserInfo(request: NextRequest): Promise<string | null> {
+  const headersList = headers()
+  const authorization = headersList.get("authorization")
+
+  if (!authorization || !authorization.startsWith("Bearer ")) {
+    return null
+  }
+
+  try {
+    const token = authorization.split("Bearer ")[1]
+    const auth = getAuth()
+    const decodedToken = await auth.verifyIdToken(token)
+    return decodedToken.uid
+  } catch (tokenError) {
+    console.log("⚠️ [Uploads Diagnostic] Token verification failed, proceeding without user context")
+    return null
+  }
+}
+
 export async function GET(request: NextRequest) {
   console.log("🚀 [Uploads Diagnostic] Starting diagnostic")
 
   try {
-    // Get authorization header
-    const headersList = headers()
-    const authorization = headersList.get("authorization")
-
-    let userId = null
-    if (authorization && authorization.startsWith("Bearer ")) {
-      try {
-        const token = authorization.split("Bearer ")[1]
-        const auth = getAuth()
-        const decodedToken = await auth.verifyIdToken(token)
-        userId = decodedToken.uid
-        console.log("✅ [Uploads Diagnostic] User ID:", userId)
-      } catch (tokenError) {
-        console.log("⚠️ [Uploads Diagnostic] Token verification failed, proceeding without user context")
-      }
-    }
+    const userId = await getUserInfo(request)
 
     const diagnostic = {
       timestamp: new Date().toISOString(),

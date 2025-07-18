@@ -1,16 +1,33 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { auth, db } from "@/lib/firebase-admin"
+import { db } from "@/lib/firebase-admin"
+import { headers } from "next/headers"
+
+async function getUserIdFromHeader(): Promise<string | null> {
+  const headersList = headers()
+  const authorization = headersList.get("authorization")
+
+  if (!authorization || !authorization.startsWith("Bearer ")) {
+    return null
+  }
+
+  const token = authorization.split("Bearer ")[1]
+  try {
+    const { getAuth } = await import("firebase-admin/auth")
+    const decodedToken = await getAuth().verifyIdToken(token)
+    return decodedToken.uid
+  } catch (error) {
+    console.error("❌ [Unified Purchases API] Auth error:", error)
+    return null
+  }
+}
 
 export async function GET(request: NextRequest) {
   try {
-    const authHeader = request.headers.get("authorization")
-    if (!authHeader?.startsWith("Bearer ")) {
-      return NextResponse.json({ error: "Authentication required" }, { status: 401 })
-    }
+    const userId = await getUserIdFromHeader()
 
-    const idToken = authHeader.split("Bearer ")[1]
-    const decodedToken = await auth.verifyIdToken(idToken)
-    const userId = decodedToken.uid
+    if (!userId) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    }
 
     console.log(`🔍 [Unified Purchases API] Fetching purchases for user: ${userId}`)
 
@@ -122,8 +139,8 @@ export async function GET(request: NextRequest) {
           allPurchases.push({
             id: doc.id,
             productBoxId: bundleId,
-            bundleTitle: bundleDetails?.title || "Untitled Bundle",
-            productBoxTitle: bundleDetails?.title || "Untitled Bundle",
+            bundleTitle: bundleDetails?.title || data.bundleTitle || "Untitled Bundle",
+            productBoxTitle: bundleDetails?.title || data.bundleTitle || "Untitled Bundle",
             productBoxDescription: bundleDetails?.description || data.description || "Premium content bundle",
             thumbnailUrl: bundleDetails?.thumbnail,
             productBoxThumbnail: bundleDetails?.thumbnail,
@@ -251,18 +268,18 @@ export async function GET(request: NextRequest) {
     console.log(`✅ [Unified Purchases API] Total unique purchases found: ${allPurchases.length}`)
 
     return NextResponse.json({
+      success: true,
       purchases: allPurchases,
       totalCount: allPurchases.length,
       userId,
       timestamp: new Date().toISOString(),
     })
-  } catch (error: any) {
-    console.error(`❌ [Unified Purchases API] Error:`, error)
+  } catch (error) {
+    console.error("❌ [Unified Purchases API] Error:", error)
     return NextResponse.json(
       {
         error: "Failed to fetch purchases",
-        details: error.message,
-        purchases: [],
+        details: error instanceof Error ? error.message : "Unknown error",
       },
       { status: 500 },
     )

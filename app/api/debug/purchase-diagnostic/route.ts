@@ -1,10 +1,14 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { db } from "@/lib/firebase-admin"
 
+async function getUserIdFromParams(request: NextRequest): Promise<string | null> {
+  const searchParams = request.nextUrl.searchParams
+  return searchParams.get("userId")
+}
+
 export async function GET(request: NextRequest) {
   try {
-    const searchParams = request.nextUrl.searchParams
-    const userId = searchParams.get("userId")
+    const userId = await getUserIdFromParams(request)
 
     if (!userId) {
       return NextResponse.json({ error: "User ID is required" }, { status: 400 })

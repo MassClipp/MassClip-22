@@ -1,13 +1,33 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { verifyIdToken } from "@/lib/auth-utils"
 import { db } from "@/lib/firebase-admin"
+import { headers } from "next/headers"
+
+async function verifyToken(request: NextRequest): Promise<any> {
+  try {
+    const headersList = headers()
+    const authorization = headersList.get("authorization")
+
+    if (!authorization || !authorization.startsWith("Bearer ")) {
+      console.error(`❌ [List Bundles Debug] Authentication failed`)
+      return null
+    }
+
+    const token = authorization.split("Bearer ")[1]
+    const authResult = await verifyIdToken(request, token)
+    return authResult
+  } catch (error) {
+    console.error(`❌ [List Bundles Debug] Authentication failed`, error)
+    return null
+  }
+}
 
 export async function GET(request: NextRequest) {
   try {
     console.log(`📦 [List Bundles Debug] Fetching available bundles`)
 
     // Verify authentication
-    const decodedToken = await verifyIdToken(request)
+    const decodedToken = await verifyToken(request)
     if (!decodedToken) {
       console.error(`❌ [List Bundles Debug] Authentication failed`)
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })

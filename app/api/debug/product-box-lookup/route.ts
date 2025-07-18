@@ -1,16 +1,26 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { db } from "@/lib/firebase-admin"
 import { getAuth } from "firebase-admin/auth"
+import { headers } from "next/headers"
+
+async function getAuthToken(request: NextRequest): Promise<string | null> {
+  const headersList = headers()
+  const authorization = headersList.get("Authorization")
+  if (!authorization || !authorization.startsWith("Bearer ")) {
+    return null
+  }
+
+  return authorization.split("Bearer ")[1]
+}
 
 export async function GET(request: NextRequest) {
   try {
     // Get Firebase auth token
-    const authHeader = request.headers.get("Authorization")
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    const token = await getAuthToken(request)
+    if (!token) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const token = authHeader.split("Bearer ")[1]
     let decodedToken
 
     try {

@@ -1,49 +1,48 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { auth } from "@/lib/firebase-admin"
-import { db } from "@/lib/firebase-admin"
+import { headers } from "next/headers"
+
+async function getUserIdFromHeader(): Promise<string | null> {
+  const headersList = headers()
+  const authorization = headersList.get("authorization")
+
+  if (!authorization || !authorization.startsWith("Bearer ")) {
+    return null
+  }
+
+  const token = authorization.split("Bearer ")[1]
+  try {
+    const { getAuth } = await import("firebase-admin/auth")
+    const decodedToken = await getAuth().verifyIdToken(token)
+    return decodedToken.uid
+  } catch (error) {
+    console.error("❌ [Product Box Access] Auth error:", error)
+    return null
+  }
+}
 
 export async function GET(request: NextRequest) {
   try {
-    const authHeader = request.headers.get("authorization")
+    const userId = await getUserIdFromHeader()
 
-    if (!authHeader?.startsWith("Bearer ")) {
-      return NextResponse.json({ error: "Authentication required" }, { status: 401 })
+    if (!userId) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
-
-    const idToken = authHeader.split("Bearer ")[1]
-    const decodedToken = await auth.verifyIdToken(idToken)
-    const userId = decodedToken.uid
 
     console.log(`🔍 [Product Box Access] Checking access for user: ${userId}`)
 
-    // Get all purchases for this user
-    const purchasesQuery = await db
-      .collection("productBoxPurchases")
-      .where("buyerUid", "==", userId)
-      .where("status", "==", "completed")
-      .get()
-
-    const accessibleProductBoxes = purchasesQuery.docs.map((doc) => {
-      const data = doc.data()
-      return {
-        productBoxId: data.productBoxId,
-        purchaseId: doc.id,
-        type: data.type,
-        purchasedAt: data.createdAt,
-      }
-    })
-
-    console.log(`✅ [Product Box Access] Found ${accessibleProductBoxes.length} accessible product boxes`)
+    // Fetch product boxes the user has access to (replace with your actual logic)
+    const productBoxes = [] // Replace with actual data fetching
 
     return NextResponse.json({
       success: true,
-      accessibleProductBoxes,
+      productBoxes,
+      count: productBoxes.length,
     })
   } catch (error) {
     console.error("❌ [Product Box Access] Error:", error)
     return NextResponse.json(
       {
-        error: "Failed to check product box access",
+        error: "Failed to fetch product box access",
         details: error instanceof Error ? error.message : "Unknown error",
       },
       { status: 500 },

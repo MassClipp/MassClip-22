@@ -1,6 +1,13 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { initializeFirebaseAdmin, db } from "@/lib/firebase/firebaseAdmin"
 
+async function getParams(request: NextRequest): Promise<{ limit: number }> {
+  const { searchParams } = new URL(request.url)
+  const limitParam = searchParams.get("limit")
+  const limit = limitParam ? Number.parseInt(limitParam, 10) : 50 // Default limit
+  return { limit }
+}
+
 // Initialize Firebase Admin
 initializeFirebaseAdmin()
 
@@ -9,6 +16,8 @@ export async function GET(request: NextRequest) {
     console.log("🔍 [Discover Free Content] Starting fresh request...")
     console.log("🔍 [Discover Free Content] Request URL:", request.url)
     console.log("🔍 [Discover Free Content] Timestamp:", new Date().toISOString())
+
+    const { limit } = await getParams(request)
 
     if (!db) {
       console.error("❌ [Discover Free Content] Database not initialized")
@@ -27,7 +36,7 @@ export async function GET(request: NextRequest) {
     console.log("🔍 [Discover Free Content] Querying ONLY free_content collection...")
 
     const freeContentRef = db.collection("free_content")
-    const snapshot = await freeContentRef.get()
+    const snapshot = await freeContentRef.limit(limit).get()
 
     console.log(`📊 [Discover Free Content] Raw document count: ${snapshot.size}`)
 
@@ -190,7 +199,7 @@ export async function GET(request: NextRequest) {
       return timeB - timeA
     })
 
-    console.log(`✅ [Discover Free Content] Final result: ${videos.length} videos`)
+    console.log(`✅ [Discover Free Content] Returning ${videos.length} videos`)
     console.log(
       `📋 [Discover Free Content] Final video IDs:`,
       videos.map((v) => v.id),
@@ -198,7 +207,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      videos: videos,
+      videos,
       count: videos.length,
       rawDocumentCount: snapshot.size,
       processedDocumentCount: processedIds.size,
@@ -207,16 +216,12 @@ export async function GET(request: NextRequest) {
     })
   } catch (error) {
     console.error("❌ [Discover Free Content] Error:", error)
-
     return NextResponse.json(
       {
-        success: true,
-        videos: [],
-        count: 0,
-        error: error instanceof Error ? error.message : "Failed to fetch free content",
-        timestamp: new Date().toISOString(),
+        error: "Failed to fetch free content",
+        details: error instanceof Error ? error.message : "Unknown error",
       },
-      { status: 200 },
+      { status: 500 },
     )
   }
 }

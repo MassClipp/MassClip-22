@@ -1,12 +1,14 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { initializeFirebaseAdmin, db } from "@/lib/firebase/firebaseAdmin"
+import { headers } from "next/headers"
 
 // Initialize Firebase Admin
 initializeFirebaseAdmin()
 
 async function verifyAuthToken(request: NextRequest) {
   try {
-    const authHeader = request.headers.get("authorization")
+    const headersList = headers()
+    const authHeader = headersList.get("authorization")
     if (!authHeader || !authHeader.startsWith("Bearer ")) {
       return null
     }
