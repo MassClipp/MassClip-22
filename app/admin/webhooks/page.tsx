@@ -1,14 +1,13 @@
-"use client"
-import WebhookDiagnosticClient from "./WebhookDiagnosticClient"
-
-export const dynamic = "force-dynamic" // ensure this route is rendered at runtime
+import dynamic from "next/dynamic"
 
 /**
- * Server wrapper that simply streams the client component.
- * Keeps Auth logic in the browser and prevents build-time errors.
+ * Make this route render ONLY on the client so hooks like `useAuth`
+ * are never executed during the build.
  */
+const ForceDynamic = "force-dynamic"
+
+const WebhookDiagnosticClient = dynamic(() => import("./WebhookDiagnosticClient"), { ssr: false })
+
 export default function WebhookDiagnosticPage() {
   return <WebhookDiagnosticClient />
 }
-
-// Client component logic can remain in WebhookDiagnosticClient.tsx

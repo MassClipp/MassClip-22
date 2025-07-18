@@ -1,6 +1,6 @@
-export const dynamic = "force-dynamic"
+import dynamic from "next/dynamic"
 
-import StripeTestClientPage from "./StripeTestClientPage"
+const StripeTestClientPage = dynamic(() => import("./StripeTestClientPage"), { ssr: false })
 
 export default function StripeTestPage() {
   return <StripeTestClientPage />

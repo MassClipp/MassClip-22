@@ -1,5 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  serverExternalPackages: ['firebase-admin', 'stripe'],
+
   eslint: {
     ignoreDuringBuilds: true,
   },
@@ -8,9 +10,6 @@ const nextConfig = {
   },
   images: {
     unoptimized: true,
-  },
-  experimental: {
-    serverExternalPackages: ["firebase-admin", "stripe"],
   },
 }
 
