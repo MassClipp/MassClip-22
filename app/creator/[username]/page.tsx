@@ -3,24 +3,6 @@ import type { Metadata } from "next"
 import CreatorProfileWithSidebar from "@/components/creator-profile-with-sidebar"
 import ProfileViewTracker from "@/components/profile-view-tracker"
 
-// Mock data for development when Firebase isn't configured
-const mockCreatorData = {
-  uid: "mock-uid-123",
-  username: "take",
-  displayName: "Take",
-  bio: "Content creator and developer",
-  profilePic: "/placeholder.svg?height=200&width=200",
-  createdAt: new Date().toISOString(),
-  socialLinks: {
-    instagram: "https://instagram.com/take",
-    twitter: "https://twitter.com/take",
-    youtube: "https://youtube.com/@take",
-    website: "https://take.dev",
-  },
-  email: "take@example.com",
-  updatedAt: new Date().toISOString(),
-}
-
 // Helper function to convert Firestore data to plain objects
 function serializeData(data: any) {
   if (!data) return null
@@ -44,66 +26,42 @@ export async function generateMetadata({ params }: { params: { username: string 
   const { username } = params
 
   try {
-    // Try to initialize Firebase Admin only if environment variables are available
-    const hasFirebaseConfig =
-      process.env.FIREBASE_PROJECT_ID && process.env.FIREBASE_CLIENT_EMAIL && process.env.FIREBASE_PRIVATE_KEY
-
-    if (!hasFirebaseConfig) {
-      console.log(`[Metadata] Firebase not configured, using mock data for ${username}`)
-      return {
-        title: `${mockCreatorData.displayName} | MassClip`,
-        description: mockCreatorData.bio,
-        openGraph: {
-          title: `${mockCreatorData.displayName} | MassClip`,
-          description: mockCreatorData.bio,
-          url: `https://massclip.pro/creator/${username}`,
-          siteName: "MassClip",
-          images: [
-            {
-              url: mockCreatorData.profilePic,
-              width: 1200,
-              height: 630,
-              alt: mockCreatorData.displayName,
-            },
-          ],
-          locale: "en_US",
-          type: "website",
-        },
-      }
-    }
-
-    // Initialize Firebase Admin
-    const { initializeFirebaseAdmin, db } = await import("@/lib/firebase-admin")
-    initializeFirebaseAdmin()
-
-    console.log(`[Metadata] Looking for user with username: ${username}`)
-
-    // First try users collection for most up-to-date data
-    const usersRef = db.collection("users")
-    let querySnapshot = await usersRef.where("username", "==", username.toLowerCase()).get()
-
+    // Try to initialize Firebase Admin if available
     let userData = null
 
-    if (!querySnapshot.empty) {
-      userData = querySnapshot.docs[0].data()
-      console.log(`[Metadata] Found user in users collection`)
-    } else {
-      // Fallback to creators collection
-      console.log(`[Metadata] User not found in users collection, checking creators`)
-      const creatorsRef = db.collection("creators")
-      querySnapshot = await creatorsRef.where("username", "==", username.toLowerCase()).get()
+    try {
+      const { initializeFirebaseAdmin, db } = await import("@/lib/firebase-admin")
+      initializeFirebaseAdmin()
+
+      console.log(`[Metadata] Looking for user with username: ${username}`)
+
+      // First try users collection for most up-to-date data
+      const usersRef = db.collection("users")
+      let querySnapshot = await usersRef.where("username", "==", username.toLowerCase()).get()
 
       if (!querySnapshot.empty) {
         userData = querySnapshot.docs[0].data()
-        console.log(`[Metadata] Found user in creators collection`)
+        console.log(`[Metadata] Found user in users collection`)
+      } else {
+        // Fallback to creators collection
+        console.log(`[Metadata] User not found in users collection, checking creators`)
+        const creatorsRef = db.collection("creators")
+        querySnapshot = await creatorsRef.where("username", "==", username.toLowerCase()).get()
+
+        if (!querySnapshot.empty) {
+          userData = querySnapshot.docs[0].data()
+          console.log(`[Metadata] Found user in creators collection`)
+        }
       }
+    } catch (firebaseError) {
+      console.log(`[Metadata] Firebase not available, using fallback metadata`)
     }
 
     if (!userData) {
       console.log(`[Metadata] Creator not found for username: ${username}`)
       return {
-        title: "Creator Not Found | MassClip",
-        description: "The creator profile you're looking for doesn't exist.",
+        title: `${username} | MassClip`,
+        description: `Check out ${username}'s content on MassClip`,
       }
     }
 
@@ -143,8 +101,8 @@ export async function generateMetadata({ params }: { params: { username: string 
   } catch (error) {
     console.error("[Metadata] Error generating metadata:", error)
     return {
-      title: "Creator Profile | MassClip",
-      description: "View creator content on MassClip",
+      title: `${username} | MassClip`,
+      description: `Check out ${username}'s content on MassClip`,
     }
   }
 }
@@ -155,110 +113,106 @@ export default async function CreatorProfilePage({ params }: { params: { usernam
   try {
     console.log(`[Page] Fetching creator profile for username: ${username}`)
 
-    // Check if Firebase is configured
-    const hasFirebaseConfig =
-      process.env.FIREBASE_PROJECT_ID && process.env.FIREBASE_CLIENT_EMAIL && process.env.FIREBASE_PRIVATE_KEY
-
-    if (!hasFirebaseConfig) {
-      console.log(`[Page] Firebase not configured, using mock data for ${username}`)
-
-      // Return mock data for development
-      if (username.toLowerCase() === "take") {
-        return (
-          <>
-            <ProfileViewTracker profileUserId={mockCreatorData.uid} />
-            <CreatorProfileWithSidebar creator={mockCreatorData} />
-          </>
-        )
-      } else {
-        // For other usernames, show not found
-        notFound()
-      }
-    }
-
-    // Initialize Firebase Admin
-    const { initializeFirebaseAdmin, db } = await import("@/lib/firebase-admin")
-    initializeFirebaseAdmin()
-
     let userData = null
     let uid = null
 
-    // First try to find the user in the users collection (most up-to-date data)
-    console.log(`[Page] Checking users collection for username: ${username}`)
-    const usersRef = db.collection("users")
-    let querySnapshot = await usersRef.where("username", "==", username.toLowerCase()).get()
+    try {
+      // Try to initialize Firebase Admin if available
+      const { initializeFirebaseAdmin, db } = await import("@/lib/firebase-admin")
+      initializeFirebaseAdmin()
 
-    if (!querySnapshot.empty) {
-      const userDoc = querySnapshot.docs[0]
-      userData = userDoc.data()
-      uid = userData.uid || userDoc.id
-      console.log(`[Page] Found user in users collection with UID: ${uid}`)
-    } else {
-      // Fallback: try case-insensitive match in users collection
-      console.log(`[Page] No exact match found in users collection, trying case-insensitive match`)
-      const allUsersSnapshot = await usersRef.get()
-      const matchingDocs = allUsersSnapshot.docs.filter((doc) => {
-        const data = doc.data()
-        return data.username && data.username.toLowerCase() === username.toLowerCase()
-      })
-
-      if (matchingDocs.length > 0) {
-        userData = matchingDocs[0].data()
-        uid = userData.uid || matchingDocs[0].id
-        console.log(`[Page] Found user via case-insensitive match with UID: ${uid}`)
-      }
-    }
-
-    // If still not found, try creators collection
-    if (!userData) {
-      console.log(`[Page] User not found in users collection, checking creators collection`)
-      const creatorsRef = db.collection("creators")
-
-      // Try exact match on username
-      querySnapshot = await creatorsRef.where("username", "==", username.toLowerCase()).get()
+      // First try to find the user in the users collection (most up-to-date data)
+      console.log(`[Page] Checking users collection for username: ${username}`)
+      const usersRef = db.collection("users")
+      let querySnapshot = await usersRef.where("username", "==", username.toLowerCase()).get()
 
       if (!querySnapshot.empty) {
-        userData = querySnapshot.docs[0].data()
-        uid = userData.uid || querySnapshot.docs[0].id
-        console.log(`[Page] Found creator by username with UID: ${uid}`)
+        const userDoc = querySnapshot.docs[0]
+        userData = userDoc.data()
+        uid = userData.uid || userDoc.id
+        console.log(`[Page] Found user in users collection with UID: ${uid}`)
       } else {
-        // Try by document ID
-        console.log(`[Page] Creator not found by username, checking by document ID`)
-        const creatorDoc = await creatorsRef.doc(username.toLowerCase()).get()
+        // Fallback: try case-insensitive match in users collection
+        console.log(`[Page] No exact match found in users collection, trying case-insensitive match`)
+        const allUsersSnapshot = await usersRef.get()
+        const matchingDocs = allUsersSnapshot.docs.filter((doc) => {
+          const data = doc.data()
+          return data.username && data.username.toLowerCase() === username.toLowerCase()
+        })
 
-        if (creatorDoc.exists) {
-          userData = creatorDoc.data()
-          uid = userData.uid || creatorDoc.id
-          console.log(`[Page] Found creator by document ID with UID: ${uid}`)
+        if (matchingDocs.length > 0) {
+          userData = matchingDocs[0].data()
+          uid = userData.uid || matchingDocs[0].id
+          console.log(`[Page] Found user via case-insensitive match with UID: ${uid}`)
         }
       }
+
+      // If still not found, try creators collection
+      if (!userData) {
+        console.log(`[Page] User not found in users collection, checking creators collection`)
+        const creatorsRef = db.collection("creators")
+
+        // Try exact match on username
+        querySnapshot = await creatorsRef.where("username", "==", username.toLowerCase()).get()
+
+        if (!querySnapshot.empty) {
+          userData = querySnapshot.docs[0].data()
+          uid = userData.uid || querySnapshot.docs[0].id
+          console.log(`[Page] Found creator by username with UID: ${uid}`)
+        } else {
+          // Try by document ID
+          console.log(`[Page] Creator not found by username, checking by document ID`)
+          const creatorDoc = await creatorsRef.doc(username.toLowerCase()).get()
+
+          if (creatorDoc.exists) {
+            userData = creatorDoc.data()
+            uid = userData.uid || creatorDoc.id
+            console.log(`[Page] Found creator by document ID with UID: ${uid}`)
+          }
+        }
+      }
+
+      // If we found the user in creators collection but not users, try to get fresh data from users
+      if (uid && !userData.email) {
+        console.log(`[Page] Attempting to get fresh user data from users collection for UID: ${uid}`)
+        try {
+          const freshUserDoc = await db.collection("users").doc(uid).get()
+          if (freshUserDoc.exists) {
+            const freshUserData = freshUserDoc.data()
+            console.log(`[Page] Found fresh user data, merging with creator data`)
+
+            // Merge fresh user data with existing creator data, prioritizing user data
+            userData = {
+              ...userData,
+              ...freshUserData,
+              // Ensure we keep the UID
+              uid: uid,
+            }
+          }
+        } catch (error) {
+          console.warn(`[Page] Could not fetch fresh user data for UID ${uid}:`, error)
+        }
+      }
+    } catch (firebaseError) {
+      console.log(`[Page] Firebase not available, creating demo profile for: ${username}`)
+
+      // Create a demo profile when Firebase isn't configured
+      userData = {
+        uid: `demo-${username}`,
+        username: username.toLowerCase(),
+        displayName: username.charAt(0).toUpperCase() + username.slice(1),
+        bio: "This is a demo profile. Configure Firebase to see real creator data.",
+        profilePic: null,
+        email: `${username}@demo.com`,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      }
+      uid = userData.uid
     }
 
     if (!userData || !uid) {
       console.log(`[Page] Creator profile not found for username: ${username}`)
       notFound()
-    }
-
-    // If we found the user in creators collection but not users, try to get fresh data from users
-    if (uid && !userData.email) {
-      console.log(`[Page] Attempting to get fresh user data from users collection for UID: ${uid}`)
-      try {
-        const freshUserDoc = await db.collection("users").doc(uid).get()
-        if (freshUserDoc.exists) {
-          const freshUserData = freshUserDoc.data()
-          console.log(`[Page] Found fresh user data, merging with creator data`)
-
-          // Merge fresh user data with existing creator data, prioritizing user data
-          userData = {
-            ...userData,
-            ...freshUserData,
-            // Ensure we keep the UID
-            uid: uid,
-          }
-        }
-      } catch (error) {
-        console.warn(`[Page] Could not fetch fresh user data for UID ${uid}:`, error)
-      }
     }
 
     console.log(
@@ -315,17 +269,24 @@ export default async function CreatorProfilePage({ params }: { params: { usernam
   } catch (error) {
     console.error(`[Page] Error fetching creator profile for ${username}:`, error)
 
-    // If it's the 'take' user and there's an error, show mock data
-    if (username.toLowerCase() === "take") {
-      console.log(`[Page] Showing mock data for ${username} due to error`)
-      return (
-        <>
-          <ProfileViewTracker profileUserId={mockCreatorData.uid} />
-          <CreatorProfileWithSidebar creator={mockCreatorData} />
-        </>
-      )
+    // Return a fallback profile instead of notFound
+    const fallbackCreatorData = {
+      uid: `fallback-${username}`,
+      username: username.toLowerCase(),
+      displayName: username.charAt(0).toUpperCase() + username.slice(1),
+      bio: "Profile temporarily unavailable. Please try again later.",
+      profilePic: "",
+      createdAt: new Date().toISOString(),
+      socialLinks: {},
+      email: "",
+      updatedAt: new Date().toISOString(),
     }
 
-    notFound()
+    return (
+      <>
+        <ProfileViewTracker profileUserId={fallbackCreatorData.uid} />
+        <CreatorProfileWithSidebar creator={fallbackCreatorData} />
+      </>
+    )
   }
 }
