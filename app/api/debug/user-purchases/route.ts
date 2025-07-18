@@ -1,68 +1,91 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { headers } from "next/headers"
-import { db } from "@/lib/firebase-admin"
-
-async function getUserIdFromHeader(): Promise<string | null> {
-  const headersList = headers()
-  const authorization = headersList.get("authorization")
-
-  if (!authorization || !authorization.startsWith("Bearer ")) {
-    return null
-  }
-
-  const token = authorization.split("Bearer ")[1]
-  // Verify the Firebase ID token (replace with your actual verification logic)
-  // For example, using firebase-admin:
-  try {
-    const { getAuth } = await import("firebase-admin/auth")
-    const decodedToken = await getAuth().verifyIdToken(token)
-    return decodedToken.uid
-  } catch (error) {
-    console.error("❌ [Purchases API] Auth error:", error)
-    return null
-  }
-}
+import { auth, db } from "@/lib/firebase-admin"
 
 export async function GET(request: NextRequest) {
   try {
-    const userId = await getUserIdFromHeader()
-
-    if (!userId) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    const authHeader = request.headers.get("authorization")
+    if (!authHeader?.startsWith("Bearer ")) {
+      return NextResponse.json({ error: "Authentication required" }, { status: 401 })
     }
 
-    console.log(`🔍 [Purchases API] Fetching purchases for user: ${userId}`)
+    const idToken = authHeader.split("Bearer ")[1]
+    const decodedToken = await auth.verifyIdToken(idToken)
+    const userId = decodedToken.uid
 
-    // Query unified purchases
-    const unifiedPurchasesRef = db.collection("userPurchases").doc(userId).collection("purchases")
-    const unifiedSnapshot = await unifiedPurchasesRef.get()
+    console.log(`🔍 [Debug Purchases] Checking purchases for user: ${userId}`)
 
-    const unifiedPurchases = unifiedSnapshot.docs.map((doc) => ({
-      id: doc.id,
-      ...doc.data(),
-    }))
+    // Check all possible purchase collections
+    const collections = ["productBoxPurchases", "unifiedPurchases", "purchases", "userPurchases"]
 
-    // Query legacy purchases
-    const legacyPurchasesRef = db.collection("users").doc(userId).collection("purchases")
-    const legacySnapshot = await legacyPurchasesRef.get()
+    const allPurchases: any[] = []
 
-    const legacyPurchases = legacySnapshot.docs.map((doc) => ({
-      id: doc.id,
-      ...doc.data(),
-    }))
+    for (const collectionName of collections) {
+      try {
+        console.log(`🔍 [Debug Purchases] Checking collection: ${collectionName}`)
+
+        let query
+        if (collectionName === "userPurchases") {
+          // userPurchases has subcollections
+          query = db.collection("userPurchases").doc(userId).collection("purchases")
+        } else {
+          // Other collections use buyerUid or userId field
+          query = db.collection(collectionName).where("buyerUid", "==", userId)
+
+          // Also try userId field
+          const userIdQuery = db.collection(collectionName).where("userId", "==", userId)
+          const userIdSnapshot = await userIdQuery.get()
+
+          if (!userIdSnapshot.empty) {
+            userIdSnapshot.forEach((doc) => {
+              allPurchases.push({
+                collection: collectionName,
+                id: doc.id,
+                data: doc.data(),
+                queryField: "userId",
+              })
+            })
+          }
+        }
+
+        const snapshot = await query.get()
+        console.log(`✅ [Debug Purchases] Found ${snapshot.size} documents in ${collectionName}`)
+
+        snapshot.forEach((doc) => {
+          allPurchases.push({
+            collection: collectionName,
+            id: doc.id,
+            data: doc.data(),
+            queryField: collectionName === "userPurchases" ? "subcollection" : "buyerUid",
+          })
+        })
+      } catch (error) {
+        console.warn(`⚠️ [Debug Purchases] Error checking ${collectionName}:`, error)
+      }
+    }
+
+    console.log(`✅ [Debug Purchases] Total purchases found: ${allPurchases.length}`)
+
+    // Also check what collections exist
+    const collectionsSnapshot = await db.listCollections()
+    const availableCollections = collectionsSnapshot.map((col) => col.id)
 
     return NextResponse.json({
-      success: true,
-      unifiedPurchases,
-      legacyPurchases,
       userId,
+      userEmail: decodedToken.email,
+      totalPurchases: allPurchases.length,
+      purchases: allPurchases,
+      availableCollections,
+      debug: {
+        searchedCollections: collections,
+        timestamp: new Date().toISOString(),
+      },
     })
-  } catch (error) {
-    console.error("❌ [Purchases API] Error:", error)
+  } catch (error: any) {
+    console.error(`❌ [Debug Purchases] Error:`, error)
     return NextResponse.json(
       {
-        error: "Failed to fetch purchases",
-        details: error instanceof Error ? error.message : "Unknown error",
+        error: "Failed to debug purchases",
+        details: error.message,
       },
       { status: 500 },
     )

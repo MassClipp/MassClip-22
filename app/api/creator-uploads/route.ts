@@ -5,38 +5,6 @@ import { cookies } from "next/headers"
 // Initialize Firebase Admin
 initializeFirebaseAdmin()
 
-async function getUserId(request: NextRequest): Promise<string | null> {
-  let userId = null
-
-  // Method 1: Try from URL params
-  const { searchParams } = new URL(request.url)
-  userId = searchParams.get("userId")
-
-  // Method 2: Try from cookies/headers
-  if (!userId) {
-    const cookieStore = cookies()
-    const sessionCookie = cookieStore.get("session")
-    if (sessionCookie) {
-      try {
-        const sessionData = JSON.parse(sessionCookie.value)
-        userId = sessionData.uid || sessionData.user?.uid
-      } catch (e) {
-        console.log("Could not parse session cookie")
-      }
-    }
-  }
-
-  // Method 3: Try from Authorization header
-  if (!userId) {
-    const authHeader = request.headers.get("authorization")
-    if (authHeader && authHeader.startsWith("Bearer ")) {
-      userId = authHeader.replace("Bearer ", "")
-    }
-  }
-
-  return userId
-}
-
 export async function GET(request: NextRequest) {
   try {
     console.log("🔍 [Creator Uploads] Starting request...")
@@ -54,7 +22,34 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    const userId = await getUserId(request)
+    // Try to get user ID from various sources
+    let userId = null
+
+    // Method 1: Try from URL params
+    const { searchParams } = new URL(request.url)
+    userId = searchParams.get("userId")
+
+    // Method 2: Try from cookies/headers
+    if (!userId) {
+      const cookieStore = cookies()
+      const sessionCookie = cookieStore.get("session")
+      if (sessionCookie) {
+        try {
+          const sessionData = JSON.parse(sessionCookie.value)
+          userId = sessionData.uid || sessionData.user?.uid
+        } catch (e) {
+          console.log("Could not parse session cookie")
+        }
+      }
+    }
+
+    // Method 3: Try from Authorization header
+    if (!userId) {
+      const authHeader = request.headers.get("authorization")
+      if (authHeader && authHeader.startsWith("Bearer ")) {
+        userId = authHeader.replace("Bearer ", "")
+      }
+    }
 
     console.log("🔍 [Creator Uploads] User ID:", userId)
 

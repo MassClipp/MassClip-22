@@ -1,16 +1,11 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { db } from "@/lib/firebase-admin"
 
-async function getParams(request: NextRequest): Promise<{ productBoxId: string | null; userId: string | null }> {
-  const { searchParams } = new URL(request.url)
-  const productBoxId = searchParams.get("productBoxId")
-  const userId = searchParams.get("userId")
-  return { productBoxId, userId }
-}
-
 export async function GET(request: NextRequest) {
   try {
-    const { productBoxId, userId } = await getParams(request)
+    const { searchParams } = new URL(request.url)
+    const productBoxId = searchParams.get("productBoxId")
+    const userId = searchParams.get("userId")
 
     console.log("🔍 [Content Logging Debug] Checking content logging for:", { productBoxId, userId })
 

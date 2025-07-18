@@ -21,40 +21,28 @@ if (!getApps().length) {
 
 const db = getFirestore()
 
-async function getUserInfo(request: NextRequest): Promise<{ userId: string | null; email: string | null }> {
-  const headersList = headers()
-  const authorization = headersList.get("authorization")
-
-  if (!authorization || !authorization.startsWith("Bearer ")) {
-    return { userId: null, email: null }
-  }
-
-  const token = authorization.split("Bearer ")[1]
-  const auth = getAuth()
-  try {
-    const decodedToken = await auth.verifyIdToken(token)
-    return { userId: decodedToken.uid, email: decodedToken.email || null }
-  } catch (error) {
-    console.error("❌ [Find User Uploads] Token verification failed, proceeding without user context")
-    return { userId: null, email: null }
-  }
-}
-
 export async function GET(request: NextRequest) {
   console.log("🚀 [Find User Uploads] Starting comprehensive search")
 
   try {
-    const { userId, email } = await getUserInfo(request)
+    // Get authorization header
+    const headersList = headers()
+    const authorization = headersList.get("authorization")
 
-    if (!userId) {
+    if (!authorization || !authorization.startsWith("Bearer ")) {
       return NextResponse.json({ error: "Missing authorization header" }, { status: 401 })
     }
+
+    const token = authorization.split("Bearer ")[1]
+    const auth = getAuth()
+    const decodedToken = await auth.verifyIdToken(token)
+    const userId = decodedToken.uid
 
     console.log("🔍 [Find User Uploads] Searching for user:", userId)
 
     const results = {
       userId,
-      userEmail: email,
+      userEmail: decodedToken.email,
       collectionsFound: [],
       allCollections: [],
       userDocuments: [],
@@ -145,9 +133,9 @@ export async function GET(request: NextRequest) {
         }
 
         // Also try searching by email if available
-        if (email) {
+        if (decodedToken.email) {
           try {
-            const emailQuery = collectionRef.where("email", "==", email).limit(5)
+            const emailQuery = collectionRef.where("email", "==", decodedToken.email).limit(5)
             const emailSnapshot = await emailQuery.get()
 
             if (!emailSnapshot.empty) {
@@ -189,7 +177,7 @@ export async function GET(request: NextRequest) {
 
             // Look for any field that might contain our user ID
             Object.entries(data).forEach(([key, value]) => {
-              if (value === userId || value === email) {
+              if (value === userId || value === decodedToken.email) {
                 console.log(`🔍 [Find User Uploads] Potential match in ${collectionName}.${doc.id}.${key}: ${value}`)
                 results.potentialMatches.push({
                   id: doc.id,
@@ -222,7 +210,6 @@ export async function GET(request: NextRequest) {
     })
   } catch (error) {
     console.error("❌ [Find User Uploads] Unexpected error:", error)
-
     return NextResponse.json(
       {
         error: "Search failed",

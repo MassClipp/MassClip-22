@@ -1,21 +1,14 @@
-import { type NextRequest, NextResponse } from "next/server"
+import { NextResponse } from "next/server"
 import { initializeFirebaseAdmin } from "@/lib/firebase-admin"
 import { getFirestore } from "firebase-admin/firestore"
 import Stripe from "stripe"
 
-async function getUrl(request: NextRequest): Promise<string | null> {
-  return request.url
-}
-
-export async function GET(request: NextRequest) {
+export async function GET(request: Request) {
   try {
-    const url = await getUrl(request)
-
-    console.log(`🔍 [Verify Subscription] Verifying subscription from URL: ${url}`)
-
     // Get the session ID from the URL
-    const sessionId = new URL(url).searchParams.get("sessionId")
-    const userId = new URL(url).searchParams.get("userId")
+    const url = new URL(request.url)
+    const sessionId = url.searchParams.get("sessionId")
+    const userId = url.searchParams.get("userId")
 
     if (!sessionId) {
       return NextResponse.json({ error: "Missing sessionId parameter" }, { status: 400 })
@@ -140,13 +133,7 @@ export async function GET(request: NextRequest) {
       }
     }
   } catch (error) {
-    console.error("❌ [Verify Subscription] Error:", error)
-    return NextResponse.json(
-      {
-        error: "Failed to verify subscription",
-        details: error instanceof Error ? error.message : "Unknown error",
-      },
-      { status: 500 },
-    )
+    console.error("Error verifying subscription:", error)
+    return NextResponse.json({ error: error instanceof Error ? error.message : "Unknown error" }, { status: 500 })
   }
 }

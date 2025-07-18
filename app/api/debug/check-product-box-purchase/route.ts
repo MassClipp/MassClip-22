@@ -1,27 +1,22 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { auth, db } from "@/lib/firebase-admin"
-import { headers } from "next/headers"
-
-async function getUserIdFromHeader(): Promise<string | null> {
-  const headersList = headers()
-  const authorization = headersList.get("authorization")
-  if (!authorization || !authorization.startsWith("Bearer ")) {
-    return null
-  }
-
-  const token = authorization.split("Bearer ")[1]
-  try {
-    const decodedToken = await auth.verifyIdToken(token)
-    return decodedToken.uid
-  } catch (error) {
-    console.error("❌ [Check Purchase] Auth error:", error)
-    return null
-  }
-}
 
 export async function GET(request: NextRequest) {
   try {
-    const authenticatedUserId = await getUserIdFromHeader()
+    // Get auth token from header
+    const authHeader = request.headers.get("authorization")
+    let authenticatedUserId: string | null = null
+
+    if (authHeader && authHeader.startsWith("Bearer ")) {
+      const token = authHeader.substring(7)
+      try {
+        const decodedToken = await auth.verifyIdToken(token)
+        authenticatedUserId = decodedToken.uid
+      } catch (error) {
+        console.error("❌ [Check Purchase] Auth error:", error)
+        return NextResponse.json({ error: "Invalid authentication" }, { status: 401 })
+      }
+    }
 
     if (!authenticatedUserId) {
       return NextResponse.json({ error: "Authentication required" }, { status: 401 })

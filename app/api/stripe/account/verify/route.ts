@@ -1,8 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { auth } from "@/lib/firebase-admin"
+import { getServerSession } from "@/lib/server-session"
 import { db } from "@/lib/firebase-admin"
 import Stripe from "stripe"
-import { cookies } from "next/headers"
 
 export const runtime = "nodejs"
 
@@ -10,25 +9,15 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: "2024-06-20",
 })
 
-async function getSessionCookie(request: NextRequest): Promise<string | null> {
-  const cookieStore = cookies()
-  const sessionCookie = cookieStore.get("session")
-  return sessionCookie ? sessionCookie.value : null
-}
-
 export async function GET(request: NextRequest) {
   try {
-    const sessionCookie = await getSessionCookie(request)
-
-    if (!sessionCookie) {
+    const session = await getServerSession()
+    if (!session?.uid) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    // Verify the session cookie. In this case an additional check is performed.
-    const decodedToken = await auth.verifySessionCookie(sessionCookie)
-
     // Get user's Stripe account info
-    const userDoc = await db.collection("users").doc(decodedToken.uid).get()
+    const userDoc = await db.collection("users").doc(session.uid).get()
     if (!userDoc.exists) {
       return NextResponse.json({ error: "User not found" }, { status: 404 })
     }
@@ -108,8 +97,6 @@ export async function GET(request: NextRequest) {
       status: statusCode,
       message,
       suggestedActions,
-      userId: decodedToken.uid,
-      email: decodedToken.email,
     })
   } catch (error) {
     console.error("❌ [Stripe Account Verify] Error:", error)

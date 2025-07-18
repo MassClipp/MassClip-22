@@ -1,10 +1,9 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { headers } from "next/headers"
-import { db as firestoreDb } from "@/lib/db"
+import { db } from "@/lib/db"
 import { collection, getDocs, limit, query, where } from "firebase/firestore"
 import { getAuth } from "firebase-admin/auth"
 import { initializeApp, getApps, cert } from "firebase-admin/app"
-import { getFirestore } from "firebase-admin/firestore"
 
 // Initialize Firebase Admin if not already initialized
 if (!getApps().length) {
@@ -21,41 +20,28 @@ if (!getApps().length) {
   }
 }
 
-const db = getFirestore()
-
-async function getUserIdFromHeader(): Promise<string | null> {
-  const headersList = headers()
-  const authorization = headersList.get("authorization")
-
-  if (!authorization || !authorization.startsWith("Bearer ")) {
-    return null
-  }
-
-  const token = authorization.split("Bearer ")[1]
-
-  // Verify the Firebase token
-  const auth = getAuth()
-  try {
-    const decodedToken = await auth.verifyIdToken(token)
-    return decodedToken.uid
-  } catch (error) {
-    console.error("❌ [Debug] Token verification failed:", error)
-    return null
-  }
-}
-
 export async function GET(request: NextRequest) {
   try {
-    const userId = await getUserIdFromHeader()
+    // Get authorization header
+    const headersList = headers()
+    const authorization = headersList.get("authorization")
 
-    if (!userId) {
+    if (!authorization || !authorization.startsWith("Bearer ")) {
       return NextResponse.json({ error: "Missing authorization header" }, { status: 401 })
     }
+
+    const token = authorization.split("Bearer ")[1]
+
+    // Verify the Firebase token
+    const auth = getAuth()
+    const decodedToken = await auth.verifyIdToken(token)
+    const userId = decodedToken.uid
 
     console.log("🔍 [Debug] Checking content for user:", userId)
 
     const results: any = {
       userId,
+      userEmail: decodedToken.email,
       collections: {},
       summary: {
         totalCollections: 0,
@@ -81,7 +67,7 @@ export async function GET(request: NextRequest) {
         console.log(`🔍 [Debug] Checking collection: ${collectionName}`)
 
         // Get total count
-        const allDocsQuery = query(collection(firestoreDb, collectionName), limit(100))
+        const allDocsQuery = query(collection(db, collectionName), limit(100))
         const allDocsSnapshot = await getDocs(allDocsQuery)
 
         const collectionData: any = {
@@ -113,7 +99,7 @@ export async function GET(request: NextRequest) {
         const userFields = ["uid", "userId", "creatorId"]
         for (const field of userFields) {
           try {
-            const userQuery = query(collection(firestoreDb, collectionName), where(field, "==", userId), limit(10))
+            const userQuery = query(collection(db, collectionName), where(field, "==", userId), limit(10))
             const userSnapshot = await getDocs(userQuery)
 
             if (!userSnapshot.empty) {

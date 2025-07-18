@@ -2,20 +2,16 @@ import { type NextRequest, NextResponse } from "next/server"
 import { db } from "@/lib/firebase-admin"
 import { auth } from "@/lib/firebase-admin"
 
-async function getParams(request: NextRequest): Promise<{ userId: string | null }> {
-  const searchParams = request.nextUrl.searchParams
-  const userId = searchParams.get("userId")
-  return { userId }
-}
-
 export async function GET(request: NextRequest) {
   try {
-    const { userId } = await getParams(request)
-
-    let authenticatedUserId: string | null = null
+    // Get user ID from query params
+    const searchParams = request.nextUrl.searchParams
+    const userId = searchParams.get("userId")
 
     // Get auth token from header
     const authHeader = request.headers.get("authorization")
+
+    let authenticatedUserId: string | null = null
 
     // Verify auth token if provided
     if (authHeader && authHeader.startsWith("Bearer ")) {
@@ -37,7 +33,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: "User ID is required" }, { status: 400 })
     }
 
-    console.log(`🔍 [Purchases API] Fetching purchases for user: ${finalUserId}`)
+    console.log("🔍 [Purchases API] Fetching purchases for user:", finalUserId)
 
     // Check ALL possible locations for purchases with more thorough queries
     const allPurchases = []

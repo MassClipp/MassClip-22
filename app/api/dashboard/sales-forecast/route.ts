@@ -1,14 +1,10 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { SalesForecastService } from "@/lib/sales-forecast-service"
 
-async function getUserIdFromParams(request: NextRequest): Promise<string | null> {
-  const { searchParams } = new URL(request.url)
-  return searchParams.get("userId")
-}
-
 export async function GET(request: NextRequest) {
   try {
-    const userId = await getUserIdFromParams(request)
+    const { searchParams } = new URL(request.url)
+    const userId = searchParams.get("userId")
 
     if (!userId) {
       return NextResponse.json({ error: "User ID is required" }, { status: 400 })

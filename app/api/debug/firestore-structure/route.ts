@@ -21,36 +21,24 @@ if (!getApps().length) {
 
 const db = getFirestore()
 
-async function getUserInfo(request: NextRequest): Promise<{ userId: string | null; email: string | null }> {
-  const headersList = headers()
-  const authorization = headersList.get("authorization")
-
-  if (!authorization || !authorization.startsWith("Bearer ")) {
-    return { userId: null, email: null }
-  }
-
-  const token = authorization.split("Bearer ")[1]
-
-  // Verify the Firebase token
-  const auth = getAuth()
-  try {
-    const decodedToken = await auth.verifyIdToken(token)
-    return { userId: decodedToken.uid, email: decodedToken.email || null }
-  } catch (error) {
-    console.error("❌ [Firestore Structure] Token verification failed:", error)
-    return { userId: null, email: null }
-  }
-}
-
 export async function GET(request: NextRequest) {
   console.log("🚀 [Firestore Structure] API route called")
 
   try {
-    const { userId, email } = await getUserInfo(request)
+    // Get authorization header
+    const headersList = headers()
+    const authorization = headersList.get("authorization")
 
-    if (!userId) {
+    if (!authorization || !authorization.startsWith("Bearer ")) {
       return NextResponse.json({ error: "Missing or invalid authorization header" }, { status: 401 })
     }
+
+    const token = authorization.split("Bearer ")[1]
+
+    // Verify the Firebase token
+    const auth = getAuth()
+    const decodedToken = await auth.verifyIdToken(token)
+    const userId = decodedToken.uid
 
     console.log("✅ [Firestore Structure] Token verified for user:", userId)
 
@@ -97,9 +85,9 @@ export async function GET(request: NextRequest) {
           }
 
           // Try email field
-          if (fields.includes("email") && email) {
+          if (fields.includes("email") && decodedToken.email) {
             try {
-              const emailQuery = collectionRef.where("email", "==", email).limit(10)
+              const emailQuery = collectionRef.where("email", "==", decodedToken.email).limit(10)
               const emailSnapshot = await emailQuery.get()
               userDocuments += emailSnapshot.size
             } catch (error) {
@@ -143,7 +131,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       success: true,
       userId,
-      userEmail: email,
+      userEmail: decodedToken.email,
       collections: collectionIds,
       collectionData,
       userSubcollections,

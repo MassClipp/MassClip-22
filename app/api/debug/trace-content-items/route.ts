@@ -1,14 +1,10 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { db } from "@/lib/firebase-admin"
 
-async function getProductBoxId(request: NextRequest): Promise<string | null> {
-  const { searchParams } = new URL(request.url)
-  return searchParams.get("productBoxId")
-}
-
 export async function GET(request: NextRequest) {
   try {
-    const productBoxId = await getProductBoxId(request)
+    const { searchParams } = new URL(request.url)
+    const productBoxId = searchParams.get("productBoxId")
 
     if (!productBoxId) {
       return NextResponse.json({ error: "Product box ID is required" }, { status: 400 })
