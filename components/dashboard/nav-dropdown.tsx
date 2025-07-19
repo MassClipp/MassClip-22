@@ -1,124 +1,135 @@
 "use client"
 
-import Link from "next/link"
+import type React from "react"
+
+import { useState } from "react"
 import { usePathname } from "next/navigation"
+import Link from "next/link"
+import { Button } from "@/components/ui/button"
+import { ScrollArea } from "@/components/ui/scroll-area"
+import { Separator } from "@/components/ui/separator"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import {
-  Menu,
-  ChevronDown,
-  LayoutDashboard,
-  Compass,
-  ShoppingBag,
-  Heart,
-  Film,
+  Home,
+  Search,
+  Video,
   Upload,
+  FolderOpen,
   Package,
+  ShoppingCart,
+  Heart,
+  History,
   DollarSign,
-  User,
   Crown,
   CreditCard,
-  KeyRound,
+  User,
+  Shield,
+  ChevronDown,
+  Menu,
 } from "lucide-react"
-import { cn } from "@/lib/utils"
 
-import {
-  DropdownMenu,
-  DropdownMenuTrigger,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuLabel,
-  DropdownMenuGroup,
-} from "@/components/ui/dropdown-menu"
+interface NavItem {
+  title: string
+  href: string
+  icon: React.ComponentType<{ className?: string }>
+}
 
-/**
- * Streamlined navigation structure for the MassClip dashboard
- */
-const navigationSections = [
+interface NavSection {
+  title: string
+  items: NavItem[]
+}
+
+const navigationSections: NavSection[] = [
   {
-    label: "Main",
+    title: "Main",
     items: [
-      { label: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-      { label: "Explore", href: "/dashboard/explore", icon: Compass },
+      { title: "Dashboard", href: "/dashboard", icon: Home },
+      { title: "Explore", href: "/dashboard/explore", icon: Search },
     ],
   },
   {
-    label: "Content",
+    title: "Content",
     items: [
-      { label: "Free Content", href: "/dashboard/free-content", icon: Film },
-      { label: "Upload", href: "/dashboard/upload", icon: Upload },
-      { label: "Bundles", href: "/dashboard/bundles", icon: Package },
+      { title: "Free Content", href: "/dashboard/free-content", icon: Video },
+      { title: "Upload", href: "/dashboard/upload", icon: Upload },
+      { title: "My Uploads", href: "/dashboard/uploads", icon: FolderOpen },
+      { title: "Bundles", href: "/dashboard/bundles", icon: Package },
     ],
   },
   {
-    label: "Activity",
+    title: "Activity",
     items: [
-      { label: "Purchases", href: "/dashboard/purchases", icon: ShoppingBag },
-      { label: "Favorites", href: "/dashboard/favorites", icon: Heart },
+      { title: "My Purchases", href: "/dashboard/purchases", icon: ShoppingCart },
+      { title: "Favorites", href: "/dashboard/favorites", icon: Heart },
+      { title: "History", href: "/dashboard/history", icon: History },
     ],
   },
   {
-    label: "Business",
+    title: "Business",
     items: [
-      { label: "Earnings", href: "/dashboard/earnings", icon: DollarSign },
-      { label: "Membership", href: "/dashboard/membership", icon: Crown },
-      { label: "Connect Stripe", href: "/dashboard/connect-stripe", icon: CreditCard },
+      { title: "Earnings", href: "/dashboard/earnings", icon: DollarSign },
+      { title: "Membership", href: "/dashboard/membership", icon: Crown },
+      { title: "Connect Stripe", href: "/dashboard/connect-stripe", icon: CreditCard },
     ],
   },
   {
-    label: "Settings",
+    title: "Settings",
     items: [
-      { label: "Profile", href: "/dashboard/profile", icon: User },
-      { label: "Security", href: "/dashboard/security", icon: KeyRound },
+      { title: "Profile", href: "/dashboard/profile", icon: User },
+      { title: "Security", href: "/dashboard/security", icon: Shield },
     ],
   },
-] as const
+]
 
 export function NavDropdown() {
+  const [open, setOpen] = useState(false)
   const pathname = usePathname()
 
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger
-        className="flex items-center gap-1 rounded-md px-3 py-2 text-sm font-medium hover:bg-muted transition-colors"
-        aria-label="Open navigation menu"
-      >
-        <Menu className="h-4 w-4" />
-        <span className="hidden sm:inline">Menu</span>
-        <ChevronDown className="h-3 w-3" />
+    <DropdownMenu open={open} onOpenChange={setOpen}>
+      <DropdownMenuTrigger asChild>
+        <Button variant="ghost" size="sm" className="gap-2">
+          <Menu className="h-4 w-4" />
+          Menu
+          <ChevronDown className="h-4 w-4" />
+        </Button>
       </DropdownMenuTrigger>
+      <DropdownMenuContent className="w-56 p-0" align="start">
+        <ScrollArea className="max-h-[400px]">
+          <div className="p-2">
+            {navigationSections.map((section, sectionIndex) => (
+              <div key={section.title}>
+                <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                  {section.title}
+                </div>
+                <div className="space-y-1">
+                  {section.items.map((item) => {
+                    const Icon = item.icon
+                    const isActive = pathname === item.href
 
-      <DropdownMenuContent
-        align="end"
-        className="w-56 max-h-[400px] overflow-y-auto scrollbar-thin scrollbar-thumb-muted scrollbar-track-transparent"
-      >
-        {navigationSections.map((section, sectionIndex) => (
-          <div key={section.label}>
-            <DropdownMenuLabel className="text-xs font-semibold text-muted-foreground px-2 py-1.5">
-              {section.label}
-            </DropdownMenuLabel>
-            <DropdownMenuGroup>
-              {section.items.map(({ label, href, icon: Icon }) => (
-                <DropdownMenuItem key={href} asChild>
-                  <Link
-                    href={href}
-                    className={cn(
-                      "flex w-full items-center gap-3 px-2 py-2 text-sm",
-                      pathname === href && "bg-accent text-accent-foreground font-medium",
-                    )}
-                  >
-                    <Icon className="h-4 w-4 flex-shrink-0" />
-                    <span className="truncate">{label}</span>
-                  </Link>
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuGroup>
-            {sectionIndex < navigationSections.length - 1 && <DropdownMenuSeparator className="my-1" />}
+                    return (
+                      <Link
+                        key={item.href}
+                        href={item.href}
+                        onClick={() => setOpen(false)}
+                        className={`flex items-center gap-3 px-2 py-2 text-sm rounded-md transition-colors hover:bg-accent hover:text-accent-foreground ${
+                          isActive ? "bg-accent text-accent-foreground font-medium" : ""
+                        }`}
+                      >
+                        <Icon className="h-4 w-4" />
+                        {item.title}
+                      </Link>
+                    )
+                  })}
+                </div>
+                {sectionIndex < navigationSections.length - 1 && <Separator className="my-2" />}
+              </div>
+            ))}
           </div>
-        ))}
+        </ScrollArea>
       </DropdownMenuContent>
     </DropdownMenu>
   )
 }
 
-/* Default export for compatibility */
 export default NavDropdown
