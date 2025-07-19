@@ -1,46 +1,41 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { useAuth } from "@/contexts/auth-context"
-import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Separator } from "@/components/ui/separator"
+import { Alert, AlertDescription } from "@/components/ui/alert"
 import {
-  Loader2,
-  CheckCircle,
-  XCircle,
-  AlertCircle,
-  ExternalLink,
   CreditCard,
   DollarSign,
-  TrendingUp,
-  Calendar,
+  ExternalLink,
+  RefreshCw,
+  CheckCircle,
+  XCircle,
+  AlertTriangle,
   Unlink,
   LinkIcon,
-  RefreshCw,
-  Info,
-  Building,
-  Globe,
-  Mail,
-  Shield,
+  Clock,
+  TrendingUp,
+  Activity,
 } from "lucide-react"
-import { useToast } from "@/components/ui/use-toast"
+import { useToast } from "@/hooks/use-toast"
 
-interface StripeAccountStatus {
-  connected: boolean
-  accountId?: string
-  chargesEnabled: boolean
-  payoutsEnabled: boolean
-  detailsSubmitted: boolean
-  requirementsCount: number
-  currentlyDue: string[]
-  pastDue: string[]
-  email?: string
-  country?: string
-  type?: string
-  livemode?: boolean
+interface StripeAccount {
+  id: string
+  email: string
+  country: string
+  type: string
+  charges_enabled: boolean
+  payouts_enabled: boolean
+  details_submitted: boolean
+  requirements: {
+    currently_due: string[]
+    eventually_due: string[]
+    past_due: string[]
+    pending_verification: string[]
+  }
 }
 
 interface StripeBalance {
@@ -52,152 +47,57 @@ interface StripeTransaction {
   id: string
   amount: number
   currency: string
+  status: string
   description: string
   created: number
-  status: string
   type: string
 }
 
 export default function ConnectStripePage() {
-  const { user } = useAuth()
-  const { toast } = useToast()
-  const [loading, setLoading] = useState(false)
-  const [checking, setChecking] = useState(true)
-  const [accountStatus, setAccountStatus] = useState<StripeAccountStatus | null>(null)
+  const [account, setAccount] = useState<StripeAccount | null>(null)
   const [balance, setBalance] = useState<StripeBalance | null>(null)
   const [transactions, setTransactions] = useState<StripeTransaction[]>([])
+  const [loading, setLoading] = useState(true)
+  const [connecting, setConnecting] = useState(false)
   const [unlinking, setUnlinking] = useState(false)
+  const [refreshing, setRefreshing] = useState(false)
+  const { toast } = useToast()
 
   useEffect(() => {
-    if (user) {
-      checkStripeStatus()
-    }
-  }, [user])
+    fetchStripeData()
+  }, [])
 
-  const checkStripeStatus = async () => {
-    if (!user) return
-
-    setChecking(true)
+  const fetchStripeData = async () => {
     try {
-      const token = await user.getIdToken()
+      setLoading(true)
 
-      // Check connection status
-      const statusResponse = await fetch("/api/stripe/connect/status", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ idToken: token }),
-      })
+      // Fetch account status
+      const accountResponse = await fetch("/api/stripe/connect/status")
+      if (accountResponse.ok) {
+        const accountData = await accountResponse.json()
+        setAccount(accountData.account)
 
-      const statusData = await statusResponse.json()
+        if (accountData.account) {
+          // Fetch balance
+          const balanceResponse = await fetch("/api/stripe/balance")
+          if (balanceResponse.ok) {
+            const balanceData = await balanceResponse.json()
+            setBalance(balanceData.balance)
+          }
 
-      if (statusData.success && statusData.isConnected) {
-        setAccountStatus({
-          connected: true,
-          accountId: statusData.accountId,
-          chargesEnabled: statusData.accountStatus?.chargesEnabled || false,
-          payoutsEnabled: statusData.accountStatus?.payoutsEnabled || false,
-          detailsSubmitted: statusData.accountStatus?.detailsSubmitted || false,
-          requirementsCount: statusData.accountStatus?.requirementsCount || 0,
-          currentlyDue: statusData.accountStatus?.currentlyDue || [],
-          pastDue: statusData.accountStatus?.pastDue || [],
-          email: statusData.accountStatus?.email,
-          country: statusData.accountStatus?.country,
-          type: statusData.accountStatus?.type,
-          livemode: statusData.accountStatus?.livemode,
-        })
-
-        // Fetch balance and transactions if connected
-        await Promise.all([fetchBalance(token), fetchTransactions(token)])
-      } else {
-        setAccountStatus({
-          connected: false,
-          chargesEnabled: false,
-          payoutsEnabled: false,
-          detailsSubmitted: false,
-          requirementsCount: 0,
-          currentlyDue: [],
-          pastDue: [],
-        })
+          // Fetch recent transactions
+          const transactionsResponse = await fetch("/api/stripe/transactions")
+          if (transactionsResponse.ok) {
+            const transactionsData = await transactionsResponse.json()
+            setTransactions(transactionsData.transactions || [])
+          }
+        }
       }
     } catch (error) {
-      console.error("Error checking Stripe status:", error)
+      console.error("Error fetching Stripe data:", error)
       toast({
         title: "Error",
-        description: "Failed to check Stripe account status",
-        variant: "destructive",
-      })
-    } finally {
-      setChecking(false)
-    }
-  }
-
-  const fetchBalance = async (token: string) => {
-    try {
-      const response = await fetch("/api/stripe/balance", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ idToken: token }),
-      })
-
-      if (response.ok) {
-        const data = await response.json()
-        setBalance(data.balance)
-      }
-    } catch (error) {
-      console.error("Error fetching balance:", error)
-    }
-  }
-
-  const fetchTransactions = async (token: string) => {
-    try {
-      const response = await fetch("/api/stripe/transactions", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ idToken: token, limit: 10 }),
-      })
-
-      if (response.ok) {
-        const data = await response.json()
-        setTransactions(data.transactions || [])
-      }
-    } catch (error) {
-      console.error("Error fetching transactions:", error)
-    }
-  }
-
-  const connectStripeAccount = async () => {
-    if (!user) return
-
-    setLoading(true)
-    try {
-      const token = await user.getIdToken()
-      const response = await fetch("/api/stripe/connect/onboard", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ idToken: token }),
-      })
-
-      const data = await response.json()
-
-      if (data.onboardingComplete) {
-        toast({
-          title: "Success",
-          description: "Stripe account already connected!",
-        })
-        await checkStripeStatus()
-      } else if (data.onboardingUrl) {
-        window.location.href = data.onboardingUrl
-      } else {
-        toast({
-          title: "Error",
-          description: data.error || "Failed to connect Stripe account",
-          variant: "destructive",
-        })
-      }
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to connect to Stripe",
+        description: "Failed to load Stripe account information",
         variant: "destructive",
       })
     } finally {
@@ -205,37 +105,57 @@ export default function ConnectStripePage() {
     }
   }
 
-  const unlinkStripeAccount = async () => {
-    if (!user || !accountStatus?.accountId) return
-
-    setUnlinking(true)
+  const handleConnectStripe = async () => {
     try {
-      const token = await user.getIdToken()
-      const response = await fetch("/api/stripe/connect/unlink", {
+      setConnecting(true)
+      const response = await fetch("/api/stripe/connect/onboard", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          idToken: token,
-          accountId: accountStatus.accountId,
-        }),
       })
 
-      const data = await response.json()
-
-      if (data.success) {
-        toast({
-          title: "Account Unlinked",
-          description: "Your Stripe account has been successfully unlinked.",
-        })
-        await checkStripeStatus()
+      if (response.ok) {
+        const data = await response.json()
+        if (data.url) {
+          window.location.href = data.url
+        }
       } else {
-        toast({
-          title: "Error",
-          description: data.error || "Failed to unlink Stripe account",
-          variant: "destructive",
-        })
+        throw new Error("Failed to create onboarding link")
       }
     } catch (error) {
+      console.error("Error connecting Stripe:", error)
+      toast({
+        title: "Error",
+        description: "Failed to connect Stripe account",
+        variant: "destructive",
+      })
+    } finally {
+      setConnecting(false)
+    }
+  }
+
+  const handleUnlinkStripe = async () => {
+    if (!confirm("Are you sure you want to unlink your Stripe account? This will disable payments.")) {
+      return
+    }
+
+    try {
+      setUnlinking(true)
+      const response = await fetch("/api/stripe/connect/unlink", {
+        method: "POST",
+      })
+
+      if (response.ok) {
+        setAccount(null)
+        setBalance(null)
+        setTransactions([])
+        toast({
+          title: "Success",
+          description: "Stripe account has been unlinked",
+        })
+      } else {
+        throw new Error("Failed to unlink account")
+      }
+    } catch (error) {
+      console.error("Error unlinking Stripe:", error)
       toast({
         title: "Error",
         description: "Failed to unlink Stripe account",
@@ -246,6 +166,16 @@ export default function ConnectStripePage() {
     }
   }
 
+  const handleRefresh = async () => {
+    setRefreshing(true)
+    await fetchStripeData()
+    setRefreshing(false)
+    toast({
+      title: "Refreshed",
+      description: "Account information has been updated",
+    })
+  }
+
   const formatCurrency = (amount: number, currency: string) => {
     return new Intl.NumberFormat("en-US", {
       style: "currency",
@@ -253,347 +183,227 @@ export default function ConnectStripePage() {
     }).format(amount / 100)
   }
 
-  const formatDate = (timestamp: number) => {
-    return new Date(timestamp * 1000).toLocaleDateString("en-US", {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    })
+  const getStatusBadge = (enabled: boolean, label: string) => {
+    return (
+      <Badge variant={enabled ? "default" : "destructive"} className="flex items-center gap-1">
+        {enabled ? <CheckCircle className="w-3 h-3" /> : <XCircle className="w-3 h-3" />}
+        {label}
+      </Badge>
+    )
   }
 
-  if (checking) {
+  if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <div className="text-center">
-          <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
-          <p className="text-zinc-400">Checking Stripe account status...</p>
+      <div className="container mx-auto px-4 py-8 max-w-4xl">
+        <div className="flex items-center justify-center min-h-[400px]">
+          <div className="flex items-center gap-2">
+            <RefreshCw className="w-5 h-5 animate-spin" />
+            <span>Loading Stripe account information...</span>
+          </div>
         </div>
       </div>
     )
   }
 
   return (
-    <div className="space-y-6">
+    <div className="container mx-auto px-4 py-8 max-w-4xl space-y-6">
+      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold">Stripe Integration</h1>
-          <p className="text-zinc-400 mt-1">Manage your payment processing and view account details</p>
+          <p className="text-muted-foreground">Manage your payment processing and view account information</p>
         </div>
-        <Button variant="outline" onClick={checkStripeStatus} disabled={checking}>
-          <RefreshCw className="h-4 w-4 mr-2" />
+        <Button
+          variant="outline"
+          onClick={handleRefresh}
+          disabled={refreshing}
+          className="flex items-center gap-2 bg-transparent"
+        >
+          <RefreshCw className={`w-4 h-4 ${refreshing ? "animate-spin" : ""}`} />
           Refresh
         </Button>
       </div>
 
-      {/* Connection Status Overview */}
-      <Card className="bg-zinc-900/60 border-zinc-800/50">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <CreditCard className="h-5 w-5" />
-            Account Status
-          </CardTitle>
-          <CardDescription>Current status of your Stripe integration</CardDescription>
-        </CardHeader>
-        <CardContent>
-          {!accountStatus?.connected ? (
-            <div className="text-center py-8">
-              <XCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
-              <h3 className="text-lg font-semibold mb-2">No Stripe Account Connected</h3>
-              <p className="text-zinc-400 mb-6">
-                Connect your Stripe account to start accepting payments and receiving payouts.
-              </p>
-              <Button onClick={connectStripeAccount} disabled={loading} size="lg">
-                {loading ? (
-                  <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Connecting...
-                  </>
-                ) : (
-                  <>
-                    <LinkIcon className="h-4 w-4 mr-2" />
-                    Connect Stripe Account
-                  </>
-                )}
-              </Button>
+      {!account ? (
+        /* No Account Connected */
+        <Card>
+          <CardHeader className="text-center">
+            <div className="mx-auto w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center mb-4">
+              <CreditCard className="w-6 h-6 text-primary" />
             </div>
-          ) : (
-            <div className="space-y-6">
-              {/* Status Indicators */}
+            <CardTitle>Connect Your Stripe Account</CardTitle>
+            <CardDescription>
+              Connect your Stripe account to start receiving payments for your premium content
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="text-center">
+            <Button onClick={handleConnectStripe} disabled={connecting} size="lg" className="flex items-center gap-2">
+              {connecting ? <RefreshCw className="w-4 h-4 animate-spin" /> : <LinkIcon className="w-4 h-4" />}
+              {connecting ? "Connecting..." : "Connect Stripe Account"}
+            </Button>
+            <p className="text-sm text-muted-foreground mt-4">
+              You'll be redirected to Stripe to complete the setup process
+            </p>
+          </CardContent>
+        </Card>
+      ) : (
+        /* Account Connected */
+        <>
+          {/* Account Status */}
+          <Card>
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="flex items-center gap-2">
+                    <CheckCircle className="w-5 h-5 text-green-500" />
+                    Stripe Account Connected
+                  </CardTitle>
+                  <CardDescription>Your payment processing is active</CardDescription>
+                </div>
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => window.open("https://dashboard.stripe.com", "_blank")}
+                  >
+                    <ExternalLink className="w-4 h-4 mr-2" />
+                    Stripe Dashboard
+                  </Button>
+                  <Button variant="destructive" size="sm" onClick={handleUnlinkStripe} disabled={unlinking}>
+                    {unlinking ? (
+                      <RefreshCw className="w-4 h-4 animate-spin mr-2" />
+                    ) : (
+                      <Unlink className="w-4 h-4 mr-2" />
+                    )}
+                    Unlink
+                  </Button>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {/* Account Info */}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div className="text-center p-4 bg-zinc-800/30 rounded-lg">
-                  <div className="flex items-center justify-center mb-2">
-                    {accountStatus.chargesEnabled ? (
-                      <CheckCircle className="h-6 w-6 text-green-500" />
-                    ) : (
-                      <XCircle className="h-6 w-6 text-red-500" />
-                    )}
-                  </div>
-                  <div className="text-sm font-medium">Charges</div>
-                  <div className="text-xs text-zinc-400">{accountStatus.chargesEnabled ? "Enabled" : "Disabled"}</div>
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Account ID</p>
+                  <p className="font-mono text-sm">{account.id}</p>
                 </div>
-
-                <div className="text-center p-4 bg-zinc-800/30 rounded-lg">
-                  <div className="flex items-center justify-center mb-2">
-                    {accountStatus.payoutsEnabled ? (
-                      <CheckCircle className="h-6 w-6 text-green-500" />
-                    ) : (
-                      <XCircle className="h-6 w-6 text-red-500" />
-                    )}
-                  </div>
-                  <div className="text-sm font-medium">Payouts</div>
-                  <div className="text-xs text-zinc-400">{accountStatus.payoutsEnabled ? "Enabled" : "Disabled"}</div>
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Email</p>
+                  <p className="text-sm">{account.email}</p>
                 </div>
-
-                <div className="text-center p-4 bg-zinc-800/30 rounded-lg">
-                  <div className="flex items-center justify-center mb-2">
-                    {accountStatus.detailsSubmitted ? (
-                      <CheckCircle className="h-6 w-6 text-green-500" />
-                    ) : (
-                      <AlertCircle className="h-6 w-6 text-yellow-500" />
-                    )}
-                  </div>
-                  <div className="text-sm font-medium">Details</div>
-                  <div className="text-xs text-zinc-400">{accountStatus.detailsSubmitted ? "Complete" : "Pending"}</div>
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Country</p>
+                  <p className="text-sm">{account.country}</p>
                 </div>
-
-                <div className="text-center p-4 bg-zinc-800/30 rounded-lg">
-                  <div className="flex items-center justify-center mb-2">
-                    {accountStatus.requirementsCount === 0 ? (
-                      <CheckCircle className="h-6 w-6 text-green-500" />
-                    ) : (
-                      <AlertCircle className="h-6 w-6 text-yellow-500" />
-                    )}
-                  </div>
-                  <div className="text-sm font-medium">Requirements</div>
-                  <div className="text-xs text-zinc-400">
-                    {accountStatus.requirementsCount === 0 ? "Complete" : `${accountStatus.requirementsCount} pending`}
-                  </div>
+                <div>
+                  <p className="text-sm font-medium text-muted-foreground">Type</p>
+                  <p className="text-sm capitalize">{account.type}</p>
                 </div>
               </div>
 
-              {/* Account Information */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-3">
-                  <div className="flex items-center gap-2">
-                    <Building className="h-4 w-4 text-zinc-400" />
-                    <span className="text-sm font-medium">Account ID:</span>
-                    <code className="text-xs bg-zinc-800 px-2 py-1 rounded">{accountStatus.accountId}</code>
-                  </div>
+              <Separator />
 
-                  {accountStatus.email && (
-                    <div className="flex items-center gap-2">
-                      <Mail className="h-4 w-4 text-zinc-400" />
-                      <span className="text-sm font-medium">Email:</span>
-                      <span className="text-sm text-zinc-400">{accountStatus.email}</span>
-                    </div>
-                  )}
-
-                  {accountStatus.country && (
-                    <div className="flex items-center gap-2">
-                      <Globe className="h-4 w-4 text-zinc-400" />
-                      <span className="text-sm font-medium">Country:</span>
-                      <span className="text-sm text-zinc-400">{accountStatus.country}</span>
-                    </div>
-                  )}
-                </div>
-
-                <div className="space-y-3">
-                  {accountStatus.type && (
-                    <div className="flex items-center gap-2">
-                      <Shield className="h-4 w-4 text-zinc-400" />
-                      <span className="text-sm font-medium">Account Type:</span>
-                      <Badge variant="outline">{accountStatus.type}</Badge>
-                    </div>
-                  )}
-
-                  <div className="flex items-center gap-2">
-                    <Info className="h-4 w-4 text-zinc-400" />
-                    <span className="text-sm font-medium">Mode:</span>
-                    <Badge variant={accountStatus.livemode ? "default" : "secondary"}>
-                      {accountStatus.livemode ? "Live" : "Test"}
-                    </Badge>
-                  </div>
-                </div>
+              {/* Status Badges */}
+              <div className="flex flex-wrap gap-2">
+                {getStatusBadge(account.charges_enabled, "Charges")}
+                {getStatusBadge(account.payouts_enabled, "Payouts")}
+                {getStatusBadge(account.details_submitted, "Details")}
+                <Badge variant="outline" className="flex items-center gap-1">
+                  <Activity className="w-3 h-3" />
+                  {process.env.NODE_ENV === "production" ? "Live" : "Test"} Mode
+                </Badge>
               </div>
 
-              {/* Requirements Alert */}
-              {accountStatus.requirementsCount > 0 && (
-                <Alert className="border-yellow-600 bg-yellow-600/10">
-                  <AlertCircle className="h-4 w-4" />
+              {/* Requirements */}
+              {account.requirements.currently_due.length > 0 && (
+                <Alert>
+                  <AlertTriangle className="h-4 w-4" />
                   <AlertDescription>
-                    <div className="space-y-2">
-                      <div className="font-medium">
-                        Your account needs additional information to enable full functionality.
-                      </div>
-                      {accountStatus.currentlyDue.length > 0 && (
-                        <div>
-                          <div className="text-sm font-medium">Currently Due:</div>
-                          <ul className="list-disc list-inside text-sm ml-4">
-                            {accountStatus.currentlyDue.map((req, index) => (
-                              <li key={index}>{req.replace(/_/g, " ")}</li>
-                            ))}
-                          </ul>
-                        </div>
-                      )}
-                    </div>
+                    <strong>Action Required:</strong> You have {account.requirements.currently_due.length}
+                    requirement(s) that need to be completed to maintain full account functionality.
                   </AlertDescription>
                 </Alert>
               )}
+            </CardContent>
+          </Card>
 
-              {/* Action Buttons */}
-              <div className="flex gap-4">
-                <Button variant="outline" onClick={() => window.open("https://dashboard.stripe.com", "_blank")}>
-                  <ExternalLink className="h-4 w-4 mr-2" />
-                  Open Stripe Dashboard
-                </Button>
+          {/* Balance Information */}
+          {balance && (
+            <div className="grid md:grid-cols-2 gap-6">
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Available Balance</CardTitle>
+                  <DollarSign className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">
+                    {balance.available.length > 0
+                      ? formatCurrency(balance.available[0].amount, balance.available[0].currency)
+                      : "$0.00"}
+                  </div>
+                  <p className="text-xs text-muted-foreground">Ready for payout</p>
+                </CardContent>
+              </Card>
 
-                <Button variant="destructive" onClick={unlinkStripeAccount} disabled={unlinking}>
-                  {unlinking ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Unlinking...
-                    </>
-                  ) : (
-                    <>
-                      <Unlink className="h-4 w-4 mr-2" />
-                      Unlink Account
-                    </>
-                  )}
-                </Button>
-              </div>
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <CardTitle className="text-sm font-medium">Pending Balance</CardTitle>
+                  <Clock className="h-4 w-4 text-muted-foreground" />
+                </CardHeader>
+                <CardContent>
+                  <div className="text-2xl font-bold">
+                    {balance.pending.length > 0
+                      ? formatCurrency(balance.pending[0].amount, balance.pending[0].currency)
+                      : "$0.00"}
+                  </div>
+                  <p className="text-xs text-muted-foreground">Processing or on hold</p>
+                </CardContent>
+              </Card>
             </div>
           )}
-        </CardContent>
-      </Card>
 
-      {/* Balance and Transactions - Only show if connected */}
-      {accountStatus?.connected && (
-        <Tabs defaultValue="balance" className="space-y-4">
-          <TabsList className="grid w-full grid-cols-2">
-            <TabsTrigger value="balance">Account Balance</TabsTrigger>
-            <TabsTrigger value="transactions">Recent Transactions</TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="balance">
-            <Card className="bg-zinc-900/60 border-zinc-800/50">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <DollarSign className="h-5 w-5" />
-                  Account Balance
-                </CardTitle>
-                <CardDescription>Your current Stripe account balance</CardDescription>
-              </CardHeader>
-              <CardContent>
-                {balance ? (
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div className="space-y-4">
-                      <div>
-                        <h3 className="text-lg font-semibold mb-2">Available Balance</h3>
-                        {balance.available.length > 0 ? (
-                          balance.available.map((bal, index) => (
-                            <div key={index} className="text-2xl font-bold text-green-500">
-                              {formatCurrency(bal.amount, bal.currency)}
-                            </div>
-                          ))
-                        ) : (
-                          <div className="text-2xl font-bold text-zinc-400">$0.00</div>
-                        )}
-                        <p className="text-sm text-zinc-400">Ready for payout</p>
+          {/* Recent Transactions */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <TrendingUp className="w-5 h-5" />
+                Recent Transactions
+              </CardTitle>
+              <CardDescription>Your latest payment activity</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {transactions.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  <Activity className="w-12 h-12 mx-auto mb-4 opacity-50" />
+                  <p>No transactions yet</p>
+                  <p className="text-sm">Transactions will appear here once you start receiving payments</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {transactions.slice(0, 10).map((transaction) => (
+                    <div key={transaction.id} className="flex items-center justify-between p-3 border rounded-lg">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2">
+                          <p className="font-medium">{transaction.description || "Payment"}</p>
+                          <Badge variant={transaction.status === "succeeded" ? "default" : "secondary"}>
+                            {transaction.status}
+                          </Badge>
+                        </div>
+                        <p className="text-sm text-muted-foreground">
+                          {new Date(transaction.created * 1000).toLocaleDateString()} • {transaction.type}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <p className="font-medium">{formatCurrency(transaction.amount, transaction.currency)}</p>
                       </div>
                     </div>
-
-                    <div className="space-y-4">
-                      <div>
-                        <h3 className="text-lg font-semibold mb-2">Pending Balance</h3>
-                        {balance.pending.length > 0 ? (
-                          balance.pending.map((bal, index) => (
-                            <div key={index} className="text-2xl font-bold text-yellow-500">
-                              {formatCurrency(bal.amount, bal.currency)}
-                            </div>
-                          ))
-                        ) : (
-                          <div className="text-2xl font-bold text-zinc-400">$0.00</div>
-                        )}
-                        <p className="text-sm text-zinc-400">Processing or on hold</p>
-                      </div>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="text-center py-8">
-                    <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
-                    <p className="text-zinc-400">Loading balance information...</p>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="transactions">
-            <Card className="bg-zinc-900/60 border-zinc-800/50">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <TrendingUp className="h-5 w-5" />
-                  Recent Transactions
-                </CardTitle>
-                <CardDescription>Your latest Stripe transactions</CardDescription>
-              </CardHeader>
-              <CardContent>
-                {transactions.length > 0 ? (
-                  <div className="space-y-4">
-                    {transactions.map((transaction) => (
-                      <div
-                        key={transaction.id}
-                        className="flex items-center justify-between p-4 bg-zinc-800/30 rounded-lg"
-                      >
-                        <div className="flex-1">
-                          <div className="flex items-center gap-2 mb-1">
-                            <span className="font-medium">{transaction.description || "Payment"}</span>
-                            <Badge variant={transaction.status === "succeeded" ? "default" : "secondary"}>
-                              {transaction.status}
-                            </Badge>
-                          </div>
-                          <div className="flex items-center gap-4 text-sm text-zinc-400">
-                            <span>{transaction.type}</span>
-                            <span className="flex items-center gap-1">
-                              <Calendar className="h-3 w-3" />
-                              {formatDate(transaction.created)}
-                            </span>
-                          </div>
-                        </div>
-                        <div className="text-right">
-                          <div className="font-semibold">
-                            {formatCurrency(transaction.amount, transaction.currency)}
-                          </div>
-                          <div className="text-xs text-zinc-400">{transaction.currency.toUpperCase()}</div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="text-center py-8">
-                    <TrendingUp className="h-12 w-12 text-zinc-400 mx-auto mb-4" />
-                    <h3 className="text-lg font-semibold mb-2">No Transactions Yet</h3>
-                    <p className="text-zinc-400">
-                      Your recent transactions will appear here once you start processing payments.
-                    </p>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
-        </Tabs>
+                  ))}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </>
       )}
-
-      {/* Test Mode Notice */}
-      <Alert className="border-blue-600 bg-blue-600/10">
-        <Info className="h-4 w-4" />
-        <AlertDescription>
-          <strong>Test Environment:</strong> This application is currently running in test mode. All transactions are
-          simulated and no real money will be processed.
-        </AlertDescription>
-      </Alert>
     </div>
   )
 }
