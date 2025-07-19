@@ -279,36 +279,29 @@ export default async function CreatorProfilePage({ params }: { params: { usernam
 
             {/* Simple Video Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-              {/* Placeholder videos - replace with actual data fetching */}
               <VideoCard
-                video={{
-                  id: "1",
-                  title: "Sample Video 1",
-                  thumbnail: "/placeholder.svg?height=200&width=300",
-                  duration: "2:30",
-                  views: 1200,
-                  createdAt: new Date().toISOString(),
-                }}
+                id="1"
+                title="Sample Video 1"
+                thumbnailUrl="/placeholder.svg?height=200&width=300"
+                fileUrl="#"
+                duration={150}
+                type="video"
               />
               <VideoCard
-                video={{
-                  id: "2",
-                  title: "Sample Video 2",
-                  thumbnail: "/placeholder.svg?height=200&width=300",
-                  duration: "1:45",
-                  views: 850,
-                  createdAt: new Date().toISOString(),
-                }}
+                id="2"
+                title="Sample Video 2"
+                thumbnailUrl="/placeholder.svg?height=200&width=300"
+                fileUrl="#"
+                duration={105}
+                type="video"
               />
               <VideoCard
-                video={{
-                  id: "3",
-                  title: "Sample Video 3",
-                  thumbnail: "/placeholder.svg?height=200&width=300",
-                  duration: "3:15",
-                  views: 2100,
-                  createdAt: new Date().toISOString(),
-                }}
+                id="3"
+                title="Sample Video 3"
+                thumbnailUrl="/placeholder.svg?height=200&width=300"
+                fileUrl="#"
+                duration={195}
+                type="video"
               />
             </div>
           </div>
