@@ -2,7 +2,7 @@
 
 import type React from "react"
 import { useState, useEffect, useRef } from "react"
-import { Download, Lock, Heart, Play, Pause, User } from "lucide-react"
+import { Download, Play, Clock } from "lucide-react"
 import { useAuth } from "@/contexts/auth-context"
 import { db } from "@/lib/firebase"
 import { trackFirestoreWrite } from "@/lib/firestore-optimizer"
@@ -24,20 +24,25 @@ import { useUserPlan } from "@/hooks/use-user-plan"
 import { useDownloadLimit } from "@/contexts/download-limit-context"
 import { useRouter } from "next/navigation"
 import { TrackingService } from "@/lib/tracking-service"
+import { Card, CardContent } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
+
+interface Video {
+  id: string
+  title: string
+  fileUrl: string
+  thumbnailUrl?: string
+  creatorName: string
+  uid: string
+  views: number
+  downloads: number
+  duration?: string
+  type?: string
+}
 
 interface CreatorUploadCardProps {
-  video: {
-    id: string
-    title: string
-    fileUrl: string
-    thumbnailUrl?: string
-    creatorName?: string
-    uid?: string
-    views?: number
-    downloads?: number
-    username?: string
-    userDisplayName?: string
-  }
+  video: Video
 }
 
 function CreatorUploadCard({ video }: CreatorUploadCardProps) {
@@ -51,6 +56,7 @@ function CreatorUploadCard({ video }: CreatorUploadCardProps) {
   const [creatorUsername, setCreatorUsername] = useState<string | null>(null)
   const [creatorDisplayName, setCreatorDisplayName] = useState<string | null>(null)
   const [isLoadingCreatorData, setIsLoadingCreatorData] = useState(true)
+  const [imageError, setImageError] = useState(false)
 
   const videoRef = useRef<HTMLVideoElement>(null)
   const { user } = useAuth()
@@ -429,103 +435,92 @@ function CreatorUploadCard({ video }: CreatorUploadCardProps) {
     }
   }
 
+  const handleImageError = () => {
+    setImageError(true)
+  }
+
+  const handlePlay = () => {
+    if (video.fileUrl) {
+      window.open(video.fileUrl, "_blank")
+    }
+  }
+
   return (
-    <div className="flex-shrink-0 w-[160px]">
-      <div
-        className="relative group border border-transparent hover:border-white/20 transition-all duration-300 rounded-lg"
-        onMouseEnter={() => setIsHovered(true)}
-        onMouseLeave={() => setIsHovered(false)}
-        onClick={trackVideoView}
-      >
-        {/* Video container with 9:16 aspect ratio and curved borders */}
-        <div className="relative aspect-[9/16] overflow-hidden rounded-lg bg-zinc-900 shadow-md">
-          {/* Creator Profile Badge - Top Right - Small and Blended */}
-          <div className="absolute top-2 right-2 z-30">
-            <button
-              onClick={handleCreatorClick}
-              className="flex items-center bg-red-500/70 backdrop-blur-sm hover:bg-red-600/90 text-white text-xs px-2 py-1 rounded-full transition-all duration-200 border border-white/20 hover:border-white/40"
-              aria-label={`View ${creatorDisplayName || "creator"}'s profile`}
-              title={`View ${creatorDisplayName || "creator"}'s profile`}
-              disabled={isLoadingCreatorData}
-            >
-              <User className="w-3 h-3 mr-1" />
-              <span className="font-medium truncate max-w-[60px] sm:max-w-[70px] text-[11px]">
-                {isLoadingCreatorData ? "..." : creatorDisplayName || "Creator"}
-              </span>
-            </button>
-          </div>
+    <Card
+      className="bg-zinc-900 border-zinc-800 hover:border-zinc-700 transition-all duration-200 cursor-pointer group"
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+    >
+      <CardContent className="p-0">
+        {/* Thumbnail */}
+        <div className="relative aspect-video bg-zinc-800 rounded-t-lg overflow-hidden">
+          {video.thumbnailUrl && !imageError ? (
+            <img
+              src={video.thumbnailUrl || "/placeholder.svg"}
+              alt={video.title}
+              className="w-full h-full object-cover transition-transform duration-200 group-hover:scale-105"
+              onError={handleImageError}
+            />
+          ) : (
+            <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-zinc-800 to-zinc-900">
+              <Play className="w-8 h-8 text-zinc-600" />
+            </div>
+          )}
 
-          {/* Raw video element - this will show the first frame as thumbnail */}
-          <video
-            ref={videoRef}
-            className="w-full h-full object-cover cursor-pointer"
-            preload="metadata"
-            muted={false}
-            playsInline
-            onEnded={handleVideoEnd}
-            onClick={togglePlay}
-            controls={false}
+          {/* Overlay */}
+          <div
+            className={`absolute inset-0 bg-black/60 flex items-center justify-center transition-opacity duration-200 ${
+              isHovered ? "opacity-100" : "opacity-0"
+            }`}
           >
-            <source src={video.fileUrl} type="video/mp4" />
-            Your browser does not support the video tag.
-          </video>
-
-          {/* Play/Pause button - only show on hover */}
-          <div className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-300 z-20">
-            <button
-              onClick={togglePlay}
-              className="w-12 h-12 rounded-full bg-black/50 backdrop-blur-sm flex items-center justify-center text-white transition-all duration-200 hover:bg-black/70"
-              aria-label={isPlaying ? "Pause video" : "Play video"}
-            >
-              {isPlaying ? <Pause className="h-5 w-5" /> : <Play className="h-5 w-5 ml-0.5" />}
-            </button>
+            <div className="flex gap-2">
+              <Button size="sm" variant="secondary" onClick={togglePlay} className="bg-white/20 hover:bg-white/30">
+                <Play className="w-4 h-4" />
+              </Button>
+              <Button size="sm" variant="secondary" onClick={handleDownload} className="bg-white/20 hover:bg-white/30">
+                <Download className="w-4 h-4" />
+              </Button>
+            </div>
           </div>
 
-          {/* Overlay gradient for better visibility - only on hover */}
-          <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity duration-300 pointer-events-none"></div>
+          {/* Duration badge */}
+          {video.duration && (
+            <Badge className="absolute bottom-2 right-2 bg-black/80 text-white text-xs px-2 py-1">
+              <Clock className="w-3 h-3 mr-1" />
+              {video.duration}
+            </Badge>
+          )}
 
-          {/* Action buttons overlay */}
-          <div className="absolute bottom-2 left-2 right-2 z-30 flex items-center justify-between opacity-0 group-hover:opacity-100 transition-opacity duration-300">
-            {/* Download button - show lock when limit reached */}
-            <button
-              className={`${
-                hasReachedLimit && !isProUser ? "bg-zinc-800/90 cursor-not-allowed" : "bg-black/70 hover:bg-black/90"
-              } p-1.5 rounded-full transition-all duration-300 ${downloadError ? "ring-1 ring-red-500" : ""}`}
-              onClick={handleDownload}
-              aria-label={hasReachedLimit && !isProUser ? "Download limit reached" : "Download video"}
-              disabled={isDownloading || (hasReachedLimit && !isProUser)}
-              title={
-                hasReachedLimit && !isProUser ? "Upgrade to Creator Pro for unlimited downloads" : "Download video"
-              }
-            >
-              {hasReachedLimit && !isProUser ? (
-                <Lock className="h-3.5 w-3.5 text-zinc-400" />
-              ) : (
-                <Download className={`h-3.5 w-3.5 ${downloadError ? "text-red-500" : "text-white"}`} />
-              )}
-            </button>
+          {/* Type badge */}
+          {video.type && (
+            <Badge className="absolute top-2 left-2 bg-red-600 text-white text-xs px-2 py-1">
+              {video.type.toUpperCase()}
+            </Badge>
+          )}
+        </div>
 
-            {/* Favorite button */}
-            <button
-              className={`bg-black/70 hover:bg-black/90 p-1.5 rounded-full transition-all duration-300 ${
-                isFavorite ? "text-crimson" : "text-white"
-              }`}
-              onClick={toggleFavorite}
-              aria-label={isFavorite ? "Remove from favorites" : "Add to favorites"}
-              disabled={isCheckingFavorite}
-              title={isFavorite ? "Remove from favorites" : "Add to favorites"}
-            >
-              <Heart className="h-3.5 w-3.5" fill={isFavorite ? "currentColor" : "none"} />
-            </button>
+        {/* Content Info */}
+        <div className="p-3">
+          <h3 className="font-medium text-white text-sm line-clamp-2 mb-2" title={video.title}>
+            {video.title}
+          </h3>
+
+          {/* Stats */}
+          <div className="flex items-center justify-between text-xs text-zinc-400">
+            <div className="flex items-center gap-3">
+              <span className="flex items-center gap-1">
+                <Play className="w-3 h-3" />
+                {video.views.toLocaleString()}
+              </span>
+              <span className="flex items-center gap-1">
+                <Download className="w-3 h-3" />
+                {video.downloads.toLocaleString()}
+              </span>
+            </div>
           </div>
         </div>
-      </div>
-
-      {/* Title */}
-      <div className="mt-2 text-xs text-zinc-300 min-h-[2.5rem] line-clamp-2 font-light" title={video.title}>
-        {video.title || "Untitled video"}
-      </div>
-    </div>
+      </CardContent>
+    </Card>
   )
 }
 

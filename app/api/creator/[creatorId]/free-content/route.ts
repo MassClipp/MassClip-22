@@ -5,46 +5,82 @@ export async function GET(request: NextRequest, { params }: { params: { creatorI
   try {
     const { creatorId } = params
 
-    console.log(`[API] Fetching free content for creator: ${creatorId}`)
+    if (!creatorId) {
+      return NextResponse.json({ error: "Creator ID is required" }, { status: 400 })
+    }
+
+    console.log(`🔍 Fetching FREE CONTENT for creator: ${creatorId}`)
 
     // Initialize Firebase Admin
     initializeFirebaseAdmin()
 
-    // Query free content for this creator
-    const freeContentRef = db.collection("free-content")
-    const query = freeContentRef.where("creatorId", "==", creatorId).orderBy("createdAt", "desc")
+    let freeContent: any[] = []
 
-    const snapshot = await query.get()
+    // Check the free_content collection - this is where users explicitly add content
+    // from their /dashboard/free-content page
+    try {
+      console.log("📁 Checking free_content collection...")
+      const freeContentRef = db.collection("free_content")
+      const snapshot = await freeContentRef.where("uid", "==", creatorId).get()
 
-    if (snapshot.empty) {
-      console.log(`[API] No free content found for creator: ${creatorId}`)
-      return NextResponse.json({ content: [] })
+      console.log(`📊 Found ${snapshot.size} documents in free_content collection`)
+
+      if (!snapshot.empty) {
+        freeContent = snapshot.docs.map((doc) => {
+          const data = doc.data()
+          console.log(`📄 Free content item:`, {
+            id: doc.id,
+            title: data.title,
+            type: data.type,
+            fileUrl: data.fileUrl ? "✅" : "❌",
+            thumbnailUrl: data.thumbnailUrl ? "✅" : "❌",
+          })
+
+          return {
+            id: doc.id,
+            title: data.title || "Untitled",
+            fileUrl: data.fileUrl || "",
+            thumbnailUrl: data.thumbnailUrl || "",
+            type: data.type || "video",
+            uid: data.uid || "",
+            uploadId: data.uploadId || "",
+            addedAt: data.addedAt || new Date(),
+            views: data.views || 0,
+            downloads: data.downloads || 0,
+          }
+        })
+
+        console.log(`✅ Successfully loaded ${freeContent.length} free content items`)
+      } else {
+        console.log("ℹ️ No items found in free_content collection")
+      }
+    } catch (error) {
+      console.error("❌ Error checking free_content collection:", error)
+      return NextResponse.json(
+        {
+          error: "Failed to fetch free content",
+          details: error instanceof Error ? error.message : "Unknown error",
+        },
+        { status: 500 },
+      )
     }
 
-    const content = snapshot.docs.map((doc) => {
-      const data = doc.data()
-      return {
-        id: doc.id,
-        title: data.title || "Untitled",
-        description: data.description || "",
-        thumbnail: data.thumbnail || data.thumbnailUrl || "",
-        type: data.type || data.category || "video",
-        duration: data.duration || "",
-        views: data.views || 0,
-        createdAt: data.createdAt?.toDate?.()?.toISOString() || new Date().toISOString(),
-        isLocked: false,
-        url: data.url || data.videoUrl || "",
-      }
-    })
-
-    console.log(`[API] Found ${content.length} free content items for creator: ${creatorId}`)
+    console.log(`📊 FINAL RESULT: ${freeContent.length} free content items`)
 
     return NextResponse.json({
-      content,
-      total: content.length,
+      freeContent,
+      totalFound: freeContent.length,
+      creatorId,
+      source: "free_content_collection",
     })
   } catch (error) {
-    console.error("[API] Error fetching free content:", error)
-    return NextResponse.json({ error: "Failed to fetch free content" }, { status: 500 })
+    console.error("❌ FREE CONTENT API ERROR:", error)
+    return NextResponse.json(
+      {
+        error: "Failed to fetch creator free content",
+        details: error instanceof Error ? error.message : "Unknown error",
+      },
+      { status: 500 },
+    )
   }
 }
