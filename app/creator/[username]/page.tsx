@@ -1,8 +1,10 @@
 import { notFound } from "next/navigation"
 import type { Metadata } from "next"
 import { initializeFirebaseAdmin, db } from "@/lib/firebase-admin"
-import CreatorProfileWithSidebar from "@/components/creator-profile-with-sidebar"
 import ProfileViewTracker from "@/components/profile-view-tracker"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { Button } from "@/components/ui/button"
+import VideoCard from "@/components/video-card"
 
 // Helper function to convert Firestore data to plain objects
 function serializeData(data: any) {
@@ -241,7 +243,76 @@ export default async function CreatorProfilePage({ params }: { params: { usernam
     return (
       <>
         <ProfileViewTracker profileUserId={uid} />
-        <CreatorProfileWithSidebar creator={creatorData} />
+        <div className="min-h-screen bg-black text-white">
+          <div className="container mx-auto px-4 py-8 max-w-6xl">
+            {/* Profile Header */}
+            <div className="flex flex-col md:flex-row items-start md:items-center gap-6 mb-8">
+              <Avatar className="w-24 h-24 md:w-32 md:h-32 border-4 border-red-500">
+                <AvatarImage src={creatorData.profilePic || "/placeholder.svg"} alt={creatorData.displayName} />
+                <AvatarFallback className="bg-zinc-800 text-white text-2xl font-bold">
+                  {creatorData.displayName?.charAt(0)?.toUpperCase() ||
+                    creatorData.username?.charAt(0)?.toUpperCase() ||
+                    "?"}
+                </AvatarFallback>
+              </Avatar>
+
+              <div className="flex-1">
+                <div className="flex flex-col md:flex-row md:items-center gap-4 mb-4">
+                  <div>
+                    <h1 className="text-3xl font-bold">{creatorData.displayName || creatorData.username}</h1>
+                    <p className="text-zinc-400">@{creatorData.username}</p>
+                  </div>
+
+                  <div className="flex gap-2">
+                    <Button variant="outline" className="border-zinc-700 hover:bg-zinc-800 bg-transparent">
+                      Follow
+                    </Button>
+                    <Button variant="outline" className="border-zinc-700 hover:bg-zinc-800 bg-transparent">
+                      Share
+                    </Button>
+                  </div>
+                </div>
+
+                {creatorData.bio && <p className="text-zinc-300 mb-4 max-w-2xl">{creatorData.bio}</p>}
+              </div>
+            </div>
+
+            {/* Simple Video Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+              {/* Placeholder videos - replace with actual data fetching */}
+              <VideoCard
+                video={{
+                  id: "1",
+                  title: "Sample Video 1",
+                  thumbnail: "/placeholder.svg?height=200&width=300",
+                  duration: "2:30",
+                  views: 1200,
+                  createdAt: new Date().toISOString(),
+                }}
+              />
+              <VideoCard
+                video={{
+                  id: "2",
+                  title: "Sample Video 2",
+                  thumbnail: "/placeholder.svg?height=200&width=300",
+                  duration: "1:45",
+                  views: 850,
+                  createdAt: new Date().toISOString(),
+                }}
+              />
+              <VideoCard
+                video={{
+                  id: "3",
+                  title: "Sample Video 3",
+                  thumbnail: "/placeholder.svg?height=200&width=300",
+                  duration: "3:15",
+                  views: 2100,
+                  createdAt: new Date().toISOString(),
+                }}
+              />
+            </div>
+          </div>
+        </div>
       </>
     )
   } catch (error) {
