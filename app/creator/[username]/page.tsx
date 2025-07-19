@@ -1,8 +1,7 @@
 import { notFound } from "next/navigation"
 import type { Metadata } from "next"
 import { initializeFirebaseAdmin, db } from "@/lib/firebase-admin"
-import ProfileViewTracker from "@/components/profile-view-tracker"
-import CreatorProfileNew from "@/components/creator-profile-new"
+import CreatorProfileMinimal from "@/components/creator-profile-minimal"
 
 // Helper function to convert Firestore data to plain objects
 function serializeData(data: any) {
@@ -93,122 +92,36 @@ export async function generateMetadata({ params }: { params: { username: string 
   }
 }
 
-export default async function CreatorProfilePage({ params }: { params: { username: string } }) {
-  const { username } = params
+interface CreatorPageProps {
+  params: {
+    username: string
+  }
+}
 
+async function getCreatorByUsername(username: string) {
   try {
-    console.log(`[Page] Fetching creator profile for username: ${username}`)
+    const response = await fetch(`${process.env.NEXT_PUBLIC_SITE_URL}/api/uploads/by-username/${username}`, {
+      cache: "no-store",
+    })
 
-    // Initialize Firebase Admin
-    initializeFirebaseAdmin()
-
-    let userData = null
-    let uid = null
-
-    // First try to find the user in the users collection (most up-to-date data)
-    console.log(`[Page] Checking users collection for username: ${username}`)
-    const usersRef = db.collection("users")
-    let querySnapshot = await usersRef.where("username", "==", username.toLowerCase()).get()
-
-    if (!querySnapshot.empty) {
-      const userDoc = querySnapshot.docs[0]
-      userData = userDoc.data()
-      uid = userData.uid || userDoc.id
-      console.log(`[Page] Found user in users collection with UID: ${uid}`)
-    } else {
-      // Fallback: try case-insensitive match in users collection
-      console.log(`[Page] No exact match found in users collection, trying case-insensitive match`)
-      const allUsersSnapshot = await usersRef.get()
-      const matchingDocs = allUsersSnapshot.docs.filter((doc) => {
-        const data = doc.data()
-        return data.username && data.username.toLowerCase() === username.toLowerCase()
-      })
-
-      if (matchingDocs.length > 0) {
-        userData = matchingDocs[0].data()
-        uid = userData.uid || matchingDocs[0].id
-        console.log(`[Page] Found user via case-insensitive match with UID: ${uid}`)
-      }
+    if (!response.ok) {
+      return null
     }
 
-    // If still not found, try creators collection
-    if (!userData) {
-      console.log(`[Page] User not found in users collection, checking creators collection`)
-      const creatorsRef = db.collection("creators")
-
-      // Try exact match on username
-      querySnapshot = await creatorsRef.where("username", "==", username.toLowerCase()).get()
-
-      if (!querySnapshot.empty) {
-        userData = querySnapshot.docs[0].data()
-        uid = userData.uid || querySnapshot.docs[0].id
-        console.log(`[Page] Found creator by username with UID: ${uid}`)
-      } else {
-        // Try by document ID
-        console.log(`[Page] Creator not found by username, checking by document ID`)
-        const creatorDoc = await creatorsRef.doc(username.toLowerCase()).get()
-
-        if (creatorDoc.exists) {
-          userData = creatorDoc.data()
-          uid = userData.uid || creatorDoc.id
-          console.log(`[Page] Found creator by document ID with UID: ${uid}`)
-        }
-      }
-    }
-
-    if (!userData || !uid) {
-      console.log(`[Page] Creator profile not found for username: ${username}`)
-      notFound()
-    }
-
-    // If we found the user in creators collection but not users, try to get fresh data from users
-    if (uid && !userData.email) {
-      console.log(`[Page] Attempting to get fresh user data from users collection for UID: ${uid}`)
-      try {
-        const freshUserDoc = await db.collection("users").doc(uid).get()
-        if (freshUserDoc.exists) {
-          const freshUserData = freshUserDoc.data()
-          console.log(`[Page] Found fresh user data, merging with creator data`)
-
-          // Merge fresh user data with existing creator data, prioritizing user data
-          userData = {
-            ...userData,
-            ...freshUserData,
-            // Ensure we keep the UID
-            uid: uid,
-          }
-        }
-      } catch (error) {
-        console.warn(`[Page] Could not fetch fresh user data for UID ${uid}:`, error)
-      }
-    }
-
-    // Serialize the Firestore data to plain objects
-    const serializedData = serializeData(userData)
-
-    // Format the creator data for the component
-    const profilePicture = serializedData.profilePic || serializedData.photoURL || ""
-
-    const creatorData = {
-      uid: uid,
-      username: serializedData.username || username,
-      displayName: serializedData.displayName || username,
-      bio: serializedData.bio || "",
-      profilePic: profilePicture,
-      createdAt: serializedData.createdAt || new Date().toISOString(),
-      socialLinks: serializedData.socialLinks || {},
-      email: serializedData.email || "",
-      updatedAt: serializedData.updatedAt || new Date().toISOString(),
-    }
-
-    return (
-      <>
-        <ProfileViewTracker profileUserId={uid} />
-        <CreatorProfileNew creator={creatorData} />
-      </>
-    )
+    const data = await response.json()
+    return data.creator
   } catch (error) {
-    console.error(`[Page] Error fetching creator profile for ${username}:`, error)
+    console.error("Error fetching creator:", error)
+    return null
+  }
+}
+
+export default async function CreatorPage({ params }: CreatorPageProps) {
+  const creator = await getCreatorByUsername(params.username)
+
+  if (!creator) {
     notFound()
   }
+
+  return <CreatorProfileMinimal creator={creator} />
 }

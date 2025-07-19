@@ -1,0 +1,234 @@
+"use client"
+
+import { useState, useEffect } from "react"
+import { Button } from "@/components/ui/button"
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
+import { Share2, RefreshCw, Play, Calendar, Users, Heart } from "lucide-react"
+
+interface CreatorData {
+  uid: string
+  username: string
+  displayName: string
+  bio?: string
+  profilePic?: string
+  createdAt?: string
+}
+
+interface CreatorProfileMinimalProps {
+  creator: CreatorData
+}
+
+interface ContentItem {
+  id: string
+  title: string
+  thumbnailUrl: string
+  duration: string
+  views: number
+  type: "video" | "audio" | "image"
+  isPremium: boolean
+}
+
+export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimalProps) {
+  const [activeTab, setActiveTab] = useState<"free" | "premium">("free")
+  const [freeContent, setFreeContent] = useState<ContentItem[]>([])
+  const [premiumContent, setPremiumContent] = useState<ContentItem[]>([])
+  const [loading, setLoading] = useState(true)
+  const [freeContentCount, setFreeContentCount] = useState(0)
+  const [premiumContentCount, setPremiumContentCount] = useState(0)
+
+  const getMemberSince = () => {
+    if (creator.createdAt) {
+      const date = new Date(creator.createdAt)
+      return date.toLocaleDateString("en-US", { month: "long", year: "numeric" })
+    }
+    return "Recently"
+  }
+
+  useEffect(() => {
+    const fetchContent = async () => {
+      try {
+        setLoading(true)
+
+        const freeResponse = await fetch(`/api/creator/${creator.uid}/free-content`)
+        if (freeResponse.ok) {
+          const freeData = await freeResponse.json()
+          setFreeContent(freeData.content || [])
+          setFreeContentCount(freeData.content?.length || 0)
+        }
+
+        const premiumResponse = await fetch(`/api/creator/${creator.uid}/premium-content`)
+        if (premiumResponse.ok) {
+          const premiumData = await premiumResponse.json()
+          setPremiumContent(premiumData.content || [])
+          setPremiumContentCount(premiumData.content?.length || 0)
+        }
+      } catch (error) {
+        console.error("Error fetching content:", error)
+      } finally {
+        setLoading(false)
+      }
+    }
+
+    if (creator.uid) {
+      fetchContent()
+    }
+  }, [creator.uid])
+
+  const currentContent = activeTab === "free" ? freeContent : premiumContent
+
+  return (
+    <div className="min-h-screen bg-black">
+      <div className="max-w-6xl mx-auto px-8 py-16">
+        {/* Header */}
+        <div className="flex items-start justify-between mb-16">
+          <div className="flex items-center gap-8">
+            <Avatar className="w-20 h-20 border border-zinc-800">
+              <AvatarImage
+                src={creator.profilePic || "/placeholder.svg"}
+                alt={creator.displayName}
+                className="object-cover"
+              />
+              <AvatarFallback className="bg-zinc-900 text-white text-xl font-medium">
+                {creator.displayName?.charAt(0)?.toUpperCase() || creator.username?.charAt(0)?.toUpperCase() || "?"}
+              </AvatarFallback>
+            </Avatar>
+
+            <div className="space-y-3">
+              <div>
+                <h1 className="text-3xl font-light text-white tracking-tight">
+                  {creator.displayName || creator.username}
+                </h1>
+                <p className="text-zinc-500 text-sm font-mono">@{creator.username}</p>
+              </div>
+
+              {creator.bio && <p className="text-zinc-400 text-sm max-w-md leading-relaxed">{creator.bio}</p>}
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <Button size="sm" className="bg-white text-black hover:bg-zinc-100 font-medium px-6 h-9 rounded-full">
+              Follow
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-zinc-400 hover:text-white hover:bg-zinc-900 h-9 w-9 rounded-full p-0"
+            >
+              <Share2 className="w-4 h-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-zinc-400 hover:text-white hover:bg-zinc-900 h-9 w-9 rounded-full p-0"
+            >
+              <RefreshCw className="w-4 h-4" />
+            </Button>
+          </div>
+        </div>
+
+        {/* Stats */}
+        <div className="flex items-center gap-8 mb-12 text-sm">
+          <div className="flex items-center gap-2 text-zinc-500">
+            <Calendar className="w-4 h-4" />
+            <span>Member since {getMemberSince()}</span>
+          </div>
+          <div className="flex items-center gap-2 text-zinc-500">
+            <Users className="w-4 h-4" />
+            <span>{freeContentCount} free</span>
+          </div>
+          <div className="flex items-center gap-2 text-zinc-500">
+            <Heart className="w-4 h-4" />
+            <span>{premiumContentCount} premium</span>
+          </div>
+        </div>
+
+        {/* Tabs */}
+        <div className="flex items-center gap-1 mb-12">
+          <button
+            onClick={() => setActiveTab("free")}
+            className={`px-4 py-2 text-sm font-medium rounded-full transition-all duration-200 ${
+              activeTab === "free" ? "bg-white text-black" : "text-zinc-400 hover:text-white"
+            }`}
+          >
+            Free Content
+          </button>
+          <button
+            onClick={() => setActiveTab("premium")}
+            className={`px-4 py-2 text-sm font-medium rounded-full transition-all duration-200 ${
+              activeTab === "premium" ? "bg-white text-black" : "text-zinc-400 hover:text-white"
+            }`}
+          >
+            Premium Content
+          </button>
+        </div>
+
+        {/* Content */}
+        <div>
+          {loading ? (
+            <div className="flex items-center justify-center py-24">
+              <div className="w-6 h-6 border border-zinc-800 border-t-white rounded-full animate-spin"></div>
+            </div>
+          ) : currentContent.length > 0 ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+              {currentContent.map((item) => (
+                <ContentCard key={item.id} item={item} />
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-24">
+              <div className="w-12 h-12 mx-auto mb-6 bg-zinc-900 rounded-full flex items-center justify-center">
+                <Play className="w-5 h-5 text-zinc-600" />
+              </div>
+              <h3 className="text-lg font-medium text-white mb-2">No {activeTab} content available</h3>
+              <p className="text-zinc-500 text-sm">This creator hasn't uploaded any {activeTab} content yet.</p>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+function ContentCard({ item }: { item: ContentItem }) {
+  const [isHovered, setIsHovered] = useState(false)
+
+  return (
+    <div
+      className="group cursor-pointer"
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+    >
+      <div className="relative aspect-video bg-zinc-900 rounded-lg overflow-hidden mb-3">
+        <img
+          src={item.thumbnailUrl || "/placeholder.svg?height=200&width=300"}
+          alt={item.title}
+          className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+        />
+
+        <div
+          className={`absolute inset-0 bg-black/40 flex items-center justify-center transition-opacity duration-200 ${
+            isHovered ? "opacity-100" : "opacity-0"
+          }`}
+        >
+          <div className="w-12 h-12 bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center">
+            <Play className="w-5 h-5 text-white ml-0.5" />
+          </div>
+        </div>
+
+        <div className="absolute bottom-3 right-3 bg-black/60 backdrop-blur-sm px-2 py-1 rounded text-xs text-white font-mono">
+          {item.duration}
+        </div>
+
+        {item.isPremium && (
+          <div className="absolute top-3 left-3 bg-white text-black px-2 py-1 rounded text-xs font-medium">Premium</div>
+        )}
+      </div>
+
+      <h3 className="text-white text-sm font-medium line-clamp-2 leading-snug" title={item.title}>
+        {item.title}
+      </h3>
+
+      <p className="text-zinc-500 text-xs mt-1">{item.views.toLocaleString()} views</p>
+    </div>
+  )
+}
