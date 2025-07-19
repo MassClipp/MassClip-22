@@ -2,9 +2,7 @@ import { notFound } from "next/navigation"
 import type { Metadata } from "next"
 import { initializeFirebaseAdmin, db } from "@/lib/firebase-admin"
 import ProfileViewTracker from "@/components/profile-view-tracker"
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { Button } from "@/components/ui/button"
-import VideoCard from "@/components/video-card"
+import CreatorProfileNew from "@/components/creator-profile-new"
 
 // Helper function to convert Firestore data to plain objects
 function serializeData(data: any) {
@@ -62,16 +60,6 @@ export async function generateMetadata({ params }: { params: { username: string 
         description: "The creator profile you're looking for doesn't exist.",
       }
     }
-
-    console.log(
-      `[Metadata] Found user data:`,
-      JSON.stringify({
-        displayName: userData.displayName,
-        username: userData.username,
-        hasPhotoURL: !!userData.photoURL,
-        hasProfilePic: !!userData.profilePic,
-      }),
-    )
 
     // Prioritize profilePic over photoURL
     const profileImage = userData.profilePic || userData.photoURL || "https://massclip.pro/og-image.jpg"
@@ -195,24 +183,10 @@ export default async function CreatorProfilePage({ params }: { params: { usernam
       }
     }
 
-    console.log(
-      `[Page] Final user data:`,
-      JSON.stringify({
-        uid: uid,
-        username: userData.username,
-        displayName: userData.displayName,
-        hasProfilePic: !!userData.profilePic,
-        hasPhotoURL: !!userData.photoURL,
-        hasBio: !!userData.bio,
-        hasSocialLinks: !!userData.socialLinks,
-      }),
-    )
-
     // Serialize the Firestore data to plain objects
     const serializedData = serializeData(userData)
 
     // Format the creator data for the component
-    // Prioritize profilePic over photoURL for profile picture
     const profilePicture = serializedData.profilePic || serializedData.photoURL || ""
 
     const creatorData = {
@@ -223,89 +197,14 @@ export default async function CreatorProfilePage({ params }: { params: { usernam
       profilePic: profilePicture,
       createdAt: serializedData.createdAt || new Date().toISOString(),
       socialLinks: serializedData.socialLinks || {},
-      // Add additional fields that might be useful
       email: serializedData.email || "",
       updatedAt: serializedData.updatedAt || new Date().toISOString(),
     }
 
-    console.log(
-      `[Page] Passing creator data to component:`,
-      JSON.stringify({
-        uid: creatorData.uid,
-        username: creatorData.username,
-        displayName: creatorData.displayName,
-        hasProfilePic: !!creatorData.profilePic,
-        hasBio: !!creatorData.bio,
-        hasSocialLinks: Object.keys(creatorData.socialLinks).length > 0,
-      }),
-    )
-
     return (
       <>
         <ProfileViewTracker profileUserId={uid} />
-        <div className="min-h-screen bg-black text-white">
-          <div className="container mx-auto px-4 py-8 max-w-6xl">
-            {/* Profile Header */}
-            <div className="flex flex-col md:flex-row items-start md:items-center gap-6 mb-8">
-              <Avatar className="w-24 h-24 md:w-32 md:h-32 border-4 border-red-500">
-                <AvatarImage src={creatorData.profilePic || "/placeholder.svg"} alt={creatorData.displayName} />
-                <AvatarFallback className="bg-zinc-800 text-white text-2xl font-bold">
-                  {creatorData.displayName?.charAt(0)?.toUpperCase() ||
-                    creatorData.username?.charAt(0)?.toUpperCase() ||
-                    "?"}
-                </AvatarFallback>
-              </Avatar>
-
-              <div className="flex-1">
-                <div className="flex flex-col md:flex-row md:items-center gap-4 mb-4">
-                  <div>
-                    <h1 className="text-3xl font-bold">{creatorData.displayName || creatorData.username}</h1>
-                    <p className="text-zinc-400">@{creatorData.username}</p>
-                  </div>
-
-                  <div className="flex gap-2">
-                    <Button variant="outline" className="border-zinc-700 hover:bg-zinc-800 bg-transparent">
-                      Follow
-                    </Button>
-                    <Button variant="outline" className="border-zinc-700 hover:bg-zinc-800 bg-transparent">
-                      Share
-                    </Button>
-                  </div>
-                </div>
-
-                {creatorData.bio && <p className="text-zinc-300 mb-4 max-w-2xl">{creatorData.bio}</p>}
-              </div>
-            </div>
-
-            {/* Simple Video Grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-              <VideoCard
-                id="1"
-                title="Sample Video 1"
-                thumbnailUrl="/placeholder.svg?height=200&width=300"
-                fileUrl="#"
-                duration={150}
-                type="video"
-              />
-              <VideoCard
-                id="2"
-                title="Sample Video 2"
-                thumbnailUrl="/placeholder.svg?height=200&width=300"
-                fileUrl="#"
-                duration={105}
-                type="video"
-              />
-              <VideoCard
-                id="3"
-                title="Sample Video 3"
-                thumbnailUrl="/placeholder.svg?height=200&width=300"
-                fileUrl="#"
-                duration={195}
-                type="video"
-              />
-            </div>
-          </div>
-        </div>
+        <CreatorProfileNew creator={creatorData} />
       </>
     )
   } catch (error) {
