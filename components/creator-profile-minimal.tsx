@@ -431,7 +431,6 @@ function ContentCard({ item }: { item: ContentItem }) {
 }
 
 function BundleCard({ item, user }: { item: ContentItem; user: any }) {
-  const [isCardHovered, setIsCardHovered] = useState(false)
   const [isThumbnailHovered, setIsThumbnailHovered] = useState(false)
   const [isUnlocking, setIsUnlocking] = useState(false)
   const [imageError, setImageError] = useState(false)
@@ -530,14 +529,10 @@ function BundleCard({ item, user }: { item: ContentItem; user: any }) {
   }
 
   return (
-    <div
-      className="bg-gradient-to-br from-zinc-900/90 via-zinc-800/60 to-zinc-900/80 rounded-2xl overflow-hidden border border-zinc-700/30 hover:border-zinc-600/40 transition-all duration-500 relative backdrop-blur-md shadow-2xl hover:shadow-3xl w-full max-w-sm"
-      onMouseEnter={() => setIsCardHovered(true)}
-      onMouseLeave={() => setIsCardHovered(false)}
-    >
-      {/* 1:1 Aspect Ratio Thumbnail - Only zoom on thumbnail hover */}
+    <div className="bg-zinc-900 rounded-2xl overflow-hidden border border-zinc-700/30 hover:border-zinc-600/40 transition-all duration-300 w-full max-w-sm">
+      {/* Thumbnail Section */}
       <div
-        className="relative aspect-square bg-gradient-to-br from-zinc-800 to-zinc-900 overflow-hidden"
+        className="relative aspect-square bg-zinc-800 overflow-hidden"
         onMouseEnter={() => setIsThumbnailHovered(true)}
         onMouseLeave={() => setIsThumbnailHovered(false)}
       >
@@ -550,56 +545,45 @@ function BundleCard({ item, user }: { item: ContentItem; user: any }) {
             onLoad={handleImageLoad}
           />
         ) : (
-          <div className="w-full h-full bg-gradient-to-br from-zinc-800 to-zinc-900 flex items-center justify-center">
+          <div className="w-full h-full bg-zinc-800 flex items-center justify-center">
             <Package className="w-16 h-16 text-zinc-600" />
           </div>
         )}
 
-        {/* Enhanced content count badge */}
-        <div className="absolute top-4 right-4 bg-black/80 backdrop-blur-md px-3 py-1.5 rounded-full text-xs text-white font-semibold border border-white/20 shadow-lg">
+        {/* Content count badge */}
+        <div className="absolute top-4 right-4 bg-black/80 backdrop-blur-sm px-3 py-1.5 rounded-full text-xs text-white font-semibold">
           {item.contentCount || 0} items
         </div>
       </div>
 
-      {/* Compact Bottom Half - Content Info */}
-      <div className="relative p-4 space-y-3 bg-black">
-        {/* Content wrapper */}
-        <div className="relative z-10">
-          {/* Bundle Name - More compact */}
-          <div className="space-y-1">
-            <h3 className="text-white text-base font-bold line-clamp-1 tracking-tight" title={item.title}>
-              {item.title}
-            </h3>
-            <p className="text-zinc-400 text-xs line-clamp-1 leading-relaxed">
-              {item.description || "Premium content bundle"}
-            </p>
-          </div>
+      {/* Content Section */}
+      <div className="p-4 space-y-3 bg-black">
+        {/* Title and Description */}
+        <div className="space-y-1">
+          <h3 className="text-white text-base font-bold line-clamp-1" title={item.title}>
+            {item.title}
+          </h3>
+          <p className="text-zinc-400 text-xs line-clamp-1">{item.description || "Premium content bundle"}</p>
+        </div>
 
-          {/* Price and Unlock Button Row - More compact */}
-          <div className="flex items-center justify-between pt-2">
-            {/* Price */}
-            <div className="flex flex-col">
-              <span className="text-white text-xl font-light tracking-tight">${item.price?.toFixed(2) || "0.00"}</span>
-            </div>
+        {/* Price and Button Row */}
+        <div className="flex items-center justify-between pt-2">
+          <span className="text-white text-xl font-light">${item.price?.toFixed(2) || "0.00"}</span>
 
-            {/* Unlock Button - Fixed clickability issues */}
-            <div className="relative z-50">
-              <button
-                onClick={handleUnlock}
-                disabled={isUnlocking || !item.stripePriceId}
-                className="bg-white text-black hover:bg-gray-100 font-semibold px-4 py-2 text-sm rounded-lg transition-all duration-200 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 cursor-pointer"
-              >
-                {isUnlocking ? (
-                  <div className="w-4 h-4 border-2 border-black/30 border-t-black rounded-full animate-spin" />
-                ) : (
-                  <>
-                    <Unlock className="w-4 h-4" />
-                    Unlock
-                  </>
-                )}
-              </button>
-            </div>
-          </div>
+          <button
+            onClick={handleUnlock}
+            disabled={isUnlocking || !item.stripePriceId}
+            className="bg-white text-black hover:bg-gray-100 active:bg-gray-200 font-semibold px-4 py-2 text-sm rounded-lg transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+          >
+            {isUnlocking ? (
+              <div className="w-4 h-4 border-2 border-black/30 border-t-black rounded-full animate-spin" />
+            ) : (
+              <>
+                <Unlock className="w-4 h-4" />
+                Unlock
+              </>
+            )}
+          </button>
         </div>
       </div>
     </div>
