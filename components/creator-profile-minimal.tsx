@@ -4,6 +4,8 @@ import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Share2, Play, Calendar, Users, Heart, Check, Package, Unlock } from "lucide-react"
+import { useAuthState } from "react-firebase-hooks/auth"
+import { auth } from "@/lib/firebase"
 
 interface CreatorData {
   uid: string
@@ -35,6 +37,7 @@ interface ContentItem {
 }
 
 export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimalProps) {
+  const [user] = useAuthState(auth)
   const [activeTab, setActiveTab] = useState<"free" | "premium">("free")
   const [freeContent, setFreeContent] = useState<ContentItem[]>([])
   const [premiumContent, setPremiumContent] = useState<ContentItem[]>([])
@@ -118,6 +121,7 @@ export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimal
         if (premiumResponse.ok) {
           const premiumData = await premiumResponse.json()
           console.log("Premium content response:", premiumData)
+          console.log("Premium content items:", premiumData.content)
           setPremiumContent(premiumData.content || [])
           setPremiumContentCount(premiumData.content?.length || 0)
         } else {
@@ -240,7 +244,7 @@ export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimal
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
               {currentContent.map((item) =>
                 activeTab === "premium" ? (
-                  <BundleCard key={item.id} item={item} />
+                  <BundleCard key={item.id} item={item} user={user} />
                 ) : (
                   <ContentCard key={item.id} item={item} />
                 ),
@@ -305,25 +309,48 @@ function ContentCard({ item }: { item: ContentItem }) {
   )
 }
 
-function BundleCard({ item }: { item: ContentItem }) {
+function BundleCard({ item, user }: { item: ContentItem; user: any }) {
   const [isHovered, setIsHovered] = useState(false)
   const [isUnlocking, setIsUnlocking] = useState(false)
+  const [imageError, setImageError] = useState(false)
+
+  console.log("BundleCard item:", item)
 
   const handleUnlock = async () => {
     if (!item.stripePriceId) {
       console.error("No Stripe price ID available for this bundle")
+      alert("This bundle is not available for purchase at the moment.")
       return
     }
 
     setIsUnlocking(true)
 
     try {
+      let idToken = null
+
+      // Get Firebase ID token if user is authenticated
+      if (user) {
+        try {
+          idToken = await user.getIdToken()
+          console.log("Got Firebase ID token for checkout")
+        } catch (error) {
+          console.error("Failed to get ID token:", error)
+        }
+      }
+
+      console.log("Creating checkout session with:", {
+        priceId: item.stripePriceId,
+        bundleId: item.id,
+        hasIdToken: !!idToken,
+      })
+
       const response = await fetch("/api/stripe/create-checkout-session", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
+          idToken,
           priceId: item.stripePriceId,
           bundleId: item.id,
           successUrl: `${window.location.origin}/purchase-success?bundle_id=${item.id}`,
@@ -331,16 +358,38 @@ function BundleCard({ item }: { item: ContentItem }) {
         }),
       })
 
+      if (!response.ok) {
+        const errorData = await response.json()
+        console.error("Checkout session creation failed:", errorData)
+        alert(`Failed to create checkout session: ${errorData.error}`)
+        return
+      }
+
       const { url } = await response.json()
 
       if (url) {
+        console.log("Redirecting to Stripe checkout:", url)
         window.location.href = url
+      } else {
+        console.error("No checkout URL received")
+        alert("Failed to create checkout session")
       }
     } catch (error) {
       console.error("Error creating checkout session:", error)
+      alert("An error occurred while creating the checkout session")
     } finally {
       setIsUnlocking(false)
     }
+  }
+
+  const handleImageError = () => {
+    console.log("Image failed to load:", item.thumbnailUrl)
+    setImageError(true)
+  }
+
+  const handleImageLoad = () => {
+    console.log("Image loaded successfully:", item.thumbnailUrl)
+    setImageError(false)
   }
 
   return (
@@ -354,11 +403,19 @@ function BundleCard({ item }: { item: ContentItem }) {
 
       {/* 1:1 Aspect Ratio Thumbnail */}
       <div className="relative aspect-square bg-zinc-800 overflow-hidden">
-        <img
-          src={item.thumbnailUrl || "/placeholder.svg?height=300&width=300"}
-          alt={item.title}
-          className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
-        />
+        {item.thumbnailUrl && !imageError ? (
+          <img
+            src={item.thumbnailUrl || "/placeholder.svg"}
+            alt={item.title}
+            className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+            onError={handleImageError}
+            onLoad={handleImageLoad}
+          />
+        ) : (
+          <div className="w-full h-full bg-zinc-800 flex items-center justify-center">
+            <Package className="w-12 h-12 text-zinc-600" />
+          </div>
+        )}
 
         <div
           className={`absolute inset-0 bg-black/40 flex items-center justify-center transition-opacity duration-200 ${

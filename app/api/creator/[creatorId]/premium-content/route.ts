@@ -38,20 +38,25 @@ export async function GET(request: NextRequest, { params }: { params: { creatorI
               contentCount = data.contentCount
             }
 
-            console.log(`📦 Bundle:`, {
+            // Try multiple thumbnail field names
+            const thumbnailUrl = data.thumbnailUrl || data.thumbnail || data.imageUrl || data.image || null
+
+            console.log(`📦 Bundle Details:`, {
               id: doc.id,
               title: data.title,
               price: data.price,
-              thumbnailUrl: data.thumbnailUrl || data.thumbnail ? "✅" : "❌",
-              stripePriceId: data.stripePriceId ? "✅" : "❌",
+              thumbnailUrl: thumbnailUrl,
+              stripePriceId: data.stripePriceId,
+              stripeProductId: data.stripeProductId,
               contentCount: contentCount,
-              description: data.description ? "✅" : "❌",
+              description: data.description,
+              rawData: Object.keys(data), // Log all available fields
             })
 
             return {
               id: doc.id,
               title: data.title || "Untitled Bundle",
-              thumbnailUrl: data.thumbnailUrl || data.thumbnail || "/placeholder.svg?height=300&width=300",
+              thumbnailUrl: thumbnailUrl,
               type: "bundle",
               price: data.price || 0,
               description: data.description || "No description available",
@@ -70,6 +75,7 @@ export async function GET(request: NextRequest, { params }: { params: { creatorI
         )
 
         console.log(`✅ Successfully loaded ${premiumContent.length} bundles`)
+        console.log("Bundle data:", premiumContent)
       } else {
         console.log("ℹ️ No bundles found")
       }
