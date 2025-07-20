@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { Share2, Play, Calendar, Users, Heart } from "lucide-react"
+import { Share2, Play, Calendar, Users, Heart, Check } from "lucide-react"
 
 interface CreatorData {
   uid: string
@@ -35,11 +35,30 @@ export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimal
   const [loading, setLoading] = useState(true)
   const [freeContentCount, setFreeContentCount] = useState(0)
   const [premiumContentCount, setPremiumContentCount] = useState(0)
+  const [showToast, setShowToast] = useState(false)
 
   const getMemberSince = () => {
     if (creator.createdAt) {
-      const date = new Date(creator.createdAt)
-      return date.toLocaleDateString("en-US", { month: "long", year: "numeric" })
+      // Handle different date formats
+      let date: Date
+
+      if (typeof creator.createdAt === "string") {
+        // Try parsing as ISO string first
+        if (creator.createdAt.includes("T") || creator.createdAt.includes("-")) {
+          date = new Date(creator.createdAt)
+        } else {
+          // Handle timestamp strings
+          const timestamp = Number.parseInt(creator.createdAt)
+          date = new Date(timestamp)
+        }
+      } else {
+        date = new Date(creator.createdAt)
+      }
+
+      // Check if date is valid
+      if (!isNaN(date.getTime())) {
+        return date.toLocaleDateString("en-US", { month: "long", year: "numeric" })
+      }
     }
     return "Recently"
   }
@@ -48,8 +67,12 @@ export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimal
     try {
       const url = window.location.href
       await navigator.clipboard.writeText(url)
-      // You could add a toast notification here if you have one
-      console.log("URL copied to clipboard:", url)
+
+      // Show toast notification
+      setShowToast(true)
+      setTimeout(() => {
+        setShowToast(false)
+      }, 1000)
     } catch (err) {
       console.error("Failed to copy URL:", err)
       // Fallback for older browsers
@@ -59,6 +82,12 @@ export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimal
       textArea.select()
       document.execCommand("copy")
       document.body.removeChild(textArea)
+
+      // Show toast even for fallback
+      setShowToast(true)
+      setTimeout(() => {
+        setShowToast(false)
+      }, 1000)
     }
   }
 
@@ -100,17 +129,25 @@ export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimal
       <div className="absolute inset-0 bg-gradient-to-br from-white/5 via-black to-zinc-800/20 pointer-events-none" />
       <div className="absolute inset-0 bg-gradient-to-t from-zinc-900/30 via-transparent to-zinc-800/10 pointer-events-none" />
 
+      {/* Toast Notification */}
+      {showToast && (
+        <div className="fixed top-6 right-6 z-50 bg-white text-black px-4 py-2 rounded-lg shadow-lg flex items-center gap-2 animate-in fade-in slide-in-from-top-2 duration-200">
+          <Check className="w-4 h-4" />
+          <span className="text-sm font-medium">Link copied to clipboard</span>
+        </div>
+      )}
+
       <div className="relative max-w-6xl mx-auto px-8 py-16">
         {/* Header */}
         <div className="flex items-start justify-between mb-16">
           <div className="flex items-center gap-8">
-            <Avatar className="w-20 h-20 border border-zinc-800">
+            <Avatar className="w-20 h-20 border-2 border-white/20">
               <AvatarImage
                 src={creator.profilePic || "/placeholder.svg"}
                 alt={creator.displayName}
                 className="object-cover"
               />
-              <AvatarFallback className="bg-zinc-900 text-white text-xl font-medium">
+              <AvatarFallback className="bg-zinc-900 text-white text-xl font-medium border-2 border-white/20">
                 {creator.displayName?.charAt(0)?.toUpperCase() || creator.username?.charAt(0)?.toUpperCase() || "?"}
               </AvatarFallback>
             </Avatar>
