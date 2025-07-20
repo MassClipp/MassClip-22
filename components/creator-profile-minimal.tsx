@@ -431,7 +431,8 @@ function ContentCard({ item }: { item: ContentItem }) {
 }
 
 function BundleCard({ item, user }: { item: ContentItem; user: any }) {
-  const [isHovered, setIsHovered] = useState(false)
+  const [isCardHovered, setIsCardHovered] = useState(false)
+  const [isThumbnailHovered, setIsThumbnailHovered] = useState(false)
   const [isUnlocking, setIsUnlocking] = useState(false)
   const [imageError, setImageError] = useState(false)
 
@@ -530,29 +531,33 @@ function BundleCard({ item, user }: { item: ContentItem; user: any }) {
 
   return (
     <div
-      className="bg-gradient-to-br from-zinc-900/90 via-zinc-800/60 to-zinc-900/80 rounded-2xl overflow-hidden border border-zinc-700/30 hover:border-zinc-600/40 transition-all duration-500 relative group backdrop-blur-md shadow-2xl hover:shadow-3xl w-full max-w-sm"
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
+      className="bg-gradient-to-br from-zinc-900/90 via-zinc-800/60 to-zinc-900/80 rounded-2xl overflow-hidden border border-zinc-700/30 hover:border-zinc-600/40 transition-all duration-500 relative backdrop-blur-md shadow-2xl hover:shadow-3xl w-full max-w-sm"
+      onMouseEnter={() => setIsCardHovered(true)}
+      onMouseLeave={() => setIsCardHovered(false)}
     >
-      {/* Sophisticated gradient overlays - with pointer-events-none to ensure clickability */}
+      {/* Sophisticated gradient overlays */}
       <div className="absolute inset-0 bg-gradient-to-br from-white/8 via-white/3 to-transparent pointer-events-none rounded-2xl" />
       <div className="absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-white/5 pointer-events-none rounded-2xl" />
 
-      {/* Enhanced hover glow effect - with pointer-events-none */}
+      {/* Enhanced hover glow effect */}
       <div
-        className={`absolute inset-0 bg-gradient-to-br from-white/15 via-white/5 to-white/8 pointer-events-none rounded-2xl transition-opacity duration-500 ${isHovered ? "opacity-100" : "opacity-0"}`}
+        className={`absolute inset-0 bg-gradient-to-br from-white/15 via-white/5 to-white/8 pointer-events-none rounded-2xl transition-opacity duration-500 ${isCardHovered ? "opacity-100" : "opacity-0"}`}
       />
 
-      {/* Subtle inner border - with pointer-events-none */}
+      {/* Subtle inner border */}
       <div className="absolute inset-[1px] rounded-2xl border border-white/10 pointer-events-none" />
 
-      {/* 1:1 Aspect Ratio Thumbnail */}
-      <div className="relative aspect-square bg-gradient-to-br from-zinc-800 to-zinc-900 overflow-hidden">
+      {/* 1:1 Aspect Ratio Thumbnail - Only zoom on thumbnail hover */}
+      <div
+        className="relative aspect-square bg-gradient-to-br from-zinc-800 to-zinc-900 overflow-hidden"
+        onMouseEnter={() => setIsThumbnailHovered(true)}
+        onMouseLeave={() => setIsThumbnailHovered(false)}
+      >
         {item.thumbnailUrl && !imageError ? (
           <img
             src={item.thumbnailUrl || "/placeholder.svg"}
             alt={item.title}
-            className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
+            className={`w-full h-full object-cover transition-transform duration-500 ${isThumbnailHovered ? "scale-110" : "scale-100"}`}
             onError={handleImageError}
             onLoad={handleImageLoad}
           />
@@ -567,42 +572,43 @@ function BundleCard({ item, user }: { item: ContentItem; user: any }) {
           {item.contentCount || 0} items
         </div>
 
-        {/* Subtle image overlay - with pointer-events-none */}
+        {/* Subtle image overlay */}
         <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-transparent pointer-events-none" />
       </div>
 
-      {/* Enhanced Bottom Half - Content Info */}
-      <div className="relative p-6 space-y-5 bg-black">
-        {/* Subtle white gradient overlay - with pointer-events-none */}
+      {/* Compact Bottom Half - Content Info */}
+      <div className="relative p-4 space-y-3 bg-black">
+        {/* Subtle white gradient overlay */}
         <div className="absolute inset-0 bg-gradient-to-t from-white/5 via-white/2 to-transparent pointer-events-none" />
 
-        {/* Content wrapper with proper z-index */}
-        <div className="relative z-20">
-          {/* Bundle Name */}
-          <div className="space-y-2">
-            <h3 className="text-white text-lg font-bold line-clamp-1 tracking-tight" title={item.title}>
+        {/* Content wrapper */}
+        <div className="relative">
+          {/* Bundle Name - More compact */}
+          <div className="space-y-1">
+            <h3 className="text-white text-base font-bold line-clamp-1 tracking-tight" title={item.title}>
               {item.title}
             </h3>
-            <p className="text-zinc-400 text-sm line-clamp-2 leading-relaxed">
+            <p className="text-zinc-400 text-xs line-clamp-1 leading-relaxed">
               {item.description || "Premium content bundle"}
             </p>
           </div>
 
-          {/* Price and Unlock Button Row */}
+          {/* Price and Unlock Button Row - More compact */}
           <div className="flex items-center justify-between pt-2">
-            {/* Enhanced Price */}
+            {/* Price */}
             <div className="flex flex-col">
-              <span className="text-white text-2xl font-light tracking-tight">${item.price?.toFixed(2) || "0.00"}</span>
+              <span className="text-white text-xl font-light tracking-tight">${item.price?.toFixed(2) || "0.00"}</span>
             </div>
 
-            {/* Enhanced Unlock Button with proper z-index and pointer events */}
+            {/* Unlock Button - Fixed clickability issues */}
             <button
               onClick={handleUnlock}
               disabled={isUnlocking || !item.stripePriceId}
-              className="relative z-30 bg-black text-white hover:bg-zinc-900 font-bold px-6 py-2.5 h-10 text-sm rounded-lg transition-all duration-300 shadow-xl hover:shadow-2xl hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed border border-white/30 flex items-center gap-2"
+              className="bg-white text-black hover:bg-gray-100 font-semibold px-4 py-2 text-sm rounded-lg transition-all duration-200 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 z-10 relative"
+              style={{ pointerEvents: "auto" }}
             >
               {isUnlocking ? (
-                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                <div className="w-4 h-4 border-2 border-black/30 border-t-black rounded-full animate-spin" />
               ) : (
                 <>
                   <Unlock className="w-4 h-4" />
