@@ -31,15 +31,16 @@ export async function GET(request: NextRequest, { params }: { params: { creatorI
             title: data.title,
             price: data.price,
             thumbnailUrl: data.thumbnailUrl ? "✅" : "❌",
+            stripePriceId: data.stripePriceId ? "✅" : "❌",
           })
 
           return {
             id: doc.id,
             title: data.title || "Untitled Bundle",
-            thumbnailUrl: data.thumbnailUrl || "/placeholder.svg?height=200&width=300",
+            thumbnailUrl: data.thumbnailUrl || "/placeholder.svg?height=300&width=300",
             type: "bundle",
             price: data.price || 0,
-            description: data.description || "",
+            description: data.description || "No description available",
             creatorId: data.creatorId || "",
             createdAt: data.createdAt || new Date(),
             views: data.views || 0,
@@ -47,6 +48,8 @@ export async function GET(request: NextRequest, { params }: { params: { creatorI
             duration: "Bundle",
             isPremium: true,
             contentCount: data.contentCount || 0,
+            stripePriceId: data.stripePriceId || null,
+            stripeProductId: data.stripeProductId || null,
           }
         })
 

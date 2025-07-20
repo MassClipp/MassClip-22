@@ -21,38 +21,34 @@ export async function GET(request: NextRequest, { params }: { params: { creatorI
       const freeContentRef = db.collection("free_content")
       const snapshot = await freeContentRef.where("uid", "==", creatorId).get()
 
-      console.log(`📊 Found ${snapshot.size} documents in free_content collection`)
+      console.log(`📊 Found ${snapshot.size} free content items`)
 
       if (!snapshot.empty) {
         freeContent = snapshot.docs.map((doc) => {
           const data = doc.data()
-          console.log(`📄 Free content item:`, {
+          console.log(`🎬 Free Content:`, {
             id: doc.id,
             title: data.title,
-            type: data.type,
-            fileUrl: data.fileUrl ? "✅" : "❌",
             thumbnailUrl: data.thumbnailUrl ? "✅" : "❌",
           })
 
           return {
             id: doc.id,
-            title: data.title || "Untitled",
-            fileUrl: data.fileUrl || "",
+            title: data.title || "Untitled Content",
             thumbnailUrl: data.thumbnailUrl || "/placeholder.svg?height=200&width=300",
             type: data.type || "video",
-            uid: data.uid || "",
-            uploadId: data.uploadId || "",
-            addedAt: data.addedAt || new Date(),
-            views: data.views || 0,
-            downloads: data.downloads || 0,
             duration: data.duration || "0:00",
+            views: data.views || 0,
+            createdAt: data.createdAt || new Date(),
             isPremium: false,
+            fileUrl: data.fileUrl || "",
+            description: data.description || "",
           }
         })
 
         console.log(`✅ Successfully loaded ${freeContent.length} free content items`)
       } else {
-        console.log("ℹ️ No items found in free_content collection")
+        console.log("ℹ️ No free content found")
       }
     } catch (error) {
       console.error("❌ Error checking free_content collection:", error)

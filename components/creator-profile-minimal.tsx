@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { Share2, Play, Calendar, Users, Heart, Check, Package } from "lucide-react"
+import { Share2, Play, Calendar, Users, Heart, Check, Package, Unlock } from "lucide-react"
 
 interface CreatorData {
   uid: string
@@ -28,6 +28,9 @@ interface ContentItem {
   isPremium: boolean
   price?: number
   contentCount?: number
+  description?: string
+  stripePriceId?: string
+  stripeProductId?: string
 }
 
 export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimalProps) {
@@ -234,9 +237,13 @@ export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimal
             </div>
           ) : currentContent.length > 0 ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-              {currentContent.map((item) => (
-                <ContentCard key={item.id} item={item} />
-              ))}
+              {currentContent.map((item) =>
+                activeTab === "premium" ? (
+                  <BundleCard key={item.id} item={item} />
+                ) : (
+                  <ContentCard key={item.id} item={item} />
+                ),
+              )}
             </div>
           ) : (
             <div className="text-center py-24">
@@ -279,23 +286,13 @@ function ContentCard({ item }: { item: ContentItem }) {
           }`}
         >
           <div className="w-12 h-12 bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center">
-            {item.type === "bundle" ? (
-              <Package className="w-5 h-5 text-white" />
-            ) : (
-              <Play className="w-5 h-5 text-white ml-0.5" />
-            )}
+            <Play className="w-5 h-5 text-white ml-0.5" />
           </div>
         </div>
 
         <div className="absolute bottom-3 right-3 bg-black/60 backdrop-blur-sm px-2 py-1 rounded text-xs text-white font-mono">
-          {item.type === "bundle" ? `${item.contentCount || 0} items` : item.duration}
+          {item.duration}
         </div>
-
-        {item.isPremium && (
-          <div className="absolute top-3 left-3 bg-white text-black px-2 py-1 rounded text-xs font-medium">
-            {item.price ? `$${item.price}` : "Premium"}
-          </div>
-        )}
       </div>
 
       <h3 className="text-white text-sm font-medium line-clamp-2 leading-snug" title={item.title}>
@@ -303,6 +300,112 @@ function ContentCard({ item }: { item: ContentItem }) {
       </h3>
 
       <p className="text-zinc-500 text-xs mt-1">{item.views.toLocaleString()} views</p>
+    </div>
+  )
+}
+
+function BundleCard({ item }: { item: ContentItem }) {
+  const [isHovered, setIsHovered] = useState(false)
+  const [isUnlocking, setIsUnlocking] = useState(false)
+
+  const handleUnlock = async () => {
+    if (!item.stripePriceId) {
+      console.error("No Stripe price ID available for this bundle")
+      return
+    }
+
+    setIsUnlocking(true)
+
+    try {
+      const response = await fetch("/api/stripe/create-checkout-session", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          priceId: item.stripePriceId,
+          bundleId: item.id,
+          successUrl: `${window.location.origin}/purchase-success?bundle_id=${item.id}`,
+          cancelUrl: window.location.href,
+        }),
+      })
+
+      const { url } = await response.json()
+
+      if (url) {
+        window.location.href = url
+      }
+    } catch (error) {
+      console.error("Error creating checkout session:", error)
+    } finally {
+      setIsUnlocking(false)
+    }
+  }
+
+  return (
+    <div
+      className="bg-zinc-900/50 rounded-lg overflow-hidden border border-zinc-800/50 hover:border-zinc-700/50 transition-all duration-200"
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+    >
+      {/* 1:1 Aspect Ratio Thumbnail */}
+      <div className="relative aspect-square bg-zinc-800 overflow-hidden">
+        <img
+          src={item.thumbnailUrl || "/placeholder.svg?height=300&width=300"}
+          alt={item.title}
+          className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+        />
+
+        <div
+          className={`absolute inset-0 bg-black/40 flex items-center justify-center transition-opacity duration-200 ${
+            isHovered ? "opacity-100" : "opacity-0"
+          }`}
+        >
+          <div className="w-12 h-12 bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center">
+            <Package className="w-5 h-5 text-white" />
+          </div>
+        </div>
+
+        <div className="absolute top-3 right-3 bg-black/60 backdrop-blur-sm px-2 py-1 rounded text-xs text-white font-mono">
+          {item.contentCount || 0} items
+        </div>
+      </div>
+
+      {/* Bottom Half - Content Info */}
+      <div className="p-4 space-y-3">
+        {/* Bundle Name - Top Left */}
+        <h3 className="text-white text-sm font-medium line-clamp-1" title={item.title}>
+          {item.title}
+        </h3>
+
+        {/* Description */}
+        <p className="text-zinc-400 text-xs line-clamp-2 leading-relaxed">
+          {item.description || "No description available"}
+        </p>
+
+        {/* Price and Unlock Button Row */}
+        <div className="flex items-end justify-between">
+          {/* Price - Bottom Left */}
+          <div className="text-white font-medium">${item.price?.toFixed(2) || "0.00"}</div>
+
+          {/* Unlock Button - Bottom Right */}
+          <Button
+            size="sm"
+            onClick={handleUnlock}
+            disabled={isUnlocking || !item.stripePriceId}
+            className="bg-white text-black hover:bg-zinc-100 font-medium px-3 py-1 h-7 text-xs rounded"
+          >
+            {isUnlocking ? (
+              <div className="w-3 h-3 border border-black/20 border-t-black rounded-full animate-spin" />
+            ) : (
+              <>
+                <Unlock className="w-3 h-3 mr-1" />
+                Unlock
+              </>
+            )}
+          </Button>
+        </div>
+      </div>
     </div>
   )
 }

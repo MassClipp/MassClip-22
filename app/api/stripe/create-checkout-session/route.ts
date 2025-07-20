@@ -1,6 +1,10 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { stripe } from "@/lib/stripe"
+import Stripe from "stripe"
 import { auth, db } from "@/lib/firebase-admin"
+
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
+  apiVersion: "2024-06-20",
+})
 
 export async function POST(request: NextRequest) {
   try {
@@ -9,21 +13,16 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     console.log("📝 [Checkout API] Request body:", { ...body, idToken: "[REDACTED]" })
 
-    const { idToken, productBoxId, priceInCents } = body
+    const { idToken, priceId, bundleId, successUrl, cancelUrl } = body
 
     if (!idToken) {
       console.error("❌ [Checkout API] Missing idToken")
       return NextResponse.json({ error: "Authentication required" }, { status: 401 })
     }
 
-    if (!productBoxId) {
-      console.error("❌ [Checkout API] Missing productBoxId")
-      return NextResponse.json({ error: "Product Box ID is required" }, { status: 400 })
-    }
-
-    if (!priceInCents || priceInCents < 50) {
-      console.error("❌ [Checkout API] Invalid price:", priceInCents)
-      return NextResponse.json({ error: "Invalid price amount" }, { status: 400 })
+    if (!priceId) {
+      console.error("❌ [Checkout API] Missing priceId")
+      return NextResponse.json({ error: "Price ID is required" }, { status: 400 })
     }
 
     // Verify Firebase token
@@ -40,10 +39,10 @@ export async function POST(request: NextRequest) {
     const userId = decodedToken.uid
 
     // Get product box details
-    console.log("📦 [Checkout API] Fetching product box:", productBoxId)
-    const productBoxDoc = await db.collection("productBoxes").doc(productBoxId).get()
+    console.log("📦 [Checkout API] Fetching product box:", bundleId)
+    const productBoxDoc = await db.collection("productBoxes").doc(bundleId).get()
     if (!productBoxDoc.exists) {
-      console.error("❌ [Checkout API] Product box not found:", productBoxId)
+      console.error("❌ [Checkout API] Product box not found:", bundleId)
       return NextResponse.json({ error: "Product not found" }, { status: 404 })
     }
 
@@ -94,55 +93,38 @@ export async function POST(request: NextRequest) {
       console.log("🔧 [Checkout API] Corrected for Vercel preview:", currentDomain)
     }
 
-    // Create success/cancel URLs with the detected domain
-    const successUrl = `${currentDomain}/purchase-success?session_id={CHECKOUT_SESSION_ID}&product_box_id=${productBoxId}`
-    const cancelUrl = `${currentDomain}/product-box/${productBoxId}`
+    console.log("Creating checkout session for:", { priceId, bundleId })
 
-    console.log("🔗 [Checkout API] Final URLs:")
-    console.log("   Success:", successUrl)
-    console.log("   Cancel:", cancelUrl)
-
-    // Create Stripe checkout session
-    console.log("💳 [Checkout API] Creating Stripe session...")
-    const sessionParams = {
+    const session = await stripe.checkout.sessions.create({
       payment_method_types: ["card"],
       line_items: [
         {
-          price_data: {
-            currency: "usd",
-            product_data: {
-              name: productBox.title || `Product Box ${productBoxId}`,
-              description: productBox.description || "Digital content access",
-            },
-            unit_amount: priceInCents,
-          },
+          price: priceId,
           quantity: 1,
         },
       ],
-      mode: "payment" as const,
-      success_url: successUrl,
-      cancel_url: cancelUrl,
+      mode: "payment",
+      success_url: successUrl || `${currentDomain}/purchase-success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: cancelUrl || `${currentDomain}/creator/${bundleId}`,
       metadata: {
         userId,
-        productBoxId,
+        bundleId: bundleId || "",
         creatorId: productBox.creatorId || "",
         originalDomain: currentDomain,
         timestamp: new Date().toISOString(),
       },
-    }
-
-    const session = await stripe.checkout.sessions.create(sessionParams)
+    })
 
     console.log("✅ [Checkout API] Session created successfully:")
     console.log("   Session ID:", session.id)
     console.log("   Checkout URL:", session.url)
-    console.log("   Success URL will redirect to:", successUrl.replace("{CHECKOUT_SESSION_ID}", session.id))
+    console.log("   Success URL will redirect to:", session.url)
 
     return NextResponse.json({
       sessionId: session.id,
       url: session.url,
       domain: currentDomain,
-      successUrl: successUrl.replace("{CHECKOUT_SESSION_ID}", session.id),
+      successUrl: session.url,
     })
   } catch (error: any) {
     console.error("❌ [Checkout API] Session creation failed:", error)
