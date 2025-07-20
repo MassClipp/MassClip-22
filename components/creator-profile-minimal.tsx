@@ -5,7 +5,7 @@ import type React from "react"
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { Share2, Play, Calendar, Users, Heart, Check, Package, Unlock, Star, Download } from "lucide-react"
+import { Share2, Play, Calendar, Users, Heart, Check, Package, Unlock } from "lucide-react"
 import { useAuthState } from "react-firebase-hooks/auth"
 import { auth } from "@/lib/firebase"
 
@@ -161,13 +161,13 @@ export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimal
         {/* Header */}
         <div className="flex items-start justify-between mb-16">
           <div className="flex items-center gap-8">
-            <Avatar className="w-20 h-20 border-2 border-white/20">
+            <Avatar className="w-28 h-28 border-2 border-white/20">
               <AvatarImage
                 src={creator.profilePic || "/placeholder.svg"}
                 alt={creator.displayName}
                 className="object-cover"
               />
-              <AvatarFallback className="bg-zinc-900 text-white text-xl font-medium border-2 border-white/20">
+              <AvatarFallback className="bg-zinc-900 text-white text-2xl font-medium border-2 border-white/20">
                 {creator.displayName?.charAt(0)?.toUpperCase() || creator.username?.charAt(0)?.toUpperCase() || "?"}
               </AvatarFallback>
             </Avatar>
@@ -243,7 +243,7 @@ export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimal
               <div className="w-6 h-6 border border-zinc-800 border-t-white rounded-full animate-spin"></div>
             </div>
           ) : currentContent.length > 0 ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
               {currentContent.map((item) =>
                 activeTab === "premium" ? (
                   <BundleCard key={item.id} item={item} user={user} />
@@ -411,7 +411,7 @@ function BundleCard({ item, user }: { item: ContentItem; user: any }) {
 
   return (
     <div
-      className="bg-gradient-to-br from-zinc-900/80 to-zinc-900/40 rounded-xl overflow-hidden border border-zinc-800/50 hover:border-zinc-700/50 transition-all duration-300 relative group backdrop-blur-sm"
+      className="bg-gradient-to-br from-zinc-900/80 to-zinc-900/40 rounded-xl overflow-hidden border border-zinc-800/50 hover:border-zinc-700/50 transition-all duration-300 relative group backdrop-blur-sm max-w-sm"
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
@@ -439,25 +439,9 @@ function BundleCard({ item, user }: { item: ContentItem; user: any }) {
           </div>
         )}
 
-        <div
-          className={`absolute inset-0 bg-black/40 flex items-center justify-center transition-opacity duration-200 ${
-            isHovered ? "opacity-100" : "opacity-0"
-          }`}
-        >
-          <div className="w-14 h-14 bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center border border-white/20">
-            <Package className="w-6 h-6 text-white" />
-          </div>
-        </div>
-
         {/* Content count badge */}
         <div className="absolute top-3 right-3 bg-black/70 backdrop-blur-sm px-2.5 py-1 rounded-full text-xs text-white font-medium border border-white/10">
           {item.contentCount || 0} items
-        </div>
-
-        {/* Premium badge */}
-        <div className="absolute top-3 left-3 bg-gradient-to-r from-yellow-500/90 to-orange-500/90 backdrop-blur-sm px-2 py-1 rounded-full text-xs text-white font-medium flex items-center gap-1">
-          <Star className="w-3 h-3 fill-current" />
-          Premium
         </div>
       </div>
 
@@ -473,24 +457,11 @@ function BundleCard({ item, user }: { item: ContentItem; user: any }) {
           </p>
         </div>
 
-        {/* Stats row */}
-        <div className="flex items-center gap-4 text-xs text-zinc-500">
-          <div className="flex items-center gap-1">
-            <Download className="w-3 h-3" />
-            <span>{item.downloads || 0}</span>
-          </div>
-          <div className="flex items-center gap-1">
-            <Package className="w-3 h-3" />
-            <span>{item.contentCount || 0} files</span>
-          </div>
-        </div>
-
         {/* Price and Unlock Button Row */}
         <div className="flex items-center justify-between pt-2 border-t border-zinc-800/50">
           {/* Price */}
           <div className="flex flex-col">
             <span className="text-white text-lg font-bold">${item.price?.toFixed(2) || "0.00"}</span>
-            <span className="text-zinc-500 text-xs">one-time purchase</span>
           </div>
 
           {/* Unlock Button */}
