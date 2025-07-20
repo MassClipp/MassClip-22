@@ -299,7 +299,7 @@ export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimal
             <div
               className={
                 activeTab === "premium"
-                  ? "flex flex-col items-center gap-6 sm:grid sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 sm:gap-6 sm:justify-items-center"
+                  ? "flex flex-col items-center gap-6 sm:grid sm:grid-cols-3 sm:gap-8 sm:justify-items-center"
                   : "grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4 sm:gap-6 justify-items-center"
               }
             >
@@ -690,7 +690,7 @@ function BundleCard({ item, user }: { item: ContentItem; user: any }) {
   }
 
   return (
-    <div className="bg-zinc-900 rounded-2xl overflow-hidden border border-zinc-700/30 hover:border-zinc-600/40 transition-all duration-300 w-full max-w-[280px] sm:max-w-sm">
+    <div className="bg-zinc-900 rounded-2xl overflow-hidden border border-zinc-700/30 hover:border-zinc-600/40 transition-all duration-300 w-full max-w-[340px] sm:max-w-[320px]">
       {/* Thumbnail Section - Always square aspect ratio */}
       <div
         className="relative aspect-square bg-zinc-800 overflow-hidden"
@@ -718,29 +718,29 @@ function BundleCard({ item, user }: { item: ContentItem; user: any }) {
       </div>
 
       {/* Content Section */}
-      <div className="p-3 sm:p-4 space-y-2 sm:space-y-3 bg-black">
+      <div className="p-4 sm:p-5 space-y-3 bg-black">
         {/* Title and Description */}
         <div className="space-y-1">
-          <h3 className="text-white text-sm sm:text-base font-bold line-clamp-1" title={item.title}>
+          <h3 className="text-white text-base sm:text-lg font-bold line-clamp-1" title={item.title}>
             {item.title}
           </h3>
-          <p className="text-zinc-400 text-xs line-clamp-1">{item.description || "Premium content bundle"}</p>
+          <p className="text-zinc-400 text-sm line-clamp-1">{item.description || "Premium content bundle"}</p>
         </div>
 
         {/* Price and Button Row */}
-        <div className="flex items-center justify-between pt-1 sm:pt-2">
-          <span className="text-white text-lg sm:text-xl font-light">${item.price?.toFixed(2) || "0.00"}</span>
+        <div className="flex items-center justify-between pt-2">
+          <span className="text-white text-xl sm:text-2xl font-light">${item.price?.toFixed(2) || "0.00"}</span>
 
           <button
             onClick={handleUnlock}
             disabled={isUnlocking || !item.stripePriceId}
-            className="bg-white text-black hover:bg-gray-100 active:bg-gray-200 font-semibold px-3 py-1.5 sm:px-4 sm:py-2 text-xs sm:text-sm rounded-lg transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5 sm:gap-2"
+            className="bg-white text-black hover:bg-gray-100 active:bg-gray-200 font-semibold px-4 py-2 sm:px-5 sm:py-2.5 text-sm sm:text-base rounded-lg transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
           >
             {isUnlocking ? (
-              <div className="w-3 h-3 sm:w-4 sm:h-4 border-2 border-black/30 border-t-black rounded-full animate-spin" />
+              <div className="w-4 h-4 border-2 border-black/30 border-t-black rounded-full animate-spin" />
             ) : (
               <>
-                <Unlock className="w-3 h-3 sm:w-4 sm:h-4" />
+                <Unlock className="w-4 h-4" />
                 Unlock
               </>
             )}
