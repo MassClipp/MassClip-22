@@ -278,8 +278,7 @@ function ContentCard({ item }: { item: ContentItem }) {
   const [thumbnailError, setThumbnailError] = useState(false)
   const videoRef = useRef<HTMLVideoElement>(null)
 
-  // Hardcoded video URL for testing - replace with actual video URL
-  const hardcodedVideoUrl = "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4"
+  console.log("🎥 ContentCard video URL:", item.fileUrl)
 
   const handlePlayPause = (e: React.MouseEvent) => {
     e.preventDefault()
@@ -324,7 +323,7 @@ function ContentCard({ item }: { item: ContentItem }) {
     e.stopPropagation()
 
     try {
-      const response = await fetch(hardcodedVideoUrl)
+      const response = await fetch(item.fileUrl)
       const blob = await response.blob()
       const url = window.URL.createObjectURL(blob)
       const a = document.createElement("a")
@@ -389,7 +388,7 @@ function ContentCard({ item }: { item: ContentItem }) {
           controls={false}
           onError={handleThumbnailError}
         >
-          <source src={hardcodedVideoUrl} type="video/mp4" />
+          <source src={item.fileUrl} type="video/mp4" />
           Your browser does not support the video tag.
         </video>
 
