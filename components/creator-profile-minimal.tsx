@@ -453,41 +453,49 @@ function BundleCard({ item, user }: { item: ContentItem; user: any }) {
       </div>
 
       {/* Enhanced Bottom Half - Content Info */}
-      <div className="relative p-6 space-y-5 bg-gradient-to-b from-zinc-900/60 to-zinc-900/90 backdrop-blur-sm">
-        {/* Bundle Name */}
-        <div className="space-y-2">
-          <h3 className="text-white text-lg font-bold line-clamp-1 tracking-tight" title={item.title}>
-            {item.title}
-          </h3>
-          <p className="text-zinc-400 text-sm line-clamp-2 leading-relaxed">
-            {item.description || "Premium content bundle"}
-          </p>
-        </div>
-
-        {/* Price and Unlock Button Row - No border */}
-        <div className="flex items-center justify-between pt-2">
-          {/* Enhanced Price */}
-          <div className="flex flex-col">
-            <span className="text-white text-2xl font-bold tracking-tight">${item.price?.toFixed(2) || "0.00"}</span>
+      <div className="relative p-6 space-y-5 bg-black">
+        {/* Subtle white gradient overlay */}
+        <div className="absolute inset-0 bg-gradient-to-t from-white/5 via-white/2 to-transparent pointer-events-none" />
+        <div className="relative z-10">
+          {/* Bundle Name */}
+          <div className="space-y-2">
+            <h3 className="text-white text-lg font-bold line-clamp-1 tracking-tight" title={item.title}>
+              {item.title}
+            </h3>
+            <p className="text-zinc-400 text-sm line-clamp-2 leading-relaxed">
+              {item.description || "Premium content bundle"}
+            </p>
           </div>
 
-          {/* Enhanced Unlock Button */}
-          <Button
-            size="sm"
-            onClick={handleUnlock}
-            disabled={isUnlocking || !item.stripePriceId}
-            className="bg-gradient-to-r from-white via-zinc-50 to-white text-black hover:from-zinc-50 hover:to-zinc-100 font-bold px-6 py-2.5 h-10 text-sm rounded-xl transition-all duration-300 shadow-xl hover:shadow-2xl hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed border border-white/20"
-          >
-            {isUnlocking ? (
-              <div className="w-4 h-4 border-2 border-black/30 border-t-black rounded-full animate-spin" />
-            ) : (
-              <>
-                <Unlock className="w-4 h-4 mr-2" />
-                Unlock
-              </>
-            )}
-          </Button>
-        </div>
+          {/* Price and Unlock Button Row - No border */}
+          <div className="flex items-center justify-between pt-2">
+            {/* Enhanced Price */}
+            <div className="flex flex-col">
+              <span className="text-white text-2xl font-light tracking-tight">${item.price?.toFixed(2) || "0.00"}</span>
+            </div>
+
+            {/* Enhanced Unlock Button */}
+            <Button
+              size="sm"
+              onClick={(e) => {
+                console.log("Button clicked!", e)
+                handleUnlock(e)
+              }}
+              disabled={isUnlocking || !item.stripePriceId}
+              className="bg-gradient-to-r from-white via-zinc-50 to-white text-black hover:from-zinc-50 hover:to-zinc-100 font-bold px-6 py-2.5 h-10 text-sm rounded-lg transition-all duration-300 shadow-xl hover:shadow-2xl hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed border border-white/20"
+            >
+              {isUnlocking ? (
+                <div className="w-4 h-4 border-2 border-black/30 border-t-black rounded-full animate-spin" />
+              ) : (
+                <>
+                  <Unlock className="w-4 h-4 mr-2" />
+                  Unlock
+                </>
+              )}
+            </Button>
+          </div>
+        </div>{" "}
+        {/* Close relative z-10 div */}
       </div>
     </div>
   )
