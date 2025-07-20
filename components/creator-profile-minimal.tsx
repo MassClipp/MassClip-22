@@ -411,25 +411,29 @@ function BundleCard({ item, user }: { item: ContentItem; user: any }) {
 
   return (
     <div
-      className="bg-gradient-to-br from-zinc-900/80 to-zinc-900/40 rounded-xl overflow-hidden border border-zinc-800/50 hover:border-zinc-700/50 transition-all duration-300 relative group backdrop-blur-sm max-w-sm"
+      className="bg-gradient-to-br from-zinc-900/90 via-zinc-800/60 to-zinc-900/80 rounded-2xl overflow-hidden border border-zinc-700/30 hover:border-zinc-600/40 transition-all duration-500 relative group backdrop-blur-md shadow-2xl hover:shadow-3xl max-w-sm"
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
-      {/* Subtle shine effect */}
-      <div className="absolute inset-0 bg-gradient-to-br from-white/5 via-transparent to-white/2 pointer-events-none rounded-xl" />
+      {/* Sophisticated gradient overlays */}
+      <div className="absolute inset-0 bg-gradient-to-br from-white/8 via-white/3 to-transparent pointer-events-none rounded-2xl" />
+      <div className="absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-white/5 pointer-events-none rounded-2xl" />
 
-      {/* Hover glow effect */}
+      {/* Enhanced hover glow effect */}
       <div
-        className={`absolute inset-0 bg-gradient-to-br from-white/10 via-transparent to-white/5 pointer-events-none rounded-xl transition-opacity duration-300 ${isHovered ? "opacity-100" : "opacity-0"}`}
+        className={`absolute inset-0 bg-gradient-to-br from-white/15 via-white/5 to-white/8 pointer-events-none rounded-2xl transition-opacity duration-500 ${isHovered ? "opacity-100" : "opacity-0"}`}
       />
 
+      {/* Subtle inner border */}
+      <div className="absolute inset-[1px] rounded-2xl border border-white/10 pointer-events-none" />
+
       {/* 1:1 Aspect Ratio Thumbnail */}
-      <div className="relative aspect-square bg-zinc-800 overflow-hidden">
+      <div className="relative aspect-square bg-gradient-to-br from-zinc-800 to-zinc-900 overflow-hidden">
         {item.thumbnailUrl && !imageError ? (
           <img
             src={item.thumbnailUrl || "/placeholder.svg"}
             alt={item.title}
-            className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
+            className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-110"
             onError={handleImageError}
             onLoad={handleImageLoad}
           />
@@ -439,40 +443,43 @@ function BundleCard({ item, user }: { item: ContentItem; user: any }) {
           </div>
         )}
 
-        {/* Content count badge */}
-        <div className="absolute top-3 right-3 bg-black/70 backdrop-blur-sm px-2.5 py-1 rounded-full text-xs text-white font-medium border border-white/10">
+        {/* Enhanced content count badge */}
+        <div className="absolute top-4 right-4 bg-black/80 backdrop-blur-md px-3 py-1.5 rounded-full text-xs text-white font-semibold border border-white/20 shadow-lg">
           {item.contentCount || 0} items
         </div>
+
+        {/* Subtle image overlay */}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-transparent pointer-events-none" />
       </div>
 
       {/* Enhanced Bottom Half - Content Info */}
-      <div className="relative p-5 space-y-4 bg-gradient-to-b from-zinc-900/50 to-zinc-900/80">
+      <div className="relative p-6 space-y-5 bg-gradient-to-b from-zinc-900/60 to-zinc-900/90 backdrop-blur-sm">
         {/* Bundle Name */}
-        <div>
-          <h3 className="text-white text-base font-semibold line-clamp-1 mb-1" title={item.title}>
+        <div className="space-y-2">
+          <h3 className="text-white text-lg font-bold line-clamp-1 tracking-tight" title={item.title}>
             {item.title}
           </h3>
-          <p className="text-zinc-400 text-xs line-clamp-2 leading-relaxed">
+          <p className="text-zinc-400 text-sm line-clamp-2 leading-relaxed">
             {item.description || "Premium content bundle"}
           </p>
         </div>
 
-        {/* Price and Unlock Button Row */}
-        <div className="flex items-center justify-between pt-2 border-t border-zinc-800/50">
-          {/* Price */}
+        {/* Price and Unlock Button Row - No border */}
+        <div className="flex items-center justify-between pt-2">
+          {/* Enhanced Price */}
           <div className="flex flex-col">
-            <span className="text-white text-lg font-bold">${item.price?.toFixed(2) || "0.00"}</span>
+            <span className="text-white text-2xl font-bold tracking-tight">${item.price?.toFixed(2) || "0.00"}</span>
           </div>
 
-          {/* Unlock Button */}
+          {/* Enhanced Unlock Button */}
           <Button
             size="sm"
             onClick={handleUnlock}
             disabled={isUnlocking || !item.stripePriceId}
-            className="bg-gradient-to-r from-white to-zinc-100 text-black hover:from-zinc-100 hover:to-white font-semibold px-4 py-2 h-9 text-sm rounded-lg transition-all duration-200 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
+            className="bg-gradient-to-r from-white via-zinc-50 to-white text-black hover:from-zinc-50 hover:to-zinc-100 font-bold px-6 py-2.5 h-10 text-sm rounded-xl transition-all duration-300 shadow-xl hover:shadow-2xl hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed border border-white/20"
           >
             {isUnlocking ? (
-              <div className="w-4 h-4 border-2 border-black/20 border-t-black rounded-full animate-spin" />
+              <div className="w-4 h-4 border-2 border-black/30 border-t-black rounded-full animate-spin" />
             ) : (
               <>
                 <Unlock className="w-4 h-4 mr-2" />
