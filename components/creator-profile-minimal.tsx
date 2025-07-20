@@ -306,7 +306,7 @@ export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimal
             >
               {currentContent.map((item) =>
                 activeTab === "premium" ? (
-                  <BundleCard key={item.id} item={item} user={user} />
+                  <BundleCard key={item.id} item={item} user={user} creatorId={creator.uid} />
                 ) : (
                   <ContentCard key={item.id} item={item} />
                 ),
@@ -592,7 +592,7 @@ function ContentCard({ item }: { item: ContentItem }) {
   )
 }
 
-function BundleCard({ item, user }: { item: ContentItem; user: any }) {
+function BundleCard({ item, user, creatorId }: { item: ContentItem; user: any; creatorId: string }) {
   const [isThumbnailHovered, setIsThumbnailHovered] = useState(false)
   const [imageError, setImageError] = useState(false)
 
@@ -603,6 +603,8 @@ function BundleCard({ item, user }: { item: ContentItem; user: any }) {
     stripePriceId: item.stripePriceId,
     price: item.price,
     contentCount: item.contentCount,
+    creatorId,
+    currentUserId: user?.uid,
   })
 
   const handleImageError = () => {
@@ -657,7 +659,7 @@ function BundleCard({ item, user }: { item: ContentItem; user: any }) {
         <div className="flex items-center justify-between pt-2">
           <span className="text-white text-xl sm:text-2xl font-light">${item.price?.toFixed(2) || "0.00"}</span>
 
-          <UnlockButton stripePriceId={item.stripePriceId} bundleId={item.id} user={user} />
+          <UnlockButton stripePriceId={item.stripePriceId} bundleId={item.id} user={user} creatorId={creatorId} />
         </div>
       </div>
     </div>
