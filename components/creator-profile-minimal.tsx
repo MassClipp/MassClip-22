@@ -161,7 +161,7 @@ export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimal
         {/* Header */}
         <div className="flex items-start justify-between mb-16">
           <div className="flex items-center gap-8">
-            <Avatar className="w-28 h-28 border-2 border-white/20">
+            <Avatar className="w-32 h-32 border-2 border-white/20">
               <AvatarImage
                 src={creator.profilePic || "/placeholder.svg"}
                 alt={creator.displayName}
@@ -482,10 +482,10 @@ function BundleCard({ item, user }: { item: ContentItem; user: any }) {
                 handleUnlock(e)
               }}
               disabled={isUnlocking || !item.stripePriceId}
-              className="bg-gradient-to-r from-white via-zinc-50 to-white text-black hover:from-zinc-50 hover:to-zinc-100 font-bold px-6 py-2.5 h-10 text-sm rounded-lg transition-all duration-300 shadow-xl hover:shadow-2xl hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed border border-white/20"
+              className="bg-black text-white hover:bg-zinc-900 font-bold px-6 py-2.5 h-10 text-sm rounded-lg transition-all duration-300 shadow-xl hover:shadow-2xl hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed border border-white/30"
             >
               {isUnlocking ? (
-                <div className="w-4 h-4 border-2 border-black/30 border-t-black rounded-full animate-spin" />
+                <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
               ) : (
                 <>
                   <Unlock className="w-4 h-4 mr-2" />
