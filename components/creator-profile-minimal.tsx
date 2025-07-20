@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { Share2, RefreshCw, Play, Calendar, Users, Heart } from "lucide-react"
+import { Share2, Play, Calendar, Users, Heart } from "lucide-react"
 
 interface CreatorData {
   uid: string
@@ -44,6 +44,24 @@ export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimal
     return "Recently"
   }
 
+  const handleShare = async () => {
+    try {
+      const url = window.location.href
+      await navigator.clipboard.writeText(url)
+      // You could add a toast notification here if you have one
+      console.log("URL copied to clipboard:", url)
+    } catch (err) {
+      console.error("Failed to copy URL:", err)
+      // Fallback for older browsers
+      const textArea = document.createElement("textarea")
+      textArea.value = window.location.href
+      document.body.appendChild(textArea)
+      textArea.select()
+      document.execCommand("copy")
+      document.body.removeChild(textArea)
+    }
+  }
+
   useEffect(() => {
     const fetchContent = async () => {
       try {
@@ -78,8 +96,9 @@ export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimal
 
   return (
     <div className="min-h-screen bg-black relative">
-      {/* Subtle gradient background */}
-      <div className="absolute inset-0 bg-gradient-to-br from-zinc-900/20 via-black to-zinc-900/10 pointer-events-none" />
+      {/* Enhanced subtle gradient background */}
+      <div className="absolute inset-0 bg-gradient-to-br from-white/5 via-black to-zinc-800/20 pointer-events-none" />
+      <div className="absolute inset-0 bg-gradient-to-t from-zinc-900/30 via-transparent to-zinc-800/10 pointer-events-none" />
 
       <div className="relative max-w-6xl mx-auto px-8 py-16">
         {/* Header */}
@@ -109,22 +128,13 @@ export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimal
           </div>
 
           <div className="flex items-center gap-3">
-            <Button size="sm" className="bg-white text-black hover:bg-zinc-100 font-medium px-6 h-9 rounded-full">
-              Follow
-            </Button>
             <Button
               variant="ghost"
               size="sm"
+              onClick={handleShare}
               className="text-zinc-400 hover:text-white hover:bg-zinc-900 h-9 w-9 rounded-full p-0"
             >
               <Share2 className="w-4 h-4" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="text-zinc-400 hover:text-white hover:bg-zinc-900 h-9 w-9 rounded-full p-0"
-            >
-              <RefreshCw className="w-4 h-4" />
             </Button>
           </div>
         </div>
