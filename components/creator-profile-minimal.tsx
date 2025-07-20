@@ -244,7 +244,7 @@ export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimal
               <div className="w-6 h-6 border border-zinc-800 border-t-white rounded-full animate-spin"></div>
             </div>
           ) : currentContent.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 justify-items-center">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-6 justify-items-center">
               {currentContent.map((item) =>
                 activeTab === "premium" ? (
                   <BundleCard key={item.id} item={item} user={user} />
@@ -278,6 +278,9 @@ function ContentCard({ item }: { item: ContentItem }) {
   const [thumbnailError, setThumbnailError] = useState(false)
   const videoRef = useRef<HTMLVideoElement>(null)
 
+  // Hardcoded video URL for testing - replace with actual video URL
+  const hardcodedVideoUrl = "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4"
+
   const handlePlayPause = (e: React.MouseEvent) => {
     e.preventDefault()
     e.stopPropagation()
@@ -286,15 +289,18 @@ function ContentCard({ item }: { item: ContentItem }) {
 
     if (isPlaying) {
       videoRef.current.pause()
+      videoRef.current.currentTime = 0
       setIsPlaying(false)
     } else {
       // Pause all other videos first
       document.querySelectorAll("video").forEach((v) => {
         if (v !== videoRef.current) {
           v.pause()
+          v.currentTime = 0
         }
       })
 
+      videoRef.current.muted = false
       videoRef.current
         .play()
         .then(() => {
@@ -318,7 +324,7 @@ function ContentCard({ item }: { item: ContentItem }) {
     e.stopPropagation()
 
     try {
-      const response = await fetch(item.fileUrl)
+      const response = await fetch(hardcodedVideoUrl)
       const blob = await response.blob()
       const url = window.URL.createObjectURL(blob)
       const a = document.createElement("a")
@@ -358,13 +364,13 @@ function ContentCard({ item }: { item: ContentItem }) {
 
   return (
     <div
-      className="group cursor-pointer w-full max-w-[280px]"
+      className="group cursor-pointer w-full max-w-[200px]"
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
-      {/* 9:16 aspect ratio video container */}
+      {/* 9:16 aspect ratio video container - smaller size */}
       <div
-        className={`relative aspect-[9/16] bg-zinc-900 rounded-lg overflow-hidden mb-3 transition-all duration-300 ${
+        className={`relative aspect-[9/16] bg-zinc-900 rounded-lg overflow-hidden mb-2 transition-all duration-300 ${
           isHovered ? "border border-white/50" : "border border-transparent"
         }`}
       >
@@ -374,8 +380,8 @@ function ContentCard({ item }: { item: ContentItem }) {
           className="w-full h-full object-cover"
           poster={
             thumbnailError
-              ? `/placeholder.svg?height=400&width=225&query=${encodeURIComponent(item.title)}`
-              : item.thumbnailUrl || "/placeholder.svg?height=400&width=225"
+              ? `/placeholder.svg?height=356&width=200&query=${encodeURIComponent(item.title)}`
+              : item.thumbnailUrl || "/placeholder.svg?height=356&width=200"
           }
           preload="metadata"
           muted={false}
@@ -383,7 +389,7 @@ function ContentCard({ item }: { item: ContentItem }) {
           controls={false}
           onError={handleThumbnailError}
         >
-          <source src={item.fileUrl} type="video/mp4" />
+          <source src={hardcodedVideoUrl} type="video/mp4" />
           Your browser does not support the video tag.
         </video>
 
@@ -395,36 +401,30 @@ function ContentCard({ item }: { item: ContentItem }) {
         >
           <button
             onClick={handlePlayPause}
-            className="bg-white/20 backdrop-blur-sm rounded-full p-3 transition-transform duration-300 hover:scale-110"
+            className="bg-white/20 backdrop-blur-sm rounded-full p-2 transition-transform duration-300 hover:scale-110"
             aria-label={isPlaying ? "Pause video" : "Play video"}
           >
-            {isPlaying ? <Pause className="h-6 w-6 text-white" /> : <Play className="h-6 w-6 text-white ml-0.5" />}
+            {isPlaying ? <Pause className="h-4 w-4 text-white" /> : <Play className="h-4 w-4 text-white ml-0.5" />}
           </button>
-        </div>
-
-        {/* Duration badge */}
-        <div className="absolute bottom-3 left-3 bg-black/60 backdrop-blur-sm px-2 py-1 rounded text-xs text-white font-mono">
-          {item.duration}
         </div>
 
         {/* Download button */}
         <button
           onClick={handleDownload}
-          className={`absolute bottom-3 right-3 bg-black/60 backdrop-blur-sm p-2 rounded-full transition-all duration-200 hover:bg-black/80 hover:scale-110 ${
+          className={`absolute bottom-2 right-2 bg-black/60 backdrop-blur-sm p-1.5 rounded-full transition-all duration-200 hover:bg-black/80 hover:scale-110 ${
             isHovered ? "opacity-100" : "opacity-70"
           }`}
           aria-label="Download video"
         >
-          <Download className="h-4 w-4 text-white" />
+          <Download className="h-3 w-3 text-white" />
         </button>
       </div>
 
-      {/* Video info */}
+      {/* Video info - only title, no view count */}
       <div className="space-y-1">
-        <h3 className="text-white text-sm font-medium line-clamp-2 leading-snug" title={item.title}>
+        <h3 className="text-white text-xs font-medium line-clamp-2 leading-tight" title={item.title}>
           {item.title}
         </h3>
-        <p className="text-zinc-500 text-xs">{item.views.toLocaleString()} views</p>
       </div>
     </div>
   )
