@@ -243,7 +243,7 @@ export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimal
               <div className="w-6 h-6 border border-zinc-800 border-t-white rounded-full animate-spin"></div>
             </div>
           ) : currentContent.length > 0 ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-8">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 justify-items-center">
               {currentContent.map((item) =>
                 activeTab === "premium" ? (
                   <BundleCard key={item.id} item={item} user={user} />
@@ -276,7 +276,7 @@ function ContentCard({ item }: { item: ContentItem }) {
 
   return (
     <div
-      className="group cursor-pointer"
+      className="group cursor-pointer w-full max-w-sm"
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
@@ -411,20 +411,20 @@ function BundleCard({ item, user }: { item: ContentItem; user: any }) {
 
   return (
     <div
-      className="bg-gradient-to-br from-zinc-900/90 via-zinc-800/60 to-zinc-900/80 rounded-2xl overflow-hidden border border-zinc-700/30 hover:border-zinc-600/40 transition-all duration-500 relative group backdrop-blur-md shadow-2xl hover:shadow-3xl max-w-sm"
+      className="bg-gradient-to-br from-zinc-900/90 via-zinc-800/60 to-zinc-900/80 rounded-2xl overflow-hidden border border-zinc-700/30 hover:border-zinc-600/40 transition-all duration-500 relative group backdrop-blur-md shadow-2xl hover:shadow-3xl w-full max-w-sm"
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
-      {/* Sophisticated gradient overlays */}
+      {/* Sophisticated gradient overlays - with pointer-events-none to ensure clickability */}
       <div className="absolute inset-0 bg-gradient-to-br from-white/8 via-white/3 to-transparent pointer-events-none rounded-2xl" />
       <div className="absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-white/5 pointer-events-none rounded-2xl" />
 
-      {/* Enhanced hover glow effect */}
+      {/* Enhanced hover glow effect - with pointer-events-none */}
       <div
         className={`absolute inset-0 bg-gradient-to-br from-white/15 via-white/5 to-white/8 pointer-events-none rounded-2xl transition-opacity duration-500 ${isHovered ? "opacity-100" : "opacity-0"}`}
       />
 
-      {/* Subtle inner border */}
+      {/* Subtle inner border - with pointer-events-none */}
       <div className="absolute inset-[1px] rounded-2xl border border-white/10 pointer-events-none" />
 
       {/* 1:1 Aspect Ratio Thumbnail */}
@@ -448,15 +448,17 @@ function BundleCard({ item, user }: { item: ContentItem; user: any }) {
           {item.contentCount || 0} items
         </div>
 
-        {/* Subtle image overlay */}
+        {/* Subtle image overlay - with pointer-events-none */}
         <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-transparent pointer-events-none" />
       </div>
 
       {/* Enhanced Bottom Half - Content Info */}
       <div className="relative p-6 space-y-5 bg-black">
-        {/* Subtle white gradient overlay */}
+        {/* Subtle white gradient overlay - with pointer-events-none */}
         <div className="absolute inset-0 bg-gradient-to-t from-white/5 via-white/2 to-transparent pointer-events-none" />
-        <div className="relative z-10">
+
+        {/* Content wrapper with proper z-index */}
+        <div className="relative z-20">
           {/* Bundle Name */}
           <div className="space-y-2">
             <h3 className="text-white text-lg font-bold line-clamp-1 tracking-tight" title={item.title}>
@@ -467,35 +469,30 @@ function BundleCard({ item, user }: { item: ContentItem; user: any }) {
             </p>
           </div>
 
-          {/* Price and Unlock Button Row - No border */}
+          {/* Price and Unlock Button Row */}
           <div className="flex items-center justify-between pt-2">
             {/* Enhanced Price */}
             <div className="flex flex-col">
               <span className="text-white text-2xl font-light tracking-tight">${item.price?.toFixed(2) || "0.00"}</span>
             </div>
 
-            {/* Enhanced Unlock Button */}
-            <Button
-              size="sm"
-              onClick={(e) => {
-                console.log("Button clicked!", e)
-                handleUnlock(e)
-              }}
+            {/* Enhanced Unlock Button with proper z-index and pointer events */}
+            <button
+              onClick={handleUnlock}
               disabled={isUnlocking || !item.stripePriceId}
-              className="bg-black text-white hover:bg-zinc-900 font-bold px-6 py-2.5 h-10 text-sm rounded-lg transition-all duration-300 shadow-xl hover:shadow-2xl hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed border border-white/30"
+              className="relative z-30 bg-black text-white hover:bg-zinc-900 font-bold px-6 py-2.5 h-10 text-sm rounded-lg transition-all duration-300 shadow-xl hover:shadow-2xl hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed border border-white/30 flex items-center gap-2"
             >
               {isUnlocking ? (
                 <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
               ) : (
                 <>
-                  <Unlock className="w-4 h-4 mr-2" />
+                  <Unlock className="w-4 h-4" />
                   Unlock
                 </>
               )}
-            </Button>
+            </button>
           </div>
-        </div>{" "}
-        {/* Close relative z-10 div */}
+        </div>
       </div>
     </div>
   )
