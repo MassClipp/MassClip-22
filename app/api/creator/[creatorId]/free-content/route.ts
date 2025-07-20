@@ -26,16 +26,20 @@ export async function GET(request: NextRequest, { params }: { params: { creatorI
       if (!snapshot.empty) {
         freeContent = snapshot.docs.map((doc) => {
           const data = doc.data()
-          console.log(`🎬 Free Content:`, {
+          console.log(`🎬 Free Content Item:`, {
             id: doc.id,
             title: data.title,
+            fileUrl: data.fileUrl,
             thumbnailUrl: data.thumbnailUrl ? "✅" : "❌",
+            type: data.type,
+            duration: data.duration,
           })
 
           return {
             id: doc.id,
             title: data.title || "Untitled Content",
             thumbnailUrl: data.thumbnailUrl || "/placeholder.svg?height=200&width=300",
+            fileUrl: data.fileUrl || data.url || "", // Try both fileUrl and url fields
             type: data.type || "video",
             duration: data.duration || "0:00",
             views: data.views || 0,
@@ -46,6 +50,16 @@ export async function GET(request: NextRequest, { params }: { params: { creatorI
         })
 
         console.log(`✅ Successfully loaded ${freeContent.length} free content items`)
+
+        // Log the final processed items
+        freeContent.forEach((item, index) => {
+          console.log(`📹 Processed item ${index}:`, {
+            id: item.id,
+            title: item.title,
+            fileUrl: item.fileUrl,
+            hasFileUrl: !!item.fileUrl,
+          })
+        })
       } else {
         console.log("ℹ️ No free content found")
       }

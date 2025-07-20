@@ -112,7 +112,18 @@ export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimal
         const freeResponse = await fetch(`/api/creator/${creator.uid}/free-content`)
         if (freeResponse.ok) {
           const freeData = await freeResponse.json()
-          console.log("Free content response:", freeData)
+          console.log("🎬 Free content API response:", freeData)
+
+          // Log each content item to debug fileUrl
+          freeData.content?.forEach((item: any, index: number) => {
+            console.log(`📹 Free content item ${index}:`, {
+              id: item.id,
+              title: item.title,
+              fileUrl: item.fileUrl,
+              thumbnailUrl: item.thumbnailUrl,
+            })
+          })
+
           setFreeContent(freeData.content || [])
           setFreeContentCount(freeData.content?.length || 0)
         } else {
@@ -158,30 +169,32 @@ export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimal
         </div>
       )}
 
-      <div className="relative max-w-6xl mx-auto px-8 py-16">
+      <div className="relative max-w-6xl mx-auto px-4 sm:px-8 py-8 sm:py-16">
         {/* Header */}
-        <div className="flex items-start justify-between mb-16">
-          <div className="flex items-center gap-8">
-            <Avatar className="w-32 h-32 border-2 border-white/20">
+        <div className="flex items-start justify-between mb-8 sm:mb-16">
+          <div className="flex items-center gap-4 sm:gap-8">
+            <Avatar className="w-20 h-20 sm:w-32 sm:h-32 border-2 border-white/20">
               <AvatarImage
                 src={creator.profilePic || "/placeholder.svg"}
                 alt={creator.displayName}
                 className="object-cover"
               />
-              <AvatarFallback className="bg-zinc-900 text-white text-2xl font-medium border-2 border-white/20">
+              <AvatarFallback className="bg-zinc-900 text-white text-lg sm:text-2xl font-medium border-2 border-white/20">
                 {creator.displayName?.charAt(0)?.toUpperCase() || creator.username?.charAt(0)?.toUpperCase() || "?"}
               </AvatarFallback>
             </Avatar>
 
-            <div className="space-y-3">
+            <div className="space-y-2 sm:space-y-3">
               <div>
-                <h1 className="text-3xl font-light text-white tracking-tight">
+                <h1 className="text-xl sm:text-3xl font-light text-white tracking-tight">
                   {creator.displayName || creator.username}
                 </h1>
-                <p className="text-zinc-500 text-sm font-mono">@{creator.username}</p>
+                <p className="text-zinc-500 text-xs sm:text-sm font-mono">@{creator.username}</p>
               </div>
 
-              {creator.bio && <p className="text-zinc-400 text-sm max-w-md leading-relaxed">{creator.bio}</p>}
+              {creator.bio && (
+                <p className="text-zinc-400 text-xs sm:text-sm max-w-md leading-relaxed">{creator.bio}</p>
+              )}
             </div>
           </div>
 
@@ -190,35 +203,35 @@ export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimal
               variant="ghost"
               size="sm"
               onClick={handleShare}
-              className="text-zinc-400 hover:text-white hover:bg-zinc-900 h-9 w-9 rounded-full p-0"
+              className="text-zinc-400 hover:text-white hover:bg-zinc-900 h-8 w-8 sm:h-9 sm:w-9 rounded-full p-0"
             >
-              <Share2 className="w-4 h-4" />
+              <Share2 className="w-3 h-3 sm:w-4 sm:h-4" />
             </Button>
           </div>
         </div>
 
         {/* Stats */}
-        <div className="flex items-center gap-8 mb-12 text-sm">
+        <div className="flex items-center gap-4 sm:gap-8 mb-8 sm:mb-12 text-xs sm:text-sm">
           <div className="flex items-center gap-2 text-zinc-500">
-            <Calendar className="w-4 h-4" />
+            <Calendar className="w-3 h-3 sm:w-4 sm:h-4" />
             <span>Member since {getMemberSince()}</span>
           </div>
           <div className="flex items-center gap-2 text-zinc-500">
-            <Users className="w-4 h-4" />
+            <Users className="w-3 h-3 sm:w-4 sm:h-4" />
             <span>{freeContentCount} free</span>
           </div>
           <div className="flex items-center gap-2 text-zinc-500">
-            <Heart className="w-4 h-4" />
+            <Heart className="w-3 h-3 sm:w-4 sm:h-4" />
             <span>{premiumContentCount} premium</span>
           </div>
         </div>
 
         {/* Tabs with underline style */}
-        <div className="mb-8">
-          <div className="flex items-center gap-8 border-b border-zinc-800/50">
+        <div className="mb-6 sm:mb-8">
+          <div className="flex items-center gap-6 sm:gap-8 border-b border-zinc-800/50">
             <button
               onClick={() => setActiveTab("free")}
-              className={`pb-4 text-sm font-medium transition-all duration-200 relative ${
+              className={`pb-3 sm:pb-4 text-xs sm:text-sm font-medium transition-all duration-200 relative ${
                 activeTab === "free" ? "text-white" : "text-zinc-400 hover:text-zinc-300"
               }`}
             >
@@ -227,7 +240,7 @@ export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimal
             </button>
             <button
               onClick={() => setActiveTab("premium")}
-              className={`pb-4 text-sm font-medium transition-all duration-200 relative ${
+              className={`pb-3 sm:pb-4 text-xs sm:text-sm font-medium transition-all duration-200 relative ${
                 activeTab === "premium" ? "text-white" : "text-zinc-400 hover:text-zinc-300"
               }`}
             >
@@ -238,13 +251,13 @@ export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimal
         </div>
 
         {/* Content */}
-        <div className="pt-8">
+        <div className="pt-4 sm:pt-8">
           {loading ? (
-            <div className="flex items-center justify-center py-24">
+            <div className="flex items-center justify-center py-16 sm:py-24">
               <div className="w-6 h-6 border border-zinc-800 border-t-white rounded-full animate-spin"></div>
             </div>
           ) : currentContent.length > 0 ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-6 justify-items-center">
+            <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3 sm:gap-6 justify-items-center">
               {currentContent.map((item) =>
                 activeTab === "premium" ? (
                   <BundleCard key={item.id} item={item} user={user} />
@@ -254,16 +267,18 @@ export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimal
               )}
             </div>
           ) : (
-            <div className="text-center py-24">
-              <div className="w-12 h-12 mx-auto mb-6 bg-zinc-900 rounded-full flex items-center justify-center">
+            <div className="text-center py-16 sm:py-24">
+              <div className="w-10 h-10 sm:w-12 sm:h-12 mx-auto mb-4 sm:mb-6 bg-zinc-900 rounded-full flex items-center justify-center">
                 {activeTab === "premium" ? (
-                  <Package className="w-5 h-5 text-zinc-600" />
+                  <Package className="w-4 h-4 sm:w-5 sm:h-5 text-zinc-600" />
                 ) : (
-                  <Play className="w-5 h-5 text-zinc-600" />
+                  <Play className="w-4 h-4 sm:w-5 sm:h-5 text-zinc-600" />
                 )}
               </div>
-              <h3 className="text-lg font-medium text-white mb-2">No {activeTab} content available</h3>
-              <p className="text-zinc-500 text-sm">This creator hasn't uploaded any {activeTab} content yet.</p>
+              <h3 className="text-base sm:text-lg font-medium text-white mb-2">No {activeTab} content available</h3>
+              <p className="text-zinc-500 text-xs sm:text-sm">
+                This creator hasn't uploaded any {activeTab} content yet.
+              </p>
             </div>
           )}
         </div>
@@ -276,15 +291,26 @@ function ContentCard({ item }: { item: ContentItem }) {
   const [isHovered, setIsHovered] = useState(false)
   const [isPlaying, setIsPlaying] = useState(false)
   const [thumbnailError, setThumbnailError] = useState(false)
+  const [videoError, setVideoError] = useState(false)
   const videoRef = useRef<HTMLVideoElement>(null)
 
-  console.log("🎥 ContentCard video URL:", item.fileUrl)
+  console.log("🎥 ContentCard rendering with:", {
+    id: item.id,
+    title: item.title,
+    fileUrl: item.fileUrl,
+    thumbnailUrl: item.thumbnailUrl,
+  })
 
   const handlePlayPause = (e: React.MouseEvent) => {
     e.preventDefault()
     e.stopPropagation()
 
-    if (!videoRef.current) return
+    if (!videoRef.current || !item.fileUrl) {
+      console.error("❌ No video element or fileUrl available")
+      return
+    }
+
+    console.log("🎬 Attempting to play video:", item.fileUrl)
 
     if (isPlaying) {
       videoRef.current.pause()
@@ -303,10 +329,12 @@ function ContentCard({ item }: { item: ContentItem }) {
       videoRef.current
         .play()
         .then(() => {
+          console.log("✅ Video started playing")
           setIsPlaying(true)
         })
         .catch((error) => {
-          console.error("Error playing video:", error)
+          console.error("❌ Error playing video:", error)
+          setVideoError(true)
         })
     }
   }
@@ -318,11 +346,22 @@ function ContentCard({ item }: { item: ContentItem }) {
     }
   }
 
+  const handleVideoError = (e: React.SyntheticEvent<HTMLVideoElement, Event>) => {
+    console.error("❌ Video error:", e.currentTarget.error)
+    setVideoError(true)
+  }
+
   const handleDownload = async (e: React.MouseEvent) => {
     e.preventDefault()
     e.stopPropagation()
 
+    if (!item.fileUrl) {
+      console.error("❌ No fileUrl available for download")
+      return
+    }
+
     try {
+      console.log("📥 Downloading:", item.fileUrl)
       const response = await fetch(item.fileUrl)
       const blob = await response.blob()
       const url = window.URL.createObjectURL(blob)
@@ -334,7 +373,7 @@ function ContentCard({ item }: { item: ContentItem }) {
       window.URL.revokeObjectURL(url)
       document.body.removeChild(a)
     } catch (error) {
-      console.error("Download failed:", error)
+      console.error("❌ Download failed:", error)
     }
   }
 
@@ -363,34 +402,44 @@ function ContentCard({ item }: { item: ContentItem }) {
 
   return (
     <div
-      className="group cursor-pointer w-full max-w-[200px]"
+      className="group cursor-pointer w-full max-w-[160px] sm:max-w-[200px]"
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
-      {/* 9:16 aspect ratio video container - smaller size */}
+      {/* 9:16 aspect ratio video container */}
       <div
         className={`relative aspect-[9/16] bg-zinc-900 rounded-lg overflow-hidden mb-2 transition-all duration-300 ${
           isHovered ? "border border-white/50" : "border border-transparent"
         }`}
       >
         {/* Video element */}
-        <video
-          ref={videoRef}
-          className="w-full h-full object-cover"
-          poster={
-            thumbnailError
-              ? `/placeholder.svg?height=356&width=200&query=${encodeURIComponent(item.title)}`
-              : item.thumbnailUrl || "/placeholder.svg?height=356&width=200"
-          }
-          preload="metadata"
-          muted={false}
-          playsInline
-          controls={false}
-          onError={handleThumbnailError}
-        >
-          <source src={item.fileUrl} type="video/mp4" />
-          Your browser does not support the video tag.
-        </video>
+        {item.fileUrl && !videoError ? (
+          <video
+            ref={videoRef}
+            className="w-full h-full object-cover"
+            poster={
+              thumbnailError
+                ? `/placeholder.svg?height=356&width=200&query=${encodeURIComponent(item.title)}`
+                : item.thumbnailUrl || "/placeholder.svg?height=356&width=200"
+            }
+            preload="metadata"
+            muted={false}
+            playsInline
+            controls={false}
+            onError={handleVideoError}
+            crossOrigin="anonymous"
+          >
+            <source src={item.fileUrl} type="video/mp4" />
+            Your browser does not support the video tag.
+          </video>
+        ) : (
+          <div className="w-full h-full bg-zinc-800 flex items-center justify-center">
+            <div className="text-center">
+              <Play className="w-8 h-8 text-zinc-600 mx-auto mb-2" />
+              <p className="text-xs text-zinc-500">Video unavailable</p>
+            </div>
+          </div>
+        )}
 
         {/* Play/Pause overlay */}
         <div
@@ -400,23 +449,30 @@ function ContentCard({ item }: { item: ContentItem }) {
         >
           <button
             onClick={handlePlayPause}
-            className="bg-white/20 backdrop-blur-sm rounded-full p-2 transition-transform duration-300 hover:scale-110"
+            disabled={!item.fileUrl || videoError}
+            className="bg-white/20 backdrop-blur-sm rounded-full p-2 transition-transform duration-300 hover:scale-110 disabled:opacity-50"
             aria-label={isPlaying ? "Pause video" : "Play video"}
           >
-            {isPlaying ? <Pause className="h-4 w-4 text-white" /> : <Play className="h-4 w-4 text-white ml-0.5" />}
+            {isPlaying ? (
+              <Pause className="h-3 w-3 sm:h-4 sm:w-4 text-white" />
+            ) : (
+              <Play className="h-3 w-3 sm:h-4 sm:w-4 text-white ml-0.5" />
+            )}
           </button>
         </div>
 
         {/* Download button */}
-        <button
-          onClick={handleDownload}
-          className={`absolute bottom-2 right-2 bg-black/60 backdrop-blur-sm p-1.5 rounded-full transition-all duration-200 hover:bg-black/80 hover:scale-110 ${
-            isHovered ? "opacity-100" : "opacity-70"
-          }`}
-          aria-label="Download video"
-        >
-          <Download className="h-3 w-3 text-white" />
-        </button>
+        {item.fileUrl && !videoError && (
+          <button
+            onClick={handleDownload}
+            className={`absolute bottom-2 right-2 bg-black/60 backdrop-blur-sm p-1.5 rounded-full transition-all duration-200 hover:bg-black/80 hover:scale-110 ${
+              isHovered ? "opacity-100" : "opacity-70"
+            }`}
+            aria-label="Download video"
+          >
+            <Download className="h-2.5 w-2.5 sm:h-3 sm:w-3 text-white" />
+          </button>
+        )}
       </div>
 
       {/* Video info - only title, no view count */}
@@ -528,7 +584,7 @@ function BundleCard({ item, user }: { item: ContentItem; user: any }) {
   }
 
   return (
-    <div className="bg-zinc-900 rounded-2xl overflow-hidden border border-zinc-700/30 hover:border-zinc-600/40 transition-all duration-300 w-full max-w-sm">
+    <div className="bg-zinc-900 rounded-2xl overflow-hidden border border-zinc-700/30 hover:border-zinc-600/40 transition-all duration-300 w-full max-w-xs sm:max-w-sm">
       {/* Thumbnail Section */}
       <div
         className="relative aspect-square bg-zinc-800 overflow-hidden"
@@ -545,40 +601,40 @@ function BundleCard({ item, user }: { item: ContentItem; user: any }) {
           />
         ) : (
           <div className="w-full h-full bg-zinc-800 flex items-center justify-center">
-            <Package className="w-16 h-16 text-zinc-600" />
+            <Package className="w-12 h-12 sm:w-16 sm:h-16 text-zinc-600" />
           </div>
         )}
 
         {/* Content count badge */}
-        <div className="absolute top-4 right-4 bg-black/80 backdrop-blur-sm px-3 py-1.5 rounded-full text-xs text-white font-semibold">
+        <div className="absolute top-3 right-3 sm:top-4 sm:right-4 bg-black/80 backdrop-blur-sm px-2 py-1 sm:px-3 sm:py-1.5 rounded-full text-xs text-white font-semibold">
           {item.contentCount || 0} items
         </div>
       </div>
 
       {/* Content Section */}
-      <div className="p-4 space-y-3 bg-black">
+      <div className="p-3 sm:p-4 space-y-2 sm:space-y-3 bg-black">
         {/* Title and Description */}
         <div className="space-y-1">
-          <h3 className="text-white text-base font-bold line-clamp-1" title={item.title}>
+          <h3 className="text-white text-sm sm:text-base font-bold line-clamp-1" title={item.title}>
             {item.title}
           </h3>
           <p className="text-zinc-400 text-xs line-clamp-1">{item.description || "Premium content bundle"}</p>
         </div>
 
         {/* Price and Button Row */}
-        <div className="flex items-center justify-between pt-2">
-          <span className="text-white text-xl font-light">${item.price?.toFixed(2) || "0.00"}</span>
+        <div className="flex items-center justify-between pt-1 sm:pt-2">
+          <span className="text-white text-lg sm:text-xl font-light">${item.price?.toFixed(2) || "0.00"}</span>
 
           <button
             onClick={handleUnlock}
             disabled={isUnlocking || !item.stripePriceId}
-            className="bg-white text-black hover:bg-gray-100 active:bg-gray-200 font-semibold px-4 py-2 text-sm rounded-lg transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+            className="bg-white text-black hover:bg-gray-100 active:bg-gray-200 font-semibold px-3 py-1.5 sm:px-4 sm:py-2 text-xs sm:text-sm rounded-lg transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5 sm:gap-2"
           >
             {isUnlocking ? (
-              <div className="w-4 h-4 border-2 border-black/30 border-t-black rounded-full animate-spin" />
+              <div className="w-3 h-3 sm:w-4 sm:h-4 border-2 border-black/30 border-t-black rounded-full animate-spin" />
             ) : (
               <>
-                <Unlock className="w-4 h-4" />
+                <Unlock className="w-3 h-3 sm:w-4 sm:h-4" />
                 Unlock
               </>
             )}
