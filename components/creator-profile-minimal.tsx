@@ -77,8 +77,11 @@ export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimal
   const currentContent = activeTab === "free" ? freeContent : premiumContent
 
   return (
-    <div className="min-h-screen bg-black">
-      <div className="max-w-6xl mx-auto px-8 py-16">
+    <div className="min-h-screen bg-black relative">
+      {/* Subtle gradient background */}
+      <div className="absolute inset-0 bg-gradient-to-br from-zinc-900/20 via-black to-zinc-900/10 pointer-events-none" />
+
+      <div className="relative max-w-6xl mx-auto px-8 py-16">
         {/* Header */}
         <div className="flex items-start justify-between mb-16">
           <div className="flex items-center gap-8">
@@ -142,28 +145,32 @@ export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimal
           </div>
         </div>
 
-        {/* Tabs */}
-        <div className="flex items-center gap-1 mb-12">
-          <button
-            onClick={() => setActiveTab("free")}
-            className={`px-4 py-2 text-sm font-medium rounded-full transition-all duration-200 ${
-              activeTab === "free" ? "bg-white text-black" : "text-zinc-400 hover:text-white"
-            }`}
-          >
-            Free Content
-          </button>
-          <button
-            onClick={() => setActiveTab("premium")}
-            className={`px-4 py-2 text-sm font-medium rounded-full transition-all duration-200 ${
-              activeTab === "premium" ? "bg-white text-black" : "text-zinc-400 hover:text-white"
-            }`}
-          >
-            Premium Content
-          </button>
+        {/* Tabs with underline style */}
+        <div className="mb-8">
+          <div className="flex items-center gap-8 border-b border-zinc-800/50">
+            <button
+              onClick={() => setActiveTab("free")}
+              className={`pb-4 text-sm font-medium transition-all duration-200 relative ${
+                activeTab === "free" ? "text-white" : "text-zinc-400 hover:text-zinc-300"
+              }`}
+            >
+              Free Content
+              {activeTab === "free" && <div className="absolute bottom-0 left-0 right-0 h-px bg-white" />}
+            </button>
+            <button
+              onClick={() => setActiveTab("premium")}
+              className={`pb-4 text-sm font-medium transition-all duration-200 relative ${
+                activeTab === "premium" ? "text-white" : "text-zinc-400 hover:text-zinc-300"
+              }`}
+            >
+              Premium Content
+              {activeTab === "premium" && <div className="absolute bottom-0 left-0 right-0 h-px bg-white" />}
+            </button>
+          </div>
         </div>
 
         {/* Content */}
-        <div>
+        <div className="pt-8">
           {loading ? (
             <div className="flex items-center justify-center py-24">
               <div className="w-6 h-6 border border-zinc-800 border-t-white rounded-full animate-spin"></div>
