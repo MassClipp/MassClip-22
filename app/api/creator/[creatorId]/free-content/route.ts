@@ -39,10 +39,9 @@ export async function GET(request: NextRequest, { params }: { params: { creatorI
             type: data.type || "video",
             duration: data.duration || "0:00",
             views: data.views || 0,
+            description: data.description || "",
             createdAt: data.createdAt || new Date(),
             isPremium: false,
-            fileUrl: data.fileUrl || "",
-            description: data.description || "",
           }
         })
 

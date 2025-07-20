@@ -24,34 +24,50 @@ export async function GET(request: NextRequest, { params }: { params: { creatorI
       console.log(`📊 Found ${snapshot.size} bundles`)
 
       if (!snapshot.empty) {
-        premiumContent = snapshot.docs.map((doc) => {
-          const data = doc.data()
-          console.log(`📦 Bundle:`, {
-            id: doc.id,
-            title: data.title,
-            price: data.price,
-            thumbnailUrl: data.thumbnailUrl ? "✅" : "❌",
-            stripePriceId: data.stripePriceId ? "✅" : "❌",
-          })
+        premiumContent = await Promise.all(
+          snapshot.docs.map(async (doc) => {
+            const data = doc.data()
 
-          return {
-            id: doc.id,
-            title: data.title || "Untitled Bundle",
-            thumbnailUrl: data.thumbnailUrl || "/placeholder.svg?height=300&width=300",
-            type: "bundle",
-            price: data.price || 0,
-            description: data.description || "No description available",
-            creatorId: data.creatorId || "",
-            createdAt: data.createdAt || new Date(),
-            views: data.views || 0,
-            downloads: data.downloads || 0,
-            duration: "Bundle",
-            isPremium: true,
-            contentCount: data.contentCount || 0,
-            stripePriceId: data.stripePriceId || null,
-            stripeProductId: data.stripeProductId || null,
-          }
-        })
+            // Get content count from the content array or contentItems
+            let contentCount = 0
+            if (data.content && Array.isArray(data.content)) {
+              contentCount = data.content.length
+            } else if (data.contentItems && Array.isArray(data.contentItems)) {
+              contentCount = data.contentItems.length
+            } else if (data.contentCount) {
+              contentCount = data.contentCount
+            }
+
+            console.log(`📦 Bundle:`, {
+              id: doc.id,
+              title: data.title,
+              price: data.price,
+              thumbnailUrl: data.thumbnailUrl || data.thumbnail ? "✅" : "❌",
+              stripePriceId: data.stripePriceId ? "✅" : "❌",
+              contentCount: contentCount,
+              description: data.description ? "✅" : "❌",
+            })
+
+            return {
+              id: doc.id,
+              title: data.title || "Untitled Bundle",
+              thumbnailUrl: data.thumbnailUrl || data.thumbnail || "/placeholder.svg?height=300&width=300",
+              type: "bundle",
+              price: data.price || 0,
+              description: data.description || "No description available",
+              creatorId: data.creatorId || "",
+              createdAt: data.createdAt || new Date(),
+              views: data.views || 0,
+              downloads: data.downloads || 0,
+              duration: "Bundle",
+              isPremium: true,
+              contentCount: contentCount,
+              stripePriceId: data.stripePriceId || null,
+              stripeProductId: data.stripeProductId || null,
+              content: data.content || data.contentItems || [],
+            }
+          }),
+        )
 
         console.log(`✅ Successfully loaded ${premiumContent.length} bundles`)
       } else {

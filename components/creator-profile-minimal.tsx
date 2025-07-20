@@ -31,6 +31,7 @@ interface ContentItem {
   description?: string
   stripePriceId?: string
   stripeProductId?: string
+  content?: any[]
 }
 
 export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimalProps) {
@@ -344,10 +345,13 @@ function BundleCard({ item }: { item: ContentItem }) {
 
   return (
     <div
-      className="bg-zinc-900/50 rounded-lg overflow-hidden border border-zinc-800/50 hover:border-zinc-700/50 transition-all duration-200"
+      className="bg-zinc-900/50 rounded-lg overflow-hidden border border-zinc-800/50 hover:border-zinc-700/50 transition-all duration-200 relative"
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
+      {/* Subtle white gradient overlay */}
+      <div className="absolute inset-0 bg-gradient-to-br from-white/3 via-transparent to-white/1 pointer-events-none rounded-lg" />
+
       {/* 1:1 Aspect Ratio Thumbnail */}
       <div className="relative aspect-square bg-zinc-800 overflow-hidden">
         <img
@@ -372,7 +376,7 @@ function BundleCard({ item }: { item: ContentItem }) {
       </div>
 
       {/* Bottom Half - Content Info */}
-      <div className="p-4 space-y-3">
+      <div className="relative p-4 space-y-3">
         {/* Bundle Name - Top Left */}
         <h3 className="text-white text-sm font-medium line-clamp-1" title={item.title}>
           {item.title}
@@ -393,10 +397,10 @@ function BundleCard({ item }: { item: ContentItem }) {
             size="sm"
             onClick={handleUnlock}
             disabled={isUnlocking || !item.stripePriceId}
-            className="bg-white text-black hover:bg-zinc-100 font-medium px-3 py-1 h-7 text-xs rounded"
+            className="bg-black text-white hover:bg-zinc-800 font-medium px-3 py-1 h-7 text-xs rounded border border-white/20 hover:border-white/30 transition-all duration-200"
           >
             {isUnlocking ? (
-              <div className="w-3 h-3 border border-black/20 border-t-black rounded-full animate-spin" />
+              <div className="w-3 h-3 border border-white/20 border-t-white rounded-full animate-spin" />
             ) : (
               <>
                 <Unlock className="w-3 h-3 mr-1" />
