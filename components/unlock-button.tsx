@@ -53,6 +53,7 @@ export function UnlockButton({ stripePriceId, bundleId, user, disabled = false }
         hasIdToken: !!idToken,
       })
 
+      // STEP 1: Create Stripe checkout session
       const response = await fetch("/api/stripe/create-checkout-session", {
         method: "POST",
         headers: {
@@ -81,7 +82,22 @@ export function UnlockButton({ stripePriceId, bundleId, user, disabled = false }
 
       if (url) {
         console.log("🚀 Redirecting to Stripe checkout:", url)
+        // STEP 2: Redirect user to Stripe checkout page
         window.location.href = url
+
+        // STEP 3: After payment, Stripe will:
+        // - Process the payment
+        // - Call our webhook at /api/stripe/webhook
+        // - Redirect user to success_url (/purchase-success)
+
+        // STEP 4: Webhook will:
+        // - Verify the payment
+        // - Grant access to bundle content
+        // - Update user's purchases in Firestore
+
+        // STEP 5: Success page will:
+        // - Show purchase confirmation
+        // - Allow user to access the content
       } else {
         console.error("❌ No checkout URL received")
         alert("Failed to create checkout session")
