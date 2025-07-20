@@ -690,7 +690,7 @@ function BundleCard({ item, user }: { item: ContentItem; user: any }) {
   }
 
   return (
-    <div className="bg-zinc-900 rounded-2xl overflow-hidden border border-zinc-700/30 hover:border-zinc-600/40 transition-all duration-300 w-full max-w-[340px] sm:max-w-[320px]">
+    <div className="bg-zinc-900 rounded-lg overflow-hidden border border-zinc-700/30 hover:border-zinc-600/40 transition-all duration-300 w-full max-w-[340px] sm:max-w-[320px] relative">
       {/* Thumbnail Section - Always square aspect ratio */}
       <div
         className="relative aspect-square bg-zinc-800 overflow-hidden"
@@ -718,7 +718,7 @@ function BundleCard({ item, user }: { item: ContentItem; user: any }) {
       </div>
 
       {/* Content Section */}
-      <div className="p-4 sm:p-5 space-y-3 bg-black">
+      <div className="p-4 sm:p-5 space-y-3 bg-black relative">
         {/* Title and Description */}
         <div className="space-y-1">
           <h3 className="text-white text-base sm:text-lg font-bold line-clamp-1" title={item.title}>
@@ -732,12 +732,14 @@ function BundleCard({ item, user }: { item: ContentItem; user: any }) {
           <span className="text-white text-xl sm:text-2xl font-light">${item.price?.toFixed(2) || "0.00"}</span>
 
           <button
+            type="button"
             onClick={handleUnlock}
             disabled={isUnlocking || !item.stripePriceId}
-            className="bg-white text-black hover:bg-gray-100 active:bg-gray-200 font-semibold px-4 py-2 sm:px-5 sm:py-2.5 text-sm sm:text-base rounded-lg transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+            className="bg-zinc-800 text-white hover:bg-zinc-700 active:bg-zinc-600 border border-zinc-600 hover:border-zinc-500 font-semibold px-4 py-2 sm:px-5 sm:py-2.5 text-sm sm:text-base rounded-md transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 relative z-10 cursor-pointer"
+            style={{ pointerEvents: "auto" }}
           >
             {isUnlocking ? (
-              <div className="w-4 h-4 border-2 border-black/30 border-t-black rounded-full animate-spin" />
+              <div className="w-4 h-4 border-2 border-zinc-400 border-t-white rounded-full animate-spin" />
             ) : (
               <>
                 <Unlock className="w-4 h-4" />
