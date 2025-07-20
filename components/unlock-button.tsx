@@ -3,7 +3,7 @@
 import type React from "react"
 
 import { useState } from "react"
-import { Unlock, Settings } from "lucide-react"
+import { Unlock, Settings, Loader2 } from "lucide-react"
 
 interface UnlockButtonProps {
   stripePriceId?: string
@@ -36,6 +36,7 @@ export function UnlockButton({ stripePriceId, bundleId, user, creatorId, disable
       isCreator,
       userId: user?.uid,
       creatorId,
+      stripePriceId,
     })
 
     // Case 1: No user logged in - show login toast
@@ -57,7 +58,7 @@ export function UnlockButton({ stripePriceId, bundleId, user, creatorId, disable
 
     if (!stripePriceId) {
       console.error("❌ No Stripe price ID available for this bundle")
-      alert("This bundle is not available for purchase at the moment.")
+      alert("This bundle is not available for purchase at the moment. The creator needs to set up Stripe integration.")
       return
     }
 
@@ -133,7 +134,7 @@ export function UnlockButton({ stripePriceId, bundleId, user, creatorId, disable
     if (isUnlocking) {
       return (
         <>
-          <div className="w-4 h-4 border-2 border-zinc-400 border-t-white rounded-full animate-spin" />
+          <Loader2 className="w-4 h-4 animate-spin" />
           <span>Processing...</span>
         </>
       )

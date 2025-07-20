@@ -1,132 +1,125 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { initializeFirebaseAdmin, db } from "@/lib/firebase-admin"
+import { getFirestore } from "firebase-admin/firestore"
+import { initializeApp, getApps, cert } from "firebase-admin/app"
+
+// Initialize Firebase Admin
+if (!getApps().length) {
+  const serviceAccount = {
+    type: "service_account",
+    project_id: process.env.FIREBASE_PROJECT_ID,
+    private_key_id: process.env.FIREBASE_PRIVATE_KEY_ID,
+    private_key: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n"),
+    client_email: process.env.FIREBASE_CLIENT_EMAIL,
+    client_id: process.env.FIREBASE_CLIENT_ID,
+    auth_uri: "https://accounts.google.com/o/oauth2/auth",
+    token_uri: "https://oauth2.googleapis.com/token",
+    auth_provider_x509_cert_url: "https://www.googleapis.com/oauth2/v1/certs",
+    client_x509_cert_url: `https://www.googleapis.com/robot/v1/metadata/x509/${process.env.FIREBASE_CLIENT_EMAIL}`,
+  }
+
+  initializeApp({
+    credential: cert(serviceAccount as any),
+  })
+}
+
+const db = getFirestore()
 
 export async function GET(request: NextRequest, { params }: { params: { creatorId: string } }) {
   try {
     const { creatorId } = params
 
-    if (!creatorId) {
-      return NextResponse.json({ error: "Creator ID is required" }, { status: 400 })
-    }
+    console.log(`🔍 [Premium Content API] Fetching premium content for creator: ${creatorId}`)
 
-    console.log(`🔍 Fetching PREMIUM CONTENT (bundles) for creator: ${creatorId}`)
+    // Query bundles collection for this creator
+    const bundlesQuery = db.collection("bundles").where("creatorId", "==", creatorId).where("active", "==", true)
+    const bundlesSnapshot = await bundlesQuery.get()
 
-    // Initialize Firebase Admin
-    initializeFirebaseAdmin()
+    console.log(`📦 [Premium Content API] Found ${bundlesSnapshot.docs.length} active bundles`)
 
-    let premiumContent: any[] = []
+    const premiumContent: any[] = []
 
-    try {
-      console.log("📁 Checking bundles collection...")
-      const bundlesRef = db.collection("bundles")
-      const snapshot = await bundlesRef.where("creatorId", "==", creatorId).get()
+    bundlesSnapshot.docs.forEach((doc) => {
+      const data = doc.data()
 
-      console.log(`📊 Found ${snapshot.size} bundles`)
+      // Ensure we have the required Stripe integration fields
+      const bundle = {
+        id: doc.id,
+        title: data.title || "Untitled Bundle",
+        description: data.description || "",
+        price: data.price || 0,
+        currency: data.currency || "usd",
+        type: "bundle",
+        isPremium: true,
 
-      if (!snapshot.empty) {
-        premiumContent = await Promise.all(
-          snapshot.docs.map(async (doc) => {
-            const data = doc.data()
+        // Thumbnail handling - prioritize different sources
+        thumbnailUrl: data.coverImage || data.customPreviewThumbnail || data.thumbnail || null,
 
-            // Log the complete raw data to see what fields are available
-            console.log(`📦 RAW BUNDLE DATA for ${doc.id}:`, JSON.stringify(data, null, 2))
+        // Content metadata
+        contentCount: data.contentItems?.length || 0,
+        contentItems: data.contentItems || [],
 
-            // Get content count from the content array or contentItems
-            let contentCount = 0
-            if (data.content && Array.isArray(data.content)) {
-              contentCount = data.content.length
-            } else if (data.contentItems && Array.isArray(data.contentItems)) {
-              contentCount = data.contentItems.length
-            } else if (data.contentCount) {
-              contentCount = data.contentCount
-            }
+        // Stripe integration - CRITICAL for unlock functionality
+        stripePriceId: data.priceId || null,
+        stripeProductId: data.productId || null,
 
-            // Try multiple thumbnail field names and log each attempt
-            const possibleThumbnailFields = [
-              "thumbnailUrl",
-              "thumbnail",
-              "imageUrl",
-              "image",
-              "coverImage",
-              "previewImage",
-            ]
-            let thumbnailUrl = null
+        // Additional metadata
+        createdAt: data.createdAt,
+        updatedAt: data.updatedAt,
+        active: data.active !== false,
 
-            for (const field of possibleThumbnailFields) {
-              if (data[field]) {
-                thumbnailUrl = data[field]
-                console.log(`✅ Found thumbnail in field '${field}':`, thumbnailUrl)
-                break
-              }
-            }
-
-            if (!thumbnailUrl) {
-              console.log(`❌ No thumbnail found in any of these fields:`, possibleThumbnailFields)
-              console.log(`Available fields in bundle:`, Object.keys(data))
-            }
-
-            console.log(`📦 Bundle Processing Result:`, {
-              id: doc.id,
-              title: data.title,
-              price: data.price,
-              thumbnailUrl: thumbnailUrl,
-              stripePriceId: data.stripePriceId,
-              stripeProductId: data.stripeProductId,
-              contentCount: contentCount,
-              description: data.description,
-              allFields: Object.keys(data),
-            })
-
-            return {
-              id: doc.id,
-              title: data.title || "Untitled Bundle",
-              thumbnailUrl: thumbnailUrl,
-              type: "bundle",
-              price: data.price || 0,
-              description: data.description || "No description available",
-              creatorId: data.creatorId || "",
-              createdAt: data.createdAt || new Date(),
-              views: data.views || 0,
-              downloads: data.downloads || 0,
-              duration: "Bundle",
-              isPremium: true,
-              contentCount: contentCount,
-              stripePriceId: data.stripePriceId || null,
-              stripeProductId: data.stripeProductId || null,
-              content: data.content || data.contentItems || [],
-            }
-          }),
-        )
-
-        console.log(`✅ Successfully loaded ${premiumContent.length} bundles`)
-        console.log("Final bundle data being returned:", JSON.stringify(premiumContent, null, 2))
-      } else {
-        console.log("ℹ️ No bundles found")
+        // Enhanced metadata if available
+        contentMetadata: data.contentMetadata || null,
+        detailedContentItems: data.detailedContentItems || [],
       }
-    } catch (error) {
-      console.error("❌ Error checking bundles collection:", error)
-      return NextResponse.json(
-        {
-          error: "Failed to fetch bundles",
-          details: error instanceof Error ? error.message : "Unknown error",
-        },
-        { status: 500 },
-      )
-    }
 
-    console.log(`📊 FINAL RESULT: ${premiumContent.length} bundles`)
+      // Log bundle details for debugging
+      console.log(`📋 [Premium Content API] Bundle ${doc.id}:`, {
+        title: bundle.title,
+        price: bundle.price,
+        contentCount: bundle.contentCount,
+        thumbnailUrl: bundle.thumbnailUrl,
+        stripePriceId: bundle.stripePriceId,
+        stripeProductId: bundle.stripeProductId,
+        hasStripeIntegration: !!(bundle.stripePriceId && bundle.stripeProductId),
+      })
+
+      // Only include bundles that have proper Stripe integration
+      if (bundle.stripePriceId && bundle.stripeProductId) {
+        premiumContent.push(bundle)
+      } else {
+        console.warn(`⚠️ [Premium Content API] Bundle ${doc.id} missing Stripe integration:`, {
+          stripePriceId: bundle.stripePriceId,
+          stripeProductId: bundle.stripeProductId,
+        })
+      }
+    })
+
+    // Sort by creation date (newest first)
+    premiumContent.sort((a, b) => {
+      if (!a.createdAt || !b.createdAt) return 0
+      const aTime = a.createdAt.seconds || a.createdAt.getTime?.() / 1000 || 0
+      const bTime = b.createdAt.seconds || b.createdAt.getTime?.() / 1000 || 0
+      return bTime - aTime
+    })
+
+    console.log(`✅ [Premium Content API] Returning ${premiumContent.length} premium bundles with Stripe integration`)
 
     return NextResponse.json({
+      success: true,
       content: premiumContent,
-      totalFound: premiumContent.length,
-      creatorId,
-      source: "bundles_collection",
+      count: premiumContent.length,
+      metadata: {
+        creatorId,
+        totalBundles: bundlesSnapshot.docs.length,
+        activeBundles: premiumContent.length,
+        bundlesWithoutStripe: bundlesSnapshot.docs.length - premiumContent.length,
+      },
     })
   } catch (error) {
-    console.error("❌ PREMIUM CONTENT API ERROR:", error)
+    console.error("❌ [Premium Content API] Error:", error)
     return NextResponse.json(
       {
-        error: "Failed to fetch creator premium content",
+        error: "Failed to fetch premium content",
         details: error instanceof Error ? error.message : "Unknown error",
       },
       { status: 500 },

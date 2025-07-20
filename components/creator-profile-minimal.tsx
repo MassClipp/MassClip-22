@@ -135,8 +135,22 @@ export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimal
         const premiumResponse = await fetch(`/api/creator/${creator.uid}/premium-content`)
         if (premiumResponse.ok) {
           const premiumData = await premiumResponse.json()
-          console.log("Premium content response:", premiumData)
-          console.log("Premium content items:", premiumData.content)
+          console.log("🎯 Premium content response:", premiumData)
+          console.log("🎯 Premium content items:", premiumData.content)
+
+          // Log each premium item for debugging
+          premiumData.content?.forEach((item: any, index: number) => {
+            console.log(`🎯 Premium content item ${index}:`, {
+              id: item.id,
+              title: item.title,
+              thumbnailUrl: item.thumbnailUrl,
+              stripePriceId: item.stripePriceId,
+              stripeProductId: item.stripeProductId,
+              price: item.price,
+              contentCount: item.contentCount,
+            })
+          })
+
           setPremiumContent(premiumData.content || [])
           setPremiumContentCount(premiumData.content?.length || 0)
         } else {
@@ -601,6 +615,7 @@ function BundleCard({ item, user, creatorId }: { item: ContentItem; user: any; c
     title: item.title,
     thumbnailUrl: item.thumbnailUrl,
     stripePriceId: item.stripePriceId,
+    stripeProductId: item.stripeProductId,
     price: item.price,
     contentCount: item.contentCount,
     creatorId,
