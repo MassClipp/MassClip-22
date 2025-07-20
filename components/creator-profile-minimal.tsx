@@ -2,10 +2,10 @@
 
 import type React from "react"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { Share2, Play, Calendar, Users, Heart, Check, Package, Unlock } from "lucide-react"
+import { Share2, Play, Calendar, Users, Heart, Check, Package, Unlock, Download, Pause } from "lucide-react"
 import { useAuthState } from "react-firebase-hooks/auth"
 import { auth } from "@/lib/firebase"
 
@@ -26,6 +26,7 @@ interface ContentItem {
   id: string
   title: string
   thumbnailUrl: string
+  fileUrl: string
   duration: string
   views: number
   type: "video" | "audio" | "image" | "bundle"
@@ -273,40 +274,158 @@ export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimal
 
 function ContentCard({ item }: { item: ContentItem }) {
   const [isHovered, setIsHovered] = useState(false)
+  const [isPlaying, setIsPlaying] = useState(false)
+  const [thumbnailError, setThumbnailError] = useState(false)
+  const videoRef = useRef<HTMLVideoElement>(null)
+
+  const handlePlayPause = (e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+
+    if (!videoRef.current) return
+
+    if (isPlaying) {
+      videoRef.current.pause()
+      setIsPlaying(false)
+    } else {
+      // Pause all other videos first
+      document.querySelectorAll("video").forEach((v) => {
+        if (v !== videoRef.current) {
+          v.pause()
+        }
+      })
+
+      videoRef.current
+        .play()
+        .then(() => {
+          setIsPlaying(true)
+        })
+        .catch((error) => {
+          console.error("Error playing video:", error)
+        })
+    }
+  }
+
+  const handleVideoEnd = () => {
+    setIsPlaying(false)
+    if (videoRef.current) {
+      videoRef.current.currentTime = 0
+    }
+  }
+
+  const handleDownload = async (e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+
+    try {
+      const response = await fetch(item.fileUrl)
+      const blob = await response.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement("a")
+      a.href = url
+      a.download = `${item.title}.mp4`
+      document.body.appendChild(a)
+      a.click()
+      window.URL.revokeObjectURL(url)
+      document.body.removeChild(a)
+    } catch (error) {
+      console.error("Download failed:", error)
+    }
+  }
+
+  const handleThumbnailError = () => {
+    setThumbnailError(true)
+  }
+
+  // Update state when video plays/pauses
+  useEffect(() => {
+    const videoElement = videoRef.current
+    if (!videoElement) return
+
+    const handlePlay = () => setIsPlaying(true)
+    const handlePause = () => setIsPlaying(false)
+
+    videoElement.addEventListener("play", handlePlay)
+    videoElement.addEventListener("pause", handlePause)
+    videoElement.addEventListener("ended", handleVideoEnd)
+
+    return () => {
+      videoElement.removeEventListener("play", handlePlay)
+      videoElement.removeEventListener("pause", handlePause)
+      videoElement.removeEventListener("ended", handleVideoEnd)
+    }
+  }, [])
 
   return (
     <div
-      className="group cursor-pointer w-full max-w-sm"
+      className="group cursor-pointer w-full max-w-[280px]"
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
-      <div className="relative aspect-video bg-zinc-900 rounded-lg overflow-hidden mb-3">
-        <img
-          src={item.thumbnailUrl || "/placeholder.svg?height=200&width=300"}
-          alt={item.title}
-          className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-105"
-        />
+      {/* 9:16 aspect ratio video container */}
+      <div
+        className={`relative aspect-[9/16] bg-zinc-900 rounded-lg overflow-hidden mb-3 transition-all duration-300 ${
+          isHovered ? "border border-white/50" : "border border-transparent"
+        }`}
+      >
+        {/* Video element */}
+        <video
+          ref={videoRef}
+          className="w-full h-full object-cover"
+          poster={
+            thumbnailError
+              ? `/placeholder.svg?height=400&width=225&query=${encodeURIComponent(item.title)}`
+              : item.thumbnailUrl || "/placeholder.svg?height=400&width=225"
+          }
+          preload="metadata"
+          muted={false}
+          playsInline
+          controls={false}
+          onError={handleThumbnailError}
+        >
+          <source src={item.fileUrl} type="video/mp4" />
+          Your browser does not support the video tag.
+        </video>
 
+        {/* Play/Pause overlay */}
         <div
           className={`absolute inset-0 bg-black/40 flex items-center justify-center transition-opacity duration-200 ${
-            isHovered ? "opacity-100" : "opacity-0"
+            isHovered || !isPlaying ? "opacity-100" : "opacity-0"
           }`}
         >
-          <div className="w-12 h-12 bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center">
-            <Play className="w-5 h-5 text-white ml-0.5" />
-          </div>
+          <button
+            onClick={handlePlayPause}
+            className="bg-white/20 backdrop-blur-sm rounded-full p-3 transition-transform duration-300 hover:scale-110"
+            aria-label={isPlaying ? "Pause video" : "Play video"}
+          >
+            {isPlaying ? <Pause className="h-6 w-6 text-white" /> : <Play className="h-6 w-6 text-white ml-0.5" />}
+          </button>
         </div>
 
-        <div className="absolute bottom-3 right-3 bg-black/60 backdrop-blur-sm px-2 py-1 rounded text-xs text-white font-mono">
+        {/* Duration badge */}
+        <div className="absolute bottom-3 left-3 bg-black/60 backdrop-blur-sm px-2 py-1 rounded text-xs text-white font-mono">
           {item.duration}
         </div>
+
+        {/* Download button */}
+        <button
+          onClick={handleDownload}
+          className={`absolute bottom-3 right-3 bg-black/60 backdrop-blur-sm p-2 rounded-full transition-all duration-200 hover:bg-black/80 hover:scale-110 ${
+            isHovered ? "opacity-100" : "opacity-70"
+          }`}
+          aria-label="Download video"
+        >
+          <Download className="h-4 w-4 text-white" />
+        </button>
       </div>
 
-      <h3 className="text-white text-sm font-medium line-clamp-2 leading-snug" title={item.title}>
-        {item.title}
-      </h3>
-
-      <p className="text-zinc-500 text-xs mt-1">{item.views.toLocaleString()} views</p>
+      {/* Video info */}
+      <div className="space-y-1">
+        <h3 className="text-white text-sm font-medium line-clamp-2 leading-snug" title={item.title}>
+          {item.title}
+        </h3>
+        <p className="text-zinc-500 text-xs">{item.views.toLocaleString()} views</p>
+      </div>
     </div>
   )
 }
