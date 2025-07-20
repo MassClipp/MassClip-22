@@ -535,18 +535,6 @@ function BundleCard({ item, user }: { item: ContentItem; user: any }) {
       onMouseEnter={() => setIsCardHovered(true)}
       onMouseLeave={() => setIsCardHovered(false)}
     >
-      {/* Sophisticated gradient overlays */}
-      <div className="absolute inset-0 bg-gradient-to-br from-white/8 via-white/3 to-transparent pointer-events-none rounded-2xl" />
-      <div className="absolute inset-0 bg-gradient-to-t from-black/20 via-transparent to-white/5 pointer-events-none rounded-2xl" />
-
-      {/* Enhanced hover glow effect */}
-      <div
-        className={`absolute inset-0 bg-gradient-to-br from-white/15 via-white/5 to-white/8 pointer-events-none rounded-2xl transition-opacity duration-500 ${isCardHovered ? "opacity-100" : "opacity-0"}`}
-      />
-
-      {/* Subtle inner border */}
-      <div className="absolute inset-[1px] rounded-2xl border border-white/10 pointer-events-none" />
-
       {/* 1:1 Aspect Ratio Thumbnail - Only zoom on thumbnail hover */}
       <div
         className="relative aspect-square bg-gradient-to-br from-zinc-800 to-zinc-900 overflow-hidden"
@@ -571,18 +559,12 @@ function BundleCard({ item, user }: { item: ContentItem; user: any }) {
         <div className="absolute top-4 right-4 bg-black/80 backdrop-blur-md px-3 py-1.5 rounded-full text-xs text-white font-semibold border border-white/20 shadow-lg">
           {item.contentCount || 0} items
         </div>
-
-        {/* Subtle image overlay */}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/30 via-transparent to-transparent pointer-events-none" />
       </div>
 
       {/* Compact Bottom Half - Content Info */}
       <div className="relative p-4 space-y-3 bg-black">
-        {/* Subtle white gradient overlay */}
-        <div className="absolute inset-0 bg-gradient-to-t from-white/5 via-white/2 to-transparent pointer-events-none" />
-
         {/* Content wrapper */}
-        <div className="relative">
+        <div className="relative z-10">
           {/* Bundle Name - More compact */}
           <div className="space-y-1">
             <h3 className="text-white text-base font-bold line-clamp-1 tracking-tight" title={item.title}>
@@ -601,21 +583,22 @@ function BundleCard({ item, user }: { item: ContentItem; user: any }) {
             </div>
 
             {/* Unlock Button - Fixed clickability issues */}
-            <button
-              onClick={handleUnlock}
-              disabled={isUnlocking || !item.stripePriceId}
-              className="bg-white text-black hover:bg-gray-100 font-semibold px-4 py-2 text-sm rounded-lg transition-all duration-200 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 z-10 relative"
-              style={{ pointerEvents: "auto" }}
-            >
-              {isUnlocking ? (
-                <div className="w-4 h-4 border-2 border-black/30 border-t-black rounded-full animate-spin" />
-              ) : (
-                <>
-                  <Unlock className="w-4 h-4" />
-                  Unlock
-                </>
-              )}
-            </button>
+            <div className="relative z-50">
+              <button
+                onClick={handleUnlock}
+                disabled={isUnlocking || !item.stripePriceId}
+                className="bg-white text-black hover:bg-gray-100 font-semibold px-4 py-2 text-sm rounded-lg transition-all duration-200 hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 cursor-pointer"
+              >
+                {isUnlocking ? (
+                  <div className="w-4 h-4 border-2 border-black/30 border-t-black rounded-full animate-spin" />
+                ) : (
+                  <>
+                    <Unlock className="w-4 h-4" />
+                    Unlock
+                  </>
+                )}
+              </button>
+            </div>
           </div>
         </div>
       </div>
