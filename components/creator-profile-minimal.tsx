@@ -299,7 +299,7 @@ export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimal
             <div
               className={
                 activeTab === "premium"
-                  ? "grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4 sm:gap-6 justify-items-center"
+                  ? "flex flex-col items-center gap-6 sm:grid sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 sm:gap-6 sm:justify-items-center"
                   : "grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4 sm:gap-6 justify-items-center"
               }
             >
@@ -690,66 +690,61 @@ function BundleCard({ item, user }: { item: ContentItem; user: any }) {
   }
 
   return (
-    <div className="bg-zinc-900 rounded-2xl overflow-hidden border border-zinc-700/30 hover:border-zinc-600/40 transition-all duration-300 w-full max-w-full sm:max-w-sm">
-      {/* Mobile: Horizontal layout, Desktop: Vertical layout */}
-      <div className="flex sm:flex-col">
-        {/* Thumbnail Section */}
-        <div
-          className="relative w-32 h-32 sm:w-full sm:aspect-square bg-zinc-800 overflow-hidden flex-shrink-0"
-          onMouseEnter={() => setIsThumbnailHovered(true)}
-          onMouseLeave={() => setIsThumbnailHovered(false)}
-        >
-          {item.thumbnailUrl && !imageError ? (
-            <img
-              src={item.thumbnailUrl || "/placeholder.svg"}
-              alt={item.title}
-              className={`w-full h-full object-cover transition-transform duration-500 ${isThumbnailHovered ? "scale-110" : "scale-100"}`}
-              onError={handleImageError}
-              onLoad={handleImageLoad}
-            />
-          ) : (
-            <div className="w-full h-full bg-zinc-800 flex items-center justify-center">
-              <Package className="w-8 h-8 sm:w-16 sm:h-16 text-zinc-600" />
-            </div>
-          )}
-
-          {/* Content count badge */}
-          <div className="absolute top-2 right-2 sm:top-4 sm:right-4 bg-black/80 backdrop-blur-sm px-2 py-1 sm:px-3 sm:py-1.5 rounded-full text-xs text-white font-semibold">
-            {item.contentCount || 0} items
+    <div className="bg-zinc-900 rounded-2xl overflow-hidden border border-zinc-700/30 hover:border-zinc-600/40 transition-all duration-300 w-full max-w-[280px] sm:max-w-sm">
+      {/* Thumbnail Section - Always square aspect ratio */}
+      <div
+        className="relative aspect-square bg-zinc-800 overflow-hidden"
+        onMouseEnter={() => setIsThumbnailHovered(true)}
+        onMouseLeave={() => setIsThumbnailHovered(false)}
+      >
+        {item.thumbnailUrl && !imageError ? (
+          <img
+            src={item.thumbnailUrl || "/placeholder.svg"}
+            alt={item.title}
+            className={`w-full h-full object-cover transition-transform duration-500 ${isThumbnailHovered ? "scale-110" : "scale-100"}`}
+            onError={handleImageError}
+            onLoad={handleImageLoad}
+          />
+        ) : (
+          <div className="w-full h-full bg-zinc-800 flex items-center justify-center">
+            <Package className="w-12 h-12 sm:w-16 sm:h-16 text-zinc-600" />
           </div>
+        )}
+
+        {/* Content count badge */}
+        <div className="absolute top-2 right-2 sm:top-4 sm:right-4 bg-black/80 backdrop-blur-sm px-2 py-1 sm:px-3 sm:py-1.5 rounded-full text-xs text-white font-semibold">
+          {item.contentCount || 0} items
+        </div>
+      </div>
+
+      {/* Content Section */}
+      <div className="p-3 sm:p-4 space-y-2 sm:space-y-3 bg-black">
+        {/* Title and Description */}
+        <div className="space-y-1">
+          <h3 className="text-white text-sm sm:text-base font-bold line-clamp-1" title={item.title}>
+            {item.title}
+          </h3>
+          <p className="text-zinc-400 text-xs line-clamp-1">{item.description || "Premium content bundle"}</p>
         </div>
 
-        {/* Content Section */}
-        <div className="flex-1 p-3 sm:p-4 space-y-2 sm:space-y-3 bg-black flex flex-col justify-between">
-          {/* Title and Description */}
-          <div className="space-y-1 flex-1">
-            <h3 className="text-white text-sm sm:text-base font-bold line-clamp-2 sm:line-clamp-1" title={item.title}>
-              {item.title}
-            </h3>
-            <p className="text-zinc-400 text-xs line-clamp-2 sm:line-clamp-1">
-              {item.description || "Premium content bundle"}
-            </p>
-          </div>
+        {/* Price and Button Row */}
+        <div className="flex items-center justify-between pt-1 sm:pt-2">
+          <span className="text-white text-lg sm:text-xl font-light">${item.price?.toFixed(2) || "0.00"}</span>
 
-          {/* Price and Button Row */}
-          <div className="flex items-center justify-between pt-2 sm:pt-2">
-            <span className="text-white text-lg sm:text-xl font-light">${item.price?.toFixed(2) || "0.00"}</span>
-
-            <button
-              onClick={handleUnlock}
-              disabled={isUnlocking || !item.stripePriceId}
-              className="bg-white text-black hover:bg-gray-100 active:bg-gray-200 font-semibold px-3 py-1.5 sm:px-4 sm:py-2 text-xs sm:text-sm rounded-lg transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5 sm:gap-2"
-            >
-              {isUnlocking ? (
-                <div className="w-3 h-3 sm:w-4 sm:h-4 border-2 border-black/30 border-t-black rounded-full animate-spin" />
-              ) : (
-                <>
-                  <Unlock className="w-3 h-3 sm:w-4 sm:h-4" />
-                  Unlock
-                </>
-              )}
-            </button>
-          </div>
+          <button
+            onClick={handleUnlock}
+            disabled={isUnlocking || !item.stripePriceId}
+            className="bg-white text-black hover:bg-gray-100 active:bg-gray-200 font-semibold px-3 py-1.5 sm:px-4 sm:py-2 text-xs sm:text-sm rounded-lg transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5 sm:gap-2"
+          >
+            {isUnlocking ? (
+              <div className="w-3 h-3 sm:w-4 sm:h-4 border-2 border-black/30 border-t-black rounded-full animate-spin" />
+            ) : (
+              <>
+                <Unlock className="w-3 h-3 sm:w-4 sm:h-4" />
+                Unlock
+              </>
+            )}
+          </button>
         </div>
       </div>
     </div>
