@@ -294,10 +294,19 @@ function ContentCard({ item }: { item: ContentItem }) {
   const [videoError, setVideoError] = useState(false)
   const videoRef = useRef<HTMLVideoElement>(null)
 
+  // Create proxied video URL to bypass CORS
+  const getProxiedVideoUrl = (originalUrl: string) => {
+    if (!originalUrl) return ""
+    return `/api/proxy-video?url=${encodeURIComponent(originalUrl)}`
+  }
+
+  const proxiedVideoUrl = getProxiedVideoUrl(item.fileUrl)
+
   console.log("🎥 ContentCard rendering with:", {
     id: item.id,
     title: item.title,
-    fileUrl: item.fileUrl,
+    originalFileUrl: item.fileUrl,
+    proxiedVideoUrl: proxiedVideoUrl,
     thumbnailUrl: item.thumbnailUrl,
   })
 
@@ -305,12 +314,12 @@ function ContentCard({ item }: { item: ContentItem }) {
     e.preventDefault()
     e.stopPropagation()
 
-    if (!videoRef.current || !item.fileUrl) {
-      console.error("❌ No video element or fileUrl available")
+    if (!videoRef.current || !proxiedVideoUrl) {
+      console.error("❌ No video element or proxied URL available")
       return
     }
 
-    console.log("🎬 Attempting to play video:", item.fileUrl)
+    console.log("🎬 Attempting to play video:", proxiedVideoUrl)
 
     if (isPlaying) {
       videoRef.current.pause()
@@ -361,8 +370,8 @@ function ContentCard({ item }: { item: ContentItem }) {
     }
 
     try {
-      console.log("📥 Downloading:", item.fileUrl)
-      const response = await fetch(item.fileUrl)
+      console.log("📥 Downloading via proxy:", proxiedVideoUrl)
+      const response = await fetch(proxiedVideoUrl)
       const blob = await response.blob()
       const url = window.URL.createObjectURL(blob)
       const a = document.createElement("a")
@@ -413,7 +422,7 @@ function ContentCard({ item }: { item: ContentItem }) {
         }`}
       >
         {/* Video element */}
-        {item.fileUrl && !videoError ? (
+        {proxiedVideoUrl && !videoError ? (
           <video
             ref={videoRef}
             className="w-full h-full object-cover"
@@ -427,9 +436,8 @@ function ContentCard({ item }: { item: ContentItem }) {
             playsInline
             controls={false}
             onError={handleVideoError}
-            crossOrigin="anonymous"
           >
-            <source src={item.fileUrl} type="video/mp4" />
+            <source src={proxiedVideoUrl} type="video/mp4" />
             Your browser does not support the video tag.
           </video>
         ) : (
@@ -449,7 +457,7 @@ function ContentCard({ item }: { item: ContentItem }) {
         >
           <button
             onClick={handlePlayPause}
-            disabled={!item.fileUrl || videoError}
+            disabled={!proxiedVideoUrl || videoError}
             className="bg-white/20 backdrop-blur-sm rounded-full p-2 transition-transform duration-300 hover:scale-110 disabled:opacity-50"
             aria-label={isPlaying ? "Pause video" : "Play video"}
           >
@@ -462,7 +470,7 @@ function ContentCard({ item }: { item: ContentItem }) {
         </div>
 
         {/* Download button */}
-        {item.fileUrl && !videoError && (
+        {proxiedVideoUrl && !videoError && (
           <button
             onClick={handleDownload}
             className={`absolute bottom-2 right-2 bg-black/60 backdrop-blur-sm p-1.5 rounded-full transition-all duration-200 hover:bg-black/80 hover:scale-110 ${
