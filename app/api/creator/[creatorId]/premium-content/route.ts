@@ -28,6 +28,9 @@ export async function GET(request: NextRequest, { params }: { params: { creatorI
           snapshot.docs.map(async (doc) => {
             const data = doc.data()
 
+            // Log the complete raw data to see what fields are available
+            console.log(`📦 RAW BUNDLE DATA for ${doc.id}:`, JSON.stringify(data, null, 2))
+
             // Get content count from the content array or contentItems
             let contentCount = 0
             if (data.content && Array.isArray(data.content)) {
@@ -38,10 +41,31 @@ export async function GET(request: NextRequest, { params }: { params: { creatorI
               contentCount = data.contentCount
             }
 
-            // Try multiple thumbnail field names
-            const thumbnailUrl = data.thumbnailUrl || data.thumbnail || data.imageUrl || data.image || null
+            // Try multiple thumbnail field names and log each attempt
+            const possibleThumbnailFields = [
+              "thumbnailUrl",
+              "thumbnail",
+              "imageUrl",
+              "image",
+              "coverImage",
+              "previewImage",
+            ]
+            let thumbnailUrl = null
 
-            console.log(`📦 Bundle Details:`, {
+            for (const field of possibleThumbnailFields) {
+              if (data[field]) {
+                thumbnailUrl = data[field]
+                console.log(`✅ Found thumbnail in field '${field}':`, thumbnailUrl)
+                break
+              }
+            }
+
+            if (!thumbnailUrl) {
+              console.log(`❌ No thumbnail found in any of these fields:`, possibleThumbnailFields)
+              console.log(`Available fields in bundle:`, Object.keys(data))
+            }
+
+            console.log(`📦 Bundle Processing Result:`, {
               id: doc.id,
               title: data.title,
               price: data.price,
@@ -50,7 +74,7 @@ export async function GET(request: NextRequest, { params }: { params: { creatorI
               stripeProductId: data.stripeProductId,
               contentCount: contentCount,
               description: data.description,
-              rawData: Object.keys(data), // Log all available fields
+              allFields: Object.keys(data),
             })
 
             return {
@@ -75,7 +99,7 @@ export async function GET(request: NextRequest, { params }: { params: { creatorI
         )
 
         console.log(`✅ Successfully loaded ${premiumContent.length} bundles`)
-        console.log("Bundle data:", premiumContent)
+        console.log("Final bundle data being returned:", JSON.stringify(premiumContent, null, 2))
       } else {
         console.log("ℹ️ No bundles found")
       }

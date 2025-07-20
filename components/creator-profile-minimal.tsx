@@ -1,9 +1,11 @@
 "use client"
 
+import type React from "react"
+
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { Share2, Play, Calendar, Users, Heart, Check, Package, Unlock } from "lucide-react"
+import { Share2, Play, Calendar, Users, Heart, Check, Package, Unlock, Star, Download } from "lucide-react"
 import { useAuthState } from "react-firebase-hooks/auth"
 import { auth } from "@/lib/firebase"
 
@@ -314,11 +316,23 @@ function BundleCard({ item, user }: { item: ContentItem; user: any }) {
   const [isUnlocking, setIsUnlocking] = useState(false)
   const [imageError, setImageError] = useState(false)
 
-  console.log("BundleCard item:", item)
+  console.log("🎯 BundleCard rendering with item:", {
+    id: item.id,
+    title: item.title,
+    thumbnailUrl: item.thumbnailUrl,
+    stripePriceId: item.stripePriceId,
+    price: item.price,
+    contentCount: item.contentCount,
+  })
 
-  const handleUnlock = async () => {
+  const handleUnlock = async (e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+
+    console.log("🔓 Unlock button clicked for bundle:", item.id)
+
     if (!item.stripePriceId) {
-      console.error("No Stripe price ID available for this bundle")
+      console.error("❌ No Stripe price ID available for this bundle")
       alert("This bundle is not available for purchase at the moment.")
       return
     }
@@ -332,13 +346,13 @@ function BundleCard({ item, user }: { item: ContentItem; user: any }) {
       if (user) {
         try {
           idToken = await user.getIdToken()
-          console.log("Got Firebase ID token for checkout")
+          console.log("✅ Got Firebase ID token for checkout")
         } catch (error) {
-          console.error("Failed to get ID token:", error)
+          console.error("❌ Failed to get ID token:", error)
         }
       }
 
-      console.log("Creating checkout session with:", {
+      console.log("💳 Creating checkout session with:", {
         priceId: item.stripePriceId,
         bundleId: item.id,
         hasIdToken: !!idToken,
@@ -358,24 +372,27 @@ function BundleCard({ item, user }: { item: ContentItem; user: any }) {
         }),
       })
 
+      console.log("📡 Checkout API response status:", response.status)
+
       if (!response.ok) {
         const errorData = await response.json()
-        console.error("Checkout session creation failed:", errorData)
+        console.error("❌ Checkout session creation failed:", errorData)
         alert(`Failed to create checkout session: ${errorData.error}`)
         return
       }
 
       const { url } = await response.json()
+      console.log("✅ Checkout session created, URL:", url)
 
       if (url) {
-        console.log("Redirecting to Stripe checkout:", url)
+        console.log("🚀 Redirecting to Stripe checkout:", url)
         window.location.href = url
       } else {
-        console.error("No checkout URL received")
+        console.error("❌ No checkout URL received")
         alert("Failed to create checkout session")
       }
     } catch (error) {
-      console.error("Error creating checkout session:", error)
+      console.error("❌ Error creating checkout session:", error)
       alert("An error occurred while creating the checkout session")
     } finally {
       setIsUnlocking(false)
@@ -383,23 +400,28 @@ function BundleCard({ item, user }: { item: ContentItem; user: any }) {
   }
 
   const handleImageError = () => {
-    console.log("Image failed to load:", item.thumbnailUrl)
+    console.log("❌ Image failed to load:", item.thumbnailUrl)
     setImageError(true)
   }
 
   const handleImageLoad = () => {
-    console.log("Image loaded successfully:", item.thumbnailUrl)
+    console.log("✅ Image loaded successfully:", item.thumbnailUrl)
     setImageError(false)
   }
 
   return (
     <div
-      className="bg-zinc-900/50 rounded-lg overflow-hidden border border-zinc-800/50 hover:border-zinc-700/50 transition-all duration-200 relative"
+      className="bg-gradient-to-br from-zinc-900/80 to-zinc-900/40 rounded-xl overflow-hidden border border-zinc-800/50 hover:border-zinc-700/50 transition-all duration-300 relative group backdrop-blur-sm"
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
-      {/* Subtle white gradient overlay */}
-      <div className="absolute inset-0 bg-gradient-to-br from-white/3 via-transparent to-white/1 pointer-events-none rounded-lg" />
+      {/* Subtle shine effect */}
+      <div className="absolute inset-0 bg-gradient-to-br from-white/5 via-transparent to-white/2 pointer-events-none rounded-xl" />
+
+      {/* Hover glow effect */}
+      <div
+        className={`absolute inset-0 bg-gradient-to-br from-white/10 via-transparent to-white/5 pointer-events-none rounded-xl transition-opacity duration-300 ${isHovered ? "opacity-100" : "opacity-0"}`}
+      />
 
       {/* 1:1 Aspect Ratio Thumbnail */}
       <div className="relative aspect-square bg-zinc-800 overflow-hidden">
@@ -412,8 +434,8 @@ function BundleCard({ item, user }: { item: ContentItem; user: any }) {
             onLoad={handleImageLoad}
           />
         ) : (
-          <div className="w-full h-full bg-zinc-800 flex items-center justify-center">
-            <Package className="w-12 h-12 text-zinc-600" />
+          <div className="w-full h-full bg-gradient-to-br from-zinc-800 to-zinc-900 flex items-center justify-center">
+            <Package className="w-16 h-16 text-zinc-600" />
           </div>
         )}
 
@@ -422,45 +444,67 @@ function BundleCard({ item, user }: { item: ContentItem; user: any }) {
             isHovered ? "opacity-100" : "opacity-0"
           }`}
         >
-          <div className="w-12 h-12 bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center">
-            <Package className="w-5 h-5 text-white" />
+          <div className="w-14 h-14 bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center border border-white/20">
+            <Package className="w-6 h-6 text-white" />
           </div>
         </div>
 
-        <div className="absolute top-3 right-3 bg-black/60 backdrop-blur-sm px-2 py-1 rounded text-xs text-white font-mono">
+        {/* Content count badge */}
+        <div className="absolute top-3 right-3 bg-black/70 backdrop-blur-sm px-2.5 py-1 rounded-full text-xs text-white font-medium border border-white/10">
           {item.contentCount || 0} items
+        </div>
+
+        {/* Premium badge */}
+        <div className="absolute top-3 left-3 bg-gradient-to-r from-yellow-500/90 to-orange-500/90 backdrop-blur-sm px-2 py-1 rounded-full text-xs text-white font-medium flex items-center gap-1">
+          <Star className="w-3 h-3 fill-current" />
+          Premium
         </div>
       </div>
 
-      {/* Bottom Half - Content Info */}
-      <div className="relative p-4 space-y-3">
-        {/* Bundle Name - Top Left */}
-        <h3 className="text-white text-sm font-medium line-clamp-1" title={item.title}>
-          {item.title}
-        </h3>
+      {/* Enhanced Bottom Half - Content Info */}
+      <div className="relative p-5 space-y-4 bg-gradient-to-b from-zinc-900/50 to-zinc-900/80">
+        {/* Bundle Name */}
+        <div>
+          <h3 className="text-white text-base font-semibold line-clamp-1 mb-1" title={item.title}>
+            {item.title}
+          </h3>
+          <p className="text-zinc-400 text-xs line-clamp-2 leading-relaxed">
+            {item.description || "Premium content bundle"}
+          </p>
+        </div>
 
-        {/* Description */}
-        <p className="text-zinc-400 text-xs line-clamp-2 leading-relaxed">
-          {item.description || "No description available"}
-        </p>
+        {/* Stats row */}
+        <div className="flex items-center gap-4 text-xs text-zinc-500">
+          <div className="flex items-center gap-1">
+            <Download className="w-3 h-3" />
+            <span>{item.downloads || 0}</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <Package className="w-3 h-3" />
+            <span>{item.contentCount || 0} files</span>
+          </div>
+        </div>
 
         {/* Price and Unlock Button Row */}
-        <div className="flex items-end justify-between">
-          {/* Price - Bottom Left */}
-          <div className="text-white font-medium">${item.price?.toFixed(2) || "0.00"}</div>
+        <div className="flex items-center justify-between pt-2 border-t border-zinc-800/50">
+          {/* Price */}
+          <div className="flex flex-col">
+            <span className="text-white text-lg font-bold">${item.price?.toFixed(2) || "0.00"}</span>
+            <span className="text-zinc-500 text-xs">one-time purchase</span>
+          </div>
 
-          {/* Unlock Button - Bottom Right */}
+          {/* Unlock Button */}
           <Button
             size="sm"
             onClick={handleUnlock}
             disabled={isUnlocking || !item.stripePriceId}
-            className="bg-black text-white hover:bg-zinc-800 font-medium px-3 py-1 h-7 text-xs rounded border border-white/20 hover:border-white/30 transition-all duration-200"
+            className="bg-gradient-to-r from-white to-zinc-100 text-black hover:from-zinc-100 hover:to-white font-semibold px-4 py-2 h-9 text-sm rounded-lg transition-all duration-200 shadow-lg hover:shadow-xl disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {isUnlocking ? (
-              <div className="w-3 h-3 border border-white/20 border-t-white rounded-full animate-spin" />
+              <div className="w-4 h-4 border-2 border-black/20 border-t-black rounded-full animate-spin" />
             ) : (
               <>
-                <Unlock className="w-3 h-3 mr-1" />
+                <Unlock className="w-4 h-4 mr-2" />
                 Unlock
               </>
             )}
