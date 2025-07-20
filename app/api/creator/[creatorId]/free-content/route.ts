@@ -16,8 +16,6 @@ export async function GET(request: NextRequest, { params }: { params: { creatorI
 
     let freeContent: any[] = []
 
-    // Check the free_content collection - this is where users explicitly add content
-    // from their /dashboard/free-content page
     try {
       console.log("📁 Checking free_content collection...")
       const freeContentRef = db.collection("free_content")
@@ -40,13 +38,15 @@ export async function GET(request: NextRequest, { params }: { params: { creatorI
             id: doc.id,
             title: data.title || "Untitled",
             fileUrl: data.fileUrl || "",
-            thumbnailUrl: data.thumbnailUrl || "",
+            thumbnailUrl: data.thumbnailUrl || "/placeholder.svg?height=200&width=300",
             type: data.type || "video",
             uid: data.uid || "",
             uploadId: data.uploadId || "",
             addedAt: data.addedAt || new Date(),
             views: data.views || 0,
             downloads: data.downloads || 0,
+            duration: data.duration || "0:00",
+            isPremium: false,
           }
         })
 
@@ -68,7 +68,7 @@ export async function GET(request: NextRequest, { params }: { params: { creatorI
     console.log(`📊 FINAL RESULT: ${freeContent.length} free content items`)
 
     return NextResponse.json({
-      freeContent,
+      content: freeContent,
       totalFound: freeContent.length,
       creatorId,
       source: "free_content_collection",

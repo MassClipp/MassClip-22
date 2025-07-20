@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { Share2, Play, Calendar, Users, Heart, Check } from "lucide-react"
+import { Share2, Play, Calendar, Users, Heart, Check, Package } from "lucide-react"
 
 interface CreatorData {
   uid: string
@@ -24,8 +24,10 @@ interface ContentItem {
   thumbnailUrl: string
   duration: string
   views: number
-  type: "video" | "audio" | "image"
+  type: "video" | "audio" | "image" | "bundle"
   isPremium: boolean
+  price?: number
+  contentCount?: number
 }
 
 export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimalProps) {
@@ -96,18 +98,26 @@ export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimal
       try {
         setLoading(true)
 
+        // Fetch free content from free_content collection
         const freeResponse = await fetch(`/api/creator/${creator.uid}/free-content`)
         if (freeResponse.ok) {
           const freeData = await freeResponse.json()
+          console.log("Free content response:", freeData)
           setFreeContent(freeData.content || [])
           setFreeContentCount(freeData.content?.length || 0)
+        } else {
+          console.error("Failed to fetch free content:", freeResponse.status)
         }
 
+        // Fetch premium content from bundles collection
         const premiumResponse = await fetch(`/api/creator/${creator.uid}/premium-content`)
         if (premiumResponse.ok) {
           const premiumData = await premiumResponse.json()
+          console.log("Premium content response:", premiumData)
           setPremiumContent(premiumData.content || [])
           setPremiumContentCount(premiumData.content?.length || 0)
+        } else {
+          console.error("Failed to fetch premium content:", premiumResponse.status)
         }
       } catch (error) {
         console.error("Error fetching content:", error)
@@ -231,7 +241,11 @@ export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimal
           ) : (
             <div className="text-center py-24">
               <div className="w-12 h-12 mx-auto mb-6 bg-zinc-900 rounded-full flex items-center justify-center">
-                <Play className="w-5 h-5 text-zinc-600" />
+                {activeTab === "premium" ? (
+                  <Package className="w-5 h-5 text-zinc-600" />
+                ) : (
+                  <Play className="w-5 h-5 text-zinc-600" />
+                )}
               </div>
               <h3 className="text-lg font-medium text-white mb-2">No {activeTab} content available</h3>
               <p className="text-zinc-500 text-sm">This creator hasn't uploaded any {activeTab} content yet.</p>
@@ -265,16 +279,22 @@ function ContentCard({ item }: { item: ContentItem }) {
           }`}
         >
           <div className="w-12 h-12 bg-white/20 backdrop-blur-sm rounded-full flex items-center justify-center">
-            <Play className="w-5 h-5 text-white ml-0.5" />
+            {item.type === "bundle" ? (
+              <Package className="w-5 h-5 text-white" />
+            ) : (
+              <Play className="w-5 h-5 text-white ml-0.5" />
+            )}
           </div>
         </div>
 
         <div className="absolute bottom-3 right-3 bg-black/60 backdrop-blur-sm px-2 py-1 rounded text-xs text-white font-mono">
-          {item.duration}
+          {item.type === "bundle" ? `${item.contentCount || 0} items` : item.duration}
         </div>
 
         {item.isPremium && (
-          <div className="absolute top-3 left-3 bg-white text-black px-2 py-1 rounded text-xs font-medium">Premium</div>
+          <div className="absolute top-3 left-3 bg-white text-black px-2 py-1 rounded text-xs font-medium">
+            {item.price ? `$${item.price}` : "Premium"}
+          </div>
         )}
       </div>
 

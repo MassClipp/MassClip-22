@@ -5,46 +5,82 @@ export async function GET(request: NextRequest, { params }: { params: { creatorI
   try {
     const { creatorId } = params
 
-    console.log(`[API] Fetching premium content for creator: ${creatorId}`)
+    if (!creatorId) {
+      return NextResponse.json({ error: "Creator ID is required" }, { status: 400 })
+    }
+
+    console.log(`🔍 Fetching PREMIUM CONTENT (bundles) for creator: ${creatorId}`)
 
     // Initialize Firebase Admin
     initializeFirebaseAdmin()
 
-    // Query premium content for this creator (product boxes)
-    const productBoxesRef = db.collection("product-boxes")
-    const query = productBoxesRef.where("creatorId", "==", creatorId).orderBy("createdAt", "desc")
+    let premiumContent: any[] = []
 
-    const snapshot = await query.get()
+    try {
+      console.log("📁 Checking bundles collection...")
+      const bundlesRef = db.collection("bundles")
+      const snapshot = await bundlesRef.where("creatorId", "==", creatorId).get()
 
-    if (snapshot.empty) {
-      console.log(`[API] No premium content found for creator: ${creatorId}`)
-      return NextResponse.json({ content: [] })
+      console.log(`📊 Found ${snapshot.size} bundles`)
+
+      if (!snapshot.empty) {
+        premiumContent = snapshot.docs.map((doc) => {
+          const data = doc.data()
+          console.log(`📦 Bundle:`, {
+            id: doc.id,
+            title: data.title,
+            price: data.price,
+            thumbnailUrl: data.thumbnailUrl ? "✅" : "❌",
+          })
+
+          return {
+            id: doc.id,
+            title: data.title || "Untitled Bundle",
+            thumbnailUrl: data.thumbnailUrl || "/placeholder.svg?height=200&width=300",
+            type: "bundle",
+            price: data.price || 0,
+            description: data.description || "",
+            creatorId: data.creatorId || "",
+            createdAt: data.createdAt || new Date(),
+            views: data.views || 0,
+            downloads: data.downloads || 0,
+            duration: "Bundle",
+            isPremium: true,
+            contentCount: data.contentCount || 0,
+          }
+        })
+
+        console.log(`✅ Successfully loaded ${premiumContent.length} bundles`)
+      } else {
+        console.log("ℹ️ No bundles found")
+      }
+    } catch (error) {
+      console.error("❌ Error checking bundles collection:", error)
+      return NextResponse.json(
+        {
+          error: "Failed to fetch bundles",
+          details: error instanceof Error ? error.message : "Unknown error",
+        },
+        { status: 500 },
+      )
     }
 
-    const content = snapshot.docs.map((doc) => {
-      const data = doc.data()
-      return {
-        id: doc.id,
-        title: data.title || "Untitled Premium Content",
-        description: data.description || "",
-        thumbnail: data.thumbnail || data.thumbnailUrl || "",
-        type: data.type || data.category || "premium",
-        duration: data.duration || "",
-        views: data.views || 0,
-        price: data.price || 0,
-        createdAt: data.createdAt?.toDate?.()?.toISOString() || new Date().toISOString(),
-        isLocked: true,
-      }
-    })
-
-    console.log(`[API] Found ${content.length} premium content items for creator: ${creatorId}`)
+    console.log(`📊 FINAL RESULT: ${premiumContent.length} bundles`)
 
     return NextResponse.json({
-      content,
-      total: content.length,
+      content: premiumContent,
+      totalFound: premiumContent.length,
+      creatorId,
+      source: "bundles_collection",
     })
   } catch (error) {
-    console.error("[API] Error fetching premium content:", error)
-    return NextResponse.json({ error: "Failed to fetch premium content" }, { status: 500 })
+    console.error("❌ PREMIUM CONTENT API ERROR:", error)
+    return NextResponse.json(
+      {
+        error: "Failed to fetch creator premium content",
+        details: error instanceof Error ? error.message : "Unknown error",
+      },
+      { status: 500 },
+    )
   }
 }
