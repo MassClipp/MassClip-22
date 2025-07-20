@@ -5,9 +5,10 @@ import type React from "react"
 import { useState, useEffect, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
-import { Share2, Play, Calendar, Users, Heart, Check, Package, Unlock, Download, Pause } from "lucide-react"
+import { Share2, Play, Calendar, Users, Heart, Check, Package, Download, Pause } from "lucide-react"
 import { useAuthState } from "react-firebase-hooks/auth"
 import { auth } from "@/lib/firebase"
+import { UnlockButton } from "@/components/unlock-button"
 
 interface CreatorData {
   uid: string
@@ -593,7 +594,6 @@ function ContentCard({ item }: { item: ContentItem }) {
 
 function BundleCard({ item, user }: { item: ContentItem; user: any }) {
   const [isThumbnailHovered, setIsThumbnailHovered] = useState(false)
-  const [isUnlocking, setIsUnlocking] = useState(false)
   const [imageError, setImageError] = useState(false)
 
   console.log("🎯 BundleCard rendering with item:", {
@@ -604,80 +604,6 @@ function BundleCard({ item, user }: { item: ContentItem; user: any }) {
     price: item.price,
     contentCount: item.contentCount,
   })
-
-  const handleUnlock = async (e: React.MouseEvent) => {
-    e.preventDefault()
-    e.stopPropagation()
-
-    console.log("🔓 Unlock button clicked for bundle:", item.id)
-
-    if (!item.stripePriceId) {
-      console.error("❌ No Stripe price ID available for this bundle")
-      alert("This bundle is not available for purchase at the moment.")
-      return
-    }
-
-    setIsUnlocking(true)
-
-    try {
-      let idToken = null
-
-      // Get Firebase ID token if user is authenticated
-      if (user) {
-        try {
-          idToken = await user.getIdToken()
-          console.log("✅ Got Firebase ID token for checkout")
-        } catch (error) {
-          console.error("❌ Failed to get ID token:", error)
-        }
-      }
-
-      console.log("💳 Creating checkout session with:", {
-        priceId: item.stripePriceId,
-        bundleId: item.id,
-        hasIdToken: !!idToken,
-      })
-
-      const response = await fetch("/api/stripe/create-checkout-session", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          idToken,
-          priceId: item.stripePriceId,
-          bundleId: item.id,
-          successUrl: `${window.location.origin}/purchase-success?bundle_id=${item.id}`,
-          cancelUrl: window.location.href,
-        }),
-      })
-
-      console.log("📡 Checkout API response status:", response.status)
-
-      if (!response.ok) {
-        const errorData = await response.json()
-        console.error("❌ Checkout session creation failed:", errorData)
-        alert(`Failed to create checkout session: ${errorData.error}`)
-        return
-      }
-
-      const { url } = await response.json()
-      console.log("✅ Checkout session created, URL:", url)
-
-      if (url) {
-        console.log("🚀 Redirecting to Stripe checkout:", url)
-        window.location.href = url
-      } else {
-        console.error("❌ No checkout URL received")
-        alert("Failed to create checkout session")
-      }
-    } catch (error) {
-      console.error("❌ Error creating checkout session:", error)
-      alert("An error occurred while creating the checkout session")
-    } finally {
-      setIsUnlocking(false)
-    }
-  }
 
   const handleImageError = () => {
     console.log("❌ Image failed to load:", item.thumbnailUrl)
@@ -731,22 +657,7 @@ function BundleCard({ item, user }: { item: ContentItem; user: any }) {
         <div className="flex items-center justify-between pt-2">
           <span className="text-white text-xl sm:text-2xl font-light">${item.price?.toFixed(2) || "0.00"}</span>
 
-          <button
-            type="button"
-            onClick={handleUnlock}
-            disabled={isUnlocking || !item.stripePriceId}
-            className="bg-zinc-800 text-white hover:bg-zinc-700 active:bg-zinc-600 border border-zinc-600 hover:border-zinc-500 font-semibold px-4 py-2 sm:px-5 sm:py-2.5 text-sm sm:text-base rounded-md transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 relative z-10 cursor-pointer"
-            style={{ pointerEvents: "auto" }}
-          >
-            {isUnlocking ? (
-              <div className="w-4 h-4 border-2 border-zinc-400 border-t-white rounded-full animate-spin" />
-            ) : (
-              <>
-                <Unlock className="w-4 h-4" />
-                Unlock
-              </>
-            )}
-          </button>
+          <UnlockButton stripePriceId={item.stripePriceId} bundleId={item.id} user={user} />
         </div>
       </div>
     </div>
