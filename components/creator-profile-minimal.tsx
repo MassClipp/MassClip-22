@@ -170,48 +170,87 @@ export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimal
       )}
 
       <div className="relative max-w-6xl mx-auto px-4 sm:px-8 py-8 sm:py-16">
-        {/* Header */}
-        <div className="flex items-start justify-between mb-8 sm:mb-16">
-          <div className="flex items-center gap-4 sm:gap-8">
-            <Avatar className="w-20 h-20 sm:w-32 sm:h-32 border-2 border-white/20">
-              <AvatarImage
-                src={creator.profilePic || "/placeholder.svg"}
-                alt={creator.displayName}
-                className="object-cover"
-              />
-              <AvatarFallback className="bg-zinc-900 text-white text-lg sm:text-2xl font-medium border-2 border-white/20">
-                {creator.displayName?.charAt(0)?.toUpperCase() || creator.username?.charAt(0)?.toUpperCase() || "?"}
-              </AvatarFallback>
-            </Avatar>
+        {/* Header - Mobile Tree Layout */}
+        <div className="mb-8 sm:mb-16">
+          {/* Mobile Layout - Vertical Tree */}
+          <div className="block sm:hidden">
+            <div className="flex flex-col items-center text-center space-y-4 mb-6">
+              {/* Profile Picture */}
+              <Avatar className="w-24 h-24 border-2 border-white/20">
+                <AvatarImage
+                  src={creator.profilePic || "/placeholder.svg"}
+                  alt={creator.displayName}
+                  className="object-cover"
+                />
+                <AvatarFallback className="bg-zinc-900 text-white text-2xl font-medium border-2 border-white/20">
+                  {creator.displayName?.charAt(0)?.toUpperCase() || creator.username?.charAt(0)?.toUpperCase() || "?"}
+                </AvatarFallback>
+              </Avatar>
 
-            <div className="space-y-2 sm:space-y-3">
-              <div>
-                <h1 className="text-xl sm:text-3xl font-light text-white tracking-tight">
+              {/* Name and Username */}
+              <div className="space-y-1">
+                <h1 className="text-2xl font-light text-white tracking-tight">
                   {creator.displayName || creator.username}
                 </h1>
-                <p className="text-zinc-500 text-xs sm:text-sm font-mono">@{creator.username}</p>
+                <p className="text-zinc-500 text-sm font-mono">@{creator.username}</p>
               </div>
 
-              {creator.bio && (
-                <p className="text-zinc-400 text-xs sm:text-sm max-w-md leading-relaxed">{creator.bio}</p>
-              )}
+              {/* Bio */}
+              {creator.bio && <p className="text-zinc-400 text-sm max-w-sm leading-relaxed">{creator.bio}</p>}
+
+              {/* Share Button */}
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleShare}
+                className="text-zinc-400 hover:text-white hover:bg-zinc-900 h-9 w-9 rounded-full p-0"
+              >
+                <Share2 className="w-4 h-4" />
+              </Button>
             </div>
           </div>
 
-          <div className="flex items-center gap-3">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={handleShare}
-              className="text-zinc-400 hover:text-white hover:bg-zinc-900 h-8 w-8 sm:h-9 sm:w-9 rounded-full p-0"
-            >
-              <Share2 className="w-3 h-3 sm:w-4 sm:h-4" />
-            </Button>
+          {/* Desktop Layout - Horizontal */}
+          <div className="hidden sm:flex items-start justify-between">
+            <div className="flex items-center gap-8">
+              <Avatar className="w-32 h-32 border-2 border-white/20">
+                <AvatarImage
+                  src={creator.profilePic || "/placeholder.svg"}
+                  alt={creator.displayName}
+                  className="object-cover"
+                />
+                <AvatarFallback className="bg-zinc-900 text-white text-2xl font-medium border-2 border-white/20">
+                  {creator.displayName?.charAt(0)?.toUpperCase() || creator.username?.charAt(0)?.toUpperCase() || "?"}
+                </AvatarFallback>
+              </Avatar>
+
+              <div className="space-y-3">
+                <div>
+                  <h1 className="text-3xl font-light text-white tracking-tight">
+                    {creator.displayName || creator.username}
+                  </h1>
+                  <p className="text-zinc-500 text-sm font-mono">@{creator.username}</p>
+                </div>
+
+                {creator.bio && <p className="text-zinc-400 text-sm max-w-md leading-relaxed">{creator.bio}</p>}
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleShare}
+                className="text-zinc-400 hover:text-white hover:bg-zinc-900 h-9 w-9 rounded-full p-0"
+              >
+                <Share2 className="w-4 h-4" />
+              </Button>
+            </div>
           </div>
         </div>
 
         {/* Stats */}
-        <div className="flex items-center gap-4 sm:gap-8 mb-8 sm:mb-12 text-xs sm:text-sm">
+        <div className="flex items-center justify-center sm:justify-start gap-4 sm:gap-8 mb-8 sm:mb-12 text-xs sm:text-sm">
           <div className="flex items-center gap-2 text-zinc-500">
             <Calendar className="w-3 h-3 sm:w-4 sm:h-4" />
             <span>Member since {getMemberSince()}</span>
@@ -228,7 +267,7 @@ export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimal
 
         {/* Tabs with underline style */}
         <div className="mb-6 sm:mb-8">
-          <div className="flex items-center gap-6 sm:gap-8 border-b border-zinc-800/50">
+          <div className="flex items-center justify-center sm:justify-start gap-6 sm:gap-8 border-b border-zinc-800/50">
             <button
               onClick={() => setActiveTab("free")}
               className={`pb-3 sm:pb-4 text-xs sm:text-sm font-medium transition-all duration-200 relative ${
@@ -257,7 +296,7 @@ export default function CreatorProfileMinimal({ creator }: CreatorProfileMinimal
               <div className="w-6 h-6 border border-zinc-800 border-t-white rounded-full animate-spin"></div>
             </div>
           ) : currentContent.length > 0 ? (
-            <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3 sm:gap-6 justify-items-center">
+            <div className="grid grid-cols-2 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-4 sm:gap-6 justify-items-center">
               {currentContent.map((item) =>
                 activeTab === "premium" ? (
                   <BundleCard key={item.id} item={item} user={user} />
@@ -292,6 +331,7 @@ function ContentCard({ item }: { item: ContentItem }) {
   const [isPlaying, setIsPlaying] = useState(false)
   const [thumbnailError, setThumbnailError] = useState(false)
   const [videoError, setVideoError] = useState(false)
+  const [videoLoaded, setVideoLoaded] = useState(false)
   const videoRef = useRef<HTMLVideoElement>(null)
 
   // Create proxied video URL to bypass CORS
@@ -310,6 +350,51 @@ function ContentCard({ item }: { item: ContentItem }) {
     thumbnailUrl: item.thumbnailUrl,
   })
 
+  // Load video metadata and show first frame
+  useEffect(() => {
+    const videoElement = videoRef.current
+    if (!videoElement || !proxiedVideoUrl) return
+
+    const handleLoadedMetadata = () => {
+      console.log("✅ Video metadata loaded for:", item.title)
+      setVideoLoaded(true)
+      setVideoError(false)
+      // Seek to first frame to show video immediately
+      videoElement.currentTime = 0.1
+    }
+
+    const handleLoadedData = () => {
+      console.log("✅ Video data loaded for:", item.title)
+      setVideoLoaded(true)
+    }
+
+    const handleError = (e: Event) => {
+      console.error("❌ Video loading error:", e)
+      setVideoError(true)
+      setVideoLoaded(false)
+    }
+
+    const handleCanPlay = () => {
+      console.log("✅ Video can play:", item.title)
+      setVideoLoaded(true)
+    }
+
+    videoElement.addEventListener("loadedmetadata", handleLoadedMetadata)
+    videoElement.addEventListener("loadeddata", handleLoadedData)
+    videoElement.addEventListener("error", handleError)
+    videoElement.addEventListener("canplay", handleCanPlay)
+
+    // Start loading the video
+    videoElement.load()
+
+    return () => {
+      videoElement.removeEventListener("loadedmetadata", handleLoadedMetadata)
+      videoElement.removeEventListener("loadeddata", handleLoadedData)
+      videoElement.removeEventListener("error", handleError)
+      videoElement.removeEventListener("canplay", handleCanPlay)
+    }
+  }, [proxiedVideoUrl, item.title])
+
   const handlePlayPause = (e: React.MouseEvent) => {
     e.preventDefault()
     e.stopPropagation()
@@ -323,14 +408,14 @@ function ContentCard({ item }: { item: ContentItem }) {
 
     if (isPlaying) {
       videoRef.current.pause()
-      videoRef.current.currentTime = 0
+      videoRef.current.currentTime = 0.1
       setIsPlaying(false)
     } else {
       // Pause all other videos first
       document.querySelectorAll("video").forEach((v) => {
         if (v !== videoRef.current) {
           v.pause()
-          v.currentTime = 0
+          v.currentTime = 0.1
         }
       })
 
@@ -351,13 +436,14 @@ function ContentCard({ item }: { item: ContentItem }) {
   const handleVideoEnd = () => {
     setIsPlaying(false)
     if (videoRef.current) {
-      videoRef.current.currentTime = 0
+      videoRef.current.currentTime = 0.1
     }
   }
 
   const handleVideoError = (e: React.SyntheticEvent<HTMLVideoElement, Event>) => {
     console.error("❌ Video error:", e.currentTarget.error)
     setVideoError(true)
+    setVideoLoaded(false)
   }
 
   const handleDownload = async (e: React.MouseEvent) => {
@@ -411,11 +497,11 @@ function ContentCard({ item }: { item: ContentItem }) {
 
   return (
     <div
-      className="group cursor-pointer w-full max-w-[160px] sm:max-w-[200px]"
+      className="group cursor-pointer w-full max-w-[180px] sm:max-w-[200px]"
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
-      {/* 9:16 aspect ratio video container */}
+      {/* 9:16 aspect ratio video container - larger on mobile */}
       <div
         className={`relative aspect-[9/16] bg-zinc-900 rounded-lg overflow-hidden mb-2 transition-all duration-300 ${
           isHovered ? "border border-white/50" : "border border-transparent"
@@ -426,26 +512,32 @@ function ContentCard({ item }: { item: ContentItem }) {
           <video
             ref={videoRef}
             className="w-full h-full object-cover"
-            poster={
-              thumbnailError
-                ? `/placeholder.svg?height=356&width=200&query=${encodeURIComponent(item.title)}`
-                : item.thumbnailUrl || "/placeholder.svg?height=356&width=200"
-            }
             preload="metadata"
-            muted={false}
+            muted
             playsInline
             controls={false}
             onError={handleVideoError}
+            style={{ display: videoLoaded ? "block" : "none" }}
           >
             <source src={proxiedVideoUrl} type="video/mp4" />
             Your browser does not support the video tag.
           </video>
-        ) : (
-          <div className="w-full h-full bg-zinc-800 flex items-center justify-center">
-            <div className="text-center">
-              <Play className="w-8 h-8 text-zinc-600 mx-auto mb-2" />
-              <p className="text-xs text-zinc-500">Video unavailable</p>
-            </div>
+        ) : null}
+
+        {/* Loading state or fallback */}
+        {(!videoLoaded || videoError) && (
+          <div className="absolute inset-0 bg-zinc-800 flex items-center justify-center">
+            {!videoError ? (
+              <div className="text-center">
+                <div className="w-4 h-4 border border-zinc-600 border-t-white rounded-full animate-spin mx-auto mb-2" />
+                <p className="text-xs text-zinc-500">Loading...</p>
+              </div>
+            ) : (
+              <div className="text-center">
+                <Play className="w-8 h-8 text-zinc-600 mx-auto mb-2" />
+                <p className="text-xs text-zinc-500">Video unavailable</p>
+              </div>
+            )}
           </div>
         )}
 
@@ -457,20 +549,20 @@ function ContentCard({ item }: { item: ContentItem }) {
         >
           <button
             onClick={handlePlayPause}
-            disabled={!proxiedVideoUrl || videoError}
+            disabled={!proxiedVideoUrl || videoError || !videoLoaded}
             className="bg-white/20 backdrop-blur-sm rounded-full p-2 transition-transform duration-300 hover:scale-110 disabled:opacity-50"
             aria-label={isPlaying ? "Pause video" : "Play video"}
           >
             {isPlaying ? (
-              <Pause className="h-3 w-3 sm:h-4 sm:w-4 text-white" />
+              <Pause className="h-4 w-4 sm:h-5 sm:w-5 text-white" />
             ) : (
-              <Play className="h-3 w-3 sm:h-4 sm:w-4 text-white ml-0.5" />
+              <Play className="h-4 w-4 sm:h-5 sm:w-5 text-white ml-0.5" />
             )}
           </button>
         </div>
 
         {/* Download button */}
-        {proxiedVideoUrl && !videoError && (
+        {proxiedVideoUrl && !videoError && videoLoaded && (
           <button
             onClick={handleDownload}
             className={`absolute bottom-2 right-2 bg-black/60 backdrop-blur-sm p-1.5 rounded-full transition-all duration-200 hover:bg-black/80 hover:scale-110 ${
@@ -478,14 +570,14 @@ function ContentCard({ item }: { item: ContentItem }) {
             }`}
             aria-label="Download video"
           >
-            <Download className="h-2.5 w-2.5 sm:h-3 sm:w-3 text-white" />
+            <Download className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-white" />
           </button>
         )}
       </div>
 
       {/* Video info - only title, no view count */}
       <div className="space-y-1">
-        <h3 className="text-white text-xs font-medium line-clamp-2 leading-tight" title={item.title}>
+        <h3 className="text-white text-xs sm:text-sm font-medium line-clamp-2 leading-tight" title={item.title}>
           {item.title}
         </h3>
       </div>
@@ -592,7 +684,7 @@ function BundleCard({ item, user }: { item: ContentItem; user: any }) {
   }
 
   return (
-    <div className="bg-zinc-900 rounded-2xl overflow-hidden border border-zinc-700/30 hover:border-zinc-600/40 transition-all duration-300 w-full max-w-xs sm:max-w-sm">
+    <div className="bg-zinc-900 rounded-2xl overflow-hidden border border-zinc-700/30 hover:border-zinc-600/40 transition-all duration-300 w-full max-w-[180px] sm:max-w-sm">
       {/* Thumbnail Section */}
       <div
         className="relative aspect-square bg-zinc-800 overflow-hidden"
@@ -614,16 +706,16 @@ function BundleCard({ item, user }: { item: ContentItem; user: any }) {
         )}
 
         {/* Content count badge */}
-        <div className="absolute top-3 right-3 sm:top-4 sm:right-4 bg-black/80 backdrop-blur-sm px-2 py-1 sm:px-3 sm:py-1.5 rounded-full text-xs text-white font-semibold">
+        <div className="absolute top-2 right-2 sm:top-4 sm:right-4 bg-black/80 backdrop-blur-sm px-2 py-1 sm:px-3 sm:py-1.5 rounded-full text-xs text-white font-semibold">
           {item.contentCount || 0} items
         </div>
       </div>
 
       {/* Content Section */}
-      <div className="p-3 sm:p-4 space-y-2 sm:space-y-3 bg-black">
+      <div className="p-2 sm:p-4 space-y-2 sm:space-y-3 bg-black">
         {/* Title and Description */}
         <div className="space-y-1">
-          <h3 className="text-white text-sm sm:text-base font-bold line-clamp-1" title={item.title}>
+          <h3 className="text-white text-xs sm:text-base font-bold line-clamp-1" title={item.title}>
             {item.title}
           </h3>
           <p className="text-zinc-400 text-xs line-clamp-1">{item.description || "Premium content bundle"}</p>
@@ -631,12 +723,12 @@ function BundleCard({ item, user }: { item: ContentItem; user: any }) {
 
         {/* Price and Button Row */}
         <div className="flex items-center justify-between pt-1 sm:pt-2">
-          <span className="text-white text-lg sm:text-xl font-light">${item.price?.toFixed(2) || "0.00"}</span>
+          <span className="text-white text-sm sm:text-xl font-light">${item.price?.toFixed(2) || "0.00"}</span>
 
           <button
             onClick={handleUnlock}
             disabled={isUnlocking || !item.stripePriceId}
-            className="bg-white text-black hover:bg-gray-100 active:bg-gray-200 font-semibold px-3 py-1.5 sm:px-4 sm:py-2 text-xs sm:text-sm rounded-lg transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5 sm:gap-2"
+            className="bg-white text-black hover:bg-gray-100 active:bg-gray-200 font-semibold px-2 py-1 sm:px-4 sm:py-2 text-xs sm:text-sm rounded-lg transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1 sm:gap-2"
           >
             {isUnlocking ? (
               <div className="w-3 h-3 sm:w-4 sm:h-4 border-2 border-black/30 border-t-black rounded-full animate-spin" />
