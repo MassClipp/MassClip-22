@@ -23,7 +23,7 @@ interface ConnectionStatus {
   message?: string
 }
 
-export default function StripeAccountLinker() {
+export function StripeAccountLinker() {
   const [accountId, setAccountId] = useState("")
   const [isLinking, setIsLinking] = useState(false)
   const [isCheckingStatus, setIsCheckingStatus] = useState(true)
@@ -267,3 +267,5 @@ export default function StripeAccountLinker() {
     </div>
   )
 }
+
+export default StripeAccountLinker
