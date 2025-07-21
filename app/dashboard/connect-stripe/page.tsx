@@ -1,20 +1,7 @@
 import { Suspense } from "react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Loader2 } from "lucide-react"
-import dynamic from "next/dynamic"
-
-// Dynamically import the StripeAccountLinker to avoid SSR issues
-const StripeAccountLinker = dynamic(() => import("@/components/stripe-account-linker"), {
-  loading: () => (
-    <Card className="w-full max-w-2xl mx-auto">
-      <CardContent className="flex items-center justify-center p-8">
-        <Loader2 className="h-6 w-6 animate-spin mr-2" />
-        <span>Loading Stripe connection...</span>
-      </CardContent>
-    </Card>
-  ),
-  ssr: false,
-})
+import StripeAccountLinkerClient from "./stripe-account-linker-client"
 
 export default function ConnectStripePage() {
   return (
@@ -34,7 +21,7 @@ export default function ConnectStripePage() {
           </Card>
         }
       >
-        <StripeAccountLinker />
+        <StripeAccountLinkerClient />
       </Suspense>
     </div>
   )
