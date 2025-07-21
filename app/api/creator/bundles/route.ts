@@ -2,6 +2,7 @@ import { type NextRequest, NextResponse } from "next/server"
 import { getAuth } from "firebase-admin/auth"
 import { getFirestore } from "firebase-admin/firestore"
 import { initializeApp, getApps, cert } from "firebase-admin/app"
+import Stripe from "stripe"
 
 // Initialize Firebase Admin
 if (!getApps().length) {
@@ -25,6 +26,11 @@ if (!getApps().length) {
 
 const db = getFirestore()
 const auth = getAuth()
+
+// Initialize Stripe
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
+  apiVersion: "2024-06-20",
+})
 
 // Enhanced content item interface with comprehensive metadata
 interface DetailedContentItem {
@@ -441,8 +447,12 @@ export async function GET(request: NextRequest) {
         // Timestamps
         createdAt: data.createdAt,
         updatedAt: data.updatedAt,
-        productId: data.productId || null,
-        priceId: data.priceId || null,
+
+        // Stripe integration - use consistent field names
+        productId: data.productId || data.stripeProductId,
+        priceId: data.priceId || data.stripePriceId,
+        stripeAccountId: data.stripeAccountId,
+
         type: data.type || "one_time",
       })
     }
@@ -495,6 +505,27 @@ export async function POST(request: NextRequest) {
     console.log(`🔍 [Bundles API] Creating bundle for user: ${userId} with ${contentIds.length} content items`)
     console.log(`🔍 [Bundles API] Content IDs to process:`, contentIds)
 
+    // Get user's Stripe account info
+    const userDoc = await db.collection("users").doc(userId).get()
+    const userData = userDoc.data()
+    const stripeAccountId = userData?.stripeAccountId
+
+    if (!stripeAccountId) {
+      return NextResponse.json(
+        {
+          error: "Stripe account not connected",
+          code: "NO_STRIPE_ACCOUNT",
+          message: "Please connect your Stripe account before creating bundles",
+          suggestedActions: [
+            "Go to Dashboard > Settings > Stripe",
+            "Complete Stripe account setup",
+            "Verify your account is active",
+          ],
+        },
+        { status: 400 },
+      )
+    }
+
     // Get detailed metadata for initial content items if provided
     const detailedContentItems: DetailedContentItem[] = []
     const validContentIds: string[] = []
@@ -525,6 +556,71 @@ export async function POST(request: NextRequest) {
     const imageCount = detailedContentItems.filter((item) => item.contentType === "image").length
     const documentCount = detailedContentItems.filter((item) => item.contentType === "document").length
 
+    // Create Stripe product and price
+    let stripeProductId: string | null = null
+    let stripePriceId: string | null = null
+
+    try {
+      console.log(`💳 [Bundles API] Creating Stripe product for account: ${stripeAccountId}`)
+
+      // Create product in connected account
+      const product = await stripe.products.create(
+        {
+          name: title.trim(),
+          description: description?.trim() || `Premium content bundle: ${title}`,
+          metadata: {
+            bundleId: "temp", // Will be updated after bundle creation
+            creatorId: userId,
+            type: "bundle",
+          },
+        },
+        {
+          stripeAccount: stripeAccountId,
+        },
+      )
+
+      stripeProductId = product.id
+      console.log(`✅ [Bundles API] Created Stripe product: ${stripeProductId}`)
+
+      // Create price for the product
+      const priceAmount = Math.round(Number.parseFloat(price.toString()) * 100) // Convert to cents
+
+      const stripePrice = await stripe.prices.create(
+        {
+          product: stripeProductId,
+          unit_amount: priceAmount,
+          currency: currency.toLowerCase(),
+          metadata: {
+            bundleId: "temp", // Will be updated after bundle creation
+            creatorId: userId,
+            type: "bundle",
+          },
+        },
+        {
+          stripeAccount: stripeAccountId,
+        },
+      )
+
+      stripePriceId = stripePrice.id
+      console.log(`✅ [Bundles API] Created Stripe price: ${stripePriceId} for $${price}`)
+    } catch (stripeError) {
+      console.error("❌ [Bundles API] Stripe error:", stripeError)
+      return NextResponse.json(
+        {
+          error: "Failed to create Stripe product",
+          code: "STRIPE_PRODUCT_CREATION_FAILED",
+          message: "Could not create product in your Stripe account",
+          details: stripeError instanceof Error ? stripeError.message : "Unknown Stripe error",
+          suggestedActions: [
+            "Check your Stripe account status",
+            "Verify account is fully set up",
+            "Contact support if issue persists",
+          ],
+        },
+        { status: 500 },
+      )
+    }
+
     // Create bundle document with enhanced structure and comprehensive metadata
     const bundleData = {
       title: title.trim(),
@@ -534,6 +630,13 @@ export async function POST(request: NextRequest) {
       type,
       creatorId: userId,
       active: true,
+
+      // Stripe integration - use consistent field names
+      productId: stripeProductId,
+      priceId: stripePriceId,
+      stripeProductId: stripeProductId, // Also store with this name for compatibility
+      stripePriceId: stripePriceId, // Also store with this name for compatibility
+      stripeAccountId: stripeAccountId,
 
       // Content arrays with full metadata stored directly in Firestore
       contentItems: validContentIds, // Array of content IDs for compatibility
@@ -576,6 +679,44 @@ export async function POST(request: NextRequest) {
     const bundleRef = await db.collection("bundles").add(bundleData)
     const bundleId = bundleRef.id
 
+    // Update Stripe product and price metadata with actual bundle ID
+    if (stripeProductId && stripePriceId) {
+      try {
+        await Promise.all([
+          stripe.products.update(
+            stripeProductId,
+            {
+              metadata: {
+                bundleId: bundleId,
+                creatorId: userId,
+                type: "bundle",
+              },
+            },
+            {
+              stripeAccount: stripeAccountId,
+            },
+          ),
+          stripe.prices.update(
+            stripePriceId,
+            {
+              metadata: {
+                bundleId: bundleId,
+                creatorId: userId,
+                type: "bundle",
+              },
+            },
+            {
+              stripeAccount: stripeAccountId,
+            },
+          ),
+        ])
+        console.log(`✅ [Bundles API] Updated Stripe metadata with bundle ID: ${bundleId}`)
+      } catch (updateError) {
+        console.error("❌ [Bundles API] Failed to update Stripe metadata:", updateError)
+        // Don't fail the entire operation for metadata update issues
+      }
+    }
+
     console.log(
       `✅ [Bundles API] Created enhanced bundle: ${bundleId} with ${detailedContentItems.length} detailed content items`,
     )
@@ -587,7 +728,9 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       success: true,
       bundleId,
-      message: "Bundle created successfully with comprehensive metadata",
+      productId: stripeProductId,
+      priceId: stripePriceId,
+      message: "Bundle created successfully with Stripe integration",
       contentItemsAdded: detailedContentItems.length,
       contentItemsRequested: contentIds.length,
       addedContentTitles: addedTitles,

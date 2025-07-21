@@ -23,9 +23,35 @@ export interface DecodedToken {
 }
 
 /**
+ * Verify Firebase ID token directly from token string
+ */
+export async function verifyIdToken(token: string): Promise<DecodedToken | null> {
+  try {
+    if (!token) {
+      console.error("❌ [Auth Utils] No token provided")
+      return null
+    }
+
+    if (!isValidTokenFormat(token)) {
+      console.error("❌ [Auth Utils] Invalid token format")
+      return null
+    }
+
+    console.log("🔍 [Auth Utils] Verifying ID token...")
+    const decodedToken = await auth.verifyIdToken(token)
+    console.log("✅ [Auth Utils] ID token verified successfully for user:", decodedToken.uid)
+
+    return decodedToken
+  } catch (error: any) {
+    console.error("❌ [Auth Utils] Failed to verify ID token:", error.message)
+    return null
+  }
+}
+
+/**
  * Verify Firebase ID token from request headers
  */
-export async function verifyIdToken(request: NextRequest): Promise<DecodedToken | null> {
+export async function verifyIdTokenFromRequest(request: NextRequest): Promise<DecodedToken | null> {
   try {
     const authHeader = request.headers.get("authorization")
 
@@ -45,13 +71,9 @@ export async function verifyIdToken(request: NextRequest): Promise<DecodedToken 
       return null
     }
 
-    console.log("🔍 [Auth Utils] Verifying ID token...")
-    const decodedToken = await auth.verifyIdToken(idToken)
-    console.log("✅ [Auth Utils] ID token verified successfully for user:", decodedToken.uid)
-
-    return decodedToken
+    return await verifyIdToken(idToken)
   } catch (error: any) {
-    console.error("❌ [Auth Utils] Failed to verify ID token:", error.message)
+    console.error("❌ [Auth Utils] Failed to verify ID token from request:", error.message)
     return null
   }
 }
@@ -60,7 +82,7 @@ export async function verifyIdToken(request: NextRequest): Promise<DecodedToken 
  * Require authentication for API routes
  */
 export async function requireAuth(request: NextRequest): Promise<DecodedToken> {
-  const decodedToken = await verifyIdToken(request)
+  const decodedToken = await verifyIdTokenFromRequest(request)
 
   if (!decodedToken) {
     throw new Error("Authentication required")
@@ -73,7 +95,7 @@ export async function requireAuth(request: NextRequest): Promise<DecodedToken> {
  * Check if user is authenticated (returns boolean)
  */
 export async function isAuthenticated(request: NextRequest): Promise<boolean> {
-  const decodedToken = await verifyIdToken(request)
+  const decodedToken = await verifyIdTokenFromRequest(request)
   return !!decodedToken
 }
 
@@ -81,7 +103,7 @@ export async function isAuthenticated(request: NextRequest): Promise<boolean> {
  * Get user ID from request
  */
 export async function getUserId(request: NextRequest): Promise<string | null> {
-  const decodedToken = await verifyIdToken(request)
+  const decodedToken = await verifyIdTokenFromRequest(request)
   return decodedToken?.uid || null
 }
 
@@ -111,7 +133,7 @@ export function isValidTokenFormat(token: string): boolean {
  * Get user claims from token
  */
 export async function getUserClaims(request: NextRequest): Promise<any> {
-  const decodedToken = await verifyIdToken(request)
+  const decodedToken = await verifyIdTokenFromRequest(request)
   return decodedToken || {}
 }
 
@@ -119,7 +141,7 @@ export async function getUserClaims(request: NextRequest): Promise<any> {
  * Check if user has specific claim
  */
 export async function hasUserClaim(request: NextRequest, claimName: string, claimValue?: any): Promise<boolean> {
-  const decodedToken = await verifyIdToken(request)
+  const decodedToken = await verifyIdTokenFromRequest(request)
 
   if (!decodedToken) {
     return false
@@ -158,6 +180,6 @@ export class AuthorizationError extends Error {
  * Get authenticated user ID
  */
 export async function getAuthenticatedUser(request: NextRequest): Promise<string | null> {
-  const decodedToken = await verifyIdToken(request)
+  const decodedToken = await verifyIdTokenFromRequest(request)
   return decodedToken ? decodedToken.uid : null
 }

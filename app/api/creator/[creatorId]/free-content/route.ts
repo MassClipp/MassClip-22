@@ -16,41 +16,52 @@ export async function GET(request: NextRequest, { params }: { params: { creatorI
 
     let freeContent: any[] = []
 
-    // ONLY check the free_content collection - this is where users explicitly add content
-    // from their /dashboard/free-content page
     try {
-      console.log("📁 Checking free_content collection (from /dashboard/free-content)...")
+      console.log("📁 Checking free_content collection...")
       const freeContentRef = db.collection("free_content")
       const snapshot = await freeContentRef.where("uid", "==", creatorId).get()
 
-      console.log(`📊 Found ${snapshot.size} documents in free_content collection`)
+      console.log(`📊 Found ${snapshot.size} free content items`)
 
       if (!snapshot.empty) {
         freeContent = snapshot.docs.map((doc) => {
           const data = doc.data()
-          console.log(`📄 Free content item:`, {
+          console.log(`🎬 Free Content Item:`, {
             id: doc.id,
             title: data.title,
-            type: data.type,
-            fileUrl: data.fileUrl ? "✅" : "❌",
+            fileUrl: data.fileUrl,
             thumbnailUrl: data.thumbnailUrl ? "✅" : "❌",
+            type: data.type,
+            duration: data.duration,
           })
 
           return {
             id: doc.id,
-            title: data.title || "Untitled",
-            fileUrl: data.fileUrl || "",
-            thumbnailUrl: data.thumbnailUrl || "",
+            title: data.title || "Untitled Content",
+            thumbnailUrl: data.thumbnailUrl || "/placeholder.svg?height=200&width=300",
+            fileUrl: data.fileUrl || data.url || "", // Try both fileUrl and url fields
             type: data.type || "video",
-            uid: data.uid || "",
-            uploadId: data.uploadId || "",
-            addedAt: data.addedAt || new Date(),
+            duration: data.duration || "0:00",
+            views: data.views || 0,
+            description: data.description || "",
+            createdAt: data.createdAt || new Date(),
+            isPremium: false,
           }
         })
 
         console.log(`✅ Successfully loaded ${freeContent.length} free content items`)
+
+        // Log the final processed items
+        freeContent.forEach((item, index) => {
+          console.log(`📹 Processed item ${index}:`, {
+            id: item.id,
+            title: item.title,
+            fileUrl: item.fileUrl,
+            hasFileUrl: !!item.fileUrl,
+          })
+        })
       } else {
-        console.log("ℹ️ No items found in free_content collection - user hasn't added any content to free section yet")
+        console.log("ℹ️ No free content found")
       }
     } catch (error) {
       console.error("❌ Error checking free_content collection:", error)
@@ -63,10 +74,10 @@ export async function GET(request: NextRequest, { params }: { params: { creatorI
       )
     }
 
-    console.log(`📊 FINAL RESULT: ${freeContent.length} free content items from free_content collection`)
+    console.log(`📊 FINAL RESULT: ${freeContent.length} free content items`)
 
     return NextResponse.json({
-      freeContent,
+      content: freeContent,
       totalFound: freeContent.length,
       creatorId,
       source: "free_content_collection",

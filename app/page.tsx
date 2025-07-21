@@ -9,15 +9,11 @@ import { motion } from "framer-motion"
 import { Upload, Share2, DollarSign, StoreIcon as Storefront, Download, EyeOff } from "lucide-react"
 import LandingHeader from "@/components/landing-header"
 import { Button } from "@/components/ui/button"
-import { MaintenanceCover } from "@/components/maintenance-cover"
 
 export default function LandingPage() {
   const router = useRouter()
   const [searchQuery, setSearchQuery] = useState("")
   const heroRef = useRef<HTMLDivElement>(null)
-
-  // Check if maintenance mode is enabled
-  const isMaintenanceMode = process.env.NEXT_PUBLIC_MAINTENANCE_MODE === "true"
 
   // Enhanced search functionality
   const handleSearch = (e: React.FormEvent) => {
@@ -45,9 +41,6 @@ export default function LandingPage() {
 
   return (
     <div className="relative min-h-screen">
-      {/* Maintenance Cover - renders above everything else */}
-      <MaintenanceCover isEnabled={isMaintenanceMode} />
-
       {/* Background */}
       <div className="fixed inset-0 z-0 premium-gradient"></div>
       <div className="fixed inset-0 z-0 bg-[url('/noise.png')] opacity-[0.03]"></div>

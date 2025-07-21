@@ -1,80 +1,83 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { db } from "@/lib/firebase-admin"
+import { initializeFirebaseAdmin, db } from "@/lib/firebase-admin"
 
 export async function GET(request: NextRequest, { params }: { params: { creatorId: string } }) {
   try {
     const { creatorId } = params
-    console.log("🔍 [Creator Product Boxes API] Fetching for creator:", creatorId)
 
     if (!creatorId) {
-      return NextResponse.json(
-        {
-          success: true,
-          productBoxes: [],
-        },
-        { status: 200 },
-      )
+      return NextResponse.json({ error: "Creator ID is required" }, { status: 400 })
     }
 
-    // First try bundles collection (new structure)
-    let bundlesQuery = await db.collection("bundles").where("creatorId", "==", creatorId).get()
+    console.log(`🔍 Fetching PRODUCT BOXES for creator: ${creatorId}`)
 
-    // If no results, try with userId field
-    if (bundlesQuery.empty) {
-      bundlesQuery = await db.collection("bundles").where("userId", "==", creatorId).get()
-    }
+    // Initialize Firebase Admin
+    initializeFirebaseAdmin()
 
     let productBoxes: any[] = []
 
-    if (!bundlesQuery.empty) {
-      console.log(`✅ [Creator Product Boxes API] Found ${bundlesQuery.size} bundles`)
+    try {
+      console.log("📁 Checking product_boxes collection...")
+      const productBoxesRef = db.collection("product_boxes")
+      const snapshot = await productBoxesRef.where("creatorId", "==", creatorId).get()
 
-      productBoxes = bundlesQuery.docs
-        .map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-        }))
-        .filter((box: any) => box.active === true) // Only show active bundles
-        .sort((a: any, b: any) => {
-          const aTime = a.createdAt?.seconds || 0
-          const bTime = b.createdAt?.seconds || 0
-          return bTime - aTime
+      console.log(`📊 Found ${snapshot.size} product boxes`)
+
+      if (!snapshot.empty) {
+        productBoxes = snapshot.docs.map((doc) => {
+          const data = doc.data()
+          console.log(`📦 Product box:`, {
+            id: doc.id,
+            title: data.title,
+            price: data.price,
+            thumbnailUrl: data.thumbnailUrl ? "✅" : "❌",
+          })
+
+          return {
+            id: doc.id,
+            title: data.title || "Untitled Product",
+            description: data.description || "",
+            price: data.price || 0,
+            thumbnailUrl: data.thumbnailUrl || "",
+            creatorId: data.creatorId || "",
+            createdAt: data.createdAt || new Date(),
+            views: data.views || 0,
+            downloads: data.downloads || 0,
+            type: "premium",
+          }
         })
-    } else {
-      // Fallback to productBoxes collection (legacy)
-      console.log("🔄 [Creator Product Boxes API] No bundles found, trying productBoxes collection")
 
-      const productBoxesQuery = await db.collection("productBoxes").where("creatorId", "==", creatorId).get()
-
-      productBoxes = productBoxesQuery.docs
-        .map((doc) => ({
-          id: doc.id,
-          ...doc.data(),
-        }))
-        .filter((box: any) => box.active === true)
-        .sort((a: any, b: any) => {
-          const aTime = a.createdAt?.seconds || 0
-          const bTime = b.createdAt?.seconds || 0
-          return bTime - aTime
-        })
+        console.log(`✅ Successfully loaded ${productBoxes.length} product boxes`)
+      } else {
+        console.log("ℹ️ No product boxes found")
+      }
+    } catch (error) {
+      console.error("❌ Error checking product_boxes collection:", error)
+      return NextResponse.json(
+        {
+          error: "Failed to fetch product boxes",
+          details: error instanceof Error ? error.message : "Unknown error",
+        },
+        { status: 500 },
+      )
     }
 
-    console.log(`✅ [Creator Product Boxes API] Found ${productBoxes.length} active product boxes`)
+    console.log(`📊 FINAL RESULT: ${productBoxes.length} product boxes`)
 
     return NextResponse.json({
-      success: true,
       productBoxes,
+      totalFound: productBoxes.length,
+      creatorId,
+      source: "product_boxes_collection",
     })
   } catch (error) {
-    console.error("❌ [Creator Product Boxes API] Error:", error)
-
-    // Always return success with empty array to prevent UI errors
+    console.error("❌ PRODUCT BOXES API ERROR:", error)
     return NextResponse.json(
       {
-        success: true,
-        productBoxes: [],
+        error: "Failed to fetch creator product boxes",
+        details: error instanceof Error ? error.message : "Unknown error",
       },
-      { status: 200 },
+      { status: 500 },
     )
   }
 }

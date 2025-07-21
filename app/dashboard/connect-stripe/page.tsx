@@ -1,322 +1,126 @@
-"use client"
-
-import { useState, useEffect } from "react"
-import { useAuth } from "@/contexts/auth-context"
-import { Button } from "@/components/ui/button"
+import { Suspense } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Loader2, CheckCircle, XCircle, AlertCircle, ExternalLink, CreditCard } from "lucide-react"
-import { useToast } from "@/components/ui/use-toast"
-
-interface StripeAccountStatus {
-  connected: boolean
-  accountId?: string
-  chargesEnabled: boolean
-  payoutsEnabled: boolean
-  detailsSubmitted: boolean
-  requirementsCount: number
-  currentlyDue: string[]
-  pastDue: string[]
-}
+import { Button } from "@/components/ui/button"
+import { ExternalLink, CreditCard, DollarSign, Shield, Zap } from "lucide-react"
+import { StripeAccountLinker } from "@/components/stripe-account-linker"
 
 export default function ConnectStripePage() {
-  const { user } = useAuth()
-  const { toast } = useToast()
-  const [loading, setLoading] = useState(false)
-  const [checking, setChecking] = useState(true)
-  const [accountStatus, setAccountStatus] = useState<StripeAccountStatus | null>(null)
-
-  useEffect(() => {
-    if (user) {
-      checkStripeStatus()
-    }
-  }, [user])
-
-  const checkStripeStatus = async () => {
-    if (!user) return
-
-    setChecking(true)
-    try {
-      const token = await user.getIdToken()
-      const response = await fetch("/api/stripe/connection-status", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ idToken: token }),
-      })
-
-      const data = await response.json()
-      if (data.success) {
-        setAccountStatus({
-          connected: data.isConnected,
-          accountId: data.accountId,
-          chargesEnabled: data.accountStatus?.chargesEnabled || false,
-          payoutsEnabled: data.accountStatus?.payoutsEnabled || false,
-          detailsSubmitted: data.accountStatus?.detailsSubmitted || false,
-          requirementsCount: data.accountStatus?.requirementsCount || 0,
-          currentlyDue: [],
-          pastDue: [],
-        })
-      } else {
-        console.error("Failed to check Stripe status:", data.error)
-      }
-    } catch (error) {
-      console.error("Error checking Stripe status:", error)
-    } finally {
-      setChecking(false)
-    }
-  }
-
-  const createStripeAccount = async () => {
-    if (!user) return
-
-    setLoading(true)
-    try {
-      const token = await user.getIdToken()
-      const response = await fetch("/api/stripe/connect/onboard", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ idToken: token }),
-      })
-
-      const data = await response.json()
-      if (data.onboardingComplete) {
-        toast({
-          title: "Success",
-          description: "Stripe account already connected! Redirecting to earnings...",
-        })
-        // Redirect to earnings page
-        setTimeout(() => {
-          window.location.href = "/dashboard/earnings"
-        }, 1500)
-      } else if (data.onboardingUrl) {
-        // Redirect to Stripe Connect onboarding
-        window.location.href = data.onboardingUrl
-      } else {
-        toast({
-          title: "Error",
-          description: data.error || "Failed to create Stripe account",
-          variant: "destructive",
-        })
-      }
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to connect to Stripe",
-        variant: "destructive",
-      })
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const continueOnboarding = async () => {
-    if (!user || !accountStatus?.accountId) return
-
-    setLoading(true)
-    try {
-      const token = await user.getIdToken()
-      const response = await fetch("/api/stripe/create-account-link", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          accountId: accountStatus.accountId,
-          returnUrl: `${window.location.origin}/dashboard/earnings`,
-          refreshUrl: `${window.location.origin}/dashboard/connect-stripe`,
-        }),
-      })
-
-      const data = await response.json()
-      if (data.success && data.url) {
-        window.location.href = data.url
-      } else {
-        toast({
-          title: "Error",
-          description: data.error || "Failed to continue onboarding",
-          variant: "destructive",
-        })
-      }
-    } catch (error) {
-      toast({
-        title: "Error",
-        description: "Failed to continue onboarding",
-        variant: "destructive",
-      })
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  if (checking) {
-    return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <div className="text-center">
-          <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
-          <p className="text-zinc-400">Checking Stripe account status...</p>
-        </div>
-      </div>
-    )
-  }
-
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold">Connect Stripe Account</h1>
-        <p className="text-zinc-400 mt-1">Set up payments to start earning from your content</p>
-      </div>
+    <div className="container mx-auto px-4 py-8 max-w-4xl">
+      <div className="space-y-8">
+        {/* Header */}
+        <div className="text-center space-y-4">
+          <h1 className="text-3xl font-bold">Connect Your Stripe Account</h1>
+          <p className="text-gray-600 max-w-2xl mx-auto">
+            Connect your Stripe account to start receiving payments for your premium content. Our platform handles all
+            the technical integration while you focus on creating great content.
+          </p>
+        </div>
 
-      {/* Test Environment Notice */}
-      <Alert className="border-blue-600 bg-blue-600/10">
-        <AlertCircle className="h-4 w-4" />
-        <AlertDescription>
-          <strong>Test Environment:</strong> This will connect your account to Stripe's test environment. All
-          transactions will be simulated and no real money will be processed.
-        </AlertDescription>
-      </Alert>
+        {/* Benefits */}
+        <div className="grid md:grid-cols-4 gap-6">
+          <Card>
+            <CardHeader className="text-center">
+              <Zap className="h-8 w-8 mx-auto text-purple-600" />
+              <CardTitle className="text-lg">Express Setup</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm text-gray-600 text-center">
+                Quick onboarding with minimal information required to get started
+              </p>
+            </CardContent>
+          </Card>
 
-      {/* Account Status Card */}
-      <Card className="bg-zinc-900/60 border-zinc-800/50">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <CreditCard className="h-5 w-5" />
-            Stripe Account Status
-          </CardTitle>
-          <CardDescription>Current status of your Stripe integration</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {!accountStatus?.connected ? (
-            <Alert className="border-yellow-600 bg-yellow-600/10">
-              <AlertCircle className="h-4 w-4" />
-              <AlertDescription>
-                No Stripe account connected. You need to connect a Stripe account to receive payments.
-              </AlertDescription>
-            </Alert>
-          ) : (
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div className="text-center">
-                <div className="flex items-center justify-center mb-2">
-                  {accountStatus.chargesEnabled ? (
-                    <CheckCircle className="h-5 w-5 text-green-500" />
-                  ) : (
-                    <XCircle className="h-5 w-5 text-red-500" />
-                  )}
+          <Card>
+            <CardHeader className="text-center">
+              <CreditCard className="h-8 w-8 mx-auto text-blue-600" />
+              <CardTitle className="text-lg">Secure Payments</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm text-gray-600 text-center">
+                Industry-leading security with PCI compliance and fraud protection
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="text-center">
+              <DollarSign className="h-8 w-8 mx-auto text-green-600" />
+              <CardTitle className="text-lg">Competitive Fees</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm text-gray-600 text-center">
+                2.9% + 30¢ per transaction with automatic payouts to your bank
+              </p>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader className="text-center">
+              <Shield className="h-8 w-8 mx-auto text-indigo-600" />
+              <CardTitle className="text-lg">Global Reach</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm text-gray-600 text-center">
+                Accept payments from customers worldwide in multiple currencies
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Main Connection Interface */}
+        <Suspense
+          fallback={
+            <Card>
+              <CardContent className="pt-6">
+                <div className="flex items-center justify-center">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+                  <span className="ml-2">Loading connection status...</span>
                 </div>
-                <div className="text-sm font-medium">Charges</div>
-                <div className="text-xs text-zinc-400">{accountStatus.chargesEnabled ? "Enabled" : "Disabled"}</div>
-              </div>
+              </CardContent>
+            </Card>
+          }
+        >
+          <StripeAccountLinker />
+        </Suspense>
 
-              <div className="text-center">
-                <div className="flex items-center justify-center mb-2">
-                  {accountStatus.payoutsEnabled ? (
-                    <CheckCircle className="h-5 w-5 text-green-500" />
-                  ) : (
-                    <XCircle className="h-5 w-5 text-red-500" />
-                  )}
-                </div>
-                <div className="text-sm font-medium">Payouts</div>
-                <div className="text-xs text-zinc-400">{accountStatus.payoutsEnabled ? "Enabled" : "Disabled"}</div>
-              </div>
-
-              <div className="text-center">
-                <div className="flex items-center justify-center mb-2">
-                  {accountStatus.detailsSubmitted ? (
-                    <CheckCircle className="h-5 w-5 text-green-500" />
-                  ) : (
-                    <XCircle className="h-5 w-5 text-red-500" />
-                  )}
-                </div>
-                <div className="text-sm font-medium">Details</div>
-                <div className="text-xs text-zinc-400">{accountStatus.detailsSubmitted ? "Submitted" : "Pending"}</div>
-              </div>
-
-              <div className="text-center">
-                <div className="flex items-center justify-center mb-2">
-                  {accountStatus.requirementsCount === 0 ? (
-                    <CheckCircle className="h-5 w-5 text-green-500" />
-                  ) : (
-                    <AlertCircle className="h-5 w-5 text-yellow-500" />
-                  )}
-                </div>
-                <div className="text-sm font-medium">Requirements</div>
-                <div className="text-xs text-zinc-400">
-                  {accountStatus.requirementsCount === 0 ? "Complete" : `${accountStatus.requirementsCount} pending`}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {accountStatus?.connected && accountStatus.requirementsCount > 0 && (
-            <Alert className="border-yellow-600 bg-yellow-600/10">
-              <AlertCircle className="h-4 w-4" />
-              <AlertDescription>
-                Your Stripe account needs additional information to enable full functionality.
-              </AlertDescription>
-            </Alert>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Actions */}
-      <div className="flex gap-4">
-        {!accountStatus?.connected ? (
-          <Button onClick={createStripeAccount} disabled={loading} size="lg">
-            {loading ? (
-              <>
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                Creating Account...
-              </>
-            ) : (
-              <>
-                <CreditCard className="h-4 w-4 mr-2" />
-                Connect Stripe Account (Test Mode)
-              </>
-            )}
-          </Button>
-        ) : (
-          <>
-            {accountStatus.requirementsCount > 0 && (
-              <Button onClick={continueOnboarding} disabled={loading} size="lg">
-                {loading ? (
-                  <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Loading...
-                  </>
-                ) : (
-                  <>
-                    <ExternalLink className="h-4 w-4 mr-2" />
-                    Complete Setup
-                  </>
-                )}
-              </Button>
-            )}
-
-            <Button variant="outline" onClick={checkStripeStatus} disabled={loading}>
-              Refresh Status
-            </Button>
-
-            <Button variant="outline" onClick={() => (window.location.href = "/dashboard/earnings")}>
-              Go to Earnings
-            </Button>
-          </>
-        )}
-      </div>
-
-      {/* Account ID Display */}
-      {accountStatus?.connected && accountStatus.accountId && (
-        <Card className="bg-zinc-900/60 border-zinc-800/50">
+        {/* Help Section */}
+        <Card>
           <CardHeader>
-            <CardTitle className="text-sm">Account Information</CardTitle>
+            <CardTitle className="flex items-center gap-2">
+              <ExternalLink className="h-5 w-5" />
+              Need Help?
+            </CardTitle>
+            <CardDescription>Resources and support for connecting your Stripe account</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="text-xs font-mono text-zinc-400">Account ID: {accountStatus.accountId}</div>
+            <div className="space-y-4">
+              <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                <h3 className="font-medium text-gray-900 mb-2">Don't have a Stripe account?</h3>
+                <p className="text-sm text-gray-600 mb-3">
+                  You can create one during the connection process, or create one beforehand at Stripe.
+                </p>
+                <Button asChild variant="outline" size="sm">
+                  <a href="https://dashboard.stripe.com/register" target="_blank" rel="noopener noreferrer">
+                    <ExternalLink className="mr-2 h-4 w-4" />
+                    Create Stripe Account
+                  </a>
+                </Button>
+              </div>
+
+              <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+                <h3 className="font-medium text-amber-900 mb-2">What you'll need:</h3>
+                <ul className="text-sm text-amber-800 space-y-1">
+                  <li>• Business information (can be individual/sole proprietor)</li>
+                  <li>• Bank account details for payouts</li>
+                  <li>• Government-issued ID for identity verification</li>
+                  <li>• Tax identification number (SSN for individuals)</li>
+                </ul>
+              </div>
+            </div>
           </CardContent>
         </Card>
-      )}
+      </div>
     </div>
   )
 }

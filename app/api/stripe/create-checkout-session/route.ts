@@ -1,148 +1,187 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { stripe } from "@/lib/stripe"
-import { auth, db } from "@/lib/firebase-admin"
+import { initializeApp, getApps, cert } from "firebase-admin/app"
+import { getAuth } from "firebase-admin/auth"
+import { getFirestore } from "firebase-admin/firestore"
+import Stripe from "stripe"
+
+// Initialize Firebase Admin
+if (!getApps().length) {
+  const serviceAccount = {
+    type: "service_account",
+    project_id: process.env.FIREBASE_PROJECT_ID,
+    private_key_id: process.env.FIREBASE_PRIVATE_KEY_ID,
+    private_key: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n"),
+    client_email: process.env.FIREBASE_CLIENT_EMAIL,
+    client_id: process.env.FIREBASE_CLIENT_ID,
+    auth_uri: "https://accounts.google.com/o/oauth2/auth",
+    token_uri: "https://oauth2.googleapis.com/token",
+    auth_provider_x509_cert_url: "https://www.googleapis.com/oauth2/v1/certs",
+    client_x509_cert_url: `https://www.googleapis.com/robot/v1/metadata/x509/${process.env.FIREBASE_CLIENT_EMAIL}`,
+  }
+
+  initializeApp({
+    credential: cert(serviceAccount as any),
+  })
+}
+
+const db = getFirestore()
+const auth = getAuth()
+
+// Initialize Stripe
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
+  apiVersion: "2024-06-20",
+})
 
 export async function POST(request: NextRequest) {
   try {
     console.log("🚀 [Checkout API] Starting checkout session creation...")
 
     const body = await request.json()
-    console.log("📝 [Checkout API] Request body:", { ...body, idToken: "[REDACTED]" })
+    console.log("📝 [Checkout API] Request body:", { ...body, idToken: body.idToken ? "[REDACTED]" : "MISSING" })
 
-    const { idToken, productBoxId, priceInCents } = body
+    const { idToken, priceId, bundleId, successUrl, cancelUrl } = body
 
-    if (!idToken) {
-      console.error("❌ [Checkout API] Missing idToken")
-      return NextResponse.json({ error: "Authentication required" }, { status: 401 })
+    if (!priceId || !bundleId) {
+      console.error("❌ [Checkout API] Missing required parameters")
+      return NextResponse.json({ error: "Missing required parameters" }, { status: 400 })
     }
 
-    if (!productBoxId) {
-      console.error("❌ [Checkout API] Missing productBoxId")
-      return NextResponse.json({ error: "Product Box ID is required" }, { status: 400 })
-    }
+    let userId: string | null = null
+    let userEmail: string | null = null
 
-    if (!priceInCents || priceInCents < 50) {
-      console.error("❌ [Checkout API] Invalid price:", priceInCents)
-      return NextResponse.json({ error: "Invalid price amount" }, { status: 400 })
-    }
-
-    // Verify Firebase token
-    console.log("🔐 [Checkout API] Verifying Firebase token...")
-    let decodedToken
-    try {
-      decodedToken = await auth.verifyIdToken(idToken)
-      console.log("✅ [Checkout API] Token verified for user:", decodedToken.uid)
-    } catch (error) {
-      console.error("❌ [Checkout API] Token verification failed:", error)
-      return NextResponse.json({ error: "Invalid authentication token" }, { status: 401 })
-    }
-
-    const userId = decodedToken.uid
-
-    // Get product box details
-    console.log("📦 [Checkout API] Fetching product box:", productBoxId)
-    const productBoxDoc = await db.collection("productBoxes").doc(productBoxId).get()
-    if (!productBoxDoc.exists) {
-      console.error("❌ [Checkout API] Product box not found:", productBoxId)
-      return NextResponse.json({ error: "Product not found" }, { status: 404 })
-    }
-
-    const productBox = productBoxDoc.data()!
-    console.log("✅ [Checkout API] Product box found:", productBox.title)
-
-    // Get the current domain from multiple sources
-    const host = request.headers.get("host")
-    const forwardedHost = request.headers.get("x-forwarded-host")
-    const origin = request.headers.get("origin")
-    const referer = request.headers.get("referer")
-    const protocol = request.headers.get("x-forwarded-proto") || "https"
-
-    console.log("🌐 [Checkout API] Domain detection headers:", {
-      host,
-      forwardedHost,
-      origin,
-      referer,
-      protocol,
-    })
-
-    // Determine the correct domain to use
-    let currentDomain: string
-
-    if (origin) {
-      // Use origin header if available (most reliable)
-      currentDomain = origin
-      console.log("✅ [Checkout API] Using origin header:", currentDomain)
-    } else if (referer) {
-      // Extract domain from referer
+    // If idToken is provided, verify it
+    if (idToken) {
       try {
-        const refererUrl = new URL(referer)
-        currentDomain = `${refererUrl.protocol}//${refererUrl.host}`
-        console.log("✅ [Checkout API] Using referer header:", currentDomain)
-      } catch {
-        currentDomain = `${protocol}://${host}`
-        console.log("⚠️ [Checkout API] Referer parsing failed, using host:", currentDomain)
+        const decodedToken = await auth.verifyIdToken(idToken)
+        userId = decodedToken.uid
+        userEmail = decodedToken.email || null
+        console.log("✅ [Checkout API] Token verified for user:", userId)
+      } catch (error) {
+        console.error("❌ [Checkout API] Token verification failed:", error)
+        return NextResponse.json({ error: "Invalid authentication token" }, { status: 401 })
       }
     } else {
-      // Fallback to host header
-      currentDomain = `${protocol}://${forwardedHost || host}`
-      console.log("⚠️ [Checkout API] Using fallback host:", currentDomain)
+      console.log("⚠️ [Checkout API] No idToken provided, proceeding without user authentication")
     }
 
-    // For v0 preview environments, ensure we use the correct domain format
-    if (host && host.includes("vercel.app") && !currentDomain.includes("vercel.app")) {
-      currentDomain = `${protocol}://${host}`
-      console.log("🔧 [Checkout API] Corrected for Vercel preview:", currentDomain)
+    // Get bundle details from bundles collection
+    console.log("📦 [Checkout API] Fetching bundle:", bundleId)
+    const bundleDoc = await db.collection("bundles").doc(bundleId).get()
+    if (!bundleDoc.exists) {
+      console.error("❌ [Checkout API] Bundle not found:", bundleId)
+      return NextResponse.json({ error: "Bundle not found" }, { status: 404 })
     }
 
-    // Create success/cancel URLs with the detected domain
-    const successUrl = `${currentDomain}/purchase-success?session_id={CHECKOUT_SESSION_ID}&product_box_id=${productBoxId}`
-    const cancelUrl = `${currentDomain}/product-box/${productBoxId}`
+    const bundle = bundleDoc.data()!
+    console.log("✅ [Checkout API] Bundle found:", {
+      title: bundle.title,
+      price: bundle.price,
+      priceId: bundle.priceId,
+      stripePriceId: bundle.stripePriceId,
+      productId: bundle.productId,
+      stripeProductId: bundle.stripeProductId,
+      creatorId: bundle.creatorId,
+      stripeAccountId: bundle.stripeAccountId,
+    })
 
-    console.log("🔗 [Checkout API] Final URLs:")
-    console.log("   Success:", successUrl)
-    console.log("   Cancel:", cancelUrl)
+    // Get the correct price ID from bundle - check both possible field names
+    const bundleStripePriceId = bundle.priceId || bundle.stripePriceId
+    const stripeAccountId = bundle.stripeAccountId
 
-    // Create Stripe checkout session
-    console.log("💳 [Checkout API] Creating Stripe session...")
-    const sessionParams = {
+    if (!stripeAccountId) {
+      console.error("❌ [Checkout API] No Stripe account ID for bundle:", bundleId)
+      return NextResponse.json(
+        {
+          error: "Bundle not available for purchase",
+          details: "Creator has not set up Stripe integration",
+        },
+        { status: 400 },
+      )
+    }
+
+    if (!bundleStripePriceId) {
+      console.error("❌ [Checkout API] No Stripe price ID for bundle:", bundleId)
+      return NextResponse.json(
+        {
+          error: "Bundle pricing not configured",
+          details: "Bundle does not have a valid price ID",
+        },
+        { status: 400 },
+      )
+    }
+
+    // Use the bundle's stored price ID instead of validating against the provided one
+    // This prevents mismatches due to field name inconsistencies
+    const finalPriceId = bundleStripePriceId
+
+    console.log("💳 [Checkout API] Creating checkout session with:", {
+      finalPriceId,
+      bundleId,
+      stripeAccountId,
+      providedPriceId: priceId,
+      bundleStoredPriceId: bundleStripePriceId,
+    })
+
+    // Get the current domain from headers
+    const host = request.headers.get("host")
+    const protocol = request.headers.get("x-forwarded-proto") || "https"
+    const currentDomain = `${protocol}://${host}`
+
+    const sessionMetadata: any = {
+      bundleId: bundleId,
+      creatorId: bundle.creatorId || "",
+      originalDomain: currentDomain,
+      timestamp: new Date().toISOString(),
+    }
+
+    if (userId) {
+      sessionMetadata.userId = userId
+    }
+
+    const sessionParams: Stripe.Checkout.SessionCreateParams = {
       payment_method_types: ["card"],
       line_items: [
         {
-          price_data: {
-            currency: "usd",
-            product_data: {
-              name: productBox.title || `Product Box ${productBoxId}`,
-              description: productBox.description || "Digital content access",
-            },
-            unit_amount: priceInCents,
-          },
+          price: finalPriceId,
           quantity: 1,
         },
       ],
-      mode: "payment" as const,
-      success_url: successUrl,
-      cancel_url: cancelUrl,
-      metadata: {
-        userId,
-        productBoxId,
-        creatorId: productBox.creatorId || "",
-        originalDomain: currentDomain,
-        timestamp: new Date().toISOString(),
+      mode: "payment",
+      success_url: successUrl || `${currentDomain}/purchase-success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: cancelUrl || `${currentDomain}/creator/${bundle.creatorId}`,
+      metadata: sessionMetadata,
+      payment_intent_data: {
+        metadata: sessionMetadata,
       },
+      allow_promotion_codes: true,
     }
 
-    const session = await stripe.checkout.sessions.create(sessionParams)
+    // Add customer email if available
+    if (userEmail) {
+      sessionParams.customer_email = userEmail
+    }
+
+    console.log("🔄 [Checkout API] Creating Stripe session with params:", {
+      priceId: finalPriceId,
+      stripeAccount: stripeAccountId,
+      successUrl: sessionParams.success_url,
+      cancelUrl: sessionParams.cancel_url,
+    })
+
+    const session = await stripe.checkout.sessions.create(sessionParams, {
+      stripeAccount: stripeAccountId,
+    })
 
     console.log("✅ [Checkout API] Session created successfully:")
     console.log("   Session ID:", session.id)
     console.log("   Checkout URL:", session.url)
-    console.log("   Success URL will redirect to:", successUrl.replace("{CHECKOUT_SESSION_ID}", session.id))
+    console.log("   Success URL:", session.success_url)
+    console.log("   Cancel URL:", session.cancel_url)
 
     return NextResponse.json({
-      sessionId: session.id,
+      success: true,
       url: session.url,
-      domain: currentDomain,
-      successUrl: successUrl.replace("{CHECKOUT_SESSION_ID}", session.id),
+      sessionId: session.id,
     })
   } catch (error: any) {
     console.error("❌ [Checkout API] Session creation failed:", error)
@@ -150,7 +189,19 @@ export async function POST(request: NextRequest) {
       message: error.message,
       type: error.type,
       code: error.code,
+      stack: error.stack,
     })
+
+    if (error instanceof Stripe.errors.StripeError) {
+      return NextResponse.json(
+        {
+          error: "Stripe error occurred",
+          details: error.message,
+          code: error.code,
+        },
+        { status: 400 },
+      )
+    }
 
     return NextResponse.json(
       {

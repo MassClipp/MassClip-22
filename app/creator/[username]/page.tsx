@@ -1,8 +1,7 @@
 import { notFound } from "next/navigation"
 import type { Metadata } from "next"
 import { initializeFirebaseAdmin, db } from "@/lib/firebase-admin"
-import CreatorProfileWithSidebar from "@/components/creator-profile-with-sidebar"
-import ProfileViewTracker from "@/components/profile-view-tracker"
+import CreatorProfileMinimal from "@/components/creator-profile-minimal"
 
 // Helper function to convert Firestore data to plain objects
 function serializeData(data: any) {
@@ -60,16 +59,6 @@ export async function generateMetadata({ params }: { params: { username: string 
         description: "The creator profile you're looking for doesn't exist.",
       }
     }
-
-    console.log(
-      `[Metadata] Found user data:`,
-      JSON.stringify({
-        displayName: userData.displayName,
-        username: userData.username,
-        hasPhotoURL: !!userData.photoURL,
-        hasProfilePic: !!userData.profilePic,
-      }),
-    )
 
     // Prioritize profilePic over photoURL
     const profileImage = userData.profilePic || userData.photoURL || "https://massclip.pro/og-image.jpg"
@@ -238,12 +227,7 @@ export default async function CreatorProfilePage({ params }: { params: { usernam
       }),
     )
 
-    return (
-      <>
-        <ProfileViewTracker profileUserId={uid} />
-        <CreatorProfileWithSidebar creator={creatorData} />
-      </>
-    )
+    return <CreatorProfileMinimal creator={creatorData} />
   } catch (error) {
     console.error(`[Page] Error fetching creator profile for ${username}:`, error)
     notFound()

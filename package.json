@@ -70,6 +70,7 @@
     "react-day-picker": "latest",
     "react-dom": "^19",
     "react-dropzone": "latest",
+    "react-firebase-hooks": "latest",
     "react-hook-form": "latest",
     "react-image-crop": "latest",
     "react-resizable-panels": "latest",

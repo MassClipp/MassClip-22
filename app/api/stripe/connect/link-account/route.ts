@@ -1,151 +1,86 @@
-export const runtime = "nodejs"
-
 import { type NextRequest, NextResponse } from "next/server"
-import { getAuthenticatedUser, db } from "@/lib/firebase-admin"
-import { stripe } from "@/lib/stripe"
+import { db } from "@/lib/firebase-admin"
+import { stripe, isTestMode } from "@/lib/stripe"
 
 export async function POST(request: NextRequest) {
   try {
-    // Get user from multiple auth methods
-    let user
-    try {
-      user = await getAuthenticatedUser(request.headers)
-    } catch (authError) {
-      console.error("Primary auth failed, trying alternative methods:", authError)
+    const { userId, accountId } = await request.json()
 
-      // Try to get user ID from request body
-      const body = await request.json()
-      const { idToken, stripeAccountId } = body
-
-      if (!idToken) {
-        return NextResponse.json({ success: false, error: "Authentication required" }, { status: 401 })
-      }
-
-      // Verify the ID token directly
-      const { auth } = await import("@/lib/firebase-admin")
-      try {
-        const decodedToken = await auth.verifyIdToken(idToken)
-        user = { uid: decodedToken.uid }
-      } catch (tokenError) {
-        console.error("Token verification failed:", tokenError)
-        return NextResponse.json({ success: false, error: "Invalid authentication token" }, { status: 401 })
-      }
-
-      if (!stripeAccountId) {
-        return NextResponse.json({ success: false, error: "Stripe account ID is required" }, { status: 400 })
-      }
-
-      // Verify the account exists and get its details
-      try {
-        const account = await stripe.accounts.retrieve(stripeAccountId)
-
-        // Update user profile with Stripe account ID
-        await db
-          .collection("users")
-          .doc(user.uid)
-          .update({
-            stripeAccountId: stripeAccountId,
-            stripeAccountStatus: {
-              chargesEnabled: account.charges_enabled,
-              payoutsEnabled: account.payouts_enabled,
-              detailsSubmitted: account.details_submitted,
-              requirementsCount:
-                (account.requirements?.currently_due?.length || 0) + (account.requirements?.past_due?.length || 0),
-              currentlyDue: account.requirements?.currently_due || [],
-              pastDue: account.requirements?.past_due || [],
-              lastUpdated: new Date(),
-            },
-            updatedAt: new Date(),
-          })
-
-        console.log(`✅ Linked Stripe account ${stripeAccountId} to user ${user.uid}`)
-
-        return NextResponse.json({
-          success: true,
-          message: "Stripe account linked successfully",
-          accountId: stripeAccountId,
-          accountStatus: {
-            chargesEnabled: account.charges_enabled,
-            payoutsEnabled: account.payouts_enabled,
-            detailsSubmitted: account.details_submitted,
-          },
-        })
-      } catch (stripeError: any) {
-        console.error("Stripe account verification failed:", stripeError)
-        return NextResponse.json(
-          {
-            success: false,
-            error: "Invalid Stripe account",
-            details: stripeError.message,
-          },
-          { status: 400 },
-        )
-      }
+    if (!userId || !accountId) {
+      return NextResponse.json({ error: "User ID and Account ID are required" }, { status: 400 })
     }
 
-    // Original flow if primary auth worked
-    const body = await request.json()
-    const { stripeAccountId } = body
-
-    if (!stripeAccountId) {
-      return NextResponse.json({ success: false, error: "Stripe account ID is required" }, { status: 400 })
-    }
+    console.log(`🔄 [Link Account] Creating account link for user ${userId}, account ${accountId}`)
 
     // Verify the account exists and get its details
+    let account
     try {
-      const account = await stripe.accounts.retrieve(stripeAccountId)
-
-      // Update user profile with Stripe account ID
-      await db
-        .collection("users")
-        .doc(user.uid)
-        .update({
-          stripeAccountId: stripeAccountId,
-          stripeAccountStatus: {
-            chargesEnabled: account.charges_enabled,
-            payoutsEnabled: account.payouts_enabled,
-            detailsSubmitted: account.details_submitted,
-            requirementsCount:
-              (account.requirements?.currently_due?.length || 0) + (account.requirements?.past_due?.length || 0),
-            currentlyDue: account.requirements?.currently_due || [],
-            pastDue: account.requirements?.past_due || [],
-            lastUpdated: new Date(),
-          },
-          updatedAt: new Date(),
-        })
-
-      console.log(`✅ Linked Stripe account ${stripeAccountId} to user ${user.uid}`)
-
-      return NextResponse.json({
-        success: true,
-        message: "Stripe account linked successfully",
-        accountId: stripeAccountId,
-        accountStatus: {
-          chargesEnabled: account.charges_enabled,
-          payoutsEnabled: account.payouts_enabled,
-          detailsSubmitted: account.details_submitted,
-        },
-      })
+      account = await stripe.accounts.retrieve(accountId)
     } catch (stripeError: any) {
-      console.error("Stripe account verification failed:", stripeError)
+      console.error(`❌ [Link Account] Invalid account ID ${accountId}:`, stripeError)
+      return NextResponse.json({ error: "Invalid account ID" }, { status: 400 })
+    }
+
+    // Validate account environment matches our platform
+    const environmentMismatch = (isTestMode && account.livemode) || (!isTestMode && !account.livemode)
+    if (environmentMismatch) {
+      console.error(
+        `❌ [Link Account] Environment mismatch: Platform is in ${isTestMode ? "test" : "live"} mode but account is in ${account.livemode ? "live" : "test"} mode`,
+      )
       return NextResponse.json(
         {
-          success: false,
-          error: "Invalid Stripe account",
-          details: stripeError.message,
+          error: `Account mode (${account.livemode ? "live" : "test"}) does not match platform mode (${isTestMode ? "test" : "live"})`,
         },
         { status: 400 },
       )
     }
+
+    // Create account link for onboarding/re-onboarding
+    const accountLink = await stripe.accountLinks.create({
+      account: accountId,
+      refresh_url: `${process.env.NEXT_PUBLIC_SITE_URL}/dashboard/connect-stripe?refresh=true`,
+      return_url: `${process.env.NEXT_PUBLIC_SITE_URL}/dashboard/connect-stripe?success=true&account=${accountId}`,
+      type: "account_onboarding",
+    })
+
+    console.log(`✅ [Link Account] Created account link for ${accountId}`)
+
+    // Save account info to database
+    const accountIdField = isTestMode ? "stripeTestAccountId" : "stripeAccountId"
+    const connectedField = isTestMode ? "stripeTestConnected" : "stripeConnected"
+    const detailsField = isTestMode ? "stripeTestAccountDetails" : "stripeAccountDetails"
+
+    const accountDetails = {
+      id: accountId,
+      country: account.country,
+      email: account.email,
+      type: account.type,
+      chargesEnabled: account.charges_enabled,
+      payoutsEnabled: account.payouts_enabled,
+      detailsSubmitted: account.details_submitted,
+      requirementsCurrentlyDue: account.requirements?.currently_due || [],
+      requirementsEventuallyDue: account.requirements?.eventually_due || [],
+      connectedAt: new Date().toISOString(),
+      lastUpdated: new Date().toISOString(),
+    }
+
+    await db
+      .collection("users")
+      .doc(userId)
+      .update({
+        [accountIdField]: accountId,
+        [connectedField]: true,
+        [detailsField]: accountDetails,
+        updatedAt: new Date().toISOString(),
+      })
+
+    return NextResponse.json({
+      url: accountLink.url,
+      accountId,
+      mode: isTestMode ? "test" : "live",
+    })
   } catch (error: any) {
-    console.error("Error linking Stripe account:", error)
-    return NextResponse.json(
-      {
-        success: false,
-        error: "Failed to link Stripe account",
-        details: error.message,
-      },
-      { status: 500 },
-    )
+    console.error("❌ [Link Account] Error creating account link:", error)
+    return NextResponse.json({ error: "Failed to create account link", details: error.message }, { status: 500 })
   }
 }

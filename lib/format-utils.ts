@@ -13,3 +13,26 @@ export function formatFileSize(bytes?: number): string {
 
   return Number.parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i]
 }
+
+/**
+ * Converts a duration in seconds to a human-readable string (hh:mm:ss or mm:ss).
+ * @param seconds The duration in seconds.
+ * @returns A formatted duration string.
+ */
+export function formatDuration(seconds?: number): string {
+  if (seconds === undefined || seconds === null || Number.isNaN(seconds)) {
+    return "0:00"
+  }
+
+  const hrs = Math.floor(seconds / 3600)
+  const mins = Math.floor((seconds % 3600) / 60)
+  const secs = Math.floor(seconds % 60)
+
+  const parts = [
+    hrs > 0 ? String(hrs) : null,
+    String(mins).padStart(hrs > 0 ? 2 : 1, "0"),
+    String(secs).padStart(2, "0"),
+  ].filter(Boolean)
+
+  return parts.join(":")
+}
