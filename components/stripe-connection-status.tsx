@@ -1,49 +1,66 @@
 "use client"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent } from "@/components/ui/card"
-import { CheckCircle, AlertCircle, ExternalLink, RefreshCw } from "lucide-react"
-import { useEffect, useState } from "react"
+
+import { useState, useEffect } from "react"
 import { useAuthState } from "react-firebase-hooks/auth"
 import { auth } from "@/lib/firebase"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Loader2, ExternalLink, CheckCircle, AlertCircle, Link } from "lucide-react"
 
-interface ConnectionStatusProps {
-  accountStatus?: {
-    chargesEnabled: boolean
-    payoutsEnabled: boolean
-    detailsSubmitted: boolean
-    requirementsCount: number
-    livemode?: boolean
-  }
-  mode?: "live" | "test"
-  environment?: string
-  onRefresh?: () => void
-}
-
-interface StripeConnectionData {
+interface StripeConnectionStatus {
   connected: boolean
   accountId?: string
-  status?: string
-  requiresAction?: boolean
+  status: string
+  requiresAction: boolean
 }
 
-export function StripeConnectionStatus({ accountStatus, mode, environment, onRefresh }: ConnectionStatusProps) {
-  const [user, loading] = useAuthState(auth)
-  const [connectionData, setConnectionData] = useState<StripeConnectionData | null>(null)
+export default function StripeConnectionStatus() {
+  const [user, loading, error] = useAuthState(auth)
+  const [connectionStatus, setConnectionStatus] = useState<StripeConnectionStatus | null>(null)
   const [isLoading, setIsLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const [isLinking, setIsLinking] = useState(false)
+  const [accountId, setAccountId] = useState("")
+  const [message, setMessage] = useState("")
+  const [messageType, setMessageType] = useState<"success" | "error" | "">("")
 
+  // Get Firebase ID token
+  const getIdToken = async () => {
+    if (!user) {
+      console.log("❌ No user available for token")
+      return null
+    }
+
+    try {
+      const token = await user.getIdToken()
+      console.log("✅ Got Firebase ID token, length:", token.length)
+      return token
+    } catch (error) {
+      console.error("❌ Failed to get ID token:", error)
+      return null
+    }
+  }
+
+  // Check connection status
   const checkConnectionStatus = async () => {
     if (!user) {
-      console.log("No user authenticated")
+      console.log("⏳ User not available yet, skipping status check")
       return
     }
 
     setIsLoading(true)
-    setError(null)
+    setMessage("")
+    setMessageType("")
 
     try {
-      const token = await user.getIdToken()
       console.log("🔍 Checking Stripe connection status...")
+
+      const token = await getIdToken()
+      if (!token) {
+        throw new Error("Failed to get authentication token")
+      }
 
       const response = await fetch("/api/stripe/connection-status", {
         method: "GET",
@@ -53,219 +70,278 @@ export function StripeConnectionStatus({ accountStatus, mode, environment, onRef
         },
       })
 
+      console.log("📡 Connection status response:", response.status)
+
       if (!response.ok) {
-        const errorText = await response.text()
-        console.error("❌ Connection status check failed:", response.status, errorText)
-        throw new Error(`Failed to check connection status: ${response.status}`)
+        const errorData = await response.json()
+        throw new Error(errorData.error || `HTTP ${response.status}`)
       }
 
       const data = await response.json()
       console.log("✅ Connection status data:", data)
-      setConnectionData(data)
-    } catch (error: any) {
-      console.error("❌ Error checking Stripe connection:", error)
-      setError(error.message)
+      setConnectionStatus(data)
+    } catch (error) {
+      console.error("❌ Error checking connection status:", error)
+      setMessage(`Error checking connection: ${error instanceof Error ? error.message : "Unknown error"}`)
+      setMessageType("error")
     } finally {
       setIsLoading(false)
     }
   }
 
+  // Link existing account
+  const linkAccount = async () => {
+    if (!accountId.trim()) {
+      setMessage("Please enter a Stripe Account ID")
+      setMessageType("error")
+      return
+    }
+
+    if (!user) {
+      setMessage("User not authenticated")
+      setMessageType("error")
+      return
+    }
+
+    setIsLinking(true)
+    setMessage("")
+    setMessageType("")
+
+    try {
+      console.log("🔗 Linking Stripe account:", accountId)
+
+      const token = await getIdToken()
+      if (!token) {
+        throw new Error("Failed to get authentication token")
+      }
+
+      const response = await fetch("/api/stripe/connect/link-account", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ accountId: accountId.trim() }),
+      })
+
+      console.log("📡 Link account response:", response.status)
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || `HTTP ${response.status}`)
+      }
+
+      const data = await response.json()
+      console.log("✅ Link account success:", data)
+
+      setMessage("Account linked successfully!")
+      setMessageType("success")
+      setAccountId("")
+
+      // Refresh connection status
+      await checkConnectionStatus()
+    } catch (error) {
+      console.error("❌ Error linking account:", error)
+      setMessage(`Error linking account: ${error instanceof Error ? error.message : "Unknown error"}`)
+      setMessageType("error")
+    } finally {
+      setIsLinking(false)
+    }
+  }
+
+  // Create new Stripe account
+  const createStripeAccount = async () => {
+    if (!user) {
+      setMessage("User not authenticated")
+      setMessageType("error")
+      return
+    }
+
+    try {
+      console.log("🆕 Creating new Stripe account...")
+
+      const token = await getIdToken()
+      if (!token) {
+        throw new Error("Failed to get authentication token")
+      }
+
+      const response = await fetch("/api/stripe/connect/onboard", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || `HTTP ${response.status}`)
+      }
+
+      const data = await response.json()
+      console.log("✅ Onboarding URL created:", data)
+
+      if (data.url) {
+        window.open(data.url, "_blank")
+      }
+    } catch (error) {
+      console.error("❌ Error creating Stripe account:", error)
+      setMessage(`Error creating account: ${error instanceof Error ? error.message : "Unknown error"}`)
+      setMessageType("error")
+    }
+  }
+
+  // Check status when user is available
   useEffect(() => {
     if (user && !loading) {
+      console.log("👤 User authenticated, checking connection status")
       checkConnectionStatus()
     }
   }, [user, loading])
 
-  const handleRefresh = () => {
-    checkConnectionStatus()
-    if (onRefresh) {
-      onRefresh()
-    }
-  }
-
+  // Show loading state
   if (loading) {
     return (
-      <Card className="border-gray-600 bg-gray-900/10">
-        <CardContent className="pt-4">
-          <div className="flex items-center gap-2">
-            <RefreshCw className="h-4 w-4 animate-spin" />
-            <span>Loading authentication...</span>
-          </div>
-        </CardContent>
-      </Card>
+      <div className="flex items-center justify-center p-8">
+        <Loader2 className="h-8 w-8 animate-spin" />
+        <span className="ml-2">Loading authentication...</span>
+      </div>
     )
   }
 
-  if (!user) {
-    return (
-      <Card className="border-red-600 bg-red-900/10">
-        <CardContent className="pt-4">
-          <div className="flex items-center gap-2">
-            <AlertCircle className="h-4 w-4 text-red-400" />
-            <span>Please log in to check Stripe connection status</span>
-          </div>
-        </CardContent>
-      </Card>
-    )
-  }
-
+  // Show error state
   if (error) {
     return (
-      <Card className="border-red-600 bg-red-900/10">
-        <CardContent className="pt-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <AlertCircle className="h-4 w-4 text-red-400" />
-              <span>Error checking connection: {error}</span>
-            </div>
-            <Button variant="outline" size="sm" onClick={handleRefresh} disabled={isLoading}>
-              <RefreshCw className={`h-3 w-3 ${isLoading ? "animate-spin" : ""}`} />
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
+      <Alert>
+        <AlertCircle className="h-4 w-4" />
+        <AlertDescription>Authentication error: {error.message}</AlertDescription>
+      </Alert>
     )
   }
 
-  if (isLoading) {
+  // Show not authenticated state
+  if (!user) {
     return (
-      <Card className="border-gray-600 bg-gray-900/10">
-        <CardContent className="pt-4">
-          <div className="flex items-center gap-2">
-            <RefreshCw className="h-4 w-4 animate-spin" />
-            <span>Checking connection status...</span>
-          </div>
-        </CardContent>
-      </Card>
+      <Alert>
+        <AlertCircle className="h-4 w-4" />
+        <AlertDescription>Please log in to manage your Stripe connection.</AlertDescription>
+      </Alert>
     )
   }
-
-  // Use connectionData if available, otherwise fall back to accountStatus
-  const status = connectionData || {
-    connected: accountStatus?.chargesEnabled && accountStatus?.payoutsEnabled,
-    accountId: undefined,
-    status: accountStatus?.detailsSubmitted ? "active" : "pending",
-    requiresAction: (accountStatus?.requirementsCount || 0) > 0,
-  }
-
-  const getStatusColor = (enabled: boolean) => (enabled ? "text-green-400" : "text-red-400")
-  const getStatusIcon = (enabled: boolean) =>
-    enabled ? <CheckCircle className="h-4 w-4" /> : <AlertCircle className="h-4 w-4" />
-
-  const allEnabled = accountStatus?.chargesEnabled && accountStatus?.payoutsEnabled && accountStatus?.detailsSubmitted
-  const needsAttention = (accountStatus?.requirementsCount || 0) > 0
-
-  // Check for environment/mode mismatch
-  const isProduction = environment === "production"
-  const accountIsLive = accountStatus?.livemode
-  const environmentMismatch = (isProduction && !accountIsLive) || (!isProduction && accountIsLive)
 
   return (
-    <Card
-      className={`border ${
-        environmentMismatch
-          ? "border-yellow-600 bg-yellow-900/10"
-          : allEnabled
-            ? "border-green-600 bg-green-900/10"
-            : "border-yellow-600 bg-yellow-900/10"
-      }`}
-    >
-      <CardContent className="pt-4">
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-2">
-            {environmentMismatch ? (
-              <AlertCircle className="h-5 w-5 text-yellow-400" />
-            ) : allEnabled ? (
-              <CheckCircle className="h-5 w-5 text-green-400" />
+    <div className="space-y-6">
+      {/* Connection Status */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            {connectionStatus?.connected ? (
+              <CheckCircle className="h-5 w-5 text-green-500" />
             ) : (
-              <AlertCircle className="h-5 w-5 text-yellow-400" />
+              <AlertCircle className="h-5 w-5 text-yellow-500" />
             )}
-            <div className="flex flex-col">
-              <span className="font-medium">
-                {environmentMismatch ? "Environment Mismatch" : allEnabled ? "Stripe Account Active" : "Setup Required"}
-              </span>
-              <span className="text-xs text-muted-foreground">
-                {mode?.toUpperCase()} mode • {environment}
-              </span>
-            </div>
-          </div>
-
-          <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={handleRefresh} disabled={isLoading}>
-              <RefreshCw className={`h-3 w-3 ${isLoading ? "animate-spin" : ""}`} />
-            </Button>
-            <Button variant="outline" size="sm" onClick={() => window.open("https://dashboard.stripe.com", "_blank")}>
-              <ExternalLink className="h-3 w-3 mr-1" />
-              Dashboard
-            </Button>
-          </div>
-        </div>
-
-        {environmentMismatch && (
-          <div className="mb-4 p-3 bg-yellow-900/20 border border-yellow-600/30 rounded-lg">
-            <p className="text-sm text-yellow-200 font-medium mb-1">Environment Mismatch Detected</p>
-            <p className="text-xs text-yellow-300">
-              Your app is running in {isProduction ? "PRODUCTION" : "DEVELOPMENT"} mode but your Stripe account is in{" "}
-              {accountIsLive ? "LIVE" : "TEST"} mode.
-            </p>
-            <p className="text-xs text-yellow-300 mt-1">
-              {isProduction
-                ? "Please connect a live Stripe account for production use."
-                : "Please use a test Stripe account for development."}
-            </p>
-          </div>
-        )}
-
-        {accountStatus && (
-          <div className="grid grid-cols-3 gap-4 text-sm">
+            Stripe Connection Status
+          </CardTitle>
+          <CardDescription>
+            {isLoading
+              ? "Checking connection..."
+              : connectionStatus?.connected
+                ? "Your Stripe account is connected"
+                : "Connect your Stripe account to start accepting payments"}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {isLoading ? (
             <div className="flex items-center gap-2">
-              <span className={getStatusColor(accountStatus.chargesEnabled)}>
-                {getStatusIcon(accountStatus.chargesEnabled)}
-              </span>
-              <span>Charges</span>
+              <Loader2 className="h-4 w-4 animate-spin" />
+              <span>Checking connection status...</span>
             </div>
-
-            <div className="flex items-center gap-2">
-              <span className={getStatusColor(accountStatus.payoutsEnabled)}>
-                {getStatusIcon(accountStatus.payoutsEnabled)}
-              </span>
-              <span>Payouts</span>
+          ) : connectionStatus ? (
+            <div className="space-y-2">
+              <p>
+                <strong>Status:</strong> {connectionStatus.status}
+              </p>
+              {connectionStatus.accountId && (
+                <p>
+                  <strong>Account ID:</strong> {connectionStatus.accountId}
+                </p>
+              )}
+              {connectionStatus.requiresAction && (
+                <Alert>
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>Your Stripe account requires additional setup to accept payments.</AlertDescription>
+                </Alert>
+              )}
             </div>
+          ) : (
+            <p>Unable to check connection status</p>
+          )}
+        </CardContent>
+      </Card>
 
-            <div className="flex items-center gap-2">
-              <span className={getStatusColor(accountStatus.detailsSubmitted)}>
-                {getStatusIcon(accountStatus.detailsSubmitted)}
-              </span>
-              <span>Verified</span>
-            </div>
-          </div>
-        )}
+      {/* Create New Account */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <ExternalLink className="h-5 w-5" />
+            Create New Stripe Account
+          </CardTitle>
+          <CardDescription>Set up a new Stripe account to start accepting payments</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Button onClick={createStripeAccount} className="w-full">
+            <ExternalLink className="h-4 w-4 mr-2" />
+            Create Stripe Account
+          </Button>
+          <p className="text-sm text-muted-foreground mt-2">After creating your account, return here to link it</p>
+        </CardContent>
+      </Card>
 
-        {needsAttention && !environmentMismatch && (
-          <div className="mt-3 p-3 bg-yellow-900/20 border border-yellow-600/30 rounded-lg">
-            <p className="text-sm text-yellow-200">
-              {accountStatus?.requirementsCount} requirement(s) need attention to enable full functionality.
+      {/* Link Existing Account */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Link className="h-5 w-5" />
+            Link Existing Account
+          </CardTitle>
+          <CardDescription>Connect your existing Stripe account</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div>
+            <Label htmlFor="accountId">Stripe Account ID</Label>
+            <Input
+              id="accountId"
+              placeholder="acct_1234567890"
+              value={accountId}
+              onChange={(e) => setAccountId(e.target.value)}
+            />
+            <p className="text-sm text-muted-foreground mt-1">
+              Find this in your Stripe Dashboard → Settings → Account
             </p>
-            <Button
-              variant="link"
-              size="sm"
-              className="text-yellow-400 hover:text-yellow-300 p-0 h-auto mt-1"
-              onClick={() => window.open("https://dashboard.stripe.com/settings/account", "_blank")}
-            >
-              Complete setup in Stripe →
-            </Button>
           </div>
-        )}
 
-        {connectionData && (
-          <div className="mt-3 p-2 bg-gray-900/20 border border-gray-600/30 rounded-lg">
-            <p className="text-xs text-gray-400">
-              Connection Status: {connectionData.connected ? "Connected" : "Not Connected"}
-              {connectionData.accountId && ` • Account: ${connectionData.accountId.substring(0, 12)}...`}
-            </p>
-          </div>
-        )}
-      </CardContent>
-    </Card>
+          {message && (
+            <Alert className={messageType === "error" ? "border-red-500" : "border-green-500"}>
+              {messageType === "error" ? <AlertCircle className="h-4 w-4" /> : <CheckCircle className="h-4 w-4" />}
+              <AlertDescription>{message}</AlertDescription>
+            </Alert>
+          )}
+
+          <Button onClick={linkAccount} disabled={isLinking || !accountId.trim()} className="w-full">
+            {isLinking ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                Linking Account...
+              </>
+            ) : (
+              <>
+                <Link className="h-4 w-4 mr-2" />
+                Link Account
+              </>
+            )}
+          </Button>
+        </CardContent>
+      </Card>
+    </div>
   )
 }
