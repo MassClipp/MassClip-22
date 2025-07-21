@@ -13,6 +13,8 @@ export async function POST(request: NextRequest) {
 
     // Get authorization header
     const authHeader = request.headers.get("authorization")
+    console.log("🔑 [Link Account] Auth header present:", !!authHeader)
+
     if (!authHeader?.startsWith("Bearer ")) {
       console.log("❌ [Link Account] Invalid or missing Bearer token")
       return NextResponse.json({ error: "Authentication required" }, { status: 401 })
@@ -38,21 +40,21 @@ export async function POST(request: NextRequest) {
     const body = await request.json()
     const { accountId } = body
 
-    if (!accountId || typeof accountId !== "string") {
+    if (!accountId) {
+      console.log("❌ [Link Account] No account ID provided")
       return NextResponse.json({ error: "Account ID is required" }, { status: 400 })
     }
 
-    console.log("🏦 [Link Account] Linking account:", accountId)
+    console.log("🔍 [Link Account] Verifying Stripe account:", accountId)
 
     // Verify the Stripe account exists and get its details
     try {
       const account = await stripe.accounts.retrieve(accountId)
       console.log("✅ [Link Account] Stripe account verified:", {
         id: account.id,
-        type: account.type,
-        country: account.country,
         chargesEnabled: account.charges_enabled,
         payoutsEnabled: account.payouts_enabled,
+        detailsSubmitted: account.details_submitted,
       })
 
       // Update user document in Firestore
@@ -62,11 +64,12 @@ export async function POST(request: NextRequest) {
         .set(
           {
             stripeAccountId: accountId,
-            stripeAccountStatus: account.charges_enabled && account.payouts_enabled ? "active" : "pending",
-            stripeAccountType: account.type,
-            stripeCountry: account.country,
+            stripeAccountStatus: account.details_submitted ? "active" : "pending",
             stripeChargesEnabled: account.charges_enabled,
             stripePayoutsEnabled: account.payouts_enabled,
+            stripeDetailsSubmitted: account.details_submitted,
+            stripeAccountType: account.type,
+            stripeCountry: account.country,
             updatedAt: new Date(),
           },
           { merge: true },
@@ -77,15 +80,16 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({
         success: true,
         accountId: accountId,
-        status: account.charges_enabled && account.payouts_enabled ? "active" : "pending",
+        status: account.details_submitted ? "active" : "pending",
         chargesEnabled: account.charges_enabled,
         payoutsEnabled: account.payouts_enabled,
+        detailsSubmitted: account.details_submitted,
       })
     } catch (stripeError: any) {
       console.error("❌ [Link Account] Stripe error:", stripeError.message)
       return NextResponse.json(
         {
-          error: "Invalid Stripe account ID or account not accessible",
+          error: "Invalid Stripe account",
           details: stripeError.message,
         },
         { status: 400 },

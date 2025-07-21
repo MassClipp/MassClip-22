@@ -13,6 +13,8 @@ export async function POST(request: NextRequest) {
 
     // Get authorization header
     const authHeader = request.headers.get("authorization")
+    console.log("🔑 [Onboard] Auth header present:", !!authHeader)
+
     if (!authHeader?.startsWith("Bearer ")) {
       console.log("❌ [Onboard] Invalid or missing Bearer token")
       return NextResponse.json({ error: "Authentication required" }, { status: 401 })
@@ -34,11 +36,19 @@ export async function POST(request: NextRequest) {
 
     const userId = decodedToken.uid
 
-    // Create Stripe Express account
+    console.log("🏗️ [Onboard] Creating Stripe Express account...")
+
     try {
+      // Create Stripe Express account
       const account = await stripe.accounts.create({
         type: "express",
+        country: "US", // You might want to make this configurable
         email: decodedToken.email,
+        capabilities: {
+          card_payments: { requested: true },
+          transfers: { requested: true },
+        },
+        business_type: "individual",
         metadata: {
           userId: userId,
           email: decodedToken.email || "",
@@ -51,27 +61,28 @@ export async function POST(request: NextRequest) {
       const accountLink = await stripe.accountLinks.create({
         account: account.id,
         refresh_url: `${process.env.NEXT_PUBLIC_SITE_URL}/dashboard/earnings`,
-        return_url: `${process.env.NEXT_PUBLIC_SITE_URL}/dashboard/earnings`,
+        return_url: `${process.env.NEXT_PUBLIC_SITE_URL}/dashboard/earnings?connected=true`,
         type: "account_onboarding",
       })
 
-      console.log("✅ [Onboard] Account link created")
+      console.log("✅ [Onboard] Account link created:", accountLink.url)
 
       // Update user document in Firestore
       await db.collection("users").doc(userId).set(
         {
           stripeAccountId: account.id,
           stripeAccountStatus: "pending",
-          stripeAccountType: "express",
           stripeChargesEnabled: false,
           stripePayoutsEnabled: false,
+          stripeDetailsSubmitted: false,
+          stripeAccountType: "express",
           createdAt: new Date(),
           updatedAt: new Date(),
         },
         { merge: true },
       )
 
-      console.log("✅ [Onboard] User document updated")
+      console.log("✅ [Onboard] User document updated successfully")
 
       return NextResponse.json({
         success: true,
