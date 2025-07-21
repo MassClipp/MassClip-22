@@ -4,7 +4,7 @@ import { useEffect, useState } from "react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Loader2, CreditCard, DollarSign, Globe, Shield } from "lucide-react"
-import StripeAccountLinker from "@/components/stripe-account-linker"
+import { StripeAccountLinker } from "@/components/stripe-account-linker"
 
 export default function ConnectStripePage() {
   const [isLoading, setIsLoading] = useState(true)

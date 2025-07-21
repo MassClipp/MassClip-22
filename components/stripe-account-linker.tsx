@@ -56,10 +56,14 @@ export function StripeAccountLinker() {
           setSuccess("Stripe account is already connected!")
         }
       } else {
-        console.error("Failed to check connection status")
+        console.error("Failed to check connection status:", response.status)
+        // Don't show error to user for connection check failure
+        setConnectionStatus({ connected: false })
       }
     } catch (error) {
       console.error("Error checking connection status:", error)
+      // Don't show error to user for connection check failure
+      setConnectionStatus({ connected: false })
     } finally {
       setIsCheckingStatus(false)
     }
@@ -128,34 +132,26 @@ export function StripeAccountLinker() {
   return (
     <div className="w-full max-w-2xl mx-auto space-y-6">
       {/* Connection Status Card */}
-      {connectionStatus && (
+      {connectionStatus && connectionStatus.connected && (
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              {connectionStatus.connected ? (
-                <CheckCircle className="h-5 w-5 text-green-500" />
-              ) : (
-                <AlertCircle className="h-5 w-5 text-yellow-500" />
-              )}
+              <CheckCircle className="h-5 w-5 text-green-500" />
               Connection Status
             </CardTitle>
           </CardHeader>
           <CardContent>
-            {connectionStatus.connected ? (
-              <div className="space-y-2">
-                <p className="text-green-600 font-medium">✅ Stripe account connected</p>
-                <p className="text-sm text-gray-600">Account ID: {connectionStatus.accountId}</p>
-                {connectionStatus.accountStatus && (
-                  <div className="text-sm space-y-1">
-                    <p>Charges Enabled: {connectionStatus.accountStatus.chargesEnabled ? "✅" : "❌"}</p>
-                    <p>Payouts Enabled: {connectionStatus.accountStatus.payoutsEnabled ? "✅" : "❌"}</p>
-                    <p>Details Submitted: {connectionStatus.accountStatus.detailsSubmitted ? "✅" : "❌"}</p>
-                  </div>
-                )}
-              </div>
-            ) : (
-              <p className="text-yellow-600">No Stripe account connected</p>
-            )}
+            <div className="space-y-2">
+              <p className="text-green-600 font-medium">✅ Stripe account connected</p>
+              <p className="text-sm text-gray-600">Account ID: {connectionStatus.accountId}</p>
+              {connectionStatus.accountStatus && (
+                <div className="text-sm space-y-1">
+                  <p>Charges Enabled: {connectionStatus.accountStatus.chargesEnabled ? "✅" : "❌"}</p>
+                  <p>Payouts Enabled: {connectionStatus.accountStatus.payoutsEnabled ? "✅" : "❌"}</p>
+                  <p>Details Submitted: {connectionStatus.accountStatus.detailsSubmitted ? "✅" : "❌"}</p>
+                </div>
+              )}
+            </div>
           </CardContent>
         </Card>
       )}

@@ -102,3 +102,8 @@ export async function GET(request: NextRequest) {
     )
   }
 }
+
+export async function POST(request: NextRequest) {
+  // Handle POST requests the same way as GET for compatibility
+  return GET(request)
+}
