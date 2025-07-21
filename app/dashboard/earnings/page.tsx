@@ -2,9 +2,9 @@
 
 import { useState, useEffect } from "react"
 import { useAuth } from "@/contexts/auth-context"
-import StripeExpressOnboarding from "@/components/stripe-express-onboarding"
+import StripeConnectionPrompt from "@/components/stripe-connection-prompt"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Loader2, TrendingUp } from "lucide-react"
+import { Loader2 } from "lucide-react"
 
 interface OnboardingStatus {
   connected: boolean
@@ -51,62 +51,41 @@ export default function EarningsPage() {
   // Show loading state
   if (loading || isCheckingStatus) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="text-center">
-          <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4 text-blue-600" />
-          <p className="text-gray-600">Loading earnings dashboard...</p>
+      <div className="container mx-auto py-8">
+        <div className="flex items-center justify-center">
+          <Loader2 className="h-8 w-8 animate-spin" />
+          <span className="ml-2">Loading earnings dashboard...</span>
         </div>
       </div>
     )
   }
 
+  // Show onboarding if needed
+  if (onboardingStatus && !onboardingStatus.connected) {
+    return <StripeConnectionPrompt onConnectionSuccess={() => checkOnboardingStatus()} />
+  }
+
+  // Show main earnings dashboard
   return (
-    <div className="min-h-screen bg-gray-50 py-8">
-      <div className="container mx-auto px-4">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Earnings Dashboard</h1>
-          <p className="text-gray-600">
-            {onboardingStatus?.connected
-              ? "Track your earnings and manage your payment settings"
-              : "Set up your payment account to start earning from your content"}
-          </p>
-        </div>
+    <div className="container mx-auto py-8">
+      <div className="mb-6">
+        <h1 className="text-3xl font-bold">Earnings Dashboard</h1>
+        <p className="text-muted-foreground">Track your earnings and manage your Stripe account</p>
+      </div>
 
-        <div className="space-y-8">
-          {/* Stripe Account Setup/Status */}
-          <StripeExpressOnboarding />
-
-          {/* Earnings Overview - Show only if connected */}
-          {onboardingStatus?.connected && (
-            <Card className="border-0 shadow-lg">
-              <CardHeader>
-                <div className="flex items-center space-x-3">
-                  <div className="w-10 h-10 bg-green-100 rounded-lg flex items-center justify-center">
-                    <TrendingUp className="w-5 h-5 text-green-600" />
-                  </div>
-                  <div>
-                    <CardTitle className="text-xl text-gray-900">Earnings Overview</CardTitle>
-                    <CardDescription className="text-gray-600">Your revenue and payout information</CardDescription>
-                  </div>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="text-center py-12">
-                  <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <TrendingUp className="w-8 h-8 text-gray-400" />
-                  </div>
-                  <h3 className="text-lg font-medium text-gray-900 mb-2">Ready to Start Earning</h3>
-                  <p className="text-gray-600 mb-4">
-                    Your earnings dashboard will populate once you start making sales.
-                  </p>
-                  <p className="text-sm text-gray-500">
-                    Upload content and share it with your audience to begin generating revenue.
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-        </div>
+      <div className="grid gap-6">
+        {/* Earnings Overview - This would be your existing earnings components */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Earnings Overview</CardTitle>
+            <CardDescription>Your earnings and payout information</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <p className="text-muted-foreground">
+              Your earnings dashboard will appear here once you start making sales.
+            </p>
+          </CardContent>
+        </Card>
       </div>
     </div>
   )

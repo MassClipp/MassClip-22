@@ -1,7 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { headers } from "next/headers"
+import { auth } from "@/lib/firebase-admin"
+import { db } from "@/lib/firebase-admin"
 import Stripe from "stripe"
-import { adminAuth, adminDb } from "@/lib/firebase-admin"
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: "2024-06-20",
@@ -10,23 +10,21 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
 export async function POST(request: NextRequest) {
   try {
     // Get authorization header
-    const headersList = await headers()
-    const authorization = headersList.get("authorization")
-
-    if (!authorization?.startsWith("Bearer ")) {
+    const authHeader = request.headers.get("authorization")
+    if (!authHeader?.startsWith("Bearer ")) {
       return NextResponse.json({ error: "Missing or invalid authorization header" }, { status: 401 })
     }
 
-    const idToken = authorization.split("Bearer ")[1]
+    const token = authHeader.substring(7)
 
-    // Verify Firebase ID token
-    const decodedToken = await adminAuth.verifyIdToken(idToken)
+    // Verify Firebase token
+    const decodedToken = await auth.verifyIdToken(token)
     const userId = decodedToken.uid
 
-    console.log("Refreshing onboarding link for user:", userId)
+    console.log(`[Refresh Onboarding] Refreshing link for user: ${userId}`)
 
     // Get user's Stripe account ID from database
-    const userDoc = await adminDb.collection("users").doc(userId).get()
+    const userDoc = await db.collection("users").doc(userId).get()
     const userData = userDoc.data()
 
     if (!userData?.stripeAccountId) {
@@ -35,29 +33,38 @@ export async function POST(request: NextRequest) {
 
     const accountId = userData.stripeAccountId
 
-    // Create new onboarding link
+    // Verify account exists
+    try {
+      await stripe.accounts.retrieve(accountId)
+    } catch (error: any) {
+      if (error.code === "resource_missing") {
+        return NextResponse.json({ error: "Stripe account not found" }, { status: 404 })
+      }
+      throw error
+    }
+
+    // Create fresh onboarding link
     const accountLink = await stripe.accountLinks.create({
       account: accountId,
-      refresh_url: `${process.env.NEXT_PUBLIC_SITE_URL}/dashboard/stripe/onboarding?refresh=true&account=${accountId}`,
-      return_url: `${process.env.NEXT_PUBLIC_SITE_URL}/dashboard/stripe/onboarding/success?account=${accountId}`,
+      refresh_url: `${process.env.NEXT_PUBLIC_SITE_URL}/dashboard/stripe/onboarding?refresh=true`,
+      return_url: `${process.env.NEXT_PUBLIC_SITE_URL}/dashboard/stripe/onboarding/success`,
       type: "account_onboarding",
     })
 
-    console.log("Created refreshed onboarding link:", accountLink.url)
+    console.log(`[Refresh Onboarding] Created fresh onboarding link`)
 
     return NextResponse.json({
       success: true,
-      accountId: accountId,
       onboardingUrl: accountLink.url,
       message: "Onboarding link refreshed successfully",
     })
-  } catch (error) {
-    console.error("Error refreshing onboarding link:", error)
+  } catch (error: any) {
+    console.error("[Refresh Onboarding] Error:", error)
 
     return NextResponse.json(
       {
-        error: error instanceof Error ? error.message : "Failed to refresh onboarding link",
-        details: error instanceof Stripe.errors.StripeError ? error.type : undefined,
+        error: error.message || "Failed to refresh onboarding link",
+        details: error.type || "unknown_error",
       },
       { status: 500 },
     )

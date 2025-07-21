@@ -1,33 +1,32 @@
-// ---------------------------------------------------------------------------
-//  Firebase Admin singleton + helpers
-// ---------------------------------------------------------------------------
 import { initializeApp, getApps, cert, type App } from "firebase-admin/app"
 import { getFirestore, FieldValue, type Firestore } from "firebase-admin/firestore"
 import { getAuth, type Auth, type DecodedIdToken } from "firebase-admin/auth"
 
 /* -------------------------------------------------------------------------- */
-/*                           App initialisation                               */
+/*                              App initialisation                            */
 /* -------------------------------------------------------------------------- */
 
 /**
- * Initialise Firebase Admin exactly once (prevents double-init in
- * serverless / local hot-reload scenarios).
- * All server-side code that needs `auth` / `db` should import from here.
+ * Initialise the Firebase Admin SDK exactly once (avoids double-init in
+ * serverless / hot-reload scenarios).
+ * All logic calling `auth` / `db` must import from this file.
  */
 export function initializeFirebaseAdmin(): App {
-  if (getApps().length > 0) return getApps()[0]!
+  if (getApps().length > 0) {
+    return getApps()[0]!
+  }
 
   const { FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, FIREBASE_PRIVATE_KEY } = process.env
 
   if (!FIREBASE_PROJECT_ID || !FIREBASE_CLIENT_EMAIL || !FIREBASE_PRIVATE_KEY) {
     throw new Error(
-      "Missing Firebase Admin credentials. Ensure " +
+      "Missing Firebase Admin credentials. Make sure " +
         "FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL and FIREBASE_PRIVATE_KEY " +
         "environment variables are set.",
     )
   }
 
-  // Firebase Admin expects literal new-lines in the private key
+  // Firebase Admin expects real line breaks in the private key
   const privateKey = FIREBASE_PRIVATE_KEY.replace(/\\n/g, "\n")
 
   return initializeApp({
@@ -41,7 +40,7 @@ export function initializeFirebaseAdmin(): App {
 }
 
 /* -------------------------------------------------------------------------- */
-/*                         Lazy-loaded singletons                              */
+/*                             Lazy loaded singletons                         */
 /* -------------------------------------------------------------------------- */
 
 const adminApp = initializeFirebaseAdmin()
@@ -96,7 +95,9 @@ export async function getAuthenticatedUser(
   const get = (key: string) => (headers instanceof Headers ? headers.get(key) : headers[key])
 
   const authHeader = get("authorization") ?? ""
-  if (!authHeader.startsWith("Bearer ")) throw new Error("Missing Bearer token")
+  if (!authHeader.startsWith("Bearer ")) {
+    throw new Error("Missing Bearer token")
+  }
 
   const token = authHeader.slice(7)
   const decoded = await verifyIdToken(token)
@@ -127,11 +128,3 @@ export async function createOrUpdateUserProfile(userId: string, profileData: Rec
 /* -------------------------------------------------------------------------- */
 
 export { FieldValue }
-
-/* -------------------------------------------------------------------------- */
-/*                     Compatibility alias exports                            */
-/* -------------------------------------------------------------------------- */
-
-/** Alias for libraries still expecting `adminAuth` / `adminDb` names */
-export const adminAuth = auth
-export const adminDb = db
