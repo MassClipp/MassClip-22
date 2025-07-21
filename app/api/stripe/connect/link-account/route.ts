@@ -14,7 +14,6 @@ export async function POST(request: NextRequest) {
     // Get authorization header
     const authHeader = request.headers.get("authorization")
     console.log("🔑 [Link Account] Auth header present:", !!authHeader)
-    console.log("🔑 [Link Account] Auth header format:", authHeader?.substring(0, 20) + "...")
 
     if (!authHeader?.startsWith("Bearer ")) {
       console.log("❌ [Link Account] Invalid or missing Bearer token")
@@ -74,29 +73,45 @@ export async function POST(request: NextRequest) {
 
     if (!finalAccountId.startsWith("acct_")) {
       console.log("❌ [Link Account] Invalid account ID format:", finalAccountId)
-      return NextResponse.json({ error: "Invalid Stripe account ID format" }, { status: 400 })
+      return NextResponse.json(
+        {
+          error: "Invalid Stripe account ID format",
+          details: "Account ID must start with 'acct_'",
+        },
+        { status: 400 },
+      )
     }
+
+    // Check if we're in test mode
+    const isTestMode = process.env.STRIPE_SECRET_KEY?.includes("sk_test_")
+    console.log("🧪 [Link Account] Stripe mode:", isTestMode ? "TEST" : "LIVE")
 
     // Verify the Stripe account exists
     try {
       console.log("🔍 [Link Account] Verifying Stripe account:", finalAccountId)
       const account = await stripe.accounts.retrieve(finalAccountId)
-      console.log("✅ [Link Account] Stripe account verified:", account.id)
+      console.log("✅ [Link Account] Stripe account verified:", {
+        id: account.id,
+        type: account.type,
+        country: account.country,
+        details_submitted: account.details_submitted,
+        charges_enabled: account.charges_enabled,
+        payouts_enabled: account.payouts_enabled,
+      })
 
       // Update user document in Firestore
-      await db
-        .collection("users")
-        .doc(userId)
-        .set(
-          {
-            stripeAccountId: finalAccountId,
-            stripeAccountStatus: account.details_submitted ? "active" : "pending",
-            stripeAccountType: account.type,
-            stripeAccountCountry: account.country,
-            updatedAt: new Date(),
-          },
-          { merge: true },
-        )
+      const userData = {
+        stripeAccountId: finalAccountId,
+        stripeAccountStatus: account.details_submitted ? "active" : "pending",
+        stripeAccountType: account.type,
+        stripeAccountCountry: account.country,
+        stripeChargesEnabled: account.charges_enabled,
+        stripePayoutsEnabled: account.payouts_enabled,
+        stripeDetailsSubmitted: account.details_submitted,
+        updatedAt: new Date(),
+      }
+
+      await db.collection("users").doc(userId).set(userData, { merge: true })
 
       console.log("✅ [Link Account] User document updated successfully")
 
@@ -105,18 +120,42 @@ export async function POST(request: NextRequest) {
         accountId: finalAccountId,
         status: account.details_submitted ? "active" : "pending",
         message: "Account linked successfully",
+        accountDetails: {
+          type: account.type,
+          country: account.country,
+          charges_enabled: account.charges_enabled,
+          payouts_enabled: account.payouts_enabled,
+          details_submitted: account.details_submitted,
+        },
       })
     } catch (stripeError: any) {
       console.error("❌ [Link Account] Stripe error:", stripeError.message)
       console.error("❌ [Link Account] Stripe error code:", stripeError.code)
+      console.error("❌ [Link Account] Stripe error type:", stripeError.type)
 
       if (stripeError.code === "resource_missing") {
         return NextResponse.json(
           {
             error: "Stripe account not found",
-            details: "The provided account ID does not exist in Stripe",
+            details: `The account ID '${finalAccountId}' does not exist or is not accessible with your current Stripe keys.`,
+            suggestions: [
+              "Double-check the account ID format (should start with 'acct_')",
+              "Ensure you're using the correct Stripe environment (test vs live)",
+              "Verify the account exists in your Stripe dashboard",
+            ],
           },
           { status: 404 },
+        )
+      }
+
+      if (stripeError.code === "account_invalid") {
+        return NextResponse.json(
+          {
+            error: "Invalid Stripe account",
+            details: "The provided account ID is not valid or accessible",
+            suggestions: ["Check that the account ID is correct", "Ensure the account belongs to your Stripe platform"],
+          },
+          { status: 400 },
         )
       }
 
@@ -124,12 +163,20 @@ export async function POST(request: NextRequest) {
         {
           error: "Failed to verify Stripe account",
           details: stripeError.message,
+          code: stripeError.code,
+          type: stripeError.type,
+          suggestions: [
+            "Verify the account ID is correct",
+            "Check your Stripe API keys are properly configured",
+            "Ensure you have access to this account",
+          ],
         },
         { status: 400 },
       )
     }
   } catch (error: any) {
     console.error("❌ [Link Account] Unexpected error:", error.message)
+    console.error("❌ [Link Account] Error stack:", error.stack)
     return NextResponse.json(
       {
         error: "Internal server error",
