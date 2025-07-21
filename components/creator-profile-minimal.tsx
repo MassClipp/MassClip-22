@@ -617,6 +617,7 @@ function BundleCard({ item, user, creatorId }: { item: ContentItem; user: any; c
     stripePriceId: item.stripePriceId,
     stripeProductId: item.stripeProductId,
     price: item.price,
+    priceType: typeof item.price,
     contentCount: item.contentCount,
     creatorId,
     currentUserId: user?.uid,
@@ -632,19 +633,53 @@ function BundleCard({ item, user, creatorId }: { item: ContentItem; user: any; c
     setImageError(false)
   }
 
-  // Safe price formatting with fallback - moved inside component
+  // Safe price formatting with extensive error handling
   const formatPrice = (price: number | undefined | null): string => {
-    console.log("🔢 Formatting price:", price, typeof price)
-    if (typeof price === "number" && !isNaN(price) && isFinite(price)) {
-      return price.toFixed(2)
+    try {
+      console.log("🔢 Formatting price:", price, typeof price)
+
+      // Handle null/undefined
+      if (price === null || price === undefined) {
+        console.log("⚠️ Price is null or undefined, using default")
+        return "0.00"
+      }
+
+      // Convert to number if it's a string
+      if (typeof price === "string") {
+        const numPrice = Number.parseFloat(price)
+        if (isNaN(numPrice)) {
+          console.log("⚠️ Price string cannot be parsed to number:", price)
+          return "0.00"
+        }
+        price = numPrice
+      }
+
+      // Final check for valid number
+      if (typeof price === "number" && !isNaN(price) && isFinite(price)) {
+        const formatted = price.toFixed(2)
+        console.log("✅ Successfully formatted price:", formatted)
+        return formatted
+      }
+
+      console.log("⚠️ Price failed all checks, using default:", price)
+      return "0.00"
+    } catch (error) {
+      console.error("❌ Error in formatPrice:", error, "for price:", price)
+      return "0.00"
     }
-    return "0.00"
   }
 
-  // Get the formatted price
-  const formattedPrice = formatPrice(item.price)
-  console.log("💰 Final formatted price:", formattedPrice)
+  // Get the formatted price with error handling
+  let formattedPrice = "0.00"
+  try {
+    formattedPrice = formatPrice(item.price)
+    console.log("💰 Final formatted price:", formattedPrice)
+  } catch (error) {
+    console.error("❌ Error formatting price in BundleCard:", error)
+    formattedPrice = "0.00"
+  }
 
+  // Rest of the component remains the same...
   return (
     <div className="bg-zinc-900 rounded-lg overflow-hidden border border-zinc-700/30 hover:border-zinc-600/40 transition-all duration-300 w-full max-w-[340px] sm:max-w-[320px] relative">
       {/* Thumbnail Section - Always square aspect ratio */}
@@ -687,7 +722,13 @@ function BundleCard({ item, user, creatorId }: { item: ContentItem; user: any; c
         <div className="flex items-center justify-between pt-2">
           <span className="text-white text-xl sm:text-2xl font-light">${formattedPrice}</span>
 
-          <UnlockButton stripePriceId={item.stripePriceId} bundleId={item.id} user={user} creatorId={creatorId} />
+          <UnlockButton
+            stripePriceId={item.stripePriceId}
+            bundleId={item.id}
+            user={user}
+            creatorId={creatorId}
+            price={item.price}
+          />
         </div>
       </div>
     </div>
