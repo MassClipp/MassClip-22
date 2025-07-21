@@ -22,7 +22,6 @@ import {
   User,
   Shield,
   ChevronDown,
-  Menu,
 } from "lucide-react"
 
 interface NavItem {
@@ -75,6 +74,13 @@ const navigationSections: NavSection[] = [
   },
 ]
 
+// Custom hamburger menu icon component
+const HamburgerIcon = ({ className }: { className?: string }) => (
+  <svg className={className} fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+  </svg>
+)
+
 export function NavDropdown() {
   const [open, setOpen] = useState(false)
   const pathname = usePathname()
@@ -82,18 +88,20 @@ export function NavDropdown() {
   return (
     <DropdownMenu open={open} onOpenChange={setOpen}>
       <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="sm" className="gap-2">
-          <Menu className="h-4 w-4" />
-          Menu
-          <ChevronDown className="h-4 w-4" />
+        <Button variant="ghost" size="sm" className="gap-2 hover:bg-zinc-800/50 transition-colors duration-200">
+          <HamburgerIcon className="h-4 w-4" />
+          <ChevronDown className="h-3 w-3 opacity-70" />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent className="w-56 p-0" align="start">
+      <DropdownMenuContent
+        className="w-56 p-0 bg-zinc-900/95 backdrop-blur-sm border-zinc-800/50 shadow-2xl"
+        align="start"
+      >
         <ScrollArea className="max-h-[400px]">
           <div className="p-2">
             {navigationSections.map((section, sectionIndex) => (
               <div key={section.title}>
-                <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                <div className="px-2 py-1.5 text-xs font-semibold text-zinc-400 uppercase tracking-wider">
                   {section.title}
                 </div>
                 <div className="space-y-1">
@@ -106,8 +114,10 @@ export function NavDropdown() {
                         key={item.href}
                         href={item.href}
                         onClick={() => setOpen(false)}
-                        className={`flex items-center gap-3 px-2 py-2 text-sm rounded-md transition-colors hover:bg-accent hover:text-accent-foreground ${
-                          isActive ? "bg-accent text-accent-foreground font-medium" : ""
+                        className={`flex items-center gap-3 px-2 py-2 text-sm rounded-lg transition-all duration-200 hover:bg-zinc-800/50 hover:text-white ${
+                          isActive
+                            ? "bg-zinc-800/80 text-white font-medium shadow-sm"
+                            : "text-zinc-300 hover:text-white"
                         }`}
                       >
                         <Icon className="h-4 w-4" />
@@ -116,7 +126,7 @@ export function NavDropdown() {
                     )
                   })}
                 </div>
-                {sectionIndex < navigationSections.length - 1 && <Separator className="my-2" />}
+                {sectionIndex < navigationSections.length - 1 && <Separator className="my-2 bg-zinc-800/50" />}
               </div>
             ))}
           </div>
