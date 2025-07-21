@@ -134,7 +134,7 @@ export function UnlockButton({ stripePriceId, bundleId, user, creatorId, disable
     if (isUnlocking) {
       return (
         <>
-          <Loader2 className="w-4 h-4 animate-spin" />
+          <Loader2 className="w-3.5 h-3.5 animate-spin" />
           <span>Processing...</span>
         </>
       )
@@ -143,7 +143,7 @@ export function UnlockButton({ stripePriceId, bundleId, user, creatorId, disable
     if (!isLoggedIn) {
       return (
         <>
-          <Unlock className="w-4 h-4" />
+          <Unlock className="w-3.5 h-3.5" />
           <span>Unlock</span>
         </>
       )
@@ -152,7 +152,7 @@ export function UnlockButton({ stripePriceId, bundleId, user, creatorId, disable
     if (isCreator) {
       return (
         <>
-          <Settings className="w-4 h-4" />
+          <Settings className="w-3.5 h-3.5" />
           <span>Manage</span>
         </>
       )
@@ -160,7 +160,7 @@ export function UnlockButton({ stripePriceId, bundleId, user, creatorId, disable
 
     return (
       <>
-        <Unlock className="w-4 h-4" />
+        <Unlock className="w-3.5 h-3.5" />
         <span>Unlock</span>
       </>
     )
@@ -168,9 +168,9 @@ export function UnlockButton({ stripePriceId, bundleId, user, creatorId, disable
 
   const getButtonStyle = () => {
     if (isCreator) {
-      return "bg-blue-600 text-white hover:bg-blue-700 active:bg-blue-800 border border-blue-500 hover:border-blue-400"
+      return "bg-gradient-to-r from-blue-600 to-blue-700 text-white hover:from-blue-700 hover:to-blue-800 active:from-blue-800 active:to-blue-900 border border-blue-500/20 hover:border-blue-400/30 shadow-lg hover:shadow-blue-500/25"
     }
-    return "bg-zinc-800 text-white hover:bg-zinc-700 active:bg-zinc-600 border border-zinc-600 hover:border-zinc-500"
+    return "bg-gradient-to-r from-zinc-800 to-zinc-900 text-white hover:from-zinc-700 hover:to-zinc-800 active:from-zinc-600 active:to-zinc-700 border border-zinc-600/30 hover:border-zinc-500/40 shadow-lg hover:shadow-zinc-500/20"
   }
 
   const isDisabled = disabled || isUnlocking
@@ -179,12 +179,12 @@ export function UnlockButton({ stripePriceId, bundleId, user, creatorId, disable
     <>
       {/* Toast Notification */}
       {showToast && (
-        <div className="fixed top-6 right-6 z-50 bg-red-600 text-white px-4 py-3 rounded-lg shadow-lg flex items-center gap-2 animate-in fade-in slide-in-from-top-2 duration-200">
-          <div className="w-4 h-4 rounded-full border-2 border-white flex items-center justify-center">
+        <div className="fixed top-6 right-6 z-50 bg-gradient-to-r from-red-600 to-red-700 text-white px-4 py-3 rounded-xl shadow-2xl flex items-center gap-3 animate-in fade-in slide-in-from-top-2 duration-300 border border-red-500/20">
+          <div className="w-5 h-5 rounded-full bg-white/20 flex items-center justify-center flex-shrink-0">
             <span className="text-xs font-bold">!</span>
           </div>
           <div className="flex flex-col">
-            <span className="text-sm font-medium">Login Required</span>
+            <span className="text-sm font-semibold">Login Required</span>
             <span className="text-xs opacity-90">You need to login to unlock this content</span>
           </div>
         </div>
@@ -194,7 +194,7 @@ export function UnlockButton({ stripePriceId, bundleId, user, creatorId, disable
         type="button"
         onClick={handleClick}
         disabled={isDisabled}
-        className={`${getButtonStyle()} font-semibold px-4 py-2 sm:px-5 sm:py-2.5 text-sm sm:text-base rounded-md transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 cursor-pointer select-none`}
+        className={`${getButtonStyle()} font-medium px-3 py-1.5 sm:px-4 sm:py-2 text-xs sm:text-sm rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 cursor-pointer select-none hover:scale-[1.02] active:scale-[0.98] backdrop-blur-sm`}
         style={{
           pointerEvents: isDisabled ? "none" : "auto",
           userSelect: "none",
