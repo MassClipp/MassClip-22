@@ -36,26 +36,34 @@ export async function POST(request: NextRequest) {
 
     const userId = decodedToken.uid
 
-    // Get request body
-    const body = await request.json()
-    const { accountId } = body
-
-    if (!accountId) {
-      console.log("❌ [Link Account] No account ID provided")
-      return NextResponse.json({ error: "Account ID is required" }, { status: 400 })
+    // Parse request body
+    let body
+    try {
+      body = await request.json()
+      console.log("📝 [Link Account] Request body:", body)
+    } catch (error) {
+      console.error("❌ [Link Account] Invalid JSON body")
+      return NextResponse.json({ error: "Invalid request body" }, { status: 400 })
     }
 
-    console.log("🔍 [Link Account] Verifying Stripe account:", accountId)
+    const { stripeAccountId, accountId } = body
+    const finalAccountId = stripeAccountId || accountId
 
-    // Verify the Stripe account exists and get its details
+    if (!finalAccountId) {
+      console.log("❌ [Link Account] No account ID provided")
+      return NextResponse.json({ error: "Stripe account ID is required" }, { status: 400 })
+    }
+
+    if (!finalAccountId.startsWith("acct_")) {
+      console.log("❌ [Link Account] Invalid account ID format")
+      return NextResponse.json({ error: "Invalid Stripe account ID format" }, { status: 400 })
+    }
+
+    // Verify the Stripe account exists
     try {
-      const account = await stripe.accounts.retrieve(accountId)
-      console.log("✅ [Link Account] Stripe account verified:", {
-        id: account.id,
-        chargesEnabled: account.charges_enabled,
-        payoutsEnabled: account.payouts_enabled,
-        detailsSubmitted: account.details_submitted,
-      })
+      console.log("🔍 [Link Account] Verifying Stripe account:", finalAccountId)
+      const account = await stripe.accounts.retrieve(finalAccountId)
+      console.log("✅ [Link Account] Stripe account verified:", account.id)
 
       // Update user document in Firestore
       await db
@@ -63,13 +71,10 @@ export async function POST(request: NextRequest) {
         .doc(userId)
         .set(
           {
-            stripeAccountId: accountId,
+            stripeAccountId: finalAccountId,
             stripeAccountStatus: account.details_submitted ? "active" : "pending",
-            stripeChargesEnabled: account.charges_enabled,
-            stripePayoutsEnabled: account.payouts_enabled,
-            stripeDetailsSubmitted: account.details_submitted,
             stripeAccountType: account.type,
-            stripeCountry: account.country,
+            stripeAccountCountry: account.country,
             updatedAt: new Date(),
           },
           { merge: true },
@@ -79,21 +84,18 @@ export async function POST(request: NextRequest) {
 
       return NextResponse.json({
         success: true,
-        accountId: accountId,
+        accountId: finalAccountId,
         status: account.details_submitted ? "active" : "pending",
-        chargesEnabled: account.charges_enabled,
-        payoutsEnabled: account.payouts_enabled,
-        detailsSubmitted: account.details_submitted,
+        message: "Account linked successfully",
       })
     } catch (stripeError: any) {
       console.error("❌ [Link Account] Stripe error:", stripeError.message)
-      return NextResponse.json(
-        {
-          error: "Invalid Stripe account",
-          details: stripeError.message,
-        },
-        { status: 400 },
-      )
+
+      if (stripeError.code === "resource_missing") {
+        return NextResponse.json({ error: "Stripe account not found" }, { status: 404 })
+      }
+
+      return NextResponse.json({ error: "Failed to verify Stripe account" }, { status: 400 })
     }
   } catch (error: any) {
     console.error("❌ [Link Account] Unexpected error:", error.message)

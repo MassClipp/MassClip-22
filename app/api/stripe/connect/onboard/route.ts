@@ -36,22 +36,16 @@ export async function POST(request: NextRequest) {
 
     const userId = decodedToken.uid
 
-    console.log("🏗️ [Onboard] Creating Stripe Express account...")
-
     try {
-      // Create Stripe Express account
+      // Create Stripe Connect account
+      console.log("🏗️ [Onboard] Creating Stripe Connect account...")
       const account = await stripe.accounts.create({
         type: "express",
-        country: "US", // You might want to make this configurable
+        country: "US", // Default to US, can be made configurable
         email: decodedToken.email,
         capabilities: {
           card_payments: { requested: true },
           transfers: { requested: true },
-        },
-        business_type: "individual",
-        metadata: {
-          userId: userId,
-          email: decodedToken.email || "",
         },
       })
 
@@ -61,7 +55,7 @@ export async function POST(request: NextRequest) {
       const accountLink = await stripe.accountLinks.create({
         account: account.id,
         refresh_url: `${process.env.NEXT_PUBLIC_SITE_URL}/dashboard/earnings`,
-        return_url: `${process.env.NEXT_PUBLIC_SITE_URL}/dashboard/earnings?connected=true`,
+        return_url: `${process.env.NEXT_PUBLIC_SITE_URL}/dashboard/earnings`,
         type: "account_onboarding",
       })
 
@@ -72,11 +66,8 @@ export async function POST(request: NextRequest) {
         {
           stripeAccountId: account.id,
           stripeAccountStatus: "pending",
-          stripeChargesEnabled: false,
-          stripePayoutsEnabled: false,
-          stripeDetailsSubmitted: false,
-          stripeAccountType: "express",
-          createdAt: new Date(),
+          stripeAccountType: account.type,
+          stripeAccountCountry: account.country,
           updatedAt: new Date(),
         },
         { merge: true },
@@ -88,16 +79,11 @@ export async function POST(request: NextRequest) {
         success: true,
         accountId: account.id,
         url: accountLink.url,
+        message: "Onboarding link created successfully",
       })
     } catch (stripeError: any) {
       console.error("❌ [Onboard] Stripe error:", stripeError.message)
-      return NextResponse.json(
-        {
-          error: "Failed to create Stripe account",
-          details: stripeError.message,
-        },
-        { status: 500 },
-      )
+      return NextResponse.json({ error: "Failed to create Stripe account" }, { status: 500 })
     }
   } catch (error: any) {
     console.error("❌ [Onboard] Unexpected error:", error.message)

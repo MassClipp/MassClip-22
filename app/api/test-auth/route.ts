@@ -7,30 +7,45 @@ export async function GET(request: NextRequest) {
 
     // Get authorization header
     const authHeader = request.headers.get("authorization")
-    console.log("🔑 [Test Auth] Auth header present:", !!authHeader)
-    console.log("🔑 [Test Auth] Auth header value:", authHeader?.substring(0, 20) + "...")
+    console.log("🔑 [Test Auth] Auth header:", authHeader ? "present" : "missing")
 
     if (!authHeader) {
-      console.log("❌ [Test Auth] No authorization header")
-      return NextResponse.json({ error: "No authorization header" }, { status: 401 })
+      return NextResponse.json(
+        {
+          error: "No authorization header",
+          received: "none",
+        },
+        { status: 401 },
+      )
     }
 
     if (!authHeader.startsWith("Bearer ")) {
-      console.log("❌ [Test Auth] Invalid authorization header format")
-      return NextResponse.json({ error: "Invalid authorization header format" }, { status: 401 })
+      return NextResponse.json(
+        {
+          error: "Invalid authorization format",
+          received: authHeader.substring(0, 20) + "...",
+        },
+        { status: 401 },
+      )
     }
 
-    // Extract token
     const token = authHeader.replace("Bearer ", "")
-    console.log("🎫 [Test Auth] Token extracted, length:", token.length)
-    console.log("🎫 [Test Auth] Token preview:", token.substring(0, 50) + "...")
+    console.log("🎫 [Test Auth] Token length:", token.length)
 
-    // Verify Firebase token
+    if (token.length < 100) {
+      return NextResponse.json(
+        {
+          error: "Token too short",
+          length: token.length,
+        },
+        { status: 401 },
+      )
+    }
+
+    // Verify token
     try {
       const decodedToken = await auth.verifyIdToken(token)
       console.log("✅ [Test Auth] Token verified successfully")
-      console.log("👤 [Test Auth] User ID:", decodedToken.uid)
-      console.log("📧 [Test Auth] User email:", decodedToken.email)
 
       return NextResponse.json({
         success: true,
@@ -46,22 +61,19 @@ export async function GET(request: NextRequest) {
           expiresAt: new Date(decodedToken.exp * 1000).toISOString(),
         },
       })
-    } catch (error: any) {
-      console.error("❌ [Test Auth] Token verification failed:", error.message)
-      console.error("❌ [Test Auth] Error code:", error.code)
-      console.error("❌ [Test Auth] Error details:", error)
-
+    } catch (verifyError: any) {
+      console.error("❌ [Test Auth] Token verification failed:", verifyError.message)
       return NextResponse.json(
         {
           error: "Token verification failed",
-          details: error.message,
-          code: error.code,
+          details: verifyError.message,
+          code: verifyError.code,
         },
         { status: 401 },
       )
     }
   } catch (error: any) {
-    console.error("❌ [Test Auth] Unexpected error:", error.message)
+    console.error("❌ [Test Auth] Unexpected error:", error)
     return NextResponse.json(
       {
         error: "Internal server error",
