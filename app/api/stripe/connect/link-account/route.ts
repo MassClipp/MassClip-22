@@ -2,125 +2,112 @@ export const runtime = "nodejs"
 
 import { type NextRequest, NextResponse } from "next/server"
 import { getAuthenticatedUser, db } from "@/lib/firebase-admin"
-import { stripe } from "@/lib/stripe"
+import Stripe from "stripe"
+
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
+  apiVersion: "2024-06-20",
+})
 
 export async function POST(request: NextRequest) {
   try {
-    console.log("🔗 Starting simplified Stripe account linking...")
-
-    // Parse request body first
-    const body = await request.json()
-    const { stripeAccountId, idToken } = body
-
-    if (!stripeAccountId) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Stripe account ID is required",
-        },
-        { status: 400 },
-      )
-    }
-
-    console.log(`🔗 Attempting to link account: ${stripeAccountId}`)
+    console.log("🔗 Linking Stripe account...")
 
     // Get authenticated user
     let user
     try {
       user = await getAuthenticatedUser(request.headers)
-      console.log(`✅ Auth successful via headers for user: ${user.uid}`)
     } catch (authError) {
-      console.log("⚠️ Header auth failed, trying token from body...")
+      console.error("Auth failed:", authError)
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Authentication required",
+        },
+        { status: 401 },
+      )
+    }
 
-      if (!idToken) {
+    if (!user) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "User not found",
+        },
+        { status: 401 },
+      )
+    }
+
+    const { accountId } = await request.json()
+
+    if (!accountId) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Account ID is required",
+        },
+        { status: 400 },
+      )
+    }
+
+    console.log(`🔗 Linking account ${accountId} to user ${user.uid}`)
+
+    try {
+      // Verify the account exists in Stripe
+      const account = await stripe.accounts.retrieve(accountId)
+
+      if (!account) {
         return NextResponse.json(
           {
             success: false,
-            error: "Authentication required - no token provided",
+            error: "Invalid Stripe account ID",
           },
-          { status: 401 },
+          { status: 400 },
         )
       }
 
-      try {
-        const { auth } = await import("@/lib/firebase-admin")
-        const decodedToken = await auth.verifyIdToken(idToken)
-        user = { uid: decodedToken.uid }
-        console.log(`✅ Auth successful via token for user: ${user.uid}`)
-      } catch (tokenError) {
-        console.error("❌ Token verification failed:", tokenError)
-        return NextResponse.json(
-          {
-            success: false,
-            error: "Invalid authentication token",
+      // Update user document with Stripe account info
+      await db
+        .collection("users")
+        .doc(user.uid)
+        .update({
+          stripeAccountId: accountId,
+          stripeAccountStatus: {
+            chargesEnabled: account.charges_enabled,
+            payoutsEnabled: account.payouts_enabled,
+            detailsSubmitted: account.details_submitted,
+            accountType: account.type,
+            country: account.country,
           },
-          { status: 401 },
-        )
-      }
-    }
+          stripeConnectedAt: new Date(),
+        })
 
-    // Simple account linking - just save it
-    console.log(`💾 Linking account ${stripeAccountId} to user ${user.uid}`)
-
-    // Try to get account info but don't fail if we can't
-    let accountInfo = {
-      chargesEnabled: false,
-      payoutsEnabled: false,
-      detailsSubmitted: false,
-      accountType: "express",
-      country: "US",
-      lastUpdated: new Date(),
-    }
-
-    try {
-      console.log(`🔍 Attempting to retrieve Stripe account details...`)
-      const account = await stripe.accounts.retrieve(stripeAccountId)
-
-      accountInfo = {
-        chargesEnabled: account.charges_enabled || false,
-        payoutsEnabled: account.payouts_enabled || false,
-        detailsSubmitted: account.details_submitted || false,
-        accountType: account.type || "express",
-        country: account.country || "US",
-        lastUpdated: new Date(),
-      }
-
-      console.log(`✅ Retrieved account details:`, accountInfo)
-    } catch (stripeError: any) {
-      console.warn(`⚠️ Could not retrieve account details (continuing anyway):`, stripeError.message)
-      // Continue with default values
-    }
-
-    try {
-      // Update user profile in Firestore
-      await db.collection("users").doc(user.uid).update({
-        stripeAccountId: stripeAccountId,
-        stripeAccountStatus: accountInfo,
-        stripeConnectedAt: new Date(),
-        updatedAt: new Date(),
-      })
-
-      console.log(`✅ Successfully linked Stripe account ${stripeAccountId} to user ${user.uid}`)
+      console.log(`✅ Successfully linked Stripe account ${accountId}`)
 
       return NextResponse.json({
         success: true,
         message: "Stripe account linked successfully",
-        accountId: stripeAccountId,
-        accountStatus: accountInfo,
+        accountId,
+        accountStatus: {
+          chargesEnabled: account.charges_enabled,
+          payoutsEnabled: account.payouts_enabled,
+          detailsSubmitted: account.details_submitted,
+          accountType: account.type,
+          country: account.country,
+        },
       })
-    } catch (dbError: any) {
-      console.error("❌ Database error:", dbError)
+    } catch (stripeError: any) {
+      console.error("❌ Stripe error:", stripeError)
       return NextResponse.json(
         {
           success: false,
-          error: "Failed to save account information",
-          details: dbError.message,
+          error: "Failed to verify Stripe account",
+          details: stripeError.message,
         },
-        { status: 500 },
+        { status: 400 },
       )
     }
   } catch (error: any) {
-    console.error("❌ Unexpected error in link-account:", error)
+    console.error("❌ Unexpected error linking account:", error)
     return NextResponse.json(
       {
         success: false,
