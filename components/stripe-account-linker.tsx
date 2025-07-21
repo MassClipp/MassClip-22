@@ -5,8 +5,9 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Loader2, CheckCircle, AlertCircle, ExternalLink } from "lucide-react"
+import { Loader2, CheckCircle, AlertCircle, ExternalLink, LinkIcon } from "lucide-react"
 import { useRouter } from "next/navigation"
+import { useAuth } from "@/contexts/auth-context"
 
 interface StripeAccountStatus {
   chargesEnabled: boolean
@@ -24,6 +25,7 @@ interface ConnectionStatus {
 }
 
 export function StripeAccountLinker() {
+  const { user } = useAuth()
   const [accountId, setAccountId] = useState("")
   const [isLinking, setIsLinking] = useState(false)
   const [isCheckingStatus, setIsCheckingStatus] = useState(true)
@@ -40,11 +42,29 @@ export function StripeAccountLinker() {
   const checkConnectionStatus = async () => {
     try {
       setIsCheckingStatus(true)
+
+      // Get auth token if user is available
+      let authToken = null
+      if (user) {
+        try {
+          // @ts-ignore - Firebase user has getIdToken method
+          authToken = await user.getIdToken()
+        } catch (tokenError) {
+          console.warn("Could not get auth token:", tokenError)
+        }
+      }
+
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+      }
+
+      if (authToken) {
+        headers.Authorization = `Bearer ${authToken}`
+      }
+
       const response = await fetch("/api/stripe/connection-status", {
         method: "GET",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers,
       })
 
       if (response.ok) {
@@ -57,12 +77,10 @@ export function StripeAccountLinker() {
         }
       } else {
         console.error("Failed to check connection status:", response.status)
-        // Don't show error to user for connection check failure
         setConnectionStatus({ connected: false })
       }
     } catch (error) {
       console.error("Error checking connection status:", error)
-      // Don't show error to user for connection check failure
       setConnectionStatus({ connected: false })
     } finally {
       setIsCheckingStatus(false)
@@ -75,16 +93,39 @@ export function StripeAccountLinker() {
       return
     }
 
+    if (!user) {
+      setError("Please log in first to link your Stripe account")
+      return
+    }
+
     setIsLinking(true)
     setError("")
     setSuccess("")
 
     try {
+      // Get auth token
+      let authToken = null
+      try {
+        // @ts-ignore - Firebase user has getIdToken method
+        authToken = await user.getIdToken()
+      } catch (tokenError) {
+        console.error("Could not get auth token:", tokenError)
+        setError("Authentication error - please try logging in again")
+        setIsLinking(false)
+        return
+      }
+
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+      }
+
+      if (authToken) {
+        headers.Authorization = `Bearer ${authToken}`
+      }
+
       const response = await fetch("/api/stripe/connect/link-account", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers,
         body: JSON.stringify({ accountId: accountId.trim() }),
       })
 
@@ -131,6 +172,20 @@ export function StripeAccountLinker() {
 
   return (
     <div className="w-full max-w-2xl mx-auto space-y-6">
+      {/* Authentication Status */}
+      {!user && (
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>
+            You need to be logged in to connect your Stripe account. Please{" "}
+            <button onClick={() => router.push("/login")} className="underline hover:no-underline">
+              log in
+            </button>{" "}
+            first.
+          </AlertDescription>
+        </Alert>
+      )}
+
       {/* Connection Status Card */}
       {connectionStatus && connectionStatus.connected && (
         <Card>
@@ -160,10 +215,11 @@ export function StripeAccountLinker() {
       {!connectionStatus?.connected && (
         <Card>
           <CardHeader>
-            <CardTitle>Link Existing Stripe Account</CardTitle>
-            <CardDescription>
-              If you already have a Stripe account, enter your Account ID below to connect it.
-            </CardDescription>
+            <CardTitle className="flex items-center gap-2">
+              <LinkIcon className="h-5 w-5" />
+              Link Existing Account
+            </CardTitle>
+            <CardDescription>Connect your existing Stripe account</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
@@ -176,11 +232,9 @@ export function StripeAccountLinker() {
                 placeholder="acct_1234567890"
                 value={accountId}
                 onChange={(e) => setAccountId(e.target.value)}
-                disabled={isLinking}
+                disabled={isLinking || !user}
               />
-              <p className="text-xs text-gray-500">
-                Find your Account ID in your Stripe Dashboard under Settings → Account details
-              </p>
+              <p className="text-xs text-gray-500">Find this in your Stripe Dashboard → Settings → Account</p>
             </div>
 
             {error && (
@@ -197,14 +251,17 @@ export function StripeAccountLinker() {
               </Alert>
             )}
 
-            <Button onClick={handleLinkAccount} disabled={isLinking || !accountId.trim()} className="w-full">
+            <Button onClick={handleLinkAccount} disabled={isLinking || !accountId.trim() || !user} className="w-full">
               {isLinking ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   Linking Account...
                 </>
               ) : (
-                "Link Account"
+                <>
+                  <LinkIcon className="mr-2 h-4 w-4" />
+                  Link Account
+                </>
               )}
             </Button>
           </CardContent>
@@ -216,7 +273,7 @@ export function StripeAccountLinker() {
         <Card>
           <CardHeader>
             <CardTitle>Create New Stripe Account</CardTitle>
-            <CardDescription>Don't have a Stripe account yet? Create one to start accepting payments.</CardDescription>
+            <CardDescription>Set up a new Stripe account to start accepting payments</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="space-y-3 mb-4">
@@ -239,25 +296,39 @@ export function StripeAccountLinker() {
               Create Stripe Account
             </Button>
 
-            <p className="text-xs text-gray-500 mt-2">
-              After creating your account, come back here and enter your Account ID to connect it.
-            </p>
+            <p className="text-xs text-gray-500 mt-2">After creating your account, return here to link it</p>
           </CardContent>
         </Card>
       )}
 
-      {/* Instructions Card */}
+      {/* Help Section */}
       <Card>
         <CardHeader>
-          <CardTitle>How to Find Your Stripe Account ID</CardTitle>
+          <CardTitle>Need Help?</CardTitle>
         </CardHeader>
         <CardContent>
-          <ol className="list-decimal list-inside space-y-2 text-sm">
-            <li>Log in to your Stripe Dashboard</li>
-            <li>Go to Settings → Account details</li>
-            <li>Your Account ID will be displayed at the top (starts with "acct_")</li>
-            <li>Copy and paste it into the field above</li>
-          </ol>
+          <div className="space-y-4">
+            <div>
+              <h4 className="font-medium mb-2">Creating a New Account</h4>
+              <ol className="list-decimal list-inside space-y-1 text-sm text-gray-600">
+                <li>Click "Create Stripe Account" above</li>
+                <li>Fill out your business information</li>
+                <li>Verify your identity</li>
+                <li>Add your bank account details</li>
+                <li>Return here to link your account</li>
+              </ol>
+            </div>
+
+            <div>
+              <h4 className="font-medium mb-2">Finding Your Account ID</h4>
+              <ol className="list-decimal list-inside space-y-1 text-sm text-gray-600">
+                <li>Log in to your Stripe Dashboard</li>
+                <li>Go to Settings → Account details</li>
+                <li>Your Account ID will be displayed at the top (starts with "acct_")</li>
+                <li>Copy and paste it into the field above</li>
+              </ol>
+            </div>
+          </div>
         </CardContent>
       </Card>
     </div>

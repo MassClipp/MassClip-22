@@ -27,24 +27,16 @@
 
   // Prevent zoom with keyboard shortcuts
   document.addEventListener("keydown", (event) => {
-    if (
-      (event.ctrlKey || event.metaKey) &&
-      (event.which === 61 ||
-        event.which === 107 ||
-        event.which === 173 ||
-        event.which === 109 ||
-        event.which === 187 ||
-        event.which === 189)
-    ) {
+    if ((event.ctrlKey || event.metaKey) && (event.key === "+" || event.key === "-" || event.key === "0")) {
       event.preventDefault()
     }
   })
 
-  // Prevent zoom with mouse wheel
+  // Prevent zoom with wheel
   document.addEventListener(
     "wheel",
     (event) => {
-      if (event.ctrlKey) {
+      if (event.ctrlKey || event.metaKey) {
         event.preventDefault()
       }
     },
