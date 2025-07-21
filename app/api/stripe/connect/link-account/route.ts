@@ -1,5 +1,4 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { auth } from "@/lib/firebase-admin"
 import { db } from "@/lib/firebase-admin"
 import Stripe from "stripe"
 
@@ -11,30 +10,31 @@ export async function POST(request: NextRequest) {
   try {
     console.log("🔗 [Link Account] Starting account linking...")
 
-    // Get authorization header
-    const authHeader = request.headers.get("authorization")
-    console.log("🔑 [Link Account] Auth header present:", !!authHeader)
+    // First test the auth endpoint
+    const testAuthResponse = await fetch(`${request.nextUrl.origin}/api/test-auth`, {
+      headers: {
+        authorization: request.headers.get("authorization") || "",
+      },
+    })
 
-    if (!authHeader?.startsWith("Bearer ")) {
-      console.log("❌ [Link Account] Invalid or missing Bearer token")
-      return NextResponse.json({ error: "Authentication required" }, { status: 401 })
+    console.log("🧪 [Link Account] Test auth response:", testAuthResponse.status)
+
+    if (!testAuthResponse.ok) {
+      const testError = await testAuthResponse.json()
+      console.error("❌ [Link Account] Test auth failed:", testError)
+      return NextResponse.json(
+        {
+          error: "Authentication test failed",
+          details: testError,
+        },
+        { status: 401 },
+      )
     }
 
-    // Extract token
-    const token = authHeader.replace("Bearer ", "")
-    console.log("🎫 [Link Account] Token extracted, length:", token.length)
+    const testResult = await testAuthResponse.json()
+    console.log("✅ [Link Account] Test auth passed:", testResult.user)
 
-    // Verify Firebase token
-    let decodedToken
-    try {
-      decodedToken = await auth.verifyIdToken(token)
-      console.log("✅ [Link Account] Token verified for user:", decodedToken.uid)
-    } catch (error) {
-      console.error("❌ [Link Account] Token verification failed:", error)
-      return NextResponse.json({ error: "Invalid authentication token" }, { status: 401 })
-    }
-
-    const userId = decodedToken.uid
+    const userId = testResult.user.uid
 
     // Get request body
     let body
