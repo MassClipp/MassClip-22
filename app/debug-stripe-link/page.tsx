@@ -42,6 +42,7 @@ interface DebugResults {
   linkResult?: TestResult
   stripeEnvironment?: any
   error?: string
+  comprehensiveCheck?: any
 }
 
 export default function DebugStripeLinkPage() {
@@ -151,6 +152,39 @@ export default function DebugStripeLinkPage() {
       }))
     } catch (error) {
       console.error("Failed to get Stripe environment:", error)
+    }
+  }
+
+  const runComprehensiveCheck = async () => {
+    if (!accountId.trim() || !accountId.startsWith("acct_")) {
+      setResults({ error: "Please enter a valid Stripe account ID" })
+      return
+    }
+
+    setIsLoading(true)
+    setResults({})
+
+    try {
+      const response = await fetch("/api/debug/stripe-account-verification", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          accountId: accountId.trim(),
+        }),
+      })
+
+      const data = await response.json()
+      setResults((prev) => ({
+        ...prev,
+        comprehensiveCheck: data,
+      }))
+    } catch (error: any) {
+      console.error("Failed to run comprehensive check:", error)
+      setResults({ error: `Failed to run comprehensive check: ${error.message}` })
+    } finally {
+      setIsLoading(false)
     }
   }
 
@@ -300,6 +334,67 @@ export default function DebugStripeLinkPage() {
     </Card>
   )
 
+  const renderComprehensiveCheck = (check: any) => (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Info className="h-5 w-5" />
+          Comprehensive Account Check
+        </CardTitle>
+        <CardDescription>Detailed analysis of account status and platform compatibility</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {Object.entries(check.checks).map(([checkName, checkResult]: [string, any]) => (
+          <div key={checkName} className="border rounded-lg p-4">
+            <div className="flex items-center gap-2 mb-2">
+              {checkResult.success ? (
+                <CheckCircle className="h-4 w-4 text-green-500" />
+              ) : (
+                <XCircle className="h-4 w-4 text-red-500" />
+              )}
+              <Label className="font-medium capitalize">{checkName.replace(/([A-Z])/g, " $1")}</Label>
+            </div>
+
+            <p className="text-sm text-muted-foreground mb-2">{checkResult.message}</p>
+
+            {checkResult.error && (
+              <Alert variant="destructive" className="mb-2">
+                <AlertDescription>
+                  <strong>Error:</strong> {checkResult.error}
+                  {checkResult.code && (
+                    <span className="block mt-1">
+                      <strong>Code:</strong> {checkResult.code}
+                    </span>
+                  )}
+                </AlertDescription>
+              </Alert>
+            )}
+
+            {checkResult.suggestions && (
+              <div className="mt-2">
+                <Label className="text-xs font-medium">Suggestions:</Label>
+                <ul className="text-xs text-muted-foreground mt-1 space-y-1">
+                  {checkResult.suggestions.map((suggestion: string, i: number) => (
+                    <li key={i}>• {suggestion}</li>
+                  ))}
+                </ul>
+              </div>
+            )}
+
+            {checkResult.details && (
+              <details className="mt-2">
+                <summary className="text-xs font-medium cursor-pointer">View Details</summary>
+                <pre className="text-xs bg-muted p-2 rounded mt-1 overflow-auto">
+                  {JSON.stringify(checkResult.details, null, 2)}
+                </pre>
+              </details>
+            )}
+          </div>
+        ))}
+      </CardContent>
+    </Card>
+  )
+
   return (
     <div className="container mx-auto py-8 space-y-6">
       <div>
@@ -340,6 +435,16 @@ export default function DebugStripeLinkPage() {
             </Button>
             <Button variant="outline" onClick={getAccountInfo} disabled={!accountId.trim()}>
               Get Account Info
+            </Button>
+            <Button onClick={runComprehensiveCheck} disabled={isLoading || !accountId.trim()} variant="secondary">
+              {isLoading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Running Checks...
+                </>
+              ) : (
+                "Run Comprehensive Check"
+              )}
             </Button>
           </div>
         </CardContent>
@@ -397,6 +502,7 @@ export default function DebugStripeLinkPage() {
 
       {results.accountDetails && renderAccountDetails(results.accountDetails)}
       {results.linkResult && renderTestResult(results.linkResult)}
+      {results.comprehensiveCheck && renderComprehensiveCheck(results.comprehensiveCheck)}
     </div>
   )
 }

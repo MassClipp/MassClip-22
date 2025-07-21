@@ -1,42 +1,52 @@
 import { NextResponse } from "next/server"
+import Stripe from "stripe"
+
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
+  apiVersion: "2024-06-20",
+})
 
 export async function GET() {
   try {
-    const secretKey = process.env.STRIPE_SECRET_KEY
-    const isProduction = process.env.NODE_ENV === "production"
+    console.log("🔍 [Stripe Environment] Checking environment...")
 
-    if (!secretKey) {
-      return NextResponse.json({
-        error: "No Stripe secret key found",
-        isTestMode: null,
-        nodeEnv: process.env.NODE_ENV,
-      })
-    }
-
+    const secretKey = process.env.STRIPE_SECRET_KEY!
     const isTestMode = secretKey.startsWith("sk_test_")
     const isLiveMode = secretKey.startsWith("sk_live_")
 
-    let warning = null
+    // Get partial key info for display (hide most of it for security)
+    const keyInfo = secretKey.substring(0, 12) + "..." + secretKey.slice(-4)
 
-    // Check for environment mismatches
-    if (isProduction && isTestMode) {
-      warning = "⚠️ WARNING: Running in production but using test keys!"
-    } else if (!isProduction && isLiveMode) {
-      warning = "⚠️ WARNING: Running in development but using live keys!"
+    console.log("🧪 [Stripe Environment] Mode:", isTestMode ? "TEST" : isLiveMode ? "LIVE" : "UNKNOWN")
+
+    let warning = ""
+    if (!isTestMode && !isLiveMode) {
+      warning = "Invalid Stripe API key format detected"
+    }
+
+    // Try to make a simple API call to verify the key works
+    let apiWorking = false
+    try {
+      await stripe.balance.retrieve()
+      apiWorking = true
+      console.log("✅ [Stripe Environment] API key is working")
+    } catch (error: any) {
+      console.error("❌ [Stripe Environment] API key error:", error.message)
+      warning = `API key error: ${error.message}`
     }
 
     return NextResponse.json({
       isTestMode,
       isLiveMode,
+      keyInfo,
       nodeEnv: process.env.NODE_ENV,
-      keyInfo: `${secretKey.substring(0, 12)}...${secretKey.substring(secretKey.length - 4)}`,
-      warning,
-      keyType: isTestMode ? "TEST" : isLiveMode ? "LIVE" : "UNKNOWN",
+      apiWorking,
+      warning: warning || undefined,
     })
   } catch (error: any) {
+    console.error("❌ [Stripe Environment] Error:", error.message)
     return NextResponse.json(
       {
-        error: "Failed to check environment",
+        error: "Failed to check Stripe environment",
         details: error.message,
       },
       { status: 500 },
