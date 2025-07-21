@@ -1,21 +1,22 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { useSearchParams, useRouter } from "next/navigation"
+import { useRouter } from "next/navigation"
 import { useAuth } from "@/contexts/auth-context"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { CheckCircle, Loader2 } from "lucide-react"
-import Link from "next/link"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { CheckCircle, Loader2, AlertCircle } from "lucide-react"
 
 export default function OnboardingSuccessPage() {
-  const { user } = useAuth()
-  const searchParams = useSearchParams()
+  const { user, loading } = useAuth()
   const router = useRouter()
   const [isVerifying, setIsVerifying] = useState(true)
-  const [isComplete, setIsComplete] = useState(false)
-
-  const accountId = searchParams.get("account")
+  const [verificationResult, setVerificationResult] = useState<{
+    success: boolean
+    message: string
+    accountConnected?: boolean
+  } | null>(null)
 
   // Verify onboarding completion
   const verifyOnboarding = async () => {
@@ -34,20 +35,45 @@ export default function OnboardingSuccessPage() {
 
       if (response.ok) {
         const data = await response.json()
-        setIsComplete(data.connected)
 
         if (data.connected) {
-          console.log("✅ Onboarding completed successfully!")
+          setVerificationResult({
+            success: true,
+            message: "Your Stripe account has been successfully connected!",
+            accountConnected: true,
+          })
+        } else {
+          setVerificationResult({
+            success: false,
+            message: "Your Stripe account setup is not yet complete. You may need to finish some additional steps.",
+            accountConnected: false,
+          })
         }
+      } else {
+        setVerificationResult({
+          success: false,
+          message: "Unable to verify your Stripe account status. Please try again.",
+          accountConnected: false,
+        })
       }
     } catch (error) {
       console.error("Error verifying onboarding:", error)
+      setVerificationResult({
+        success: false,
+        message: "An error occurred while verifying your account. Please try again.",
+        accountConnected: false,
+      })
     } finally {
       setIsVerifying(false)
     }
   }
 
   useEffect(() => {
+    if (!loading && !user) {
+      router.push("/login")
+      return
+    }
+
     if (user) {
       // Wait a moment for Stripe to process, then verify
       const timer = setTimeout(() => {
@@ -56,86 +82,94 @@ export default function OnboardingSuccessPage() {
 
       return () => clearTimeout(timer)
     }
-  }, [user])
+  }, [user, loading, router])
+
+  const handleContinue = () => {
+    router.push("/dashboard/earnings")
+  }
+
+  if (loading) {
+    return (
+      <div className="container mx-auto py-8">
+        <div className="flex items-center justify-center">
+          <Loader2 className="h-8 w-8 animate-spin" />
+          <span className="ml-2">Loading...</span>
+        </div>
+      </div>
+    )
+  }
+
+  if (!user) {
+    return null
+  }
 
   return (
-    <div className="container max-w-2xl mx-auto py-8">
-      <Card>
-        <CardHeader className="text-center">
-          <CardTitle className="flex items-center justify-center gap-2">
+    <div className="container mx-auto py-8">
+      <div className="max-w-2xl mx-auto">
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              {isVerifying ? (
+                <Loader2 className="h-5 w-5 animate-spin" />
+              ) : verificationResult?.success ? (
+                <CheckCircle className="h-5 w-5 text-green-500" />
+              ) : (
+                <AlertCircle className="h-5 w-5 text-yellow-500" />
+              )}
+              Stripe Onboarding Complete
+            </CardTitle>
+            <CardDescription>
+              {isVerifying
+                ? "Verifying your Stripe account setup..."
+                : "Thank you for completing the Stripe onboarding process"}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
             {isVerifying ? (
-              <Loader2 className="h-6 w-6 animate-spin text-blue-500" />
-            ) : isComplete ? (
-              <CheckCircle className="h-6 w-6 text-green-500" />
-            ) : (
-              <CheckCircle className="h-6 w-6 text-yellow-500" />
-            )}
-            {isVerifying ? "Verifying Setup..." : isComplete ? "Setup Complete!" : "Almost Done!"}
-          </CardTitle>
-          <CardDescription>
-            {isVerifying
-              ? "We're verifying your Stripe account setup..."
-              : isComplete
-                ? "Your Stripe account is ready to accept payments"
-                : "Your account setup is processing"}
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {accountId && (
-            <div className="text-sm text-muted-foreground text-center">
-              <p>
-                Account ID: <code className="bg-muted px-2 py-1 rounded">{accountId}</code>
-              </p>
-            </div>
-          )}
+              <div className="text-center py-8">
+                <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
+                <p className="text-muted-foreground">Please wait while we verify your Stripe account setup...</p>
+              </div>
+            ) : verificationResult ? (
+              <div className="space-y-4">
+                <Alert className={verificationResult.success ? "border-green-500" : "border-yellow-500"}>
+                  {verificationResult.success ? (
+                    <CheckCircle className="h-4 w-4" />
+                  ) : (
+                    <AlertCircle className="h-4 w-4" />
+                  )}
+                  <AlertDescription>{verificationResult.message}</AlertDescription>
+                </Alert>
 
-          {!isVerifying && (
-            <div className="space-y-3">
-              {isComplete ? (
-                <div className="text-center space-y-4">
+                {verificationResult.success ? (
                   <div className="space-y-2">
-                    <h3 className="font-semibold text-green-700">🎉 Congratulations!</h3>
+                    <p className="text-muted-foreground">Your Stripe account is now ready to:</p>
+                    <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground">
+                      <li>Accept payments from customers</li>
+                      <li>Receive automatic payouts to your bank account</li>
+                      <li>View earnings and transaction history</li>
+                      <li>Manage your payment settings</li>
+                    </ul>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    <p className="text-muted-foreground">
+                      You may need to complete additional verification steps in your Stripe dashboard.
+                    </p>
                     <p className="text-sm text-muted-foreground">
-                      Your Stripe Express account is now connected and ready to process payments. You can start selling
-                      your content immediately.
+                      Don't worry - you can continue this process later from your earnings page.
                     </p>
                   </div>
+                )}
 
-                  <div className="grid grid-cols-2 gap-3">
-                    <Link href="/dashboard/earnings">
-                      <Button className="w-full">View Earnings</Button>
-                    </Link>
-                    <Link href="/dashboard/upload">
-                      <Button variant="outline" className="w-full bg-transparent">
-                        Upload Content
-                      </Button>
-                    </Link>
-                  </div>
-                </div>
-              ) : (
-                <div className="text-center space-y-4">
-                  <p className="text-sm text-muted-foreground">
-                    Your account setup is still processing. This can take a few minutes.
-                  </p>
-
-                  <div className="space-y-2">
-                    <Button onClick={verifyOnboarding} variant="outline" className="w-full bg-transparent">
-                      <Loader2 className="h-4 w-4 mr-2" />
-                      Check Status Again
-                    </Button>
-
-                    <Link href="/dashboard/earnings">
-                      <Button variant="ghost" className="w-full">
-                        Continue to Dashboard
-                      </Button>
-                    </Link>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+                <Button onClick={handleContinue} className="w-full">
+                  Continue to Earnings Dashboard
+                </Button>
+              </div>
+            ) : null}
+          </CardContent>
+        </Card>
+      </div>
     </div>
   )
 }

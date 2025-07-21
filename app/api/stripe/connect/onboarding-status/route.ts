@@ -1,88 +1,96 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { verifyIdTokenFromRequest } from "@/lib/auth-utils"
+import { auth } from "@/lib/firebase-admin"
 import { db } from "@/lib/firebase-admin"
-import { stripe } from "@/lib/stripe"
+import Stripe from "stripe"
+
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
+  apiVersion: "2024-06-20",
+})
 
 export async function GET(request: NextRequest) {
   try {
-    console.log("🔍 [Onboarding Status] Checking onboarding status...")
-
-    // Verify authentication
-    const decodedToken = await verifyIdTokenFromRequest(request)
-    if (!decodedToken) {
-      return NextResponse.json({ error: "Authentication required" }, { status: 401 })
+    // Get the authorization header
+    const authHeader = request.headers.get("authorization")
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return NextResponse.json({ error: "Missing or invalid authorization header" }, { status: 401 })
     }
 
+    const token = authHeader.split("Bearer ")[1]
+
+    // Verify the Firebase token
+    const decodedToken = await auth.verifyIdToken(token)
     const userId = decodedToken.uid
 
-    // Get user's Stripe account info from database
+    console.log("Checking onboarding status for user:", userId)
+
+    // Get user's Stripe account ID from database
     const userDoc = await db.collection("users").doc(userId).get()
     const userData = userDoc.data()
 
     if (!userData?.stripeAccountId) {
+      console.log("No Stripe account found for user")
       return NextResponse.json({
         connected: false,
         onboardingRequired: true,
-        message: "No Stripe account found",
       })
     }
 
     const accountId = userData.stripeAccountId
-    console.log("🏦 [Onboarding Status] Checking account:", accountId)
+    console.log("Found Stripe account:", accountId)
 
     // Get account details from Stripe
-    const account = await stripe.accounts.retrieve(accountId)
+    try {
+      const account = await stripe.accounts.retrieve(accountId)
 
-    // Check if onboarding is complete
-    const onboardingComplete = account.details_submitted && account.charges_enabled && account.payouts_enabled
+      // Check if account is fully onboarded
+      const isFullyOnboarded = account.details_submitted && account.charges_enabled && account.payouts_enabled
 
-    console.log("📊 [Onboarding Status] Account status:", {
-      details_submitted: account.details_submitted,
-      charges_enabled: account.charges_enabled,
-      payouts_enabled: account.payouts_enabled,
-      onboarding_complete: onboardingComplete,
-    })
-
-    // Update database if onboarding is now complete
-    if (onboardingComplete && !userData.stripeConnected) {
-      await db.collection("users").doc(userId).set(
-        {
-          stripeConnected: true,
-          stripeOnboardingCompleted: true,
-          stripeOnboardingCompletedAt: new Date().toISOString(),
-          stripeChargesEnabled: account.charges_enabled,
-          stripePayoutsEnabled: account.payouts_enabled,
-          updatedAt: new Date().toISOString(),
-        },
-        { merge: true },
-      )
-
-      console.log("✅ [Onboarding Status] Updated user as fully connected")
-    }
-
-    return NextResponse.json({
-      connected: onboardingComplete,
-      accountId: accountId,
-      onboardingRequired: !onboardingComplete,
-      account: {
-        id: account.id,
-        type: account.type,
-        country: account.country,
-        email: account.email,
+      console.log("Account status:", {
         details_submitted: account.details_submitted,
         charges_enabled: account.charges_enabled,
         payouts_enabled: account.payouts_enabled,
-        requirements: account.requirements,
-      },
-    })
-  } catch (error: any) {
-    console.error("❌ [Onboarding Status] Error:", error)
-    return NextResponse.json(
-      {
-        error: "Failed to check onboarding status",
-        details: error.message,
-      },
-      { status: 500 },
-    )
+        fully_onboarded: isFullyOnboarded,
+      })
+
+      return NextResponse.json({
+        connected: isFullyOnboarded,
+        accountId: account.id,
+        onboardingRequired: !isFullyOnboarded,
+        account: {
+          id: account.id,
+          type: account.type,
+          country: account.country,
+          email: account.email,
+          details_submitted: account.details_submitted,
+          charges_enabled: account.charges_enabled,
+          payouts_enabled: account.payouts_enabled,
+          requirements: account.requirements,
+        },
+      })
+    } catch (stripeError) {
+      console.error("Error retrieving Stripe account:", stripeError)
+
+      // Account might have been deleted or is invalid
+      // Remove invalid account ID from user profile
+      await db.collection("users").doc(userId).update({
+        stripeAccountId: null,
+        stripeAccountType: null,
+        stripeConnectedAt: null,
+      })
+
+      return NextResponse.json({
+        connected: false,
+        onboardingRequired: true,
+        error: "Stripe account not found or invalid",
+      })
+    }
+  } catch (error) {
+    console.error("Error checking onboarding status:", error)
+
+    if (error instanceof Error) {
+      return NextResponse.json({ error: error.message }, { status: 500 })
+    }
+
+    return NextResponse.json({ error: "Failed to check onboarding status" }, { status: 500 })
   }
 }

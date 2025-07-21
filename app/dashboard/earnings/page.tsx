@@ -3,7 +3,6 @@
 import { useState, useEffect } from "react"
 import { useAuth } from "@/contexts/auth-context"
 import StripeExpressOnboarding from "@/components/stripe-express-onboarding"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Loader2 } from "lucide-react"
 
 interface OnboardingStatus {
@@ -60,45 +59,19 @@ export default function EarningsPage() {
     )
   }
 
-  // Show onboarding if needed
-  if (onboardingStatus && !onboardingStatus.connected) {
-    return (
-      <div className="container mx-auto py-8">
-        <div className="mb-6">
-          <h1 className="text-3xl font-bold">Earnings Dashboard</h1>
-          <p className="text-muted-foreground">Set up your Stripe account to start earning from your content</p>
-        </div>
-
-        <StripeExpressOnboarding />
-      </div>
-    )
-  }
-
-  // Show main earnings dashboard
   return (
-    <div className="container mx-auto py-8">
-      <div className="mb-6">
-        <h1 className="text-3xl font-bold">Earnings Dashboard</h1>
-        <p className="text-muted-foreground">Track your earnings and manage your Stripe account</p>
-      </div>
+    <div className="container mx-auto py-8 space-y-6">
+      {/* Stripe Account Setup/Status */}
+      <StripeExpressOnboarding />
 
-      <div className="grid gap-6">
-        {/* Stripe Account Status */}
-        <StripeExpressOnboarding />
-
-        {/* Earnings Overview - This would be your existing earnings components */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Earnings Overview</CardTitle>
-            <CardDescription>Your earnings and payout information</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <p className="text-muted-foreground">
-              Your earnings dashboard will appear here once you start making sales.
-            </p>
-          </CardContent>
-        </Card>
-      </div>
+      {/* Earnings Overview - Show only if connected */}
+      {onboardingStatus?.connected && (
+        <div className="bg-zinc-900 border border-zinc-800 rounded-lg p-6">
+          <h2 className="text-xl font-semibold text-white mb-2">Earnings Overview</h2>
+          <p className="text-zinc-400 mb-4">Your earnings and payout information</p>
+          <p className="text-zinc-400">Your earnings dashboard will appear here once you start making sales.</p>
+        </div>
+      )}
     </div>
   )
 }
