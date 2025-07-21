@@ -1,123 +1,101 @@
+export const runtime = "nodejs"
+
 import { type NextRequest, NextResponse } from "next/server"
-import { stripe, isTestMode } from "@/lib/stripe"
-import { db, auth } from "@/lib/firebase-admin"
+import { getAuthenticatedUser, db } from "@/lib/firebase-admin"
 
-export async function POST(request: NextRequest) {
+export async function GET(request: NextRequest) {
   try {
-    const { idToken } = await request.json()
+    console.log("🔍 Checking Stripe connection status...")
 
-    if (!idToken) {
-      return NextResponse.json({ error: "ID token is required" }, { status: 400 })
-    }
-
-    // Verify the Firebase ID token
-    let decodedToken
+    // Get authenticated user
+    let user
     try {
-      decodedToken = await auth.verifyIdToken(idToken)
-      console.log(`✅ [Stripe Status] Token verified for user: ${decodedToken.uid}`)
-    } catch (tokenError) {
-      console.error("❌ [Stripe Status] Token verification failed:", tokenError)
-      return NextResponse.json({ error: "Invalid or expired token" }, { status: 401 })
-    }
-
-    const userId = decodedToken.uid
-    console.log(`🔍 [Stripe Status] Checking connection for user: ${userId} (${isTestMode ? "TEST" : "LIVE"} mode)`)
-
-    // Get user data from Firestore
-    const userDoc = await db.collection("users").doc(userId).get()
-    if (!userDoc.exists) {
-      return NextResponse.json({ error: "User not found" }, { status: 404 })
-    }
-
-    const userData = userDoc.data()!
-
-    // Get the appropriate account ID based on mode
-    const accountId = isTestMode ? userData.stripeTestAccountId : userData.stripeAccountId
-
-    if (!accountId) {
-      console.log(`❌ [Stripe Status] No ${isTestMode ? "test" : "live"} account found for user: ${userId}`)
-      return NextResponse.json({
-        success: true,
-        isConnected: false,
-        accountId: null,
-        mode: isTestMode ? "test" : "live",
-        message: `No ${isTestMode ? "test" : "live"} Stripe account connected`,
-      })
-    }
-
-    console.log(`🔍 [Stripe Status] Checking account: ${accountId}`)
-
-    try {
-      // Retrieve account details from Stripe
-      const account = await stripe.accounts.retrieve(accountId)
-
-      console.log(`✅ [Stripe Status] Account retrieved:`, {
-        id: account.id,
-        charges_enabled: account.charges_enabled,
-        payouts_enabled: account.payouts_enabled,
-        details_submitted: account.details_submitted,
-      })
-
-      // Check requirements
-      const requirements = account.requirements || {}
-      const currentlyDue = requirements.currently_due || []
-      const pastDue = requirements.past_due || []
-      const requirementsCount = currentlyDue.length + pastDue.length
-
-      return NextResponse.json({
-        success: true,
-        isConnected: true,
-        accountId: account.id,
-        mode: isTestMode ? "test" : "live",
-        accountStatus: {
-          chargesEnabled: account.charges_enabled,
-          payoutsEnabled: account.payouts_enabled,
-          detailsSubmitted: account.details_submitted,
-          requirementsCount,
-          currentlyDue,
-          pastDue,
-          country: account.country,
-          email: account.email,
-          type: account.type,
-        },
-        message:
-          account.charges_enabled && account.payouts_enabled
-            ? "Account fully connected and operational"
-            : "Account connected but requires completion",
-      })
-    } catch (stripeError: any) {
-      console.error(`❌ [Stripe Status] Error retrieving account ${accountId}:`, stripeError)
-
-      // If account doesn't exist in Stripe, clean up Firestore
-      if (stripeError.code === "resource_missing") {
-        const cleanupData = isTestMode ? { stripeTestAccountId: null } : { stripeAccountId: null }
-
-        await db.collection("users").doc(userId).update(cleanupData)
-
-        return NextResponse.json({
-          success: true,
-          isConnected: false,
-          accountId: null,
-          mode: isTestMode ? "test" : "live",
-          message: "Account not found in Stripe (cleaned up)",
-        })
-      }
-
+      user = await getAuthenticatedUser(request.headers)
+    } catch (authError) {
+      console.error("Auth failed:", authError)
       return NextResponse.json(
         {
           success: false,
-          error: "Failed to retrieve account status",
-          details: stripeError.message,
+          error: "Authentication required",
+          connected: false,
+        },
+        { status: 401 },
+      )
+    }
+
+    if (!user) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "User not found",
+          connected: false,
+        },
+        { status: 401 },
+      )
+    }
+
+    console.log(`🔍 Checking connection status for user: ${user.uid}`)
+
+    try {
+      // Get user document from Firestore
+      const userDoc = await db.collection("users").doc(user.uid).get()
+
+      if (!userDoc.exists) {
+        console.log(`❌ User document not found: ${user.uid}`)
+        return NextResponse.json({
+          success: true,
+          connected: false,
+          message: "User profile not found",
+        })
+      }
+
+      const userData = userDoc.data()
+      const stripeAccountId = userData?.stripeAccountId
+      const stripeAccountStatus = userData?.stripeAccountStatus
+
+      if (!stripeAccountId) {
+        console.log(`ℹ️ No Stripe account connected for user: ${user.uid}`)
+        return NextResponse.json({
+          success: true,
+          connected: false,
+          message: "No Stripe account connected",
+        })
+      }
+
+      console.log(`✅ Stripe account found: ${stripeAccountId}`)
+
+      return NextResponse.json({
+        success: true,
+        connected: true,
+        accountId: stripeAccountId,
+        accountStatus: stripeAccountStatus || {
+          chargesEnabled: false,
+          payoutsEnabled: false,
+          detailsSubmitted: false,
+          accountType: "unknown",
+          country: "unknown",
+        },
+        message: "Stripe account connected",
+      })
+    } catch (dbError: any) {
+      console.error("❌ Database error:", dbError)
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Database error",
+          connected: false,
+          details: dbError.message,
         },
         { status: 500 },
       )
     }
   } catch (error: any) {
-    console.error("❌ [Stripe Status] Connection status error:", error)
+    console.error("❌ Unexpected error checking connection status:", error)
     return NextResponse.json(
       {
         success: false,
-        error: "Failed to check connection status",
+        error: "Internal server error",
+        connected: false,
         details: error.message,
       },
       { status: 500 },
