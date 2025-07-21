@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Loader2, CheckCircle, AlertCircle, ExternalLink, LinkIcon } from "lucide-react"
+import { Loader2, CheckCircle, AlertCircle, ExternalLink, LinkIcon, Info } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/contexts/auth-context"
 
@@ -15,6 +15,8 @@ interface StripeAccountStatus {
   detailsSubmitted: boolean
   accountType: string
   country: string
+  email?: string
+  businessType?: string
 }
 
 interface ConnectionStatus {
@@ -111,6 +113,12 @@ export function StripeAccountLinker() {
       return
     }
 
+    // Validate account ID format
+    if (!accountId.trim().startsWith("acct_")) {
+      setError("Account ID should start with 'acct_'. Please check your Account ID.")
+      return
+    }
+
     setIsLinking(true)
     setError("")
     setSuccess("")
@@ -127,7 +135,7 @@ export function StripeAccountLinker() {
       const data = await response.json()
 
       if (data.success) {
-        setSuccess("Stripe account linked successfully!")
+        setSuccess("Stripe account linked successfully! You can now start receiving payments.")
         setConnectionStatus({
           connected: true,
           accountId: data.accountId,
@@ -138,7 +146,7 @@ export function StripeAccountLinker() {
         // Redirect to earnings page after successful connection
         setTimeout(() => {
           router.push("/dashboard/earnings")
-        }, 2000)
+        }, 3000)
       } else {
         setError(data.error || "Failed to link Stripe account")
       }
@@ -181,6 +189,33 @@ export function StripeAccountLinker() {
         </Alert>
       )}
 
+      {/* How It Works Info */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Info className="h-5 w-5 text-blue-500" />
+            How Stripe Connect Works
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-2 text-sm text-gray-600">
+            <p>
+              1. <strong>Link Your Account:</strong> Connect your existing Stripe account to MassClip
+            </p>
+            <p>
+              2. <strong>Automatic Payments:</strong> When customers buy your content, payments go directly to your
+              Stripe account
+            </p>
+            <p>
+              3. <strong>Platform Fee:</strong> MassClip automatically deducts a small platform fee from each sale
+            </p>
+            <p>
+              4. <strong>You Keep the Rest:</strong> The majority of each sale goes directly to your bank account
+            </p>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Connection Status Card */}
       {connectionStatus && connectionStatus.connected && (
         <Card>
@@ -199,6 +234,8 @@ export function StripeAccountLinker() {
                   <p>Charges Enabled: {connectionStatus.accountStatus.chargesEnabled ? "✅" : "❌"}</p>
                   <p>Payouts Enabled: {connectionStatus.accountStatus.payoutsEnabled ? "✅" : "❌"}</p>
                   <p>Details Submitted: {connectionStatus.accountStatus.detailsSubmitted ? "✅" : "❌"}</p>
+                  <p>Account Type: {connectionStatus.accountStatus.accountType}</p>
+                  <p>Country: {connectionStatus.accountStatus.country}</p>
                 </div>
               )}
             </div>
@@ -214,7 +251,7 @@ export function StripeAccountLinker() {
               <LinkIcon className="h-5 w-5" />
               Link Existing Account
             </CardTitle>
-            <CardDescription>Connect your existing Stripe account</CardDescription>
+            <CardDescription>Connect your existing Stripe account to start receiving payments</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
@@ -224,12 +261,14 @@ export function StripeAccountLinker() {
               <Input
                 id="accountId"
                 type="text"
-                placeholder="acct_1234567890"
+                placeholder="acct_1234567890abcdef"
                 value={accountId}
                 onChange={(e) => setAccountId(e.target.value)}
                 disabled={isLinking || !user}
               />
-              <p className="text-xs text-gray-500">Find this in your Stripe Dashboard → Settings → Account</p>
+              <p className="text-xs text-gray-500">
+                Find this in your Stripe Dashboard → Settings → Account details (starts with "acct_")
+              </p>
             </div>
 
             {error && (
@@ -250,7 +289,7 @@ export function StripeAccountLinker() {
               {isLinking ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Linking Account...
+                  Verifying & Linking Account...
                 </>
               ) : (
                 <>

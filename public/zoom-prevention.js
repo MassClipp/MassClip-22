@@ -11,16 +11,6 @@
     { passive: false },
   )
 
-  document.addEventListener(
-    "touchmove",
-    (event) => {
-      if (event.touches.length > 1) {
-        event.preventDefault()
-      }
-    },
-    { passive: false },
-  )
-
   // Prevent double-tap zoom
   let lastTouchEnd = 0
   document.addEventListener(
@@ -35,14 +25,14 @@
     false,
   )
 
-  // Prevent keyboard zoom shortcuts
+  // Prevent zoom via keyboard
   document.addEventListener("keydown", (event) => {
     if ((event.ctrlKey || event.metaKey) && (event.key === "+" || event.key === "-" || event.key === "0")) {
       event.preventDefault()
     }
   })
 
-  // Prevent mouse wheel zoom
+  // Prevent zoom via mouse wheel
   document.addEventListener(
     "wheel",
     (event) => {
@@ -52,6 +42,4 @@
     },
     { passive: false },
   )
-
-  console.log("Zoom prevention script loaded")
 })()
