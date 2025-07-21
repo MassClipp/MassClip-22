@@ -1,7 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { auth } from "@/lib/firebase-admin"
-import { db } from "@/lib/firebase-admin"
+import { headers } from "next/headers"
 import Stripe from "stripe"
+import { adminAuth, adminDb } from "@/lib/firebase-admin"
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: "2024-06-20",
@@ -9,48 +9,43 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
 
 export async function POST(request: NextRequest) {
   try {
-    // Get the authorization header
-    const authHeader = request.headers.get("authorization")
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    // Get authorization header
+    const headersList = await headers()
+    const authorization = headersList.get("authorization")
+
+    if (!authorization?.startsWith("Bearer ")) {
       return NextResponse.json({ error: "Missing or invalid authorization header" }, { status: 401 })
     }
 
-    const token = authHeader.split("Bearer ")[1]
+    const idToken = authorization.split("Bearer ")[1]
 
-    // Verify the Firebase token
-    const decodedToken = await auth.verifyIdToken(token)
+    // Verify Firebase ID token
+    const decodedToken = await adminAuth.verifyIdToken(idToken)
     const userId = decodedToken.uid
-    const userEmail = decodedToken.email
 
     console.log("Creating Express account for user:", userId)
 
     // Check if user already has a Stripe account
-    const userDoc = await db.collection("users").doc(userId).get()
+    const userDoc = await adminDb.collection("users").doc(userId).get()
     const userData = userDoc.data()
 
     if (userData?.stripeAccountId) {
       console.log("User already has Stripe account:", userData.stripeAccountId)
 
-      // Check if the account still exists and is valid
+      // Check if account is fully onboarded
       try {
         const account = await stripe.accounts.retrieve(userData.stripeAccountId)
 
-        return NextResponse.json({
-          alreadyConnected: true,
-          accountId: account.id,
-          account: {
-            id: account.id,
-            type: account.type,
-            country: account.country,
-            email: account.email,
-            details_submitted: account.details_submitted,
-            charges_enabled: account.charges_enabled,
-            payouts_enabled: account.payouts_enabled,
-          },
-        })
+        if (account.details_submitted && account.charges_enabled) {
+          return NextResponse.json({
+            success: true,
+            alreadyConnected: true,
+            accountId: userData.stripeAccountId,
+            message: "Stripe account already connected",
+          })
+        }
       } catch (error) {
-        console.log("Existing account not found, creating new one")
-        // Continue to create new account if existing one is invalid
+        console.log("Existing account not accessible, creating new one")
       }
     }
 
@@ -59,11 +54,10 @@ export async function POST(request: NextRequest) {
     const { country = "US", businessType = "individual", email } = body
 
     // Create Express account
-    console.log("Creating new Express account...")
     const account = await stripe.accounts.create({
       type: "express",
       country: country,
-      email: email || userEmail,
+      email: email || decodedToken.email,
       business_type: businessType,
       capabilities: {
         card_payments: { requested: true },
@@ -78,48 +72,41 @@ export async function POST(request: NextRequest) {
       },
     })
 
-    console.log("Express account created:", account.id)
+    console.log("Created Express account:", account.id)
 
     // Save account ID to user profile
-    await db.collection("users").doc(userId).update({
+    await adminDb.collection("users").doc(userId).update({
       stripeAccountId: account.id,
       stripeAccountType: "express",
-      stripeConnectedAt: new Date().toISOString(),
+      stripeOnboardingCompleted: false,
+      updatedAt: new Date().toISOString(),
     })
-
-    console.log("Account ID saved to user profile")
 
     // Create onboarding link
     const accountLink = await stripe.accountLinks.create({
       account: account.id,
-      refresh_url: `${process.env.NEXT_PUBLIC_SITE_URL}/dashboard/stripe/onboarding?refresh=true`,
-      return_url: `${process.env.NEXT_PUBLIC_SITE_URL}/dashboard/stripe/onboarding/success`,
+      refresh_url: `${process.env.NEXT_PUBLIC_SITE_URL}/dashboard/stripe/onboarding?refresh=true&account=${account.id}`,
+      return_url: `${process.env.NEXT_PUBLIC_SITE_URL}/dashboard/stripe/onboarding/success?account=${account.id}`,
       type: "account_onboarding",
     })
 
-    console.log("Onboarding link created:", accountLink.url)
+    console.log("Created onboarding link:", accountLink.url)
 
     return NextResponse.json({
       success: true,
       accountId: account.id,
       onboardingUrl: accountLink.url,
-      account: {
-        id: account.id,
-        type: account.type,
-        country: account.country,
-        email: account.email,
-        details_submitted: account.details_submitted,
-        charges_enabled: account.charges_enabled,
-        payouts_enabled: account.payouts_enabled,
-      },
+      message: "Express account created successfully",
     })
   } catch (error) {
     console.error("Error creating Express account:", error)
 
-    if (error instanceof Error) {
-      return NextResponse.json({ error: error.message }, { status: 500 })
-    }
-
-    return NextResponse.json({ error: "Failed to create Express account" }, { status: 500 })
+    return NextResponse.json(
+      {
+        error: error instanceof Error ? error.message : "Failed to create Express account",
+        details: error instanceof Stripe.errors.StripeError ? error.type : undefined,
+      },
+      { status: 500 },
+    )
   }
 }

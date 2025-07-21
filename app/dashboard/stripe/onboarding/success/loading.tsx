@@ -1,11 +1,11 @@
 import { Loader2 } from "lucide-react"
 
-export default function OnboardingSuccessLoading() {
+export default function Loading() {
   return (
-    <div className="container mx-auto py-8">
-      <div className="flex items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin" />
-        <span className="ml-2">Loading success page...</span>
+    <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="text-center">
+        <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4 text-blue-600" />
+        <p className="text-gray-600">Loading success page...</p>
       </div>
     </div>
   )

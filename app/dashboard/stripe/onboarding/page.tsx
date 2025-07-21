@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation"
 import { useAuth } from "@/contexts/auth-context"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Loader2, AlertCircle, ExternalLink } from "lucide-react"
+import { Loader2, ArrowLeft, RefreshCw } from "lucide-react"
 
 export default function StripeOnboardingPage() {
   const { user, loading } = useAuth()
@@ -26,10 +26,10 @@ export default function StripeOnboardingPage() {
 
   if (loading) {
     return (
-      <div className="container mx-auto py-8">
-        <div className="flex items-center justify-center">
-          <Loader2 className="h-8 w-8 animate-spin" />
-          <span className="ml-2">Loading...</span>
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center">
+          <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4 text-blue-600" />
+          <p className="text-gray-600">Loading...</p>
         </div>
       </div>
     )
@@ -40,54 +40,54 @@ export default function StripeOnboardingPage() {
   }
 
   return (
-    <div className="container mx-auto py-8">
-      <div className="max-w-2xl mx-auto">
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              {isRefresh ? <ExternalLink className="h-5 w-5" /> : <AlertCircle className="h-5 w-5" />}
-              Stripe Onboarding
-            </CardTitle>
-            <CardDescription>
-              {isRefresh
-                ? "Continue setting up your Stripe account"
-                : "Complete your Stripe account setup to start accepting payments"}
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {isRefresh ? (
-              <div className="space-y-4">
-                <p className="text-muted-foreground">
-                  It looks like you need to complete additional steps in your Stripe onboarding process.
-                </p>
-                <p className="text-sm text-muted-foreground">
-                  If you were redirected here, please return to the earnings page and try the onboarding process again.
-                </p>
+    <div className="min-h-screen bg-gray-50 py-12">
+      <div className="container mx-auto px-4">
+        <div className="max-w-2xl mx-auto">
+          <Card className="border-0 shadow-lg">
+            <CardHeader className="text-center">
+              <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <RefreshCw className="w-6 h-6 text-blue-600" />
               </div>
-            ) : (
-              <div className="space-y-4">
-                <p className="text-muted-foreground">
-                  You'll be redirected to Stripe to complete your account setup. This process includes:
-                </p>
-                <ul className="list-disc list-inside space-y-1 text-sm text-muted-foreground">
-                  <li>Verifying your identity</li>
-                  <li>Adding your business information</li>
-                  <li>Setting up your bank account for payouts</li>
-                  <li>Reviewing terms and conditions</li>
-                </ul>
-                <p className="text-sm text-muted-foreground">
-                  After completing the setup, you'll be redirected back to your earnings dashboard.
-                </p>
-              </div>
-            )}
+              <CardTitle className="text-2xl text-gray-900">
+                {isRefresh ? "Continue Your Setup" : "Stripe Account Setup"}
+              </CardTitle>
+              <CardDescription className="text-base text-gray-600">
+                {isRefresh
+                  ? "Your onboarding session has expired. Let's get you back on track."
+                  : "You'll be redirected to Stripe to complete your account verification."}
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              {isRefresh ? (
+                <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
+                  <p className="text-amber-800 text-sm">
+                    <strong>Session Expired:</strong> Don't worry, your progress has been saved. Click below to continue
+                    where you left off.
+                  </p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                    <h4 className="font-medium text-blue-900 mb-2">What happens next?</h4>
+                    <ul className="text-sm text-blue-800 space-y-1">
+                      <li>• You'll be securely redirected to Stripe</li>
+                      <li>• Complete identity verification (2-3 minutes)</li>
+                      <li>• Add your bank account details</li>
+                      <li>• Return here to start earning</li>
+                    </ul>
+                  </div>
+                </div>
+              )}
 
-            <div className="flex gap-3">
-              <Button onClick={handleReturnToEarnings} variant="outline">
-                Return to Earnings
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+              <div className="flex gap-3">
+                <Button onClick={handleReturnToEarnings} variant="outline" className="flex-1 bg-transparent">
+                  <ArrowLeft className="w-4 h-4 mr-2" />
+                  Back to Dashboard
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
       </div>
     </div>
   )
