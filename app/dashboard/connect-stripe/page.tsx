@@ -1,41 +1,41 @@
-"use client"
-
-import { useEffect, useState } from "react"
+import { Suspense } from "react"
+import { Card, CardContent } from "@/components/ui/card"
 import { Loader2 } from "lucide-react"
-import { StripeAccountLinker } from "@/components/stripe-account-linker"
+import dynamic from "next/dynamic"
+
+// Dynamically import the StripeAccountLinker to avoid SSR issues
+const StripeAccountLinker = dynamic(() => import("@/components/stripe-account-linker"), {
+  loading: () => (
+    <Card className="w-full max-w-2xl mx-auto">
+      <CardContent className="flex items-center justify-center p-8">
+        <Loader2 className="h-6 w-6 animate-spin mr-2" />
+        <span>Loading Stripe connection...</span>
+      </CardContent>
+    </Card>
+  ),
+  ssr: false,
+})
 
 export default function ConnectStripePage() {
-  const [isLoading, setIsLoading] = useState(true)
-
-  useEffect(() => {
-    // Simulate loading time for better UX
-    const timer = setTimeout(() => {
-      setIsLoading(false)
-    }, 1000)
-
-    return () => clearTimeout(timer)
-  }, [])
-
-  if (isLoading) {
-    return (
-      <div className="container mx-auto px-4 py-8">
-        <div className="flex items-center justify-center min-h-[400px]">
-          <Loader2 className="h-8 w-8 animate-spin" />
-        </div>
-      </div>
-    )
-  }
-
   return (
-    <div className="container mx-auto py-8 px-4">
+    <div className="container mx-auto p-6">
       <div className="mb-8 text-center">
         <h1 className="text-3xl font-bold mb-2">Connect Your Stripe Account</h1>
-        <p className="text-gray-600">
-          Start accepting payments and track your earnings by connecting your Stripe account
-        </p>
+        <p className="text-gray-600">Start accepting payments and track your earnings</p>
       </div>
 
-      <StripeAccountLinker />
+      <Suspense
+        fallback={
+          <Card className="w-full max-w-2xl mx-auto">
+            <CardContent className="flex items-center justify-center p-8">
+              <Loader2 className="h-6 w-6 animate-spin mr-2" />
+              <span>Loading...</span>
+            </CardContent>
+          </Card>
+        }
+      >
+        <StripeAccountLinker />
+      </Suspense>
     </div>
   )
 }

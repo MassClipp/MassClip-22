@@ -4,8 +4,9 @@ import { type NextRequest, NextResponse } from "next/server"
 import { verifyIdToken } from "@/lib/auth-utils"
 import { db } from "@/lib/firebase-admin"
 import Stripe from "stripe"
+import { error } from "console"
 
-// Initialize Stripe
+// Initialize Stripe with your secret key
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: "2024-06-20",
 })
@@ -30,22 +31,24 @@ export async function POST(request: NextRequest) {
 
     const { accountId } = await request.json()
 
-    if (!accountId || !accountId.trim()) {
+    if (!accountId || typeof accountId !== "string") {
       return NextResponse.json(
         {
           success: false,
-          error: "Account ID is required",
+          error: "Valid Account ID is required",
         },
         { status: 400 },
       )
     }
 
+    // Clean the account ID (remove any whitespace)
     const cleanAccountId = accountId.trim()
+
     console.log(`🔗 Linking account ${cleanAccountId} to user ${decodedToken.uid}`)
 
     try {
-      // Step 1: Verify the Stripe account exists and get its details
-      console.log("🔍 Verifying Stripe account exists...")
+      // Step 1: Verify the account exists and get its details from Stripe
+      console.log("🔍 Verifying Stripe account with Stripe API...")
       const account = await stripe.accounts.retrieve(cleanAccountId)
 
       if (!account) {
@@ -58,40 +61,28 @@ export async function POST(request: NextRequest) {
         )
       }
 
-      console.log(`✅ Stripe account verified: ${account.id}`)
-      console.log(`Account type: ${account.type}`)
-      console.log(`Charges enabled: ${account.charges_enabled}`)
-      console.log(`Payouts enabled: ${account.payouts_enabled}`)
+      console.log(`✅ Account verified: ${account.id}`)
+      console.log(`📊 Account status: charges=${account.charges_enabled}, payouts=${account.payouts_enabled}`)
 
       // Step 2: Create account info from Stripe response
       const accountInfo = {
-        chargesEnabled: account.charges_enabled || false,
-        payoutsEnabled: account.payouts_enabled || false,
-        detailsSubmitted: account.details_submitted || false,
-        accountType: account.type || "unknown",
-        country: account.country || "unknown",
+        chargesEnabled: account.charges_enabled,
+        payoutsEnabled: account.payouts_enabled,
+        detailsSubmitted: account.details_submitted,
+        accountType: account.type || "standard",
+        country: account.country || "US",
         email: account.email || null,
         businessType: account.business_type || null,
         lastUpdated: new Date(),
+        stripeData: {
+          created: account.created,
+          defaultCurrency: account.default_currency,
+          businessProfile: account.business_profile,
+        },
       }
 
-      // Step 3: Check if this account is already connected to another user
-      const existingConnection = await db.collection("users").where("stripeAccountId", "==", cleanAccountId).get()
-
-      if (!existingConnection.empty) {
-        const existingDoc = existingConnection.docs[0]
-        if (existingDoc.id !== decodedToken.uid) {
-          return NextResponse.json(
-            {
-              success: false,
-              error: "This Stripe account is already connected to another MassClip user.",
-            },
-            { status: 409 },
-          )
-        }
-      }
-
-      // Step 4: Update user document with Stripe account info
+      // Step 3: Update user document with Stripe account info
+      console.log(`💾 Saving account info to Firestore for user: ${decodedToken.uid}`)
       await db.collection("users").doc(decodedToken.uid).set(
         {
           stripeAccountId: cleanAccountId,
@@ -102,15 +93,7 @@ export async function POST(request: NextRequest) {
         { merge: true },
       )
 
-      console.log(`✅ Successfully linked Stripe account ${cleanAccountId} to user ${decodedToken.uid}`)
-
-      // Step 5: Log the connection for audit purposes
-      await db.collection("stripe_connections").add({
-        userId: decodedToken.uid,
-        stripeAccountId: cleanAccountId,
-        connectedAt: new Date(),
-        accountInfo: accountInfo,
-      })
+      console.log(`✅ Successfully linked and saved Stripe account ${cleanAccountId}`)
 
       return NextResponse.json({
         success: true,
@@ -129,13 +112,11 @@ export async function POST(request: NextRequest) {
           },
           { status: 404 },
         )
-      }
-
-      if (stripeError.code === "invalid_request_error") {
+      } else if (stripeError.code === "invalid_request_error") {
         return NextResponse.json(
           {
             success: false,
-            error: "Invalid Account ID format. Please check your Account ID and try again.",
+            error: "Invalid Account ID format. Please ensure you're using the correct Stripe Account ID.",
           },
           { status: 400 },
         )
@@ -144,7 +125,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         {
           success: false,
-          error: "Failed to verify Stripe account. Please try again.",
+          error: "Failed to verify account with Stripe. Please try again.",
           details: stripeError.message,
         },
         { status: 500 },
@@ -160,15 +141,15 @@ export async function POST(request: NextRequest) {
       },
       { status: 500 },
     )
+    \
   }
-  catch (err)
-  \
-    console.error("❌ Unexpected error linking account:", err)
+  catch (error: any)
+  console.error("❌ Unexpected error linking account:", error)
   return NextResponse.json(
     {
       success: false,
       error: "Internal server error",
-      details: err.message,
+      details: error.message,
     },
     { status: 500 },
   )

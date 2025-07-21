@@ -11,35 +11,44 @@ import { getAuth, type Auth, type DecodedIdToken } from "firebase-admin/auth"
  * serverless / hot-reload scenarios).
  * All logic calling `auth` / `db` must import from this file.
  */
-let app: App
-
-if (!getApps().length) {
-  try {
-    app = initializeApp({
-      credential: cert({
-        projectId: process.env.FIREBASE_PROJECT_ID,
-        clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-        privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n"),
-      }),
-    })
-    console.log("✅ Firebase Admin initialized successfully")
-  } catch (error) {
-    console.error("❌ Failed to initialize Firebase Admin:", error)
-    throw error
+export function initializeFirebaseAdmin(): App {
+  if (getApps().length > 0) {
+    return getApps()[0]!
   }
-} else {
-  app = getApps()[0]
+
+  const { FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, FIREBASE_PRIVATE_KEY } = process.env
+
+  if (!FIREBASE_PROJECT_ID || !FIREBASE_CLIENT_EMAIL || !FIREBASE_PRIVATE_KEY) {
+    throw new Error(
+      "Missing Firebase Admin credentials. Make sure " +
+        "FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL and FIREBASE_PRIVATE_KEY " +
+        "environment variables are set.",
+    )
+  }
+
+  // Firebase Admin expects real line breaks in the private key
+  const privateKey = FIREBASE_PRIVATE_KEY.replace(/\\n/g, "\n")
+
+  return initializeApp({
+    credential: cert({
+      projectId: FIREBASE_PROJECT_ID,
+      clientEmail: FIREBASE_CLIENT_EMAIL,
+      privateKey,
+    }),
+    projectId: FIREBASE_PROJECT_ID,
+  })
 }
-
-export const db: Firestore = getFirestore(app)
-export const auth: Auth = getAuth(app)
-
-// Recommended for better Firestore reliability
-db.settings({ ignoreUndefinedProperties: true })
 
 /* -------------------------------------------------------------------------- */
 /*                             Lazy loaded singletons                         */
 /* -------------------------------------------------------------------------- */
+
+const adminApp = initializeFirebaseAdmin()
+export const db: Firestore = getFirestore(adminApp)
+export const auth: Auth = getAuth(adminApp)
+
+// Recommended for better Firestore reliability
+db.settings({ ignoreUndefinedProperties: true })
 
 /* -------------------------------------------------------------------------- */
 /*                                 Utilities                                  */
@@ -119,4 +128,3 @@ export async function createOrUpdateUserProfile(userId: string, profileData: Rec
 /* -------------------------------------------------------------------------- */
 
 export { FieldValue }
-export { app }

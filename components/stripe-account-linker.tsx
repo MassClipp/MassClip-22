@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Loader2, CheckCircle, AlertCircle, ExternalLink, LinkIcon, Info } from "lucide-react"
+import { Loader2, CheckCircle, AlertCircle, ExternalLink, LinkIcon } from "lucide-react"
 import { useRouter } from "next/navigation"
 import { useAuth } from "@/contexts/auth-context"
 
@@ -17,6 +17,11 @@ interface StripeAccountStatus {
   country: string
   email?: string
   businessType?: string
+  stripeData?: {
+    created: number
+    defaultCurrency: string
+    businessProfile: any
+  }
 }
 
 interface ConnectionStatus {
@@ -54,6 +59,7 @@ export function StripeAccountLinker() {
     try {
       // Get fresh ID token
       const idToken = await user.getIdToken(true) // Force refresh
+      console.log("🔑 Got fresh ID token")
       return {
         "Content-Type": "application/json",
         Authorization: `Bearer ${idToken}`,
@@ -72,6 +78,7 @@ export function StripeAccountLinker() {
 
     try {
       setIsCheckingStatus(true)
+      console.log("🔍 Checking connection status...")
 
       const headers = await getAuthHeaders()
 
@@ -80,8 +87,11 @@ export function StripeAccountLinker() {
         headers,
       })
 
+      console.log("📡 Connection status response:", response.status)
+
       if (response.ok) {
         const data = await response.json()
+        console.log("📊 Connection status data:", data)
         setConnectionStatus(data)
 
         if (data.connected && data.accountId) {
@@ -113,17 +123,12 @@ export function StripeAccountLinker() {
       return
     }
 
-    // Validate account ID format
-    if (!accountId.trim().startsWith("acct_")) {
-      setError("Account ID should start with 'acct_'. Please check your Account ID.")
-      return
-    }
-
     setIsLinking(true)
     setError("")
     setSuccess("")
 
     try {
+      console.log("🔗 Starting account linking process...")
       const headers = await getAuthHeaders()
 
       const response = await fetch("/api/stripe/connect/link-account", {
@@ -132,10 +137,12 @@ export function StripeAccountLinker() {
         body: JSON.stringify({ accountId: accountId.trim() }),
       })
 
+      console.log("📡 Link account response:", response.status)
       const data = await response.json()
+      console.log("📊 Link account data:", data)
 
       if (data.success) {
-        setSuccess("Stripe account linked successfully! You can now start receiving payments.")
+        setSuccess("Stripe account linked successfully! Redirecting to earnings page...")
         setConnectionStatus({
           connected: true,
           accountId: data.accountId,
@@ -146,7 +153,8 @@ export function StripeAccountLinker() {
         // Redirect to earnings page after successful connection
         setTimeout(() => {
           router.push("/dashboard/earnings")
-        }, 3000)
+          router.refresh()
+        }, 2000)
       } else {
         setError(data.error || "Failed to link Stripe account")
       }
@@ -175,6 +183,20 @@ export function StripeAccountLinker() {
 
   return (
     <div className="w-full max-w-2xl mx-auto space-y-6">
+      {/* Debug Info for Development */}
+      {process.env.NODE_ENV === "development" && (
+        <Card className="border-blue-200 bg-blue-50">
+          <CardHeader>
+            <CardTitle className="text-blue-800">Debug Info</CardTitle>
+          </CardHeader>
+          <CardContent className="text-sm text-blue-700">
+            <p>User: {user ? "✅ Authenticated" : "❌ Not authenticated"}</p>
+            <p>User ID: {user?.uid || "N/A"}</p>
+            <p>Connection Status: {connectionStatus?.connected ? "✅ Connected" : "❌ Not connected"}</p>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Authentication Status */}
       {!user && (
         <Alert variant="destructive">
@@ -188,33 +210,6 @@ export function StripeAccountLinker() {
           </AlertDescription>
         </Alert>
       )}
-
-      {/* How It Works Info */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Info className="h-5 w-5 text-blue-500" />
-            How Stripe Connect Works
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-2 text-sm text-gray-600">
-            <p>
-              1. <strong>Link Your Account:</strong> Connect your existing Stripe account to MassClip
-            </p>
-            <p>
-              2. <strong>Automatic Payments:</strong> When customers buy your content, payments go directly to your
-              Stripe account
-            </p>
-            <p>
-              3. <strong>Platform Fee:</strong> MassClip automatically deducts a small platform fee from each sale
-            </p>
-            <p>
-              4. <strong>You Keep the Rest:</strong> The majority of each sale goes directly to your bank account
-            </p>
-          </div>
-        </CardContent>
-      </Card>
 
       {/* Connection Status Card */}
       {connectionStatus && connectionStatus.connected && (
@@ -261,14 +256,12 @@ export function StripeAccountLinker() {
               <Input
                 id="accountId"
                 type="text"
-                placeholder="acct_1234567890abcdef"
+                placeholder="acct_1234567890"
                 value={accountId}
                 onChange={(e) => setAccountId(e.target.value)}
                 disabled={isLinking || !user}
               />
-              <p className="text-xs text-gray-500">
-                Find this in your Stripe Dashboard → Settings → Account details (starts with "acct_")
-              </p>
+              <p className="text-xs text-gray-500">Find this in your Stripe Dashboard → Settings → Account details</p>
             </div>
 
             {error && (
@@ -334,6 +327,46 @@ export function StripeAccountLinker() {
           </CardContent>
         </Card>
       )}
+
+      {/* How it Works */}
+      <Card>
+        <CardHeader>
+          <CardTitle>How Stripe Connect Works</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            <div className="flex items-start gap-3">
+              <div className="w-6 h-6 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center text-sm font-medium">
+                1
+              </div>
+              <div>
+                <h4 className="font-medium">Link Your Account</h4>
+                <p className="text-sm text-gray-600">Enter your Stripe Account ID to connect it to MassClip</p>
+              </div>
+            </div>
+            <div className="flex items-start gap-3">
+              <div className="w-6 h-6 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center text-sm font-medium">
+                2
+              </div>
+              <div>
+                <h4 className="font-medium">Verification</h4>
+                <p className="text-sm text-gray-600">We verify your account with Stripe's API and check its status</p>
+              </div>
+            </div>
+            <div className="flex items-start gap-3">
+              <div className="w-6 h-6 bg-blue-100 text-blue-600 rounded-full flex items-center justify-center text-sm font-medium">
+                3
+              </div>
+              <div>
+                <h4 className="font-medium">Start Earning</h4>
+                <p className="text-sm text-gray-600">
+                  Customers can purchase your content and payments flow directly to your account
+                </p>
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Help Section */}
       <Card>
