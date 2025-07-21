@@ -120,3 +120,5 @@ export function NavDropdown() {
     </DropdownMenu>
   )
 }
+
+export default NavDropdown

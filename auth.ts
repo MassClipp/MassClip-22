@@ -1,6 +1,7 @@
 import { initializeApp, getApps } from "firebase/app"
 import { getAuth, connectAuthEmulator } from "firebase/auth"
 import { getFirestore, connectFirestoreEmulator } from "firebase/firestore"
+import type { NextAuthOptions } from "next-auth"
 
 // Firebase configuration
 const firebaseConfig = {
@@ -47,3 +48,11 @@ if (typeof window !== "undefined" && process.env.NODE_ENV === "development") {
 }
 
 export default app
+
+// ---------------------------------------------------------------------------
+// Stub authOptions so other modules can import it from "@/auth".
+// Replace with your real NextAuth configuration as needed.
+export const authOptions: NextAuthOptions = {
+  providers: [],
+  session: { strategy: "jwt" },
+}
