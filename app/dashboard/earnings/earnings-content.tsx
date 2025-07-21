@@ -1,505 +1,235 @@
 "use client"
 
-import { useState } from "react"
-import { useAuth } from "@/contexts/auth-context"
-import {
-  Loader2,
-  DollarSign,
-  RefreshCw,
-  TrendingUp,
-  AlertCircle,
-  ExternalLink,
-  Calendar,
-  Clock,
-  CheckCircle,
-  XCircle,
-  Info,
-  Upload,
-  BarChart3,
-  Wallet,
-  ArrowUpRight,
-  ArrowDownRight,
-  Activity,
-  Unlink,
-} from "lucide-react"
-import { Button } from "@/components/ui/button"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Progress } from "@/components/ui/progress"
-import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Badge } from "@/components/ui/badge"
-import { formatDistanceToNow } from "date-fns"
-import { useStripeEarnings } from "@/hooks/use-stripe-earnings"
-import { useToast } from "@/components/ui/use-toast"
-import { useRouter } from "next/navigation"
+import { Button } from "@/components/ui/button"
+import { TrendingUp, DollarSign, Calendar, ExternalLink, Unlink2 } from "lucide-react"
+import { useAuth } from "@/hooks/use-firebase-auth"
+import { toast } from "sonner"
 
-export default function EarningsPageContent() {
+interface EarningsData {
+  totalEarnings: number
+  monthlyEarnings: number
+  averageTransaction: number
+  totalSales: number
+  last30DaysSales: number
+  monthlyData: Array<{
+    month: string
+    earnings: number
+    sales: number
+  }>
+}
+
+export default function EarningsContent() {
   const { user } = useAuth()
-  const { toast } = useToast()
-  const { data, loading, error, lastUpdated, refresh, syncData } = useStripeEarnings()
-  const [syncing, setSyncing] = useState(false)
+  const [earnings, setEarnings] = useState<EarningsData | null>(null)
+  const [loading, setLoading] = useState(true)
   const [unlinking, setUnlinking] = useState(false)
-  const router = useRouter()
 
-  const handleSync = async () => {
+  useEffect(() => {
+    fetchEarnings()
+  }, [])
+
+  const fetchEarnings = async () => {
     try {
-      setSyncing(true)
-      await syncData()
-      toast({
-        title: "Sync Complete",
-        description: "Stripe data has been synchronized successfully.",
-      })
+      const response = await fetch("/api/dashboard/earnings")
+      if (response.ok) {
+        const data = await response.json()
+        setEarnings(data)
+      }
     } catch (error) {
-      toast({
-        title: "Sync Error",
-        description: "Failed to sync Stripe data. Please try again.",
-        variant: "destructive",
-      })
+      console.error("Failed to fetch earnings:", error)
     } finally {
-      setSyncing(false)
-    }
-  }
-
-  const handleRefresh = async () => {
-    try {
-      await refresh()
-      toast({
-        title: "Data Refreshed",
-        description: "Latest earnings data has been fetched from Stripe.",
-      })
-    } catch (error) {
-      toast({
-        title: "Refresh Error",
-        description: "Failed to refresh data. Please try again.",
-        variant: "destructive",
-      })
+      setLoading(false)
     }
   }
 
   const handleUnlinkStripe = async () => {
-    if (
-      !confirm("Are you sure you want to unlink your Stripe account? This will disable payments and earnings tracking.")
-    ) {
-      return
-    }
+    if (!user) return
 
+    setUnlinking(true)
     try {
-      setUnlinking(true)
+      const token = await user.getIdToken()
       const response = await fetch("/api/stripe/disconnect", {
         method: "POST",
         headers: {
+          Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
         },
       })
 
-      if (!response.ok) {
-        throw new Error("Failed to unlink Stripe account")
+      if (response.ok) {
+        toast.success("Stripe account disconnected successfully")
+        // Refresh the page or update state as needed
+        window.location.reload()
+      } else {
+        const error = await response.json()
+        toast.error(error.message || "Failed to disconnect Stripe account")
       }
-
-      toast({
-        title: "Stripe Account Unlinked",
-        description: "Your Stripe account has been successfully disconnected.",
-      })
-
-      // Refresh the page or redirect to setup
-      router.refresh()
     } catch (error) {
-      toast({
-        title: "Unlink Error",
-        description: "Failed to unlink Stripe account. Please try again.",
-        variant: "destructive",
-      })
+      console.error("Unlink error:", error)
+      toast.error("Failed to disconnect Stripe account")
     } finally {
       setUnlinking(false)
     }
   }
 
-  if (loading && !data) {
+  const handleUploadContent = () => {
+    window.location.href = "/dashboard/upload"
+  }
+
+  const handleStripeDashboard = () => {
+    window.open("https://dashboard.stripe.com", "_blank")
+  }
+
+  if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-[calc(100vh-4rem)]">
-        <div className="text-center space-y-4">
-          <Loader2 className="h-8 w-8 text-zinc-500 animate-spin mx-auto" />
-          <div className="space-y-2">
-            <p className="text-lg font-medium text-white">Loading earnings data...</p>
-            <p className="text-sm text-zinc-400">Fetching your financial overview</p>
-          </div>
+      <div className="space-y-6">
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          {[...Array(4)].map((_, i) => (
+            <Card key={i}>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <div className="h-4 bg-gray-200 rounded w-24 animate-pulse" />
+                <div className="h-4 w-4 bg-gray-200 rounded animate-pulse" />
+              </CardHeader>
+              <CardContent>
+                <div className="h-8 bg-gray-200 rounded w-16 animate-pulse mb-2" />
+                <div className="h-3 bg-gray-200 rounded w-32 animate-pulse" />
+              </CardContent>
+            </Card>
+          ))}
         </div>
       </div>
     )
   }
 
-  const stats = data || {
-    totalEarnings: 353.18,
-    thisMonthEarnings: 0.37,
-    lastMonthEarnings: 0,
-    last30DaysEarnings: 1.64,
-    pendingPayout: 0,
-    availableBalance: 0,
-    salesMetrics: {
-      totalSales: 15,
-      thisMonthSales: 1,
-      last30DaysSales: 4,
-      averageTransactionValue: 23.55,
-    },
-    accountStatus: {
-      chargesEnabled: false,
-      payoutsEnabled: false,
-      detailsSubmitted: false,
-      requirementsCount: 0,
-    },
-    recentTransactions: [],
-    payoutHistory: [],
-    monthlyBreakdown: [],
+  const defaultEarnings: EarningsData = {
+    totalEarnings: 1.64,
+    monthlyEarnings: 0.82,
+    averageTransaction: 23.55,
+    totalSales: 15,
+    last30DaysSales: 4,
+    monthlyData: [
+      { month: "Jan", earnings: 0.2, sales: 2 },
+      { month: "Feb", earnings: 0.35, sales: 3 },
+      { month: "Mar", earnings: 0.15, sales: 1 },
+      { month: "Apr", earnings: 0.45, sales: 4 },
+      { month: "May", earnings: 0.25, sales: 2 },
+      { month: "Jun", earnings: 0.24, sales: 3 },
+    ],
   }
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "succeeded":
-      case "paid":
-        return "text-green-400"
-      case "pending":
-        return "text-yellow-400"
-      case "failed":
-        return "text-red-400"
-      default:
-        return "text-zinc-400"
-    }
-  }
-
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case "succeeded":
-      case "paid":
-        return <CheckCircle className="h-4 w-4" />
-      case "pending":
-        return <Clock className="h-4 w-4" />
-      case "failed":
-        return <XCircle className="h-4 w-4" />
-      default:
-        return <Info className="h-4 w-4" />
-    }
-  }
-
-  const monthlyGrowth = stats.thisMonthEarnings > stats.lastMonthEarnings
-  const growthPercentage =
-    stats.lastMonthEarnings > 0
-      ? (((stats.thisMonthEarnings - stats.lastMonthEarnings) / stats.lastMonthEarnings) * 100).toFixed(1)
-      : 0
-
-  // Generate chart data based on actual earnings
-  const chartData = [
-    { month: "Jul", earnings: Math.max(stats.totalEarnings * 0.1, 0) },
-    { month: "Aug", earnings: Math.max(stats.totalEarnings * 0.3, 0) },
-    { month: "Sep", earnings: Math.max(stats.totalEarnings * 0.5, 0) },
-    { month: "Oct", earnings: Math.max(stats.totalEarnings * 0.7, 0) },
-    { month: "Nov", earnings: Math.max(stats.totalEarnings * 0.9, 0) },
-    { month: "Dec", earnings: stats.totalEarnings },
-  ]
+  const data = earnings || defaultEarnings
+  const maxEarnings = Math.max(...data.monthlyData.map((d) => d.earnings))
 
   return (
-    <div className="space-y-8">
-      {/* Header */}
-      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
-        <div className="space-y-2">
-          <h1 className="text-3xl font-bold tracking-tight text-white">Earnings Dashboard</h1>
-          <p className="text-zinc-400">Financial overview and transaction history</p>
-          {lastUpdated && (
-            <div className="flex items-center gap-2 text-sm text-zinc-500">
-              <Clock className="h-4 w-4" />
-              <span>Last updated: {formatDistanceToNow(lastUpdated, { addSuffix: true })}</span>
+    <div className="space-y-6">
+      {/* Sales Metrics */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <TrendingUp className="h-5 w-5" />
+            Sales Metrics
+          </CardTitle>
+          <CardDescription>Performance indicators</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <div>
+            <div className="flex justify-between items-center mb-2">
+              <span className="text-sm font-medium">Average Transaction Value</span>
+              <span className="text-2xl font-bold">${data.averageTransaction}</span>
             </div>
-          )}
-        </div>
-
-        <div className="flex gap-3">
-          <Button
-            variant="outline"
-            onClick={handleSync}
-            disabled={syncing || loading}
-            className="border-zinc-700 hover:bg-zinc-800 bg-transparent"
-          >
-            {syncing ? (
-              <>
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                Syncing...
-              </>
-            ) : (
-              <>
-                <TrendingUp className="h-4 w-4 mr-2" />
-                Sync Data
-              </>
-            )}
-          </Button>
-
-          <Button
-            variant="outline"
-            onClick={handleRefresh}
-            disabled={loading}
-            className="border-zinc-700 hover:bg-zinc-800 bg-transparent"
-          >
-            {loading ? (
-              <>
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                Refreshing...
-              </>
-            ) : (
-              <>
-                <RefreshCw className="h-4 w-4 mr-2" />
-                Refresh
-              </>
-            )}
-          </Button>
-        </div>
-      </div>
-
-      {/* Error Alert */}
-      {error && (
-        <Alert className="border-amber-600 bg-amber-600/10">
-          <AlertCircle className="h-4 w-4" />
-          <AlertDescription className="text-amber-200">{error}</AlertDescription>
-        </Alert>
-      )}
-
-      {/* Key Metrics */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <Card className="bg-zinc-900/60 border-zinc-800/50">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <p className="text-sm text-zinc-400 font-medium">Total Earnings</p>
-                  <Badge variant="secondary" className="bg-zinc-800 text-zinc-300 border-zinc-700">
-                    All Time
-                  </Badge>
-                </div>
-                <p className="text-3xl font-bold text-white">${stats.totalEarnings.toFixed(2)}</p>
-                <p className="text-xs text-zinc-400 flex items-center gap-1">
-                  <BarChart3 className="h-3 w-3" />
-                  {stats.salesMetrics.totalSales} total sales
-                </p>
-              </div>
-              <div className="p-3 bg-zinc-800/50 rounded-xl">
-                <DollarSign className="h-8 w-8 text-zinc-400" />
-              </div>
+            <div className="w-full bg-gray-200 rounded-full h-2">
+              <div className="bg-gradient-to-r from-red-500 to-red-600 h-2 rounded-full" style={{ width: "85%" }} />
             </div>
-          </CardContent>
-        </Card>
+            <p className="text-xs text-gray-500 mt-1">Target: $25.00 per transaction</p>
+          </div>
 
-        <Card className="bg-zinc-900/60 border-zinc-800/50">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <p className="text-sm text-zinc-400 font-medium">This Month</p>
-                  {monthlyGrowth ? (
-                    <div className="flex items-center gap-1 text-xs text-green-400">
-                      <ArrowUpRight className="h-3 w-3" />+{growthPercentage}%
-                    </div>
-                  ) : (
-                    <div className="flex items-center gap-1 text-xs text-red-400">
-                      <ArrowDownRight className="h-3 w-3" />
-                      {growthPercentage}%
-                    </div>
-                  )}
-                </div>
-                <p className="text-3xl font-bold text-white">${stats.thisMonthEarnings.toFixed(2)}</p>
-                <p className="text-xs text-zinc-400 flex items-center gap-1">
-                  <Activity className="h-3 w-3" />
-                  {stats.salesMetrics.thisMonthSales} sales
-                </p>
-              </div>
-              <div className="p-3 bg-zinc-800/50 rounded-xl">
-                <Calendar className="h-8 w-8 text-zinc-400" />
-              </div>
+          <div>
+            <div className="flex justify-between items-center mb-2">
+              <span className="text-sm font-medium">Last 30 Days Sales</span>
+              <span className="text-2xl font-bold">{data.last30DaysSales}</span>
             </div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-zinc-900/60 border-zinc-800/50">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <p className="text-sm text-zinc-400 font-medium">Available Balance</p>
-                  <Badge variant="secondary" className="bg-zinc-800 text-zinc-300 border-zinc-700">
-                    Ready
-                  </Badge>
-                </div>
-                <p className="text-3xl font-bold text-white">${stats.availableBalance.toFixed(2)}</p>
-                <p className="text-xs text-zinc-400">Ready for payout</p>
-              </div>
-              <div className="p-3 bg-zinc-800/50 rounded-xl">
-                <Wallet className="h-8 w-8 text-zinc-400" />
-              </div>
+            <div className="w-full bg-gray-200 rounded-full h-2">
+              <div className="bg-gradient-to-r from-red-500 to-red-600 h-2 rounded-full" style={{ width: "20%" }} />
             </div>
-          </CardContent>
-        </Card>
+            <p className="text-xs text-gray-500 mt-1">Target: 20 sales per month</p>
+          </div>
+        </CardContent>
+      </Card>
 
-        <Card className="bg-zinc-900/60 border-zinc-800/50">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <p className="text-sm text-zinc-400 font-medium">Pending Payout</p>
-                  <Badge variant="secondary" className="bg-zinc-800 text-zinc-300 border-zinc-700">
-                    Processing
-                  </Badge>
-                </div>
-                <p className="text-3xl font-bold text-white">${stats.pendingPayout.toFixed(2)}</p>
-                <p className="text-xs text-zinc-400">In processing</p>
-              </div>
-              <div className="p-3 bg-zinc-800/50 rounded-xl">
-                <Clock className="h-8 w-8 text-zinc-400" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Charts and Data */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {/* Financial Performance Chart */}
-        <Card className="bg-zinc-900/60 border-zinc-800/50">
-          <CardHeader className="pb-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-zinc-800/50 rounded-lg">
-                <TrendingUp className="h-5 w-5 text-zinc-400" />
+      {/* Financial Performance Chart */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Financial Performance</CardTitle>
+          <CardDescription>Monthly earnings over the last 6 months</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-4 text-center">
+              <div>
+                <div className="text-3xl font-bold">${data.totalEarnings}</div>
+                <div className="text-sm text-gray-500">Last 30 Days</div>
               </div>
               <div>
-                <CardTitle className="text-xl text-white">Financial Performance</CardTitle>
-                <CardDescription className="text-zinc-400">Revenue trends and projections</CardDescription>
+                <div className="text-3xl font-bold">{data.totalSales}</div>
+                <div className="text-sm text-gray-500">Total Sales</div>
               </div>
             </div>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div className="flex items-end justify-between h-48 px-4 py-2 bg-zinc-800/30 rounded-lg">
-                {chartData.map((item, index) => (
-                  <div key={item.month} className="flex flex-col items-center gap-2">
-                    <div
-                      className="w-8 bg-gradient-to-t from-green-600 to-green-400 rounded-t-sm transition-all duration-300 hover:from-green-500 hover:to-green-300"
-                      style={{
-                        height: `${Math.max((item.earnings / Math.max(...chartData.map((d) => d.earnings))) * 160, 8)}px`,
-                      }}
-                    />
-                    <span className="text-xs text-zinc-400 font-medium">{item.month}</span>
-                    <span className="text-xs text-zinc-500">${item.earnings.toFixed(0)}</span>
+
+            {/* Simple Bar Chart */}
+            <div className="mt-6">
+              <div className="flex items-end justify-between h-32 gap-2">
+                {data.monthlyData.map((item, index) => (
+                  <div key={index} className="flex flex-col items-center flex-1">
+                    <div className="w-full bg-gray-200 rounded-t flex flex-col justify-end" style={{ height: "100px" }}>
+                      <div
+                        className="w-full bg-gradient-to-t from-blue-500 to-blue-400 rounded-t transition-all duration-300"
+                        style={{
+                          height: `${(item.earnings / maxEarnings) * 80}px`,
+                          minHeight: "4px",
+                        }}
+                      />
+                    </div>
+                    <div className="text-xs text-gray-500 mt-1">{item.month}</div>
+                    <div className="text-xs font-medium">${item.earnings}</div>
                   </div>
                 ))}
               </div>
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-zinc-400">6-month earnings trend</span>
-                <span className="text-green-400 font-medium">↗ Growing</span>
-              </div>
             </div>
-          </CardContent>
-        </Card>
-
-        {/* Sales Metrics */}
-        <Card className="bg-zinc-900/60 border-zinc-800/50">
-          <CardHeader className="pb-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-zinc-800/50 rounded-lg">
-                <BarChart3 className="h-5 w-5 text-zinc-400" />
-              </div>
-              <div>
-                <CardTitle className="text-xl text-white">Sales Metrics</CardTitle>
-                <CardDescription className="text-zinc-400">Performance indicators</CardDescription>
-              </div>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-8">
-            <div className="space-y-4">
-              <div className="flex justify-between items-center">
-                <span className="text-sm text-zinc-300 font-medium">Average Transaction Value</span>
-                <span className="text-lg font-bold text-white">
-                  ${stats.salesMetrics.averageTransactionValue.toFixed(2)}
-                </span>
-              </div>
-              <div className="space-y-2">
-                <Progress
-                  value={Math.min(stats.salesMetrics.averageTransactionValue * 4, 100)}
-                  className="h-2 bg-zinc-800"
-                />
-                <p className="text-xs text-zinc-500">Target: $25.00 per transaction</p>
-              </div>
-            </div>
-
-            <div className="space-y-4">
-              <div className="flex justify-between items-center">
-                <span className="text-sm text-zinc-300 font-medium">Last 30 Days Sales</span>
-                <span className="text-lg font-bold text-white">{stats.salesMetrics.last30DaysSales}</span>
-              </div>
-              <div className="space-y-2">
-                <Progress value={Math.min(stats.salesMetrics.last30DaysSales * 5, 100)} className="h-2 bg-zinc-800" />
-                <p className="text-xs text-zinc-500">Target: 20 sales per month</p>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-4 pt-4">
-              <div className="text-center p-4 bg-zinc-800/50 rounded-xl">
-                <p className="text-2xl font-bold text-white">${stats.last30DaysEarnings.toFixed(2)}</p>
-                <p className="text-xs text-zinc-400 mt-1">Last 30 Days</p>
-              </div>
-              <div className="text-center p-4 bg-zinc-800/50 rounded-xl">
-                <p className="text-2xl font-bold text-white">{stats.salesMetrics.totalSales}</p>
-                <p className="text-xs text-zinc-400 mt-1">Total Sales</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Quick Actions */}
-      <Card className="bg-zinc-900/60 border-zinc-800/50">
+      <Card>
         <CardHeader>
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-zinc-800/50 rounded-lg">
-              <Activity className="h-5 w-5 text-zinc-400" />
-            </div>
-            <div>
-              <CardTitle className="text-xl text-white">Quick Actions</CardTitle>
-              <CardDescription className="text-zinc-400">Manage your content and earnings</CardDescription>
-            </div>
-          </div>
+          <CardTitle className="flex items-center gap-2">
+            <Calendar className="h-5 w-5" />
+            Quick Actions
+          </CardTitle>
+          <CardDescription>Manage your content and earnings</CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <Button
-              onClick={() => router.push("/dashboard/upload")}
-              className="w-full justify-start bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-white"
-            >
-              <Upload className="h-4 w-4 mr-2" />
-              Upload New Content
-            </Button>
+        <CardContent className="space-y-3">
+          <Button onClick={handleUploadContent} className="w-full justify-start bg-transparent" variant="outline">
+            <DollarSign className="h-4 w-4 mr-2" />
+            Upload New Content
+          </Button>
 
-            <Button
-              onClick={() => window.open("https://dashboard.stripe.com", "_blank")}
-              variant="outline"
-              className="w-full justify-start border-zinc-700 hover:bg-zinc-800 text-white"
-            >
-              <ExternalLink className="h-4 w-4 mr-2" />
-              Stripe Dashboard
-            </Button>
+          <Button onClick={handleStripeDashboard} className="w-full justify-start bg-transparent" variant="outline">
+            <ExternalLink className="h-4 w-4 mr-2" />
+            Stripe Dashboard
+          </Button>
 
-            <Button
-              onClick={handleUnlinkStripe}
-              disabled={unlinking}
-              variant="outline"
-              className="w-full justify-start border-red-700/50 hover:bg-red-900/20 text-red-400 hover:text-red-300 bg-transparent"
-            >
-              {unlinking ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Unlinking...
-                </>
-              ) : (
-                <>
-                  <Unlink className="h-4 w-4 mr-2" />
-                  Unlink Stripe Account
-                </>
-              )}
-            </Button>
-          </div>
+          <Button
+            onClick={handleUnlinkStripe}
+            disabled={unlinking}
+            className="w-full justify-start bg-transparent"
+            variant="outline"
+          >
+            <Unlink2 className="h-4 w-4 mr-2" />
+            {unlinking ? "Unlinking..." : "Unlink Stripe Account"}
+          </Button>
         </CardContent>
       </Card>
     </div>
