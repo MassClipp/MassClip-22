@@ -133,6 +133,11 @@ export async function POST(request: NextRequest) {
       console.error("❌ [Link Account] Stripe error code:", stripeError.code)
       console.error("❌ [Link Account] Stripe error type:", stripeError.type)
 
+      // Check if it's a test/live mode mismatch
+      const secretKey = process.env.STRIPE_SECRET_KEY!
+      const isTestKey = secretKey.startsWith("sk_test_")
+      const isLiveKey = secretKey.startsWith("sk_live_")
+
       if (stripeError.code === "resource_missing") {
         return NextResponse.json(
           {
@@ -140,9 +145,15 @@ export async function POST(request: NextRequest) {
             details: `The account ID '${finalAccountId}' does not exist or is not accessible with your current Stripe keys.`,
             suggestions: [
               "Double-check the account ID format (should start with 'acct_')",
-              "Ensure you're using the correct Stripe environment (test vs live)",
+              `You are using ${isTestKey ? "TEST" : isLiveKey ? "LIVE" : "UNKNOWN"} keys - ensure the account matches this environment`,
               "Verify the account exists in your Stripe dashboard",
+              "Check if the account belongs to your Stripe platform",
+              "If this is a Connect account, ensure it's properly linked to your platform",
             ],
+            environment: {
+              keyType: isTestKey ? "TEST" : isLiveKey ? "LIVE" : "UNKNOWN",
+              nodeEnv: process.env.NODE_ENV,
+            },
           },
           { status: 404 },
         )
@@ -153,7 +164,16 @@ export async function POST(request: NextRequest) {
           {
             error: "Invalid Stripe account",
             details: "The provided account ID is not valid or accessible",
-            suggestions: ["Check that the account ID is correct", "Ensure the account belongs to your Stripe platform"],
+            suggestions: [
+              "Check that the account ID is correct",
+              "Ensure the account belongs to your Stripe platform",
+              `Verify you're using the correct environment (currently using ${isTestKey ? "TEST" : "LIVE"} keys)`,
+              "If this is a new account, it might need to complete onboarding first",
+            ],
+            environment: {
+              keyType: isTestKey ? "TEST" : isLiveKey ? "LIVE" : "UNKNOWN",
+              nodeEnv: process.env.NODE_ENV,
+            },
           },
           { status: 400 },
         )
@@ -168,8 +188,14 @@ export async function POST(request: NextRequest) {
           suggestions: [
             "Verify the account ID is correct",
             "Check your Stripe API keys are properly configured",
+            `Ensure you're using the correct environment (currently using ${isTestKey ? "TEST" : "LIVE"} keys)`,
             "Ensure you have access to this account",
+            "Check if the account needs to complete Stripe onboarding",
           ],
+          environment: {
+            keyType: isTestKey ? "TEST" : isLiveKey ? "LIVE" : "UNKNOWN",
+            nodeEnv: process.env.NODE_ENV,
+          },
         },
         { status: 400 },
       )

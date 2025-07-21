@@ -1,52 +1,43 @@
-import { type NextRequest, NextResponse } from "next/server"
-import { verifyIdToken } from "@/lib/auth-utils"
+import { NextResponse } from "next/server"
 
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
-    console.log(`🔍 [Stripe Environment] Checking environment status`)
+    const secretKey = process.env.STRIPE_SECRET_KEY
+    const isProduction = process.env.NODE_ENV === "production"
 
-    // Verify authentication
-    const decodedToken = await verifyIdToken(request)
-    if (!decodedToken) {
-      console.error(`❌ [Stripe Environment] Authentication failed`)
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+    if (!secretKey) {
+      return NextResponse.json({
+        error: "No Stripe secret key found",
+        isTestMode: null,
+        nodeEnv: process.env.NODE_ENV,
+      })
     }
 
-    // Check Stripe configuration
-    const stripeSecretKey = process.env.STRIPE_SECRET_KEY
-    const stripeWebhookSecret = process.env.STRIPE_WEBHOOK_SECRET
+    const isTestMode = secretKey.startsWith("sk_test_")
+    const isLiveMode = secretKey.startsWith("sk_live_")
 
-    const isLiveMode = stripeSecretKey?.startsWith("sk_live_")
-    const stripeKeyPrefix = stripeSecretKey?.substring(0, 12) || "Not configured"
+    let warning = null
 
-    // Check Firebase configuration
-    const firebaseProjectId = process.env.FIREBASE_PROJECT_ID
-    const firebasePrivateKey = process.env.FIREBASE_PRIVATE_KEY
-    const firebaseClientEmail = process.env.FIREBASE_CLIENT_EMAIL
-
-    const firebaseConnected = !!(firebaseProjectId && firebasePrivateKey && firebaseClientEmail)
-
-    const environmentStatus = {
-      stripeMode: isLiveMode ? "LIVE" : "TEST",
-      stripeKeyPrefix,
-      webhookConfigured: !!stripeWebhookSecret,
-      firebaseConnected,
-      environment: process.env.NODE_ENV || "development",
+    // Check for environment mismatches
+    if (isProduction && isTestMode) {
+      warning = "⚠️ WARNING: Running in production but using test keys!"
+    } else if (!isProduction && isLiveMode) {
+      warning = "⚠️ WARNING: Running in development but using live keys!"
     }
 
-    console.log(`✅ [Stripe Environment] Environment status checked`)
-
-    return NextResponse.json(environmentStatus)
+    return NextResponse.json({
+      isTestMode,
+      isLiveMode,
+      nodeEnv: process.env.NODE_ENV,
+      keyInfo: `${secretKey.substring(0, 12)}...${secretKey.substring(secretKey.length - 4)}`,
+      warning,
+      keyType: isTestMode ? "TEST" : isLiveMode ? "LIVE" : "UNKNOWN",
+    })
   } catch (error: any) {
-    console.error(`❌ [Stripe Environment] Error:`, error)
     return NextResponse.json(
       {
-        stripeMode: "UNKNOWN",
-        stripeKeyPrefix: "Error",
-        webhookConfigured: false,
-        firebaseConnected: false,
-        environment: "error",
-        error: error instanceof Error ? error.message : "Unknown error",
+        error: "Failed to check environment",
+        details: error.message,
       },
       { status: 500 },
     )

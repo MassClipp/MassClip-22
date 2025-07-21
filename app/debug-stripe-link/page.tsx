@@ -37,15 +37,18 @@ interface TestResult {
   suggestions?: string[]
 }
 
+interface DebugResults {
+  accountDetails?: AccountDetails
+  linkResult?: TestResult
+  stripeEnvironment?: any
+  error?: string
+}
+
 export default function DebugStripeLinkPage() {
   const { user } = useFirebaseAuth()
   const [accountId, setAccountId] = useState("")
   const [isLoading, setIsLoading] = useState(false)
-  const [results, setResults] = useState<{
-    accountDetails?: AccountDetails
-    linkResult?: TestResult
-    error?: string
-  }>({})
+  const [results, setResults] = useState<DebugResults>({})
 
   const testAccountLink = async () => {
     if (!user || !accountId.trim()) {
@@ -135,6 +138,19 @@ export default function DebugStripeLinkPage() {
       }
     } catch (error) {
       console.error("Failed to get account info:", error)
+    }
+  }
+
+  const checkStripeEnvironment = async () => {
+    try {
+      const response = await fetch("/api/debug/stripe-environment")
+      const data = await response.json()
+      setResults((prev) => ({
+        ...prev,
+        stripeEnvironment: data,
+      }))
+    } catch (error) {
+      console.error("Failed to get Stripe environment:", error)
     }
   }
 
@@ -326,6 +342,49 @@ export default function DebugStripeLinkPage() {
               Get Account Info
             </Button>
           </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Stripe Environment Check</CardTitle>
+          <CardDescription>Check your current Stripe configuration</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Button onClick={checkStripeEnvironment} variant="outline" className="w-full bg-transparent">
+            Check Stripe Environment
+          </Button>
+
+          {results.stripeEnvironment && (
+            <div className="mt-4 space-y-2">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label className="text-sm font-medium">Mode</Label>
+                  <Badge variant={results.stripeEnvironment.isTestMode ? "secondary" : "default"}>
+                    {results.stripeEnvironment.isTestMode ? "TEST" : "LIVE"}
+                  </Badge>
+                </div>
+                <div>
+                  <Label className="text-sm font-medium">Environment</Label>
+                  <p className="text-sm text-muted-foreground">{results.stripeEnvironment.nodeEnv}</p>
+                </div>
+              </div>
+
+              {results.stripeEnvironment.keyInfo && (
+                <div>
+                  <Label className="text-sm font-medium">API Key Info</Label>
+                  <p className="text-xs text-muted-foreground font-mono">{results.stripeEnvironment.keyInfo}</p>
+                </div>
+              )}
+
+              {results.stripeEnvironment.warning && (
+                <Alert variant="destructive">
+                  <AlertTriangle className="h-4 w-4" />
+                  <AlertDescription>{results.stripeEnvironment.warning}</AlertDescription>
+                </Alert>
+              )}
+            </div>
+          )}
         </CardContent>
       </Card>
 
