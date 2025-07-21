@@ -447,8 +447,12 @@ export async function GET(request: NextRequest) {
         // Timestamps
         createdAt: data.createdAt,
         updatedAt: data.updatedAt,
-        productId: data.productId || null,
-        priceId: data.priceId || null,
+
+        // Stripe integration - use consistent field names
+        productId: data.productId || data.stripeProductId,
+        priceId: data.priceId || data.stripePriceId,
+        stripeAccountId: data.stripeAccountId,
+
         type: data.type || "one_time",
       })
     }
@@ -627,9 +631,11 @@ export async function POST(request: NextRequest) {
       creatorId: userId,
       active: true,
 
-      // Stripe integration
+      // Stripe integration - use consistent field names
       productId: stripeProductId,
       priceId: stripePriceId,
+      stripeProductId: stripeProductId, // Also store with this name for compatibility
+      stripePriceId: stripePriceId, // Also store with this name for compatibility
       stripeAccountId: stripeAccountId,
 
       // Content arrays with full metadata stored directly in Firestore

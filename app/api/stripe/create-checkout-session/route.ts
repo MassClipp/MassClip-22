@@ -76,32 +76,61 @@ export async function POST(request: NextRequest) {
     console.log("✅ [Checkout API] Bundle found:", {
       title: bundle.title,
       price: bundle.price,
+      priceId: bundle.priceId,
       stripePriceId: bundle.stripePriceId,
+      productId: bundle.productId,
+      stripeProductId: bundle.stripeProductId,
       creatorId: bundle.creatorId,
+      stripeAccountId: bundle.stripeAccountId,
     })
 
+    // Get the correct price ID from bundle - check both possible field names
+    const bundleStripePriceId = bundle.priceId || bundle.stripePriceId
     const stripeAccountId = bundle.stripeAccountId
 
     if (!stripeAccountId) {
       console.error("❌ [Checkout API] No Stripe account ID for bundle:", bundleId)
-      return NextResponse.json({ error: "Bundle not available for purchase" }, { status: 400 })
+      return NextResponse.json(
+        {
+          error: "Bundle not available for purchase",
+          details: "Creator has not set up Stripe integration",
+        },
+        { status: 400 },
+      )
     }
 
-    // Verify the price ID matches the bundle
-    if (bundle.stripePriceId !== priceId) {
-      console.error("❌ [Checkout API] Price ID mismatch:", {
-        provided: priceId,
-        expected: bundle.stripePriceId,
-      })
-      return NextResponse.json({ error: "Invalid price ID for this bundle" }, { status: 400 })
+    if (!bundleStripePriceId) {
+      console.error("❌ [Checkout API] No Stripe price ID for bundle:", bundleId)
+      return NextResponse.json(
+        {
+          error: "Bundle pricing not configured",
+          details: "Bundle does not have a valid price ID",
+        },
+        { status: 400 },
+      )
     }
 
-    console.log("💳 [Checkout API] Creating checkout session for:", { priceId, bundleId })
+    // Use the bundle's stored price ID instead of validating against the provided one
+    // This prevents mismatches due to field name inconsistencies
+    const finalPriceId = bundleStripePriceId
+
+    console.log("💳 [Checkout API] Creating checkout session with:", {
+      finalPriceId,
+      bundleId,
+      stripeAccountId,
+      providedPriceId: priceId,
+      bundleStoredPriceId: bundleStripePriceId,
+    })
+
+    // Get the current domain from headers
+    const host = request.headers.get("host")
+    const protocol = request.headers.get("x-forwarded-proto") || "https"
+    const currentDomain = `${protocol}://${host}`
 
     const sessionMetadata: any = {
       bundleId: bundleId,
       creatorId: bundle.creatorId || "",
-      originalDomain: process.env.NEXT_PUBLIC_SITE_URL,
+      originalDomain: currentDomain,
       timestamp: new Date().toISOString(),
     }
 
@@ -113,14 +142,13 @@ export async function POST(request: NextRequest) {
       payment_method_types: ["card"],
       line_items: [
         {
-          price: priceId,
+          price: finalPriceId,
           quantity: 1,
         },
       ],
       mode: "payment",
-      success_url:
-        successUrl || `${process.env.NEXT_PUBLIC_SITE_URL}/purchase-success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: cancelUrl || `${process.env.NEXT_PUBLIC_SITE_URL}/creator/${bundle.creatorId}`,
+      success_url: successUrl || `${currentDomain}/purchase-success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: cancelUrl || `${currentDomain}/creator/${bundle.creatorId}`,
       metadata: sessionMetadata,
       payment_intent_data: {
         metadata: sessionMetadata,
@@ -132,6 +160,13 @@ export async function POST(request: NextRequest) {
     if (userEmail) {
       sessionParams.customer_email = userEmail
     }
+
+    console.log("🔄 [Checkout API] Creating Stripe session with params:", {
+      priceId: finalPriceId,
+      stripeAccount: stripeAccountId,
+      successUrl: sessionParams.success_url,
+      cancelUrl: sessionParams.cancel_url,
+    })
 
     const session = await stripe.checkout.sessions.create(sessionParams, {
       stripeAccount: stripeAccountId,

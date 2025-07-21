@@ -28,21 +28,58 @@ export async function GET(request: NextRequest, { params }: { params: { creatorI
   try {
     const { creatorId } = params
 
-    console.log(`🔍 [Premium Content API] Fetching premium content for creator: ${creatorId}`)
+    console.log(`🎯 [Premium Content API] Fetching premium content for creator: ${creatorId}`)
 
     // Query bundles collection for this creator
-    const bundlesQuery = db.collection("bundles").where("creatorId", "==", creatorId).where("active", "==", true)
+    const bundlesRef = db.collection("bundles")
+    const bundlesQuery = bundlesRef.where("creatorId", "==", creatorId).where("active", "==", true)
     const bundlesSnapshot = await bundlesQuery.get()
 
-    console.log(`📦 [Premium Content API] Found ${bundlesSnapshot.docs.length} active bundles`)
+    console.log(`📦 [Premium Content API] Found ${bundlesSnapshot.docs.length} bundles`)
 
     const premiumContent: any[] = []
 
-    bundlesSnapshot.docs.forEach((doc) => {
+    for (const doc of bundlesSnapshot.docs) {
       const data = doc.data()
 
-      // Ensure we have the required Stripe integration fields
-      const bundle = {
+      console.log(`📦 [Premium Content API] Processing bundle: ${doc.id}`, {
+        title: data.title,
+        price: data.price,
+        priceId: data.priceId,
+        stripePriceId: data.stripePriceId,
+        productId: data.productId,
+        stripeProductId: data.stripeProductId,
+        contentItems: data.contentItems?.length || 0,
+      })
+
+      // Get the correct price ID - check both possible field names
+      const stripePriceId = data.priceId || data.stripePriceId
+      const stripeProductId = data.productId || data.stripeProductId
+
+      // Only include bundles that have proper Stripe integration
+      if (!stripePriceId) {
+        console.warn(`⚠️ [Premium Content API] Skipping bundle ${doc.id} - no Stripe price ID`)
+        continue
+      }
+
+      // Get thumbnail URL with multiple fallback options
+      const thumbnailUrl =
+        data.coverImage ||
+        data.customPreviewThumbnail ||
+        data.thumbnail ||
+        data.thumbnailUrl ||
+        (data.contentThumbnails && data.contentThumbnails.length > 0 ? data.contentThumbnails[0] : null)
+
+      console.log(`🖼️ [Premium Content API] Thumbnail for ${doc.id}:`, {
+        coverImage: data.coverImage,
+        customPreviewThumbnail: data.customPreviewThumbnail,
+        thumbnail: data.thumbnail,
+        thumbnailUrl: data.thumbnailUrl,
+        contentThumbnails: data.contentThumbnails?.length || 0,
+        finalThumbnail: thumbnailUrl,
+      })
+
+      const bundleItem = {
         id: doc.id,
         title: data.title || "Untitled Bundle",
         description: data.description || "",
@@ -50,49 +87,33 @@ export async function GET(request: NextRequest, { params }: { params: { creatorI
         currency: data.currency || "usd",
         type: "bundle",
         isPremium: true,
+        contentCount: data.contentItems?.length || 0,
 
-        // Thumbnail handling - prioritize different sources
-        thumbnailUrl: data.coverImage || data.customPreviewThumbnail || data.thumbnail || null,
+        // Stripe integration - use consistent field names
+        stripePriceId: stripePriceId,
+        stripeProductId: stripeProductId,
+
+        // Thumbnail with comprehensive fallbacks
+        thumbnailUrl: thumbnailUrl,
 
         // Content metadata
-        contentCount: data.contentItems?.length || 0,
         contentItems: data.contentItems || [],
+        contentMetadata: data.contentMetadata || {},
 
-        // Stripe integration - CRITICAL for unlock functionality
-        stripePriceId: data.priceId || null,
-        stripeProductId: data.productId || null,
-
-        // Additional metadata
+        // Timestamps
         createdAt: data.createdAt,
         updatedAt: data.updatedAt,
-        active: data.active !== false,
-
-        // Enhanced metadata if available
-        contentMetadata: data.contentMetadata || null,
-        detailedContentItems: data.detailedContentItems || [],
       }
 
-      // Log bundle details for debugging
-      console.log(`📋 [Premium Content API] Bundle ${doc.id}:`, {
-        title: bundle.title,
-        price: bundle.price,
-        contentCount: bundle.contentCount,
-        thumbnailUrl: bundle.thumbnailUrl,
-        stripePriceId: bundle.stripePriceId,
-        stripeProductId: bundle.stripeProductId,
-        hasStripeIntegration: !!(bundle.stripePriceId && bundle.stripeProductId),
+      console.log(`✅ [Premium Content API] Added bundle: ${doc.id}`, {
+        title: bundleItem.title,
+        stripePriceId: bundleItem.stripePriceId,
+        thumbnailUrl: bundleItem.thumbnailUrl,
+        contentCount: bundleItem.contentCount,
       })
 
-      // Only include bundles that have proper Stripe integration
-      if (bundle.stripePriceId && bundle.stripeProductId) {
-        premiumContent.push(bundle)
-      } else {
-        console.warn(`⚠️ [Premium Content API] Bundle ${doc.id} missing Stripe integration:`, {
-          stripePriceId: bundle.stripePriceId,
-          stripeProductId: bundle.stripeProductId,
-        })
-      }
-    })
+      premiumContent.push(bundleItem)
+    }
 
     // Sort by creation date (newest first)
     premiumContent.sort((a, b) => {
@@ -102,18 +123,12 @@ export async function GET(request: NextRequest, { params }: { params: { creatorI
       return bTime - aTime
     })
 
-    console.log(`✅ [Premium Content API] Returning ${premiumContent.length} premium bundles with Stripe integration`)
+    console.log(`✅ [Premium Content API] Returning ${premiumContent.length} premium content items`)
 
     return NextResponse.json({
       success: true,
       content: premiumContent,
       count: premiumContent.length,
-      metadata: {
-        creatorId,
-        totalBundles: bundlesSnapshot.docs.length,
-        activeBundles: premiumContent.length,
-        bundlesWithoutStripe: bundlesSnapshot.docs.length - premiumContent.length,
-      },
     })
   } catch (error) {
     console.error("❌ [Premium Content API] Error:", error)
