@@ -16,7 +16,7 @@ export async function GET(request: NextRequest) {
     const token = authHeader.split("Bearer ")[1]
     console.log("🔑 [Connection Status] Token received, verifying...")
 
-    // Verify the Firebase ID token
+    // Verify the Firebase ID token - fix the function call
     const decodedToken = await verifyIdToken(token)
     if (!decodedToken) {
       console.log("❌ [Connection Status] Token verification failed")
