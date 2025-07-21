@@ -1,6 +1,27 @@
-// Zoom prevention script for mobile devices
+// Prevent zoom on mobile devices
 ;(() => {
-  // Prevent zoom on double tap
+  // Prevent pinch zoom
+  document.addEventListener(
+    "touchstart",
+    (event) => {
+      if (event.touches.length > 1) {
+        event.preventDefault()
+      }
+    },
+    { passive: false },
+  )
+
+  document.addEventListener(
+    "touchmove",
+    (event) => {
+      if (event.touches.length > 1) {
+        event.preventDefault()
+      }
+    },
+    { passive: false },
+  )
+
+  // Prevent double-tap zoom
   let lastTouchEnd = 0
   document.addEventListener(
     "touchend",
@@ -14,25 +35,14 @@
     false,
   )
 
-  // Prevent zoom on pinch
-  document.addEventListener(
-    "touchmove",
-    (event) => {
-      if (event.scale !== 1) {
-        event.preventDefault()
-      }
-    },
-    { passive: false },
-  )
-
-  // Prevent zoom with keyboard shortcuts
+  // Prevent keyboard zoom shortcuts
   document.addEventListener("keydown", (event) => {
     if ((event.ctrlKey || event.metaKey) && (event.key === "+" || event.key === "-" || event.key === "0")) {
       event.preventDefault()
     }
   })
 
-  // Prevent zoom with wheel
+  // Prevent mouse wheel zoom
   document.addEventListener(
     "wheel",
     (event) => {

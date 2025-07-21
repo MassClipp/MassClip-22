@@ -34,33 +34,44 @@ export function StripeAccountLinker() {
   const [success, setSuccess] = useState("")
   const router = useRouter()
 
-  // Check current connection status on component mount
+  // Check current connection status on component mount and when user changes
   useEffect(() => {
-    checkConnectionStatus()
-  }, [])
+    if (user) {
+      checkConnectionStatus()
+    } else {
+      setIsCheckingStatus(false)
+      setConnectionStatus({ connected: false })
+    }
+  }, [user])
+
+  const getAuthHeaders = async () => {
+    if (!user) {
+      throw new Error("User not authenticated")
+    }
+
+    try {
+      // Get fresh ID token
+      const idToken = await user.getIdToken(true) // Force refresh
+      return {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${idToken}`,
+      }
+    } catch (error) {
+      console.error("Failed to get ID token:", error)
+      throw new Error("Failed to get authentication token")
+    }
+  }
 
   const checkConnectionStatus = async () => {
+    if (!user) {
+      setIsCheckingStatus(false)
+      return
+    }
+
     try {
       setIsCheckingStatus(true)
 
-      // Get auth token if user is available
-      let authToken = null
-      if (user) {
-        try {
-          // @ts-ignore - Firebase user has getIdToken method
-          authToken = await user.getIdToken()
-        } catch (tokenError) {
-          console.warn("Could not get auth token:", tokenError)
-        }
-      }
-
-      const headers: Record<string, string> = {
-        "Content-Type": "application/json",
-      }
-
-      if (authToken) {
-        headers.Authorization = `Bearer ${authToken}`
-      }
+      const headers = await getAuthHeaders()
 
       const response = await fetch("/api/stripe/connection-status", {
         method: "GET",
@@ -77,6 +88,8 @@ export function StripeAccountLinker() {
         }
       } else {
         console.error("Failed to check connection status:", response.status)
+        const errorData = await response.json().catch(() => ({}))
+        console.error("Error response:", errorData)
         setConnectionStatus({ connected: false })
       }
     } catch (error) {
@@ -103,25 +116,7 @@ export function StripeAccountLinker() {
     setSuccess("")
 
     try {
-      // Get auth token
-      let authToken = null
-      try {
-        // @ts-ignore - Firebase user has getIdToken method
-        authToken = await user.getIdToken()
-      } catch (tokenError) {
-        console.error("Could not get auth token:", tokenError)
-        setError("Authentication error - please try logging in again")
-        setIsLinking(false)
-        return
-      }
-
-      const headers: Record<string, string> = {
-        "Content-Type": "application/json",
-      }
-
-      if (authToken) {
-        headers.Authorization = `Bearer ${authToken}`
-      }
+      const headers = await getAuthHeaders()
 
       const response = await fetch("/api/stripe/connect/link-account", {
         method: "POST",
@@ -147,9 +142,9 @@ export function StripeAccountLinker() {
       } else {
         setError(data.error || "Failed to link Stripe account")
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error linking account:", error)
-      setError("An unexpected error occurred. Please try again.")
+      setError(error.message || "An unexpected error occurred. Please try again.")
     } finally {
       setIsLinking(false)
     }
