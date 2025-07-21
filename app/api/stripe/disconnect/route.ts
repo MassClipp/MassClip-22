@@ -1,40 +1,52 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { getServerSession } from "next-auth"
-import { authOptions } from "@/auth"
-import { db } from "@/lib/firebase-admin"
+import { getAuth } from "firebase-admin/auth"
+import { getFirestore } from "firebase-admin/firestore"
+import { initializeApp, getApps, cert } from "firebase-admin/app"
+
+// Initialize Firebase Admin if not already initialized
+if (!getApps().length) {
+  initializeApp({
+    credential: cert({
+      projectId: process.env.FIREBASE_PROJECT_ID,
+      clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+      privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n"),
+    }),
+  })
+}
 
 export async function POST(request: NextRequest) {
   try {
-    const session = await getServerSession(authOptions)
-
-    if (!session?.user?.email) {
+    const authHeader = request.headers.get("authorization")
+    if (!authHeader?.startsWith("Bearer ")) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    // Get user document
-    const userDoc = await db.collection("users").doc(session.user.email).get()
+    const token = authHeader.split("Bearer ")[1]
+    const decodedToken = await getAuth().verifyIdToken(token)
+    const userId = decodedToken.uid
 
-    if (!userDoc.exists) {
-      return NextResponse.json({ error: "User not found" }, { status: 404 })
-    }
+    const db = getFirestore()
+    const userRef = db.collection("users").doc(userId)
 
-    // Update user document to remove Stripe connection
-    await db.collection("users").doc(session.user.email).update({
+    // Remove Stripe connection data
+    await userRef.update({
       stripeAccountId: null,
       stripeConnected: false,
-      stripeOnboardingComplete: false,
-      updatedAt: new Date().toISOString(),
+      stripeChargesEnabled: false,
+      stripePayoutsEnabled: false,
+      stripeDetailsSubmitted: false,
+      stripeRequirements: null,
+      stripeCapabilities: null,
+      stripeAccountStatus: null,
+      updatedAt: new Date(),
     })
-
-    // Log the disconnection
-    console.log(`Stripe account disconnected for user: ${session.user.email}`)
 
     return NextResponse.json({
       success: true,
-      message: "Stripe account successfully disconnected",
+      message: "Stripe account disconnected successfully",
     })
-  } catch (error) {
-    console.error("Error disconnecting Stripe account:", error)
+  } catch (error: any) {
+    console.error("Stripe disconnect error:", error)
     return NextResponse.json({ error: "Failed to disconnect Stripe account" }, { status: 500 })
   }
 }

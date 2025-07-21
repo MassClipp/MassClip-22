@@ -11,6 +11,9 @@ import {
   ExternalLink,
   Calendar,
   Clock,
+  CheckCircle,
+  XCircle,
+  Info,
   Upload,
   BarChart3,
   Wallet,
@@ -27,7 +30,6 @@ import { Badge } from "@/components/ui/badge"
 import { formatDistanceToNow } from "date-fns"
 import { useStripeEarnings } from "@/hooks/use-stripe-earnings"
 import { useToast } from "@/components/ui/use-toast"
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from "recharts"
 import { useRouter } from "next/navigation"
 
 export default function EarningsPageContent() {
@@ -149,6 +151,34 @@ export default function EarningsPageContent() {
     monthlyBreakdown: [],
   }
 
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case "succeeded":
+      case "paid":
+        return "text-green-400"
+      case "pending":
+        return "text-yellow-400"
+      case "failed":
+        return "text-red-400"
+      default:
+        return "text-zinc-400"
+    }
+  }
+
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case "succeeded":
+      case "paid":
+        return <CheckCircle className="h-4 w-4" />
+      case "pending":
+        return <Clock className="h-4 w-4" />
+      case "failed":
+        return <XCircle className="h-4 w-4" />
+      default:
+        return <Info className="h-4 w-4" />
+    }
+  }
+
   const monthlyGrowth = stats.thisMonthEarnings > stats.lastMonthEarnings
   const growthPercentage =
     stats.lastMonthEarnings > 0
@@ -157,11 +187,11 @@ export default function EarningsPageContent() {
 
   // Generate chart data based on actual earnings
   const chartData = [
-    { month: "Jul", earnings: Math.max(stats.totalEarnings * 0.1, 10) },
-    { month: "Aug", earnings: Math.max(stats.totalEarnings * 0.3, 50) },
-    { month: "Sep", earnings: Math.max(stats.totalEarnings * 0.5, 120) },
-    { month: "Oct", earnings: Math.max(stats.totalEarnings * 0.7, 200) },
-    { month: "Nov", earnings: Math.max(stats.totalEarnings * 0.9, 300) },
+    { month: "Jul", earnings: Math.max(stats.totalEarnings * 0.1, 0) },
+    { month: "Aug", earnings: Math.max(stats.totalEarnings * 0.3, 0) },
+    { month: "Sep", earnings: Math.max(stats.totalEarnings * 0.5, 0) },
+    { month: "Oct", earnings: Math.max(stats.totalEarnings * 0.7, 0) },
+    { month: "Nov", earnings: Math.max(stats.totalEarnings * 0.9, 0) },
     { month: "Dec", earnings: stats.totalEarnings },
   ]
 
@@ -341,38 +371,25 @@ export default function EarningsPageContent() {
             </div>
           </CardHeader>
           <CardContent>
-            <div className="w-full h-[300px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={chartData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.3} />
-                  <XAxis dataKey="month" stroke="#9CA3AF" fontSize={12} tickLine={false} axisLine={false} />
-                  <YAxis
-                    stroke="#9CA3AF"
-                    fontSize={12}
-                    tickFormatter={(value) => `$${value}`}
-                    tickLine={false}
-                    axisLine={false}
-                  />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: "#18181B",
-                      border: "1px solid #3F3F46",
-                      borderRadius: "8px",
-                      color: "#FFFFFF",
-                    }}
-                    formatter={(value: any) => [`$${Number(value).toFixed(2)}`, "Earnings"]}
-                    labelStyle={{ color: "#A1A1AA" }}
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="earnings"
-                    stroke="#10B981"
-                    strokeWidth={2}
-                    dot={{ fill: "#10B981", strokeWidth: 2, r: 4 }}
-                    activeDot={{ r: 6, stroke: "#10B981", strokeWidth: 2, fill: "#18181B" }}
-                  />
-                </LineChart>
-              </ResponsiveContainer>
+            <div className="space-y-4">
+              <div className="flex items-end justify-between h-48 px-4 py-2 bg-zinc-800/30 rounded-lg">
+                {chartData.map((item, index) => (
+                  <div key={item.month} className="flex flex-col items-center gap-2">
+                    <div
+                      className="w-8 bg-gradient-to-t from-green-600 to-green-400 rounded-t-sm transition-all duration-300 hover:from-green-500 hover:to-green-300"
+                      style={{
+                        height: `${Math.max((item.earnings / Math.max(...chartData.map((d) => d.earnings))) * 160, 8)}px`,
+                      }}
+                    />
+                    <span className="text-xs text-zinc-400 font-medium">{item.month}</span>
+                    <span className="text-xs text-zinc-500">${item.earnings.toFixed(0)}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-zinc-400">6-month earnings trend</span>
+                <span className="text-green-400 font-medium">↗ Growing</span>
+              </div>
             </div>
           </CardContent>
         </Card>
