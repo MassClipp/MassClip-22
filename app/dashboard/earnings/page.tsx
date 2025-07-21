@@ -2,55 +2,103 @@
 
 import { useState, useEffect } from "react"
 import { useAuth } from "@/contexts/auth-context"
+import StripeExpressOnboarding from "@/components/stripe-express-onboarding"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Loader2 } from "lucide-react"
-import { useStripeConnectionCheck } from "@/hooks/use-stripe-connection-check"
-import StripeConnectionPrompt from "@/components/stripe-connection-prompt"
 
-// Import the existing earnings page content
-import EarningsPageContent from "./earnings-content"
+interface OnboardingStatus {
+  connected: boolean
+  onboardingRequired: boolean
+}
 
 export default function EarningsPage() {
-  const { user, loading: authLoading } = useAuth()
-  const { isConnected, loading: connectionLoading, refreshStatus } = useStripeConnectionCheck()
-  const [showPrompt, setShowPrompt] = useState(false)
+  const { user, loading } = useAuth()
+  const [onboardingStatus, setOnboardingStatus] = useState<OnboardingStatus | null>(null)
+  const [isCheckingStatus, setIsCheckingStatus] = useState(true)
+
+  // Check if user needs onboarding
+  const checkOnboardingStatus = async () => {
+    if (!user) return
+
+    try {
+      const token = await user.getIdToken()
+
+      const response = await fetch("/api/stripe/connect/onboarding-status", {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        setOnboardingStatus(data)
+      }
+    } catch (error) {
+      console.error("Error checking onboarding status:", error)
+    } finally {
+      setIsCheckingStatus(false)
+    }
+  }
 
   useEffect(() => {
-    // Only show prompt if user is authenticated and not connected
-    if (!authLoading && !connectionLoading && user && !isConnected) {
-      setShowPrompt(true)
-    } else {
-      setShowPrompt(false)
+    if (user && !loading) {
+      checkOnboardingStatus()
     }
-  }, [user, isConnected, authLoading, connectionLoading])
+  }, [user, loading])
 
-  const handleConnectionSuccess = () => {
-    setShowPrompt(false)
-    refreshStatus()
-  }
-
-  // Show loading while checking authentication and connection
-  if (authLoading || connectionLoading) {
+  // Show loading state
+  if (loading || isCheckingStatus) {
     return (
-      <div className="flex items-center justify-center min-h-[calc(100vh-4rem)]">
-        <div className="text-center">
-          <Loader2 className="h-8 w-8 text-zinc-500 animate-spin mx-auto mb-4" />
-          <p className="text-zinc-400">{authLoading ? "Authenticating..." : "Checking Stripe connection..."}</p>
+      <div className="container mx-auto py-8">
+        <div className="flex items-center justify-center">
+          <Loader2 className="h-8 w-8 animate-spin" />
+          <span className="ml-2">Loading earnings dashboard...</span>
         </div>
       </div>
     )
   }
 
-  // Show connection prompt if user is not connected
-  if (showPrompt) {
+  // Show onboarding if needed
+  if (onboardingStatus && !onboardingStatus.connected) {
     return (
-      <div className="min-h-[calc(100vh-4rem)] flex items-center justify-center p-4">
-        <div className="w-full max-w-4xl">
-          <StripeConnectionPrompt onConnectionSuccess={handleConnectionSuccess} />
+      <div className="container mx-auto py-8">
+        <div className="mb-6">
+          <h1 className="text-3xl font-bold">Earnings Dashboard</h1>
+          <p className="text-muted-foreground">Set up your Stripe account to start earning from your content</p>
         </div>
+
+        <StripeExpressOnboarding />
       </div>
     )
   }
 
-  // Show earnings page if connected
-  return <EarningsPageContent />
+  // Show main earnings dashboard
+  return (
+    <div className="container mx-auto py-8">
+      <div className="mb-6">
+        <h1 className="text-3xl font-bold">Earnings Dashboard</h1>
+        <p className="text-muted-foreground">Track your earnings and manage your Stripe account</p>
+      </div>
+
+      <div className="grid gap-6">
+        {/* Stripe Account Status */}
+        <StripeExpressOnboarding />
+
+        {/* Earnings Overview - This would be your existing earnings components */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Earnings Overview</CardTitle>
+            <CardDescription>Your earnings and payout information</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <p className="text-muted-foreground">
+              Your earnings dashboard will appear here once you start making sales.
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  )
 }
