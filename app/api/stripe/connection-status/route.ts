@@ -1,35 +1,35 @@
 import { type NextRequest, NextResponse } from "next/server"
+import { auth } from "@/lib/firebase-admin"
 import { db } from "@/lib/firebase-admin"
 
 export async function GET(request: NextRequest) {
   try {
     console.log("🔍 [Connection Status] Starting request...")
 
-    // First test the auth endpoint
-    const testAuthResponse = await fetch(`${request.nextUrl.origin}/api/test-auth`, {
-      headers: {
-        authorization: request.headers.get("authorization") || "",
-      },
-    })
+    // Get authorization header
+    const authHeader = request.headers.get("authorization")
+    console.log("🔑 [Connection Status] Auth header present:", !!authHeader)
 
-    console.log("🧪 [Connection Status] Test auth response:", testAuthResponse.status)
-
-    if (!testAuthResponse.ok) {
-      const testError = await testAuthResponse.json()
-      console.error("❌ [Connection Status] Test auth failed:", testError)
-      return NextResponse.json(
-        {
-          error: "Authentication test failed",
-          details: testError,
-        },
-        { status: 401 },
-      )
+    if (!authHeader?.startsWith("Bearer ")) {
+      console.log("❌ [Connection Status] Invalid or missing Bearer token")
+      return NextResponse.json({ error: "Authentication required" }, { status: 401 })
     }
 
-    const testResult = await testAuthResponse.json()
-    console.log("✅ [Connection Status] Test auth passed:", testResult.user)
+    // Extract token
+    const token = authHeader.replace("Bearer ", "")
+    console.log("🎫 [Connection Status] Token extracted, length:", token.length)
 
-    const userId = testResult.user.uid
+    // Verify Firebase token
+    let decodedToken
+    try {
+      decodedToken = await auth.verifyIdToken(token)
+      console.log("✅ [Connection Status] Token verified for user:", decodedToken.uid)
+    } catch (error) {
+      console.error("❌ [Connection Status] Token verification failed:", error)
+      return NextResponse.json({ error: "Invalid authentication token" }, { status: 401 })
+    }
+
+    const userId = decodedToken.uid
 
     // Get user document from Firestore
     try {
@@ -39,7 +39,7 @@ export async function GET(request: NextRequest) {
         console.log("⚠️ [Connection Status] User document not found, creating...")
         await db.collection("users").doc(userId).set({
           uid: userId,
-          email: testResult.user.email,
+          email: decodedToken.email,
           createdAt: new Date(),
           stripeAccountStatus: "not_connected",
         })

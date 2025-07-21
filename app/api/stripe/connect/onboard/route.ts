@@ -1,4 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
+import { auth } from "@/lib/firebase-admin"
 import { db } from "@/lib/firebase-admin"
 import Stripe from "stripe"
 
@@ -8,90 +9,90 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
 
 export async function POST(request: NextRequest) {
   try {
-    console.log("🆕 [Onboard] Starting Stripe onboarding...")
+    console.log("🆕 [Onboard] Starting request...")
 
-    // First test the auth endpoint
-    const testAuthResponse = await fetch(`${request.nextUrl.origin}/api/test-auth`, {
-      headers: {
-        authorization: request.headers.get("authorization") || "",
-      },
-    })
+    // Get authorization header
+    const authHeader = request.headers.get("authorization")
+    console.log("🔑 [Onboard] Auth header present:", !!authHeader)
 
-    console.log("🧪 [Onboard] Test auth response:", testAuthResponse.status)
-
-    if (!testAuthResponse.ok) {
-      const testError = await testAuthResponse.json()
-      console.error("❌ [Onboard] Test auth failed:", testError)
-      return NextResponse.json(
-        {
-          error: "Authentication test failed",
-          details: testError,
-        },
-        { status: 401 },
-      )
+    if (!authHeader?.startsWith("Bearer ")) {
+      console.log("❌ [Onboard] Invalid or missing Bearer token")
+      return NextResponse.json({ error: "Authentication required" }, { status: 401 })
     }
 
-    const testResult = await testAuthResponse.json()
-    console.log("✅ [Onboard] Test auth passed:", testResult.user)
+    // Extract token
+    const token = authHeader.replace("Bearer ", "")
+    console.log("🎫 [Onboard] Token extracted, length:", token.length)
 
-    const userId = testResult.user.uid
-    const userEmail = testResult.user.email
+    // Verify Firebase token
+    let decodedToken
+    try {
+      decodedToken = await auth.verifyIdToken(token)
+      console.log("✅ [Onboard] Token verified for user:", decodedToken.uid)
+    } catch (error) {
+      console.error("❌ [Onboard] Token verification failed:", error)
+      return NextResponse.json({ error: "Invalid authentication token" }, { status: 401 })
+    }
+
+    const userId = decodedToken.uid
 
     // Create Stripe Express account
+    let stripeAccount
     try {
-      const account = await stripe.accounts.create({
+      stripeAccount = await stripe.accounts.create({
         type: "express",
-        email: userEmail,
+        email: decodedToken.email,
         metadata: {
           userId: userId,
         },
       })
 
-      console.log("✅ [Onboard] Stripe account created:", account.id)
+      console.log("✅ [Onboard] Stripe account created:", stripeAccount.id)
+    } catch (stripeError: any) {
+      console.error("❌ [Onboard] Stripe account creation failed:", stripeError.message)
+      return NextResponse.json({ error: "Failed to create Stripe account" }, { status: 500 })
+    }
 
-      // Create account link for onboarding
-      const accountLink = await stripe.accountLinks.create({
-        account: account.id,
-        refresh_url: `${request.nextUrl.origin}/dashboard/connect-stripe?refresh=true`,
-        return_url: `${request.nextUrl.origin}/dashboard/connect-stripe?success=true`,
+    // Create account link for onboarding
+    let accountLink
+    try {
+      accountLink = await stripe.accountLinks.create({
+        account: stripeAccount.id,
+        refresh_url: `${process.env.NEXT_PUBLIC_SITE_URL}/dashboard/earnings`,
+        return_url: `${process.env.NEXT_PUBLIC_SITE_URL}/dashboard/earnings`,
         type: "account_onboarding",
       })
 
       console.log("✅ [Onboard] Account link created:", accountLink.url)
-
-      // Save account to user document
-      await db
-        .collection("users")
-        .doc(userId)
-        .update({
-          stripeAccountId: account.id,
-          stripeAccountStatus: "pending",
-          stripeAccountDetails: {
-            type: account.type,
-            email: account.email,
-            created: account.created,
-          },
-          updatedAt: new Date(),
-        })
-
-      console.log("✅ [Onboard] User document updated")
-
-      return NextResponse.json({
-        success: true,
-        accountId: account.id,
-        url: accountLink.url,
-        message: "Onboarding link created successfully",
-      })
     } catch (stripeError: any) {
-      console.error("❌ [Onboard] Stripe error:", stripeError)
-      return NextResponse.json(
-        {
-          error: "Failed to create Stripe account",
-          details: stripeError.message,
-        },
-        { status: 500 },
-      )
+      console.error("❌ [Onboard] Account link creation failed:", stripeError.message)
+      return NextResponse.json({ error: "Failed to create onboarding link" }, { status: 500 })
     }
+
+    // Update user document in Firestore
+    try {
+      await db.collection("users").doc(userId).set(
+        {
+          stripeAccountId: stripeAccount.id,
+          stripeAccountStatus: "pending",
+          stripeAccountType: "express",
+          updatedAt: new Date(),
+        },
+        { merge: true },
+      )
+
+      console.log("✅ [Onboard] User document updated successfully")
+    } catch (firestoreError) {
+      console.error("❌ [Onboard] Firestore error:", firestoreError)
+      return NextResponse.json({ error: "Database error" }, { status: 500 })
+    }
+
+    return NextResponse.json({
+      success: true,
+      accountId: stripeAccount.id,
+      url: accountLink.url,
+      message: "Onboarding link created successfully",
+    })
   } catch (error) {
     console.error("❌ [Onboard] Unexpected error:", error)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
