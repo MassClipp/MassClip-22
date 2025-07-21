@@ -128,3 +128,8 @@ export async function createOrUpdateUserProfile(userId: string, profileData: Rec
 /* -------------------------------------------------------------------------- */
 
 export { FieldValue }
+
+// --------------------------------------------------------------------------
+// Aliases required by other modules ---------------------------------------
+// --------------------------------------------------------------------------
+export { auth as adminAuth, db as adminDb }
