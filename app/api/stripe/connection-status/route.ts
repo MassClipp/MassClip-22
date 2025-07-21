@@ -24,8 +24,8 @@ export async function GET(request: NextRequest) {
     try {
       decodedToken = await auth.verifyIdToken(token)
       console.log("✅ [Connection Status] Token verified for user:", decodedToken.uid)
-    } catch (error) {
-      console.error("❌ [Connection Status] Token verification failed:", error)
+    } catch (error: any) {
+      console.error("❌ [Connection Status] Token verification failed:", error.message)
       return NextResponse.json({ error: "Invalid authentication token" }, { status: 401 })
     }
 
@@ -66,12 +66,12 @@ export async function GET(request: NextRequest) {
         status: stripeAccountStatus,
         requiresAction: stripeAccountStatus === "pending" || stripeAccountStatus === "restricted",
       })
-    } catch (firestoreError) {
-      console.error("❌ [Connection Status] Firestore error:", firestoreError)
+    } catch (firestoreError: any) {
+      console.error("❌ [Connection Status] Firestore error:", firestoreError.message)
       return NextResponse.json({ error: "Database error" }, { status: 500 })
     }
-  } catch (error) {
-    console.error("❌ [Connection Status] Unexpected error:", error)
+  } catch (error: any) {
+    console.error("❌ [Connection Status] Unexpected error:", error.message)
     return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }
