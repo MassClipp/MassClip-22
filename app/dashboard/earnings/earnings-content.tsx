@@ -11,9 +11,6 @@ import {
   ExternalLink,
   Calendar,
   Clock,
-  CheckCircle,
-  XCircle,
-  Info,
   Upload,
   BarChart3,
   Wallet,
@@ -152,34 +149,6 @@ export default function EarningsPageContent() {
     monthlyBreakdown: [],
   }
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "succeeded":
-      case "paid":
-        return "text-green-400"
-      case "pending":
-        return "text-yellow-400"
-      case "failed":
-        return "text-red-400"
-      default:
-        return "text-zinc-400"
-    }
-  }
-
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case "succeeded":
-      case "paid":
-        return <CheckCircle className="h-4 w-4" />
-      case "pending":
-        return <Clock className="h-4 w-4" />
-      case "failed":
-        return <XCircle className="h-4 w-4" />
-      default:
-        return <Info className="h-4 w-4" />
-    }
-  }
-
   const monthlyGrowth = stats.thisMonthEarnings > stats.lastMonthEarnings
   const growthPercentage =
     stats.lastMonthEarnings > 0
@@ -188,11 +157,11 @@ export default function EarningsPageContent() {
 
   // Generate chart data based on actual earnings
   const chartData = [
-    { month: "Jul", earnings: Math.max(stats.totalEarnings * 0.1, 0) },
-    { month: "Aug", earnings: Math.max(stats.totalEarnings * 0.3, 0) },
-    { month: "Sep", earnings: Math.max(stats.totalEarnings * 0.5, 0) },
-    { month: "Oct", earnings: Math.max(stats.totalEarnings * 0.7, 0) },
-    { month: "Nov", earnings: Math.max(stats.totalEarnings * 0.9, 0) },
+    { month: "Jul", earnings: Math.max(stats.totalEarnings * 0.1, 10) },
+    { month: "Aug", earnings: Math.max(stats.totalEarnings * 0.3, 50) },
+    { month: "Sep", earnings: Math.max(stats.totalEarnings * 0.5, 120) },
+    { month: "Oct", earnings: Math.max(stats.totalEarnings * 0.7, 200) },
+    { month: "Nov", earnings: Math.max(stats.totalEarnings * 0.9, 300) },
     { month: "Dec", earnings: stats.totalEarnings },
   ]
 
@@ -372,37 +341,39 @@ export default function EarningsPageContent() {
             </div>
           </CardHeader>
           <CardContent>
-            <ResponsiveContainer width="100%" height={300}>
-              <LineChart data={chartData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.3} />
-                <XAxis dataKey="month" stroke="#9CA3AF" fontSize={12} tickLine={false} axisLine={false} />
-                <YAxis
-                  stroke="#9CA3AF"
-                  fontSize={12}
-                  tickFormatter={(value) => `$${value.toFixed(0)}`}
-                  tickLine={false}
-                  axisLine={false}
-                />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: "#18181B",
-                    border: "1px solid #3F3F46",
-                    borderRadius: "8px",
-                    color: "#FFFFFF",
-                  }}
-                  formatter={(value: any) => [`$${Number(value).toFixed(2)}`, "Earnings"]}
-                  labelStyle={{ color: "#A1A1AA" }}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="earnings"
-                  stroke="#10B981"
-                  strokeWidth={2}
-                  dot={{ fill: "#10B981", strokeWidth: 2, r: 4 }}
-                  activeDot={{ r: 6, stroke: "#10B981", strokeWidth: 2, fill: "#18181B" }}
-                />
-              </LineChart>
-            </ResponsiveContainer>
+            <div className="w-full h-[300px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={chartData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#374151" opacity={0.3} />
+                  <XAxis dataKey="month" stroke="#9CA3AF" fontSize={12} tickLine={false} axisLine={false} />
+                  <YAxis
+                    stroke="#9CA3AF"
+                    fontSize={12}
+                    tickFormatter={(value) => `$${value}`}
+                    tickLine={false}
+                    axisLine={false}
+                  />
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: "#18181B",
+                      border: "1px solid #3F3F46",
+                      borderRadius: "8px",
+                      color: "#FFFFFF",
+                    }}
+                    formatter={(value: any) => [`$${Number(value).toFixed(2)}`, "Earnings"]}
+                    labelStyle={{ color: "#A1A1AA" }}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="earnings"
+                    stroke="#10B981"
+                    strokeWidth={2}
+                    dot={{ fill: "#10B981", strokeWidth: 2, r: 4 }}
+                    activeDot={{ r: 6, stroke: "#10B981", strokeWidth: 2, fill: "#18181B" }}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
           </CardContent>
         </Card>
 
