@@ -1,94 +1,60 @@
-export const runtime = "nodejs"
-
 import { type NextRequest, NextResponse } from "next/server"
 import { verifyIdToken } from "@/lib/auth-utils"
 import { db } from "@/lib/firebase-admin"
 
 export async function GET(request: NextRequest) {
   try {
-    console.log("🔍 Checking Stripe connection status...")
+    console.log("🔍 [Connection Status] Starting authentication check...")
 
-    // Verify authentication
-    const decodedToken = await verifyIdToken(request)
+    // Get the authorization header
+    const authHeader = request.headers.get("authorization")
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      console.log("❌ [Connection Status] No valid authorization header")
+      return NextResponse.json({ error: "Authentication required" }, { status: 401 })
+    }
 
+    const token = authHeader.split("Bearer ")[1]
+    console.log("🔑 [Connection Status] Token received, verifying...")
+
+    // Verify the Firebase ID token
+    const decodedToken = await verifyIdToken(token)
     if (!decodedToken) {
-      console.log("❌ No valid authentication found")
-      return NextResponse.json({
-        success: true,
-        connected: false,
-        message: "Authentication required",
-      })
+      console.log("❌ [Connection Status] Token verification failed")
+      return NextResponse.json({ error: "Invalid token" }, { status: 401 })
     }
 
-    console.log(`🔍 Checking connection status for user: ${decodedToken.uid}`)
+    const userId = decodedToken.uid
+    console.log("✅ [Connection Status] User authenticated:", userId)
 
-    try {
-      // Get user document from Firestore
-      const userDoc = await db.collection("users").doc(decodedToken.uid).get()
+    // Get user's Stripe connection status from Firestore
+    const userDoc = await db.collection("users").doc(userId).get()
 
-      if (!userDoc.exists) {
-        console.log(`❌ User document not found: ${decodedToken.uid}`)
-        return NextResponse.json({
-          success: true,
-          connected: false,
-          message: "User profile not found",
-        })
-      }
-
-      const userData = userDoc.data()
-      const stripeAccountId = userData?.stripeAccountId
-      const stripeAccountStatus = userData?.stripeAccountStatus
-
-      if (!stripeAccountId) {
-        console.log(`ℹ️ No Stripe account connected for user: ${decodedToken.uid}`)
-        return NextResponse.json({
-          success: true,
-          connected: false,
-          message: "No Stripe account connected",
-        })
-      }
-
-      console.log(`✅ Stripe account found: ${stripeAccountId}`)
-
-      return NextResponse.json({
-        success: true,
-        connected: true,
-        accountId: stripeAccountId,
-        accountStatus: stripeAccountStatus || {
-          chargesEnabled: false,
-          payoutsEnabled: false,
-          detailsSubmitted: false,
-          accountType: "unknown",
-          country: "unknown",
-        },
-        message: "Stripe account connected",
-      })
-    } catch (dbError: any) {
-      console.error("❌ Database error:", dbError)
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Database error",
-          connected: false,
-          details: dbError.message,
-        },
-        { status: 500 },
-      )
+    if (!userDoc.exists) {
+      console.log("❌ [Connection Status] User document not found")
+      return NextResponse.json({ error: "User not found" }, { status: 404 })
     }
-  } catch (error: any) {
-    console.error("❌ Unexpected error checking connection status:", error)
-    return NextResponse.json(
-      {
-        success: false,
-        error: "Internal server error",
-        connected: false,
-        details: error.message,
-      },
-      { status: 500 },
-    )
+
+    const userData = userDoc.data()
+    const stripeAccountId = userData?.stripeAccountId
+    const stripeAccountStatus = userData?.stripeAccountStatus || "not_connected"
+
+    console.log("📊 [Connection Status] User Stripe data:", {
+      stripeAccountId: stripeAccountId ? "present" : "missing",
+      stripeAccountStatus,
+    })
+
+    return NextResponse.json({
+      connected: !!stripeAccountId,
+      accountId: stripeAccountId,
+      status: stripeAccountStatus,
+      requiresAction: stripeAccountStatus === "pending" || stripeAccountStatus === "restricted",
+    })
+  } catch (error) {
+    console.error("❌ [Connection Status] Error:", error)
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }
 
 export async function POST(request: NextRequest) {
-  return GET(request)
+  return GET(request) // Handle POST the same way as GET for this endpoint
 }

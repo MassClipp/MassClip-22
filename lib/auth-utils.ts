@@ -1,6 +1,5 @@
 import { auth } from "@/lib/firebase-admin"
 import type { NextRequest } from "next/server"
-import type { DecodedIdToken } from "firebase-admin/auth"
 
 export interface DecodedToken {
   uid: string
@@ -26,29 +25,33 @@ export interface DecodedToken {
 /**
  * Verify Firebase ID token from request headers
  */
-export async function verifyIdToken(request: NextRequest): Promise<DecodedIdToken | null> {
+export async function verifyIdToken(request: NextRequest): Promise<DecodedToken | null> {
   try {
     const authHeader = request.headers.get("authorization")
 
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      console.log("❌ No valid authorization header found")
+    if (!authHeader) {
+      console.error("❌ [Auth Utils] No authorization header found")
+      return null
+    }
+
+    if (!authHeader.startsWith("Bearer ")) {
+      console.error("❌ [Auth Utils] Invalid authorization header format")
       return null
     }
 
     const idToken = authHeader.split("Bearer ")[1]
-
     if (!idToken) {
-      console.log("❌ No ID token found in authorization header")
+      console.error("❌ [Auth Utils] No ID token found in authorization header")
       return null
     }
 
-    console.log("🔍 Verifying ID token...")
+    console.log("🔍 [Auth Utils] Verifying ID token...")
     const decodedToken = await auth.verifyIdToken(idToken)
-    console.log(`✅ Token verified for user: ${decodedToken.uid}`)
+    console.log("✅ [Auth Utils] ID token verified successfully for user:", decodedToken.uid)
 
     return decodedToken
   } catch (error: any) {
-    console.error("❌ Error verifying ID token:", error.message)
+    console.error("❌ [Auth Utils] Failed to verify ID token:", error.message)
     return null
   }
 }
@@ -56,7 +59,7 @@ export async function verifyIdToken(request: NextRequest): Promise<DecodedIdToke
 /**
  * Require authentication for API routes
  */
-export async function requireAuth(request: NextRequest): Promise<DecodedIdToken> {
+export async function requireAuth(request: NextRequest): Promise<DecodedToken> {
   const decodedToken = await verifyIdToken(request)
 
   if (!decodedToken) {

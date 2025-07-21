@@ -632,6 +632,14 @@ function BundleCard({ item, user, creatorId }: { item: ContentItem; user: any; c
     setImageError(false)
   }
 
+  // Safe price formatting with fallback
+  const formatPrice = (price: number | undefined | null): string => {
+    if (typeof price === "number" && !isNaN(price)) {
+      return price.toFixed(2)
+    }
+    return "0.00"
+  }
+
   return (
     <div className="bg-zinc-900 rounded-lg overflow-hidden border border-zinc-700/30 hover:border-zinc-600/40 transition-all duration-300 w-full max-w-[340px] sm:max-w-[320px] relative">
       {/* Thumbnail Section - Always square aspect ratio */}
@@ -672,7 +680,7 @@ function BundleCard({ item, user, creatorId }: { item: ContentItem; user: any; c
 
         {/* Price and Button Row */}
         <div className="flex items-center justify-between pt-2">
-          <span className="text-white text-xl sm:text-2xl font-light">${item.price?.toFixed(2) || "0.00"}</span>
+          <span className="text-white text-xl sm:text-2xl font-light">${formatPrice(item.price)}</span>
 
           <UnlockButton stripePriceId={item.stripePriceId} bundleId={item.id} user={user} creatorId={creatorId} />
         </div>
