@@ -14,14 +14,11 @@ import {
   Search,
   Video,
   Upload,
-  FolderOpen,
   Package,
   ShoppingCart,
   Heart,
-  History,
   DollarSign,
   Crown,
-  CreditCard,
   User,
   Shield,
   ChevronDown,
@@ -52,7 +49,6 @@ const navigationSections: NavSection[] = [
     items: [
       { title: "Free Content", href: "/dashboard/free-content", icon: Video },
       { title: "Upload", href: "/dashboard/upload", icon: Upload },
-      { title: "My Uploads", href: "/dashboard/uploads", icon: FolderOpen },
       { title: "Bundles", href: "/dashboard/bundles", icon: Package },
     ],
   },
@@ -61,7 +57,6 @@ const navigationSections: NavSection[] = [
     items: [
       { title: "My Purchases", href: "/dashboard/purchases", icon: ShoppingCart },
       { title: "Favorites", href: "/dashboard/favorites", icon: Heart },
-      { title: "History", href: "/dashboard/history", icon: History },
     ],
   },
   {
@@ -69,7 +64,6 @@ const navigationSections: NavSection[] = [
     items: [
       { title: "Earnings", href: "/dashboard/earnings", icon: DollarSign },
       { title: "Membership", href: "/dashboard/membership", icon: Crown },
-      { title: "Connect Stripe", href: "/dashboard/connect-stripe", icon: CreditCard },
     ],
   },
   {
