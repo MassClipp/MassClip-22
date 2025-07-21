@@ -10,7 +10,7 @@ import { Loader2, CreditCard, Globe, Shield, ExternalLink } from "lucide-react"
 import { useFirebaseAuth } from "@/hooks/use-firebase-auth"
 import { useStripeConnectionCheck } from "@/hooks/use-stripe-connection-check"
 
-export function StripeConnectionPrompt() {
+export default function StripeConnectionPrompt() {
   const { user } = useFirebaseAuth()
   const { isConnected, isLoading: statusLoading, refetch } = useStripeConnectionCheck()
   const [accountId, setAccountId] = useState("")
