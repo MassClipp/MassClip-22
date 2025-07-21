@@ -14,10 +14,17 @@ export async function POST(request: NextRequest) {
     // Get authorization header
     const authHeader = request.headers.get("authorization")
     console.log("🔑 [Link Account] Auth header present:", !!authHeader)
+    console.log("🔑 [Link Account] Auth header format:", authHeader?.substring(0, 20) + "...")
 
     if (!authHeader?.startsWith("Bearer ")) {
       console.log("❌ [Link Account] Invalid or missing Bearer token")
-      return NextResponse.json({ error: "Authentication required" }, { status: 401 })
+      return NextResponse.json(
+        {
+          error: "Authentication required",
+          details: "No valid Bearer token found in Authorization header",
+        },
+        { status: 401 },
+      )
     }
 
     // Extract token
@@ -27,11 +34,22 @@ export async function POST(request: NextRequest) {
     // Verify Firebase token
     let decodedToken
     try {
+      console.log("🔍 [Link Account] Verifying token...")
       decodedToken = await auth.verifyIdToken(token)
       console.log("✅ [Link Account] Token verified for user:", decodedToken.uid)
     } catch (error: any) {
       console.error("❌ [Link Account] Token verification failed:", error.message)
-      return NextResponse.json({ error: "Invalid authentication token" }, { status: 401 })
+      console.error("❌ [Link Account] Error code:", error.code)
+      return NextResponse.json(
+        {
+          error: "Invalid authentication token",
+          details: {
+            message: error.message,
+            code: error.code,
+          },
+        },
+        { status: 401 },
+      )
     }
 
     const userId = decodedToken.uid
@@ -55,7 +73,7 @@ export async function POST(request: NextRequest) {
     }
 
     if (!finalAccountId.startsWith("acct_")) {
-      console.log("❌ [Link Account] Invalid account ID format")
+      console.log("❌ [Link Account] Invalid account ID format:", finalAccountId)
       return NextResponse.json({ error: "Invalid Stripe account ID format" }, { status: 400 })
     }
 
@@ -90,15 +108,34 @@ export async function POST(request: NextRequest) {
       })
     } catch (stripeError: any) {
       console.error("❌ [Link Account] Stripe error:", stripeError.message)
+      console.error("❌ [Link Account] Stripe error code:", stripeError.code)
 
       if (stripeError.code === "resource_missing") {
-        return NextResponse.json({ error: "Stripe account not found" }, { status: 404 })
+        return NextResponse.json(
+          {
+            error: "Stripe account not found",
+            details: "The provided account ID does not exist in Stripe",
+          },
+          { status: 404 },
+        )
       }
 
-      return NextResponse.json({ error: "Failed to verify Stripe account" }, { status: 400 })
+      return NextResponse.json(
+        {
+          error: "Failed to verify Stripe account",
+          details: stripeError.message,
+        },
+        { status: 400 },
+      )
     }
   } catch (error: any) {
     console.error("❌ [Link Account] Unexpected error:", error.message)
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+    return NextResponse.json(
+      {
+        error: "Internal server error",
+        details: error.message,
+      },
+      { status: 500 },
+    )
   }
 }
