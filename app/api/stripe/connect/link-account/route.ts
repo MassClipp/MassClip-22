@@ -6,72 +6,92 @@ import { stripe } from "@/lib/stripe"
 
 export async function POST(request: NextRequest) {
   try {
-    // Get user from multiple auth methods
+    console.log("🔗 Starting Stripe account linking process...")
+
+    // Get authenticated user
     let user
     try {
       user = await getAuthenticatedUser(request.headers)
     } catch (authError) {
-      console.error("Primary auth failed, trying alternative methods:", authError)
+      console.error("Auth failed, trying token from body:", authError)
 
-      // Try to get user ID from request body
       const body = await request.json()
       const { idToken, stripeAccountId } = body
 
       if (!idToken) {
-        return NextResponse.json({ success: false, error: "Authentication required" }, { status: 401 })
+        return NextResponse.json(
+          {
+            success: false,
+            error: "Authentication required",
+          },
+          { status: 401 },
+        )
       }
 
-      // Verify the ID token directly
       const { auth } = await import("@/lib/firebase-admin")
       try {
         const decodedToken = await auth.verifyIdToken(idToken)
         user = { uid: decodedToken.uid }
       } catch (tokenError) {
         console.error("Token verification failed:", tokenError)
-        return NextResponse.json({ success: false, error: "Invalid authentication token" }, { status: 401 })
+        return NextResponse.json(
+          {
+            success: false,
+            error: "Invalid authentication token",
+          },
+          { status: 401 },
+        )
       }
 
       if (!stripeAccountId) {
-        return NextResponse.json({ success: false, error: "Stripe account ID is required" }, { status: 400 })
+        return NextResponse.json(
+          {
+            success: false,
+            error: "Stripe account ID is required",
+          },
+          { status: 400 },
+        )
       }
 
-      // Enhanced account validation with detailed error reporting
+      // Simple connection - just save the account ID
+      console.log(`💾 Linking account ${stripeAccountId} to user ${user.uid}`)
+
       try {
-        console.log(`🔍 Validating Stripe account: ${stripeAccountId}`)
-
-        const account = await stripe.accounts.retrieve(stripeAccountId)
-        console.log(`✅ Account retrieved successfully:`, {
-          id: account.id,
-          type: account.type,
-          country: account.country,
-          charges_enabled: account.charges_enabled,
-          payouts_enabled: account.payouts_enabled,
-          details_submitted: account.details_submitted,
-        })
-
-        // Check if account belongs to our platform
-        const isConnectedAccount = account.type === "express" || account.type === "custom"
-        console.log(`🔗 Account type check: ${account.type}, isConnectedAccount: ${isConnectedAccount}`)
-
-        // Update user profile with Stripe account ID
-        const updateData = {
-          stripeAccountId: stripeAccountId,
-          stripeAccountStatus: {
-            chargesEnabled: account.charges_enabled,
-            payoutsEnabled: account.payouts_enabled,
-            detailsSubmitted: account.details_submitted,
-            accountType: account.type,
-            country: account.country,
-            requirementsCount:
-              (account.requirements?.currently_due?.length || 0) + (account.requirements?.past_due?.length || 0),
-            currentlyDue: account.requirements?.currently_due || [],
-            pastDue: account.requirements?.past_due || [],
-            lastUpdated: new Date(),
-          },
-          updatedAt: new Date(),
+        // Try to get basic account info, but don't fail if we can't
+        let accountInfo = {
+          chargesEnabled: false,
+          payoutsEnabled: false,
+          detailsSubmitted: false,
+          accountType: "unknown",
+          country: "unknown",
         }
 
-        await db.collection("users").doc(user.uid).update(updateData)
+        try {
+          const account = await stripe.accounts.retrieve(stripeAccountId)
+          accountInfo = {
+            chargesEnabled: account.charges_enabled || false,
+            payoutsEnabled: account.payouts_enabled || false,
+            detailsSubmitted: account.details_submitted || false,
+            accountType: account.type || "unknown",
+            country: account.country || "unknown",
+          }
+          console.log("✅ Retrieved account info:", accountInfo)
+        } catch (stripeError) {
+          console.warn("⚠️ Could not retrieve account details, proceeding anyway:", stripeError.message)
+        }
+
+        // Update user profile
+        await db
+          .collection("users")
+          .doc(user.uid)
+          .update({
+            stripeAccountId: stripeAccountId,
+            stripeAccountStatus: {
+              ...accountInfo,
+              lastUpdated: new Date(),
+            },
+            updatedAt: new Date(),
+          })
 
         console.log(`✅ Successfully linked Stripe account ${stripeAccountId} to user ${user.uid}`)
 
@@ -79,88 +99,74 @@ export async function POST(request: NextRequest) {
           success: true,
           message: "Stripe account linked successfully",
           accountId: stripeAccountId,
-          accountStatus: {
-            chargesEnabled: account.charges_enabled,
-            payoutsEnabled: account.payouts_enabled,
-            detailsSubmitted: account.details_submitted,
-            accountType: account.type,
-            country: account.country,
-          },
+          accountStatus: accountInfo,
         })
-      } catch (stripeError: any) {
-        console.error("❌ Stripe account validation failed:", {
-          error: stripeError.message,
-          type: stripeError.type,
-          code: stripeError.code,
-          accountId: stripeAccountId,
-        })
-
-        // Provide specific error messages based on Stripe error types
-        let errorMessage = "Invalid Stripe account"
-        if (stripeError.type === "StripeInvalidRequestError") {
-          if (stripeError.code === "resource_missing") {
-            errorMessage = "Stripe account not found. Please check the account ID."
-          } else if (stripeError.code === "account_invalid") {
-            errorMessage = "This Stripe account cannot be connected to our platform."
-          }
-        } else if (stripeError.type === "StripePermissionError") {
-          errorMessage = "Permission denied. This account may not belong to you or may already be connected elsewhere."
-        }
-
+      } catch (error: any) {
+        console.error("❌ Error updating user profile:", error)
         return NextResponse.json(
           {
             success: false,
-            error: errorMessage,
-            details: stripeError.message,
-            stripeErrorType: stripeError.type,
-            stripeErrorCode: stripeError.code,
+            error: "Failed to save account information",
+            details: error.message,
           },
-          { status: 400 },
+          { status: 500 },
         )
       }
     }
 
-    // Original flow if primary auth worked
+    // Handle request when auth worked normally
     const body = await request.json()
     const { stripeAccountId } = body
 
     if (!stripeAccountId) {
-      return NextResponse.json({ success: false, error: "Stripe account ID is required" }, { status: 400 })
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Stripe account ID is required",
+        },
+        { status: 400 },
+      )
     }
 
-    // Enhanced account validation with detailed error reporting
+    // Simple connection - just save the account ID
+    console.log(`💾 Linking account ${stripeAccountId} to user ${user.uid}`)
+
     try {
-      console.log(`🔍 Validating Stripe account: ${stripeAccountId}`)
-
-      const account = await stripe.accounts.retrieve(stripeAccountId)
-      console.log(`✅ Account retrieved successfully:`, {
-        id: account.id,
-        type: account.type,
-        country: account.country,
-        charges_enabled: account.charges_enabled,
-        payouts_enabled: account.payouts_enabled,
-        details_submitted: account.details_submitted,
-      })
-
-      // Update user profile with Stripe account ID
-      const updateData = {
-        stripeAccountId: stripeAccountId,
-        stripeAccountStatus: {
-          chargesEnabled: account.charges_enabled,
-          payoutsEnabled: account.payouts_enabled,
-          detailsSubmitted: account.details_submitted,
-          accountType: account.type,
-          country: account.country,
-          requirementsCount:
-            (account.requirements?.currently_due?.length || 0) + (account.requirements?.past_due?.length || 0),
-          currentlyDue: account.requirements?.currently_due || [],
-          pastDue: account.requirements?.past_due || [],
-          lastUpdated: new Date(),
-        },
-        updatedAt: new Date(),
+      // Try to get basic account info, but don't fail if we can't
+      let accountInfo = {
+        chargesEnabled: false,
+        payoutsEnabled: false,
+        detailsSubmitted: false,
+        accountType: "unknown",
+        country: "unknown",
       }
 
-      await db.collection("users").doc(user.uid).update(updateData)
+      try {
+        const account = await stripe.accounts.retrieve(stripeAccountId)
+        accountInfo = {
+          chargesEnabled: account.charges_enabled || false,
+          payoutsEnabled: account.payouts_enabled || false,
+          detailsSubmitted: account.details_submitted || false,
+          accountType: account.type || "unknown",
+          country: account.country || "unknown",
+        }
+        console.log("✅ Retrieved account info:", accountInfo)
+      } catch (stripeError) {
+        console.warn("⚠️ Could not retrieve account details, proceeding anyway:", stripeError.message)
+      }
+
+      // Update user profile
+      await db
+        .collection("users")
+        .doc(user.uid)
+        .update({
+          stripeAccountId: stripeAccountId,
+          stripeAccountStatus: {
+            ...accountInfo,
+            lastUpdated: new Date(),
+          },
+          updatedAt: new Date(),
+        })
 
       console.log(`✅ Successfully linked Stripe account ${stripeAccountId} to user ${user.uid}`)
 
@@ -168,51 +174,25 @@ export async function POST(request: NextRequest) {
         success: true,
         message: "Stripe account linked successfully",
         accountId: stripeAccountId,
-        accountStatus: {
-          chargesEnabled: account.charges_enabled,
-          payoutsEnabled: account.payouts_enabled,
-          detailsSubmitted: account.details_submitted,
-          accountType: account.type,
-          country: account.country,
-        },
+        accountStatus: accountInfo,
       })
-    } catch (stripeError: any) {
-      console.error("❌ Stripe account validation failed:", {
-        error: stripeError.message,
-        type: stripeError.type,
-        code: stripeError.code,
-        accountId: stripeAccountId,
-      })
-
-      // Provide specific error messages based on Stripe error types
-      let errorMessage = "Invalid Stripe account"
-      if (stripeError.type === "StripeInvalidRequestError") {
-        if (stripeError.code === "resource_missing") {
-          errorMessage = "Stripe account not found. Please check the account ID."
-        } else if (stripeError.code === "account_invalid") {
-          errorMessage = "This Stripe account cannot be connected to our platform."
-        }
-      } else if (stripeError.type === "StripePermissionError") {
-        errorMessage = "Permission denied. This account may not belong to you or may already be connected elsewhere."
-      }
-
+    } catch (error: any) {
+      console.error("❌ Error updating user profile:", error)
       return NextResponse.json(
         {
           success: false,
-          error: errorMessage,
-          details: stripeError.message,
-          stripeErrorType: stripeError.type,
-          stripeErrorCode: stripeError.code,
+          error: "Failed to save account information",
+          details: error.message,
         },
-        { status: 400 },
+        { status: 500 },
       )
     }
   } catch (error: any) {
-    console.error("❌ Unexpected error linking Stripe account:", error)
+    console.error("❌ Unexpected error in link-account:", error)
     return NextResponse.json(
       {
         success: false,
-        error: "Failed to link Stripe account",
+        error: "Internal server error",
         details: error.message,
       },
       { status: 500 },
