@@ -208,6 +208,7 @@ export default function StripeOnboardDiagnosticPage() {
 
     try {
       const idToken = await user.getIdToken()
+      console.log("🔍 [Debug] Testing onboard endpoint with token:", !!idToken)
 
       const response = await fetch("/api/stripe/connect/onboard", {
         method: "POST",
@@ -217,7 +218,11 @@ export default function StripeOnboardDiagnosticPage() {
         body: JSON.stringify({ idToken }),
       })
 
+      console.log("📊 [Debug] Response status:", response.status)
+      console.log("📊 [Debug] Response ok:", response.ok)
+
       const data = await response.json()
+      console.log("📊 [Debug] Response data:", data)
 
       setOnboardTest({
         status: response.status,
@@ -226,6 +231,7 @@ export default function StripeOnboardDiagnosticPage() {
         headers: Object.fromEntries(response.headers.entries()),
       })
     } catch (error) {
+      console.error("❌ [Debug] Endpoint test failed:", error)
       setOnboardTest({
         error: error instanceof Error ? error.message : "Unknown error",
         details: error,

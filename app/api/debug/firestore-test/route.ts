@@ -3,31 +3,71 @@ import { db } from "@/lib/firebase-admin"
 
 export async function GET() {
   try {
-    console.log("🔍 [Firestore Test] Testing Firestore connection...")
+    console.log("🔍 [Test Firestore] Testing Firestore connection...")
 
-    // Test basic Firestore connection by reading a collection
-    const testCollection = db.collection("users")
-    const snapshot = await testCollection.limit(1).get()
+    // Test basic Firestore connection
+    const testCollection = db.collection("_test")
+    const testDoc = testCollection.doc("connection-test")
 
-    console.log("✅ [Firestore Test] Successfully connected to Firestore")
-    console.log("📊 [Firestore Test] Collection size:", snapshot.size)
+    // Write test data
+    const testData = {
+      timestamp: new Date().toISOString(),
+      test: true,
+      message: "Firestore connection test",
+      source: "massclip_diagnostic",
+    }
+
+    await testDoc.set(testData)
+    console.log("✅ [Test Firestore] Successfully wrote test document")
+
+    // Read test data back
+    const readDoc = await testDoc.get()
+    if (!readDoc.exists) {
+      throw new Error("Test document was not found after writing")
+    }
+
+    const readData = readDoc.data()
+    console.log("✅ [Test Firestore] Successfully read test document")
+
+    // Clean up test document
+    await testDoc.delete()
+    console.log("✅ [Test Firestore] Successfully deleted test document")
+
+    // Test users collection access
+    let usersCollectionTest = null
+    try {
+      const usersSnapshot = await db.collection("users").limit(1).get()
+      usersCollectionTest = {
+        accessible: true,
+        documentCount: usersSnapshot.size,
+        hasDocuments: !usersSnapshot.empty,
+      }
+      console.log("✅ [Test Firestore] Users collection accessible")
+    } catch (usersError: any) {
+      console.warn("⚠️ [Test Firestore] Users collection test failed:", usersError.message)
+      usersCollectionTest = {
+        accessible: false,
+        error: usersError.message,
+      }
+    }
 
     return NextResponse.json({
       success: true,
       message: "Firestore connection successful",
-      collectionExists: true,
-      documentCount: snapshot.size,
-      projectId: process.env.FIREBASE_PROJECT_ID,
+      testData: readData,
+      usersCollection: usersCollectionTest,
+      timestamp: new Date().toISOString(),
     })
   } catch (error: any) {
-    console.error("❌ [Firestore Test] Connection failed:", error)
+    console.error("❌ [Test Firestore] Connection failed:", error)
 
     return NextResponse.json(
       {
         success: false,
-        message: "Failed to connect to Firestore",
+        message: "Firestore connection failed",
         error: error.message,
-        projectId: process.env.FIREBASE_PROJECT_ID,
+        code: error.code,
+        details: error.details,
       },
       { status: 500 },
     )
