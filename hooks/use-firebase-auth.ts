@@ -225,6 +225,3 @@ export function useFirebaseAuth() {
     signOut,
   }
 }
-
-// Alias export expected elsewhere in the app
-export { useFirebaseAuth as useAuth }
