@@ -99,55 +99,107 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Create new Stripe Express account
+    // Create new Stripe Express account with proper Connect configuration
     console.log("🆕 [Stripe Onboard] Creating new Stripe Express account...")
-    const account = await stripe.accounts.create({
-      type: "express",
-      capabilities: {
-        card_payments: { requested: true },
-        transfers: { requested: true },
-      },
-      business_type: "individual",
-      metadata: {
-        userId: userId,
-        createdAt: new Date().toISOString(),
-        source: "massclip_onboarding",
-      },
-    })
 
-    console.log("✅ [Stripe Onboard] New account created:", account.id)
-
-    // Save account ID to Firestore
-    console.log("💾 [Stripe Onboard] Saving account ID to Firestore...")
-    await db
-      .collection("users")
-      .doc(userId)
-      .update({
-        [accountIdField]: account.id,
-        [`${accountIdField}CreatedAt`]: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
+    try {
+      const account = await stripe.accounts.create({
+        type: "express",
+        country: "US", // Default to US, can be made dynamic
+        email: userData?.email,
+        capabilities: {
+          card_payments: { requested: true },
+          transfers: { requested: true },
+        },
+        business_type: "individual", // Start with individual, can be changed during onboarding
+        settings: {
+          payouts: {
+            schedule: {
+              interval: "daily",
+            },
+          },
+        },
+        metadata: {
+          userId: userId,
+          createdAt: new Date().toISOString(),
+          source: "massclip_onboarding",
+          platform: "massclip",
+        },
       })
 
-    // Create account onboarding link
-    console.log("🔗 [Stripe Onboard] Creating onboarding link...")
-    const accountLink = await stripe.accountLinks.create({
-      account: account.id,
-      refresh_url: `${getSiteUrl()}/dashboard/connect-stripe?refresh=true`,
-      return_url: `${getSiteUrl()}/dashboard/earnings?connected=true`,
-      type: "account_onboarding",
-    })
+      console.log("✅ [Stripe Onboard] New account created:", account.id)
 
-    console.log("✅ [Stripe Onboard] Onboarding process completed successfully")
-    return NextResponse.json({
-      success: true,
-      url: accountLink.url,
-      accountId: account.id,
-    })
+      // Save account ID to Firestore
+      console.log("💾 [Stripe Onboard] Saving account ID to Firestore...")
+      await db
+        .collection("users")
+        .doc(userId)
+        .update({
+          [accountIdField]: account.id,
+          [`${accountIdField}CreatedAt`]: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        })
+
+      // Create account onboarding link
+      console.log("🔗 [Stripe Onboard] Creating onboarding link...")
+      const accountLink = await stripe.accountLinks.create({
+        account: account.id,
+        refresh_url: `${getSiteUrl()}/dashboard/connect-stripe?refresh=true`,
+        return_url: `${getSiteUrl()}/dashboard/earnings?connected=true`,
+        type: "account_onboarding",
+      })
+
+      console.log("✅ [Stripe Onboard] Onboarding process completed successfully")
+      return NextResponse.json({
+        success: true,
+        url: accountLink.url,
+        accountId: account.id,
+      })
+    } catch (stripeError: any) {
+      console.error("❌ [Stripe Onboard] Stripe account creation failed:", stripeError)
+
+      // Handle specific Stripe Connect platform errors
+      if (stripeError.message?.includes("responsibilities of managing losses")) {
+        return NextResponse.json(
+          {
+            error: "Stripe Connect Platform Setup Required",
+            details:
+              "Your Stripe account needs to be configured for Connect Platform usage. Please contact support or visit your Stripe Dashboard to enable Connect.",
+            stripeError: stripeError.message,
+            action: "Please visit https://dashboard.stripe.com/settings/connect to configure your platform settings",
+          },
+          { status: 400 },
+        )
+      }
+
+      if (stripeError.message?.includes("platform")) {
+        return NextResponse.json(
+          {
+            error: "Platform Configuration Error",
+            details:
+              "There's an issue with your Stripe platform configuration. Please check your Stripe Connect settings.",
+            stripeError: stripeError.message,
+          },
+          { status: 400 },
+        )
+      }
+
+      // Generic Stripe error
+      return NextResponse.json(
+        {
+          error: "Failed to create Stripe account",
+          details: stripeError.message,
+          code: stripeError.code,
+          type: stripeError.type,
+        },
+        { status: 500 },
+      )
+    }
   } catch (error: any) {
     console.error("❌ [Stripe Onboard] Unexpected error:", error)
     return NextResponse.json(
       {
-        error: "Failed to create Stripe account",
+        error: "Internal server error",
         details: error.message,
         stack: process.env.NODE_ENV === "development" ? error.stack : undefined,
       },
