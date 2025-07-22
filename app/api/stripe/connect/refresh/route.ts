@@ -31,27 +31,21 @@ export async function POST(request: NextRequest) {
 
     const userData = userDoc.data()
     const accountIdField = isTestMode ? "stripeTestAccountId" : "stripeAccountId"
-    const connectedField = isTestMode ? "stripeTestConnected" : "stripeConnected"
-
     const accountId = userData?.[accountIdField]
 
     if (!accountId) {
-      console.log(`📭 [Stripe Refresh] No account ID found for user ${userId}`)
-      return NextResponse.json({ error: "No account to refresh" }, { status: 404 })
+      return NextResponse.json({ error: "No Stripe account found" }, { status: 404 })
     }
 
     try {
       // Check if account still exists
       const account = await stripe.accounts.retrieve(accountId)
-      console.log(
-        `📊 [Stripe Refresh] Account ${accountId} status - Charges: ${account.charges_enabled}, Payouts: ${account.payouts_enabled}`,
-      )
 
-      // If account is already fully enabled, no need for onboarding
+      // If account is complete, return success
       if (account.charges_enabled && account.payouts_enabled) {
-        console.log(`✅ [Stripe Refresh] Account ${accountId} is already fully enabled`)
+        console.log(`✅ [Stripe Refresh] Account ${accountId} is now complete`)
 
-        // Update user data
+        const connectedField = isTestMode ? "stripeTestConnected" : "stripeConnected"
         await db
           .collection("users")
           .doc(userId)
@@ -67,11 +61,10 @@ export async function POST(request: NextRequest) {
           onboardingComplete: true,
           accountId: accountId,
           businessType: account.business_type || "individual",
-          message: "Account is fully connected",
         })
       }
 
-      // Create new account link for continued onboarding
+      // Account needs more setup - create new onboarding link
       const accountLink = await stripe.accountLinks.create({
         account: accountId,
         refresh_url: `${process.env.NEXT_PUBLIC_SITE_URL}/dashboard/earnings?refresh=true`,
@@ -79,19 +72,19 @@ export async function POST(request: NextRequest) {
         type: "account_onboarding",
       })
 
-      console.log(`🔗 [Stripe Refresh] Created refresh link for account ${accountId}`)
+      console.log(`🔗 [Stripe Refresh] Created new onboarding link for account ${accountId}`)
 
       return NextResponse.json({
         onboardingComplete: false,
         onboardingUrl: accountLink.url,
         accountId: accountId,
-        message: "Continue account setup",
       })
     } catch (stripeError: any) {
       if (stripeError.code === "resource_missing") {
-        console.warn(`⚠️ [Stripe Refresh] Account ${accountId} no longer exists, cleaning up`)
+        console.warn(`⚠️ [Stripe Refresh] Account ${accountId} no longer exists`)
 
-        // Clean up invalid account ID
+        // Clean up the invalid account
+        const connectedField = isTestMode ? "stripeTestConnected" : "stripeConnected"
         await db
           .collection("users")
           .doc(userId)
@@ -102,16 +95,19 @@ export async function POST(request: NextRequest) {
             updatedAt: new Date().toISOString(),
           })
 
-        return NextResponse.json({
-          accountDeleted: true,
-          message: "Account no longer exists, please create a new one",
-        })
+        return NextResponse.json(
+          {
+            accountDeleted: true,
+            error: "Account no longer exists",
+          },
+          { status: 404 },
+        )
       }
 
-      console.error("❌ [Stripe Refresh] Error refreshing account:", stripeError)
+      console.error("❌ [Stripe Refresh] Error with account:", stripeError)
       return NextResponse.json(
         {
-          error: "Failed to refresh account",
+          error: "Failed to refresh onboarding",
           details: stripeError.message,
         },
         { status: 500 },
