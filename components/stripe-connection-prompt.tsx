@@ -3,23 +3,23 @@
 import { useState } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Alert, AlertDescription } from "@/components/ui/alert"
-import {
-  CreditCard,
-  ExternalLink,
-  Link,
-  Info,
-  CheckCircle,
-  Loader2,
-  AlertCircle,
-  DollarSign,
-  Globe,
-  Shield,
-} from "lucide-react"
 import { useAuth } from "@/contexts/auth-context"
+import {
+  CheckCircle,
+  AlertCircle,
+  Clock,
+  ExternalLink,
+  RefreshCw,
+  Shield,
+  Zap,
+  DollarSign,
+  CreditCard,
+  TrendingUp,
+  Globe,
+} from "lucide-react"
 
 interface ConnectionStatus {
-  isConnected: boolean
+  connected: boolean
   accountId: string | null
   businessType: "individual" | "company" | null
   capabilities: {
@@ -30,29 +30,30 @@ interface ConnectionStatus {
     eventually_due: string[]
     past_due: string[]
   } | null
+  account: {
+    country: string
+    email: string
+    type: string
+    businessType: string
+  } | null
+  message: string
 }
 
 interface StripeConnectionPromptProps {
-  onConnectionSuccess: () => void
-  className?: string
+  onConnectionSuccess?: () => void
   existingStatus?: ConnectionStatus | null
 }
 
-export default function StripeConnectionPrompt({
-  onConnectionSuccess,
-  className,
-  existingStatus,
-}: StripeConnectionPromptProps) {
+export default function StripeConnectionPrompt({ onConnectionSuccess, existingStatus }: StripeConnectionPromptProps) {
   const { user } = useAuth()
-  const [isConnecting, setIsConnecting] = useState(false)
+  const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  // Single handler for both new and existing account connections
-  const handleConnect = async () => {
+  const handleCreateAccount = async () => {
     if (!user) return
 
     try {
-      setIsConnecting(true)
+      setIsLoading(true)
       setError(null)
 
       const idToken = await user.getIdToken()
@@ -73,276 +74,313 @@ export default function StripeConnectionPrompt({
       const data = await response.json()
 
       if (data.onboardingComplete) {
-        // Account is already complete
-        onConnectionSuccess()
+        onConnectionSuccess?.()
       } else if (data.onboardingUrl) {
-        // Redirect to Stripe onboarding
-        console.log(`🔗 ${data.resuming ? "Resuming" : "Starting"} Stripe onboarding`)
+        console.log(`🔗 Starting Stripe onboarding:`, data.onboardingUrl)
         window.location.href = data.onboardingUrl
       }
     } catch (error: any) {
-      console.error("Error connecting to Stripe:", error)
+      console.error("Error creating Stripe account:", error)
       setError(error.message)
     } finally {
-      setIsConnecting(false)
+      setIsLoading(false)
     }
   }
 
-  // If account exists but needs completion, show continue setup UI
-  if (existingStatus?.accountId && !existingStatus.isConnected) {
+  const handleConnectExisting = async () => {
+    if (!user) return
+
+    try {
+      setIsLoading(true)
+      setError(null)
+
+      const idToken = await user.getIdToken()
+
+      const response = await fetch("/api/stripe/connect/onboard", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ idToken }),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || "Failed to connect existing account")
+      }
+
+      const data = await response.json()
+
+      if (data.onboardingComplete) {
+        onConnectionSuccess?.()
+      } else if (data.onboardingUrl) {
+        console.log(`🔗 Connecting existing account:`, data.onboardingUrl)
+        window.location.href = data.onboardingUrl
+      }
+    } catch (error: any) {
+      console.error("Error connecting existing account:", error)
+      setError(error.message)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handleContinueSetup = async () => {
+    if (!user) return
+
+    try {
+      setIsLoading(true)
+      setError(null)
+
+      const idToken = await user.getIdToken()
+
+      const response = await fetch("/api/stripe/connect/refresh", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ idToken }),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || "Failed to continue setup")
+      }
+
+      const data = await response.json()
+
+      if (data.onboardingComplete) {
+        onConnectionSuccess?.()
+      } else if (data.onboardingUrl) {
+        window.location.href = data.onboardingUrl
+      } else if (data.accountDeleted) {
+        window.location.reload()
+      }
+    } catch (error: any) {
+      console.error("Error continuing setup:", error)
+      setError(error.message)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  // Show incomplete setup prompt if account exists but needs completion
+  if (existingStatus?.accountId && !existingStatus.connected) {
     const needsAction =
       existingStatus.capabilities?.currently_due?.length > 0 || existingStatus.capabilities?.past_due?.length > 0
 
     return (
-      <div className={`space-y-8 ${className}`}>
-        {/* Header */}
-        <div className="text-center space-y-4">
-          <div className="mx-auto w-16 h-16 bg-gradient-to-br from-orange-500 to-red-600 rounded-full flex items-center justify-center">
-            <AlertCircle className="h-8 w-8 text-white" />
-          </div>
-          <div>
-            <h1 className="text-3xl font-bold text-white mb-2">Complete Your Stripe Setup</h1>
-            <p className="text-zinc-400 text-lg">
-              Your account needs additional information to start accepting payments
-            </p>
-          </div>
+      <div className="max-w-4xl mx-auto space-y-6">
+        <div className="text-center space-y-2">
+          <h1 className="text-3xl font-bold text-white">Complete Your Stripe Setup</h1>
+          <p className="text-zinc-400">Finish setting up your account to start earning</p>
         </div>
 
-        {/* Status Card */}
-        <Card className="bg-zinc-900/60 border-zinc-800/50 max-w-2xl mx-auto">
+        <Card className="bg-zinc-900/60 border-zinc-800/50">
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <AlertCircle className="h-5 w-5 text-orange-400" />
-              Account Status
-            </CardTitle>
+            <div className="flex items-center gap-2">
+              <Clock className="h-5 w-5 text-yellow-500" />
+              <CardTitle className="text-white">Setup In Progress</CardTitle>
+            </div>
+            <CardDescription>{existingStatus.message}</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="grid grid-cols-2 gap-4">
-              <div className="flex items-center gap-2">
-                {existingStatus.capabilities?.charges_enabled ? (
-                  <CheckCircle className="h-4 w-4 text-green-400" />
-                ) : (
-                  <AlertCircle className="h-4 w-4 text-orange-400" />
-                )}
-                <span className="text-sm text-zinc-300">Accept Payments</span>
-              </div>
-              <div className="flex items-center gap-2">
-                {existingStatus.capabilities?.payouts_enabled ? (
-                  <CheckCircle className="h-4 w-4 text-green-400" />
-                ) : (
-                  <AlertCircle className="h-4 w-4 text-orange-400" />
-                )}
-                <span className="text-sm text-zinc-300">Receive Payouts</span>
-              </div>
-            </div>
-
-            {needsAction && existingStatus.capabilities && (
-              <div className="bg-red-900/20 border border-red-800/50 rounded-lg p-4">
-                <h4 className="font-medium text-red-300 mb-2">Action Required:</h4>
-                <div className="text-sm text-red-400 space-y-1">
-                  {existingStatus.capabilities.past_due.length > 0 && (
-                    <p>• Past due: {existingStatus.capabilities.past_due.join(", ")}</p>
-                  )}
-                  {existingStatus.capabilities.currently_due.length > 0 && (
-                    <p>• Currently due: {existingStatus.capabilities.currently_due.join(", ")}</p>
-                  )}
-                </div>
+            {needsAction && (
+              <div className="bg-orange-50 border border-orange-200 rounded-lg p-4">
+                <h4 className="font-medium text-orange-800 mb-2">Action Required</h4>
+                <p className="text-sm text-orange-700 mb-3">
+                  Stripe needs additional information to complete your account setup.
+                </p>
+                <Button onClick={handleContinueSetup} disabled={isLoading} className="w-full">
+                  {isLoading ? "Loading..." : "Complete Setup"}
+                  <ExternalLink className="ml-2 h-4 w-4" />
+                </Button>
               </div>
             )}
 
-            <Button onClick={handleConnect} disabled={isConnecting} className="w-full bg-blue-600 hover:bg-blue-700">
-              {isConnecting ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Loading...
-                </>
-              ) : (
-                <>
-                  <ExternalLink className="h-4 w-4 mr-2" />
-                  Continue Setup
-                </>
-              )}
-            </Button>
+            {!needsAction && existingStatus.capabilities?.details_submitted && (
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <h4 className="font-medium text-blue-800 mb-2">Under Review</h4>
+                <p className="text-sm text-blue-700">
+                  Your account is being reviewed by Stripe. This typically takes 1-2 business days.
+                </p>
+              </div>
+            )}
+
+            {error && (
+              <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                <p className="text-sm text-red-700">{error}</p>
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
     )
   }
 
-  // Default connection prompt (keeping original design)
+  // Show main connection prompt
   return (
-    <div className={`space-y-8 ${className}`}>
-      {/* Header */}
-      <div className="text-center space-y-4">
-        <div className="mx-auto w-16 h-16 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center">
-          <CreditCard className="h-8 w-8 text-white" />
-        </div>
-        <div>
-          <h1 className="text-3xl font-bold text-white mb-2">Connect Your Stripe Account</h1>
-          <p className="text-zinc-400 text-lg">Start accepting payments and track your earnings</p>
-        </div>
+    <div className="max-w-4xl mx-auto space-y-6">
+      <div className="text-center space-y-2">
+        <h1 className="text-3xl font-bold text-white">Connect with Stripe</h1>
+        <p className="text-zinc-400">Set up payments to start earning from your content</p>
       </div>
 
-      {/* Benefits */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <div className="text-center p-4 bg-zinc-900/50 rounded-lg border border-zinc-800">
-          <DollarSign className="h-8 w-8 text-green-500 mx-auto mb-2" />
-          <h3 className="font-semibold text-white mb-1">Accept Payments</h3>
-          <p className="text-sm text-zinc-400">Process payments from customers worldwide</p>
-        </div>
-        <div className="text-center p-4 bg-zinc-900/50 rounded-lg border border-zinc-800">
-          <Globe className="h-8 w-8 text-blue-500 mx-auto mb-2" />
-          <h3 className="font-semibold text-white mb-1">Global Reach</h3>
-          <p className="text-sm text-zinc-400">Supported in 40+ countries</p>
-        </div>
-        <div className="text-center p-4 bg-zinc-900/50 rounded-lg border border-zinc-800">
-          <Shield className="h-8 w-8 text-purple-500 mx-auto mb-2" />
-          <h3 className="font-semibold text-white mb-1">Secure & Reliable</h3>
-          <p className="text-sm text-zinc-400">Bank-level security and encryption</p>
-        </div>
-      </div>
-
-      {/* Connection Options */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Create New Account - Keep as-is but use proper Express account flow */}
-        <Card className="bg-gradient-to-br from-blue-900/20 to-blue-800/10 border-blue-800/50">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <CreditCard className="h-5 w-5 text-blue-400" />
-              Create New Stripe Account
-            </CardTitle>
+      <div className="grid md:grid-cols-2 gap-6">
+        {/* Create New Account */}
+        <Card className="bg-zinc-900/60 border-zinc-800/50 hover:border-blue-500/50 transition-colors">
+          <CardHeader className="pb-4">
+            <div className="flex items-center gap-2 mb-2">
+              <div className="p-2 bg-blue-500/10 rounded-lg">
+                <Zap className="h-5 w-5 text-blue-400" />
+              </div>
+              <CardTitle className="text-white">Create New Stripe Account</CardTitle>
+            </div>
             <CardDescription>Set up a new Stripe account to start accepting payments</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <div className="flex items-center gap-2 text-sm text-blue-300">
-                <CheckCircle className="h-4 w-4" />
+            <div className="space-y-3">
+              <div className="flex items-center gap-2 text-sm text-zinc-300">
+                <CheckCircle className="h-4 w-4 text-green-400" />
                 <span>Quick 5-minute setup</span>
               </div>
-              <div className="flex items-center gap-2 text-sm text-blue-300">
-                <CheckCircle className="h-4 w-4" />
+              <div className="flex items-center gap-2 text-sm text-zinc-300">
+                <CheckCircle className="h-4 w-4 text-green-400" />
                 <span>2.9% + 30¢ per transaction</span>
               </div>
-              <div className="flex items-center gap-2 text-sm text-blue-300">
-                <CheckCircle className="h-4 w-4" />
+              <div className="flex items-center gap-2 text-sm text-zinc-300">
+                <CheckCircle className="h-4 w-4 text-green-400" />
                 <span>Automatic payouts to your bank</span>
               </div>
             </div>
-            <Button className="w-full bg-blue-600 hover:bg-blue-700" onClick={handleConnect} disabled={isConnecting}>
-              {isConnecting ? (
+
+            <Button
+              onClick={handleCreateAccount}
+              disabled={isLoading || !user}
+              className="w-full bg-blue-600 hover:bg-blue-700"
+            >
+              {isLoading ? (
                 <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
                   Creating Account...
                 </>
               ) : (
                 <>
-                  <ExternalLink className="h-4 w-4 mr-2" />
+                  <ExternalLink className="mr-2 h-4 w-4" />
                   Create Stripe Account
                 </>
               )}
             </Button>
-            <p className="text-xs text-blue-300 text-center">You'll be redirected to Stripe to complete setup</p>
+            <p className="text-xs text-zinc-500 text-center">You'll be redirected to Stripe to complete setup</p>
           </CardContent>
         </Card>
 
-        {/* Refactored Green Box - Already Have Account */}
-        <Card className="bg-gradient-to-br from-green-900/20 to-green-800/10 border-green-800/50">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Link className="h-5 w-5 text-green-400" />
-              Already Have a Stripe Account?
-            </CardTitle>
+        {/* Connect Existing Account */}
+        <Card className="bg-zinc-900/60 border-zinc-800/50 hover:border-green-500/50 transition-colors">
+          <CardHeader className="pb-4">
+            <div className="flex items-center gap-2 mb-2">
+              <div className="p-2 bg-green-500/10 rounded-lg">
+                <Shield className="h-5 w-5 text-green-400" />
+              </div>
+              <CardTitle className="text-white">Already Have a Stripe Account?</CardTitle>
+            </div>
             <CardDescription>Securely connect your existing Stripe account through Stripe Connect</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <div className="flex items-center gap-2 text-sm text-green-300">
-                <CheckCircle className="h-4 w-4" />
+            <div className="space-y-3">
+              <div className="flex items-center gap-2 text-sm text-zinc-300">
+                <CheckCircle className="h-4 w-4 text-green-400" />
                 <span>Secure OAuth connection</span>
               </div>
-              <div className="flex items-center gap-2 text-sm text-green-300">
-                <CheckCircle className="h-4 w-4" />
+              <div className="flex items-center gap-2 text-sm text-zinc-300">
+                <CheckCircle className="h-4 w-4 text-green-400" />
                 <span>No manual account IDs needed</span>
               </div>
-              <div className="flex items-center gap-2 text-sm text-green-300">
-                <CheckCircle className="h-4 w-4" />
+              <div className="flex items-center gap-2 text-sm text-zinc-300">
+                <CheckCircle className="h-4 w-4 text-green-400" />
                 <span>Stripe handles account verification</span>
               </div>
             </div>
 
-            {error && (
-              <Alert className="border-red-500 bg-red-500/10">
-                <AlertCircle className="h-4 w-4 text-red-400" />
-                <AlertDescription className="text-red-300">{error}</AlertDescription>
-              </Alert>
+            {existingStatus?.accountId && (
+              <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+                <div className="flex items-center gap-2 text-red-800">
+                  <AlertCircle className="h-4 w-4" />
+                  <span className="text-sm font-medium">Failed to create Stripe account</span>
+                </div>
+              </div>
             )}
 
-            <Button onClick={handleConnect} disabled={isConnecting} className="w-full bg-green-600 hover:bg-green-700">
-              {isConnecting ? (
+            <Button
+              onClick={handleConnectExisting}
+              disabled={isLoading || !user}
+              className="w-full bg-green-600 hover:bg-green-700"
+            >
+              {isLoading ? (
                 <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
                   Connecting...
                 </>
               ) : (
                 <>
-                  <Link className="h-4 w-4 mr-2" />
+                  <ExternalLink className="mr-2 h-4 w-4" />
                   Connect with Stripe
                 </>
               )}
             </Button>
-            <p className="text-xs text-green-300 text-center">
+            <p className="text-xs text-zinc-500 text-center">
               Stripe will detect your existing account and connect it securely
             </p>
           </CardContent>
         </Card>
       </div>
 
-      {/* Help Section */}
+      {/* How It Works */}
       <Card className="bg-zinc-900/60 border-zinc-800/50">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Info className="h-5 w-5 text-blue-400" />
+          <CardTitle className="text-white flex items-center gap-2">
+            <Globe className="h-5 w-5 text-blue-400" />
             How It Works
           </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <h3 className="font-medium text-white mb-2">New to Stripe?</h3>
-              <ol className="list-decimal list-inside text-sm text-zinc-400 space-y-1">
-                <li>Click "Create Stripe Account"</li>
-                <li>You'll be redirected to Stripe's secure setup</li>
-                <li>Fill out your business information</li>
-                <li>Verify your identity and bank details</li>
-                <li>Return here automatically when complete</li>
-              </ol>
-            </div>
-            <div>
-              <h3 className="font-medium text-white mb-2">Already Have Stripe?</h3>
-              <ol className="list-decimal list-inside text-sm text-zinc-400 space-y-1">
-                <li>Click "Connect with Stripe"</li>
-                <li>You'll be redirected to Stripe Connect</li>
-                <li>Log into your existing Stripe account</li>
-                <li>Authorize MassClip to connect</li>
-                <li>Return here with your account connected</li>
-              </ol>
-            </div>
-          </div>
-
-          <div className="bg-blue-900/20 border border-blue-800/50 rounded-lg p-4">
-            <div className="flex items-start gap-3">
-              <Info className="h-5 w-5 text-blue-400 mt-0.5 flex-shrink-0" />
-              <div className="text-sm text-blue-300">
-                <p className="font-medium mb-1">Both options are secure</p>
-                <p>
-                  Whether you're creating a new account or connecting an existing one, Stripe handles all the security
-                  and verification. You'll never need to manually enter account IDs or API keys.
-                </p>
+        <CardContent>
+          <div className="grid md:grid-cols-3 gap-6">
+            <div className="text-center space-y-2">
+              <div className="p-3 bg-blue-500/10 rounded-lg w-fit mx-auto">
+                <CreditCard className="h-6 w-6 text-blue-400" />
               </div>
+              <h3 className="font-medium text-white">Connect Account</h3>
+              <p className="text-sm text-zinc-400">Link your Stripe account securely through our platform</p>
+            </div>
+            <div className="text-center space-y-2">
+              <div className="p-3 bg-green-500/10 rounded-lg w-fit mx-auto">
+                <DollarSign className="h-6 w-6 text-green-400" />
+              </div>
+              <h3 className="font-medium text-white">Start Earning</h3>
+              <p className="text-sm text-zinc-400">Customers can purchase your content with secure payments</p>
+            </div>
+            <div className="text-center space-y-2">
+              <div className="p-3 bg-purple-500/10 rounded-lg w-fit mx-auto">
+                <TrendingUp className="h-6 w-6 text-purple-400" />
+              </div>
+              <h3 className="font-medium text-white">Get Paid</h3>
+              <p className="text-sm text-zinc-400">Receive automatic payouts to your bank account</p>
             </div>
           </div>
         </CardContent>
       </Card>
+
+      {error && (
+        <Card className="bg-red-900/20 border-red-800/50">
+          <CardContent className="pt-6">
+            <div className="flex items-center gap-2 text-red-400">
+              <AlertCircle className="h-4 w-4" />
+              <span className="font-medium">Connection Error</span>
+            </div>
+            <p className="text-sm text-red-300 mt-1">{error}</p>
+          </CardContent>
+        </Card>
+      )}
     </div>
   )
 }

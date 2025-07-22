@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from "react"
 import { useAuth } from "@/contexts/auth-context"
 
 interface ConnectionStatus {
-  isConnected: boolean
+  connected: boolean
   accountId: string | null
   businessType: "individual" | "company" | null
   capabilities: {
@@ -15,6 +15,13 @@ interface ConnectionStatus {
     eventually_due: string[]
     past_due: string[]
   } | null
+  account: {
+    country: string
+    email: string
+    type: string
+    businessType: string
+  } | null
+  message: string
 }
 
 export function useStripeConnectionCheck() {
@@ -23,7 +30,7 @@ export function useStripeConnectionCheck() {
   const [loading, setLoading] = useState(true)
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus | null>(null)
 
-  const checkStatus = useCallback(async () => {
+  const checkConnection = useCallback(async () => {
     if (!user) {
       setLoading(false)
       return
@@ -43,36 +50,29 @@ export function useStripeConnectionCheck() {
 
       if (response.ok) {
         const data = await response.json()
-        const status: ConnectionStatus = {
-          isConnected: data.connected,
-          accountId: data.accountId,
-          businessType: data.businessType,
-          capabilities: data.capabilities,
-        }
-
-        setConnectionStatus(status)
+        setConnectionStatus(data)
         setIsConnected(data.connected && data.capabilities?.charges_enabled && data.capabilities?.payouts_enabled)
       } else {
-        // If there's an error, assume not connected
-        setConnectionStatus(null)
+        console.error("Failed to check connection status:", response.status)
         setIsConnected(false)
+        setConnectionStatus(null)
       }
     } catch (error) {
       console.error("Error checking connection status:", error)
-      setConnectionStatus(null)
       setIsConnected(false)
+      setConnectionStatus(null)
     } finally {
       setLoading(false)
     }
   }, [user])
 
   useEffect(() => {
-    checkStatus()
-  }, [checkStatus])
+    checkConnection()
+  }, [checkConnection])
 
   const refreshStatus = useCallback(() => {
-    checkStatus()
-  }, [checkStatus])
+    checkConnection()
+  }, [checkConnection])
 
   return {
     isConnected,

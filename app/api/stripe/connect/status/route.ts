@@ -34,6 +34,7 @@ export async function POST(request: NextRequest) {
     const connectedField = isTestMode ? "stripeTestConnected" : "stripeConnected"
 
     const accountId = userData?.[accountIdField]
+    const isConnected = userData?.[connectedField] || false
 
     if (!accountId) {
       console.log(`📭 [Stripe Status] No account ID found for user ${userId}`)
@@ -42,51 +43,68 @@ export async function POST(request: NextRequest) {
         accountId: null,
         businessType: null,
         capabilities: null,
+        account: null,
+        message: "No Stripe account connected",
       })
     }
 
     try {
       // Get account details from Stripe
       const account = await stripe.accounts.retrieve(accountId)
-
       console.log(
         `📊 [Stripe Status] Account ${accountId} - Charges: ${account.charges_enabled}, Payouts: ${account.payouts_enabled}`,
       )
 
-      const isFullyConnected = account.charges_enabled && account.payouts_enabled
+      const capabilities = {
+        charges_enabled: account.charges_enabled || false,
+        payouts_enabled: account.payouts_enabled || false,
+        details_submitted: account.details_submitted || false,
+        currently_due: account.requirements?.currently_due || [],
+        eventually_due: account.requirements?.eventually_due || [],
+        past_due: account.requirements?.past_due || [],
+      }
 
-      // Update local status if it has changed
-      if (isFullyConnected !== userData?.[connectedField]) {
-        await db
-          .collection("users")
-          .doc(userId)
-          .update({
-            [connectedField]: isFullyConnected,
-            [`${accountIdField}BusinessType`]: account.business_type || "individual",
-            [`${accountIdField}Country`]: account.country,
-            [`${accountIdField}LastChecked`]: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-          })
+      const fullyConnected = capabilities.charges_enabled && capabilities.payouts_enabled
+
+      // Update Firestore with latest status
+      await db
+        .collection("users")
+        .doc(userId)
+        .update({
+          [connectedField]: fullyConnected,
+          [`${accountIdField}BusinessType`]: account.business_type || "individual",
+          [`${accountIdField}Country`]: account.country,
+          [`${accountIdField}LastChecked`]: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        })
+
+      let message = "Account connected and ready"
+      if (!fullyConnected) {
+        if (capabilities.details_submitted) {
+          message = "Account under review by Stripe"
+        } else {
+          message = "Account setup incomplete"
+        }
       }
 
       return NextResponse.json({
-        connected: isFullyConnected,
+        connected: fullyConnected,
         accountId: accountId,
         businessType: account.business_type || "individual",
-        capabilities: {
-          charges_enabled: account.charges_enabled,
-          payouts_enabled: account.payouts_enabled,
-          details_submitted: account.details_submitted,
-          currently_due: account.requirements?.currently_due || [],
-          eventually_due: account.requirements?.eventually_due || [],
-          past_due: account.requirements?.past_due || [],
+        capabilities: capabilities,
+        account: {
+          country: account.country,
+          email: account.email,
+          type: account.type,
+          businessType: account.business_type || "individual",
         },
+        message: message,
       })
     } catch (stripeError: any) {
       if (stripeError.code === "resource_missing") {
         console.warn(`⚠️ [Stripe Status] Account ${accountId} no longer exists, cleaning up`)
 
-        // Clean up the invalid account ID
+        // Clean up invalid account ID
         await db
           .collection("users")
           .doc(userId)
@@ -102,6 +120,8 @@ export async function POST(request: NextRequest) {
           accountId: null,
           businessType: null,
           capabilities: null,
+          account: null,
+          message: "Previous account no longer exists",
         })
       }
 
