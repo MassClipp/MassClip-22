@@ -2,12 +2,16 @@ import { type NextRequest, NextResponse } from "next/server"
 import { db } from "@/lib/firebase-admin"
 import { stripe, isTestMode } from "@/lib/stripe"
 import { getAuth } from "firebase-admin/auth"
+import { getSiteUrl } from "@/lib/url-utils"
 
 export async function POST(request: NextRequest) {
   try {
+    console.log("🔧 [Stripe Onboard] Starting onboarding request")
+
     const { idToken } = await request.json()
 
     if (!idToken) {
+      console.error("❌ [Stripe Onboard] No ID token provided")
       return NextResponse.json({ error: "ID token is required" }, { status: 400 })
     }
 
@@ -15,23 +19,27 @@ export async function POST(request: NextRequest) {
     let decodedToken
     try {
       decodedToken = await getAuth().verifyIdToken(idToken)
+      console.log(`✅ [Stripe Onboard] Token verified for user: ${decodedToken.uid}`)
     } catch (error) {
       console.error("❌ [Stripe Onboard] Invalid ID token:", error)
       return NextResponse.json({ error: "Invalid authentication token" }, { status: 401 })
     }
 
     const userId = decodedToken.uid
-    console.log(`🔧 [Stripe Onboard] Starting onboarding for user: ${userId}`)
+    console.log(`🔧 [Stripe Onboard] Processing onboarding for user: ${userId}`)
 
     // Get user data from Firestore
     const userDoc = await db.collection("users").doc(userId).get()
     if (!userDoc.exists) {
+      console.error(`❌ [Stripe Onboard] User ${userId} not found in Firestore`)
       return NextResponse.json({ error: "User not found" }, { status: 404 })
     }
 
     const userData = userDoc.data()
     const accountIdField = isTestMode ? "stripeTestAccountId" : "stripeAccountId"
     const connectedField = isTestMode ? "stripeTestConnected" : "stripeConnected"
+
+    console.log(`🔍 [Stripe Onboard] Using ${isTestMode ? "TEST" : "LIVE"} mode fields`)
 
     // Check if user already has a connected account
     const existingAccountId = userData?.[accountIdField]
@@ -73,12 +81,15 @@ export async function POST(request: NextRequest) {
         // Account exists but needs completion - generate new onboarding link
         console.log(`🔄 [Stripe Onboard] Account ${existingAccountId} needs completion`)
 
+        const siteUrl = getSiteUrl()
         const accountLink = await stripe.accountLinks.create({
           account: existingAccountId,
-          refresh_url: `${process.env.NEXT_PUBLIC_SITE_URL}/dashboard/earnings?refresh=true`,
-          return_url: `${process.env.NEXT_PUBLIC_SITE_URL}/dashboard/earnings?success=true`,
+          refresh_url: `${siteUrl}/dashboard/earnings?refresh=true`,
+          return_url: `${siteUrl}/dashboard/earnings?success=true`,
           type: "account_onboarding",
         })
+
+        console.log(`🔗 [Stripe Onboard] Created refresh onboarding link`)
 
         return NextResponse.json({
           onboardingComplete: false,
@@ -128,7 +139,6 @@ export async function POST(request: NextRequest) {
           card_payments: { requested: true },
           transfers: { requested: true },
         },
-        // Let Stripe handle business_type selection during onboarding
         metadata: {
           userId: userId,
           platform: "massclip",
@@ -151,10 +161,11 @@ export async function POST(request: NextRequest) {
         })
 
       // Create account link for onboarding
+      const siteUrl = getSiteUrl()
       const accountLink = await stripe.accountLinks.create({
         account: accountId,
-        refresh_url: `${process.env.NEXT_PUBLIC_SITE_URL}/dashboard/earnings?refresh=true`,
-        return_url: `${process.env.NEXT_PUBLIC_SITE_URL}/dashboard/earnings?success=true`,
+        refresh_url: `${siteUrl}/dashboard/earnings?refresh=true`,
+        return_url: `${siteUrl}/dashboard/earnings?success=true`,
         type: "account_onboarding",
       })
 
