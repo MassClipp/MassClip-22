@@ -47,6 +47,9 @@ const adminApp = initializeFirebaseAdmin()
 export const db: Firestore = getFirestore(adminApp)
 export const auth: Auth = getAuth(adminApp)
 
+// Alias exports expected elsewhere in the app
+export { auth as adminAuth, db as adminDb }
+
 // Recommended for better Firestore reliability
 db.settings({ ignoreUndefinedProperties: true })
 
