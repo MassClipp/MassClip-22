@@ -12,6 +12,8 @@ export const stripe = new Stripe(secretKey, {
   typescript: true,
 })
 
+export default stripe
+
 // Determine if we're in test mode based on the key and environment
 export const isTestMode = secretKey?.startsWith("sk_test_") || false
 export const isLiveMode = !isTestMode

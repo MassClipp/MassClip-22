@@ -19,9 +19,9 @@ interface ConnectionStatus {
 
 export function useStripeConnectionCheck() {
   const { user } = useAuth()
-  const [status, setStatus] = useState<ConnectionStatus | null>(null)
+  const [isConnected, setIsConnected] = useState(false)
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus | null>(null)
 
   const checkStatus = useCallback(async () => {
     if (!user) {
@@ -31,9 +31,8 @@ export function useStripeConnectionCheck() {
 
     try {
       setLoading(true)
-      setError(null)
-
       const idToken = await user.getIdToken()
+
       const response = await fetch("/api/stripe/connect/status", {
         method: "POST",
         headers: {
@@ -42,20 +41,20 @@ export function useStripeConnectionCheck() {
         body: JSON.stringify({ idToken }),
       })
 
-      if (!response.ok) {
-        throw new Error("Failed to check connection status")
-      }
+      if (response.ok) {
+        const data = await response.json()
+        const status: ConnectionStatus = {
+          isConnected: data.connected,
+          accountId: data.accountId,
+          businessType: data.businessType,
+          capabilities: data.capabilities,
+        }
 
-      const data = await response.json()
-      setStatus({
-        isConnected: data.connected,
-        accountId: data.accountId,
-        businessType: data.businessType,
-        capabilities: data.capabilities,
-      })
-    } catch (err: any) {
-      console.error("Error checking Stripe connection:", err)
-      setError(err.message)
+        setConnectionStatus(status)
+        setIsConnected(data.connected && data.capabilities?.charges_enabled && data.capabilities?.payouts_enabled)
+      }
+    } catch (error) {
+      console.error("Error checking connection status:", error)
     } finally {
       setLoading(false)
     }
@@ -70,12 +69,9 @@ export function useStripeConnectionCheck() {
   }, [checkStatus])
 
   return {
-    isConnected: status?.isConnected || false,
-    accountId: status?.accountId,
-    businessType: status?.businessType,
-    capabilities: status?.capabilities,
+    isConnected,
     loading,
-    error,
+    connectionStatus,
     refreshStatus,
   }
 }
