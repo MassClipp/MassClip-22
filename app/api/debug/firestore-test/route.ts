@@ -3,41 +3,31 @@ import { db } from "@/lib/firebase-admin"
 
 export async function GET() {
   try {
-    console.log("🔧 [Test Firestore] Testing Firestore connection...")
+    console.log("🔍 [Firestore Test] Testing Firestore connection...")
 
-    // Test basic read access
-    const testDoc = await db.collection("test").doc("connection-test").get()
-    console.log("✅ [Test Firestore] Read access successful")
+    // Test basic Firestore connection by reading a collection
+    const testCollection = db.collection("users")
+    const snapshot = await testCollection.limit(1).get()
 
-    // Test write access
-    await db.collection("test").doc("connection-test").set({
-      timestamp: new Date().toISOString(),
-      test: "Firestore connection test",
-      status: "success",
-    })
-    console.log("✅ [Test Firestore] Write access successful")
-
-    // Test collection listing
-    const collections = await db.listCollections()
-    const collectionNames = collections.map((col) => col.id)
-    console.log("✅ [Test Firestore] Collections found:", collectionNames)
+    console.log("✅ [Firestore Test] Successfully connected to Firestore")
+    console.log("📊 [Firestore Test] Collection size:", snapshot.size)
 
     return NextResponse.json({
       success: true,
       message: "Firestore connection successful",
-      collections: collectionNames,
-      testDocExists: testDoc.exists,
-      timestamp: new Date().toISOString(),
+      collectionExists: true,
+      documentCount: snapshot.size,
+      projectId: process.env.FIREBASE_PROJECT_ID,
     })
   } catch (error: any) {
-    console.error("❌ [Test Firestore] Firestore connection failed:", error)
+    console.error("❌ [Firestore Test] Connection failed:", error)
 
     return NextResponse.json(
       {
         success: false,
-        message: "Firestore connection failed",
+        message: "Failed to connect to Firestore",
         error: error.message,
-        code: error.code,
+        projectId: process.env.FIREBASE_PROJECT_ID,
       },
       { status: 500 },
     )

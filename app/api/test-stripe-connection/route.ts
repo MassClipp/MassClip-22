@@ -3,52 +3,52 @@ import { stripe } from "@/lib/stripe"
 
 export async function GET() {
   try {
-    console.log("🔧 [Test Stripe] Testing Stripe API connection...")
+    console.log("🔍 [Stripe Test] Testing Stripe API connection...")
 
-    // Test basic Stripe API access by retrieving account information
+    // Test basic Stripe connection
     const account = await stripe.accounts.retrieve()
 
-    console.log("✅ [Test Stripe] Stripe API connection successful")
-    console.log("📊 [Test Stripe] Account details:", {
+    console.log("✅ [Stripe Test] Successfully connected to Stripe")
+    console.log("📊 [Stripe Test] Account details:", {
       id: account.id,
-      business_type: account.business_type,
       country: account.country,
       email: account.email,
+      type: account.type,
     })
 
-    // Test if we can create a price (indicates API keys have proper permissions)
-    const testPrice = await stripe.prices.create({
-      unit_amount: 1999, // $19.99
-      currency: "usd",
-      product_data: {
-        name: "Test Product - API Connection Check",
-      },
-    })
+    // Check if Connect is enabled
+    let connectEnabled = false
+    let connectError = null
 
-    console.log("✅ [Test Stripe] Successfully created test price:", testPrice.id)
+    try {
+      // Try to list connected accounts to test Connect permissions
+      const connectedAccounts = await stripe.accounts.list({ limit: 1 })
+      connectEnabled = true
+      console.log("✅ [Stripe Test] Stripe Connect is enabled")
+    } catch (connectErr: any) {
+      connectEnabled = false
+      connectError = connectErr.message
+      console.warn("⚠️ [Stripe Test] Stripe Connect may not be enabled:", connectErr.message)
+    }
 
     return NextResponse.json({
-      success: true,
       connected: true,
       message: "Stripe connection successful",
       accountId: account.id,
-      priceId: testPrice.id,
-      priceDetails: {
-        id: testPrice.id,
-        active: testPrice.active,
-        currency: testPrice.currency,
-        product: testPrice.product,
-        unitAmount: testPrice.unit_amount,
-      },
+      country: account.country,
+      email: account.email,
+      type: account.type,
+      connectEnabled,
+      connectError,
+      testMode: process.env.STRIPE_SECRET_KEY?.startsWith("sk_test_") || false,
     })
   } catch (error: any) {
-    console.error("❌ [Test Stripe] Stripe connection failed:", error)
+    console.error("❌ [Stripe Test] Connection failed:", error)
 
     return NextResponse.json(
       {
-        success: false,
         connected: false,
-        message: "Stripe connection failed",
+        message: "Failed to connect to Stripe",
         error: error.message,
         code: error.code,
         type: error.type,

@@ -17,6 +17,7 @@ export default function EarningsPage() {
     lastMonth: 0,
     transactions: 0,
   })
+  const [earningsLoading, setEarningsLoading] = useState(false)
 
   // Handle URL parameters for Stripe onboarding returns
   useEffect(() => {
@@ -45,8 +46,11 @@ export default function EarningsPage() {
   }, [isConnected, user])
 
   const fetchEarnings = async () => {
+    if (!user) return
+
     try {
-      const idToken = await user!.getIdToken()
+      setEarningsLoading(true)
+      const idToken = await user.getIdToken()
       const response = await fetch("/api/dashboard/earnings", {
         headers: {
           Authorization: `Bearer ${idToken}`,
@@ -55,10 +59,19 @@ export default function EarningsPage() {
 
       if (response.ok) {
         const data = await response.json()
-        setEarnings(data)
+        setEarnings({
+          total: data.total || 0,
+          thisMonth: data.thisMonth || 0,
+          lastMonth: data.lastMonth || 0,
+          transactions: data.transactions || 0,
+        })
+      } else {
+        console.error("Failed to fetch earnings:", response.status)
       }
     } catch (error) {
       console.error("Error fetching earnings:", error)
+    } finally {
+      setEarningsLoading(false)
     }
   }
 
@@ -69,7 +82,7 @@ export default function EarningsPage() {
           <Skeleton className="h-8 w-48" />
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             {[...Array(4)].map((_, i) => (
-              <Card key={i}>
+              <Card key={i} className="bg-zinc-900/60 border-zinc-800/50">
                 <CardHeader className="pb-2">
                   <Skeleton className="h-4 w-24" />
                 </CardHeader>
@@ -114,7 +127,11 @@ export default function EarningsPage() {
               <DollarSign className="h-4 w-4 text-green-400" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-white">${earnings.total.toFixed(2)}</div>
+              {earningsLoading ? (
+                <Skeleton className="h-8 w-24" />
+              ) : (
+                <div className="text-2xl font-bold text-white">${(earnings?.total ?? 0).toFixed(2)}</div>
+              )}
               <p className="text-xs text-zinc-400">All time revenue</p>
             </CardContent>
           </Card>
@@ -125,7 +142,11 @@ export default function EarningsPage() {
               <TrendingUp className="h-4 w-4 text-blue-400" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-white">${earnings.thisMonth.toFixed(2)}</div>
+              {earningsLoading ? (
+                <Skeleton className="h-8 w-24" />
+              ) : (
+                <div className="text-2xl font-bold text-white">${(earnings?.thisMonth ?? 0).toFixed(2)}</div>
+              )}
               <p className="text-xs text-zinc-400">Current month earnings</p>
             </CardContent>
           </Card>
@@ -136,7 +157,11 @@ export default function EarningsPage() {
               <TrendingUp className="h-4 w-4 text-purple-400" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-white">${earnings.lastMonth.toFixed(2)}</div>
+              {earningsLoading ? (
+                <Skeleton className="h-8 w-24" />
+              ) : (
+                <div className="text-2xl font-bold text-white">${(earnings?.lastMonth ?? 0).toFixed(2)}</div>
+              )}
               <p className="text-xs text-zinc-400">Previous month earnings</p>
             </CardContent>
           </Card>
@@ -147,7 +172,11 @@ export default function EarningsPage() {
               <CreditCard className="h-4 w-4 text-orange-400" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-white">{earnings.transactions}</div>
+              {earningsLoading ? (
+                <Skeleton className="h-8 w-24" />
+              ) : (
+                <div className="text-2xl font-bold text-white">{earnings?.transactions ?? 0}</div>
+              )}
               <p className="text-xs text-zinc-400">Total sales</p>
             </CardContent>
           </Card>
