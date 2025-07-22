@@ -3,8 +3,6 @@
 import { useState } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import {
   CreditCard,
@@ -46,17 +44,15 @@ export default function StripeConnectionPrompt({
   existingStatus,
 }: StripeConnectionPromptProps) {
   const { user } = useAuth()
-  const [linkingAccount, setLinkingAccount] = useState(false)
-  const [creatingAccount, setCreatingAccount] = useState(false)
-  const [accountId, setAccountId] = useState("")
+  const [isConnecting, setIsConnecting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  // Handle Express account creation (replaces the old "Create New Account" flow)
-  const handleCreateAccount = async () => {
+  // Single handler for both new and existing account connections
+  const handleConnect = async () => {
     if (!user) return
 
     try {
-      setCreatingAccount(true)
+      setIsConnecting(true)
       setError(null)
 
       const idToken = await user.getIdToken()
@@ -85,54 +81,10 @@ export default function StripeConnectionPrompt({
         window.location.href = data.onboardingUrl
       }
     } catch (error: any) {
-      console.error("Error creating account:", error)
+      console.error("Error connecting to Stripe:", error)
       setError(error.message)
     } finally {
-      setCreatingAccount(false)
-    }
-  }
-
-  // Handle existing account linking (now uses proper Express account flow)
-  const handleLinkExistingAccount = async () => {
-    if (!accountId.trim()) {
-      setError("Please enter your Stripe account ID")
-      return
-    }
-
-    if (!accountId.startsWith("acct_")) {
-      setError('Account ID must start with "acct_"')
-      return
-    }
-
-    try {
-      setLinkingAccount(true)
-      setError(null)
-
-      const idToken = await user!.getIdToken()
-
-      const response = await fetch("/api/stripe/connect/link-account", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          idToken,
-          stripeAccountId: accountId.trim(),
-        }),
-      })
-
-      const data = await response.json()
-
-      if (!response.ok) {
-        throw new Error(data.error || "Failed to link account")
-      }
-
-      onConnectionSuccess()
-    } catch (error) {
-      console.error("Error linking account:", error)
-      setError(error instanceof Error ? error.message : "Failed to link account")
-    } finally {
-      setLinkingAccount(false)
+      setIsConnecting(false)
     }
   }
 
@@ -198,12 +150,8 @@ export default function StripeConnectionPrompt({
               </div>
             )}
 
-            <Button
-              onClick={handleCreateAccount}
-              disabled={creatingAccount}
-              className="w-full bg-blue-600 hover:bg-blue-700"
-            >
-              {creatingAccount ? (
+            <Button onClick={handleConnect} disabled={isConnecting} className="w-full bg-blue-600 hover:bg-blue-700">
+              {isConnecting ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                   Loading...
@@ -256,7 +204,7 @@ export default function StripeConnectionPrompt({
 
       {/* Connection Options */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Create New Account - Now uses Express account flow */}
+        {/* Create New Account - Keep as-is but use proper Express account flow */}
         <Card className="bg-gradient-to-br from-blue-900/20 to-blue-800/10 border-blue-800/50">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -280,12 +228,8 @@ export default function StripeConnectionPrompt({
                 <span>Automatic payouts to your bank</span>
               </div>
             </div>
-            <Button
-              className="w-full bg-blue-600 hover:bg-blue-700"
-              onClick={handleCreateAccount}
-              disabled={creatingAccount}
-            >
-              {creatingAccount ? (
+            <Button className="w-full bg-blue-600 hover:bg-blue-700" onClick={handleConnect} disabled={isConnecting}>
+              {isConnecting ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                   Creating Account...
@@ -301,28 +245,29 @@ export default function StripeConnectionPrompt({
           </CardContent>
         </Card>
 
-        {/* Link Existing Account - Keeps manual input for existing accounts */}
+        {/* Refactored Green Box - Already Have Account */}
         <Card className="bg-gradient-to-br from-green-900/20 to-green-800/10 border-green-800/50">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Link className="h-5 w-5 text-green-400" />
-              Link Existing Account
+              Already Have a Stripe Account?
             </CardTitle>
-            <CardDescription>Connect your existing Stripe account</CardDescription>
+            <CardDescription>Securely connect your existing Stripe account through Stripe Connect</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="accountId" className="text-green-300">
-                Stripe Account ID
-              </Label>
-              <Input
-                id="accountId"
-                placeholder="acct_1234567890"
-                value={accountId}
-                onChange={(e) => setAccountId(e.target.value)}
-                className="bg-zinc-800/50 border-green-800/50 focus:border-green-600"
-              />
-              <p className="text-xs text-green-300">Find this in your Stripe Dashboard → Settings → Account</p>
+              <div className="flex items-center gap-2 text-sm text-green-300">
+                <CheckCircle className="h-4 w-4" />
+                <span>Secure OAuth connection</span>
+              </div>
+              <div className="flex items-center gap-2 text-sm text-green-300">
+                <CheckCircle className="h-4 w-4" />
+                <span>No manual account IDs needed</span>
+              </div>
+              <div className="flex items-center gap-2 text-sm text-green-300">
+                <CheckCircle className="h-4 w-4" />
+                <span>Stripe handles account verification</span>
+              </div>
             </div>
 
             {error && (
@@ -332,23 +277,22 @@ export default function StripeConnectionPrompt({
               </Alert>
             )}
 
-            <Button
-              onClick={handleLinkExistingAccount}
-              disabled={linkingAccount || !accountId.trim()}
-              className="w-full bg-green-600 hover:bg-green-700"
-            >
-              {linkingAccount ? (
+            <Button onClick={handleConnect} disabled={isConnecting} className="w-full bg-green-600 hover:bg-green-700">
+              {isConnecting ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Linking Account...
+                  Connecting...
                 </>
               ) : (
                 <>
                   <Link className="h-4 w-4 mr-2" />
-                  Link Account
+                  Connect with Stripe
                 </>
               )}
             </Button>
+            <p className="text-xs text-green-300 text-center">
+              Stripe will detect your existing account and connect it securely
+            </p>
           </CardContent>
         </Card>
       </div>
@@ -358,15 +302,15 @@ export default function StripeConnectionPrompt({
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Info className="h-5 w-5 text-blue-400" />
-            Need Help?
+            How It Works
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
-              <h3 className="font-medium text-white mb-2">Creating a New Account</h3>
+              <h3 className="font-medium text-white mb-2">New to Stripe?</h3>
               <ol className="list-decimal list-inside text-sm text-zinc-400 space-y-1">
-                <li>Click "Create Stripe Account" above</li>
+                <li>Click "Create Stripe Account"</li>
                 <li>You'll be redirected to Stripe's secure setup</li>
                 <li>Fill out your business information</li>
                 <li>Verify your identity and bank details</li>
@@ -374,26 +318,28 @@ export default function StripeConnectionPrompt({
               </ol>
             </div>
             <div>
-              <h3 className="font-medium text-white mb-2">Linking Existing Account</h3>
+              <h3 className="font-medium text-white mb-2">Already Have Stripe?</h3>
               <ol className="list-decimal list-inside text-sm text-zinc-400 space-y-1">
-                <li>Log into your Stripe Dashboard</li>
-                <li>Go to Settings → Account</li>
-                <li>Copy your Account ID (starts with "acct_")</li>
-                <li>Paste it in the form above</li>
-                <li>Note: Only use this if you have an existing Express account</li>
+                <li>Click "Connect with Stripe"</li>
+                <li>You'll be redirected to Stripe Connect</li>
+                <li>Log into your existing Stripe account</li>
+                <li>Authorize MassClip to connect</li>
+                <li>Return here with your account connected</li>
               </ol>
             </div>
           </div>
 
-          <div className="flex justify-center">
-            <Button
-              variant="outline"
-              onClick={() => window.open("https://dashboard.stripe.com/settings/account", "_blank")}
-              className="border-zinc-700 hover:bg-zinc-800"
-            >
-              <ExternalLink className="h-4 w-4 mr-2" />
-              Open Stripe Dashboard
-            </Button>
+          <div className="bg-blue-900/20 border border-blue-800/50 rounded-lg p-4">
+            <div className="flex items-start gap-3">
+              <Info className="h-5 w-5 text-blue-400 mt-0.5 flex-shrink-0" />
+              <div className="text-sm text-blue-300">
+                <p className="font-medium mb-1">Both options are secure</p>
+                <p>
+                  Whether you're creating a new account or connecting an existing one, Stripe handles all the security
+                  and verification. You'll never need to manually enter account IDs or API keys.
+                </p>
+              </div>
+            </div>
           </div>
         </CardContent>
       </Card>
