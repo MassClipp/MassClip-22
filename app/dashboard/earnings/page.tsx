@@ -3,33 +3,72 @@
 import { useState, useEffect } from "react"
 import { useAuth } from "@/contexts/auth-context"
 import { Loader2 } from "lucide-react"
-import { useStripeConnectionCheck } from "@/hooks/use-stripe-connection-check"
 import StripeConnectionPrompt from "@/components/stripe-connection-prompt"
-
-// Import the existing earnings page content
 import EarningsPageContent from "./earnings-content"
+
+interface ConnectionStatus {
+  isConnected: boolean
+  accountId: string | null
+  businessType: "individual" | "company" | null
+  capabilities: {
+    charges_enabled: boolean
+    payouts_enabled: boolean
+    details_submitted: boolean
+    currently_due: string[]
+    eventually_due: string[]
+    past_due: string[]
+  } | null
+}
 
 export default function EarningsPage() {
   const { user, loading: authLoading } = useAuth()
-  const { isConnected, loading: connectionLoading, refreshStatus } = useStripeConnectionCheck()
-  const [showPrompt, setShowPrompt] = useState(false)
+  const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus | null>(null)
+  const [isCheckingConnection, setIsCheckingConnection] = useState(true)
 
   useEffect(() => {
-    // Only show prompt if user is authenticated and not connected
-    if (!authLoading && !connectionLoading && user && !isConnected) {
-      setShowPrompt(true)
-    } else {
-      setShowPrompt(false)
+    if (user && !authLoading) {
+      checkConnectionStatus()
     }
-  }, [user, isConnected, authLoading, connectionLoading])
+  }, [user, authLoading])
+
+  const checkConnectionStatus = async () => {
+    if (!user) return
+
+    try {
+      setIsCheckingConnection(true)
+      const idToken = await user.getIdToken()
+
+      const response = await fetch("/api/stripe/connect/status", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ idToken }),
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        setConnectionStatus({
+          isConnected: data.connected,
+          accountId: data.accountId,
+          businessType: data.businessType,
+          capabilities: data.capabilities,
+        })
+      }
+    } catch (error) {
+      console.error("Error checking connection status:", error)
+    } finally {
+      setIsCheckingConnection(false)
+    }
+  }
 
   const handleConnectionSuccess = () => {
-    setShowPrompt(false)
-    refreshStatus()
+    // Refresh connection status after successful connection
+    checkConnectionStatus()
   }
 
   // Show loading while checking authentication and connection
-  if (authLoading || connectionLoading) {
+  if (authLoading || isCheckingConnection) {
     return (
       <div className="flex items-center justify-center min-h-[calc(100vh-4rem)]">
         <div className="text-center">
@@ -40,17 +79,22 @@ export default function EarningsPage() {
     )
   }
 
-  // Show connection prompt if user is not connected
-  if (showPrompt) {
+  // Show connection prompt if user is not connected or needs to complete setup
+  const needsConnection =
+    !connectionStatus?.isConnected ||
+    !connectionStatus?.capabilities?.charges_enabled ||
+    !connectionStatus?.capabilities?.payouts_enabled
+
+  if (needsConnection) {
     return (
       <div className="min-h-[calc(100vh-4rem)] flex items-center justify-center p-4">
         <div className="w-full max-w-4xl">
-          <StripeConnectionPrompt onConnectionSuccess={handleConnectionSuccess} />
+          <StripeConnectionPrompt onConnectionSuccess={handleConnectionSuccess} existingStatus={connectionStatus} />
         </div>
       </div>
     )
   }
 
-  // Show earnings page if connected
+  // Show earnings page if fully connected
   return <EarningsPageContent />
 }

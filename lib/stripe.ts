@@ -16,7 +16,7 @@ export const stripe = new Stripe(secretKey, {
 export const isTestMode = secretKey?.startsWith("sk_test_") || false
 export const isLiveMode = !isTestMode
 
-console.log(`🔧 [Stripe Config] Mode: ${isLiveMode ? "LIVE" : "TEST"} | Environment: ${process.env.NODE_ENV}`)
+console.log(`🔧 Stripe initialized in ${isTestMode ? "TEST" : "LIVE"} mode`)
 
 /**
  * 25% platform fee – returns fee in cents
