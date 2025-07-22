@@ -34,65 +34,77 @@ export async function POST(request: NextRequest) {
     const accountId = userData?.[accountIdField]
 
     if (!accountId) {
-      return NextResponse.json({ error: "No Stripe account found to refresh" }, { status: 404 })
+      return NextResponse.json({ error: "No Stripe account found" }, { status: 404 })
     }
 
     try {
-      // Verify account still exists
+      // Check if account still exists
       const account = await stripe.accounts.retrieve(accountId)
 
-      // If already fully enabled, no need to refresh
+      // If account is complete, return success
       if (account.charges_enabled && account.payouts_enabled) {
+        console.log(`✅ [Stripe Refresh] Account ${accountId} is now complete`)
+
+        const connectedField = isTestMode ? "stripeTestConnected" : "stripeConnected"
+        await db
+          .collection("users")
+          .doc(userId)
+          .update({
+            [connectedField]: true,
+            [`${accountIdField}BusinessType`]: account.business_type || "individual",
+            [`${accountIdField}Country`]: account.country,
+            [`${accountIdField}LastVerified`]: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          })
+
         return NextResponse.json({
           onboardingComplete: true,
           accountId: accountId,
           businessType: account.business_type || "individual",
-          message: "Account is already fully enabled",
         })
       }
 
-      // Create fresh account link for continuing onboarding
+      // Account needs more setup - create new onboarding link
       const accountLink = await stripe.accountLinks.create({
         account: accountId,
-        refresh_url: `${process.env.NEXT_PUBLIC_SITE_URL}/dashboard/connect-stripe?refresh=true`,
-        return_url: `${process.env.NEXT_PUBLIC_SITE_URL}/dashboard/connect-stripe?success=true`,
+        refresh_url: `${process.env.NEXT_PUBLIC_SITE_URL}/dashboard/earnings?refresh=true`,
+        return_url: `${process.env.NEXT_PUBLIC_SITE_URL}/dashboard/earnings?success=true`,
         type: "account_onboarding",
       })
 
-      console.log(`🔗 [Stripe Refresh] Created refresh link for account ${accountId}`)
+      console.log(`🔗 [Stripe Refresh] Created new onboarding link for account ${accountId}`)
 
       return NextResponse.json({
         onboardingComplete: false,
         onboardingUrl: accountLink.url,
         accountId: accountId,
-        message: "Onboarding link refreshed",
       })
     } catch (stripeError: any) {
       if (stripeError.code === "resource_missing") {
-        // Account was deleted, clean up our records
         console.warn(`⚠️ [Stripe Refresh] Account ${accountId} no longer exists`)
 
+        // Clean up the invalid account
+        const connectedField = isTestMode ? "stripeTestConnected" : "stripeConnected"
         await db
           .collection("users")
           .doc(userId)
           .update({
             [accountIdField]: null,
-            [`${isTestMode ? "stripeTestConnected" : "stripeConnected"}`]: false,
+            [connectedField]: false,
             [`${accountIdField}RemovedAt`]: new Date().toISOString(),
             updatedAt: new Date().toISOString(),
           })
 
         return NextResponse.json(
           {
-            error: "Account no longer exists",
             accountDeleted: true,
-            message: "Please create a new Stripe account",
+            error: "Account no longer exists",
           },
           { status: 404 },
         )
       }
 
-      console.error("❌ [Stripe Refresh] Error refreshing account:", stripeError)
+      console.error("❌ [Stripe Refresh] Error with account:", stripeError)
       return NextResponse.json(
         {
           error: "Failed to refresh onboarding",

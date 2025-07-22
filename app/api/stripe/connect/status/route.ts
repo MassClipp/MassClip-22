@@ -21,6 +21,7 @@ export async function POST(request: NextRequest) {
     }
 
     const userId = decodedToken.uid
+    console.log(`🔍 [Stripe Status] Checking status for user: ${userId}`)
 
     // Get user data from Firestore
     const userDoc = await db.collection("users").doc(userId).get()
@@ -35,74 +36,57 @@ export async function POST(request: NextRequest) {
     const accountId = userData?.[accountIdField]
 
     if (!accountId) {
+      console.log(`📭 [Stripe Status] No account ID found for user ${userId}`)
       return NextResponse.json({
         connected: false,
         accountId: null,
-        capabilities: null,
         businessType: null,
-        message: "No Stripe account found",
+        capabilities: null,
       })
     }
 
     try {
-      // Retrieve account details from Stripe
+      // Get account details from Stripe
       const account = await stripe.accounts.retrieve(accountId)
 
-      const capabilities = {
-        charges_enabled: account.charges_enabled,
-        payouts_enabled: account.payouts_enabled,
-        details_submitted: account.details_submitted,
-        currently_due: account.requirements?.currently_due || [],
-        eventually_due: account.requirements?.eventually_due || [],
-        past_due: account.requirements?.past_due || [],
-      }
-
-      const isFullyEnabled = account.charges_enabled && account.payouts_enabled
-      const businessType = account.business_type || "individual"
-
-      // Update Firestore with current status and business type
-      await db
-        .collection("users")
-        .doc(userId)
-        .update({
-          [connectedField]: isFullyEnabled,
-          [`${accountIdField}BusinessType`]: businessType,
-          [`${accountIdField}Details`]: {
-            country: account.country,
-            email: account.email,
-            type: account.type,
-            businessType: businessType,
-            chargesEnabled: account.charges_enabled,
-            payoutsEnabled: account.payouts_enabled,
-            detailsSubmitted: account.details_submitted,
-          },
-          [`${accountIdField}LastChecked`]: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        })
-
       console.log(
-        `✅ [Stripe Status] Account ${accountId} status: ${isFullyEnabled ? "ENABLED" : "PENDING"}, Business Type: ${businessType}`,
+        `📊 [Stripe Status] Account ${accountId} - Charges: ${account.charges_enabled}, Payouts: ${account.payouts_enabled}`,
       )
 
-      return NextResponse.json({
-        connected: isFullyEnabled,
-        accountId: accountId,
-        capabilities: capabilities,
-        businessType: businessType,
-        account: {
-          country: account.country,
-          email: account.email,
-          type: account.type,
-          businessType: businessType,
-        },
-        message: isFullyEnabled ? "Account fully enabled" : "Account pending completion",
-      })
-    } catch (error: any) {
-      console.error(`❌ [Stripe Status] Failed to retrieve account ${accountId}:`, error)
+      const isFullyConnected = account.charges_enabled && account.payouts_enabled
 
-      // If account doesn't exist, clear it from user data
-      if (error.code === "resource_missing") {
-        console.log(`🧹 [Stripe Status] Cleaning up non-existent account ${accountId}`)
+      // Update local status if it has changed
+      if (isFullyConnected !== userData?.[connectedField]) {
+        await db
+          .collection("users")
+          .doc(userId)
+          .update({
+            [connectedField]: isFullyConnected,
+            [`${accountIdField}BusinessType`]: account.business_type || "individual",
+            [`${accountIdField}Country`]: account.country,
+            [`${accountIdField}LastChecked`]: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          })
+      }
+
+      return NextResponse.json({
+        connected: isFullyConnected,
+        accountId: accountId,
+        businessType: account.business_type || "individual",
+        capabilities: {
+          charges_enabled: account.charges_enabled,
+          payouts_enabled: account.payouts_enabled,
+          details_submitted: account.details_submitted,
+          currently_due: account.requirements?.currently_due || [],
+          eventually_due: account.requirements?.eventually_due || [],
+          past_due: account.requirements?.past_due || [],
+        },
+      })
+    } catch (stripeError: any) {
+      if (stripeError.code === "resource_missing") {
+        console.warn(`⚠️ [Stripe Status] Account ${accountId} no longer exists, cleaning up`)
+
+        // Clean up the invalid account ID
         await db
           .collection("users")
           .doc(userId)
@@ -112,16 +96,23 @@ export async function POST(request: NextRequest) {
             [`${accountIdField}RemovedAt`]: new Date().toISOString(),
             updatedAt: new Date().toISOString(),
           })
+
+        return NextResponse.json({
+          connected: false,
+          accountId: null,
+          businessType: null,
+          capabilities: null,
+        })
       }
 
-      return NextResponse.json({
-        connected: false,
-        accountId: accountId,
-        capabilities: null,
-        businessType: null,
-        error: error.message,
-        message: "Failed to retrieve account status",
-      })
+      console.error("❌ [Stripe Status] Error retrieving account:", stripeError)
+      return NextResponse.json(
+        {
+          error: "Failed to check account status",
+          details: stripeError.message,
+        },
+        { status: 500 },
+      )
     }
   } catch (error: any) {
     console.error("❌ [Stripe Status] Unexpected error:", error)

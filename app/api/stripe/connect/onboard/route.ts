@@ -75,8 +75,8 @@ export async function POST(request: NextRequest) {
 
         const accountLink = await stripe.accountLinks.create({
           account: existingAccountId,
-          refresh_url: `${process.env.NEXT_PUBLIC_SITE_URL}/dashboard/connect-stripe?refresh=true`,
-          return_url: `${process.env.NEXT_PUBLIC_SITE_URL}/dashboard/connect-stripe?success=true`,
+          refresh_url: `${process.env.NEXT_PUBLIC_SITE_URL}/dashboard/earnings?refresh=true`,
+          return_url: `${process.env.NEXT_PUBLIC_SITE_URL}/dashboard/earnings?success=true`,
           type: "account_onboarding",
         })
 
@@ -131,7 +131,7 @@ export async function POST(request: NextRequest) {
         // Let Stripe handle business_type selection during onboarding
         metadata: {
           userId: userId,
-          platform: "your-platform-name",
+          platform: "massclip",
           createdAt: new Date().toISOString(),
         },
       })
@@ -153,8 +153,8 @@ export async function POST(request: NextRequest) {
       // Create account link for onboarding
       const accountLink = await stripe.accountLinks.create({
         account: accountId,
-        refresh_url: `${process.env.NEXT_PUBLIC_SITE_URL}/dashboard/connect-stripe?refresh=true`,
-        return_url: `${process.env.NEXT_PUBLIC_SITE_URL}/dashboard/connect-stripe?success=true`,
+        refresh_url: `${process.env.NEXT_PUBLIC_SITE_URL}/dashboard/earnings?refresh=true`,
+        return_url: `${process.env.NEXT_PUBLIC_SITE_URL}/dashboard/earnings?success=true`,
         type: "account_onboarding",
       })
 

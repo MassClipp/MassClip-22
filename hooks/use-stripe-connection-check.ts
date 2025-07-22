@@ -52,9 +52,15 @@ export function useStripeConnectionCheck() {
 
         setConnectionStatus(status)
         setIsConnected(data.connected && data.capabilities?.charges_enabled && data.capabilities?.payouts_enabled)
+      } else {
+        // If there's an error, assume not connected
+        setConnectionStatus(null)
+        setIsConnected(false)
       }
     } catch (error) {
       console.error("Error checking connection status:", error)
+      setConnectionStatus(null)
+      setIsConnected(false)
     } finally {
       setLoading(false)
     }
