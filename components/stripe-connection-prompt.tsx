@@ -44,85 +44,47 @@ export default function StripeConnectionPrompt({
   existingStatus,
 }: StripeConnectionPromptProps) {
   const { user } = useAuth()
-  const [isCreatingAccount, setIsCreatingAccount] = useState(false)
-  const [isConnectingExisting, setIsConnectingExisting] = useState(false)
+  const [isConnecting, setIsConnecting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  // Handler for creating new Stripe account
-  const handleCreateAccount = async () => {
+  // Single handler for both new and existing account connections
+  const handleConnect = async () => {
     if (!user) return
 
     try {
-      setIsCreatingAccount(true)
+      setIsConnecting(true)
       setError(null)
 
       const idToken = await user.getIdToken()
 
-      const response = await fetch("/api/stripe/create-stripe-account", {
+      const response = await fetch("/api/stripe/connect/onboard", {
         method: "POST",
         headers: {
-          Authorization: `Bearer ${idToken}`,
           "Content-Type": "application/json",
         },
+        body: JSON.stringify({ idToken }),
       })
 
       if (!response.ok) {
         const errorData = await response.json()
-        throw new Error(errorData.error || "Failed to create Stripe account")
+        throw new Error(errorData.error || "Failed to start Stripe Connect onboarding")
       }
 
       const data = await response.json()
 
-      if (data.url) {
-        console.log("🔗 Redirecting to Stripe onboarding:", data.url)
-        window.location.href = data.url
-      } else {
-        throw new Error("No onboarding URL received")
+      if (data.onboardingComplete) {
+        // Account is already complete
+        onConnectionSuccess()
+      } else if (data.onboardingUrl) {
+        // Redirect to Stripe onboarding
+        console.log(`🔗 ${data.resuming ? "Resuming" : "Starting"} Stripe onboarding`)
+        window.location.href = data.onboardingUrl
       }
     } catch (error: any) {
-      console.error("❌ Failed to create Stripe account:", error)
+      console.error("Error connecting to Stripe:", error)
       setError(error.message)
     } finally {
-      setIsCreatingAccount(false)
-    }
-  }
-
-  // Handler for connecting existing Stripe account
-  const handleConnectExisting = async () => {
-    if (!user) return
-
-    try {
-      setIsConnectingExisting(true)
-      setError(null)
-
-      const idToken = await user.getIdToken()
-
-      const response = await fetch("/api/stripe/connect-existing-account", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${idToken}`,
-          "Content-Type": "application/json",
-        },
-      })
-
-      if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.error || "Failed to connect existing account")
-      }
-
-      const data = await response.json()
-
-      if (data.url) {
-        console.log("🔗 Redirecting to Stripe OAuth:", data.url)
-        window.location.href = data.url
-      } else {
-        throw new Error("No OAuth URL received")
-      }
-    } catch (error: any) {
-      console.error("❌ Failed to connect existing account:", error)
-      setError(error.message)
-    } finally {
-      setIsConnectingExisting(false)
+      setIsConnecting(false)
     }
   }
 
@@ -188,12 +150,8 @@ export default function StripeConnectionPrompt({
               </div>
             )}
 
-            <Button
-              onClick={handleCreateAccount}
-              disabled={isCreatingAccount}
-              className="w-full bg-blue-600 hover:bg-blue-700"
-            >
-              {isCreatingAccount ? (
+            <Button onClick={handleConnect} disabled={isConnecting} className="w-full bg-blue-600 hover:bg-blue-700">
+              {isConnecting ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                   Loading...
@@ -244,17 +202,9 @@ export default function StripeConnectionPrompt({
         </div>
       </div>
 
-      {/* Error Display */}
-      {error && (
-        <Alert className="border-red-500 bg-red-500/10">
-          <AlertCircle className="h-4 w-4 text-red-400" />
-          <AlertDescription className="text-red-300">{error}</AlertDescription>
-        </Alert>
-      )}
-
       {/* Connection Options */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Create New Account */}
+        {/* Create New Account - Keep as-is but use proper Express account flow */}
         <Card className="bg-gradient-to-br from-blue-900/20 to-blue-800/10 border-blue-800/50">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -278,12 +228,8 @@ export default function StripeConnectionPrompt({
                 <span>Automatic payouts to your bank</span>
               </div>
             </div>
-            <Button
-              className="w-full bg-blue-600 hover:bg-blue-700"
-              onClick={handleCreateAccount}
-              disabled={isCreatingAccount || isConnectingExisting}
-            >
-              {isCreatingAccount ? (
+            <Button className="w-full bg-blue-600 hover:bg-blue-700" onClick={handleConnect} disabled={isConnecting}>
+              {isConnecting ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                   Creating Account...
@@ -299,7 +245,7 @@ export default function StripeConnectionPrompt({
           </CardContent>
         </Card>
 
-        {/* Connect Existing Account */}
+        {/* Refactored Green Box - Already Have Account */}
         <Card className="bg-gradient-to-br from-green-900/20 to-green-800/10 border-green-800/50">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -324,12 +270,15 @@ export default function StripeConnectionPrompt({
               </div>
             </div>
 
-            <Button
-              onClick={handleConnectExisting}
-              disabled={isCreatingAccount || isConnectingExisting}
-              className="w-full bg-green-600 hover:bg-green-700"
-            >
-              {isConnectingExisting ? (
+            {error && (
+              <Alert className="border-red-500 bg-red-500/10">
+                <AlertCircle className="h-4 w-4 text-red-400" />
+                <AlertDescription className="text-red-300">{error}</AlertDescription>
+              </Alert>
+            )}
+
+            <Button onClick={handleConnect} disabled={isConnecting} className="w-full bg-green-600 hover:bg-green-700">
+              {isConnecting ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                   Connecting...
