@@ -3,6 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import { ExternalLink, CreditCard, DollarSign, Shield } from "lucide-react"
 import { StripeAccountLinker } from "@/components/stripe-account-linker"
+import { StripeAccountStatus } from "@/components/stripe-account-status"
 
 export default function ConnectStripePage() {
   return (
@@ -16,6 +17,21 @@ export default function ConnectStripePage() {
             processing securely and efficiently.
           </p>
         </div>
+
+        {/* Account Status */}
+        <Suspense
+          fallback={
+            <Card>
+              <CardContent className="pt-6">
+                <div className="flex items-center justify-center">
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-gray-900"></div>
+                </div>
+              </CardContent>
+            </Card>
+          }
+        >
+          <StripeAccountStatus />
+        </Suspense>
 
         {/* Benefits */}
         <div className="grid md:grid-cols-3 gap-6">
