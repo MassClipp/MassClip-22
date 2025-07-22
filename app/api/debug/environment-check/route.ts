@@ -1,73 +1,63 @@
 import { NextResponse } from "next/server"
 
 export async function GET() {
-  try {
-    console.log("🔍 [Environment Check] Checking environment variables...")
+  console.log("🔧 [Environment Check] Checking environment variables...")
 
-    const requiredEnvVars = [
-      "STRIPE_SECRET_KEY",
-      "NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY",
-      "FIREBASE_PROJECT_ID",
-      "FIREBASE_CLIENT_EMAIL",
-      "FIREBASE_PRIVATE_KEY",
-      "NEXT_PUBLIC_FIREBASE_API_KEY",
-      "NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN",
-      "NEXT_PUBLIC_FIREBASE_PROJECT_ID",
-      "NEXT_PUBLIC_BASE_URL",
-    ]
+  const requiredEnvVars = [
+    "STRIPE_SECRET_KEY",
+    "NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY",
+    "FIREBASE_PROJECT_ID",
+    "FIREBASE_CLIENT_EMAIL",
+    "FIREBASE_PRIVATE_KEY",
+    "NEXT_PUBLIC_FIREBASE_API_KEY",
+    "NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN",
+    "NEXT_PUBLIC_FIREBASE_PROJECT_ID",
+    "NEXT_PUBLIC_BASE_URL",
+  ]
 
-    const envStatus: Record<string, any> = {}
-    let allPresent = true
+  const envStatus: Record<string, boolean> = {}
+  let allPresent = true
 
-    for (const envVar of requiredEnvVars) {
-      const value = process.env[envVar]
-      const isPresent = !!value
+  requiredEnvVars.forEach((varName) => {
+    const value = process.env[varName]
+    const isPresent = !!value && value.trim().length > 0
+    envStatus[varName] = isPresent
 
-      if (!isPresent) {
-        allPresent = false
-      }
-
-      envStatus[envVar] = {
-        present: isPresent,
-        hasValue: isPresent && value.length > 0,
-        // Only show first/last few characters for security
-        preview: isPresent ? `${value.substring(0, 4)}...${value.substring(value.length - 4)}` : null,
-        length: isPresent ? value.length : 0,
-      }
+    if (!isPresent) {
+      allPresent = false
+      console.error(`❌ [Environment Check] Missing: ${varName}`)
+    } else {
+      console.log(`✅ [Environment Check] Found: ${varName}`)
     }
+  })
 
-    // Check for Stripe test vs live mode
-    const stripeKey = process.env.STRIPE_SECRET_KEY
-    const isTestMode = stripeKey?.startsWith("sk_test_")
-    const isLiveMode = stripeKey?.startsWith("sk_live_")
+  // Check for common configuration issues
+  const issues: string[] = []
 
-    console.log(
-      `✅ [Environment Check] Found ${Object.keys(envStatus).filter((k) => envStatus[k].present).length}/${requiredEnvVars.length} required variables`,
-    )
-
-    return NextResponse.json({
-      success: true,
-      allPresent,
-      totalRequired: requiredEnvVars.length,
-      totalPresent: Object.keys(envStatus).filter((k) => envStatus[k].present).length,
-      stripeMode: {
-        isTest: isTestMode,
-        isLive: isLiveMode,
-        detected: isTestMode ? "test" : isLiveMode ? "live" : "unknown",
-      },
-      variables: envStatus,
-      timestamp: new Date().toISOString(),
-    })
-  } catch (error: any) {
-    console.error("❌ [Environment Check] Failed:", error)
-
-    return NextResponse.json(
-      {
-        success: false,
-        error: error.message,
-        allPresent: false,
-      },
-      { status: 500 },
-    )
+  if (process.env.STRIPE_SECRET_KEY && !process.env.STRIPE_SECRET_KEY.startsWith("sk_")) {
+    issues.push("STRIPE_SECRET_KEY should start with 'sk_'")
   }
+
+  if (
+    process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY &&
+    !process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY.startsWith("pk_")
+  ) {
+    issues.push("NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY should start with 'pk_'")
+  }
+
+  const isTestMode = process.env.STRIPE_SECRET_KEY?.includes("_test_")
+  const publishableIsTest = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY?.includes("_test_")
+
+  if (isTestMode !== publishableIsTest) {
+    issues.push("Stripe secret and publishable keys don't match (one is test, one is live)")
+  }
+
+  return NextResponse.json({
+    allPresent,
+    envStatus,
+    issues,
+    isTestMode,
+    timestamp: new Date().toISOString(),
+    nodeEnv: process.env.NODE_ENV,
+  })
 }

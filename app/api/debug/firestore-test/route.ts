@@ -3,63 +3,34 @@ import { db } from "@/lib/firebase-admin"
 
 export async function GET() {
   try {
-    console.log("🔍 [Test Firestore] Testing Firestore connection...")
+    console.log("🔧 [Test Firestore] Testing Firestore connection...")
 
-    // Test basic Firestore connection
-    const testCollection = db.collection("_test")
-    const testDoc = testCollection.doc("connection-test")
+    // Test basic read access
+    const testDoc = await db.collection("test").doc("connection-test").get()
+    console.log("✅ [Test Firestore] Read access successful")
 
-    // Write test data
-    const testData = {
+    // Test write access
+    await db.collection("test").doc("connection-test").set({
       timestamp: new Date().toISOString(),
-      test: true,
-      message: "Firestore connection test",
-      source: "massclip_diagnostic",
-    }
+      test: "Firestore connection test",
+      status: "success",
+    })
+    console.log("✅ [Test Firestore] Write access successful")
 
-    await testDoc.set(testData)
-    console.log("✅ [Test Firestore] Successfully wrote test document")
-
-    // Read test data back
-    const readDoc = await testDoc.get()
-    if (!readDoc.exists) {
-      throw new Error("Test document was not found after writing")
-    }
-
-    const readData = readDoc.data()
-    console.log("✅ [Test Firestore] Successfully read test document")
-
-    // Clean up test document
-    await testDoc.delete()
-    console.log("✅ [Test Firestore] Successfully deleted test document")
-
-    // Test users collection access
-    let usersCollectionTest = null
-    try {
-      const usersSnapshot = await db.collection("users").limit(1).get()
-      usersCollectionTest = {
-        accessible: true,
-        documentCount: usersSnapshot.size,
-        hasDocuments: !usersSnapshot.empty,
-      }
-      console.log("✅ [Test Firestore] Users collection accessible")
-    } catch (usersError: any) {
-      console.warn("⚠️ [Test Firestore] Users collection test failed:", usersError.message)
-      usersCollectionTest = {
-        accessible: false,
-        error: usersError.message,
-      }
-    }
+    // Test collection listing
+    const collections = await db.listCollections()
+    const collectionNames = collections.map((col) => col.id)
+    console.log("✅ [Test Firestore] Collections found:", collectionNames)
 
     return NextResponse.json({
       success: true,
       message: "Firestore connection successful",
-      testData: readData,
-      usersCollection: usersCollectionTest,
+      collections: collectionNames,
+      testDocExists: testDoc.exists,
       timestamp: new Date().toISOString(),
     })
   } catch (error: any) {
-    console.error("❌ [Test Firestore] Connection failed:", error)
+    console.error("❌ [Test Firestore] Firestore connection failed:", error)
 
     return NextResponse.json(
       {
@@ -67,7 +38,6 @@ export async function GET() {
         message: "Firestore connection failed",
         error: error.message,
         code: error.code,
-        details: error.details,
       },
       { status: 500 },
     )

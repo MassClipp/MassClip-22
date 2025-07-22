@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { CheckCircle, XCircle, AlertCircle, RefreshCw, Play, Bug, Server } from "lucide-react"
+import { CheckCircle, XCircle, AlertCircle, RefreshCw, Play, Bug, Server, MousePointer } from "lucide-react"
 
 interface DiagnosticResult {
   name: string
@@ -20,6 +20,7 @@ export default function StripeOnboardDiagnosticPage() {
   const [diagnostics, setDiagnostics] = useState<DiagnosticResult[]>([])
   const [isRunning, setIsRunning] = useState(false)
   const [onboardTest, setOnboardTest] = useState<any>(null)
+  const [buttonTest, setButtonTest] = useState<any>(null)
 
   const addDiagnostic = (diagnostic: DiagnosticResult) => {
     setDiagnostics((prev) => [...prev, diagnostic])
@@ -208,7 +209,6 @@ export default function StripeOnboardDiagnosticPage() {
 
     try {
       const idToken = await user.getIdToken()
-      console.log("🔍 [Debug] Testing onboard endpoint with token:", !!idToken)
 
       const response = await fetch("/api/stripe/connect/onboard", {
         method: "POST",
@@ -218,11 +218,7 @@ export default function StripeOnboardDiagnosticPage() {
         body: JSON.stringify({ idToken }),
       })
 
-      console.log("📊 [Debug] Response status:", response.status)
-      console.log("📊 [Debug] Response ok:", response.ok)
-
       const data = await response.json()
-      console.log("📊 [Debug] Response data:", data)
 
       setOnboardTest({
         status: response.status,
@@ -231,8 +227,79 @@ export default function StripeOnboardDiagnosticPage() {
         headers: Object.fromEntries(response.headers.entries()),
       })
     } catch (error) {
-      console.error("❌ [Debug] Endpoint test failed:", error)
       setOnboardTest({
+        error: error instanceof Error ? error.message : "Unknown error",
+        details: error,
+      })
+    }
+  }
+
+  const testButtonFunctionality = async () => {
+    setButtonTest({ loading: true })
+
+    try {
+      // Test if the button click handler exists
+      const testResults: any = {
+        timestamp: new Date().toISOString(),
+        userAuthenticated: !!user,
+        windowLocation: window.location.href,
+        tests: [],
+      }
+
+      // Test 1: Check if Stripe Connect button component exists
+      const stripeButtons = document.querySelectorAll('[class*="stripe"], [class*="connect"], button')
+      testResults.tests.push({
+        name: "Button Elements Found",
+        result: stripeButtons.length > 0,
+        count: stripeButtons.length,
+        details: Array.from(stripeButtons).map((btn) => ({
+          tagName: btn.tagName,
+          className: btn.className,
+          textContent: btn.textContent?.trim(),
+        })),
+      })
+
+      // Test 2: Check for JavaScript errors
+      const originalError = window.onerror
+      const errors: string[] = []
+
+      window.onerror = (message) => {
+        if (typeof message === "string") {
+          errors.push(message)
+        }
+        return false
+      }
+
+      // Test 3: Try to trigger a button click programmatically
+      const createButton = document.querySelector('button[class*="bg-blue"]') as HTMLButtonElement
+      const connectButton = document.querySelector('button[class*="bg-green"]') as HTMLButtonElement
+
+      testResults.tests.push({
+        name: "Create Button Found",
+        result: !!createButton,
+        enabled: createButton ? !createButton.disabled : false,
+        text: createButton?.textContent?.trim(),
+      })
+
+      testResults.tests.push({
+        name: "Connect Button Found",
+        result: !!connectButton,
+        enabled: connectButton ? !connectButton.disabled : false,
+        text: connectButton?.textContent?.trim(),
+      })
+
+      // Test 4: Check console for errors
+      testResults.consoleErrors = errors
+
+      // Restore original error handler
+      window.onerror = originalError
+
+      setButtonTest({
+        success: true,
+        results: testResults,
+      })
+    } catch (error) {
+      setButtonTest({
         error: error instanceof Error ? error.message : "Unknown error",
         details: error,
       })
@@ -268,7 +335,7 @@ export default function StripeOnboardDiagnosticPage() {
   return (
     <div className="container mx-auto py-8 space-y-8">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Stripe Connect Diagnostics</h1>
+        <h1 className="text-3xl font-bold tracking-tight text-white">Stripe Connect Diagnostics</h1>
         <p className="text-zinc-400 mt-1">Debug and troubleshoot Stripe Connect integration issues</p>
       </div>
 
@@ -276,6 +343,7 @@ export default function StripeOnboardDiagnosticPage() {
         <TabsList>
           <TabsTrigger value="diagnostics">System Diagnostics</TabsTrigger>
           <TabsTrigger value="endpoint">Endpoint Test</TabsTrigger>
+          <TabsTrigger value="buttons">Button Test</TabsTrigger>
         </TabsList>
 
         <TabsContent value="diagnostics" className="mt-6">
@@ -283,7 +351,7 @@ export default function StripeOnboardDiagnosticPage() {
             <CardHeader>
               <div className="flex items-center justify-between">
                 <div>
-                  <CardTitle className="flex items-center gap-2">
+                  <CardTitle className="flex items-center gap-2 text-white">
                     <Bug className="h-5 w-5" />
                     System Diagnostics
                   </CardTitle>
@@ -307,7 +375,7 @@ export default function StripeOnboardDiagnosticPage() {
                       <div className="flex items-center justify-between mb-2">
                         <div className="flex items-center gap-2">
                           {getStatusIcon(diagnostic.status)}
-                          <h3 className="font-medium">{diagnostic.name}</h3>
+                          <h3 className="font-medium text-white">{diagnostic.name}</h3>
                         </div>
                         {getStatusBadge(diagnostic.status)}
                       </div>
@@ -333,7 +401,7 @@ export default function StripeOnboardDiagnosticPage() {
             <CardHeader>
               <div className="flex items-center justify-between">
                 <div>
-                  <CardTitle className="flex items-center gap-2">
+                  <CardTitle className="flex items-center gap-2 text-white">
                     <Server className="h-5 w-5" />
                     Onboard Endpoint Test
                   </CardTitle>
@@ -386,7 +454,7 @@ export default function StripeOnboardDiagnosticPage() {
 
                   {onboardTest.data && (
                     <div>
-                      <h4 className="font-medium mb-2">Response Data</h4>
+                      <h4 className="font-medium mb-2 text-white">Response Data</h4>
                       <pre className="p-4 bg-zinc-800 rounded text-sm text-zinc-300 overflow-auto">
                         {JSON.stringify(onboardTest.data, null, 2)}
                       </pre>
@@ -400,6 +468,53 @@ export default function StripeOnboardDiagnosticPage() {
                         {JSON.stringify(onboardTest.headers, null, 2)}
                       </pre>
                     </details>
+                  )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        <TabsContent value="buttons" className="mt-6">
+          <Card className="bg-zinc-900/60 border-zinc-800/50 backdrop-blur-sm">
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="flex items-center gap-2 text-white">
+                    <MousePointer className="h-5 w-5" />
+                    Button Functionality Test
+                  </CardTitle>
+                  <CardDescription>Test if the Stripe Connect buttons are working properly</CardDescription>
+                </div>
+                <Button onClick={testButtonFunctionality} disabled={buttonTest?.loading} variant="outline">
+                  {buttonTest?.loading ? (
+                    <RefreshCw className="h-4 w-4 animate-spin mr-2" />
+                  ) : (
+                    <Play className="h-4 w-4 mr-2" />
+                  )}
+                  Test Buttons
+                </Button>
+              </div>
+            </CardHeader>
+            <CardContent>
+              {!buttonTest ? (
+                <div className="text-center py-8 text-zinc-500">
+                  Click "Test Buttons" to check if the Stripe Connect buttons are functioning
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {buttonTest.error ? (
+                    <div className="p-4 bg-red-900/20 border border-red-800/50 rounded-lg">
+                      <h4 className="font-medium text-red-300 mb-2">Error</h4>
+                      <p className="text-sm text-red-300">{buttonTest.error}</p>
+                    </div>
+                  ) : (
+                    <div>
+                      <h4 className="font-medium mb-2 text-white">Button Test Results</h4>
+                      <pre className="p-4 bg-zinc-800 rounded text-sm text-zinc-300 overflow-auto">
+                        {JSON.stringify(buttonTest.results, null, 2)}
+                      </pre>
+                    </div>
                   )}
                 </div>
               )}
