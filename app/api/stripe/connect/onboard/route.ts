@@ -9,50 +9,36 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
 
 export async function POST(request: NextRequest) {
   try {
-    console.log("🚀 [Stripe Onboard] Starting onboarding process...")
+    console.log("🆕 [Onboard] Starting request...")
 
     // Get authorization header
     const authHeader = request.headers.get("authorization")
-    console.log("🔑 [Stripe Onboard] Auth header present:", !!authHeader)
+    console.log("🔑 [Onboard] Auth header present:", !!authHeader)
 
     if (!authHeader?.startsWith("Bearer ")) {
-      console.log("❌ [Stripe Onboard] Invalid or missing Bearer token")
-      return NextResponse.json(
-        {
-          error: "Authentication required",
-          details: "No valid Bearer token found in Authorization header",
-        },
-        { status: 401 },
-      )
+      console.log("❌ [Onboard] Invalid or missing Bearer token")
+      return NextResponse.json({ error: "Authentication required" }, { status: 401 })
     }
 
-    // Extract and verify token
+    // Extract token
     const token = authHeader.replace("Bearer ", "")
+    console.log("🎫 [Onboard] Token extracted, length:", token.length)
+
+    // Verify Firebase token
     let decodedToken
     try {
       decodedToken = await auth.verifyIdToken(token)
-      console.log("✅ [Stripe Onboard] Token verified for user:", decodedToken.uid)
+      console.log("✅ [Onboard] Token verified for user:", decodedToken.uid)
     } catch (error: any) {
-      console.error("❌ [Stripe Onboard] Token verification failed:", error.message)
-      return NextResponse.json(
-        {
-          error: "Invalid authentication token",
-          details: error.message,
-        },
-        { status: 401 },
-      )
+      console.error("❌ [Onboard] Token verification failed:", error.message)
+      return NextResponse.json({ error: "Invalid authentication token" }, { status: 401 })
     }
 
     const userId = decodedToken.uid
 
-    // Get user data from Firestore
-    const userDoc = await db.collection("users").doc(userId).get()
-    const userData = userDoc.data()
-
-    // Create Stripe Connect account
     try {
-      console.log("🏦 [Stripe Onboard] Creating Stripe Connect account...")
-
+      // Create Stripe Connect account
+      console.log("🏗️ [Onboard] Creating Stripe Connect account...")
       const account = await stripe.accounts.create({
         type: "express",
         country: "US", // Default to US, can be made configurable
@@ -61,16 +47,21 @@ export async function POST(request: NextRequest) {
           card_payments: { requested: true },
           transfers: { requested: true },
         },
-        business_type: "individual",
-        metadata: {
-          userId: userId,
-          email: decodedToken.email || "",
-        },
       })
 
-      console.log("✅ [Stripe Onboard] Stripe account created:", account.id)
+      console.log("✅ [Onboard] Stripe account created:", account.id)
 
-      // Update user document
+      // Create account link for onboarding
+      const accountLink = await stripe.accountLinks.create({
+        account: account.id,
+        refresh_url: `${process.env.NEXT_PUBLIC_SITE_URL}/dashboard/earnings`,
+        return_url: `${process.env.NEXT_PUBLIC_SITE_URL}/dashboard/earnings`,
+        type: "account_onboarding",
+      })
+
+      console.log("✅ [Onboard] Account link created:", accountLink.url)
+
+      // Update user document in Firestore
       await db.collection("users").doc(userId).set(
         {
           stripeAccountId: account.id,
@@ -82,40 +73,20 @@ export async function POST(request: NextRequest) {
         { merge: true },
       )
 
-      // Create account link for onboarding
-      const accountLink = await stripe.accountLinks.create({
-        account: account.id,
-        refresh_url: `${process.env.NEXT_PUBLIC_SITE_URL}/dashboard/earnings?refresh=true`,
-        return_url: `${process.env.NEXT_PUBLIC_SITE_URL}/dashboard/earnings?success=true`,
-        type: "account_onboarding",
-      })
-
-      console.log("✅ [Stripe Onboard] Account link created")
+      console.log("✅ [Onboard] User document updated successfully")
 
       return NextResponse.json({
         success: true,
         accountId: account.id,
-        onboardingUrl: accountLink.url,
-        message: "Stripe account created successfully",
+        url: accountLink.url,
+        message: "Onboarding link created successfully",
       })
     } catch (stripeError: any) {
-      console.error("❌ [Stripe Onboard] Stripe error:", stripeError.message)
-      return NextResponse.json(
-        {
-          error: "Failed to create Stripe account",
-          details: stripeError.message,
-        },
-        { status: 400 },
-      )
+      console.error("❌ [Onboard] Stripe error:", stripeError.message)
+      return NextResponse.json({ error: "Failed to create Stripe account" }, { status: 500 })
     }
   } catch (error: any) {
-    console.error("❌ [Stripe Onboard] Unexpected error:", error.message)
-    return NextResponse.json(
-      {
-        error: "Internal server error",
-        details: error.message,
-      },
-      { status: 500 },
-    )
+    console.error("❌ [Onboard] Unexpected error:", error.message)
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }

@@ -2,91 +2,55 @@
 
 import { useState, useEffect } from "react"
 import { useAuth } from "@/contexts/auth-context"
-import StripeConnectionPrompt from "@/components/stripe-connection-prompt"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Loader2 } from "lucide-react"
+import { useStripeConnectionCheck } from "@/hooks/use-stripe-connection-check"
+import StripeConnectionPrompt from "@/components/stripe-connection-prompt"
 
-interface OnboardingStatus {
-  connected: boolean
-  onboardingRequired: boolean
-}
+// Import the existing earnings page content
+import EarningsPageContent from "./earnings-content"
 
 export default function EarningsPage() {
-  const { user, loading } = useAuth()
-  const [onboardingStatus, setOnboardingStatus] = useState<OnboardingStatus | null>(null)
-  const [isCheckingStatus, setIsCheckingStatus] = useState(true)
-
-  // Check if user needs onboarding
-  const checkOnboardingStatus = async () => {
-    if (!user) return
-
-    try {
-      const token = await user.getIdToken()
-
-      const response = await fetch("/api/stripe/connect/onboarding-status", {
-        method: "GET",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-      })
-
-      if (response.ok) {
-        const data = await response.json()
-        setOnboardingStatus(data)
-      }
-    } catch (error) {
-      console.error("Error checking onboarding status:", error)
-    } finally {
-      setIsCheckingStatus(false)
-    }
-  }
+  const { user, loading: authLoading } = useAuth()
+  const { isConnected, loading: connectionLoading, refreshStatus } = useStripeConnectionCheck()
+  const [showPrompt, setShowPrompt] = useState(false)
 
   useEffect(() => {
-    if (user && !loading) {
-      checkOnboardingStatus()
+    // Only show prompt if user is authenticated and not connected
+    if (!authLoading && !connectionLoading && user && !isConnected) {
+      setShowPrompt(true)
+    } else {
+      setShowPrompt(false)
     }
-  }, [user, loading])
+  }, [user, isConnected, authLoading, connectionLoading])
 
-  // Show loading state
-  if (loading || isCheckingStatus) {
+  const handleConnectionSuccess = () => {
+    setShowPrompt(false)
+    refreshStatus()
+  }
+
+  // Show loading while checking authentication and connection
+  if (authLoading || connectionLoading) {
     return (
-      <div className="container mx-auto py-8">
-        <div className="flex items-center justify-center">
-          <Loader2 className="h-8 w-8 animate-spin" />
-          <span className="ml-2">Loading earnings dashboard...</span>
+      <div className="flex items-center justify-center min-h-[calc(100vh-4rem)]">
+        <div className="text-center">
+          <Loader2 className="h-8 w-8 text-zinc-500 animate-spin mx-auto mb-4" />
+          <p className="text-zinc-400">{authLoading ? "Authenticating..." : "Checking Stripe connection..."}</p>
         </div>
       </div>
     )
   }
 
-  // Show onboarding if needed
-  if (onboardingStatus && !onboardingStatus.connected) {
-    return <StripeConnectionPrompt onConnectionSuccess={() => checkOnboardingStatus()} />
+  // Show connection prompt if user is not connected
+  if (showPrompt) {
+    return (
+      <div className="min-h-[calc(100vh-4rem)] flex items-center justify-center p-4">
+        <div className="w-full max-w-4xl">
+          <StripeConnectionPrompt onConnectionSuccess={handleConnectionSuccess} />
+        </div>
+      </div>
+    )
   }
 
-  // Show main earnings dashboard
-  return (
-    <div className="container mx-auto py-8">
-      <div className="mb-6">
-        <h1 className="text-3xl font-bold">Earnings Dashboard</h1>
-        <p className="text-muted-foreground">Track your earnings and manage your Stripe account</p>
-      </div>
-
-      <div className="grid gap-6">
-        {/* Earnings Overview - This would be your existing earnings components */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Earnings Overview</CardTitle>
-            <CardDescription>Your earnings and payout information</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <p className="text-muted-foreground">
-              Your earnings dashboard will appear here once you start making sales.
-            </p>
-          </CardContent>
-        </Card>
-      </div>
-    </div>
-  )
+  // Show earnings page if connected
+  return <EarningsPageContent />
 }
