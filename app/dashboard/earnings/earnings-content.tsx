@@ -24,7 +24,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Progress } from "@/components/ui/progress"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
-import { formatDistanceToNow } from "date-fns"
 import { useStripeEarnings } from "@/hooks/use-stripe-earnings"
 import { useToast } from "@/components/ui/use-toast"
 import { useRouter } from "next/navigation"
@@ -93,7 +92,6 @@ export default function EarningsPageContent() {
     try {
       setUnlinking(true)
 
-      // Get the Firebase auth token
       const token = await user.getIdToken()
 
       const response = await fetch("/api/stripe/disconnect", {
@@ -116,7 +114,6 @@ export default function EarningsPageContent() {
         description: result.message || "Your Stripe account has been successfully disconnected.",
       })
 
-      // Refresh the page or redirect to setup
       router.refresh()
     } catch (error: any) {
       console.error("Unlink error:", error)
@@ -175,7 +172,7 @@ export default function EarningsPageContent() {
           (((stats.thisMonthEarnings || 0) - (stats.lastMonthEarnings || 0)) / (stats.lastMonthEarnings || 0)) *
           100
         ).toFixed(1)
-      : 0
+      : "0"
 
   // Generate chart data based on actual earnings
   const chartData = [
@@ -187,6 +184,8 @@ export default function EarningsPageContent() {
     { month: "Dec", earnings: stats.totalEarnings || 0 },
   ]
 
+  const maxEarnings = Math.max(...chartData.map((d) => d.earnings), 1)
+
   return (
     <div className="space-y-8">
       {/* Header */}
@@ -197,7 +196,7 @@ export default function EarningsPageContent() {
           {lastUpdated && (
             <div className="flex items-center gap-2 text-sm text-zinc-500">
               <Clock className="h-4 w-4" />
-              <span>Last updated: {formatDistanceToNow(lastUpdated, { addSuffix: true })}</span>
+              <span>Last updated: {lastUpdated.toLocaleString()}</span>
             </div>
           )}
         </div>
@@ -365,12 +364,12 @@ export default function EarningsPageContent() {
           <CardContent>
             <div className="space-y-4">
               <div className="flex items-end justify-between h-48 px-4 py-2 bg-zinc-800/30 rounded-lg">
-                {chartData.map((item, index) => (
+                {chartData.map((item) => (
                   <div key={item.month} className="flex flex-col items-center gap-2">
                     <div
                       className="w-8 bg-gradient-to-t from-green-600 to-green-400 rounded-t-sm transition-all duration-300 hover:from-green-500 hover:to-green-300"
                       style={{
-                        height: `${Math.max((item.earnings / Math.max(...chartData.map((d) => d.earnings), 1)) * 160, 8)}px`,
+                        height: `${Math.max((item.earnings / maxEarnings) * 160, 8)}px`,
                       }}
                     />
                     <span className="text-xs text-zinc-400 font-medium">{item.month}</span>
