@@ -28,6 +28,8 @@ import { formatDistanceToNow } from "date-fns"
 import { useStripeEarnings } from "@/hooks/use-stripe-earnings"
 import { useToast } from "@/components/ui/use-toast"
 import { useRouter } from "next/navigation"
+import { RecentSales } from "@/components/recent-sales"
+import { SalesForecastCard } from "@/components/sales-forecast-card"
 
 export default function EarningsPageContent() {
   const { user } = useAuth()
@@ -143,17 +145,17 @@ export default function EarningsPageContent() {
   }
 
   const stats = data || {
-    totalEarnings: 353.18,
-    thisMonthEarnings: 0.37,
+    totalEarnings: 0,
+    thisMonthEarnings: 0,
     lastMonthEarnings: 0,
-    last30DaysEarnings: 1.64,
+    last30DaysEarnings: 0,
     pendingPayout: 0,
     availableBalance: 0,
     salesMetrics: {
-      totalSales: 15,
-      thisMonthSales: 1,
-      last30DaysSales: 4,
-      averageTransactionValue: 23.55,
+      totalSales: 0,
+      thisMonthSales: 0,
+      last30DaysSales: 0,
+      averageTransactionValue: 0,
     },
     accountStatus: {
       chargesEnabled: false,
@@ -166,20 +168,23 @@ export default function EarningsPageContent() {
     monthlyBreakdown: [],
   }
 
-  const monthlyGrowth = stats.thisMonthEarnings > stats.lastMonthEarnings
+  const monthlyGrowth = (stats.thisMonthEarnings || 0) > (stats.lastMonthEarnings || 0)
   const growthPercentage =
-    stats.lastMonthEarnings > 0
-      ? (((stats.thisMonthEarnings - stats.lastMonthEarnings) / stats.lastMonthEarnings) * 100).toFixed(1)
+    (stats.lastMonthEarnings || 0) > 0
+      ? (
+          (((stats.thisMonthEarnings || 0) - (stats.lastMonthEarnings || 0)) / (stats.lastMonthEarnings || 0)) *
+          100
+        ).toFixed(1)
       : 0
 
   // Generate chart data based on actual earnings
   const chartData = [
-    { month: "Jul", earnings: Math.max(stats.totalEarnings * 0.1, 0) },
-    { month: "Aug", earnings: Math.max(stats.totalEarnings * 0.3, 0) },
-    { month: "Sep", earnings: Math.max(stats.totalEarnings * 0.5, 0) },
-    { month: "Oct", earnings: Math.max(stats.totalEarnings * 0.7, 0) },
-    { month: "Nov", earnings: Math.max(stats.totalEarnings * 0.9, 0) },
-    { month: "Dec", earnings: stats.totalEarnings },
+    { month: "Jul", earnings: Math.max((stats.totalEarnings || 0) * 0.1, 0) },
+    { month: "Aug", earnings: Math.max((stats.totalEarnings || 0) * 0.3, 0) },
+    { month: "Sep", earnings: Math.max((stats.totalEarnings || 0) * 0.5, 0) },
+    { month: "Oct", earnings: Math.max((stats.totalEarnings || 0) * 0.7, 0) },
+    { month: "Nov", earnings: Math.max((stats.totalEarnings || 0) * 0.9, 0) },
+    { month: "Dec", earnings: stats.totalEarnings || 0 },
   ]
 
   return (
@@ -258,10 +263,10 @@ export default function EarningsPageContent() {
                     All Time
                   </Badge>
                 </div>
-                <p className="text-3xl font-bold text-white">${stats.totalEarnings.toFixed(2)}</p>
+                <p className="text-3xl font-bold text-white">${(stats.totalEarnings || 0).toFixed(2)}</p>
                 <p className="text-xs text-zinc-400 flex items-center gap-1">
                   <BarChart3 className="h-3 w-3" />
-                  {stats.salesMetrics.totalSales} total sales
+                  {stats.salesMetrics?.totalSales || 0} total sales
                 </p>
               </div>
               <div className="p-3 bg-zinc-800/50 rounded-xl">
@@ -288,10 +293,10 @@ export default function EarningsPageContent() {
                     </div>
                   )}
                 </div>
-                <p className="text-3xl font-bold text-white">${stats.thisMonthEarnings.toFixed(2)}</p>
+                <p className="text-3xl font-bold text-white">${(stats.thisMonthEarnings || 0).toFixed(2)}</p>
                 <p className="text-xs text-zinc-400 flex items-center gap-1">
                   <Activity className="h-3 w-3" />
-                  {stats.salesMetrics.thisMonthSales} sales
+                  {stats.salesMetrics?.thisMonthSales || 0} sales
                 </p>
               </div>
               <div className="p-3 bg-zinc-800/50 rounded-xl">
@@ -311,7 +316,7 @@ export default function EarningsPageContent() {
                     Ready
                   </Badge>
                 </div>
-                <p className="text-3xl font-bold text-white">${stats.availableBalance.toFixed(2)}</p>
+                <p className="text-3xl font-bold text-white">${(stats.availableBalance || 0).toFixed(2)}</p>
                 <p className="text-xs text-zinc-400">Ready for payout</p>
               </div>
               <div className="p-3 bg-zinc-800/50 rounded-xl">
@@ -331,7 +336,7 @@ export default function EarningsPageContent() {
                     Processing
                   </Badge>
                 </div>
-                <p className="text-3xl font-bold text-white">${stats.pendingPayout.toFixed(2)}</p>
+                <p className="text-3xl font-bold text-white">${(stats.pendingPayout || 0).toFixed(2)}</p>
                 <p className="text-xs text-zinc-400">In processing</p>
               </div>
               <div className="p-3 bg-zinc-800/50 rounded-xl">
@@ -365,7 +370,7 @@ export default function EarningsPageContent() {
                     <div
                       className="w-8 bg-gradient-to-t from-green-600 to-green-400 rounded-t-sm transition-all duration-300 hover:from-green-500 hover:to-green-300"
                       style={{
-                        height: `${Math.max((item.earnings / Math.max(...chartData.map((d) => d.earnings))) * 160, 8)}px`,
+                        height: `${Math.max((item.earnings / Math.max(...chartData.map((d) => d.earnings), 1)) * 160, 8)}px`,
                       }}
                     />
                     <span className="text-xs text-zinc-400 font-medium">{item.month}</span>
@@ -399,12 +404,12 @@ export default function EarningsPageContent() {
               <div className="flex justify-between items-center">
                 <span className="text-sm text-zinc-300 font-medium">Average Transaction Value</span>
                 <span className="text-lg font-bold text-white">
-                  ${stats.salesMetrics.averageTransactionValue.toFixed(2)}
+                  ${(stats.salesMetrics?.averageTransactionValue || 0).toFixed(2)}
                 </span>
               </div>
               <div className="space-y-2">
                 <Progress
-                  value={Math.min(stats.salesMetrics.averageTransactionValue * 4, 100)}
+                  value={Math.min((stats.salesMetrics?.averageTransactionValue || 0) * 4, 100)}
                   className="h-2 bg-zinc-800"
                 />
                 <p className="text-xs text-zinc-500">Target: $25.00 per transaction</p>
@@ -414,26 +419,38 @@ export default function EarningsPageContent() {
             <div className="space-y-4">
               <div className="flex justify-between items-center">
                 <span className="text-sm text-zinc-300 font-medium">Last 30 Days Sales</span>
-                <span className="text-lg font-bold text-white">{stats.salesMetrics.last30DaysSales}</span>
+                <span className="text-lg font-bold text-white">{stats.salesMetrics?.last30DaysSales || 0}</span>
               </div>
               <div className="space-y-2">
-                <Progress value={Math.min(stats.salesMetrics.last30DaysSales * 5, 100)} className="h-2 bg-zinc-800" />
+                <Progress
+                  value={Math.min((stats.salesMetrics?.last30DaysSales || 0) * 5, 100)}
+                  className="h-2 bg-zinc-800"
+                />
                 <p className="text-xs text-zinc-500">Target: 20 sales per month</p>
               </div>
             </div>
 
             <div className="grid grid-cols-2 gap-4 pt-4">
               <div className="text-center p-4 bg-zinc-800/50 rounded-xl">
-                <p className="text-2xl font-bold text-white">${stats.last30DaysEarnings.toFixed(2)}</p>
+                <p className="text-2xl font-bold text-white">${(stats.last30DaysEarnings || 0).toFixed(2)}</p>
                 <p className="text-xs text-zinc-400 mt-1">Last 30 Days</p>
               </div>
               <div className="text-center p-4 bg-zinc-800/50 rounded-xl">
-                <p className="text-2xl font-bold text-white">{stats.salesMetrics.totalSales}</p>
+                <p className="text-2xl font-bold text-white">{stats.salesMetrics?.totalSales || 0}</p>
                 <p className="text-xs text-zinc-400 mt-1">Total Sales</p>
               </div>
             </div>
           </CardContent>
         </Card>
+      </div>
+
+      {/* Additional Components Row */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        {/* Recent Sales */}
+        <RecentSales sales={stats.recentTransactions || []} isLoading={loading} />
+
+        {/* Sales Forecast */}
+        <SalesForecastCard />
       </div>
 
       {/* Quick Actions */}
