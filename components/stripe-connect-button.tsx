@@ -1,11 +1,10 @@
 "use client"
 
 import React from "react"
-
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { useAuth } from "@/contexts/auth-context"
-import { Loader2, ExternalLink, CheckCircle } from "lucide-react"
+import { Loader2, ExternalLink, CheckCircle, AlertTriangle } from "lucide-react"
 
 interface StripeConnectButtonProps {
   className?: string
@@ -86,10 +85,16 @@ export default function StripeConnectButton({
         setIsConnected(true)
         setAccountStatus(data)
         onStatusChange?.(true)
-        alert("Your Stripe account is already connected and ready to receive payments!")
+
+        // Show business type validation message if available
+        if (data.businessType === "company") {
+          alert("🎉 Your business account is already connected and ready to receive payments!")
+        } else {
+          alert("🎉 Your account is already connected and ready to receive payments!")
+        }
       } else if (data.onboardingUrl) {
         // Redirect to Stripe Connect onboarding
-        console.log("🔗 Redirecting to Stripe onboarding:", data.onboardingUrl)
+        console.log(`🔗 ${data.resuming ? "Resuming" : "Starting"} Stripe onboarding:`, data.onboardingUrl)
         window.location.href = data.onboardingUrl
       }
     } catch (error: any) {
@@ -116,12 +121,21 @@ export default function StripeConnectButton({
       })
 
       if (!response.ok) {
-        throw new Error("Failed to refresh onboarding")
+        const errorData = await response.json()
+        if (errorData.accountDeleted) {
+          // Account was deleted, refresh page to show connect button
+          window.location.reload()
+          return
+        }
+        throw new Error(errorData.error || "Failed to refresh onboarding")
       }
 
       const data = await response.json()
       if (data.onboardingUrl) {
         window.location.href = data.onboardingUrl
+      } else if (data.onboardingComplete) {
+        // Refresh status
+        await checkConnectionStatus()
       }
     } catch (error: any) {
       console.error("Error refreshing onboarding:", error)
@@ -131,6 +145,7 @@ export default function StripeConnectButton({
     }
   }
 
+  // Fully connected account
   if (isConnected && accountStatus?.capabilities?.charges_enabled && accountStatus?.capabilities?.payouts_enabled) {
     return (
       <Button disabled className={className} variant="outline" size={size}>
@@ -140,28 +155,45 @@ export default function StripeConnectButton({
     )
   }
 
-  if (
-    isConnected &&
-    accountStatus &&
-    (!accountStatus.capabilities?.charges_enabled || !accountStatus.capabilities?.payouts_enabled)
-  ) {
+  // Account exists but needs completion or is under review
+  if (accountStatus?.accountId && !isConnected) {
+    const needsAction =
+      accountStatus.capabilities?.currently_due?.length > 0 || accountStatus.capabilities?.past_due?.length > 0
+
+    if (needsAction) {
+      return (
+        <Button
+          onClick={handleRefresh}
+          disabled={isLoading || !user}
+          className={className}
+          variant="outline"
+          size={size}
+        >
+          {isLoading ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Loading...
+            </>
+          ) : (
+            <>
+              <AlertTriangle className="mr-2 h-4 w-4 text-orange-600" />
+              Complete Setup
+            </>
+          )}
+        </Button>
+      )
+    }
+
+    // Under review
     return (
-      <Button onClick={handleRefresh} disabled={isLoading || !user} className={className} variant="outline" size={size}>
-        {isLoading ? (
-          <>
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            Loading...
-          </>
-        ) : (
-          <>
-            <ExternalLink className="mr-2 h-4 w-4" />
-            Complete Setup
-          </>
-        )}
+      <Button disabled className={className} variant="outline" size={size}>
+        <AlertTriangle className="mr-2 h-4 w-4 text-yellow-600" />
+        Under Review
       </Button>
     )
   }
 
+  // No account or needs to start onboarding
   return (
     <Button onClick={handleConnect} disabled={isLoading || !user} className={className} variant={variant} size={size}>
       {isLoading ? (

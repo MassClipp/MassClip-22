@@ -5,11 +5,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { useAuth } from "@/contexts/auth-context"
-import { CheckCircle, AlertCircle, Clock, ExternalLink, RefreshCw } from "lucide-react"
+import { CheckCircle, AlertCircle, Clock, ExternalLink, RefreshCw, Building2, User } from "lucide-react"
 
 interface AccountStatus {
   connected: boolean
   accountId: string | null
+  businessType: "individual" | "company" | null
   capabilities: {
     charges_enabled: boolean
     payouts_enabled: boolean
@@ -22,6 +23,7 @@ interface AccountStatus {
     country: string
     email: string
     type: string
+    businessType: string
   } | null
   message: string
 }
@@ -88,10 +90,27 @@ export function StripeAccountStatus() {
         const data = await response.json()
         if (data.onboardingUrl) {
           window.location.href = data.onboardingUrl
+        } else if (data.accountDeleted) {
+          // Account was deleted, refresh the page to show connect button
+          window.location.reload()
         }
       }
     } catch (error) {
       console.error("Error continuing onboarding:", error)
+    }
+  }
+
+  const getBusinessTypeMessage = (businessType: string | null) => {
+    if (!businessType || businessType === "individual") {
+      return {
+        icon: <User className="h-4 w-4 text-blue-600" />,
+        message: "Running as an individual creator – perfect for getting started quickly!",
+      }
+    }
+
+    return {
+      icon: <Building2 className="h-4 w-4 text-purple-600" />,
+      message: "Looks like you're running a business – great choice for serious creators with higher volume!",
     }
   }
 
@@ -152,6 +171,8 @@ export function StripeAccountStatus() {
     return <Badge variant="destructive">Not Connected</Badge>
   }
 
+  const businessTypeInfo = getBusinessTypeMessage(status.businessType)
+
   return (
     <Card>
       <CardHeader>
@@ -187,6 +208,16 @@ export function StripeAccountStatus() {
                 </div>
               </div>
             )}
+          </div>
+        )}
+
+        {/* Business Type Validation Message */}
+        {status.businessType && status.connected && (
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+            <div className="flex items-center gap-2 text-blue-800">
+              {businessTypeInfo.icon}
+              <p className="text-sm font-medium">{businessTypeInfo.message}</p>
+            </div>
           </div>
         )}
 
