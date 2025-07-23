@@ -1,115 +1,64 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { getSiteUrl } from "@/lib/url-utils"
-import { auth, firestore } from "@/lib/firebase-admin"
+import { getAuth } from "firebase-admin/auth"
+import { db } from "@/lib/firebase-admin"
+import { isTestMode } from "@/lib/stripe"
+
+interface ConnectUrlRequest {
+  idToken: string
+}
 
 export async function POST(request: NextRequest) {
   try {
-    console.log("🔧 [Connect URL] Starting OAuth URL generation...")
-
-    // Parse request body
-    const body = await request.json()
-    const { idToken } = body
+    const { idToken } = (await request.json()) as ConnectUrlRequest
 
     if (!idToken) {
-      console.error("❌ [Connect URL] No ID token provided")
-      return NextResponse.json({ error: "Authentication required" }, { status: 401 })
+      return NextResponse.json({ error: "ID token is required" }, { status: 400 })
     }
 
-    // Verify the Firebase ID token
-    const decodedToken = await auth.verifyIdToken(idToken)
-    const userId = decodedToken.uid
-
-    console.log(`👤 [Connect URL] Authenticated user: ${userId}`)
-
-    // Check all required environment variables
-    const requiredEnvVars = {
-      STRIPE_CLIENT_ID: process.env.STRIPE_CLIENT_ID,
-      NEXT_PUBLIC_BASE_URL: process.env.NEXT_PUBLIC_BASE_URL,
-    }
-
-    const missingVars = Object.entries(requiredEnvVars)
-      .filter(([key, value]) => !value)
-      .map(([key]) => key)
-
-    if (missingVars.length > 0) {
-      console.error("❌ [Connect URL] Missing environment variables:", missingVars)
-      return NextResponse.json(
-        {
-          error: "Stripe Connect not configured",
-          details: `Missing environment variables: ${missingVars.join(", ")}`,
-          missingVars,
-          suggestion: "Add the missing environment variables to your Vercel dashboard",
-        },
-        { status: 500 },
-      )
-    }
-
-    const clientId = requiredEnvVars.STRIPE_CLIENT_ID!
-    console.log(`✅ [Connect URL] Using Stripe Client ID: ${clientId.substring(0, 20)}...`)
-
-    // Get base URL for redirect (with fallback)
-    const baseUrl = requiredEnvVars.NEXT_PUBLIC_BASE_URL || getSiteUrl()
-    console.log(`🌐 [Connect URL] Using base URL: ${baseUrl}`)
-
-    // Generate a secure state parameter
-    const state = `${userId}_${Date.now()}_${Math.random().toString(36).substring(7)}`
-
-    // Store the state in Firestore for verification (with TTL)
-    await firestore
-      .collection("stripe_oauth_states")
-      .doc(state)
-      .set({
-        userId,
-        createdAt: new Date(),
-        expiresAt: new Date(Date.now() + 10 * 60 * 1000), // 10 minutes
-      })
-
-    console.log(`🔐 [Connect URL] Generated state: ${state}`)
-
-    // Build the OAuth URL with all required parameters
-    const oauthUrl = new URL("https://connect.stripe.com/oauth/authorize")
-    oauthUrl.searchParams.set("response_type", "code")
-    oauthUrl.searchParams.set("client_id", clientId)
-    oauthUrl.searchParams.set("scope", "read_write")
-    oauthUrl.searchParams.set("redirect_uri", "https://massclip.pro/api/stripe/connect/oauth-callback")
-    oauthUrl.searchParams.set("state", state)
-
-    const finalUrl = oauthUrl.toString()
-    console.log(`🔗 [Connect URL] Generated OAuth URL: ${finalUrl}`)
-
-    // Validate the generated URL
+    // Verify Firebase ID token
+    let decodedToken
     try {
-      new URL(finalUrl)
-      console.log("✅ [Connect URL] URL validation passed")
-    } catch (urlError) {
-      console.error("❌ [Connect URL] Invalid URL generated:", finalUrl)
-      return NextResponse.json(
-        {
-          error: "Invalid OAuth URL generated",
-          details: "The generated URL is malformed",
-        },
-        { status: 500 },
-      )
+      decodedToken = await getAuth().verifyIdToken(idToken)
+    } catch (error) {
+      console.error("❌ [Connect URL] Invalid ID token:", error)
+      return NextResponse.json({ error: "Invalid authentication token" }, { status: 401 })
     }
 
-    return NextResponse.json({
-      success: true,
-      oauthUrl: finalUrl,
-      state,
-      clientId: clientId.substring(0, 20) + "...", // Partial for debugging
-      baseUrl,
-    })
-  } catch (error: any) {
-    console.error("❌ [Connect URL] Error generating OAuth URL:", error)
+    const userId = decodedToken.uid
+    console.log(`🔗 [Connect URL] Creating connect URL for user: ${userId}`)
 
-    // Provide detailed error information
-    return NextResponse.json(
-      {
-        error: "Failed to generate OAuth URL",
-        details: error.message,
-        type: error.type || "unknown",
-      },
-      { status: 500 },
-    )
+    // Get user data from Firestore
+    const userDoc = await db.collection("users").doc(userId).get()
+    if (!userDoc.exists) {
+      return NextResponse.json({ error: "User not found" }, { status: 404 })
+    }
+
+    const userData = userDoc.data()
+    const accountIdField = isTestMode ? "stripeTestAccountId" : "stripeAccountId"
+    const accountId = userData?.[accountIdField]
+
+    if (!accountId) {
+      return NextResponse.json({ error: "No Stripe account found. Please create an account first." }, { status: 404 })
+    }
+
+    try {
+      // Create Stripe Connect OAuth URL with correct redirect URI
+      const state = `user_${userId}_${Date.now()}`
+      const connectUrl = `https://connect.stripe.com/oauth/authorize?response_type=code&client_id=${process.env.STRIPE_CLIENT_ID}&scope=read_write&redirect_uri=https://massclip.pro/api/stripe/connect/oauth-callback&state=${state}`
+
+      console.log(`✅ [Connect URL] Created connect URL for account ${accountId}`)
+
+      return NextResponse.json({
+        success: true,
+        connectUrl,
+        accountId,
+      })
+    } catch (stripeError: any) {
+      console.error("❌ [Connect URL] Error creating connect URL:", stripeError)
+      return NextResponse.json({ error: "Failed to create connect URL", details: stripeError.message }, { status: 500 })
+    }
+  } catch (error: any) {
+    console.error("❌ [Connect URL] Unexpected error:", error)
+    return NextResponse.json({ error: "Failed to create connect URL", details: error.message }, { status: 500 })
   }
 }

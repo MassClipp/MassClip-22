@@ -1,110 +1,122 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { stripe } from "@/lib/stripe"
-import { getSiteUrl } from "@/lib/url-utils"
+import { getAuth } from "firebase-admin/auth"
 import { db } from "@/lib/firebase-admin"
+import { stripe, isTestMode } from "@/lib/stripe"
+
+interface CreateAccountRequest {
+  idToken: string
+  email?: string
+}
 
 export async function POST(request: NextRequest) {
   try {
-    console.log("🔧 [CreateAccount] Starting Stripe account creation...")
-
-    // Parse request body
-    const body = await request.json()
-    const { idToken } = body
+    const { idToken, email } = (await request.json()) as CreateAccountRequest
 
     if (!idToken) {
-      console.error("❌ [CreateAccount] No ID token provided")
-      return NextResponse.json({ error: "Authentication required" }, { status: 401 })
+      return NextResponse.json({ error: "ID token is required" }, { status: 400 })
     }
 
-    // Verify the Firebase ID token
-    const decodedToken = await db.auth().verifyIdToken(idToken)
-    const userId = decodedToken.uid
+    // Verify Firebase ID token
+    let decodedToken
+    try {
+      decodedToken = await getAuth().verifyIdToken(idToken)
+    } catch (error) {
+      console.error("❌ [Create Account] Invalid ID token:", error)
+      return NextResponse.json({ error: "Invalid authentication token" }, { status: 401 })
+    }
 
-    console.log(`👤 [CreateAccount] Authenticated user: ${userId}`)
+    const userId = decodedToken.uid
+    const userEmail = email || decodedToken.email
+    console.log(`🏦 [Create Account] Creating Stripe account for user: ${userId}`)
 
     // Get user data from Firestore
-    const userDoc = await db.firestore().collection("users").doc(userId).get()
-
+    const userDoc = await db.collection("users").doc(userId).get()
     if (!userDoc.exists) {
-      console.error("❌ [CreateAccount] User document not found")
       return NextResponse.json({ error: "User not found" }, { status: 404 })
     }
 
-    const userData = userDoc.data()!
+    const userData = userDoc.data()
+    const accountIdField = isTestMode ? "stripeTestAccountId" : "stripeAccountId"
+    const connectedField = isTestMode ? "stripeTestConnected" : "stripeConnected"
 
-    // Check if user already has a Stripe account
-    if (userData.stripeAccountId) {
-      console.log(`🏦 [CreateAccount] User already has account: ${userData.stripeAccountId}`)
+    // Check if account already exists
+    const existingAccountId = userData?.[accountIdField]
+    if (existingAccountId) {
+      try {
+        // Verify the account still exists in Stripe
+        const existingAccount = await stripe.accounts.retrieve(existingAccountId)
+        console.log(`ℹ️ [Create Account] Account already exists: ${existingAccountId}`)
 
-      // Create onboarding link for existing account
+        return NextResponse.json({
+          success: true,
+          accountId: existingAccountId,
+          message: "Account already exists",
+          existing: true,
+        })
+      } catch (stripeError: any) {
+        if (stripeError.code === "resource_missing") {
+          console.warn(`⚠️ [Create Account] Existing account ${existingAccountId} no longer exists, creating new one`)
+          // Continue to create new account
+        } else {
+          throw stripeError
+        }
+      }
+    }
+
+    try {
+      // Create new Stripe Connect account
+      const account = await stripe.accounts.create({
+        type: "express",
+        email: userEmail,
+        capabilities: {
+          card_payments: { requested: true },
+          transfers: { requested: true },
+        },
+        business_type: "individual",
+        metadata: {
+          userId: userId,
+          environment: isTestMode ? "test" : "live",
+        },
+      })
+
+      console.log(`✅ [Create Account] Created Stripe account: ${account.id}`)
+
+      // Update user document with new account ID
+      await db
+        .collection("users")
+        .doc(userId)
+        .update({
+          [accountIdField]: account.id,
+          [connectedField]: false,
+          [`${accountIdField}CreatedAt`]: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        })
+
+      // Create onboarding link with correct redirect URI
       const accountLink = await stripe.accountLinks.create({
-        account: userData.stripeAccountId,
-        refresh_url: "https://massclip.pro/dashboard/connect-stripe?refresh=true",
-        return_url: "https://massclip.pro/dashboard/connect-stripe?success=true",
+        account: account.id,
+        refresh_url: `https://massclip.pro/dashboard/connect-stripe?refresh=true`,
+        return_url: `https://massclip.pro/dashboard/connect-stripe?success=true`,
         type: "account_onboarding",
       })
 
+      console.log(`🔗 [Create Account] Created onboarding link for account: ${account.id}`)
+
       return NextResponse.json({
         success: true,
+        accountId: account.id,
         onboardingUrl: accountLink.url,
-        accountId: userData.stripeAccountId,
+        message: "Account created successfully",
       })
+    } catch (stripeError: any) {
+      console.error("❌ [Create Account] Error creating Stripe account:", stripeError)
+      return NextResponse.json(
+        { error: "Failed to create Stripe account", details: stripeError.message },
+        { status: 500 },
+      )
     }
-
-    // Create new Stripe Express account
-    console.log("🏦 [CreateAccount] Creating new Stripe Express account...")
-
-    const account = await stripe.accounts.create({
-      type: "express",
-      country: "US",
-      email: userData.email,
-      capabilities: {
-        card_payments: { requested: true },
-        transfers: { requested: true },
-      },
-      business_profile: {
-        mcc: "5815", // Digital goods
-        product_description: "Digital content and media",
-      },
-    })
-
-    console.log(`✅ [CreateAccount] Created Stripe account: ${account.id}`)
-
-    // Save the account ID to Firestore
-    await db.firestore().collection("users").doc(userId).update({
-      stripeAccountId: account.id,
-      stripeAccountCreatedAt: new Date().toISOString(),
-      stripeAccountStatus: "pending",
-    })
-
-    // Get base URL for redirect
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || getSiteUrl()
-    console.log(`🌐 [CreateAccount] Using base URL: ${baseUrl}`)
-
-    // Create account onboarding link
-    const accountLink = await stripe.accountLinks.create({
-      account: account.id,
-      refresh_url: "https://massclip.pro/dashboard/connect-stripe?refresh=true",
-      return_url: "https://massclip.pro/dashboard/connect-stripe?success=true",
-      type: "account_onboarding",
-    })
-
-    console.log(`🔗 [CreateAccount] Generated onboarding link: ${accountLink.url}`)
-
-    return NextResponse.json({
-      success: true,
-      onboardingUrl: accountLink.url,
-      accountId: account.id,
-    })
   } catch (error: any) {
-    console.error("❌ [CreateAccount] Error creating account:", error)
-    return NextResponse.json(
-      {
-        error: "Failed to create Stripe account",
-        details: error.message,
-        stack: error.stack,
-      },
-      { status: 500 },
-    )
+    console.error("❌ [Create Account] Unexpected error:", error)
+    return NextResponse.json({ error: "Failed to create account", details: error.message }, { status: 500 })
   }
 }
