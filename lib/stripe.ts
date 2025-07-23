@@ -1,27 +1,24 @@
 import Stripe from "stripe"
 
 // Use live keys in production, test keys in development
-const secretKey =
-  process.env.NODE_ENV === "production"
-    ? process.env.STRIPE_SECRET_KEY_LIVE || process.env.STRIPE_SECRET_KEY
-    : process.env.STRIPE_SECRET_KEY_TEST || process.env.STRIPE_SECRET_KEY
+const secretKey = process.env.STRIPE_SECRET_KEY
 
 if (!secretKey) {
-  throw new Error(
-    "STRIPE_SECRET_KEY is missing. Please set STRIPE_SECRET_KEY_LIVE for production or STRIPE_SECRET_KEY_TEST for development",
-  )
+  throw new Error("STRIPE_SECRET_KEY is not set")
 }
 
 export const stripe = new Stripe(secretKey, {
-  apiVersion: "2023-10-16",
+  apiVersion: "2024-06-20",
   typescript: true,
 })
 
-// Determine if we're in test mode based on the key and environment
-export const isTestMode = process.env.NODE_ENV !== "production" || secretKey.startsWith("sk_test_")
-export const isLiveMode = process.env.NODE_ENV === "production" && secretKey.startsWith("sk_live_")
+export default stripe
 
-console.log(`🔧 [Stripe Config] Mode: ${isLiveMode ? "LIVE" : "TEST"} | Environment: ${process.env.NODE_ENV}`)
+// Determine if we're in test mode based on the key and environment
+export const isTestMode = secretKey?.startsWith("sk_test_") || false
+export const isLiveMode = !isTestMode
+
+console.log(`🔧 Stripe initialized in ${isTestMode ? "TEST" : "LIVE"} mode`)
 
 /**
  * 25% platform fee – returns fee in cents
@@ -35,7 +32,7 @@ export function calculateApplicationFee(amountInCents: number) {
  */
 export function createStripeWithAccount(accountId: string) {
   return new Stripe(secretKey, {
-    apiVersion: "2023-10-16",
+    apiVersion: "2024-06-20",
     typescript: true,
     stripeAccount: accountId,
   })
@@ -99,6 +96,14 @@ export function validateStripeEnvironment() {
     `✅ [Stripe] Environment validation passed: ${isProduction ? "PRODUCTION" : "DEVELOPMENT"} with ${hasLiveKey ? "LIVE" : "TEST"} keys`,
   )
   return true
+}
+
+// Helper to get the correct webhook secret
+export const getWebhookSecret = () => {
+  if (isTestMode) {
+    return process.env.STRIPE_WEBHOOK_SECRET_TEST || process.env.STRIPE_WEBHOOK_SECRET
+  }
+  return process.env.STRIPE_WEBHOOK_SECRET_LIVE || process.env.STRIPE_WEBHOOK_SECRET
 }
 
 // Validate on module load

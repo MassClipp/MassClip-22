@@ -1,88 +1,35 @@
-import { type NextRequest, NextResponse } from "next/server"
-import { auth } from "@/lib/firebase-admin"
+import { NextResponse } from "next/server"
 import { db } from "@/lib/firebase-admin"
 
-export const runtime = "nodejs"
-
-export async function POST(request: NextRequest) {
+export async function GET() {
   try {
-    // Verify authentication
-    const authHeader = request.headers.get("authorization")
-    if (!authHeader?.startsWith("Bearer ")) {
-      return NextResponse.json({ error: "Authentication required" }, { status: 401 })
-    }
+    console.log("🔍 [Firestore Test] Testing Firestore connection...")
 
-    const idToken = authHeader.split("Bearer ")[1]
+    // Test basic Firestore connection by reading a collection
+    const testCollection = db.collection("users")
+    const snapshot = await testCollection.limit(1).get()
 
-    let decodedToken
-    try {
-      decodedToken = await auth.verifyIdToken(idToken)
-    } catch (error) {
-      console.error("❌ [Firestore Test] Token verification failed:", error)
-      return NextResponse.json({ error: "Invalid authentication token" }, { status: 401 })
-    }
-
-    const userId = decodedToken.uid
-    const { collection: collectionName, action, userId: targetUserId } = await request.json()
-
-    console.log(`🔍 [Firestore Test] Collection: ${collectionName}, Action: ${action}, User: ${userId}`)
-
-    if (action === "list" && collectionName === "productBoxes") {
-      try {
-        // Test basic Firestore connection
-        const testQuery = db
-          .collection("productBoxes")
-          .where("creatorId", "==", targetUserId || userId)
-          .limit(10)
-        const snapshot = await testQuery.get()
-
-        const results = {
-          connectionWorking: true,
-          queryExecuted: true,
-          documentsFound: snapshot.size,
-          documents: snapshot.docs.map((doc) => ({
-            id: doc.id,
-            exists: doc.exists,
-            data: doc.data(),
-          })),
-        }
-
-        // Test document access methods
-        if (snapshot.size > 0) {
-          const firstDoc = snapshot.docs[0]
-          results.firstDocumentTest = {
-            id: firstDoc.id,
-            existsMethod: firstDoc.exists,
-            dataMethod: !!firstDoc.data(),
-            refPath: firstDoc.ref.path,
-          }
-        }
-
-        return NextResponse.json({
-          success: true,
-          data: results,
-        })
-      } catch (error) {
-        console.error("❌ [Firestore Test] Query error:", error)
-        return NextResponse.json({
-          success: false,
-          error: "Firestore query failed",
-          details: error instanceof Error ? error.message : "Unknown error",
-          errorType: error?.constructor?.name,
-        })
-      }
-    }
+    console.log("✅ [Firestore Test] Successfully connected to Firestore")
+    console.log("📊 [Firestore Test] Collection size:", snapshot.size)
 
     return NextResponse.json({
-      success: false,
-      error: "Unknown test action",
+      success: true,
+      message: "Firestore connection successful",
+      collectionExists: true,
+      documentCount: snapshot.size,
+      projectId: process.env.FIREBASE_PROJECT_ID,
     })
-  } catch (error) {
-    console.error("❌ [Firestore Test] Error:", error)
-    return NextResponse.json({
-      success: false,
-      error: "Firestore test failed",
-      details: error instanceof Error ? error.message : "Unknown error",
-    })
+  } catch (error: any) {
+    console.error("❌ [Firestore Test] Connection failed:", error)
+
+    return NextResponse.json(
+      {
+        success: false,
+        message: "Failed to connect to Firestore",
+        error: error.message,
+        projectId: process.env.FIREBASE_PROJECT_ID,
+      },
+      { status: 500 },
+    )
   }
 }
