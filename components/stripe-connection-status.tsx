@@ -9,6 +9,8 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Loader2, ExternalLink, CheckCircle, AlertCircle, Link } from "lucide-react"
+import { CheckCircle2, Clock, XCircle } from "lucide-react"
+import { cn } from "@/lib/utils"
 
 interface StripeConnectionStatus {
   connected: boolean
@@ -17,7 +19,40 @@ interface StripeConnectionStatus {
   requiresAction: boolean
 }
 
-export default function StripeConnectionStatus() {
+export interface StripeConnectionStatusProps {
+  status?: "connected" | "pending" | "error"
+  className?: string
+}
+
+export function StripeConnectionStatus({ status, className }: StripeConnectionStatusProps) {
+  if (!status) return null
+
+  const map = {
+    connected: {
+      icon: <CheckCircle2 className="text-emerald-500" />,
+      label: "Connected",
+    },
+    pending: {
+      icon: <Clock className="text-amber-500" />,
+      label: "Pending",
+    },
+    error: {
+      icon: <XCircle className="text-destructive" />,
+      label: "Error",
+    },
+  } as const
+
+  const { icon, label } = map[status]
+
+  return (
+    <div className={cn("inline-flex items-center gap-2 text-sm font-medium", className)} data-status={status}>
+      {icon}
+      <span>{label}</span>
+    </div>
+  )
+}
+
+export function StripeConnectionStatusComponent() {
   const [user, loading, error] = useAuthState(auth)
   const [connectionStatus, setConnectionStatus] = useState<StripeConnectionStatus | null>(null)
   const [isLoading, setIsLoading] = useState(false)
@@ -345,3 +380,5 @@ export default function StripeConnectionStatus() {
     </div>
   )
 }
+
+export default StripeConnectionStatusComponent

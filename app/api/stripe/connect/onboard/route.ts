@@ -7,23 +7,6 @@ export async function POST(request: NextRequest) {
   try {
     console.log("🔧 [Onboard] Starting Stripe Connect onboarding flow...")
 
-    // Get the Stripe Connect client ID
-    const clientId = process.env.STRIPE_CLIENT_ID
-
-    if (!clientId) {
-      console.error("❌ [Onboard] STRIPE_CLIENT_ID environment variable is not set")
-      return NextResponse.json(
-        {
-          error: "Stripe Connect not configured",
-          details: "STRIPE_CLIENT_ID environment variable is missing",
-          suggestion: "Add STRIPE_CLIENT_ID to your environment variables",
-        },
-        { status: 500 },
-      )
-    }
-
-    console.log(`✅ [Onboard] Using Stripe Client ID: ${clientId.substring(0, 20)}...`)
-
     // Parse request body
     const body = await request.json()
     const { idToken } = body
@@ -48,11 +31,30 @@ export async function POST(request: NextRequest) {
     }
 
     const userData = userDoc.data()!
-    const accountId = userData.stripeAccountId
+    let accountId = userData.stripeAccountId
 
+    // If no account exists, create one
     if (!accountId) {
-      console.error("❌ [Onboard] No Stripe account ID found for user")
-      return NextResponse.json({ error: "No Stripe account found" }, { status: 404 })
+      console.log("🏦 [Onboard] Creating new Stripe account...")
+
+      const account = await stripe.accounts.create({
+        type: "express",
+        country: "US",
+        email: userData.email,
+        capabilities: {
+          card_payments: { requested: true },
+          transfers: { requested: true },
+        },
+      })
+
+      accountId = account.id
+      console.log(`✅ [Onboard] Created Stripe account: ${accountId}`)
+
+      // Save the account ID to Firestore
+      await db.firestore().collection("users").doc(userId).update({
+        stripeAccountId: accountId,
+        stripeAccountCreatedAt: new Date().toISOString(),
+      })
     }
 
     console.log(`🏦 [Onboard] Using Stripe account: ${accountId}`)
@@ -82,6 +84,7 @@ export async function POST(request: NextRequest) {
       {
         error: "Failed to create onboarding link",
         details: error.message,
+        stack: error.stack,
       },
       { status: 500 },
     )
