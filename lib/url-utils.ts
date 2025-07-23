@@ -99,6 +99,13 @@ export function getWebhookUrl(): string {
 }
 
 /**
+ * Returns the Stripe Connect OAuth callback URL for the current environment
+ */
+export function getStripeConnectCallbackUrl(): string {
+  return `${getSiteUrl()}/api/stripe/connect/oauth-callback`
+}
+
+/**
  * Checks if we're in a preview environment
  */
 export function isPreviewEnvironment(): boolean {

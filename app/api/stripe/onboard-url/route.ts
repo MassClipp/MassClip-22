@@ -1,11 +1,14 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { stripe } from "@/lib/stripe"
-import { getSiteUrl } from "@/lib/url-utils"
+import { getSiteUrl, logEnvironmentInfo } from "@/lib/url-utils"
 import { auth, firestore } from "@/lib/firebase-admin"
 
 export async function POST(request: NextRequest) {
   try {
     console.log("🔧 [Onboard URL] Starting account onboarding URL generation...")
+
+    // Log environment info for debugging
+    logEnvironmentInfo()
 
     // Parse request body
     const body = await request.json()
@@ -26,7 +29,6 @@ export async function POST(request: NextRequest) {
     // Check required environment variables
     const requiredEnvVars = {
       STRIPE_SECRET_KEY: process.env.STRIPE_SECRET_KEY,
-      NEXT_PUBLIC_BASE_URL: process.env.NEXT_PUBLIC_BASE_URL,
     }
 
     const missingVars = Object.entries(requiredEnvVars)
@@ -45,8 +47,8 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Get base URL for redirects
-    const baseUrl = requiredEnvVars.NEXT_PUBLIC_BASE_URL || getSiteUrl()
+    // Get base URL dynamically
+    const baseUrl = getSiteUrl()
     console.log(`🌐 [Onboard URL] Using base URL: ${baseUrl}`)
 
     // Check if user already has a Stripe account
@@ -112,7 +114,7 @@ export async function POST(request: NextRequest) {
       console.log(`💾 [Onboard URL] Stored account ID for user ${userId}`)
     }
 
-    // Create account onboarding link
+    // Create account onboarding link with dynamic URLs
     const accountLink = await stripe.accountLinks.create({
       account: accountId,
       refresh_url: `${baseUrl}/dashboard/earnings?refresh=true`,
