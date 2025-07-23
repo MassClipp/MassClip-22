@@ -48,29 +48,25 @@ export default function StripeConnectionPrompt({
   const [error, setError] = useState<string | null>(null)
   const [debugInfo, setDebugInfo] = useState<string | null>(null)
 
-  // Handler for creating a new Stripe account
-  const handleCreateAccount = async () => {
+  // Centralized API call handler
+  const callStripeAPI = async (endpoint: string, action: string) => {
     if (!user) {
-      console.error("❌ [Create Account] No authenticated user")
+      console.error(`❌ [${action}] No authenticated user`)
       setError("Please log in to continue")
-      return
+      return null
     }
 
     try {
-      setIsConnecting(true)
-      setError(null)
-      setDebugInfo(null)
-
-      console.log("🚀 [Create Account] Starting account creation flow...")
+      console.log(`🚀 [${action}] Starting ${action.toLowerCase()} flow...`)
 
       // Get Firebase ID token
       const idToken = await user.getIdToken()
-      console.log("✅ [Create Account] Got Firebase ID token")
+      console.log(`✅ [${action}] Got Firebase ID token`)
 
-      // Call the create account API
-      console.log("📡 [Create Account] Calling /api/stripe/create-stripe-account...")
+      // Call the API endpoint
+      console.log(`📡 [${action}] Calling ${endpoint}...`)
 
-      const response = await fetch("/api/stripe/create-stripe-account", {
+      const response = await fetch(endpoint, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -79,10 +75,9 @@ export default function StripeConnectionPrompt({
         body: JSON.stringify({ idToken }),
       })
 
-      console.log("📥 [Create Account] Response received:", {
+      console.log(`📥 [${action}] Response received:`, {
         status: response.status,
         statusText: response.statusText,
-        headers: Object.fromEntries(response.headers.entries()),
         url: response.url,
       })
 
@@ -90,7 +85,7 @@ export default function StripeConnectionPrompt({
       const contentType = response.headers.get("content-type")
       if (!contentType || !contentType.includes("application/json")) {
         const textResponse = await response.text()
-        console.error("❌ [Create Account] Non-JSON response:", textResponse)
+        console.error(`❌ [${action}] Non-JSON response:`, textResponse)
         setDebugInfo(
           `Server returned: ${response.status} ${response.statusText}\nContent: ${textResponse.substring(0, 500)}`,
         )
@@ -98,142 +93,93 @@ export default function StripeConnectionPrompt({
       }
 
       const data = await response.json()
-      console.log("📋 [Create Account] Response data:", data)
+      console.log(`📋 [${action}] Response data:`, data)
 
       if (!response.ok) {
-        console.error("❌ [Create Account] API error:", data)
+        console.error(`❌ [${action}] API error:`, data)
         setDebugInfo(`API Error: ${JSON.stringify(data, null, 2)}`)
         throw new Error(data.error || `Server error: ${response.status}`)
       }
 
-      if (data.alreadySetup) {
-        console.log("✅ [Create Account] Account already set up")
-        onConnectionSuccess()
-        return
-      }
-
-      if (!data.url) {
-        console.error("❌ [Create Account] No onboarding URL in response:", data)
-        setDebugInfo(`Response missing URL: ${JSON.stringify(data, null, 2)}`)
-        throw new Error("No onboarding URL received from server")
-      }
-
-      console.log("🔗 [Create Account] Redirecting to onboarding URL:", data.url)
-
-      // Test the URL before redirecting
-      try {
-        const urlTest = new URL(data.url)
-        console.log("✅ [Create Account] URL validation passed:", urlTest.origin)
-      } catch (urlError) {
-        console.error("❌ [Create Account] Invalid URL:", data.url)
-        setDebugInfo(`Invalid URL received: ${data.url}`)
-        throw new Error("Invalid onboarding URL received")
-      }
-
-      // Redirect to Stripe onboarding
-      window.location.href = data.url
+      return data
     } catch (error: any) {
-      console.error("❌ [Create Account] Error:", error)
-      setError(error.message || "Failed to create Stripe account")
+      console.error(`❌ [${action}] Error:`, error)
+      setError(error.message || `Failed to ${action.toLowerCase()}`)
 
       // Add more debug info for network errors
       if (error.name === "TypeError" && error.message.includes("fetch")) {
         setDebugInfo("Network error: Unable to reach the server. Check your internet connection.")
       }
-    } finally {
-      setIsConnecting(false)
+
+      return null
     }
+  }
+
+  // Handler for creating a new Stripe account
+  const handleCreateAccount = async () => {
+    setIsConnecting(true)
+    setError(null)
+    setDebugInfo(null)
+
+    const data = await callStripeAPI("/api/stripe/onboard-url", "Create Account")
+
+    if (data) {
+      if (data.alreadySetup) {
+        console.log("✅ [Create Account] Account already set up")
+        onConnectionSuccess()
+      } else if (data.onboardingUrl) {
+        console.log("🔗 [Create Account] Redirecting to onboarding URL:", data.onboardingUrl)
+
+        // Test the URL before redirecting
+        try {
+          new URL(data.onboardingUrl)
+          console.log("✅ [Create Account] URL validation passed")
+          window.location.href = data.onboardingUrl
+        } catch (urlError) {
+          console.error("❌ [Create Account] Invalid URL:", data.onboardingUrl)
+          setError("Invalid onboarding URL received")
+          setDebugInfo(`Invalid URL: ${data.onboardingUrl}`)
+        }
+      } else {
+        console.error("❌ [Create Account] No onboarding URL in response:", data)
+        setError("No onboarding URL received from server")
+        setDebugInfo(`Response missing URL: ${JSON.stringify(data, null, 2)}`)
+      }
+    }
+
+    setIsConnecting(false)
   }
 
   // Handler for connecting existing account via OAuth
   const handleConnectExisting = async () => {
-    if (!user) {
-      console.error("❌ [Connect Existing] No authenticated user")
-      setError("Please log in to continue")
-      return
-    }
+    setIsConnecting(true)
+    setError(null)
+    setDebugInfo(null)
 
-    try {
-      setIsConnecting(true)
-      setError(null)
-      setDebugInfo(null)
+    const data = await callStripeAPI("/api/stripe/connect-url", "Connect Existing")
 
-      console.log("🚀 [Connect Existing] Starting OAuth connection flow...")
+    if (data) {
+      if (data.oauthUrl) {
+        console.log("🔗 [Connect Existing] Redirecting to OAuth URL:", data.oauthUrl)
 
-      // Get Firebase ID token
-      const idToken = await user.getIdToken()
-      console.log("✅ [Connect Existing] Got Firebase ID token")
-
-      // Call the OAuth API
-      console.log("📡 [Connect Existing] Calling /api/stripe/connect/oauth...")
-
-      const response = await fetch("/api/stripe/connect/oauth", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Accept: "application/json",
-        },
-        body: JSON.stringify({ idToken }),
-      })
-
-      console.log("📥 [Connect Existing] Response received:", {
-        status: response.status,
-        statusText: response.statusText,
-        headers: Object.fromEntries(response.headers.entries()),
-        url: response.url,
-      })
-
-      // Check if response is JSON
-      const contentType = response.headers.get("content-type")
-      if (!contentType || !contentType.includes("application/json")) {
-        const textResponse = await response.text()
-        console.error("❌ [Connect Existing] Non-JSON response:", textResponse)
-        setDebugInfo(
-          `Server returned: ${response.status} ${response.statusText}\nContent: ${textResponse.substring(0, 500)}`,
-        )
-        throw new Error(`Server error: Expected JSON but got ${contentType}`)
-      }
-
-      const data = await response.json()
-      console.log("📋 [Connect Existing] Response data:", data)
-
-      if (!response.ok) {
-        console.error("❌ [Connect Existing] API error:", data)
-        setDebugInfo(`API Error: ${JSON.stringify(data, null, 2)}`)
-        throw new Error(data.error || `Server error: ${response.status}`)
-      }
-
-      if (!data.oauthUrl) {
+        // Test the URL before redirecting
+        try {
+          new URL(data.oauthUrl)
+          console.log("✅ [Connect Existing] URL validation passed")
+          window.location.href = data.oauthUrl
+        } catch (urlError) {
+          console.error("❌ [Connect Existing] Invalid URL:", data.oauthUrl)
+          setError("Invalid OAuth URL received")
+          setDebugInfo(`Invalid URL: ${data.oauthUrl}`)
+        }
+      } else {
         console.error("❌ [Connect Existing] No OAuth URL in response:", data)
+        setError("No OAuth URL received from server")
         setDebugInfo(`Response missing OAuth URL: ${JSON.stringify(data, null, 2)}`)
-        throw new Error("No OAuth URL received from server")
       }
-
-      console.log("🔗 [Connect Existing] Redirecting to OAuth URL:", data.oauthUrl)
-
-      // Test the URL before redirecting
-      try {
-        const urlTest = new URL(data.oauthUrl)
-        console.log("✅ [Connect Existing] URL validation passed:", urlTest.origin)
-      } catch (urlError) {
-        console.error("❌ [Connect Existing] Invalid URL:", data.oauthUrl)
-        setDebugInfo(`Invalid URL received: ${data.oauthUrl}`)
-        throw new Error("Invalid OAuth URL received")
-      }
-
-      // Redirect to Stripe OAuth
-      window.location.href = data.oauthUrl
-    } catch (error: any) {
-      console.error("❌ [Connect Existing] Error:", error)
-      setError(error.message || "Failed to connect Stripe account")
-
-      // Add more debug info for network errors
-      if (error.name === "TypeError" && error.message.includes("fetch")) {
-        setDebugInfo("Network error: Unable to reach the server. Check your internet connection.")
-      }
-    } finally {
-      setIsConnecting(false)
     }
+
+    setIsConnecting(false)
   }
 
   // If account exists but needs completion, show continue setup UI
