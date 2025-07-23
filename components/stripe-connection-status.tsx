@@ -8,6 +8,7 @@ import { CheckCircle, XCircle, Loader2 } from "lucide-react"
 
 interface StripeConnectionStatusProps {
   userId: string
+  onStatusChange?: (status: "checking" | "connected" | "not_connected") => void
 }
 
 interface StripeStatus {
@@ -19,7 +20,7 @@ interface StripeStatus {
   status: string
 }
 
-export function StripeConnectionStatus({ userId }: StripeConnectionStatusProps) {
+export function StripeConnectionStatus({ userId, onStatusChange }: StripeConnectionStatusProps) {
   const [status, setStatus] = useState<StripeStatus | null>(null)
   const [loading, setLoading] = useState(true)
 
@@ -30,6 +31,8 @@ export function StripeConnectionStatus({ userId }: StripeConnectionStatusProps) 
   const checkStatus = async () => {
     try {
       setLoading(true)
+      onStatusChange?.("checking")
+
       const response = await fetch("/api/stripe/connect/status", {
         method: "POST",
         headers: {
@@ -41,9 +44,11 @@ export function StripeConnectionStatus({ userId }: StripeConnectionStatusProps) 
       if (response.ok) {
         const data = await response.json()
         setStatus(data)
+        onStatusChange?.(data.connected ? "connected" : "not_connected")
       }
     } catch (error) {
       console.error("Error checking Stripe status:", error)
+      onStatusChange?.("not_connected")
     } finally {
       setLoading(false)
     }

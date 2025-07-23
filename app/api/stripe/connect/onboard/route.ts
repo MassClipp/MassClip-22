@@ -41,11 +41,11 @@ export async function POST(request: NextRequest) {
       })
     }
 
-    // Create account link for onboarding
+    // Create account link for onboarding - redirect to frontend callback page
     const accountLink = await stripe.accountLinks.create({
       account: accountId,
       refresh_url: `${process.env.NEXT_PUBLIC_SITE_URL}/dashboard/connect-stripe?refresh=true`,
-      return_url: `${process.env.NEXT_PUBLIC_SITE_URL}/api/stripe/connect/oauth-callback?state=${userId}`,
+      return_url: `${process.env.NEXT_PUBLIC_SITE_URL}/dashboard/connect-stripe/callback?state=${userId}`,
       type: "account_onboarding",
     })
 

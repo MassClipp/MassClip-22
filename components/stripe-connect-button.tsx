@@ -2,8 +2,7 @@
 
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
-import { useToast } from "@/hooks/use-toast"
-import { Loader2 } from "lucide-react"
+import { Loader2, CreditCard } from "lucide-react"
 
 interface StripeConnectButtonProps {
   userId: string
@@ -11,12 +10,11 @@ interface StripeConnectButtonProps {
 }
 
 export function StripeConnectButton({ userId, onSuccess }: StripeConnectButtonProps) {
-  const [isLoading, setIsLoading] = useState(false)
-  const { toast } = useToast()
+  const [loading, setLoading] = useState(false)
 
   const handleConnect = async () => {
     try {
-      setIsLoading(true)
+      setLoading(true)
 
       const response = await fetch("/api/stripe/connect/onboard", {
         method: "POST",
@@ -28,37 +26,32 @@ export function StripeConnectButton({ userId, onSuccess }: StripeConnectButtonPr
 
       const data = await response.json()
 
-      if (!response.ok) {
-        throw new Error(data.error || "Failed to create onboarding link")
-      }
-
-      if (data.url) {
+      if (response.ok && data.url) {
         // Redirect to Stripe onboarding
         window.location.href = data.url
       } else {
-        throw new Error("No onboarding URL received")
+        throw new Error(data.error || "Failed to create onboarding link")
       }
     } catch (error) {
       console.error("Error connecting to Stripe:", error)
-      toast({
-        title: "Connection Failed",
-        description: error instanceof Error ? error.message : "Failed to connect to Stripe",
-        variant: "destructive",
-      })
+      alert("Failed to connect to Stripe. Please try again.")
     } finally {
-      setIsLoading(false)
+      setLoading(false)
     }
   }
 
   return (
-    <Button onClick={handleConnect} disabled={isLoading} className="w-full">
-      {isLoading ? (
+    <Button onClick={handleConnect} disabled={loading} className="w-full" size="lg">
+      {loading ? (
         <>
           <Loader2 className="mr-2 h-4 w-4 animate-spin" />
           Connecting...
         </>
       ) : (
-        "Connect Stripe Account"
+        <>
+          <CreditCard className="mr-2 h-4 w-4" />
+          Connect with Stripe
+        </>
       )}
     </Button>
   )
