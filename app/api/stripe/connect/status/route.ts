@@ -50,13 +50,23 @@ export async function POST(request: NextRequest) {
       const account = await stripe.accounts.retrieve(accountId)
 
       console.log(
-        `📊 [Stripe Status] Account ${accountId} - Charges: ${account.charges_enabled}, Payouts: ${account.payouts_enabled}`,
+        `📊 [Stripe Status] Account ${accountId} - Details: ${account.details_submitted}, Charges: ${account.charges_enabled}, Payouts: ${account.payouts_enabled}`,
       )
 
-      const isFullyConnected = account.charges_enabled && account.payouts_enabled
+      // An account is considered fully connected only if:
+      // 1. Details have been submitted
+      // 2. Charges are enabled
+      // 3. Payouts are enabled
+      // 4. No currently due requirements
+      const isFullyConnected =
+        account.details_submitted &&
+        account.charges_enabled &&
+        account.payouts_enabled &&
+        (!account.requirements?.currently_due || account.requirements.currently_due.length === 0)
 
       // Update local status if it has changed
       if (isFullyConnected !== userData?.[connectedField]) {
+        console.log(`🔄 [Stripe Status] Updating connection status for user ${userId}: ${isFullyConnected}`)
         await db
           .collection("users")
           .doc(userId)
@@ -64,6 +74,9 @@ export async function POST(request: NextRequest) {
             [connectedField]: isFullyConnected,
             [`${accountIdField}BusinessType`]: account.business_type || "individual",
             [`${accountIdField}Country`]: account.country,
+            [`${accountIdField}DetailsSubmitted`]: account.details_submitted,
+            [`${accountIdField}ChargesEnabled`]: account.charges_enabled,
+            [`${accountIdField}PayoutsEnabled`]: account.payouts_enabled,
             [`${accountIdField}LastChecked`]: new Date().toISOString(),
             updatedAt: new Date().toISOString(),
           })

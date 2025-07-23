@@ -64,8 +64,10 @@ export default function StripeConnectButton({
       // Get the user's ID token
       const idToken = await user.getIdToken()
 
-      // Call the onboarding API
-      const response = await fetch("/api/stripe/connect/onboard", {
+      // Start the OAuth connection process
+      // This will redirect to Stripe's OAuth flow, which will then redirect back to our callback
+      // The callback will handle account creation and onboarding
+      const response = await fetch("/api/stripe/connect/oauth", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -75,27 +77,17 @@ export default function StripeConnectButton({
 
       if (!response.ok) {
         const errorData = await response.json()
-        throw new Error(errorData.error || "Failed to start Stripe Connect onboarding")
+        throw new Error(errorData.error || "Failed to start Stripe Connect process")
       }
 
       const data = await response.json()
 
-      if (data.onboardingComplete) {
-        // If already onboarded, update status
-        setIsConnected(true)
-        setAccountStatus(data)
-        onStatusChange?.(true)
-
-        // Show business type validation message if available
-        if (data.businessType === "company") {
-          alert("🎉 Your business account is already connected and ready to receive payments!")
-        } else {
-          alert("🎉 Your account is already connected and ready to receive payments!")
-        }
-      } else if (data.onboardingUrl) {
-        // Redirect to Stripe Connect onboarding
-        console.log(`🔗 ${data.resuming ? "Resuming" : "Starting"} Stripe onboarding:`, data.onboardingUrl)
-        window.location.href = data.onboardingUrl
+      if (data.success && data.oauthUrl) {
+        console.log(`🔗 [Connect Button] Redirecting to OAuth flow: ${data.oauthUrl}`)
+        // Redirect to Stripe's OAuth authorization page
+        window.location.href = data.oauthUrl
+      } else {
+        throw new Error("Failed to generate OAuth URL")
       }
     } catch (error: any) {
       console.error("Error connecting to Stripe:", error)
@@ -112,12 +104,13 @@ export default function StripeConnectButton({
       setIsLoading(true)
       const idToken = await user.getIdToken()
 
-      const response = await fetch("/api/stripe/connect/refresh", {
+      // Force refresh the onboarding process
+      const response = await fetch("/api/stripe/connect/onboard", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ idToken }),
+        body: JSON.stringify({ idToken, forceRefresh: true }),
       })
 
       if (!response.ok) {
@@ -132,6 +125,7 @@ export default function StripeConnectButton({
 
       const data = await response.json()
       if (data.onboardingUrl) {
+        console.log(`🔗 [Connect Button] Redirecting to onboarding: ${data.onboardingUrl}`)
         window.location.href = data.onboardingUrl
       } else if (data.onboardingComplete) {
         // Refresh status
@@ -193,7 +187,7 @@ export default function StripeConnectButton({
     )
   }
 
-  // No account or needs to start onboarding
+  // No account or needs to start connection process
   return (
     <Button onClick={handleConnect} disabled={isLoading || !user} className={className} variant={variant} size={size}>
       {isLoading ? (
