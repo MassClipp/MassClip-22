@@ -33,6 +33,13 @@ export async function POST(request: NextRequest) {
     const connectedField = isTestMode ? "stripeTestConnected" : "stripeConnected"
 
     const accountId = userData?.[accountIdField]
+    const localConnectedStatus = userData?.[connectedField]
+
+    console.log(`🔍 [Status] Checking status for user ${userId}:`, {
+      accountId,
+      localConnectedStatus,
+      testMode: isTestMode,
+    })
 
     if (!accountId) {
       return NextResponse.json({
@@ -46,39 +53,59 @@ export async function POST(request: NextRequest) {
       // Get fresh account data from Stripe
       const account = await stripe.accounts.retrieve(accountId)
 
-      const isFullyConnected =
+      const isFullyOnboarded =
         account.details_submitted &&
         account.charges_enabled &&
         account.payouts_enabled &&
-        (!account.requirements?.currently_due || account.requirements.currently_due.length === 0)
+        (!account.requirements?.currently_due || account.requirements.currently_due.length === 0) &&
+        (!account.requirements?.past_due || account.requirements.past_due.length === 0)
 
-      // Update local status if it differs from Stripe
-      if (userData?.[connectedField] !== isFullyConnected) {
+      const capabilities = {
+        charges_enabled: account.charges_enabled,
+        payouts_enabled: account.payouts_enabled,
+        details_submitted: account.details_submitted,
+        currently_due: account.requirements?.currently_due || [],
+        past_due: account.requirements?.past_due || [],
+        eventually_due: account.requirements?.eventually_due || [],
+      }
+
+      console.log(`🔍 [Status] Account ${accountId} capabilities:`, capabilities)
+
+      // Update local status if it doesn't match Stripe
+      if (localConnectedStatus !== isFullyOnboarded) {
+        console.log(`🔄 [Status] Updating local status from ${localConnectedStatus} to ${isFullyOnboarded}`)
         await db
           .collection("users")
           .doc(userId)
           .update({
-            [connectedField]: isFullyConnected,
+            [connectedField]: isFullyOnboarded,
+            [`${accountIdField}ChargesEnabled`]: account.charges_enabled,
+            [`${accountIdField}PayoutsEnabled`]: account.payouts_enabled,
+            [`${accountIdField}DetailsSubmitted`]: account.details_submitted,
+            [`${accountIdField}Requirements`]: {
+              currently_due: account.requirements?.currently_due || [],
+              past_due: account.requirements?.past_due || [],
+              eventually_due: account.requirements?.eventually_due || [],
+            },
             updatedAt: new Date().toISOString(),
           })
       }
 
       return NextResponse.json({
-        connected: isFullyConnected,
+        connected: isFullyOnboarded,
         accountId,
+        capabilities,
         businessType: account.business_type || "individual",
-        capabilities: {
-          charges_enabled: account.charges_enabled,
-          payouts_enabled: account.payouts_enabled,
-          currently_due: account.requirements?.currently_due || [],
-          past_due: account.requirements?.past_due || [],
-        },
-        details_submitted: account.details_submitted,
-        message: isFullyConnected ? "Account fully connected" : "Account needs completion",
+        country: account.country,
+        message: isFullyOnboarded
+          ? "Account is fully connected and ready to accept payments"
+          : "Account needs additional setup to accept payments",
       })
     } catch (stripeError: any) {
       if (stripeError.code === "resource_missing") {
-        // Account was deleted, clean up local data
+        console.warn(`⚠️ [Status] Account ${accountId} no longer exists in Stripe`)
+
+        // Clear the invalid account from Firestore
         await db
           .collection("users")
           .doc(userId)
@@ -92,11 +119,12 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({
           connected: false,
           accountId: null,
-          message: "Account no longer exists",
+          accountDeleted: true,
+          message: "Account was deleted from Stripe",
         })
       }
 
-      console.error("❌ [Status] Error checking account:", stripeError)
+      console.error("❌ [Status] Error checking account status:", stripeError)
       return NextResponse.json(
         { error: "Failed to check account status", details: stripeError.message },
         { status: 500 },
