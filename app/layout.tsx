@@ -22,56 +22,11 @@ export const metadata: Metadata = {
   generator: "v0.dev",
 }
 
-// Maintenance Mode Component
-function MaintenanceMode() {
-  return (
-    <div className="fixed inset-0 z-[9999] bg-black flex items-center justify-center">
-      <div className="text-center px-6">
-        <div className="mb-8">
-          <h1 className="text-4xl md:text-6xl font-light text-white mb-4">
-            <span className="text-red-500">MASS</span>
-            <span className="text-white">CLIP</span>
-          </h1>
-        </div>
-
-        <div className="max-w-md mx-auto">
-          <h2 className="text-2xl md:text-3xl font-light text-white mb-6">Under Maintenance</h2>
-
-          <p className="text-white/70 text-lg mb-8 leading-relaxed">
-            We're currently performing system updates to improve your experience. We'll be back online shortly.
-          </p>
-
-          <div className="flex items-center justify-center space-x-2 mb-8">
-            <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
-            <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse" style={{ animationDelay: "0.2s" }}></div>
-            <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse" style={{ animationDelay: "0.4s" }}></div>
-          </div>
-
-          <p className="text-white/50 text-sm">
-            Follow us for updates:
-            <a
-              href="https://www.instagram.com/massclip.official"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-red-500 hover:text-red-400 ml-2 transition-colors"
-            >
-              @massclip.official
-            </a>
-          </p>
-        </div>
-      </div>
-    </div>
-  )
-}
-
 export default function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode
 }>) {
-  // Check if maintenance mode is enabled
-  const isMaintenanceMode = process.env.NEXT_PUBLIC_MAINTENANCE_MODE === "true"
-
   return (
     <html lang="en" className="prevent-zoom">
       <head>
@@ -107,20 +62,16 @@ export default function RootLayout({
         />
       </head>
       <body className={`${inter.className} prevent-zoom`}>
-        {isMaintenanceMode ? (
-          <MaintenanceMode />
-        ) : (
-          <Providers>
-            <AuthProvider>
-              <DownloadLimitProvider>
-                <ZoomPrevention />
-                <FullscreenBlocker />
-                <TikTokBrowserBanner />
-                {children}
-              </DownloadLimitProvider>
-            </AuthProvider>
-          </Providers>
-        )}
+        <Providers>
+          <AuthProvider>
+            <DownloadLimitProvider>
+              <ZoomPrevention />
+              <FullscreenBlocker />
+              <TikTokBrowserBanner />
+              {children}
+            </DownloadLimitProvider>
+          </AuthProvider>
+        </Providers>
         <Toaster />
       </body>
     </html>
