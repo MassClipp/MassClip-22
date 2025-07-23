@@ -28,7 +28,6 @@ import { useStripeEarnings } from "@/hooks/use-stripe-earnings"
 import { useToast } from "@/components/ui/use-toast"
 import { useRouter } from "next/navigation"
 import { RecentSales } from "@/components/recent-sales"
-import { SalesForecastCard } from "@/components/sales-forecast-card"
 
 export default function EarningsPageContent() {
   const { user } = useAuth()
@@ -444,12 +443,8 @@ export default function EarningsPageContent() {
       </div>
 
       {/* Additional Components Row */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {/* Recent Sales */}
+      <div className="w-full">
         <RecentSales sales={stats.recentTransactions || []} isLoading={loading} />
-
-        {/* Sales Forecast */}
-        <SalesForecastCard />
       </div>
 
       {/* Quick Actions */}
