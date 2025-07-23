@@ -128,3 +128,12 @@ export async function createOrUpdateUserProfile(userId: string, profileData: Rec
 /* -------------------------------------------------------------------------- */
 
 export { FieldValue }
+
+// Export the services
+export const firestore = getFirestore(adminApp)
+
+// Legacy export for backward compatibility
+export const firebaseDb = {
+  auth: () => auth,
+  firestore: () => firestore,
+}

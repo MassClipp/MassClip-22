@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { getSiteUrl } from "@/lib/url-utils"
-import { db } from "@/lib/firebase-admin"
+import { auth, firestore } from "@/lib/firebase-admin"
 
 export async function POST(request: NextRequest) {
   try {
@@ -16,7 +16,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Verify the Firebase ID token
-    const decodedToken = await db.auth().verifyIdToken(idToken)
+    const decodedToken = await auth.verifyIdToken(idToken)
     const userId = decodedToken.uid
 
     console.log(`👤 [Connect URL] Authenticated user: ${userId}`)
@@ -55,8 +55,7 @@ export async function POST(request: NextRequest) {
     const state = `${userId}_${Date.now()}_${Math.random().toString(36).substring(7)}`
 
     // Store the state in Firestore for verification (with TTL)
-    await db
-      .firestore()
+    await firestore
       .collection("stripe_oauth_states")
       .doc(state)
       .set({

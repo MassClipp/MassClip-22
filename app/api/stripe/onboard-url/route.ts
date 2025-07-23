@@ -1,7 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { stripe } from "@/lib/stripe"
 import { getSiteUrl } from "@/lib/url-utils"
-import { db } from "@/lib/firebase-admin"
+import { auth, firestore } from "@/lib/firebase-admin"
 
 export async function POST(request: NextRequest) {
   try {
@@ -17,7 +17,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Verify the Firebase ID token
-    const decodedToken = await db.auth().verifyIdToken(idToken)
+    const decodedToken = await auth.verifyIdToken(idToken)
     const userId = decodedToken.uid
     const userEmail = decodedToken.email
 
@@ -50,7 +50,7 @@ export async function POST(request: NextRequest) {
     console.log(`🌐 [Onboard URL] Using base URL: ${baseUrl}`)
 
     // Check if user already has a Stripe account
-    const userDoc = await db.firestore().collection("users").doc(userId).get()
+    const userDoc = await firestore.collection("users").doc(userId).get()
     let accountId: string | null = null
 
     if (userDoc.exists) {
@@ -101,7 +101,7 @@ export async function POST(request: NextRequest) {
       console.log(`✅ [Onboard URL] Created account: ${accountId}`)
 
       // Store the account ID in Firestore
-      await db.firestore().collection("users").doc(userId).set(
+      await firestore.collection("users").doc(userId).set(
         {
           stripeAccountId: accountId,
           stripeAccountCreatedAt: new Date(),
