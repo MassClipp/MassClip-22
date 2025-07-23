@@ -1,6 +1,8 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  serverExternalPackages: ['firebase-admin'],
+  experimental: {
+    serverComponentsExternalPackages: ['firebase-admin'],
+  },
   // Force all API routes to be dynamic
   async headers() {
     return [

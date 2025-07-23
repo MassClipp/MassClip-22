@@ -80,11 +80,13 @@ export async function POST(request: NextRequest) {
         })
       }
 
-      // Create new onboarding link with correct redirect URI
+      // Create new onboarding link
+      const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_VERCEL_URL || "http://localhost:3000"
+
       const accountLink = await stripe.accountLinks.create({
         account: accountId,
-        refresh_url: `https://massclip.pro/dashboard/connect-stripe?refresh=true`,
-        return_url: `https://massclip.pro/dashboard/connect-stripe?success=true`,
+        refresh_url: `${baseUrl}/dashboard/earnings?refresh=true`,
+        return_url: `${baseUrl}/dashboard/earnings?success=true`,
         type: "account_onboarding",
       })
 

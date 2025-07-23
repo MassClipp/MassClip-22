@@ -2,90 +2,60 @@
 
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
-import { useFirebaseAuth } from "@/hooks/use-firebase-auth"
-import { AlertCircle, ExternalLink } from "lucide-react"
-import { Alert, AlertDescription } from "@/components/ui/alert"
+import { useToast } from "@/hooks/use-toast"
+import { Loader2 } from "lucide-react"
 
 interface StripeConnectButtonProps {
-  variant?: "create" | "connect"
-  className?: string
+  userId: string
+  onSuccess?: () => void
 }
 
-export function StripeConnectButton({ variant = "connect", className }: StripeConnectButtonProps) {
+export function StripeConnectButton({ userId, onSuccess }: StripeConnectButtonProps) {
   const [isLoading, setIsLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const { user } = useFirebaseAuth()
+  const { toast } = useToast()
 
   const handleConnect = async () => {
-    if (!user) {
-      setError("Please log in to connect your Stripe account")
-      return
-    }
-
-    setIsLoading(true)
-    setError(null)
-
     try {
-      const idToken = await user.getIdToken()
+      setIsLoading(true)
 
-      const endpoint = variant === "create" ? "/api/stripe/create-stripe-account" : "/api/stripe/connect/onboard"
-
-      const response = await fetch(endpoint, {
+      const response = await fetch("/api/stripe/connect/onboard", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ idToken }),
+        body: JSON.stringify({ userId }),
       })
 
       const data = await response.json()
 
       if (!response.ok) {
-        throw new Error(data.details || data.error || "Failed to connect with Stripe")
+        throw new Error(data.error || "Failed to create onboarding link")
       }
 
-      if (data.onboardingUrl) {
-        // Redirect to Stripe onboarding
-        window.location.href = data.onboardingUrl
-      } else {
-        throw new Error("No onboarding URL received")
-      }
-    } catch (error: any) {
-      console.error("Stripe connect error:", error)
-      setError(error.message || "Failed to create onboarding link")
+      // Redirect to Stripe Connect OAuth
+      window.location.href = data.url
+    } catch (error) {
+      console.error("Error connecting to Stripe:", error)
+      toast({
+        title: "Connection Failed",
+        description: error instanceof Error ? error.message : "Failed to connect to Stripe",
+        variant: "destructive",
+      })
     } finally {
       setIsLoading(false)
     }
   }
 
   return (
-    <div className="space-y-4">
-      {error && (
-        <Alert variant="destructive">
-          <AlertCircle className="h-4 w-4" />
-          <AlertDescription>{error}</AlertDescription>
-        </Alert>
+    <Button onClick={handleConnect} disabled={isLoading} className="w-full">
+      {isLoading ? (
+        <>
+          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+          Connecting...
+        </>
+      ) : (
+        "Connect with Stripe"
       )}
-
-      <Button onClick={handleConnect} disabled={isLoading || !user} className={className} size="lg">
-        {isLoading ? (
-          <>
-            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2" />
-            {variant === "create" ? "Creating Account..." : "Connecting..."}
-          </>
-        ) : (
-          <>
-            <ExternalLink className="h-4 w-4 mr-2" />
-            {variant === "create" ? "Create Stripe Account" : "Connect with Stripe"}
-          </>
-        )}
-      </Button>
-
-      <p className="text-sm text-muted-foreground text-center">
-        {variant === "create"
-          ? "You'll be redirected to Stripe to complete setup"
-          : "Stripe will detect your existing account and connect it securely"}
-      </p>
-    </div>
+    </Button>
   )
 }
