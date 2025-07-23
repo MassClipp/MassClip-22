@@ -65,8 +65,6 @@ export default function StripeConnectButton({
       const idToken = await user.getIdToken()
 
       // Start the OAuth connection process
-      // This will redirect to Stripe's OAuth flow, which will then redirect back to our callback
-      // The callback will handle account creation and onboarding
       const response = await fetch("/api/stripe/connect/oauth", {
         method: "POST",
         headers: {
@@ -77,7 +75,15 @@ export default function StripeConnectButton({
 
       if (!response.ok) {
         const errorData = await response.json()
-        throw new Error(errorData.error || "Failed to start Stripe Connect process")
+        console.error("OAuth request failed:", errorData)
+
+        // Show specific error message for missing configuration
+        if (errorData.error === "Stripe Connect not configured") {
+          alert(`Configuration Error: ${errorData.details}\n\nSuggestion: ${errorData.suggestion}`)
+        } else {
+          alert(`Failed to connect to Stripe: ${errorData.error || "Unknown error"}`)
+        }
+        return
       }
 
       const data = await response.json()
@@ -104,13 +110,12 @@ export default function StripeConnectButton({
       setIsLoading(true)
       const idToken = await user.getIdToken()
 
-      // Force refresh the onboarding process
-      const response = await fetch("/api/stripe/connect/onboard", {
+      const response = await fetch("/api/stripe/connect/refresh", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ idToken, forceRefresh: true }),
+        body: JSON.stringify({ idToken }),
       })
 
       if (!response.ok) {
