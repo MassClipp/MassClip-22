@@ -4,6 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Skeleton } from "@/components/ui/skeleton"
 import { useSalesForecast } from "@/hooks/use-sales-forecast"
 import { TrendingUp, TrendingDown, Minus, Target, Zap, Activity } from "lucide-react"
+import { LineChart, Line, XAxis, YAxis, ResponsiveContainer, ReferenceLine } from "recharts"
 
 export function SalesForecastCard() {
   const { forecast, loading, error } = useSalesForecast()
@@ -77,6 +78,9 @@ export function SalesForecastCard() {
     }
   }
 
+  // Prepare chart data - show last 15 days + next 15 days for better visualization
+  const chartData = forecast.chartData.slice(-45).filter((_, index) => index % 2 === 0) // Every other day for cleaner chart
+
   return (
     <Card className="bg-zinc-900/50 border-zinc-800/50">
       <CardHeader>
@@ -109,6 +113,54 @@ export function SalesForecastCard() {
             <p className="text-sm text-zinc-200 leading-relaxed">{forecast.motivationalMessage}</p>
           </div>
         </div>
+
+        {/* Mini Chart */}
+        {chartData.length > 0 && (
+          <div className="space-y-2">
+            <div className="flex items-center justify-between text-xs text-zinc-400">
+              <span>Past Performance</span>
+              <span>Projected</span>
+            </div>
+            <div className="h-16 w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={chartData}>
+                  <XAxis dataKey="date" hide />
+                  <YAxis hide />
+                  <ReferenceLine
+                    x={chartData[Math.floor(chartData.length / 2)]?.date}
+                    stroke="#71717a"
+                    strokeDasharray="2 2"
+                    opacity={0.5}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="revenue"
+                    stroke="#10b981"
+                    strokeWidth={2}
+                    dot={false}
+                    strokeDasharray={(entry: any) => (entry?.isProjected ? "3 3" : "0")}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+            <div className="flex items-center justify-center gap-4 text-xs text-zinc-500">
+              <div className="flex items-center gap-1">
+                <div className="w-3 h-0.5 bg-green-500"></div>
+                <span>Historical</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <div
+                  className="w-3 h-0.5 bg-green-500 opacity-60"
+                  style={{
+                    backgroundImage:
+                      "repeating-linear-gradient(to right, transparent, transparent 2px, #10b981 2px, #10b981 4px)",
+                  }}
+                ></div>
+                <span>Forecast</span>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Performance Metrics */}
         <div className="grid grid-cols-2 gap-3 pt-2 border-t border-zinc-800/50">
