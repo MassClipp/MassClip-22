@@ -1,96 +1,85 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { getAuth } from "firebase-admin/auth"
-import { isTestMode } from "@/lib/stripe"
-
-interface OAuthRequest {
-  idToken: string
-}
+import { getSiteUrl } from "@/lib/url-utils"
+import { db } from "@/lib/firebase-admin"
 
 export async function POST(request: NextRequest) {
   try {
-    const { idToken } = (await request.json()) as OAuthRequest
+    console.log("🔧 [OAuth] Starting Stripe Connect OAuth flow...")
 
-    if (!idToken) {
-      console.error("❌ [OAuth] No ID token provided")
-      return NextResponse.json({ error: "ID token is required" }, { status: 400 })
-    }
-
-    // Verify Firebase ID token
-    let decodedToken
-    try {
-      decodedToken = await getAuth().verifyIdToken(idToken)
-      console.log("✅ [OAuth] Firebase token verified for user:", decodedToken.uid)
-    } catch (error) {
-      console.error("❌ [OAuth] Invalid ID token:", error)
-      return NextResponse.json({ error: "Invalid authentication token" }, { status: 401 })
-    }
-
-    const userId = decodedToken.uid
-
-    // Use single STRIPE_CLIENT_ID for both test and live modes
+    // Get the Stripe Connect client ID - always use live
     const clientId = process.env.STRIPE_CLIENT_ID
 
     if (!clientId) {
-      console.error("❌ [OAuth] Missing STRIPE_CLIENT_ID environment variable")
+      console.error("❌ [OAuth] STRIPE_CLIENT_ID environment variable is not set")
       return NextResponse.json(
         {
           error: "Stripe Connect not configured",
           details: "STRIPE_CLIENT_ID environment variable is missing",
-          suggestion: "Please add STRIPE_CLIENT_ID to your environment variables",
+          suggestion: "Add STRIPE_CLIENT_ID to your environment variables in Vercel dashboard",
         },
         { status: 500 },
       )
     }
 
-    console.log(`🔗 [OAuth] Creating OAuth URL for user ${userId} in ${isTestMode ? "TEST" : "LIVE"} mode`)
+    console.log(`✅ [OAuth] Using Stripe Client ID: ${clientId.substring(0, 20)}...`)
 
-    // Create state parameter with user info
-    const state = Buffer.from(
-      JSON.stringify({
-        userId,
-        timestamp: Date.now(),
-        mode: isTestMode ? "test" : "live",
-        flow: "oauth_connect",
-      }),
-    ).toString("base64")
+    // Parse request body
+    const body = await request.json()
+    const { idToken } = body
+
+    if (!idToken) {
+      console.error("❌ [OAuth] No ID token provided")
+      return NextResponse.json({ error: "Authentication required" }, { status: 401 })
+    }
+
+    // Verify the Firebase ID token
+    const decodedToken = await db.auth().verifyIdToken(idToken)
+    const userId = decodedToken.uid
+
+    console.log(`👤 [OAuth] Authenticated user: ${userId}`)
 
     // Get base URL for redirect
-    const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_VERCEL_URL
-    if (!baseUrl) {
-      console.error("❌ [OAuth] Missing base URL configuration")
-      return NextResponse.json(
-        {
-          error: "Configuration error",
-          details: "Base URL not configured",
-        },
-        { status: 500 },
-      )
-    }
+    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || getSiteUrl()
+    console.log(`🌐 [OAuth] Using base URL: ${baseUrl}`)
 
-    const redirectUri = `${baseUrl}/api/stripe/connect/oauth-callback`
+    // Generate a state parameter for security
+    const state = `${userId}_${Date.now()}_${Math.random().toString(36).substring(7)}`
 
-    // Build Stripe OAuth URL
+    // Store the state in Firestore for verification
+    await db
+      .firestore()
+      .collection("stripe_oauth_states")
+      .doc(state)
+      .set({
+        userId,
+        createdAt: new Date(),
+        expiresAt: new Date(Date.now() + 10 * 60 * 1000), // 10 minutes
+      })
+
+    console.log(`🔐 [OAuth] Generated state: ${state}`)
+
+    // Build the OAuth URL
     const oauthUrl = new URL("https://connect.stripe.com/oauth/authorize")
     oauthUrl.searchParams.set("response_type", "code")
     oauthUrl.searchParams.set("client_id", clientId)
     oauthUrl.searchParams.set("scope", "read_write")
-    oauthUrl.searchParams.set("redirect_uri", redirectUri)
+    oauthUrl.searchParams.set("redirect_uri", `${baseUrl}/api/stripe/connect/oauth-callback`)
     oauthUrl.searchParams.set("state", state)
 
-    console.log(`✅ [OAuth] Generated OAuth URL for ${isTestMode ? "TEST" : "LIVE"} mode`)
+    const finalUrl = oauthUrl.toString()
+    console.log(`🔗 [OAuth] Generated OAuth URL: ${finalUrl}`)
 
     return NextResponse.json({
       success: true,
-      oauthUrl: oauthUrl.toString(),
-      mode: isTestMode ? "test" : "live",
+      oauthUrl: finalUrl,
+      state,
     })
   } catch (error: any) {
-    console.error("❌ [OAuth] Unexpected error:", error)
+    console.error("❌ [OAuth] Error in OAuth flow:", error)
     return NextResponse.json(
       {
-        error: "Failed to create OAuth URL",
+        error: "Failed to initiate OAuth flow",
         details: error.message,
-        stack: process.env.NODE_ENV === "development" ? error.stack : undefined,
       },
       { status: 500 },
     )

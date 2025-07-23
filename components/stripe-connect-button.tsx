@@ -60,12 +60,15 @@ export default function StripeConnectButton({
 
     try {
       setIsLoading(true)
+      console.log("🔄 [Connect Button] Starting connection process...")
 
       // Get the user's ID token
       const idToken = await user.getIdToken()
+      console.log("✅ [Connect Button] Got ID token")
 
-      // Start the OAuth connection process
-      const response = await fetch("/api/stripe/connect/oauth", {
+      // Call the create account API
+      console.log("📡 [Connect Button] Calling /api/stripe/create-stripe-account...")
+      const response = await fetch("/api/stripe/create-stripe-account", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -73,30 +76,49 @@ export default function StripeConnectButton({
         body: JSON.stringify({ idToken }),
       })
 
-      if (!response.ok) {
-        const errorData = await response.json()
-        console.error("OAuth request failed:", errorData)
+      console.log(`📥 [Connect Button] Response status: ${response.status}`)
+      console.log(`📥 [Connect Button] Response headers:`, Object.fromEntries(response.headers.entries()))
 
-        // Show specific error message for missing configuration
-        if (errorData.error === "Stripe Connect not configured") {
-          alert(`Configuration Error: ${errorData.details}\n\nSuggestion: ${errorData.suggestion}`)
-        } else {
-          alert(`Failed to connect to Stripe: ${errorData.error || "Unknown error"}`)
-        }
+      // Check if response is JSON
+      const contentType = response.headers.get("content-type")
+      if (!contentType || !contentType.includes("application/json")) {
+        const textResponse = await response.text()
+        console.error("❌ [Connect Button] Non-JSON response received:", textResponse)
+        alert(`Server error: Received non-JSON response. Check console for details.`)
         return
       }
 
       const data = await response.json()
+      console.log("📥 [Connect Button] Response data:", data)
 
-      if (data.success && data.oauthUrl) {
-        console.log(`🔗 [Connect Button] Redirecting to OAuth flow: ${data.oauthUrl}`)
-        // Redirect to Stripe's OAuth authorization page
-        window.location.href = data.oauthUrl
+      if (!response.ok) {
+        console.error("❌ [Connect Button] API request failed:", data)
+
+        // Show specific error message for missing configuration
+        if (data.error === "Stripe Connect not configured") {
+          alert(`Configuration Error: ${data.details}\n\nSuggestion: ${data.suggestion}`)
+        } else {
+          alert(
+            `Failed to connect to Stripe: ${data.error || "Unknown error"}\n\nDetails: ${data.details || "No additional details"}`,
+          )
+        }
+        return
+      }
+
+      if (data.success && data.url) {
+        console.log(`🔗 [Connect Button] Redirecting to onboarding: ${data.url}`)
+        // Redirect to Stripe's onboarding page
+        window.location.href = data.url
+      } else if (data.alreadySetup) {
+        console.log("✅ [Connect Button] Account already set up")
+        alert("Your Stripe account is already fully set up!")
+        await checkConnectionStatus()
       } else {
-        throw new Error("Failed to generate OAuth URL")
+        console.error("❌ [Connect Button] Unexpected response format:", data)
+        alert("Unexpected response from server. Check console for details.")
       }
     } catch (error: any) {
-      console.error("Error connecting to Stripe:", error)
+      console.error("❌ [Connect Button] Error connecting to Stripe:", error)
       alert(`Failed to connect to Stripe: ${error.message}`)
     } finally {
       setIsLoading(false)
@@ -108,6 +130,8 @@ export default function StripeConnectButton({
 
     try {
       setIsLoading(true)
+      console.log("🔄 [Connect Button] Refreshing onboarding...")
+
       const idToken = await user.getIdToken()
 
       const response = await fetch("/api/stripe/connect/refresh", {
@@ -118,8 +142,12 @@ export default function StripeConnectButton({
         body: JSON.stringify({ idToken }),
       })
 
+      console.log(`📥 [Connect Button] Refresh response status: ${response.status}`)
+
       if (!response.ok) {
         const errorData = await response.json()
+        console.error("❌ [Connect Button] Refresh failed:", errorData)
+
         if (errorData.accountDeleted) {
           // Account was deleted, refresh page to show connect button
           window.location.reload()
@@ -129,6 +157,8 @@ export default function StripeConnectButton({
       }
 
       const data = await response.json()
+      console.log("📥 [Connect Button] Refresh data:", data)
+
       if (data.onboardingUrl) {
         console.log(`🔗 [Connect Button] Redirecting to onboarding: ${data.onboardingUrl}`)
         window.location.href = data.onboardingUrl
@@ -137,7 +167,7 @@ export default function StripeConnectButton({
         await checkConnectionStatus()
       }
     } catch (error: any) {
-      console.error("Error refreshing onboarding:", error)
+      console.error("❌ [Connect Button] Error refreshing onboarding:", error)
       alert(`Failed to refresh onboarding: ${error.message}`)
     } finally {
       setIsLoading(false)
