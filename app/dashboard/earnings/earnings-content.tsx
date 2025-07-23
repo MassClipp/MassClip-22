@@ -1,507 +1,297 @@
 "use client"
 
-import { useState } from "react"
-import { useAuth } from "@/contexts/auth-context"
-import {
-  Loader2,
-  DollarSign,
-  RefreshCw,
-  TrendingUp,
-  AlertCircle,
-  ExternalLink,
-  Calendar,
-  Clock,
-  Upload,
-  BarChart3,
-  Wallet,
-  ArrowUpRight,
-  ArrowDownRight,
-  Activity,
-  Unlink,
-} from "lucide-react"
-import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Progress } from "@/components/ui/progress"
-import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { useStripeEarnings } from "@/hooks/use-stripe-earnings"
 import { useToast } from "@/components/ui/use-toast"
-import { useRouter } from "next/navigation"
+import { useStripeEarnings } from "@/hooks/use-stripe-earnings"
 import { RecentSales } from "@/components/recent-sales"
+import { DollarSign, TrendingUp, Calendar, ExternalLink, Unlink, CreditCard, AlertCircle } from "lucide-react"
+import { useState } from "react"
 
-export default function EarningsPageContent() {
-  const { user } = useAuth()
+export function EarningsContent() {
   const { toast } = useToast()
-  const { data, loading, error, lastUpdated, refresh, syncData } = useStripeEarnings()
-  const [syncing, setSyncing] = useState(false)
-  const [unlinking, setUnlinking] = useState(false)
-  const router = useRouter()
+  const [isUnlinking, setIsUnlinking] = useState(false)
+  const earnings = useStripeEarnings()
 
-  const handleSync = async () => {
+  const handleUnlinkAccount = async () => {
     try {
-      setSyncing(true)
-      await syncData()
+      setIsUnlinking(true)
+      const result = await earnings.unlinkStripeAccount()
+
       toast({
-        title: "Sync Complete",
-        description: "Stripe data has been synchronized successfully.",
+        title: "Success",
+        description: result.message || "Stripe account unlinked successfully",
       })
-    } catch (error) {
-      toast({
-        title: "Sync Error",
-        description: "Failed to sync Stripe data. Please try again.",
-        variant: "destructive",
-      })
-    } finally {
-      setSyncing(false)
-    }
-  }
-
-  const handleRefresh = async () => {
-    try {
-      await refresh()
-      toast({
-        title: "Data Refreshed",
-        description: "Latest earnings data has been fetched from Stripe.",
-      })
-    } catch (error) {
-      toast({
-        title: "Refresh Error",
-        description: "Failed to refresh data. Please try again.",
-        variant: "destructive",
-      })
-    }
-  }
-
-  const handleUnlinkStripe = async () => {
-    if (
-      !confirm("Are you sure you want to unlink your Stripe account? This will disable payments and earnings tracking.")
-    ) {
-      return
-    }
-
-    if (!user) {
-      toast({
-        title: "Authentication Error",
-        description: "You must be logged in to unlink your Stripe account.",
-        variant: "destructive",
-      })
-      return
-    }
-
-    try {
-      setUnlinking(true)
-
-      const token = await user.getIdToken()
-
-      const response = await fetch("/api/stripe/disconnect", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-      })
-
-      const result = await response.json()
-
-      if (!response.ok) {
-        throw new Error(result.error || "Failed to unlink Stripe account")
-      }
-
-      // Show success message
-      toast({
-        title: result.wasConnected ? "Stripe Account Unlinked" : "No Account to Unlink",
-        description: result.message || "Operation completed successfully.",
-        variant: result.wasConnected ? "default" : "default",
-      })
-
-      // Refresh the earnings data to reflect the change
-      await refresh()
     } catch (error: any) {
       console.error("Unlink error:", error)
       toast({
-        title: "Unlink Error",
-        description: error.message || "Failed to unlink Stripe account. Please try again.",
+        title: "Error",
+        description: error.message || "Failed to unlink Stripe account",
         variant: "destructive",
       })
     } finally {
-      setUnlinking(false)
+      setIsUnlinking(false)
     }
   }
 
-  if (loading && !data) {
+  const openStripeDashboard = () => {
+    window.open("https://dashboard.stripe.com", "_blank")
+  }
+
+  // Show Stripe Connect interface for new users
+  if (!earnings.loading && !earnings.isConnected) {
     return (
-      <div className="flex items-center justify-center min-h-[calc(100vh-4rem)]">
-        <div className="text-center space-y-4">
-          <Loader2 className="h-8 w-8 text-zinc-500 animate-spin mx-auto" />
-          <div className="space-y-2">
-            <p className="text-lg font-medium text-white">Loading earnings data...</p>
-            <p className="text-sm text-zinc-400">Fetching your financial overview</p>
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-gray-800 to-gray-900 flex items-center justify-center p-4">
+        <div className="w-full max-w-6xl">
+          {/* Header */}
+          <div className="text-center mb-12">
+            <div className="w-16 h-16 bg-blue-600 rounded-full flex items-center justify-center mx-auto mb-6">
+              <CreditCard className="h-8 w-8 text-white" />
+            </div>
+            <h1 className="text-4xl font-bold text-white mb-4">Connect Your Stripe Account</h1>
+            <p className="text-xl text-gray-300">Start accepting payments and track your earnings</p>
+          </div>
+
+          {/* Features */}
+          <div className="grid md:grid-cols-3 gap-6 mb-12">
+            <Card className="bg-gray-800/50 border-gray-700">
+              <CardContent className="pt-6 text-center">
+                <DollarSign className="h-8 w-8 text-green-500 mx-auto mb-4" />
+                <h3 className="text-lg font-semibold text-white mb-2">Accept Payments</h3>
+                <p className="text-gray-400">Process payments from customers worldwide</p>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-gray-800/50 border-gray-700">
+              <CardContent className="pt-6 text-center">
+                <TrendingUp className="h-8 w-8 text-blue-500 mx-auto mb-4" />
+                <h3 className="text-lg font-semibold text-white mb-2">Global Reach</h3>
+                <p className="text-gray-400">Supported in 40+ countries</p>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-gray-800/50 border-gray-700">
+              <CardContent className="pt-6 text-center">
+                <AlertCircle className="h-8 w-8 text-purple-500 mx-auto mb-4" />
+                <h3 className="text-lg font-semibold text-white mb-2">Secure & Reliable</h3>
+                <p className="text-gray-400">Bank-level security and encryption</p>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Connection Options */}
+          <div className="grid md:grid-cols-2 gap-8">
+            {/* Create New Account */}
+            <Card className="bg-gray-800/50 border-gray-700">
+              <CardHeader>
+                <CardTitle className="text-white flex items-center gap-2">
+                  <CreditCard className="h-5 w-5" />
+                  Create New Stripe Account
+                </CardTitle>
+                <CardDescription className="text-gray-400">
+                  Set up a new Stripe account to start accepting payments
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2 text-sm text-gray-300">
+                    <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                    Quick 5-minute setup
+                  </div>
+                  <div className="flex items-center gap-2 text-sm text-gray-300">
+                    <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                    2.9% + 30¢ per transaction
+                  </div>
+                  <div className="flex items-center gap-2 text-sm text-gray-300">
+                    <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                    Automatic payouts to your bank
+                  </div>
+                </div>
+                <Button
+                  className="w-full bg-blue-600 hover:bg-blue-700"
+                  onClick={() => window.open("/dashboard/connect-stripe", "_self")}
+                >
+                  Create Stripe Account
+                  <ExternalLink className="ml-2 h-4 w-4" />
+                </Button>
+                <p className="text-xs text-gray-500 text-center">After creating your account, return here to link it</p>
+              </CardContent>
+            </Card>
+
+            {/* Link Existing Account */}
+            <Card className="bg-gray-800/50 border-gray-700">
+              <CardHeader>
+                <CardTitle className="text-white flex items-center gap-2">
+                  <ExternalLink className="h-5 w-5" />
+                  Link Existing Account
+                </CardTitle>
+                <CardDescription className="text-gray-400">Connect your existing Stripe account</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div>
+                  <label className="text-sm font-medium text-gray-300 mb-2 block">Stripe Account ID</label>
+                  <input
+                    type="text"
+                    placeholder="acct_1234567890"
+                    className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">Find this in your Stripe Dashboard → Settings → Account</p>
+                </div>
+                <Button
+                  variant="outline"
+                  className="w-full border-green-600 text-green-600 hover:bg-green-600 hover:text-white bg-transparent"
+                  onClick={() => window.open("/dashboard/connect-stripe", "_self")}
+                >
+                  <ExternalLink className="mr-2 h-4 w-4" />
+                  Link Account
+                </Button>
+              </CardContent>
+            </Card>
           </div>
         </div>
       </div>
     )
   }
 
-  const stats = data || {
-    totalEarnings: 0,
-    thisMonthEarnings: 0,
-    lastMonthEarnings: 0,
-    last30DaysEarnings: 0,
-    pendingPayout: 0,
-    availableBalance: 0,
-    salesMetrics: {
-      totalSales: 0,
-      thisMonthSales: 0,
-      last30DaysSales: 0,
-      averageTransactionValue: 0,
-    },
-    accountStatus: {
-      chargesEnabled: false,
-      payoutsEnabled: false,
-      detailsSubmitted: false,
-      requirementsCount: 0,
-    },
-    recentTransactions: [],
-    payoutHistory: [],
-    monthlyBreakdown: [],
+  // Show loading state
+  if (earnings.loading) {
+    return (
+      <div className="space-y-6">
+        <div className="grid gap-4 md:grid-cols-4">
+          {[...Array(4)].map((_, i) => (
+            <Card key={i}>
+              <CardContent className="pt-6">
+                <div className="animate-pulse space-y-2">
+                  <div className="h-4 bg-gray-200 rounded w-3/4"></div>
+                  <div className="h-8 bg-gray-200 rounded w-1/2"></div>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      </div>
+    )
   }
 
-  const monthlyGrowth = (stats.thisMonthEarnings || 0) > (stats.lastMonthEarnings || 0)
-  const growthPercentage =
-    (stats.lastMonthEarnings || 0) > 0
-      ? (
-          (((stats.thisMonthEarnings || 0) - (stats.lastMonthEarnings || 0)) / (stats.lastMonthEarnings || 0)) *
-          100
-        ).toFixed(1)
-      : "0"
-
-  // Generate chart data based on actual earnings
-  const chartData = [
-    { month: "Jul", earnings: Math.max((stats.totalEarnings || 0) * 0.1, 0) },
-    { month: "Aug", earnings: Math.max((stats.totalEarnings || 0) * 0.3, 0) },
-    { month: "Sep", earnings: Math.max((stats.totalEarnings || 0) * 0.5, 0) },
-    { month: "Oct", earnings: Math.max((stats.totalEarnings || 0) * 0.7, 0) },
-    { month: "Nov", earnings: Math.max((stats.totalEarnings || 0) * 0.9, 0) },
-    { month: "Dec", earnings: stats.totalEarnings || 0 },
-  ]
-
-  const maxEarnings = Math.max(...chartData.map((d) => d.earnings), 1)
-
-  return (
-    <div className="space-y-8">
-      {/* Header */}
-      <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
-        <div className="space-y-2">
-          <h1 className="text-3xl font-bold tracking-tight text-white">Earnings Dashboard</h1>
-          <p className="text-zinc-400">Financial overview and transaction history</p>
-          {lastUpdated && (
-            <div className="flex items-center gap-2 text-sm text-zinc-500">
-              <Clock className="h-4 w-4" />
-              <span>Last updated: {lastUpdated.toLocaleString()}</span>
-            </div>
-          )}
-        </div>
-
-        <div className="flex gap-3">
-          <Button
-            variant="outline"
-            onClick={handleSync}
-            disabled={syncing || loading}
-            className="border-zinc-700 hover:bg-zinc-800 bg-transparent"
-          >
-            {syncing ? (
-              <>
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                Syncing...
-              </>
-            ) : (
-              <>
-                <TrendingUp className="h-4 w-4 mr-2" />
-                Sync Data
-              </>
-            )}
-          </Button>
-
-          <Button
-            variant="outline"
-            onClick={handleRefresh}
-            disabled={loading}
-            className="border-zinc-700 hover:bg-zinc-800 bg-transparent"
-          >
-            {loading ? (
-              <>
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                Refreshing...
-              </>
-            ) : (
-              <>
-                <RefreshCw className="h-4 w-4 mr-2" />
-                Refresh
-              </>
-            )}
-          </Button>
-        </div>
-      </div>
-
-      {/* Error Alert */}
-      {error && (
-        <Alert className="border-amber-600 bg-amber-600/10">
-          <AlertCircle className="h-4 w-4" />
-          <AlertDescription className="text-amber-200">{error}</AlertDescription>
-        </Alert>
-      )}
-
-      {/* Key Metrics */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <Card className="bg-zinc-900/60 border-zinc-800/50">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <p className="text-sm text-zinc-400 font-medium">Total Earnings</p>
-                  <Badge variant="secondary" className="bg-zinc-800 text-zinc-300 border-zinc-700">
-                    All Time
-                  </Badge>
-                </div>
-                <p className="text-3xl font-bold text-white">${(stats.totalEarnings || 0).toFixed(2)}</p>
-                <p className="text-xs text-zinc-400 flex items-center gap-1">
-                  <BarChart3 className="h-3 w-3" />
-                  {stats.salesMetrics?.totalSales || 0} total sales
-                </p>
-              </div>
-              <div className="p-3 bg-zinc-800/50 rounded-xl">
-                <DollarSign className="h-8 w-8 text-zinc-400" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-zinc-900/60 border-zinc-800/50">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <p className="text-sm text-zinc-400 font-medium">This Month</p>
-                  {monthlyGrowth ? (
-                    <div className="flex items-center gap-1 text-xs text-green-400">
-                      <ArrowUpRight className="h-3 w-3" />+{growthPercentage}%
-                    </div>
-                  ) : (
-                    <div className="flex items-center gap-1 text-xs text-red-400">
-                      <ArrowDownRight className="h-3 w-3" />
-                      {growthPercentage}%
-                    </div>
-                  )}
-                </div>
-                <p className="text-3xl font-bold text-white">${(stats.thisMonthEarnings || 0).toFixed(2)}</p>
-                <p className="text-xs text-zinc-400 flex items-center gap-1">
-                  <Activity className="h-3 w-3" />
-                  {stats.salesMetrics?.thisMonthSales || 0} sales
-                </p>
-              </div>
-              <div className="p-3 bg-zinc-800/50 rounded-xl">
-                <Calendar className="h-8 w-8 text-zinc-400" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-zinc-900/60 border-zinc-800/50">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <p className="text-sm text-zinc-400 font-medium">Available Balance</p>
-                  <Badge variant="secondary" className="bg-zinc-800 text-zinc-300 border-zinc-700">
-                    Ready
-                  </Badge>
-                </div>
-                <p className="text-3xl font-bold text-white">${(stats.availableBalance || 0).toFixed(2)}</p>
-                <p className="text-xs text-zinc-400">Ready for payout</p>
-              </div>
-              <div className="p-3 bg-zinc-800/50 rounded-xl">
-                <Wallet className="h-8 w-8 text-zinc-400" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card className="bg-zinc-900/60 border-zinc-800/50">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <p className="text-sm text-zinc-400 font-medium">Pending Payout</p>
-                  <Badge variant="secondary" className="bg-zinc-800 text-zinc-300 border-zinc-700">
-                    Processing
-                  </Badge>
-                </div>
-                <p className="text-3xl font-bold text-white">${(stats.pendingPayout || 0).toFixed(2)}</p>
-                <p className="text-xs text-zinc-400">In processing</p>
-              </div>
-              <div className="p-3 bg-zinc-800/50 rounded-xl">
-                <Clock className="h-8 w-8 text-zinc-400" />
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Charts and Data */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-        {/* Financial Performance Chart */}
-        <Card className="bg-zinc-900/60 border-zinc-800/50">
-          <CardHeader className="pb-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-zinc-800/50 rounded-lg">
-                <TrendingUp className="h-5 w-5 text-zinc-400" />
-              </div>
-              <div>
-                <CardTitle className="text-xl text-white">Financial Performance</CardTitle>
-                <CardDescription className="text-zinc-400">Revenue trends and projections</CardDescription>
-              </div>
-            </div>
+  // Show error state
+  if (earnings.error) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <Card className="w-full max-w-md">
+          <CardHeader>
+            <CardTitle className="text-red-600">Error Loading Earnings</CardTitle>
+            <CardDescription>There was an issue loading your earnings data</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="space-y-4">
-              <div className="flex items-end justify-between h-48 px-4 py-2 bg-zinc-800/30 rounded-lg">
-                {chartData.map((item) => (
-                  <div key={item.month} className="flex flex-col items-center gap-2">
-                    <div
-                      className="w-8 bg-gradient-to-t from-green-600 to-green-400 rounded-t-sm transition-all duration-300 hover:from-green-500 hover:to-green-300"
-                      style={{
-                        height: `${Math.max((item.earnings / maxEarnings) * 160, 8)}px`,
-                      }}
-                    />
-                    <span className="text-xs text-zinc-400 font-medium">{item.month}</span>
-                    <span className="text-xs text-zinc-500">${item.earnings.toFixed(0)}</span>
-                  </div>
-                ))}
-              </div>
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-zinc-400">6-month earnings trend</span>
-                <span className="text-green-400 font-medium">↗ Growing</span>
-              </div>
-            </div>
+            <p className="text-sm text-gray-600 mb-4">{earnings.error}</p>
+            <Button onClick={earnings.refresh} className="w-full">
+              Try Again
+            </Button>
           </CardContent>
         </Card>
+      </div>
+    )
+  }
 
-        {/* Sales Metrics */}
-        <Card className="bg-zinc-900/60 border-zinc-800/50">
-          <CardHeader className="pb-4">
-            <div className="flex items-center gap-3">
-              <div className="p-2 bg-zinc-800/50 rounded-lg">
-                <BarChart3 className="h-5 w-5 text-zinc-400" />
-              </div>
-              <div>
-                <CardTitle className="text-xl text-white">Sales Metrics</CardTitle>
-                <CardDescription className="text-zinc-400">Performance indicators</CardDescription>
-              </div>
-            </div>
+  // Show earnings dashboard for connected users
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight">Earnings Dashboard</h1>
+          <p className="text-gray-600">Track your revenue and manage payouts</p>
+        </div>
+        <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
+          Stripe Connected
+        </Badge>
+      </div>
+
+      {/* Stats Grid */}
+      <div className="grid gap-4 md:grid-cols-4">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total Earnings</CardTitle>
+            <DollarSign className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
-          <CardContent className="space-y-8">
-            <div className="space-y-4">
-              <div className="flex justify-between items-center">
-                <span className="text-sm text-zinc-300 font-medium">Average Transaction Value</span>
-                <span className="text-lg font-bold text-white">
-                  ${(stats.salesMetrics?.averageTransactionValue || 0).toFixed(2)}
-                </span>
-              </div>
-              <div className="space-y-2">
-                <Progress
-                  value={Math.min((stats.salesMetrics?.averageTransactionValue || 0) * 4, 100)}
-                  className="h-2 bg-zinc-800"
-                />
-                <p className="text-xs text-zinc-500">Target: $25.00 per transaction</p>
-              </div>
-            </div>
+          <CardContent>
+            <div className="text-2xl font-bold">${earnings.totalEarnings.toFixed(2)}</div>
+            <p className="text-xs text-muted-foreground">All time revenue</p>
+          </CardContent>
+        </Card>
 
-            <div className="space-y-4">
-              <div className="flex justify-between items-center">
-                <span className="text-sm text-zinc-300 font-medium">Last 30 Days Sales</span>
-                <span className="text-lg font-bold text-white">{stats.salesMetrics?.last30DaysSales || 0}</span>
-              </div>
-              <div className="space-y-2">
-                <Progress
-                  value={Math.min((stats.salesMetrics?.last30DaysSales || 0) * 5, 100)}
-                  className="h-2 bg-zinc-800"
-                />
-                <p className="text-xs text-zinc-500">Target: 20 sales per month</p>
-              </div>
-            </div>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Last 30 Days</CardTitle>
+            <Calendar className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">${earnings.last30Days.toFixed(2)}</div>
+            <p className="text-xs text-muted-foreground">Recent performance</p>
+          </CardContent>
+        </Card>
 
-            <div className="grid grid-cols-2 gap-4 pt-4">
-              <div className="text-center p-4 bg-zinc-800/50 rounded-xl">
-                <p className="text-2xl font-bold text-white">${(stats.last30DaysEarnings || 0).toFixed(2)}</p>
-                <p className="text-xs text-zinc-400 mt-1">Last 30 Days</p>
-              </div>
-              <div className="text-center p-4 bg-zinc-800/50 rounded-xl">
-                <p className="text-2xl font-bold text-white">{stats.salesMetrics?.totalSales || 0}</p>
-                <p className="text-xs text-zinc-400 mt-1">Total Sales</p>
-              </div>
-            </div>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">This Month</CardTitle>
+            <TrendingUp className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">${earnings.thisMonth.toFixed(2)}</div>
+            <p className="text-xs text-muted-foreground">Current month</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Last Month</CardTitle>
+            <Calendar className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">${earnings.lastMonth.toFixed(2)}</div>
+            <p className="text-xs text-muted-foreground">Previous month</p>
           </CardContent>
         </Card>
       </div>
 
-      {/* Recent Sales - Full Width */}
-      <div className="w-full">
-        <RecentSales sales={stats.recentTransactions || []} isLoading={loading} />
+      {/* Main Content */}
+      <div className="grid gap-6 lg:grid-cols-3">
+        {/* Recent Sales */}
+        <div className="lg:col-span-2">
+          <RecentSales transactions={earnings.recentTransactions} loading={earnings.loading} />
+        </div>
+
+        {/* Quick Actions */}
+        <div className="space-y-6">
+          <Card>
+            <CardHeader>
+              <CardTitle>Quick Actions</CardTitle>
+              <CardDescription>Manage your content and earnings</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <Button onClick={() => window.open("/dashboard/upload", "_self")} className="w-full justify-start">
+                Upload New Content
+              </Button>
+
+              <Button onClick={openStripeDashboard} variant="outline" className="w-full justify-start bg-transparent">
+                <ExternalLink className="mr-2 h-4 w-4" />
+                Stripe Dashboard
+              </Button>
+
+              <Button
+                onClick={handleUnlinkAccount}
+                variant="outline"
+                disabled={isUnlinking}
+                className="w-full justify-start text-red-600 border-red-200 hover:bg-red-50 bg-transparent"
+              >
+                <Unlink className="mr-2 h-4 w-4" />
+                {isUnlinking ? "Unlinking..." : "Unlink Stripe Account"}
+              </Button>
+            </CardContent>
+          </Card>
+        </div>
       </div>
-
-      {/* Quick Actions */}
-      <Card className="bg-zinc-900/60 border-zinc-800/50">
-        <CardHeader>
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-zinc-800/50 rounded-lg">
-              <Activity className="h-5 w-5 text-zinc-400" />
-            </div>
-            <div>
-              <CardTitle className="text-xl text-white">Quick Actions</CardTitle>
-              <CardDescription className="text-zinc-400">Manage your content and earnings</CardDescription>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <Button
-              onClick={() => router.push("/dashboard/upload")}
-              className="w-full justify-start bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-white"
-            >
-              <Upload className="h-4 w-4 mr-2" />
-              Upload New Content
-            </Button>
-
-            <Button
-              onClick={() => window.open("https://dashboard.stripe.com", "_blank")}
-              variant="outline"
-              className="w-full justify-start border-zinc-700 hover:bg-zinc-800 text-white"
-            >
-              <ExternalLink className="h-4 w-4 mr-2" />
-              Stripe Dashboard
-            </Button>
-
-            <Button
-              onClick={handleUnlinkStripe}
-              disabled={unlinking || !user}
-              variant="outline"
-              className="w-full justify-start border-red-700/50 hover:bg-red-900/20 text-red-400 hover:text-red-300 bg-transparent"
-            >
-              {unlinking ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Unlinking...
-                </>
-              ) : (
-                <>
-                  <Unlink className="h-4 w-4 mr-2" />
-                  Unlink Stripe Account
-                </>
-              )}
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
     </div>
   )
 }

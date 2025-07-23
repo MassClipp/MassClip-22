@@ -3,187 +3,138 @@
 import { useState, useEffect, useCallback } from "react"
 import { useAuth } from "@/contexts/auth-context"
 
-interface StripeEarningsData {
+interface EarningsData {
   totalEarnings: number
-  thisMonthEarnings: number
-  lastMonthEarnings: number
-  last30DaysEarnings: number
-  pendingPayout: number
-  availableBalance: number
-  salesMetrics: {
-    totalSales: number
-    thisMonthSales: number
-    last30DaysSales: number
-    averageTransactionValue: number
-  }
-  accountStatus: {
-    chargesEnabled: boolean
-    payoutsEnabled: boolean
-    detailsSubmitted: boolean
-    requirementsCount: number
-  }
+  last30Days: number
+  thisMonth: number
+  lastMonth: number
   recentTransactions: Array<{
     id: string
     amount: number
     currency: string
     created: number
-    description?: string
-    customer?: {
-      name?: string
-      email?: string
-    }
-  }>
-  payoutHistory: Array<{
-    id: string
-    amount: number
-    currency: string
-    created: number
+    customer: string | null
+    description: string | null
     status: string
   }>
-  monthlyBreakdown: Array<{
-    month: string
-    earnings: number
-    sales: number
-  }>
+  isConnected: boolean
+  loading: boolean
+  error: string | null
 }
 
 export function useStripeEarnings() {
   const { user } = useAuth()
-  const [data, setData] = useState<StripeEarningsData | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
+  const [data, setData] = useState<EarningsData>({
+    totalEarnings: 0,
+    last30Days: 0,
+    thisMonth: 0,
+    lastMonth: 0,
+    recentTransactions: [],
+    isConnected: false,
+    loading: true,
+    error: null,
+  })
 
   const fetchEarnings = useCallback(async () => {
     if (!user) {
-      setLoading(false)
+      setData((prev) => ({ ...prev, loading: false, isConnected: false }))
       return
     }
 
     try {
-      setError(null)
-      const token = await user.getIdToken()
+      setData((prev) => ({ ...prev, loading: true, error: null }))
 
+      const idToken = await user.getIdToken()
       const response = await fetch("/api/dashboard/earnings", {
-        method: "GET",
         headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
+          Authorization: `Bearer ${idToken}`,
         },
       })
 
-      if (!response.ok) {
-        if (response.status === 404) {
-          // No Stripe account connected - return empty data
-          setData({
-            totalEarnings: 0,
-            thisMonthEarnings: 0,
-            lastMonthEarnings: 0,
-            last30DaysEarnings: 0,
-            pendingPayout: 0,
-            availableBalance: 0,
-            salesMetrics: {
-              totalSales: 0,
-              thisMonthSales: 0,
-              last30DaysSales: 0,
-              averageTransactionValue: 0,
-            },
-            accountStatus: {
-              chargesEnabled: false,
-              payoutsEnabled: false,
-              detailsSubmitted: false,
-              requirementsCount: 0,
-            },
-            recentTransactions: [],
-            payoutHistory: [],
-            monthlyBreakdown: [],
-          })
-          setLastUpdated(new Date())
-          return
-        }
+      if (response.status === 404) {
+        // User doesn't have Stripe connected
+        setData({
+          totalEarnings: 0,
+          last30Days: 0,
+          thisMonth: 0,
+          lastMonth: 0,
+          recentTransactions: [],
+          isConnected: false,
+          loading: false,
+          error: null,
+        })
+        return
+      }
 
-        const errorData = await response.json()
-        throw new Error(errorData.error || "Failed to fetch earnings data")
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
       }
 
       const earningsData = await response.json()
-      setData(earningsData)
-      setLastUpdated(new Date())
-    } catch (err: any) {
-      console.error("Error fetching earnings:", err)
-      setError(err.message || "Failed to load earnings data")
 
-      // Set empty data on error
+      setData({
+        totalEarnings: earningsData.totalEarnings || 0,
+        last30Days: earningsData.last30Days || 0,
+        thisMonth: earningsData.thisMonth || 0,
+        lastMonth: earningsData.lastMonth || 0,
+        recentTransactions: earningsData.recentTransactions || [],
+        isConnected: true,
+        loading: false,
+        error: null,
+      })
+    } catch (error: any) {
+      console.error("Error fetching earnings:", error)
       setData({
         totalEarnings: 0,
-        thisMonthEarnings: 0,
-        lastMonthEarnings: 0,
-        last30DaysEarnings: 0,
-        pendingPayout: 0,
-        availableBalance: 0,
-        salesMetrics: {
-          totalSales: 0,
-          thisMonthSales: 0,
-          last30DaysSales: 0,
-          averageTransactionValue: 0,
-        },
-        accountStatus: {
-          chargesEnabled: false,
-          payoutsEnabled: false,
-          detailsSubmitted: false,
-          requirementsCount: 0,
-        },
+        last30Days: 0,
+        thisMonth: 0,
+        lastMonth: 0,
         recentTransactions: [],
-        payoutHistory: [],
-        monthlyBreakdown: [],
+        isConnected: false,
+        loading: false,
+        error: error.message || "Failed to load earnings data",
       })
-    } finally {
-      setLoading(false)
     }
   }, [user])
-
-  const syncData = useCallback(async () => {
-    if (!user) return
-
-    try {
-      const token = await user.getIdToken()
-
-      const response = await fetch("/api/stripe/bulk-sync", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
-      })
-
-      if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.error || "Failed to sync data")
-      }
-
-      // Refresh data after sync
-      await fetchEarnings()
-    } catch (err: any) {
-      console.error("Error syncing data:", err)
-      throw err
-    }
-  }, [user, fetchEarnings])
-
-  const refresh = useCallback(async () => {
-    setLoading(true)
-    await fetchEarnings()
-  }, [fetchEarnings])
 
   useEffect(() => {
     fetchEarnings()
   }, [fetchEarnings])
 
+  const unlinkStripeAccount = useCallback(async () => {
+    if (!user) {
+      throw new Error("User not authenticated")
+    }
+
+    try {
+      const idToken = await user.getIdToken()
+      const response = await fetch("/api/stripe/disconnect", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${idToken}`,
+          "Content-Type": "application/json",
+        },
+      })
+
+      const result = await response.json()
+
+      if (!response.ok) {
+        throw new Error(result.error || "Failed to unlink account")
+      }
+
+      // Refresh earnings data after unlinking
+      await fetchEarnings()
+
+      return result
+    } catch (error: any) {
+      console.error("Error unlinking Stripe account:", error)
+      throw error
+    }
+  }, [user, fetchEarnings])
+
   return {
-    data,
-    loading,
-    error,
-    lastUpdated,
-    refresh,
-    syncData,
+    ...data,
+    refresh: fetchEarnings,
+    unlinkStripeAccount,
   }
 }

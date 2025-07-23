@@ -1,110 +1,98 @@
-export const runtime = "nodejs"
-
 import { type NextRequest, NextResponse } from "next/server"
-import { getAuthenticatedUser, db } from "@/lib/firebase-admin"
+import { auth } from "@/lib/firebase-admin"
+import { db } from "@/lib/firebase-admin"
 
 export async function POST(request: NextRequest) {
   try {
-    console.log("🔌 Starting Stripe account disconnect process...")
+    console.log("🔗 [Stripe Disconnect] Starting disconnect process...")
 
-    // Get authenticated user
-    const user = await getAuthenticatedUser(request.headers)
-
-    if (!user) {
-      console.log("❌ No authenticated user found")
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Authentication required",
-        },
-        { status: 401 },
-      )
+    // Get authorization header
+    const authHeader = request.headers.get("authorization")
+    if (!authHeader?.startsWith("Bearer ")) {
+      console.log("❌ [Stripe Disconnect] Invalid or missing Bearer token")
+      return NextResponse.json({ error: "Authentication required" }, { status: 401 })
     }
 
-    console.log(`🗑️ Attempting to disconnect Stripe account for user ${user.uid}`)
-
+    // Extract and verify token
+    const token = authHeader.replace("Bearer ", "")
+    let decodedToken
     try {
-      // Get current user data
-      const userDoc = await db.collection("users").doc(user.uid).get()
+      decodedToken = await auth.verifyIdToken(token)
+      console.log("✅ [Stripe Disconnect] Token verified for user:", decodedToken.uid)
+    } catch (error: any) {
+      console.error("❌ [Stripe Disconnect] Token verification failed:", error.message)
+      return NextResponse.json({ error: "Invalid authentication token" }, { status: 401 })
+    }
 
-      if (!userDoc.exists) {
-        console.log(`❌ User document not found for ${user.uid}`)
-        return NextResponse.json(
-          {
-            success: false,
-            error: "User profile not found",
-          },
-          { status: 404 },
-        )
-      }
+    const userId = decodedToken.uid
 
-      const userData = userDoc.data()
-      console.log(`📊 User data retrieved:`, {
-        hasStripeAccountId: !!userData?.stripeAccountId,
-        stripeAccountStatus: userData?.stripeAccountStatus,
-        stripeAccountId: userData?.stripeAccountId ? `${userData.stripeAccountId.substring(0, 10)}...` : "none",
-      })
+    // Get user document
+    const userDoc = await db.collection("users").doc(userId).get()
 
-      // Check if user has any Stripe-related data to disconnect
-      const hasStripeData =
-        userData?.stripeAccountId ||
-        userData?.stripeAccountStatus ||
-        userData?.stripeConnected ||
-        userData?.stripeOnboardingComplete
-
-      if (!hasStripeData) {
-        console.log(`ℹ️ No Stripe account data found for user ${user.uid}`)
-        return NextResponse.json(
-          {
-            success: true,
-            message: "No Stripe account was connected to disconnect",
-            wasConnected: false,
-          },
-          { status: 200 },
-        )
-      }
-
-      const stripeAccountId = userData.stripeAccountId
-
-      // Remove all Stripe-related data from user profile
-      const updateData: any = {
-        stripeAccountId: null,
-        stripeAccountStatus: null,
-        stripeConnected: false,
-        stripeOnboardingComplete: false,
-        stripeChargesEnabled: false,
-        stripePayoutsEnabled: false,
-        stripeDetailsSubmitted: false,
-        updatedAt: new Date(),
-      }
-
-      await db.collection("users").doc(user.uid).update(updateData)
-
-      console.log(`✅ Successfully disconnected Stripe account ${stripeAccountId || "unknown"} from user ${user.uid}`)
-
+    if (!userDoc.exists) {
+      console.log("⚠️ [Stripe Disconnect] User document not found")
       return NextResponse.json({
         success: true,
-        message: "Stripe account disconnected successfully",
-        disconnectedAccountId: stripeAccountId,
-        wasConnected: true,
+        message: "No Stripe account was connected to disconnect",
       })
-    } catch (firestoreError: any) {
-      console.error("❌ Firestore error during disconnect:", firestoreError)
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Database error during disconnect",
-          details: firestoreError.message,
-        },
-        { status: 500 },
-      )
     }
+
+    const userData = userDoc.data()
+
+    // Check if user has any Stripe-related data
+    const hasStripeData = !!(
+      userData?.stripeAccountId ||
+      userData?.stripeAccountStatus ||
+      userData?.stripeConnected ||
+      userData?.stripeOnboardingComplete
+    )
+
+    if (!hasStripeData) {
+      console.log("ℹ️ [Stripe Disconnect] No Stripe account found to disconnect")
+      return NextResponse.json({
+        success: true,
+        message: "No Stripe account was connected to disconnect",
+      })
+    }
+
+    // Remove all Stripe-related fields
+    const updateData: any = {
+      stripeAccountId: null,
+      stripeAccountStatus: "not_connected",
+      stripeConnected: false,
+      stripeOnboardingComplete: false,
+      updatedAt: new Date(),
+    }
+
+    // Remove any other potential Stripe fields
+    const fieldsToRemove = [
+      "stripeAccountType",
+      "stripeBusinessType",
+      "stripeCapabilities",
+      "stripeRequirements",
+      "stripeChargesEnabled",
+      "stripePayoutsEnabled",
+    ]
+
+    fieldsToRemove.forEach((field) => {
+      if (userData?.[field] !== undefined) {
+        updateData[field] = null
+      }
+    })
+
+    await db.collection("users").doc(userId).update(updateData)
+
+    console.log("✅ [Stripe Disconnect] Successfully disconnected Stripe account for user:", userId)
+
+    return NextResponse.json({
+      success: true,
+      message: "Stripe account successfully disconnected",
+    })
   } catch (error: any) {
-    console.error("❌ Unexpected error in disconnect:", error)
+    console.error("❌ [Stripe Disconnect] Unexpected error:", error.message)
     return NextResponse.json(
       {
-        success: false,
-        error: "Internal server error",
+        error: "Failed to disconnect Stripe account",
         details: error.message,
       },
       { status: 500 },

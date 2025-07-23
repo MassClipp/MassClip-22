@@ -1,174 +1,153 @@
 "use client"
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { Skeleton } from "@/components/ui/skeleton"
-import { DollarSign, Calendar, User, CreditCard } from "lucide-react"
+import { DollarSign } from "lucide-react"
 
-interface Sale {
+interface Transaction {
   id: string
   amount: number
   currency: string
   created: number
-  description?: string
-  customer?: {
-    name?: string
-    email?: string
-  }
+  customer: string | null
+  description: string | null
+  status: string
 }
 
 interface RecentSalesProps {
-  sales: Sale[]
-  isLoading?: boolean
+  transactions: Transaction[]
+  loading?: boolean
 }
 
-function getDisplayName(sale: Sale): string {
-  if (sale.customer?.name) {
-    return sale.customer.name
-  }
-  if (sale.customer?.email) {
-    return sale.customer.email
-  }
-  return "Anonymous Customer"
-}
-
-function formatDate(timestamp: number): string {
-  try {
-    return new Date(timestamp * 1000).toLocaleDateString("en-US", {
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-    })
-  } catch (error) {
-    return "Unknown date"
-  }
-}
-
-function formatCurrency(amount: number, currency = "usd"): string {
-  try {
-    return new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency: currency.toUpperCase(),
-    }).format(amount / 100) // Stripe amounts are in cents
-  } catch (error) {
-    return `$${(amount / 100).toFixed(2)}`
-  }
-}
-
-export function RecentSales({ sales, isLoading = false }: RecentSalesProps) {
-  if (isLoading) {
+export function RecentSales({ transactions, loading }: RecentSalesProps) {
+  if (loading) {
     return (
-      <Card className="bg-zinc-900/60 border-zinc-800/50">
-        <CardHeader className="pb-4">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-zinc-800/50 rounded-lg">
-              <DollarSign className="h-5 w-5 text-zinc-400" />
-            </div>
-            <div>
-              <CardTitle className="text-xl text-white">Recent Sales</CardTitle>
-              <CardDescription className="text-zinc-400">Latest transaction activity</CardDescription>
-            </div>
-          </div>
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <DollarSign className="h-5 w-5" />
+            Recent Sales
+          </CardTitle>
+          <CardDescription>Latest transaction activity</CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
-          {Array.from({ length: 5 }).map((_, i) => (
-            <div key={i} className="flex items-center justify-between p-4 bg-zinc-800/30 rounded-lg">
-              <div className="flex items-center gap-3">
-                <Skeleton className="h-10 w-10 rounded-full bg-zinc-700" />
-                <div className="space-y-2">
-                  <Skeleton className="h-4 w-32 bg-zinc-700" />
-                  <Skeleton className="h-3 w-24 bg-zinc-700" />
+        <CardContent>
+          <div className="space-y-4">
+            {[...Array(3)].map((_, i) => (
+              <div key={i} className="flex items-center justify-between animate-pulse">
+                <div className="space-y-1">
+                  <div className="h-4 bg-gray-200 rounded w-32"></div>
+                  <div className="h-3 bg-gray-200 rounded w-24"></div>
                 </div>
+                <div className="h-4 bg-gray-200 rounded w-16"></div>
               </div>
-              <Skeleton className="h-6 w-16 bg-zinc-700" />
-            </div>
-          ))}
+            ))}
+          </div>
         </CardContent>
       </Card>
     )
   }
 
+  if (!transactions || transactions.length === 0) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <DollarSign className="h-5 w-5" />
+            Recent Sales
+          </CardTitle>
+          <CardDescription>Latest transaction activity</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="text-center py-8">
+            <DollarSign className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+            <p className="text-gray-500 font-medium">No recent sales to display</p>
+            <p className="text-sm text-gray-400 mt-1">Sales will appear here once you start making money</p>
+          </div>
+        </CardContent>
+      </Card>
+    )
+  }
+
+  const formatCurrency = (amount: number, currency: string) => {
+    try {
+      return new Intl.NumberFormat("en-US", {
+        style: "currency",
+        currency: currency.toUpperCase(),
+      }).format(amount / 100)
+    } catch (error) {
+      return `$${(amount / 100).toFixed(2)}`
+    }
+  }
+
+  const formatDate = (timestamp: number) => {
+    try {
+      return new Date(timestamp * 1000).toLocaleDateString("en-US", {
+        month: "short",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      })
+    } catch (error) {
+      return "Invalid date"
+    }
+  }
+
+  const getCustomerName = (customer: string | null, description: string | null) => {
+    if (customer && typeof customer === "string" && customer.length > 0) {
+      // Safely get first character
+      const firstChar = customer.charAt ? customer.charAt(0).toUpperCase() : customer[0]?.toUpperCase() || "?"
+      return {
+        name: customer,
+        initials: firstChar,
+      }
+    }
+
+    if (description && typeof description === "string" && description.length > 0) {
+      const firstChar = description.charAt ? description.charAt(0).toUpperCase() : description[0]?.toUpperCase() || "?"
+      return {
+        name: description,
+        initials: firstChar,
+      }
+    }
+
+    return {
+      name: "Anonymous Customer",
+      initials: "A",
+    }
+  }
+
   return (
-    <Card className="bg-zinc-900/60 border-zinc-800/50">
-      <CardHeader className="pb-4">
-        <div className="flex items-center gap-3">
-          <div className="p-2 bg-zinc-800/50 rounded-lg">
-            <DollarSign className="h-5 w-5 text-zinc-400" />
-          </div>
-          <div>
-            <CardTitle className="text-xl text-white">Recent Sales</CardTitle>
-            <CardDescription className="text-zinc-400">Latest transaction activity</CardDescription>
-          </div>
-        </div>
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <DollarSign className="h-5 w-5" />
+          Recent Sales
+        </CardTitle>
+        <CardDescription>Latest transaction activity</CardDescription>
       </CardHeader>
       <CardContent>
-        {sales.length === 0 ? (
-          <div className="text-center py-12">
-            <div className="mx-auto w-24 h-24 bg-zinc-800/50 rounded-full flex items-center justify-center mb-4">
-              <DollarSign className="h-12 w-12 text-zinc-600" />
-            </div>
-            <h3 className="text-lg font-medium text-white mb-2">No recent sales to display</h3>
-            <p className="text-zinc-400 text-sm mb-6">Sales will appear here once you start making money</p>
-            <Badge variant="secondary" className="bg-zinc-800 text-zinc-300 border-zinc-700">
-              Start selling to see activity
-            </Badge>
-          </div>
-        ) : (
-          <div className="space-y-4">
-            {sales.slice(0, 10).map((sale) => {
-              const displayName = getDisplayName(sale)
-              const initials = displayName.charAt(0).toUpperCase()
+        <div className="space-y-4">
+          {transactions.slice(0, 5).map((transaction) => {
+            const customer = getCustomerName(transaction.customer, transaction.description)
 
-              return (
-                <div
-                  key={sale.id}
-                  className="flex items-center justify-between p-4 bg-zinc-800/30 rounded-lg hover:bg-zinc-800/50 transition-colors"
-                >
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-gradient-to-br from-green-600 to-green-400 rounded-full flex items-center justify-center">
-                      <span className="text-white font-semibold text-sm">{initials}</span>
-                    </div>
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-2">
-                        <p className="font-medium text-white text-sm">{displayName}</p>
-                        {sale.customer?.email && (
-                          <Badge variant="secondary" className="bg-zinc-700 text-zinc-300 text-xs">
-                            <User className="h-3 w-3 mr-1" />
-                            Customer
-                          </Badge>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-3 text-xs text-zinc-400">
-                        <div className="flex items-center gap-1">
-                          <Calendar className="h-3 w-3" />
-                          {formatDate(sale.created)}
-                        </div>
-                        {sale.description && (
-                          <div className="flex items-center gap-1">
-                            <CreditCard className="h-3 w-3" />
-                            <span className="truncate max-w-32">{sale.description}</span>
-                          </div>
-                        )}
-                      </div>
-                    </div>
+            return (
+              <div key={transaction.id} className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center">
+                    <span className="text-sm font-medium text-blue-600">{customer.initials}</span>
                   </div>
-                  <div className="text-right">
-                    <p className="font-bold text-green-400 text-lg">{formatCurrency(sale.amount, sale.currency)}</p>
-                    <p className="text-xs text-zinc-500">{sale.currency.toUpperCase()}</p>
+                  <div className="space-y-1">
+                    <p className="text-sm font-medium leading-none">{customer.name}</p>
+                    <p className="text-xs text-gray-500">{formatDate(transaction.created)}</p>
                   </div>
                 </div>
-              )
-            })}
-
-            {sales.length > 10 && (
-              <div className="text-center pt-4">
-                <Badge variant="outline" className="border-zinc-700 text-zinc-400">
-                  +{sales.length - 10} more transactions
-                </Badge>
+                <div className="text-right">
+                  <p className="text-sm font-medium">{formatCurrency(transaction.amount, transaction.currency)}</p>
+                  <p className="text-xs text-gray-500 capitalize">{transaction.status}</p>
+                </div>
               </div>
-            )}
-          </div>
-        )}
+            )
+          })}
+        </div>
       </CardContent>
     </Card>
   )

@@ -1,5 +1,7 @@
+"use client"
+
 import { Suspense } from "react"
-import EarningsPageContent from "./earnings-content"
+import { EarningsContent } from "./earnings-content"
 import { Loader2 } from "lucide-react"
 
 function EarningsPageLoading() {
@@ -20,7 +22,7 @@ export default function EarningsPage() {
   return (
     <div className="container mx-auto px-4 py-8">
       <Suspense fallback={<EarningsPageLoading />}>
-        <EarningsPageContent />
+        <EarningsContent />
       </Suspense>
     </div>
   )
