@@ -46,43 +46,191 @@ export default function StripeConnectionPrompt({
   const { user } = useAuth()
   const [isConnecting, setIsConnecting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [debugInfo, setDebugInfo] = useState<string | null>(null)
 
-  // Single handler for both new and existing account connections
-  const handleConnect = async () => {
-    if (!user) return
+  // Handler for creating a new Stripe account
+  const handleCreateAccount = async () => {
+    if (!user) {
+      console.error("❌ [Create Account] No authenticated user")
+      setError("Please log in to continue")
+      return
+    }
 
     try {
       setIsConnecting(true)
       setError(null)
+      setDebugInfo(null)
 
+      console.log("🚀 [Create Account] Starting account creation flow...")
+
+      // Get Firebase ID token
       const idToken = await user.getIdToken()
+      console.log("✅ [Create Account] Got Firebase ID token")
 
-      const response = await fetch("/api/stripe/connect/onboard", {
+      // Call the create account API
+      console.log("📡 [Create Account] Calling /api/stripe/create-stripe-account...")
+
+      const response = await fetch("/api/stripe/create-stripe-account", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          Accept: "application/json",
         },
         body: JSON.stringify({ idToken }),
       })
 
-      if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.error || "Failed to start Stripe Connect onboarding")
+      console.log("📥 [Create Account] Response received:", {
+        status: response.status,
+        statusText: response.statusText,
+        headers: Object.fromEntries(response.headers.entries()),
+        url: response.url,
+      })
+
+      // Check if response is JSON
+      const contentType = response.headers.get("content-type")
+      if (!contentType || !contentType.includes("application/json")) {
+        const textResponse = await response.text()
+        console.error("❌ [Create Account] Non-JSON response:", textResponse)
+        setDebugInfo(
+          `Server returned: ${response.status} ${response.statusText}\nContent: ${textResponse.substring(0, 500)}`,
+        )
+        throw new Error(`Server error: Expected JSON but got ${contentType}`)
       }
 
       const data = await response.json()
+      console.log("📋 [Create Account] Response data:", data)
 
-      if (data.onboardingComplete) {
-        // Account is already complete
-        onConnectionSuccess()
-      } else if (data.onboardingUrl) {
-        // Redirect to Stripe onboarding
-        console.log(`🔗 ${data.resuming ? "Resuming" : "Starting"} Stripe onboarding`)
-        window.location.href = data.onboardingUrl
+      if (!response.ok) {
+        console.error("❌ [Create Account] API error:", data)
+        setDebugInfo(`API Error: ${JSON.stringify(data, null, 2)}`)
+        throw new Error(data.error || `Server error: ${response.status}`)
       }
+
+      if (data.alreadySetup) {
+        console.log("✅ [Create Account] Account already set up")
+        onConnectionSuccess()
+        return
+      }
+
+      if (!data.url) {
+        console.error("❌ [Create Account] No onboarding URL in response:", data)
+        setDebugInfo(`Response missing URL: ${JSON.stringify(data, null, 2)}`)
+        throw new Error("No onboarding URL received from server")
+      }
+
+      console.log("🔗 [Create Account] Redirecting to onboarding URL:", data.url)
+
+      // Test the URL before redirecting
+      try {
+        const urlTest = new URL(data.url)
+        console.log("✅ [Create Account] URL validation passed:", urlTest.origin)
+      } catch (urlError) {
+        console.error("❌ [Create Account] Invalid URL:", data.url)
+        setDebugInfo(`Invalid URL received: ${data.url}`)
+        throw new Error("Invalid onboarding URL received")
+      }
+
+      // Redirect to Stripe onboarding
+      window.location.href = data.url
     } catch (error: any) {
-      console.error("Error connecting to Stripe:", error)
-      setError(error.message)
+      console.error("❌ [Create Account] Error:", error)
+      setError(error.message || "Failed to create Stripe account")
+
+      // Add more debug info for network errors
+      if (error.name === "TypeError" && error.message.includes("fetch")) {
+        setDebugInfo("Network error: Unable to reach the server. Check your internet connection.")
+      }
+    } finally {
+      setIsConnecting(false)
+    }
+  }
+
+  // Handler for connecting existing account via OAuth
+  const handleConnectExisting = async () => {
+    if (!user) {
+      console.error("❌ [Connect Existing] No authenticated user")
+      setError("Please log in to continue")
+      return
+    }
+
+    try {
+      setIsConnecting(true)
+      setError(null)
+      setDebugInfo(null)
+
+      console.log("🚀 [Connect Existing] Starting OAuth connection flow...")
+
+      // Get Firebase ID token
+      const idToken = await user.getIdToken()
+      console.log("✅ [Connect Existing] Got Firebase ID token")
+
+      // Call the OAuth API
+      console.log("📡 [Connect Existing] Calling /api/stripe/connect/oauth...")
+
+      const response = await fetch("/api/stripe/connect/oauth", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        body: JSON.stringify({ idToken }),
+      })
+
+      console.log("📥 [Connect Existing] Response received:", {
+        status: response.status,
+        statusText: response.statusText,
+        headers: Object.fromEntries(response.headers.entries()),
+        url: response.url,
+      })
+
+      // Check if response is JSON
+      const contentType = response.headers.get("content-type")
+      if (!contentType || !contentType.includes("application/json")) {
+        const textResponse = await response.text()
+        console.error("❌ [Connect Existing] Non-JSON response:", textResponse)
+        setDebugInfo(
+          `Server returned: ${response.status} ${response.statusText}\nContent: ${textResponse.substring(0, 500)}`,
+        )
+        throw new Error(`Server error: Expected JSON but got ${contentType}`)
+      }
+
+      const data = await response.json()
+      console.log("📋 [Connect Existing] Response data:", data)
+
+      if (!response.ok) {
+        console.error("❌ [Connect Existing] API error:", data)
+        setDebugInfo(`API Error: ${JSON.stringify(data, null, 2)}`)
+        throw new Error(data.error || `Server error: ${response.status}`)
+      }
+
+      if (!data.oauthUrl) {
+        console.error("❌ [Connect Existing] No OAuth URL in response:", data)
+        setDebugInfo(`Response missing OAuth URL: ${JSON.stringify(data, null, 2)}`)
+        throw new Error("No OAuth URL received from server")
+      }
+
+      console.log("🔗 [Connect Existing] Redirecting to OAuth URL:", data.oauthUrl)
+
+      // Test the URL before redirecting
+      try {
+        const urlTest = new URL(data.oauthUrl)
+        console.log("✅ [Connect Existing] URL validation passed:", urlTest.origin)
+      } catch (urlError) {
+        console.error("❌ [Connect Existing] Invalid URL:", data.oauthUrl)
+        setDebugInfo(`Invalid URL received: ${data.oauthUrl}`)
+        throw new Error("Invalid OAuth URL received")
+      }
+
+      // Redirect to Stripe OAuth
+      window.location.href = data.oauthUrl
+    } catch (error: any) {
+      console.error("❌ [Connect Existing] Error:", error)
+      setError(error.message || "Failed to connect Stripe account")
+
+      // Add more debug info for network errors
+      if (error.name === "TypeError" && error.message.includes("fetch")) {
+        setDebugInfo("Network error: Unable to reach the server. Check your internet connection.")
+      }
     } finally {
       setIsConnecting(false)
     }
@@ -150,7 +298,11 @@ export default function StripeConnectionPrompt({
               </div>
             )}
 
-            <Button onClick={handleConnect} disabled={isConnecting} className="w-full bg-blue-600 hover:bg-blue-700">
+            <Button
+              onClick={handleCreateAccount}
+              disabled={isConnecting}
+              className="w-full bg-blue-600 hover:bg-blue-700"
+            >
               {isConnecting ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -169,7 +321,7 @@ export default function StripeConnectionPrompt({
     )
   }
 
-  // Default connection prompt (keeping original design)
+  // Default connection prompt
   return (
     <div className={`space-y-8 ${className}`}>
       {/* Header */}
@@ -202,9 +354,30 @@ export default function StripeConnectionPrompt({
         </div>
       </div>
 
+      {/* Error Display */}
+      {error && (
+        <Alert className="border-red-500 bg-red-500/10 max-w-2xl mx-auto">
+          <AlertCircle className="h-4 w-4 text-red-400" />
+          <AlertDescription className="text-red-300">
+            <div className="font-medium mb-1">Connection Error</div>
+            <div className="text-sm">{error}</div>
+            {debugInfo && (
+              <details className="mt-2">
+                <summary className="cursor-pointer text-xs text-red-400 hover:text-red-300">
+                  Show technical details
+                </summary>
+                <pre className="mt-1 text-xs text-red-400 whitespace-pre-wrap bg-red-900/20 p-2 rounded border border-red-800/50 overflow-auto max-h-32">
+                  {debugInfo}
+                </pre>
+              </details>
+            )}
+          </AlertDescription>
+        </Alert>
+      )}
+
       {/* Connection Options */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Create New Account - Keep as-is but use proper Express account flow */}
+        {/* Create New Account */}
         <Card className="bg-gradient-to-br from-blue-900/20 to-blue-800/10 border-blue-800/50">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -228,7 +401,11 @@ export default function StripeConnectionPrompt({
                 <span>Automatic payouts to your bank</span>
               </div>
             </div>
-            <Button className="w-full bg-blue-600 hover:bg-blue-700" onClick={handleConnect} disabled={isConnecting}>
+            <Button
+              className="w-full bg-blue-600 hover:bg-blue-700"
+              onClick={handleCreateAccount}
+              disabled={isConnecting}
+            >
               {isConnecting ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -245,7 +422,7 @@ export default function StripeConnectionPrompt({
           </CardContent>
         </Card>
 
-        {/* Refactored Green Box - Already Have Account */}
+        {/* Connect Existing Account */}
         <Card className="bg-gradient-to-br from-green-900/20 to-green-800/10 border-green-800/50">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -270,14 +447,11 @@ export default function StripeConnectionPrompt({
               </div>
             </div>
 
-            {error && (
-              <Alert className="border-red-500 bg-red-500/10">
-                <AlertCircle className="h-4 w-4 text-red-400" />
-                <AlertDescription className="text-red-300">{error}</AlertDescription>
-              </Alert>
-            )}
-
-            <Button onClick={handleConnect} disabled={isConnecting} className="w-full bg-green-600 hover:bg-green-700">
+            <Button
+              onClick={handleConnectExisting}
+              disabled={isConnecting}
+              className="w-full bg-green-600 hover:bg-green-700"
+            >
               {isConnecting ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
