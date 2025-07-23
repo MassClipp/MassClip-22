@@ -1,57 +1,63 @@
 import { NextResponse } from "next/server"
-import { stripe } from "@/lib/stripe"
+import Stripe from "stripe"
 
 export async function GET() {
   try {
-    console.log("🔍 [Stripe Test] Testing Stripe API connection...")
+    // Check if Stripe API key is set
+    if (!process.env.STRIPE_SECRET_KEY) {
+      return NextResponse.json({ success: false, message: "Stripe API key is not configured" }, { status: 500 })
+    }
 
-    // Test basic Stripe connection
-    const account = await stripe.accounts.retrieve()
-
-    console.log("✅ [Stripe Test] Successfully connected to Stripe")
-    console.log("📊 [Stripe Test] Account details:", {
-      id: account.id,
-      country: account.country,
-      email: account.email,
-      type: account.type,
+    // Initialize Stripe
+    const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
+      apiVersion: "2023-10-16",
     })
 
-    // Check if Connect is enabled
-    let connectEnabled = false
-    let connectError = null
+    // Test connection by fetching account details
+    const account = await stripe.accounts.retrieve()
 
-    try {
-      // Try to list connected accounts to test Connect permissions
-      const connectedAccounts = await stripe.accounts.list({ limit: 1 })
-      connectEnabled = true
-      console.log("✅ [Stripe Test] Stripe Connect is enabled")
-    } catch (connectErr: any) {
-      connectEnabled = false
-      connectError = connectErr.message
-      console.warn("⚠️ [Stripe Test] Stripe Connect may not be enabled:", connectErr.message)
+    // Check if price ID is set
+    const priceId = process.env.STRIPE_PRICE_ID
+    let priceDetails = null
+
+    if (priceId) {
+      try {
+        priceDetails = await stripe.prices.retrieve(priceId)
+      } catch (error) {
+        return NextResponse.json(
+          {
+            success: false,
+            message: "Stripe connection successful, but price ID is invalid",
+            error: error instanceof Error ? error.message : "Unknown error",
+            accountId: account.id,
+          },
+          { status: 200 },
+        )
+      }
     }
 
     return NextResponse.json({
-      connected: true,
+      success: true,
       message: "Stripe connection successful",
       accountId: account.id,
-      country: account.country,
-      email: account.email,
-      type: account.type,
-      connectEnabled,
-      connectError,
-      testMode: process.env.STRIPE_SECRET_KEY?.startsWith("sk_test_") || false,
+      priceId: priceId || "Not configured",
+      priceDetails: priceDetails
+        ? {
+            id: priceDetails.id,
+            active: priceDetails.active,
+            currency: priceDetails.currency,
+            product: priceDetails.product,
+            unitAmount: priceDetails.unit_amount,
+          }
+        : null,
     })
-  } catch (error: any) {
-    console.error("❌ [Stripe Test] Connection failed:", error)
-
+  } catch (error) {
+    console.error("Error testing Stripe connection:", error)
     return NextResponse.json(
       {
-        connected: false,
+        success: false,
         message: "Failed to connect to Stripe",
-        error: error.message,
-        code: error.code,
-        type: error.type,
+        error: error instanceof Error ? error.message : "Unknown error",
       },
       { status: 500 },
     )

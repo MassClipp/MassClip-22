@@ -3,27 +3,20 @@
 import { useState, useEffect, useCallback } from "react"
 import { useAuth } from "@/contexts/auth-context"
 
-interface ConnectionStatus {
+interface StripeConnectionStatus {
   isConnected: boolean
-  accountId: string | null
-  businessType: "individual" | "company" | null
-  capabilities: {
-    charges_enabled: boolean
-    payouts_enabled: boolean
-    details_submitted: boolean
-    currently_due: string[]
-    eventually_due: string[]
-    past_due: string[]
-  } | null
+  accountId?: string
+  status?: string
+  requiresAction?: boolean
 }
 
 export function useStripeConnectionCheck() {
   const { user } = useAuth()
   const [isConnected, setIsConnected] = useState(false)
   const [loading, setLoading] = useState(true)
-  const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus | null>(null)
+  const [error, setError] = useState<string | null>(null)
 
-  const checkStatus = useCallback(async () => {
+  const checkConnection = useCallback(async () => {
     if (!user) {
       setLoading(false)
       return
@@ -31,35 +24,27 @@ export function useStripeConnectionCheck() {
 
     try {
       setLoading(true)
-      const idToken = await user.getIdToken()
+      setError(null)
+
+      const token = await user.getIdToken()
 
       const response = await fetch("/api/stripe/connect/status", {
-        method: "POST",
+        method: "GET",
         headers: {
+          Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ idToken }),
       })
 
-      if (response.ok) {
-        const data = await response.json()
-        const status: ConnectionStatus = {
-          isConnected: data.connected,
-          accountId: data.accountId,
-          businessType: data.businessType,
-          capabilities: data.capabilities,
-        }
-
-        setConnectionStatus(status)
-        setIsConnected(data.connected && data.capabilities?.charges_enabled && data.capabilities?.payouts_enabled)
-      } else {
-        // If there's an error, assume not connected
-        setConnectionStatus(null)
-        setIsConnected(false)
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`)
       }
-    } catch (error) {
-      console.error("Error checking connection status:", error)
-      setConnectionStatus(null)
+
+      const data: StripeConnectionStatus = await response.json()
+      setIsConnected(data.isConnected || false)
+    } catch (err) {
+      console.error("Error checking Stripe connection:", err)
+      setError(err instanceof Error ? err.message : "Unknown error")
       setIsConnected(false)
     } finally {
       setLoading(false)
@@ -67,17 +52,17 @@ export function useStripeConnectionCheck() {
   }, [user])
 
   useEffect(() => {
-    checkStatus()
-  }, [checkStatus])
+    checkConnection()
+  }, [checkConnection])
 
   const refreshStatus = useCallback(() => {
-    checkStatus()
-  }, [checkStatus])
+    checkConnection()
+  }, [checkConnection])
 
   return {
     isConnected,
     loading,
-    connectionStatus,
+    error,
     refreshStatus,
   }
 }

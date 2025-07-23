@@ -1,39 +1,38 @@
-import { NextResponse } from "next/server"
+import { type NextRequest, NextResponse } from "next/server"
+import { getSiteUrl, isPreviewEnvironment, isProductionEnvironment } from "@/lib/url-utils"
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    const requiredEnvVars = [
-      "STRIPE_SECRET_KEY",
-      "NEXT_PUBLIC_BASE_URL",
-      "FIREBASE_PROJECT_ID",
-      "FIREBASE_CLIENT_EMAIL",
-      "FIREBASE_PRIVATE_KEY",
-    ]
+    const environmentInfo = {
+      // Environment variables
+      VERCEL_ENV: process.env.VERCEL_ENV,
+      VERCEL_URL: process.env.VERCEL_URL,
+      NODE_ENV: process.env.NODE_ENV,
+      NEXT_PUBLIC_SITE_URL: process.env.NEXT_PUBLIC_SITE_URL,
+      NEXT_PUBLIC_SITE_URL_2: process.env.NEXT_PUBLIC_SITE_URL_2,
 
-    const envStatus = requiredEnvVars.map((varName) => ({
-      name: varName,
-      present: !!process.env[varName],
-      value:
-        varName.includes("SECRET") || varName.includes("PRIVATE")
-          ? "[HIDDEN]"
-          : process.env[varName]?.substring(0, 20) + "...",
-    }))
+      // Calculated values
+      calculatedSiteUrl: getSiteUrl(),
+      isPreview: isPreviewEnvironment(),
+      isProduction: isProductionEnvironment(),
 
-    const allPresent = envStatus.every((env) => env.present)
-
-    return NextResponse.json({
-      allPresent,
-      environment: process.env.NODE_ENV,
-      envVars: envStatus,
-      stripeMode: process.env.STRIPE_SECRET_KEY?.startsWith("sk_live_") ? "LIVE" : "TEST",
-    })
-  } catch (error) {
-    return NextResponse.json(
-      {
-        error: "Failed to check environment variables",
-        details: error instanceof Error ? error.message : "Unknown error",
+      // Request info
+      requestUrl: request.url,
+      requestHeaders: {
+        host: request.headers.get("host"),
+        "x-forwarded-host": request.headers.get("x-forwarded-host"),
+        "x-forwarded-proto": request.headers.get("x-forwarded-proto"),
       },
-      { status: 500 },
-    )
+
+      // Timestamp
+      timestamp: new Date().toISOString(),
+    }
+
+    console.log("🌐 Environment Check:", environmentInfo)
+
+    return NextResponse.json(environmentInfo)
+  } catch (error: any) {
+    console.error("❌ Environment check error:", error)
+    return NextResponse.json({ error: error.message }, { status: 500 })
   }
 }

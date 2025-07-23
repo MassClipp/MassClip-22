@@ -3,175 +3,163 @@ import { db } from "@/lib/firebase-admin"
 import { stripe, isTestMode } from "@/lib/stripe"
 
 export async function GET(request: NextRequest) {
-  const { searchParams } = new URL(request.url)
-  const code = searchParams.get("code")
-  const state = searchParams.get("state")
-  const error = searchParams.get("error")
-  const errorDescription = searchParams.get("error_description")
-
-  console.log("🔄 [OAuth Callback] Processing OAuth callback", {
-    hasCode: !!code,
-    hasState: !!state,
-    hasError: !!error,
-    error,
-    errorDescription,
-  })
-
-  // Handle OAuth errors
-  if (error) {
-    console.error("❌ [OAuth Callback] OAuth error:", error, errorDescription)
-    const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_VERCEL_URL || "http://localhost:3000"
-    return NextResponse.redirect(
-      `${baseUrl}/dashboard/earnings?error=${encodeURIComponent(error)}&description=${encodeURIComponent(errorDescription || "")}`,
-    )
-  }
-
-  if (!code || !state) {
-    console.error("❌ [OAuth Callback] Missing code or state parameter")
-    const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_VERCEL_URL || "http://localhost:3000"
-    return NextResponse.redirect(`${baseUrl}/dashboard/earnings?error=missing_parameters`)
-  }
-
   try {
-    // Decode and validate state
+    const url = new URL(request.url)
+    const code = url.searchParams.get("code")
+    const state = url.searchParams.get("state")
+    const error = url.searchParams.get("error")
+    const errorDescription = url.searchParams.get("error_description")
+
+    console.log(`🔄 [OAuth Callback] Processing callback with code: ${code ? "present" : "missing"}`)
+
+    // Handle errors from Stripe
+    if (error) {
+      console.error(`❌ [OAuth Callback] Stripe returned error: ${error}`, errorDescription)
+      return NextResponse.redirect(
+        `${process.env.NEXT_PUBLIC_SITE_URL}/dashboard/connect-stripe?error=${error}&error_description=${encodeURIComponent(errorDescription || "Unknown error")}`,
+      )
+    }
+
+    // Validate required parameters
+    if (!code || !state) {
+      console.error("❌ [OAuth Callback] Missing required parameters")
+      return NextResponse.redirect(
+        `${process.env.NEXT_PUBLIC_SITE_URL}/dashboard/connect-stripe?error=invalid_request&error_description=Missing+required+parameters`,
+      )
+    }
+
+    // Parse and validate state parameter
     let stateData
     try {
       stateData = JSON.parse(Buffer.from(state, "base64").toString())
-      console.log("✅ [OAuth Callback] State decoded:", { userId: stateData.userId, flow: stateData.flow })
-    } catch (error) {
-      console.error("❌ [OAuth Callback] Invalid state parameter:", error)
-      const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_VERCEL_URL || "http://localhost:3000"
-      return NextResponse.redirect(`${baseUrl}/dashboard/earnings?error=invalid_state`)
+      if (!stateData.userId || !stateData.timestamp) {
+        throw new Error("Invalid state data structure")
+      }
+
+      // Check if state is not too old (15 minutes max)
+      const stateAge = Date.now() - stateData.timestamp
+      if (stateAge > 15 * 60 * 1000) {
+        throw new Error("State parameter expired")
+      }
+    } catch (stateError) {
+      console.error("❌ [OAuth Callback] Invalid state parameter:", stateError)
+      return NextResponse.redirect(
+        `${process.env.NEXT_PUBLIC_SITE_URL}/dashboard/connect-stripe?error=invalid_state&error_description=Invalid+or+expired+state+parameter`,
+      )
     }
 
-    const { userId, timestamp, mode, flow } = stateData
-
-    // Validate state timestamp (prevent replay attacks)
-    const stateAge = Date.now() - timestamp
-    if (stateAge > 10 * 60 * 1000) {
-      // 10 minutes
-      console.error("❌ [OAuth Callback] State expired:", stateAge)
-      const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_VERCEL_URL || "http://localhost:3000"
-      return NextResponse.redirect(`${baseUrl}/dashboard/earnings?error=state_expired`)
-    }
-
-    // Validate mode matches current environment
-    const currentMode = isTestMode ? "test" : "live"
-    if (mode !== currentMode) {
-      console.error("❌ [OAuth Callback] Mode mismatch:", { stateMode: mode, currentMode })
-      const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_VERCEL_URL || "http://localhost:3000"
-      return NextResponse.redirect(`${baseUrl}/dashboard/earnings?error=mode_mismatch`)
-    }
+    console.log(`🔄 [OAuth Callback] Processing for user: ${stateData.userId}`)
 
     // Exchange authorization code for access token
-    console.log("🔄 [OAuth Callback] Exchanging code for access token")
-
-    const clientSecret = isTestMode
-      ? process.env.STRIPE_SECRET_KEY_TEST || process.env.STRIPE_SECRET_KEY
-      : process.env.STRIPE_SECRET_KEY_LIVE || process.env.STRIPE_SECRET_KEY
-
-    if (!clientSecret) {
-      console.error("❌ [OAuth Callback] Missing Stripe secret key")
-      const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_VERCEL_URL || "http://localhost:3000"
-      return NextResponse.redirect(`${baseUrl}/dashboard/earnings?error=missing_secret_key`)
+    let tokenResponse
+    try {
+      tokenResponse = await stripe.oauth.token({
+        grant_type: "authorization_code",
+        code,
+      })
+      console.log(`✅ [OAuth Callback] Successfully exchanged code for token`)
+    } catch (tokenError: any) {
+      console.error("❌ [OAuth Callback] Failed to exchange code for token:", tokenError)
+      return NextResponse.redirect(
+        `${process.env.NEXT_PUBLIC_SITE_URL}/dashboard/connect-stripe?error=token_exchange_failed&error_description=${encodeURIComponent(
+          tokenError.message || "Failed to exchange authorization code",
+        )}`,
+      )
     }
 
-    const tokenResponse = await stripe.oauth.token({
-      grant_type: "authorization_code",
-      code,
-    })
+    // Get connected account ID and details
+    const connectedAccountId = tokenResponse.stripe_user_id
+    console.log(`🔄 [OAuth Callback] Connected account ID: ${connectedAccountId}`)
 
-    console.log("✅ [OAuth Callback] Token exchange successful:", {
-      accountId: tokenResponse.stripe_user_id,
-      scope: tokenResponse.scope,
-    })
+    // Retrieve account details to validate
+    let account
+    try {
+      account = await stripe.accounts.retrieve(connectedAccountId)
+      console.log(`✅ [OAuth Callback] Retrieved account details for ${connectedAccountId}`)
+    } catch (accountError: any) {
+      console.error("❌ [OAuth Callback] Failed to retrieve account:", accountError)
+      return NextResponse.redirect(
+        `${process.env.NEXT_PUBLIC_SITE_URL}/dashboard/connect-stripe?error=account_retrieval_failed&error_description=${encodeURIComponent(
+          accountError.message || "Failed to retrieve account details",
+        )}`,
+      )
+    }
 
-    const accountId = tokenResponse.stripe_user_id
-    const accessToken = tokenResponse.access_token
-    const refreshToken = tokenResponse.refresh_token
+    // Validate account environment matches our platform
+    const environmentMismatch = (isTestMode && account.livemode) || (!isTestMode && !account.livemode)
+    if (environmentMismatch) {
+      console.error(
+        `❌ [OAuth Callback] Environment mismatch: Platform is in ${isTestMode ? "test" : "live"} mode but account is in ${account.livemode ? "live" : "test"} mode`,
+      )
+      return NextResponse.redirect(
+        `${process.env.NEXT_PUBLIC_SITE_URL}/dashboard/connect-stripe?error=environment_mismatch&error_description=Account+mode+does+not+match+platform+environment`,
+      )
+    }
 
-    // Get account details from Stripe
-    const account = await stripe.accounts.retrieve(accountId)
-
-    console.log("🔍 [OAuth Callback] Account details:", {
-      accountId,
-      email: account.email,
-      country: account.country,
-      business_type: account.business_type,
-      details_submitted: account.details_submitted,
-      charges_enabled: account.charges_enabled,
-      payouts_enabled: account.payouts_enabled,
-      requirements_due: account.requirements?.currently_due?.length || 0,
-    })
-
-    // Store account information in Firestore
+    // Prepare account data for storage
+    const userId = stateData.userId
     const accountIdField = isTestMode ? "stripeTestAccountId" : "stripeAccountId"
     const connectedField = isTestMode ? "stripeTestConnected" : "stripeConnected"
-    const tokenField = isTestMode ? "stripeTestAccessToken" : "stripeAccessToken"
-    const refreshTokenField = isTestMode ? "stripeTestRefreshToken" : "stripeRefreshToken"
+    const detailsField = isTestMode ? "stripeTestAccountDetails" : "stripeAccountDetails"
 
-    // Determine if account is fully onboarded
-    const isFullyOnboarded =
-      account.details_submitted &&
-      account.charges_enabled &&
-      account.payouts_enabled &&
-      (!account.requirements?.currently_due || account.requirements.currently_due.length === 0) &&
-      (!account.requirements?.past_due || account.requirements.past_due.length === 0)
-
-    console.log("💾 [OAuth Callback] Storing account data:", {
-      userId,
-      accountId,
-      isFullyOnboarded,
-      field: accountIdField,
-    })
-
-    await db
-      .collection("users")
-      .doc(userId)
-      .update({
-        [accountIdField]: accountId,
-        [connectedField]: isFullyOnboarded,
-        [tokenField]: accessToken,
-        [refreshTokenField]: refreshToken,
-        [`${accountIdField}ConnectedAt`]: new Date().toISOString(),
-        stripeAccountEmail: account.email,
-        stripeAccountCountry: account.country,
-        stripeBusinessType: account.business_type,
-        updatedAt: new Date().toISOString(),
-      })
-
-    const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_VERCEL_URL || "http://localhost:3000"
-
-    // If account needs onboarding, redirect to Stripe's onboarding flow
-    if (!isFullyOnboarded) {
-      console.log("🔄 [OAuth Callback] Account needs onboarding, creating account link")
-
-      try {
-        const accountLink = await stripe.accountLinks.create({
-          account: accountId,
-          refresh_url: `${baseUrl}/dashboard/earnings?refresh=true`,
-          return_url: `${baseUrl}/dashboard/earnings?success=true`,
-          type: "account_onboarding",
-        })
-
-        console.log("✅ [OAuth Callback] Redirecting to onboarding:", accountLink.url)
-        return NextResponse.redirect(accountLink.url)
-      } catch (linkError: any) {
-        console.error("❌ [OAuth Callback] Failed to create account link:", linkError)
-        return NextResponse.redirect(
-          `${baseUrl}/dashboard/earnings?error=onboarding_failed&details=${encodeURIComponent(linkError.message)}`,
-        )
-      }
+    const accountDetails = {
+      id: connectedAccountId,
+      country: account.country,
+      email: account.email,
+      type: account.type,
+      chargesEnabled: account.charges_enabled,
+      payoutsEnabled: account.payouts_enabled,
+      detailsSubmitted: account.details_submitted,
+      requirementsCurrentlyDue: account.requirements?.currently_due || [],
+      requirementsEventuallyDue: account.requirements?.eventually_due || [],
+      connectedAt: new Date().toISOString(),
+      lastUpdated: new Date().toISOString(),
     }
 
-    // Account is fully onboarded, redirect to success page
-    console.log("✅ [OAuth Callback] Account fully onboarded, redirecting to success")
-    return NextResponse.redirect(`${baseUrl}/dashboard/earnings?success=true&connected=true`)
+    // Save connection to database
+    try {
+      await db
+        .collection("users")
+        .doc(userId)
+        .update({
+          [accountIdField]: connectedAccountId,
+          [connectedField]: true,
+          [detailsField]: accountDetails,
+          updatedAt: new Date().toISOString(),
+        })
+
+      console.log(
+        `✅ [OAuth Callback] Successfully saved account ${connectedAccountId} for user ${userId} in ${isTestMode ? "test" : "live"} mode`,
+      )
+    } catch (firestoreError) {
+      console.error("❌ [OAuth Callback] Failed to save to database:", firestoreError)
+      return NextResponse.redirect(
+        `${process.env.NEXT_PUBLIC_SITE_URL}/dashboard/connect-stripe?error=database_error&error_description=Failed+to+save+connection+to+database`,
+      )
+    }
+
+    // Check if account needs additional setup
+    const needsSetup =
+      !account.charges_enabled || !account.payouts_enabled || account.requirements?.currently_due?.length > 0
+
+    if (needsSetup) {
+      console.log(`⚠️ [OAuth Callback] Account ${connectedAccountId} needs additional setup`)
+      return NextResponse.redirect(
+        `${process.env.NEXT_PUBLIC_SITE_URL}/dashboard/connect-stripe?success=true&account=${connectedAccountId}&needs_setup=true`,
+      )
+    }
+
+    // Success - account is fully set up
+    console.log(`🎉 [OAuth Callback] Account ${connectedAccountId} is fully connected and operational`)
+    return NextResponse.redirect(
+      `${process.env.NEXT_PUBLIC_SITE_URL}/dashboard/connect-stripe?success=true&account=${connectedAccountId}&fully_enabled=true`,
+    )
   } catch (error: any) {
     console.error("❌ [OAuth Callback] Unexpected error:", error)
-    const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_VERCEL_URL || "http://localhost:3000"
     return NextResponse.redirect(
-      `${baseUrl}/dashboard/earnings?error=callback_failed&details=${encodeURIComponent(error.message)}`,
+      `${process.env.NEXT_PUBLIC_SITE_URL}/dashboard/connect-stripe?error=server_error&error_description=${encodeURIComponent(
+        error.message || "An unexpected error occurred",
+      )}`,
     )
   }
 }

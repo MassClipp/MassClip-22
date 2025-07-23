@@ -1,34 +1,20 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { db } from "@/lib/firebase-admin"
 import { stripe, isTestMode } from "@/lib/stripe"
-import { getAuth } from "firebase-admin/auth"
-
-interface StatusRequest {
-  idToken: string
-}
 
 export async function POST(request: NextRequest) {
   try {
-    const { idToken } = (await request.json()) as StatusRequest
+    const { userId } = await request.json()
 
-    if (!idToken) {
-      return NextResponse.json({ error: "ID token is required" }, { status: 400 })
+    if (!userId) {
+      return NextResponse.json({ error: "User ID is required" }, { status: 400 })
     }
 
-    // Verify Firebase ID token
-    let decodedToken
-    try {
-      decodedToken = await getAuth().verifyIdToken(idToken)
-    } catch (error) {
-      console.error("❌ [Status] Invalid ID token:", error)
-      return NextResponse.json({ error: "Invalid authentication token" }, { status: 401 })
-    }
+    console.log(`🔄 [Status Check] Checking Stripe connection for user: ${userId}`)
 
-    const userId = decodedToken.uid
-    console.log(`🔍 [Status] Checking connection status for user: ${userId}`)
-
-    // Get user data from Firestore
+    // Get user data from database
     const userDoc = await db.collection("users").doc(userId).get()
+
     if (!userDoc.exists) {
       return NextResponse.json({ error: "User not found" }, { status: 404 })
     }
@@ -36,110 +22,103 @@ export async function POST(request: NextRequest) {
     const userData = userDoc.data()
     const accountIdField = isTestMode ? "stripeTestAccountId" : "stripeAccountId"
     const connectedField = isTestMode ? "stripeTestConnected" : "stripeConnected"
+    const detailsField = isTestMode ? "stripeTestAccountDetails" : "stripeAccountDetails"
 
     const accountId = userData?.[accountIdField]
-    const localConnectedStatus = userData?.[connectedField]
+    const isConnected = userData?.[connectedField] || false
+    const storedDetails = userData?.[detailsField]
 
-    console.log(`🔍 [Status] Local data:`, {
-      accountId,
-      localConnectedStatus,
-      testMode: isTestMode,
-    })
-
-    if (!accountId) {
+    if (!accountId || !isConnected) {
+      console.log(`📋 [Status Check] User ${userId} has no Stripe account connected`)
       return NextResponse.json({
         connected: false,
-        accountId: null,
-        message: "No Stripe account connected",
+        mode: isTestMode ? "test" : "live",
       })
     }
 
+    // Fetch fresh account data from Stripe
+    let account
     try {
-      // Get real-time account status from Stripe
-      const account = await stripe.accounts.retrieve(accountId)
-
-      const isFullyConnected =
-        account.details_submitted &&
-        account.charges_enabled &&
-        account.payouts_enabled &&
-        (!account.requirements?.currently_due || account.requirements.currently_due.length === 0) &&
-        (!account.requirements?.past_due || account.requirements.past_due.length === 0)
-
-      console.log(`🔍 [Status] Stripe account status:`, {
-        accountId,
-        details_submitted: account.details_submitted,
-        charges_enabled: account.charges_enabled,
-        payouts_enabled: account.payouts_enabled,
-        currently_due: account.requirements?.currently_due?.length || 0,
-        past_due: account.requirements?.past_due?.length || 0,
-        isFullyConnected,
-      })
-
-      // Update local status if it doesn't match Stripe
-      if (localConnectedStatus !== isFullyConnected) {
-        console.log(`🔄 [Status] Updating local status from ${localConnectedStatus} to ${isFullyConnected}`)
-        await db
-          .collection("users")
-          .doc(userId)
-          .update({
-            [connectedField]: isFullyConnected,
-            updatedAt: new Date().toISOString(),
-          })
-      }
-
-      return NextResponse.json({
-        connected: isFullyConnected,
-        accountId,
-        capabilities: {
-          charges_enabled: account.charges_enabled,
-          payouts_enabled: account.payouts_enabled,
-          currently_due: account.requirements?.currently_due || [],
-          past_due: account.requirements?.past_due || [],
-        },
-        account: {
-          email: account.email,
-          country: account.country,
-          business_type: account.business_type,
-          details_submitted: account.details_submitted,
-        },
-        message: isFullyConnected ? "Account fully connected" : "Account needs completion",
-      })
+      account = await stripe.accounts.retrieve(accountId)
+      console.log(`✅ [Status Check] Retrieved fresh account data for ${accountId}`)
     } catch (stripeError: any) {
-      if (stripeError.code === "resource_missing") {
-        console.warn(`⚠️ [Status] Account ${accountId} no longer exists in Stripe`)
+      console.error(`❌ [Status Check] Failed to retrieve account ${accountId}:`, stripeError)
 
-        // Clean up local data
+      // Account might have been deleted or deauthorized
+      if (stripeError.code === "account_invalid") {
+        // Clear the invalid account from database
         await db
           .collection("users")
           .doc(userId)
           .update({
             [accountIdField]: null,
             [connectedField]: false,
-            [`${accountIdField}RemovedAt`]: new Date().toISOString(),
+            [detailsField]: null,
             updatedAt: new Date().toISOString(),
           })
 
         return NextResponse.json({
           connected: false,
-          accountId: null,
-          accountDeleted: true,
-          message: "Account was deleted from Stripe",
+          error: "Account no longer valid",
+          mode: isTestMode ? "test" : "live",
         })
       }
 
-      console.error("❌ [Status] Error checking Stripe account:", stripeError)
-      return NextResponse.json(
-        {
-          error: "Failed to check account status",
-          details: stripeError.message,
-          connected: false,
-          accountId,
-        },
-        { status: 500 },
-      )
+      return NextResponse.json({
+        connected: true,
+        error: "Unable to verify account status",
+        accountId,
+        mode: isTestMode ? "test" : "live",
+      })
     }
+
+    // Update stored account details if they've changed
+    const freshDetails = {
+      id: accountId,
+      country: account.country,
+      email: account.email,
+      type: account.type,
+      chargesEnabled: account.charges_enabled,
+      payoutsEnabled: account.payouts_enabled,
+      detailsSubmitted: account.details_submitted,
+      requirementsCurrentlyDue: account.requirements?.currently_due || [],
+      requirementsEventuallyDue: account.requirements?.eventually_due || [],
+      connectedAt: storedDetails?.connectedAt || new Date().toISOString(),
+      lastUpdated: new Date().toISOString(),
+    }
+
+    // Update database with fresh details
+    await db
+      .collection("users")
+      .doc(userId)
+      .update({
+        [detailsField]: freshDetails,
+        updatedAt: new Date().toISOString(),
+      })
+
+    const fullyEnabled = account.charges_enabled && account.payouts_enabled
+    const needsAttention = (account.requirements?.currently_due?.length || 0) > 0
+
+    console.log(
+      `📋 [Status Check] User ${userId} account status: enabled=${fullyEnabled}, needs_attention=${needsAttention}`,
+    )
+
+    return NextResponse.json({
+      connected: true,
+      accountId,
+      fullyEnabled,
+      needsAttention,
+      chargesEnabled: account.charges_enabled,
+      payoutsEnabled: account.payouts_enabled,
+      detailsSubmitted: account.details_submitted,
+      requirementsCurrentlyDue: account.requirements?.currently_due || [],
+      requirementsEventuallyDue: account.requirements?.eventually_due || [],
+      country: account.country,
+      email: account.email,
+      mode: isTestMode ? "test" : "live",
+    })
   } catch (error: any) {
-    console.error("❌ [Status] Unexpected error:", error)
+    console.error("❌ [Status Check] Error checking connection status:", error)
     return NextResponse.json({ error: "Failed to check connection status", details: error.message }, { status: 500 })
   }
 }
