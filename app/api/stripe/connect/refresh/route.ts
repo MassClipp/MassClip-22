@@ -3,13 +3,13 @@ import { db } from "@/lib/firebase-admin"
 import { stripe, isTestMode } from "@/lib/stripe"
 import { getAuth } from "firebase-admin/auth"
 
-interface StatusRequest {
+interface RefreshRequest {
   idToken: string
 }
 
 export async function POST(request: NextRequest) {
   try {
-    const { idToken } = (await request.json()) as StatusRequest
+    const { idToken } = (await request.json()) as RefreshRequest
 
     if (!idToken) {
       return NextResponse.json({ error: "ID token is required" }, { status: 400 })
@@ -20,12 +20,12 @@ export async function POST(request: NextRequest) {
     try {
       decodedToken = await getAuth().verifyIdToken(idToken)
     } catch (error) {
-      console.error("❌ [Status] Invalid ID token:", error)
+      console.error("❌ [Refresh] Invalid ID token:", error)
       return NextResponse.json({ error: "Invalid authentication token" }, { status: 401 })
     }
 
     const userId = decodedToken.uid
-    console.log(`🔍 [Status] Checking connection status for user: ${userId}`)
+    console.log(`🔄 [Refresh] Refreshing onboarding for user: ${userId}`)
 
     // Get user data from Firestore
     const userDoc = await db.collection("users").doc(userId).get()
@@ -38,75 +38,70 @@ export async function POST(request: NextRequest) {
     const connectedField = isTestMode ? "stripeTestConnected" : "stripeConnected"
 
     const accountId = userData?.[accountIdField]
-    const localConnectedStatus = userData?.[connectedField]
-
-    console.log(`🔍 [Status] Local data:`, {
-      accountId,
-      localConnectedStatus,
-      testMode: isTestMode,
-    })
 
     if (!accountId) {
-      return NextResponse.json({
-        connected: false,
-        accountId: null,
-        message: "No Stripe account connected",
-      })
+      return NextResponse.json({ error: "No Stripe account found" }, { status: 404 })
     }
 
     try {
-      // Get real-time account status from Stripe
+      // Check current account status
       const account = await stripe.accounts.retrieve(accountId)
 
-      const isFullyConnected =
+      const isFullyOnboarded =
         account.details_submitted &&
         account.charges_enabled &&
         account.payouts_enabled &&
         (!account.requirements?.currently_due || account.requirements.currently_due.length === 0) &&
         (!account.requirements?.past_due || account.requirements.past_due.length === 0)
 
-      console.log(`🔍 [Status] Stripe account status:`, {
-        accountId,
+      console.log(`🔍 [Refresh] Account ${accountId} status:`, {
         details_submitted: account.details_submitted,
         charges_enabled: account.charges_enabled,
         payouts_enabled: account.payouts_enabled,
         currently_due: account.requirements?.currently_due?.length || 0,
-        past_due: account.requirements?.past_due?.length || 0,
-        isFullyConnected,
+        isFullyOnboarded,
       })
 
-      // Update local status if it doesn't match Stripe
-      if (localConnectedStatus !== isFullyConnected) {
-        console.log(`🔄 [Status] Updating local status from ${localConnectedStatus} to ${isFullyConnected}`)
+      if (isFullyOnboarded) {
+        // Update local status
         await db
           .collection("users")
           .doc(userId)
           .update({
-            [connectedField]: isFullyConnected,
+            [connectedField]: true,
             updatedAt: new Date().toISOString(),
           })
+
+        return NextResponse.json({
+          success: true,
+          onboardingComplete: true,
+          accountId,
+          message: "Account is fully onboarded",
+        })
       }
 
+      // Create new onboarding link
+      const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_VERCEL_URL || "http://localhost:3000"
+
+      const accountLink = await stripe.accountLinks.create({
+        account: accountId,
+        refresh_url: `${baseUrl}/dashboard/earnings?refresh=true`,
+        return_url: `${baseUrl}/dashboard/earnings?success=true`,
+        type: "account_onboarding",
+      })
+
+      console.log(`✅ [Refresh] Created new onboarding link for account ${accountId}`)
+
       return NextResponse.json({
-        connected: isFullyConnected,
+        success: true,
+        onboardingComplete: false,
+        onboardingUrl: accountLink.url,
         accountId,
-        capabilities: {
-          charges_enabled: account.charges_enabled,
-          payouts_enabled: account.payouts_enabled,
-          currently_due: account.requirements?.currently_due || [],
-          past_due: account.requirements?.past_due || [],
-        },
-        account: {
-          email: account.email,
-          country: account.country,
-          business_type: account.business_type,
-          details_submitted: account.details_submitted,
-        },
-        message: isFullyConnected ? "Account fully connected" : "Account needs completion",
+        message: "New onboarding link created",
       })
     } catch (stripeError: any) {
       if (stripeError.code === "resource_missing") {
-        console.warn(`⚠️ [Status] Account ${accountId} no longer exists in Stripe`)
+        console.warn(`⚠️ [Refresh] Account ${accountId} no longer exists`)
 
         // Clean up local data
         await db
@@ -120,26 +115,17 @@ export async function POST(request: NextRequest) {
           })
 
         return NextResponse.json({
-          connected: false,
-          accountId: null,
+          success: false,
           accountDeleted: true,
           message: "Account was deleted from Stripe",
         })
       }
 
-      console.error("❌ [Status] Error checking Stripe account:", stripeError)
-      return NextResponse.json(
-        {
-          error: "Failed to check account status",
-          details: stripeError.message,
-          connected: false,
-          accountId,
-        },
-        { status: 500 },
-      )
+      console.error("❌ [Refresh] Error with Stripe account:", stripeError)
+      return NextResponse.json({ error: "Failed to refresh onboarding", details: stripeError.message }, { status: 500 })
     }
   } catch (error: any) {
-    console.error("❌ [Status] Unexpected error:", error)
-    return NextResponse.json({ error: "Failed to check connection status", details: error.message }, { status: 500 })
+    console.error("❌ [Refresh] Unexpected error:", error)
+    return NextResponse.json({ error: "Failed to refresh onboarding", details: error.message }, { status: 500 })
   }
 }

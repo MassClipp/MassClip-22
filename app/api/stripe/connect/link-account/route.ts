@@ -1,86 +1,104 @@
 import { type NextRequest, NextResponse } from "next/server"
+import { auth } from "@/lib/firebase-admin"
 import { db } from "@/lib/firebase-admin"
-import { stripe, isTestMode } from "@/lib/stripe"
+import Stripe from "stripe"
+
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
+  apiVersion: "2024-06-20",
+})
 
 export async function POST(request: NextRequest) {
   try {
-    const { userId, accountId } = await request.json()
+    console.log("🔗 [Link Account] Starting request...")
 
-    if (!userId || !accountId) {
-      return NextResponse.json({ error: "User ID and Account ID are required" }, { status: 400 })
+    // Get authorization header
+    const authHeader = request.headers.get("authorization")
+    console.log("🔑 [Link Account] Auth header present:", !!authHeader)
+
+    if (!authHeader?.startsWith("Bearer ")) {
+      console.log("❌ [Link Account] Invalid or missing Bearer token")
+      return NextResponse.json({ error: "Authentication required" }, { status: 401 })
     }
 
-    console.log(`🔄 [Link Account] Creating account link for user ${userId}, account ${accountId}`)
+    // Extract token
+    const token = authHeader.replace("Bearer ", "")
+    console.log("🎫 [Link Account] Token extracted, length:", token.length)
 
-    // Verify the account exists and get its details
-    let account
+    // Verify Firebase token
+    let decodedToken
     try {
-      account = await stripe.accounts.retrieve(accountId)
-    } catch (stripeError: any) {
-      console.error(`❌ [Link Account] Invalid account ID ${accountId}:`, stripeError)
-      return NextResponse.json({ error: "Invalid account ID" }, { status: 400 })
+      decodedToken = await auth.verifyIdToken(token)
+      console.log("✅ [Link Account] Token verified for user:", decodedToken.uid)
+    } catch (error: any) {
+      console.error("❌ [Link Account] Token verification failed:", error.message)
+      return NextResponse.json({ error: "Invalid authentication token" }, { status: 401 })
     }
 
-    // Validate account environment matches our platform
-    const environmentMismatch = (isTestMode && account.livemode) || (!isTestMode && !account.livemode)
-    if (environmentMismatch) {
-      console.error(
-        `❌ [Link Account] Environment mismatch: Platform is in ${isTestMode ? "test" : "live"} mode but account is in ${account.livemode ? "live" : "test"} mode`,
-      )
-      return NextResponse.json(
-        {
-          error: `Account mode (${account.livemode ? "live" : "test"}) does not match platform mode (${isTestMode ? "test" : "live"})`,
-        },
-        { status: 400 },
-      )
+    const userId = decodedToken.uid
+
+    // Parse request body
+    let body
+    try {
+      body = await request.json()
+      console.log("📝 [Link Account] Request body:", body)
+    } catch (error) {
+      console.error("❌ [Link Account] Invalid JSON body")
+      return NextResponse.json({ error: "Invalid request body" }, { status: 400 })
     }
 
-    // Create account link for onboarding/re-onboarding
-    const accountLink = await stripe.accountLinks.create({
-      account: accountId,
-      refresh_url: `${process.env.NEXT_PUBLIC_SITE_URL}/dashboard/connect-stripe?refresh=true`,
-      return_url: `${process.env.NEXT_PUBLIC_SITE_URL}/dashboard/connect-stripe?success=true&account=${accountId}`,
-      type: "account_onboarding",
-    })
+    const { stripeAccountId, accountId } = body
+    const finalAccountId = stripeAccountId || accountId
 
-    console.log(`✅ [Link Account] Created account link for ${accountId}`)
-
-    // Save account info to database
-    const accountIdField = isTestMode ? "stripeTestAccountId" : "stripeAccountId"
-    const connectedField = isTestMode ? "stripeTestConnected" : "stripeConnected"
-    const detailsField = isTestMode ? "stripeTestAccountDetails" : "stripeAccountDetails"
-
-    const accountDetails = {
-      id: accountId,
-      country: account.country,
-      email: account.email,
-      type: account.type,
-      chargesEnabled: account.charges_enabled,
-      payoutsEnabled: account.payouts_enabled,
-      detailsSubmitted: account.details_submitted,
-      requirementsCurrentlyDue: account.requirements?.currently_due || [],
-      requirementsEventuallyDue: account.requirements?.eventually_due || [],
-      connectedAt: new Date().toISOString(),
-      lastUpdated: new Date().toISOString(),
+    if (!finalAccountId) {
+      console.log("❌ [Link Account] No account ID provided")
+      return NextResponse.json({ error: "Stripe account ID is required" }, { status: 400 })
     }
 
-    await db
-      .collection("users")
-      .doc(userId)
-      .update({
-        [accountIdField]: accountId,
-        [connectedField]: true,
-        [detailsField]: accountDetails,
-        updatedAt: new Date().toISOString(),
+    if (!finalAccountId.startsWith("acct_")) {
+      console.log("❌ [Link Account] Invalid account ID format")
+      return NextResponse.json({ error: "Invalid Stripe account ID format" }, { status: 400 })
+    }
+
+    // Verify the Stripe account exists
+    try {
+      console.log("🔍 [Link Account] Verifying Stripe account:", finalAccountId)
+      const account = await stripe.accounts.retrieve(finalAccountId)
+      console.log("✅ [Link Account] Stripe account verified:", account.id)
+
+      // Update user document in Firestore
+      await db
+        .collection("users")
+        .doc(userId)
+        .set(
+          {
+            stripeAccountId: finalAccountId,
+            stripeAccountStatus: account.details_submitted ? "active" : "pending",
+            stripeAccountType: account.type,
+            stripeAccountCountry: account.country,
+            updatedAt: new Date(),
+          },
+          { merge: true },
+        )
+
+      console.log("✅ [Link Account] User document updated successfully")
+
+      return NextResponse.json({
+        success: true,
+        accountId: finalAccountId,
+        status: account.details_submitted ? "active" : "pending",
+        message: "Account linked successfully",
       })
+    } catch (stripeError: any) {
+      console.error("❌ [Link Account] Stripe error:", stripeError.message)
 
-    return NextResponse.json({
-      url: accountLink.url,
-      accountId,
-      mode: isTestMode ? "test" : "live",
-    })
+      if (stripeError.code === "resource_missing") {
+        return NextResponse.json({ error: "Stripe account not found" }, { status: 404 })
+      }
+
+      return NextResponse.json({ error: "Failed to verify Stripe account" }, { status: 400 })
+    }
   } catch (error: any) {
-    console.error("❌ [Link Account] Error creating account link:", error)
-    return NextResponse.json({ error: "Failed to create account link", details: error.message }, { status: 500 })
+    console.error("❌ [Link Account] Unexpected error:", error.message)
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }
