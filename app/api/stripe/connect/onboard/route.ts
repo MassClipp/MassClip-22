@@ -122,14 +122,17 @@ export async function POST(request: NextRequest) {
     }
 
     // For new accounts or when existing account was deleted, redirect to OAuth flow
-    // This ensures proper account connection through Stripe's OAuth process
     console.log(`🔗 [Onboard] No valid account found, redirecting to OAuth flow`)
 
     // Generate OAuth URL for account connection
     const clientId = isTestMode ? process.env.STRIPE_CONNECT_CLIENT_ID_TEST : process.env.STRIPE_CONNECT_CLIENT_ID
 
     if (!clientId) {
-      throw new Error(`Missing Stripe Connect client ID for ${isTestMode ? "test" : "live"} mode`)
+      console.error(`❌ [Onboard] Missing Stripe Connect client ID for ${isTestMode ? "test" : "live"} mode`)
+      return NextResponse.json(
+        { error: `Missing Stripe Connect client ID for ${isTestMode ? "test" : "live"} mode` },
+        { status: 500 },
+      )
     }
 
     const state = Buffer.from(

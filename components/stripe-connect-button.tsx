@@ -65,8 +65,6 @@ export default function StripeConnectButton({
       const idToken = await user.getIdToken()
 
       // Start the OAuth connection process
-      // This will redirect to Stripe's OAuth flow, which will then redirect back to our callback
-      // The callback will handle account creation and onboarding
       const response = await fetch("/api/stripe/connect/oauth", {
         method: "POST",
         headers: {
