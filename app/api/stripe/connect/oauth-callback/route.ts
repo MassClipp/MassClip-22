@@ -83,19 +83,39 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    // Save connection to Firestore
+    // Check if account needs onboarding
+    const needsOnboarding = !account.details_submitted || !account.charges_enabled || !account.payouts_enabled
+
+    console.log(`🔍 [OAuth Callback] Account status check:`, {
+      accountId: connectedAccountId,
+      detailsSubmitted: account.details_submitted,
+      chargesEnabled: account.charges_enabled,
+      payoutsEnabled: account.payouts_enabled,
+      needsOnboarding,
+    })
+
+    // Save connection to Firestore with proper status
     const userId = stateData.userId
     const accountIdField = isTestMode ? "stripeTestAccountId" : "stripeAccountId"
     const connectedField = isTestMode ? "stripeTestConnected" : "stripeConnected"
 
     try {
+      // Determine the correct status based on account capabilities
+      let accountStatus = "pending"
+      if (account.charges_enabled && account.payouts_enabled && account.details_submitted) {
+        accountStatus = "active"
+      } else if (account.details_submitted) {
+        accountStatus = "restricted"
+      }
+
       await db
         .collection("users")
         .doc(userId)
         .update({
           [accountIdField]: connectedAccountId,
-          [connectedField]: true,
+          [connectedField]: accountStatus === "active", // Only mark as connected if fully active
           [`${accountIdField}ConnectedAt`]: new Date().toISOString(),
+          [`${accountIdField}Status`]: accountStatus,
           [`${accountIdField}Details`]: {
             country: account.country,
             email: account.email,
@@ -103,12 +123,13 @@ export async function GET(request: NextRequest) {
             chargesEnabled: account.charges_enabled,
             payoutsEnabled: account.payouts_enabled,
             detailsSubmitted: account.details_submitted,
+            requiresOnboarding: needsOnboarding,
           },
           updatedAt: new Date().toISOString(),
         })
 
       console.log(
-        `✅ [OAuth Callback] Account ${connectedAccountId} connected and saved to Firestore for user ${userId}`,
+        `✅ [OAuth Callback] Account ${connectedAccountId} saved with status: ${accountStatus} for user ${userId}`,
       )
     } catch (firestoreError) {
       console.error("❌ [OAuth Callback] Failed to save to Firestore:", firestoreError)
@@ -117,7 +138,30 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    // Redirect to success page
+    // If account needs onboarding, create account link and redirect to onboarding
+    if (needsOnboarding) {
+      try {
+        console.log(`🔗 [OAuth Callback] Creating onboarding link for account ${connectedAccountId}`)
+
+        const accountLink = await stripe.accountLinks.create({
+          account: connectedAccountId,
+          refresh_url: `${process.env.NEXT_PUBLIC_SITE_URL}/dashboard/earnings?refresh=true`,
+          return_url: `${process.env.NEXT_PUBLIC_SITE_URL}/dashboard/earnings?success=true`,
+          type: "account_onboarding",
+        })
+
+        console.log(`✅ [OAuth Callback] Onboarding link created, redirecting to: ${accountLink.url}`)
+        return NextResponse.redirect(accountLink.url)
+      } catch (linkError: any) {
+        console.error("❌ [OAuth Callback] Failed to create onboarding link:", linkError)
+        // Fall back to success page with onboarding needed message
+        return NextResponse.redirect(
+          `${process.env.NEXT_PUBLIC_SITE_URL}/temp-stripe-connect?success=true&account=${connectedAccountId}&onboarding_needed=true`,
+        )
+      }
+    }
+
+    // Account is fully set up, redirect to success page
     return NextResponse.redirect(
       `${process.env.NEXT_PUBLIC_SITE_URL}/temp-stripe-connect?success=true&account=${connectedAccountId}`,
     )

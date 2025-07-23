@@ -1,145 +1,170 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { useSearchParams } from "next/navigation"
-import { Card, CardContent, CardHeader } from "@/components/ui/card"
+import { useRouter, useSearchParams } from "next/navigation"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { CheckCircle, XCircle, ArrowLeft, Home } from "lucide-react"
-import Link from "next/link"
-import ManualStripeConnect from "@/components/manual-stripe-connect"
+import { CheckCircle, AlertCircle, ExternalLink, Loader2 } from "lucide-react"
 
 export default function TempStripeConnectPage() {
+  const router = useRouter()
   const searchParams = useSearchParams()
-  const [status, setStatus] = useState<"loading" | "success" | "refresh" | "error" | null>(null)
-  const [message, setMessage] = useState("")
+  const [isLoading, setIsLoading] = useState(true)
+  const [needsOnboarding, setNeedsOnboarding] = useState(false)
+
+  const success = searchParams.get("success")
+  const error = searchParams.get("error")
+  const errorDescription = searchParams.get("error_description")
+  const accountId = searchParams.get("account")
+  const onboardingNeeded = searchParams.get("onboarding_needed")
 
   useEffect(() => {
-    const success = searchParams.get("success")
-    const refresh = searchParams.get("refresh")
-    const account = searchParams.get("account")
+    // Simulate loading and then redirect or show status
+    const timer = setTimeout(() => {
+      setIsLoading(false)
 
-    if (success === "true") {
-      setStatus("success")
-      setMessage(account ? `Account ${account} connected successfully!` : "Account connected successfully!")
-    } else if (refresh === "true") {
-      setStatus("refresh")
-      setMessage("Please complete the onboarding process and try again.")
-    } else {
-      setStatus(null)
+      if (onboardingNeeded === "true") {
+        setNeedsOnboarding(true)
+      } else if (success === "true" && !error) {
+        // Successful connection, redirect to earnings page after a moment
+        setTimeout(() => {
+          router.push("/dashboard/earnings")
+        }, 2000)
+      }
+    }, 1000)
+
+    return () => clearTimeout(timer)
+  }, [success, error, onboardingNeeded, router])
+
+  const handleCompleteOnboarding = async () => {
+    try {
+      const response = await fetch("/api/stripe/create-account-link", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        if (data.url) {
+          window.location.href = data.url
+        }
+      }
+    } catch (error) {
+      console.error("Error creating account link:", error)
     }
-  }, [searchParams])
+  }
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-black flex items-center justify-center">
+        <div className="text-center space-y-4">
+          <Loader2 className="w-8 h-8 animate-spin text-blue-500 mx-auto" />
+          <p className="text-zinc-400">Processing your Stripe connection...</p>
+        </div>
+      </div>
+    )
+  }
 
   return (
-    <div className="min-h-screen bg-background p-4">
-      <div className="max-w-4xl mx-auto space-y-6">
-        {/* Header */}
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold">Stripe Connect Setup</h1>
-            <p className="text-muted-foreground">Connect your Stripe account to start receiving payments</p>
-          </div>
-          <div className="flex gap-2">
-            <Button variant="outline" asChild>
-              <Link href="/dashboard">
-                <ArrowLeft className="h-4 w-4 mr-2" />
-                Back to Dashboard
-              </Link>
-            </Button>
-            <Button variant="outline" asChild>
-              <Link href="/dashboard/connect-stripe">
-                <Home className="h-4 w-4 mr-2" />
-                Regular Connect Page
-              </Link>
-            </Button>
-          </div>
-        </div>
-
-        {/* Status Messages */}
-        {status === "success" && (
-          <Alert className="border-green-600 bg-green-600/10">
-            <CheckCircle className="h-4 w-4" />
-            <AlertDescription>
-              <strong>Success!</strong> {message}
-            </AlertDescription>
-          </Alert>
-        )}
-
-        {status === "refresh" && (
-          <Alert className="border-yellow-600 bg-yellow-600/10">
-            <XCircle className="h-4 w-4" />
-            <AlertDescription>
-              <strong>Onboarding Incomplete:</strong> {message}
-            </AlertDescription>
-          </Alert>
-        )}
-
-        {status === "error" && (
-          <Alert className="border-red-600 bg-red-600/10">
-            <XCircle className="h-4 w-4" />
-            <AlertDescription>
-              <strong>Error:</strong> {message}
-            </AlertDescription>
-          </Alert>
-        )}
-
-        {/* Main Content */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Automatic Setup */}
-          <Card>
-            <CardHeader>
-              <h2 className="text-xl font-semibold">Automatic Setup</h2>
-              <p className="text-sm text-muted-foreground">
-                Recommended for new users. Stripe will guide you through the entire setup process.
-              </p>
+    <div className="min-h-screen bg-black flex items-center justify-center p-4">
+      <div className="max-w-md w-full space-y-6">
+        {/* Success State */}
+        {success === "true" && !error && !needsOnboarding && (
+          <Card className="bg-zinc-900/60 border-zinc-800/50">
+            <CardHeader className="text-center">
+              <div className="w-16 h-16 bg-green-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                <CheckCircle className="w-8 h-8 text-green-400" />
+              </div>
+              <CardTitle className="text-white">Successfully Connected!</CardTitle>
+              <CardDescription>Your Stripe account has been connected successfully</CardDescription>
             </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                <div className="bg-muted/30 p-4 rounded-lg">
-                  <h3 className="font-medium mb-2">What happens:</h3>
-                  <ul className="text-sm space-y-1 text-muted-foreground">
-                    <li>• Creates a new Stripe Express account</li>
-                    <li>• Guides you through identity verification</li>
-                    <li>• Sets up payment processing automatically</li>
-                    <li>• Connects account to MassClip platform</li>
-                  </ul>
+            <CardContent className="space-y-4">
+              {accountId && (
+                <div className="text-center">
+                  <p className="text-sm text-zinc-400">Account ID:</p>
+                  <p className="text-sm font-mono text-zinc-300">{accountId}</p>
                 </div>
-                <p className="text-sm text-muted-foreground">
-                  This is the easiest way to get started and works for both test and live modes.
+              )}
+              <div className="text-center">
+                <p className="text-sm text-zinc-400">Redirecting to your earnings dashboard...</p>
+              </div>
+              <Button onClick={() => router.push("/dashboard/earnings")} className="w-full">
+                Go to Dashboard
+              </Button>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Onboarding Needed State */}
+        {needsOnboarding && (
+          <Card className="bg-zinc-900/60 border-zinc-800/50">
+            <CardHeader className="text-center">
+              <div className="w-16 h-16 bg-yellow-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                <AlertCircle className="w-8 h-8 text-yellow-400" />
+              </div>
+              <CardTitle className="text-white">Complete Your Setup</CardTitle>
+              <CardDescription>Your account is connected but needs additional setup</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="text-center space-y-2">
+                <p className="text-sm text-zinc-300">
+                  To start accepting payments, you need to complete your Stripe onboarding.
                 </p>
+                <p className="text-xs text-zinc-400">
+                  This includes verifying your identity and providing business details.
+                </p>
+              </div>
+
+              <Button onClick={handleCompleteOnboarding} className="w-full bg-blue-600 hover:bg-blue-700">
+                <ExternalLink className="w-4 h-4 mr-2" />
+                Complete Stripe Setup
+              </Button>
+
+              <Button variant="outline" onClick={() => router.push("/dashboard/earnings")} className="w-full">
+                Continue to Dashboard
+              </Button>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Error State */}
+        {error && (
+          <Card className="bg-zinc-900/60 border-zinc-800/50">
+            <CardHeader className="text-center">
+              <div className="w-16 h-16 bg-red-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
+                <AlertCircle className="w-8 h-8 text-red-400" />
+              </div>
+              <CardTitle className="text-white">Connection Failed</CardTitle>
+              <CardDescription>There was an issue connecting your Stripe account</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <Alert className="border-red-500/50 bg-red-500/10">
+                <AlertCircle className="h-4 w-4 text-red-400" />
+                <AlertDescription className="text-red-300">
+                  <strong>Error:</strong> {error}
+                  {errorDescription && (
+                    <>
+                      <br />
+                      <span className="text-sm">{decodeURIComponent(errorDescription)}</span>
+                    </>
+                  )}
+                </AlertDescription>
+              </Alert>
+
+              <div className="space-y-2">
+                <Button onClick={() => router.push("/dashboard/earnings")} className="w-full">
+                  Try Again
+                </Button>
+                <Button variant="outline" onClick={() => router.push("/dashboard")} className="w-full">
+                  Back to Dashboard
+                </Button>
               </div>
             </CardContent>
           </Card>
-
-          {/* Manual Connection */}
-          <Card>
-            <CardHeader>
-              <h2 className="text-xl font-semibold">Manual Connection</h2>
-              <p className="text-sm text-muted-foreground">
-                For users who already have a Stripe account and want to connect it directly.
-              </p>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                <div className="bg-muted/30 p-4 rounded-lg">
-                  <h3 className="font-medium mb-2">Requirements:</h3>
-                  <ul className="text-sm space-y-1 text-muted-foreground">
-                    <li>• Existing Stripe account</li>
-                    <li>• Account ID from Stripe Dashboard</li>
-                    <li>• Account must match current mode (test/live)</li>
-                    <li>• May require additional onboarding</li>
-                  </ul>
-                </div>
-                <p className="text-sm text-muted-foreground">
-                  Use this if you already have a Stripe account set up and want to connect it manually.
-                </p>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Manual Connect Component */}
-        <ManualStripeConnect />
+        )}
       </div>
     </div>
   )
