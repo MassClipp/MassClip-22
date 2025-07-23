@@ -7,69 +7,62 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
 })
 
 export async function GET(request: NextRequest) {
-  const searchParams = request.nextUrl.searchParams
-  const code = searchParams.get("code")
-  const state = searchParams.get("state") // This contains the user ID
-  const error = searchParams.get("error")
-  const errorDescription = searchParams.get("error_description")
-
-  // Handle OAuth errors
-  if (error) {
-    console.error("Stripe OAuth error:", error, errorDescription)
-    return NextResponse.redirect(
-      new URL(
-        `/dashboard/connect-stripe?error=${encodeURIComponent(error)}&error_description=${encodeURIComponent(errorDescription || "")}`,
-        request.url,
-      ),
-    )
-  }
-
-  if (!code || !state) {
-    return NextResponse.redirect(new URL("/dashboard/connect-stripe?error=missing_parameters", request.url))
-  }
-
   try {
-    // Exchange authorization code for access token
-    const response = await stripe.oauth.token({
-      grant_type: "authorization_code",
-      code,
-    })
+    const searchParams = request.nextUrl.searchParams
+    const state = searchParams.get("state") // This should be the userId
+    const code = searchParams.get("code")
 
-    const stripeUserId = response.stripe_user_id
-    const accessToken = response.access_token
-    const refreshToken = response.refresh_token
-    const scope = response.scope
+    console.log("OAuth callback received:", { state, code: !!code })
 
-    if (!stripeUserId) {
-      throw new Error("No Stripe user ID received")
+    if (!state) {
+      console.error("No state parameter provided")
+      return NextResponse.redirect(`${process.env.NEXT_PUBLIC_SITE_URL}/dashboard/connect-stripe?error=no_state`)
     }
 
-    // Get the user ID from the state parameter
     const userId = state
 
-    // Update the user's record with Stripe connection details
-    await adminDb.collection("users").doc(userId).update({
-      stripeUserId,
-      stripeAccountId: stripeUserId,
-      stripeAccessToken: accessToken,
-      stripeRefreshToken: refreshToken,
-      stripeScope: scope,
-      stripeConnected: true,
-      stripeConnectedAt: new Date(),
-      updatedAt: new Date(),
+    // Get user's Stripe account ID
+    const userDoc = await adminDb.collection("users").doc(userId).get()
+    const userData = userDoc.data()
+
+    if (!userData?.stripeAccountId) {
+      console.error("No Stripe account ID found for user:", userId)
+      return NextResponse.redirect(`${process.env.NEXT_PUBLIC_SITE_URL}/dashboard/connect-stripe?error=no_account`)
+    }
+
+    const accountId = userData.stripeAccountId
+
+    // Retrieve account details from Stripe
+    const account = await stripe.accounts.retrieve(accountId)
+
+    console.log("Account details:", {
+      id: account.id,
+      details_submitted: account.details_submitted,
+      charges_enabled: account.charges_enabled,
+      payouts_enabled: account.payouts_enabled,
     })
 
-    console.log(`✅ Successfully connected Stripe account ${stripeUserId} for user ${userId}`)
+    // Update user's Stripe status in Firestore
+    const updateData: any = {
+      stripeAccountStatus: account.details_submitted ? "active" : "pending",
+      stripeChargesEnabled: account.charges_enabled,
+      stripePayoutsEnabled: account.payouts_enabled,
+      stripeDetailsSubmitted: account.details_submitted,
+      updatedAt: new Date(),
+    }
+
+    await adminDb.collection("users").doc(userId).update(updateData)
+
+    console.log("Updated user data:", updateData)
 
     // Redirect to success page
-    return NextResponse.redirect(new URL("/dashboard/connect-stripe?success=true", request.url))
+    const redirectUrl = account.details_submitted
+      ? `${process.env.NEXT_PUBLIC_SITE_URL}/dashboard/connect-stripe?success=true`
+      : `${process.env.NEXT_PUBLIC_SITE_URL}/dashboard/connect-stripe?pending=true`
+
+    return NextResponse.redirect(redirectUrl)
   } catch (error) {
-    console.error("Error processing Stripe OAuth callback:", error)
-    return NextResponse.redirect(
-      new URL(
-        `/dashboard/connect-stripe?error=oauth_failed&error_description=${encodeURIComponent(error instanceof Error ? error.message : "Unknown error")}`,
-        request.url,
-      ),
-    )
+    console.error("Error in OAuth callback:", error)
+    return NextResponse.redirect(`${process.env.NEXT_PUBLIC_SITE_URL}/dashboard/connect-stripe?error=callback_failed`)
   }
 }

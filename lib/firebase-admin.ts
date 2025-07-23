@@ -50,6 +50,7 @@ export const auth: Auth = getAuth(adminApp)
 // Add the missing exports
 export const adminAuth = auth
 export const adminDb = db
+export const firestore = db // This was the missing export
 
 // Recommended for better Firestore reliability
 db.settings({ ignoreUndefinedProperties: true })
@@ -132,9 +133,6 @@ export async function createOrUpdateUserProfile(userId: string, profileData: Rec
 /* -------------------------------------------------------------------------- */
 
 export { FieldValue }
-
-// Export the services
-export const firestore = getFirestore(adminApp)
 
 // Legacy export for backward compatibility
 export const firebaseDb = {

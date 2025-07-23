@@ -8,57 +8,52 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
 
 export async function POST(request: NextRequest) {
   try {
-    const { userId } = await request.json()
+    const { userId, email } = await request.json()
 
     if (!userId) {
       return NextResponse.json({ error: "User ID is required" }, { status: 400 })
     }
 
-    // Get user data from Firebase
+    // Check if user already has a Stripe account
     const userDoc = await adminDb.collection("users").doc(userId).get()
-
-    if (!userDoc.exists) {
-      return NextResponse.json({ error: "User not found" }, { status: 404 })
-    }
-
     const userData = userDoc.data()
 
-    // Check if user already has a Stripe account
     if (userData?.stripeAccountId) {
-      return NextResponse.json(
-        {
-          error: "User already has a Stripe account",
-          accountId: userData.stripeAccountId,
-        },
-        { status: 400 },
-      )
+      return NextResponse.json({
+        accountId: userData.stripeAccountId,
+        message: "Account already exists",
+      })
     }
 
-    // Create a new Stripe Express account
+    // Create new Stripe Express account
     const account = await stripe.accounts.create({
       type: "express",
       country: "US",
-      email: userData?.email,
+      email: email,
       capabilities: {
         card_payments: { requested: true },
         transfers: { requested: true },
       },
       business_profile: {
-        url: userData?.website || "https://massclip.pro",
+        product_description: "Digital content and services",
       },
     })
 
-    // Save the Stripe account ID to the user's record
+    // Save account ID to Firestore
     await adminDb.collection("users").doc(userId).update({
       stripeAccountId: account.id,
+      stripeAccountStatus: "pending",
+      stripeChargesEnabled: false,
+      stripePayoutsEnabled: false,
+      stripeDetailsSubmitted: false,
       updatedAt: new Date(),
     })
 
-    console.log(`✅ Created Stripe account ${account.id} for user ${userId}`)
+    console.log("Created Stripe account:", account.id, "for user:", userId)
 
     return NextResponse.json({
-      success: true,
       accountId: account.id,
+      message: "Account created successfully",
     })
   } catch (error) {
     console.error("Error creating Stripe account:", error)

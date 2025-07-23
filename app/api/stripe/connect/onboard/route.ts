@@ -18,45 +18,38 @@ export async function POST(request: NextRequest) {
     const userDoc = await adminDb.collection("users").doc(userId).get()
     const userData = userDoc.data()
 
-    let stripeAccountId = userData?.stripeAccountId
+    let accountId = userData?.stripeAccountId
 
-    // If no Stripe account exists, create one
-    if (!stripeAccountId) {
+    // Create Stripe account if it doesn't exist
+    if (!accountId) {
       const account = await stripe.accounts.create({
         type: "express",
         country: "US",
-        email: userData?.email,
         capabilities: {
           card_payments: { requested: true },
           transfers: { requested: true },
         },
       })
 
-      stripeAccountId = account.id
+      accountId = account.id
 
-      // Save the Stripe account ID to the user's record
+      // Save the account ID to Firestore
       await adminDb.collection("users").doc(userId).update({
-        stripeAccountId,
+        stripeAccountId: accountId,
+        stripeAccountStatus: "pending",
         updatedAt: new Date(),
       })
     }
 
-    // Create OAuth link with correct redirect URI
-    const oauthLink = await stripe.oauth.authorizeUrl({
-      response_type: "code",
-      client_id: process.env.STRIPE_CLIENT_ID!,
-      scope: "read_write",
-      redirect_uri: "https://massclip.pro/api/stripe/connect/oauth-callback",
-      state: userId, // Pass user ID in state parameter
-      stripe_user: {
-        email: userData?.email,
-        url: userData?.website || "https://massclip.pro",
-        country: "US",
-        business_type: "individual",
-      },
+    // Create account link for onboarding
+    const accountLink = await stripe.accountLinks.create({
+      account: accountId,
+      refresh_url: `${process.env.NEXT_PUBLIC_SITE_URL}/dashboard/connect-stripe?refresh=true`,
+      return_url: `${process.env.NEXT_PUBLIC_SITE_URL}/api/stripe/connect/oauth-callback?state=${userId}`,
+      type: "account_onboarding",
     })
 
-    return NextResponse.json({ url: oauthLink })
+    return NextResponse.json({ url: accountLink.url })
   } catch (error) {
     console.error("Error creating Stripe onboarding link:", error)
     return NextResponse.json({ error: "Failed to create onboarding link" }, { status: 500 })

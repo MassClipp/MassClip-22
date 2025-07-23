@@ -32,8 +32,12 @@ export function StripeConnectButton({ userId, onSuccess }: StripeConnectButtonPr
         throw new Error(data.error || "Failed to create onboarding link")
       }
 
-      // Redirect to Stripe Connect OAuth
-      window.location.href = data.url
+      if (data.url) {
+        // Redirect to Stripe onboarding
+        window.location.href = data.url
+      } else {
+        throw new Error("No onboarding URL received")
+      }
     } catch (error) {
       console.error("Error connecting to Stripe:", error)
       toast({
@@ -54,7 +58,7 @@ export function StripeConnectButton({ userId, onSuccess }: StripeConnectButtonPr
           Connecting...
         </>
       ) : (
-        "Connect with Stripe"
+        "Connect Stripe Account"
       )}
     </Button>
   )
