@@ -13,6 +13,7 @@
     "@aws-sdk/client-s3": "latest",
     "@aws-sdk/s3-request-presigner": "latest",
     "@chakra-ui/react": "latest",
+    "@clerk/nextjs": "latest",
     "@emotion/is-prop-valid": "latest",
     "@emotion/react": "latest",
     "@hookform/resolvers": "^3.9.1",

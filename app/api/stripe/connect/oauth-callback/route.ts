@@ -67,7 +67,7 @@ export async function GET(request: NextRequest) {
     // })
 
     // Redirect to dashboard with success message
-    const redirectUrl = new URL("/dashboard/earnings", request.url)
+    const redirectUrl = new URL("/dashboard/earnings", "https://massclip.pro")
     redirectUrl.searchParams.set("connected", "success")
 
     return NextResponse.redirect(redirectUrl)

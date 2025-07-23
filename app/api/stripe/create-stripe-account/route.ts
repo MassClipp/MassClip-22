@@ -37,12 +37,10 @@ export async function POST(request: NextRequest) {
       console.log(`🏦 [CreateAccount] User already has account: ${userData.stripeAccountId}`)
 
       // Create onboarding link for existing account
-      const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || getSiteUrl()
-
       const accountLink = await stripe.accountLinks.create({
         account: userData.stripeAccountId,
-        refresh_url: `${baseUrl}/dashboard/connect-stripe?refresh=true`,
-        return_url: `${baseUrl}/dashboard/connect-stripe?success=true`,
+        refresh_url: "https://massclip.pro/dashboard/connect-stripe?refresh=true",
+        return_url: "https://massclip.pro/dashboard/connect-stripe?success=true",
         type: "account_onboarding",
       })
 
@@ -86,8 +84,8 @@ export async function POST(request: NextRequest) {
     // Create account onboarding link
     const accountLink = await stripe.accountLinks.create({
       account: account.id,
-      refresh_url: `${baseUrl}/dashboard/connect-stripe?refresh=true`,
-      return_url: `${baseUrl}/dashboard/connect-stripe?success=true`,
+      refresh_url: "https://massclip.pro/dashboard/connect-stripe?refresh=true",
+      return_url: "https://massclip.pro/dashboard/connect-stripe?success=true",
       type: "account_onboarding",
     })
 
