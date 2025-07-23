@@ -101,19 +101,21 @@ export default function EarningsPageContent() {
         },
       })
 
-      if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.error || "Failed to unlink Stripe account")
-      }
-
       const result = await response.json()
 
+      if (!response.ok) {
+        throw new Error(result.error || "Failed to unlink Stripe account")
+      }
+
+      // Show success message
       toast({
-        title: "Stripe Account Unlinked",
-        description: result.message || "Your Stripe account has been successfully disconnected.",
+        title: result.wasConnected ? "Stripe Account Unlinked" : "No Account to Unlink",
+        description: result.message || "Operation completed successfully.",
+        variant: result.wasConnected ? "default" : "default",
       })
 
-      router.refresh()
+      // Refresh the earnings data to reflect the change
+      await refresh()
     } catch (error: any) {
       console.error("Unlink error:", error)
       toast({
@@ -442,7 +444,7 @@ export default function EarningsPageContent() {
         </Card>
       </div>
 
-      {/* Additional Components Row */}
+      {/* Recent Sales - Full Width */}
       <div className="w-full">
         <RecentSales sales={stats.recentTransactions || []} isLoading={loading} />
       </div>

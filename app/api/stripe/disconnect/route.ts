@@ -11,6 +11,7 @@ export async function POST(request: NextRequest) {
     const user = await getAuthenticatedUser(request.headers)
 
     if (!user) {
+      console.log("❌ No authenticated user found")
       return NextResponse.json(
         {
           success: false,
@@ -20,46 +21,80 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    console.log(`🗑️ Disconnecting Stripe account for user ${user.uid}`)
+    console.log(`🗑️ Attempting to disconnect Stripe account for user ${user.uid}`)
 
     try {
       // Get current user data
       const userDoc = await db.collection("users").doc(user.uid).get()
-      const userData = userDoc.data()
 
-      if (!userData?.stripeAccountId) {
+      if (!userDoc.exists) {
+        console.log(`❌ User document not found for ${user.uid}`)
         return NextResponse.json(
           {
             success: false,
-            error: "No Stripe account connected",
+            error: "User profile not found",
           },
-          { status: 400 },
+          { status: 404 },
+        )
+      }
+
+      const userData = userDoc.data()
+      console.log(`📊 User data retrieved:`, {
+        hasStripeAccountId: !!userData?.stripeAccountId,
+        stripeAccountStatus: userData?.stripeAccountStatus,
+        stripeAccountId: userData?.stripeAccountId ? `${userData.stripeAccountId.substring(0, 10)}...` : "none",
+      })
+
+      // Check if user has any Stripe-related data to disconnect
+      const hasStripeData =
+        userData?.stripeAccountId ||
+        userData?.stripeAccountStatus ||
+        userData?.stripeConnected ||
+        userData?.stripeOnboardingComplete
+
+      if (!hasStripeData) {
+        console.log(`ℹ️ No Stripe account data found for user ${user.uid}`)
+        return NextResponse.json(
+          {
+            success: true,
+            message: "No Stripe account was connected to disconnect",
+            wasConnected: false,
+          },
+          { status: 200 },
         )
       }
 
       const stripeAccountId = userData.stripeAccountId
 
-      // Remove Stripe data from user profile
-      await db.collection("users").doc(user.uid).update({
+      // Remove all Stripe-related data from user profile
+      const updateData: any = {
         stripeAccountId: null,
         stripeAccountStatus: null,
+        stripeConnected: false,
+        stripeOnboardingComplete: false,
+        stripeChargesEnabled: false,
+        stripePayoutsEnabled: false,
+        stripeDetailsSubmitted: false,
         updatedAt: new Date(),
-      })
+      }
 
-      console.log(`✅ Successfully disconnected Stripe account ${stripeAccountId} from user ${user.uid}`)
+      await db.collection("users").doc(user.uid).update(updateData)
+
+      console.log(`✅ Successfully disconnected Stripe account ${stripeAccountId || "unknown"} from user ${user.uid}`)
 
       return NextResponse.json({
         success: true,
         message: "Stripe account disconnected successfully",
         disconnectedAccountId: stripeAccountId,
+        wasConnected: true,
       })
-    } catch (error: any) {
-      console.error("❌ Error disconnecting Stripe account:", error)
+    } catch (firestoreError: any) {
+      console.error("❌ Firestore error during disconnect:", firestoreError)
       return NextResponse.json(
         {
           success: false,
-          error: "Failed to disconnect Stripe account",
-          details: error.message,
+          error: "Database error during disconnect",
+          details: firestoreError.message,
         },
         { status: 500 },
       )
