@@ -1,13 +1,14 @@
 "use client"
 
-import { useEffect, useState } from "react"
-import { useSearchParams } from "next/navigation"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { CheckCircle, AlertCircle, Loader2, CreditCard, Globe, Shield } from "lucide-react"
+import { Loader2, CheckCircle, AlertCircle, ExternalLink } from "lucide-react"
 import { StripeConnectButton } from "@/components/stripe-connect-button"
 import { useFirebaseAuth } from "@/hooks/use-firebase-auth"
+import { toast } from "sonner"
 
 interface StripeStatus {
   connected: boolean
@@ -16,18 +17,58 @@ interface StripeStatus {
   payoutsEnabled: boolean
   detailsSubmitted: boolean
   status: string
+  requirements?: any
+  email?: string
+  error?: string
 }
 
 export default function ConnectStripePage() {
-  const { user, loading: authLoading } = useFirebaseAuth()
-  const searchParams = useSearchParams()
-  const [stripeStatus, setStripeStatus] = useState<StripeStatus | null>(null)
+  const [status, setStatus] = useState<StripeStatus | null>(null)
   const [loading, setLoading] = useState(true)
+  const [refreshing, setRefreshing] = useState(false)
+  const { getIdToken, user } = useFirebaseAuth()
 
-  const success = searchParams.get("success")
-  const pending = searchParams.get("pending")
-  const error = searchParams.get("error")
-  const refresh = searchParams.get("refresh")
+  const checkStripeStatus = async (showToast = false) => {
+    try {
+      setRefreshing(true)
+
+      const idToken = await getIdToken()
+      if (!idToken) {
+        throw new Error("Authentication required")
+      }
+
+      const response = await fetch("/api/stripe/connect/status", {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${idToken}`,
+        },
+      })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to check Stripe status")
+      }
+
+      setStatus(data)
+
+      if (showToast) {
+        if (data.connected && data.chargesEnabled && data.payoutsEnabled) {
+          toast.success("Stripe account is fully connected and active!")
+        } else if (data.connected) {
+          toast.info("Stripe account connected but requires additional setup")
+        } else {
+          toast.info("No Stripe account connected")
+        }
+      }
+    } catch (error: any) {
+      console.error("Error checking Stripe status:", error)
+      toast.error(error.message || "Failed to check Stripe status")
+    } finally {
+      setLoading(false)
+      setRefreshing(false)
+    }
+  }
 
   useEffect(() => {
     if (user) {
@@ -35,202 +76,244 @@ export default function ConnectStripePage() {
     }
   }, [user])
 
-  const checkStripeStatus = async () => {
-    try {
-      setLoading(true)
-      const response = await fetch("/api/stripe/connect/status", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ userId: user?.uid }),
-      })
+  const handleRefresh = () => {
+    checkStripeStatus(true)
+  }
 
-      if (response.ok) {
-        const data = await response.json()
-        setStripeStatus(data)
-      }
-    } catch (error) {
-      console.error("Error checking Stripe status:", error)
-    } finally {
-      setLoading(false)
+  const getStatusBadge = () => {
+    if (!status) return null
+
+    if (status.connected && status.chargesEnabled && status.payoutsEnabled) {
+      return <Badge className="bg-green-100 text-green-800">Active</Badge>
+    } else if (status.connected) {
+      return <Badge className="bg-yellow-100 text-yellow-800">Setup Required</Badge>
+    } else {
+      return <Badge className="bg-gray-100 text-gray-800">Not Connected</Badge>
     }
   }
 
-  if (authLoading || loading) {
-    return (
-      <div className="flex items-center justify-center min-h-screen">
-        <Loader2 className="h-8 w-8 animate-spin" />
-      </div>
-    )
+  const getStatusIcon = () => {
+    if (!status) return null
+
+    if (status.connected && status.chargesEnabled && status.payoutsEnabled) {
+      return <CheckCircle className="h-5 w-5 text-green-600" />
+    } else {
+      return <AlertCircle className="h-5 w-5 text-yellow-600" />
+    }
   }
 
-  if (!user) {
+  if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <Card className="w-full max-w-md">
-          <CardContent className="pt-6">
-            <p className="text-center text-muted-foreground">Please log in to continue</p>
-          </CardContent>
-        </Card>
+      <div className="container mx-auto py-8">
+        <div className="flex items-center justify-center min-h-[400px]">
+          <div className="text-center">
+            <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
+            <p className="text-muted-foreground">Checking Stripe connection...</p>
+          </div>
+        </div>
       </div>
     )
   }
 
   return (
     <div className="container mx-auto py-8 max-w-4xl">
-      <div className="text-center mb-8">
-        <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
-          <CreditCard className="w-8 h-8 text-blue-600" />
-        </div>
-        <h1 className="text-3xl font-bold mb-2">Connect Your Stripe Account</h1>
-        <p className="text-gray-600">Start accepting payments and track your earnings</p>
+      <div className="mb-8">
+        <h1 className="text-3xl font-bold mb-2">Connect with Stripe</h1>
+        <p className="text-muted-foreground">
+          Connect your Stripe account to start receiving payments for your content.
+        </p>
       </div>
 
-      {/* Status Messages */}
-      {success && (
-        <Alert className="mb-6 border-green-200 bg-green-50">
-          <CheckCircle className="h-4 w-4 text-green-600" />
-          <AlertDescription className="text-green-800">
-            Successfully connected your Stripe account! You can now start accepting payments.
-          </AlertDescription>
-        </Alert>
-      )}
-
-      {pending && (
-        <Alert className="mb-6 border-yellow-200 bg-yellow-50">
-          <AlertCircle className="h-4 w-4 text-yellow-600" />
-          <AlertDescription className="text-yellow-800">
-            Your Stripe account setup is pending. Please complete the onboarding process.
-          </AlertDescription>
-        </Alert>
-      )}
-
-      {error && (
-        <Alert className="mb-6 border-red-200 bg-red-50">
-          <AlertCircle className="h-4 w-4 text-red-600" />
-          <AlertDescription className="text-red-800">
-            An error occurred while connecting your Stripe account. Please try again.
-          </AlertDescription>
-        </Alert>
-      )}
-
-      {refresh && (
-        <Alert className="mb-6 border-blue-200 bg-blue-50">
-          <AlertCircle className="h-4 w-4 text-blue-600" />
-          <AlertDescription className="text-blue-800">
-            The connection process was interrupted. Please try again.
-          </AlertDescription>
-        </Alert>
-      )}
-
-      {/* Benefits Grid */}
-      <div className="grid md:grid-cols-3 gap-6 mb-8">
-        <Card>
-          <CardHeader className="text-center">
-            <div className="w-12 h-12 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-2">
-              <CreditCard className="w-6 h-6 text-green-600" />
-            </div>
-            <CardTitle className="text-lg">Accept Payments</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <CardDescription className="text-center">
-              Process payments from customers worldwide securely
-            </CardDescription>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="text-center">
-            <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-2">
-              <Globe className="w-6 h-6 text-blue-600" />
-            </div>
-            <CardTitle className="text-lg">Global Reach</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <CardDescription className="text-center">
-              Supported in 40+ countries with local payment methods
-            </CardDescription>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="text-center">
-            <div className="w-12 h-12 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-2">
-              <Shield className="w-6 h-6 text-purple-600" />
-            </div>
-            <CardTitle className="text-lg">Secure & Reliable</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <CardDescription className="text-center">Bank-level security with PCI compliance</CardDescription>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Connection Status and Actions */}
-      <div className="max-w-2xl mx-auto">
+      <div className="grid gap-6">
+        {/* Status Card */}
         <Card>
           <CardHeader>
-            <CardTitle>Connection Status</CardTitle>
-            <CardDescription>Manage your Stripe account connection</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-6">
-            {/* Current Status */}
-            {stripeStatus && (
-              <div className="space-y-4">
-                <h3 className="text-lg font-semibold">Current Status</h3>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="flex items-center space-x-2">
-                    {stripeStatus.connected ? (
-                      <CheckCircle className="h-5 w-5 text-green-500" />
-                    ) : (
-                      <AlertCircle className="h-5 w-5 text-yellow-500" />
-                    )}
-                    <span>Account Connected</span>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    {stripeStatus.chargesEnabled ? (
-                      <CheckCircle className="h-5 w-5 text-green-500" />
-                    ) : (
-                      <AlertCircle className="h-5 w-5 text-yellow-500" />
-                    )}
-                    <span>Charges Enabled</span>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    {stripeStatus.payoutsEnabled ? (
-                      <CheckCircle className="h-5 w-5 text-green-500" />
-                    ) : (
-                      <AlertCircle className="h-5 w-5 text-yellow-500" />
-                    )}
-                    <span>Payouts Enabled</span>
-                  </div>
-                  <div className="flex items-center space-x-2">
-                    {stripeStatus.detailsSubmitted ? (
-                      <CheckCircle className="h-5 w-5 text-green-500" />
-                    ) : (
-                      <AlertCircle className="h-5 w-5 text-yellow-500" />
-                    )}
-                    <span>Details Submitted</span>
-                  </div>
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                {getStatusIcon()}
+                <div>
+                  <CardTitle>Connection Status</CardTitle>
+                  <CardDescription>Current status of your Stripe integration</CardDescription>
                 </div>
               </div>
-            )}
-
-            {/* Action Buttons */}
-            <div className="space-y-4">
-              {!stripeStatus?.connected || !stripeStatus?.detailsSubmitted ? (
-                <StripeConnectButton userId={user.uid} onSuccess={checkStripeStatus} />
-              ) : (
-                <div className="text-center">
-                  <CheckCircle className="h-12 w-12 text-green-500 mx-auto mb-4" />
-                  <p className="text-lg font-semibold text-green-600">Your Stripe account is fully connected!</p>
-                  <p className="text-muted-foreground">You can now receive payments for your content.</p>
+              <div className="flex items-center gap-2">
+                {getStatusBadge()}
+                <Button variant="outline" size="sm" onClick={handleRefresh} disabled={refreshing}>
+                  {refreshing ? <Loader2 className="h-4 w-4 animate-spin" /> : "Refresh"}
+                </Button>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {status ? (
+              <div className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="text-center p-4 border rounded-lg">
+                    <div className="text-2xl font-bold mb-1">
+                      {status.connected ? (
+                        <CheckCircle className="h-6 w-6 text-green-600 mx-auto" />
+                      ) : (
+                        <AlertCircle className="h-6 w-6 text-gray-400 mx-auto" />
+                      )}
+                    </div>
+                    <p className="text-sm font-medium">Account Connected</p>
+                    <p className="text-xs text-muted-foreground">{status.connected ? "Yes" : "No"}</p>
+                  </div>
+                  <div className="text-center p-4 border rounded-lg">
+                    <div className="text-2xl font-bold mb-1">
+                      {status.chargesEnabled ? (
+                        <CheckCircle className="h-6 w-6 text-green-600 mx-auto" />
+                      ) : (
+                        <AlertCircle className="h-6 w-6 text-gray-400 mx-auto" />
+                      )}
+                    </div>
+                    <p className="text-sm font-medium">Charges Enabled</p>
+                    <p className="text-xs text-muted-foreground">{status.chargesEnabled ? "Yes" : "No"}</p>
+                  </div>
+                  <div className="text-center p-4 border rounded-lg">
+                    <div className="text-2xl font-bold mb-1">
+                      {status.payoutsEnabled ? (
+                        <CheckCircle className="h-6 w-6 text-green-600 mx-auto" />
+                      ) : (
+                        <AlertCircle className="h-6 w-6 text-gray-400 mx-auto" />
+                      )}
+                    </div>
+                    <p className="text-sm font-medium">Payouts Enabled</p>
+                    <p className="text-xs text-muted-foreground">{status.payoutsEnabled ? "Yes" : "No"}</p>
+                  </div>
                 </div>
-              )}
 
-              <Button variant="outline" onClick={checkStripeStatus} className="w-full bg-transparent">
-                Refresh Status
-              </Button>
+                {status.accountId && (
+                  <div className="text-sm text-muted-foreground">
+                    <strong>Account ID:</strong> {status.accountId}
+                  </div>
+                )}
+
+                {status.email && (
+                  <div className="text-sm text-muted-foreground">
+                    <strong>Email:</strong> {status.email}
+                  </div>
+                )}
+
+                {status.error && (
+                  <Alert>
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertDescription>{status.error}</AlertDescription>
+                  </Alert>
+                )}
+              </div>
+            ) : (
+              <p className="text-muted-foreground">Unable to load status</p>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Action Card */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Next Steps</CardTitle>
+            <CardDescription>
+              {status?.connected && status.chargesEnabled && status.payoutsEnabled
+                ? "Your Stripe account is fully set up and ready to receive payments!"
+                : "Complete your Stripe setup to start receiving payments"}
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {status?.connected && status.chargesEnabled && status.payoutsEnabled ? (
+              <div className="space-y-4">
+                <Alert>
+                  <CheckCircle className="h-4 w-4" />
+                  <AlertDescription>
+                    Your Stripe account is fully connected and active. You can now receive payments for your content.
+                  </AlertDescription>
+                </Alert>
+                <Button variant="outline" asChild>
+                  <a
+                    href="https://dashboard.stripe.com"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-2"
+                  >
+                    Open Stripe Dashboard
+                    <ExternalLink className="h-4 w-4" />
+                  </a>
+                </Button>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {!status?.connected ? (
+                  <div>
+                    <p className="mb-4 text-sm text-muted-foreground">
+                      Connect your Stripe account to start receiving payments. This will redirect you to Stripe to
+                      complete the setup process.
+                    </p>
+                    <StripeConnectButton
+                      onSuccess={() => {
+                        toast.success("Redirecting to Stripe...")
+                      }}
+                      onError={(error) => {
+                        toast.error(error)
+                      }}
+                    />
+                  </div>
+                ) : (
+                  <div>
+                    <p className="mb-4 text-sm text-muted-foreground">
+                      Your Stripe account needs additional setup to enable payments. Complete the onboarding process to
+                      activate your account.
+                    </p>
+                    <StripeConnectButton
+                      onSuccess={() => {
+                        toast.success("Redirecting to complete setup...")
+                      }}
+                      onError={(error) => {
+                        toast.error(error)
+                      }}
+                    />
+                  </div>
+                )}
+
+                {status?.requirements && status.requirements.currently_due?.length > 0 && (
+                  <Alert>
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertDescription>
+                      <strong>Required Information:</strong>
+                      <ul className="mt-2 list-disc list-inside text-sm">
+                        {status.requirements.currently_due.map((req: string, index: number) => (
+                          <li key={index}>{req.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase())}</li>
+                        ))}
+                      </ul>
+                    </AlertDescription>
+                  </Alert>
+                )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Information Card */}
+        <Card>
+          <CardHeader>
+            <CardTitle>About Stripe Integration</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3 text-sm text-muted-foreground">
+              <p>
+                <strong>Secure Payments:</strong> Stripe handles all payment processing securely, ensuring your
+                customers' payment information is protected.
+              </p>
+              <p>
+                <strong>Global Reach:</strong> Accept payments from customers worldwide with support for multiple
+                currencies and payment methods.
+              </p>
+              <p>
+                <strong>Automatic Payouts:</strong> Receive your earnings directly to your bank account with automatic
+                daily payouts.
+              </p>
+              <p>
+                <strong>Transaction Fees:</strong> Stripe charges 2.9% + 30¢ per successful charge. No setup fees,
+                monthly fees, or hidden costs.
+              </p>
             </div>
           </CardContent>
         </Card>

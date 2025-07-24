@@ -2,57 +2,71 @@
 
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
-import { Loader2, CreditCard } from "lucide-react"
+import { useFirebaseAuth } from "@/hooks/use-firebase-auth"
+import { toast } from "sonner"
 
 interface StripeConnectButtonProps {
-  userId: string
   onSuccess?: () => void
+  onError?: (error: string) => void
+  variant?: "default" | "outline" | "secondary"
+  size?: "sm" | "default" | "lg"
+  className?: string
 }
 
-export function StripeConnectButton({ userId, onSuccess }: StripeConnectButtonProps) {
+export function StripeConnectButton({
+  onSuccess,
+  onError,
+  variant = "default",
+  size = "default",
+  className,
+}: StripeConnectButtonProps) {
   const [loading, setLoading] = useState(false)
+  const { getIdToken } = useFirebaseAuth()
 
   const handleConnect = async () => {
     try {
       setLoading(true)
 
-      const response = await fetch("/api/stripe/connect/onboard", {
+      // Get ID token for authentication
+      const idToken = await getIdToken()
+      if (!idToken) {
+        throw new Error("Authentication required")
+      }
+
+      // Create Stripe connect URL
+      const response = await fetch("/api/stripe/connect-url", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          Authorization: `Bearer ${idToken}`,
         },
-        body: JSON.stringify({ userId }),
       })
 
       const data = await response.json()
 
-      if (response.ok && data.url) {
-        // Redirect to Stripe onboarding
-        window.location.href = data.url
-      } else {
-        throw new Error(data.error || "Failed to create onboarding link")
+      if (!response.ok) {
+        throw new Error(data.error || "Failed to create Stripe connection")
       }
-    } catch (error) {
-      console.error("Error connecting to Stripe:", error)
-      alert("Failed to connect to Stripe. Please try again.")
+
+      if (data.success && data.connectUrl) {
+        // Redirect to Stripe onboarding
+        window.location.href = data.connectUrl
+      } else {
+        throw new Error("Invalid response from server")
+      }
+    } catch (error: any) {
+      console.error("Stripe connect error:", error)
+      const errorMessage = error.message || "Failed to connect to Stripe"
+      toast.error(errorMessage)
+      onError?.(errorMessage)
     } finally {
       setLoading(false)
     }
   }
 
   return (
-    <Button onClick={handleConnect} disabled={loading} className="w-full" size="lg">
-      {loading ? (
-        <>
-          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-          Connecting...
-        </>
-      ) : (
-        <>
-          <CreditCard className="mr-2 h-4 w-4" />
-          Connect with Stripe
-        </>
-      )}
+    <Button onClick={handleConnect} disabled={loading} variant={variant} size={size} className={className}>
+      {loading ? "Connecting..." : "Connect with Stripe"}
     </Button>
   )
 }
