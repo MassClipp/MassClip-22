@@ -7,6 +7,7 @@ let app: App
 let auth: Auth
 let firestore: Firestore
 let adminDb: Firestore
+let adminAuth: Auth
 
 // Initialize Firebase Admin SDK
 export function initializeFirebaseAdmin(): App {
@@ -40,6 +41,7 @@ export function initializeFirebaseAdmin(): App {
   auth = getAuth(app)
   firestore = getFirestore(app)
   adminDb = firestore
+  adminAuth = auth
 
   return app
 }
@@ -81,7 +83,7 @@ export async function getAuthenticatedUser(headers: Headers): Promise<{ uid: str
   const idToken = authHeader.substring(7)
 
   try {
-    const decodedToken = await auth.verifyIdToken(idToken)
+    const decodedToken = await adminAuth.verifyIdToken(idToken)
     return {
       uid: decodedToken.uid,
       email: decodedToken.email,
@@ -102,7 +104,7 @@ export async function getUserFromRequest(request: NextRequest): Promise<{ uid: s
       throw new Error("No ID token provided")
     }
 
-    const decodedToken = await auth.verifyIdToken(idToken)
+    const decodedToken = await adminAuth.verifyIdToken(idToken)
     return {
       uid: decodedToken.uid,
       email: decodedToken.email,
@@ -113,8 +115,8 @@ export async function getUserFromRequest(request: NextRequest): Promise<{ uid: s
   }
 }
 
-// Export initialized instances
-export { auth, firestore, adminDb, FieldValue }
+// Export initialized instances with all the names used throughout the codebase
+export { auth, firestore, adminDb, adminAuth, FieldValue }
 
 // Export the app instance
 export { app }

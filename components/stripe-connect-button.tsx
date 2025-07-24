@@ -2,42 +2,42 @@
 
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
-import { useToast } from "@/hooks/use-toast"
-import { Loader2, ExternalLink } from 'lucide-react'
 import { useFirebaseAuth } from "@/hooks/use-firebase-auth"
+import { useToast } from "@/hooks/use-toast"
+import { ExternalLink, Loader2 } from 'lucide-react'
 
 interface StripeConnectButtonProps {
-  isConnected?: boolean
+  isConnected: boolean
   accountId?: string
   onConnectionChange?: () => void
 }
 
-export default function StripeConnectButton({
-  isConnected = false,
-  accountId,
-  onConnectionChange,
+export default function StripeConnectButton({ 
+  isConnected, 
+  accountId, 
+  onConnectionChange 
 }: StripeConnectButtonProps) {
   const [isLoading, setIsLoading] = useState(false)
-  const { toast } = useToast()
   const { user } = useFirebaseAuth()
+  const { toast } = useToast()
 
   const handleConnect = async () => {
     if (!user) {
       toast({
         title: "Authentication Required",
-        description: "Please log in to connect your Stripe account",
+        description: "Please log in to connect your Stripe account.",
         variant: "destructive",
       })
       return
     }
 
+    setIsLoading(true)
+
     try {
-      setIsLoading(true)
-      console.log("🔗 Initiating Stripe Connect...")
-
-      // Get ID token
       const idToken = await user.getIdToken()
-
+      
+      console.log("🔄 Requesting Stripe connection URL...")
+      
       const response = await fetch("/api/stripe/connect-url", {
         method: "POST",
         headers: {
@@ -47,28 +47,25 @@ export default function StripeConnectButton({
       })
 
       const data = await response.json()
-      console.log("📥 API Response:", data)
+      console.log("📡 API Response:", data)
 
-      if (!response.ok) {
-        throw new Error(data.details || data.error || "Failed to generate connect URL")
-      }
-
-      // Check if we got the connectUrl in the response
-      if (data.success && data.connectUrl) {
-        console.log("✅ Connect URL received, redirecting...")
-        console.log("🔗 URL:", data.connectUrl)
-        
-        // Redirect to Stripe Connect
+      if (response.ok && data.success && data.connectUrl) {
+        console.log("✅ Redirecting to Stripe:", data.connectUrl)
+        // Redirect to Stripe Express onboarding
         window.location.href = data.connectUrl
       } else {
-        console.error("❌ No connect URL in response:", data)
-        throw new Error("No OAuth URL received from server")
+        console.error("❌ API Error:", data)
+        toast({
+          title: "Connection Failed",
+          description: data.error || "Failed to create Stripe connection URL",
+          variant: "destructive",
+        })
       }
     } catch (error) {
-      console.error("❌ Error connecting to Stripe:", error)
+      console.error("❌ Request Error:", error)
       toast({
-        title: "Connection Failed",
-        description: error instanceof Error ? error.message : "Failed to connect to Stripe",
+        title: "Connection Error",
+        description: "An unexpected error occurred. Please try again.",
         variant: "destructive",
       })
     } finally {
@@ -76,31 +73,55 @@ export default function StripeConnectButton({
     }
   }
 
-  if (isConnected && accountId) {
+  const handleManageAccount = () => {
+    if (accountId) {
+      // Open Stripe Express dashboard
+      window.open(`https://dashboard.stripe.com/express/accounts/${accountId}`, '_blank')
+    }
+  }
+
+  if (isConnected) {
     return (
-      <div className="flex items-center gap-3">
-        <div className="flex items-center gap-2">
+      <div className="space-y-2">
+        <div className="flex items-center gap-2 text-sm text-green-600 mb-3">
           <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-          <span className="text-sm text-green-600 font-medium">Connected</span>
+          <span className="font-medium">Stripe Connected</span>
         </div>
+        
         <Button
+          onClick={handleManageAccount}
           variant="outline"
-          size="sm"
-          onClick={() => window.open(`https://dashboard.stripe.com/connect/accounts/${accountId}`, "_blank")}
+          className="w-full"
+          disabled={!accountId}
         >
-          <ExternalLink className="w-4 h-4 mr-2" />
-          View Dashboard
+          <ExternalLink className="mr-2 h-4 w-4" />
+          Manage Stripe Account
+        </Button>
+        
+        <Button
+          onClick={handleConnect}
+          variant="secondary"
+          size="sm"
+          disabled={isLoading}
+          className="w-full"
+        >
+          {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+          Update Account Settings
         </Button>
       </div>
     )
   }
 
   return (
-    <Button onClick={handleConnect} disabled={isLoading} className="bg-[#635bff] hover:bg-[#5a54f9] text-white">
+    <Button
+      onClick={handleConnect}
+      disabled={isLoading}
+      className="w-full bg-[#635bff] hover:bg-[#5a54f9] text-white"
+    >
       {isLoading ? (
         <>
-          <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-          Connecting...
+          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+          Setting up...
         </>
       ) : (
         <>
