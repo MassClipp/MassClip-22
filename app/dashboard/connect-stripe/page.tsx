@@ -5,7 +5,7 @@ import { useSearchParams } from "next/navigation"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
-import { CheckCircle, XCircle, AlertCircle, Loader2 } from "lucide-react"
+import { CheckCircle, XCircle, AlertCircle, Loader2 } from 'lucide-react'
 import StripeConnectButton from "@/components/stripe-connect-button"
 import { useFirebaseAuth } from "@/hooks/use-firebase-auth"
 

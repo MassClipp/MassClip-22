@@ -3,7 +3,7 @@
 import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { useToast } from "@/hooks/use-toast"
-import { Loader2, ExternalLink } from "lucide-react"
+import { Loader2, ExternalLink } from 'lucide-react'
 import { useFirebaseAuth } from "@/hooks/use-firebase-auth"
 
 interface StripeConnectButtonProps {
@@ -47,17 +47,22 @@ export default function StripeConnectButton({
       })
 
       const data = await response.json()
+      console.log("📥 API Response:", data)
 
       if (!response.ok) {
         throw new Error(data.details || data.error || "Failed to generate connect URL")
       }
 
+      // Check if we got the connectUrl in the response
       if (data.success && data.connectUrl) {
-        console.log("✅ Connect URL generated, redirecting...")
+        console.log("✅ Connect URL received, redirecting...")
+        console.log("🔗 URL:", data.connectUrl)
+        
         // Redirect to Stripe Connect
         window.location.href = data.connectUrl
       } else {
-        throw new Error("Invalid response from server")
+        console.error("❌ No connect URL in response:", data)
+        throw new Error("No OAuth URL received from server")
       }
     } catch (error) {
       console.error("❌ Error connecting to Stripe:", error)
