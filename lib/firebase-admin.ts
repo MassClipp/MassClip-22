@@ -1,7 +1,7 @@
-import { initializeApp, getApps, cert, type App } from 'firebase-admin/app'
-import { getAuth, type Auth } from 'firebase-admin/auth'
-import { getFirestore, type Firestore, FieldValue } from 'firebase-admin/firestore'
-import type { NextRequest } from 'next/server'
+import { initializeApp, getApps, cert, type App } from "firebase-admin/app"
+import { getAuth, type Auth } from "firebase-admin/auth"
+import { getFirestore, type Firestore, FieldValue } from "firebase-admin/firestore"
+import type { NextRequest } from "next/server"
 
 let app: App
 let auth: Auth
@@ -12,10 +12,10 @@ let adminDb: Firestore
 export function initializeFirebaseAdmin(): App {
   if (getApps().length === 0) {
     try {
-      const privateKey = process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n')
+      const privateKey = process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n")
 
       if (!privateKey || !process.env.FIREBASE_PROJECT_ID || !process.env.FIREBASE_CLIENT_EMAIL) {
-        throw new Error('Missing Firebase Admin configuration')
+        throw new Error("Missing Firebase Admin configuration")
       }
 
       app = initializeApp({
@@ -27,9 +27,9 @@ export function initializeFirebaseAdmin(): App {
         projectId: process.env.FIREBASE_PROJECT_ID,
       })
 
-      console.log('✅ Firebase Admin initialized successfully')
+      console.log("✅ Firebase Admin initialized successfully")
     } catch (error) {
-      console.error('❌ Firebase Admin initialization failed:', error)
+      console.error("❌ Firebase Admin initialization failed:", error)
       throw error
     }
   } else {
@@ -72,10 +72,10 @@ export async function withRetry<T>(operation: () => Promise<T>, maxRetries = 3, 
 
 // Get authenticated user from request headers
 export async function getAuthenticatedUser(headers: Headers): Promise<{ uid: string; email?: string }> {
-  const authHeader = headers.get('authorization')
+  const authHeader = headers.get("authorization")
 
-  if (!authHeader?.startsWith('Bearer ')) {
-    throw new Error('Missing or invalid authorization header')
+  if (!authHeader?.startsWith("Bearer ")) {
+    throw new Error("Missing or invalid authorization header")
   }
 
   const idToken = authHeader.substring(7)
@@ -87,8 +87,8 @@ export async function getAuthenticatedUser(headers: Headers): Promise<{ uid: str
       email: decodedToken.email,
     }
   } catch (error) {
-    console.error('Token verification failed:', error)
-    throw new Error('Invalid authentication token')
+    console.error("Token verification failed:", error)
+    throw new Error("Invalid authentication token")
   }
 }
 
@@ -99,7 +99,7 @@ export async function getUserFromRequest(request: NextRequest): Promise<{ uid: s
     const { idToken } = body
 
     if (!idToken) {
-      throw new Error('No ID token provided')
+      throw new Error("No ID token provided")
     }
 
     const decodedToken = await auth.verifyIdToken(idToken)
@@ -108,13 +108,16 @@ export async function getUserFromRequest(request: NextRequest): Promise<{ uid: s
       email: decodedToken.email,
     }
   } catch (error) {
-    console.error('Failed to get user from request:', error)
+    console.error("Failed to get user from request:", error)
     throw error
   }
 }
 
-// Export all required instances and utilities
-export { auth, firestore, adminDb, FieldValue, app }
+// Export initialized instances
+export { auth, firestore, adminDb, FieldValue }
+
+// Export the app instance
+export { app }
 
 // Additional utility exports
 export const db = adminDb

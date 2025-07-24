@@ -1,69 +1,57 @@
-import { NextRequest, NextResponse } from 'next/server'
-import Stripe from 'stripe'
-import { adminDb, getAuthenticatedUser } from '@/lib/firebase-admin'
+import { type NextRequest, NextResponse } from "next/server"
+import Stripe from "stripe"
+import { adminDb } from "@/lib/firebase-admin"
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2024-06-20',
+  apiVersion: "2024-06-20",
 })
 
 export async function POST(request: NextRequest) {
   try {
-    // Get authenticated user
-    const headers = request.headers
-    const user = await getAuthenticatedUser(headers)
+    const { userId } = await request.json()
 
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    if (!userId) {
+      return NextResponse.json({ error: "User ID is required" }, { status: 400 })
     }
 
-    // Get user data from Firestore
-    const userDoc = await adminDb.collection('users').doc(user.uid).get()
+    // Check if user already has a Stripe account
+    const userDoc = await adminDb.collection("users").doc(userId).get()
     const userData = userDoc.data()
 
-    let stripeAccountId = userData?.stripeAccountId
+    let accountId = userData?.stripeAccountId
 
-    // Create Stripe Express account if needed
-    if (!stripeAccountId) {
+    // Create Stripe account if it doesn't exist
+    if (!accountId) {
       const account = await stripe.accounts.create({
-        type: 'express',
-        country: 'US',
-        email: user.email,
+        type: "express",
+        country: "US",
         capabilities: {
           card_payments: { requested: true },
           transfers: { requested: true },
         },
       })
 
-      stripeAccountId = account.id
+      accountId = account.id
 
-      // Update user document with Stripe account ID
-      await adminDb.collection('users').doc(user.uid).update({
-        stripeAccountId,
-        stripeAccountCreated: new Date().toISOString(),
+      // Save the account ID to Firestore
+      await adminDb.collection("users").doc(userId).update({
+        stripeAccountId: accountId,
+        stripeAccountStatus: "pending",
+        updatedAt: new Date(),
       })
     }
 
-    // Create onboarding link
+    // Create account link for onboarding - redirect to frontend callback page
     const accountLink = await stripe.accountLinks.create({
-      account: stripeAccountId,
-      refresh_url: `${process.env.NEXT_PUBLIC_SITE_URL}/dashboard/earnings?refresh=true`,
-      return_url: `${process.env.NEXT_PUBLIC_SITE_URL}/dashboard/earnings?connected=true`,
-      type: 'account_onboarding',
+      account: accountId,
+      refresh_url: `${process.env.NEXT_PUBLIC_SITE_URL}/dashboard/connect-stripe?refresh=true`,
+      return_url: `${process.env.NEXT_PUBLIC_SITE_URL}/dashboard/connect-stripe/callback?state=${userId}`,
+      type: "account_onboarding",
     })
 
-    return NextResponse.json({
-      success: true,
-      onboardingUrl: accountLink.url,
-      accountId: stripeAccountId,
-    })
+    return NextResponse.json({ url: accountLink.url })
   } catch (error) {
-    console.error('Stripe onboarding error:', error)
-    return NextResponse.json(
-      { 
-        error: 'Failed to create onboarding link',
-        details: error instanceof Error ? error.message : 'Unknown error'
-      },
-      { status: 500 }
-    )
+    console.error("Error creating Stripe onboarding link:", error)
+    return NextResponse.json({ error: "Failed to create onboarding link" }, { status: 500 })
   }
 }

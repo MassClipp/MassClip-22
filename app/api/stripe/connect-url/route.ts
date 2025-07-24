@@ -1,69 +1,89 @@
-import { NextRequest, NextResponse } from 'next/server'
-import Stripe from 'stripe'
-import { adminDb, getAuthenticatedUser } from '@/lib/firebase-admin'
-
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2024-06-20',
-})
+import { type NextRequest, NextResponse } from "next/server"
+import { getUserFromRequest, adminDb } from "@/lib/firebase-admin"
 
 export async function POST(request: NextRequest) {
   try {
-    // Get authenticated user
-    const headers = request.headers
-    const user = await getAuthenticatedUser(headers)
+    console.log("🔗 Starting Stripe Connect URL generation...")
 
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    // Check required environment variables
+    const requiredEnvVars = {
+      STRIPE_CLIENT_ID: process.env.STRIPE_CLIENT_ID,
+      NEXT_PUBLIC_SITE_URL: process.env.NEXT_PUBLIC_SITE_URL || process.env.NEXT_PUBLIC_BASE_URL,
     }
 
-    // Check if user already has a Stripe account
-    const userDoc = await adminDb.collection('users').doc(user.uid).get()
-    const userData = userDoc.data()
+    const missingVars = Object.entries(requiredEnvVars)
+      .filter(([key, value]) => !value)
+      .map(([key]) => key)
 
-    let stripeAccountId = userData?.stripeAccountId
-
-    // Create Stripe Express account if it doesn't exist
-    if (!stripeAccountId) {
-      const account = await stripe.accounts.create({
-        type: 'express',
-        country: 'US',
-        email: user.email,
-        capabilities: {
-          card_payments: { requested: true },
-          transfers: { requested: true },
+    if (missingVars.length > 0) {
+      console.error("❌ Missing environment variables:", missingVars)
+      return NextResponse.json(
+        {
+          error: "Stripe Connect not configured",
+          details: `Missing environment variables: ${missingVars.join(", ")}`,
+          missingVars,
         },
-      })
-
-      stripeAccountId = account.id
-
-      // Save Stripe account ID to user document
-      await adminDb.collection('users').doc(user.uid).update({
-        stripeAccountId,
-        stripeAccountCreated: new Date().toISOString(),
-      })
+        { status: 500 },
+      )
     }
 
-    // Create account link for onboarding
-    const accountLink = await stripe.accountLinks.create({
-      account: stripeAccountId,
-      refresh_url: `${process.env.NEXT_PUBLIC_SITE_URL}/dashboard/earnings?refresh=true`,
-      return_url: `${process.env.NEXT_PUBLIC_SITE_URL}/dashboard/earnings?connected=true`,
-      type: 'account_onboarding',
-    })
+    // Get authenticated user
+    const { uid } = await getUserFromRequest(request)
+    console.log("👤 User authenticated:", uid)
+
+    // Get user profile from Firestore
+    const userDoc = await adminDb.collection("users").doc(uid).get()
+    if (!userDoc.exists) {
+      console.error("❌ User profile not found")
+      return NextResponse.json({ error: "User profile not found" }, { status: 404 })
+    }
+
+    const userData = userDoc.data()!
+    console.log("📄 User data retrieved")
+
+    // Generate a unique state parameter for security
+    const state = `${uid}_${Date.now()}_${Math.random().toString(36).substring(7)}`
+    console.log("🔐 Generated state:", state)
+
+    // Store state in Firestore for verification
+    await adminDb
+      .collection("stripe_oauth_states")
+      .doc(state)
+      .set({
+        userId: uid,
+        createdAt: new Date(),
+        expiresAt: new Date(Date.now() + 10 * 60 * 1000), // 10 minutes
+      })
+
+    // Create Stripe Connect OAuth URL
+    const baseUrl = requiredEnvVars.NEXT_PUBLIC_SITE_URL!
+    const redirectUri = `${baseUrl}/api/stripe/connect/oauth-callback`
+
+    console.log("🌐 Using redirect URI:", redirectUri)
+
+    const connectUrl =
+      `https://connect.stripe.com/oauth/authorize?` +
+      `response_type=code&` +
+      `client_id=${process.env.STRIPE_CLIENT_ID}&` +
+      `scope=read_write&` +
+      `redirect_uri=${encodeURIComponent(redirectUri)}&` +
+      `state=${state}`
+
+    console.log("✅ Connect URL generated successfully")
 
     return NextResponse.json({
       success: true,
-      connectUrl: accountLink.url,
-      accountId: stripeAccountId,
+      connectUrl,
+      state,
     })
-  } catch (error) {
-    console.error('Stripe connect URL error:', error)
+  } catch (error: any) {
+    console.error("❌ Error generating Stripe Connect URL:", error)
     return NextResponse.json(
-      { 
-        error: 'Failed to create Stripe connection URL',
-        details: error instanceof Error ? error.message : 'Unknown error'
+      {
+        error: "Failed to generate connect URL",
+        details: error.message,
       },
-      { status: 500 }
+      { status: 500 },
     )
   }
 }
