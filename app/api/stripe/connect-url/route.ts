@@ -1,43 +1,33 @@
-import { NextRequest, NextResponse } from "next/server"
-import { adminAuth, adminDb } from "@/lib/firebase-admin"
-import Stripe from "stripe"
+import { NextRequest, NextResponse } from 'next/server'
+import Stripe from 'stripe'
+import { adminDb, getAuthenticatedUser } from '@/lib/firebase-admin'
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: "2024-06-20",
+  apiVersion: '2024-06-20',
 })
 
 export async function POST(request: NextRequest) {
   try {
-    const { idToken } = await request.json()
+    // Get authenticated user
+    const headers = request.headers
+    const user = await getAuthenticatedUser(headers)
 
-    if (!idToken) {
-      return NextResponse.json({ error: "No ID token provided" }, { status: 400 })
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Verify the Firebase ID token
-    const decodedToken = await adminAuth.verifyIdToken(idToken)
-    const userId = decodedToken.uid
-
-    console.log("🔗 Creating Stripe Connect URL for user:", userId)
-
-    // Get user document from Firestore
-    const userDoc = await adminDb.collection("users").doc(userId).get()
-    
-    if (!userDoc.exists) {
-      return NextResponse.json({ error: "User not found" }, { status: 404 })
-    }
-
+    // Check if user already has a Stripe account
+    const userDoc = await adminDb.collection('users').doc(user.uid).get()
     const userData = userDoc.data()
+
     let stripeAccountId = userData?.stripeAccountId
 
     // Create Stripe Express account if it doesn't exist
     if (!stripeAccountId) {
-      console.log("📝 Creating new Stripe Express account...")
-      
       const account = await stripe.accounts.create({
-        type: "express",
-        country: "US",
-        email: userData?.email || decodedToken.email,
+        type: 'express',
+        country: 'US',
+        email: user.email,
         capabilities: {
           card_payments: { requested: true },
           transfers: { requested: true },
@@ -45,42 +35,33 @@ export async function POST(request: NextRequest) {
       })
 
       stripeAccountId = account.id
-      console.log("✅ Created Stripe account:", stripeAccountId)
 
-      // Save the Stripe account ID to Firestore
-      await adminDb.collection("users").doc(userId).update({
-        stripeAccountId: stripeAccountId,
-        stripeAccountStatus: "pending",
-        stripeConnected: false,
-        stripeConnectedAt: new Date(),
-        updatedAt: new Date(),
+      // Save Stripe account ID to user document
+      await adminDb.collection('users').doc(user.uid).update({
+        stripeAccountId,
+        stripeAccountCreated: new Date().toISOString(),
       })
     }
 
-    // Create Express account link for onboarding
-    console.log("🔗 Creating Express account link...")
-    
+    // Create account link for onboarding
     const accountLink = await stripe.accountLinks.create({
       account: stripeAccountId,
       refresh_url: `${process.env.NEXT_PUBLIC_SITE_URL}/dashboard/earnings?refresh=true`,
       return_url: `${process.env.NEXT_PUBLIC_SITE_URL}/dashboard/earnings?connected=true`,
-      type: "account_onboarding",
+      type: 'account_onboarding',
     })
-
-    console.log("✅ Account link created successfully")
 
     return NextResponse.json({
       success: true,
       connectUrl: accountLink.url,
       accountId: stripeAccountId,
     })
-
   } catch (error) {
-    console.error("❌ Stripe connect-url error:", error)
+    console.error('Stripe connect URL error:', error)
     return NextResponse.json(
       { 
-        error: "Failed to create connection URL",
-        details: error instanceof Error ? error.message : "Unknown error"
+        error: 'Failed to create Stripe connection URL',
+        details: error instanceof Error ? error.message : 'Unknown error'
       },
       { status: 500 }
     )

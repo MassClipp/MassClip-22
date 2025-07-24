@@ -20,18 +20,31 @@ interface AuthResult {
   user?: User | null
 }
 
+interface AuthState {
+  user: User | null
+  loading: boolean
+  error: string | null
+}
+
 export function useFirebaseAuth() {
-  const [user, setUser] = useState<User | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [authChecked, setAuthChecked] = useState(false)
+  const [authState, setAuthState] = useState<AuthState>({
+    user: null,
+    loading: true,
+    error: null,
+  })
+
   const [firebaseReady, setFirebaseReady] = useState(isFirebaseConfigured())
 
   // Set up auth state listener
   useEffect(() => {
     if (!auth) {
       console.error("Firebase auth not initialized")
-      setLoading(false)
-      setAuthChecked(true)
+      setAuthState({
+        user: null,
+        loading: false,
+        error: "Firebase auth not initialized",
+      })
+      setFirebaseReady(false)
       return
     }
 
@@ -40,14 +53,19 @@ export function useFirebaseAuth() {
       auth,
       (user) => {
         console.log("Auth state changed:", user ? "User logged in" : "No user")
-        setUser(user)
-        setLoading(false)
-        setAuthChecked(true)
+        setAuthState({
+          user,
+          loading: false,
+          error: null,
+        })
       },
       (error) => {
         console.error("Auth state change error:", error)
-        setLoading(false)
-        setAuthChecked(true)
+        setAuthState({
+          user: null,
+          loading: false,
+          error: error.message,
+        })
       },
     )
 
@@ -186,10 +204,6 @@ export function useFirebaseAuth() {
   }, [])
 
   const signOut = useCallback(async (): Promise<AuthResult> => {
-    if (!auth) {
-      return { success: false, error: "Firebase auth not initialized" }
-    }
-
     try {
       await firebaseSignOut(auth)
 
@@ -203,9 +217,19 @@ export function useFirebaseAuth() {
         console.error("Error clearing session:", error)
       }
 
+      setAuthState({
+        user: null,
+        loading: false,
+        error: null,
+      })
+
       return { success: true }
     } catch (error: any) {
       console.error("Sign out error:", error)
+      setAuthState(prev => ({
+        ...prev,
+        error: error instanceof Error ? error.message : 'Sign out failed',
+      }))
       return {
         success: false,
         error: error.message || "Failed to sign out",
@@ -214,9 +238,7 @@ export function useFirebaseAuth() {
   }, [])
 
   return {
-    user,
-    loading,
-    authChecked,
+    ...authState,
     firebaseReady,
     signIn,
     signUp,
@@ -225,3 +247,6 @@ export function useFirebaseAuth() {
     signOut,
   }
 }
+
+// Export alias for compatibility
+export const useAuth = useFirebaseAuth

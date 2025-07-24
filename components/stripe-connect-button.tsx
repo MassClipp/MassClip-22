@@ -1,136 +1,80 @@
-"use client"
+'use client'
 
-import { useState } from "react"
-import { Button } from "@/components/ui/button"
-import { useFirebaseAuth } from "@/hooks/use-firebase-auth"
-import { useToast } from "@/hooks/use-toast"
-import { ExternalLink, Loader2 } from 'lucide-react'
+import { useState } from 'react'
+import { Button } from '@/components/ui/button'
+import { useAuth } from '@/hooks/use-firebase-auth'
+import { toast } from '@/hooks/use-toast'
 
 interface StripeConnectButtonProps {
-  isConnected: boolean
-  accountId?: string
-  onConnectionChange?: () => void
+  onSuccess?: () => void
+  onError?: (error: string) => void
 }
 
-export default function StripeConnectButton({ 
-  isConnected, 
-  accountId, 
-  onConnectionChange 
-}: StripeConnectButtonProps) {
-  const [isLoading, setIsLoading] = useState(false)
-  const { user } = useFirebaseAuth()
-  const { toast } = useToast()
+export function StripeConnectButton({ onSuccess, onError }: StripeConnectButtonProps) {
+  const [loading, setLoading] = useState(false)
+  const { user } = useAuth()
 
   const handleConnect = async () => {
     if (!user) {
       toast({
-        title: "Authentication Required",
-        description: "Please log in to connect your Stripe account.",
-        variant: "destructive",
+        title: 'Authentication Required',
+        description: 'Please log in to connect your Stripe account.',
+        variant: 'destructive',
       })
       return
     }
 
-    setIsLoading(true)
+    setLoading(true)
 
     try {
+      // Get ID token for authentication
       const idToken = await user.getIdToken()
-      
-      console.log("🔄 Requesting Stripe connection URL...")
-      
-      const response = await fetch("/api/stripe/connect-url", {
-        method: "POST",
+
+      // Create Stripe connection URL
+      const response = await fetch('/api/stripe/connect-url', {
+        method: 'POST',
         headers: {
-          "Content-Type": "application/json",
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${idToken}`,
         },
-        body: JSON.stringify({ idToken }),
       })
 
       const data = await response.json()
-      console.log("📡 API Response:", data)
 
-      if (response.ok && data.success && data.connectUrl) {
-        console.log("✅ Redirecting to Stripe:", data.connectUrl)
-        // Redirect to Stripe Express onboarding
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to create Stripe connection')
+      }
+
+      if (data.success && data.connectUrl) {
+        // Redirect to Stripe onboarding
         window.location.href = data.connectUrl
       } else {
-        console.error("❌ API Error:", data)
-        toast({
-          title: "Connection Failed",
-          description: data.error || "Failed to create Stripe connection URL",
-          variant: "destructive",
-        })
+        throw new Error('No connection URL received from server')
       }
     } catch (error) {
-      console.error("❌ Request Error:", error)
+      console.error('Stripe connection error:', error)
+      const errorMessage = error instanceof Error ? error.message : 'Failed to connect Stripe account'
+      
       toast({
-        title: "Connection Error",
-        description: "An unexpected error occurred. Please try again.",
-        variant: "destructive",
+        title: 'Connection Failed',
+        description: errorMessage,
+        variant: 'destructive',
       })
+
+      onError?.(errorMessage)
     } finally {
-      setIsLoading(false)
+      setLoading(false)
     }
-  }
-
-  const handleManageAccount = () => {
-    if (accountId) {
-      // Open Stripe Express dashboard
-      window.open(`https://dashboard.stripe.com/express/accounts/${accountId}`, '_blank')
-    }
-  }
-
-  if (isConnected) {
-    return (
-      <div className="space-y-2">
-        <div className="flex items-center gap-2 text-sm text-green-600 mb-3">
-          <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-          <span className="font-medium">Stripe Connected</span>
-        </div>
-        
-        <Button
-          onClick={handleManageAccount}
-          variant="outline"
-          className="w-full"
-          disabled={!accountId}
-        >
-          <ExternalLink className="mr-2 h-4 w-4" />
-          Manage Stripe Account
-        </Button>
-        
-        <Button
-          onClick={handleConnect}
-          variant="secondary"
-          size="sm"
-          disabled={isLoading}
-          className="w-full"
-        >
-          {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-          Update Account Settings
-        </Button>
-      </div>
-    )
   }
 
   return (
     <Button
       onClick={handleConnect}
-      disabled={isLoading}
-      className="w-full bg-[#635bff] hover:bg-[#5a54f9] text-white"
+      disabled={loading || !user}
+      className="w-full"
+      size="lg"
     >
-      {isLoading ? (
-        <>
-          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-          Setting up...
-        </>
-      ) : (
-        <>
-          <svg className="w-4 h-4 mr-2" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M13.976 9.15c-2.172-.806-3.356-1.426-3.356-2.409 0-.831.683-1.305 1.901-1.305 2.227 0 4.515.858 6.09 1.631l.89-5.494C18.252.975 15.697 0 12.165 0 9.667 0 7.589.654 6.104 1.872 4.56 3.147 3.757 4.992 3.757 7.218c0 4.039 2.467 5.76 6.476 7.219 2.585.92 3.445 1.574 3.445 2.583 0 .98-.84 1.545-2.354 1.545-1.875 0-4.965-.921-6.99-2.109l-.9 5.555C5.175 22.99 8.385 24 11.714 24c2.641 0 4.843-.624 6.328-1.813 1.664-1.305 2.525-3.236 2.525-5.732 0-4.128-2.524-5.851-6.591-7.305z" />
-          </svg>
-          Connect with Stripe
-        </>
-      )}
+      {loading ? 'Connecting...' : 'Connect with Stripe'}
     </Button>
   )
 }
