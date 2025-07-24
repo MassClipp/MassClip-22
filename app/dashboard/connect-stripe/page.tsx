@@ -7,6 +7,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import { CheckCircle, XCircle, AlertCircle, Loader2 } from "lucide-react"
 import StripeConnectButton from "@/components/stripe-connect-button"
+import { useFirebaseAuth } from "@/hooks/use-firebase-auth"
 
 interface StripeStatus {
   connected: boolean
@@ -15,9 +16,11 @@ interface StripeStatus {
   payoutsEnabled: boolean
   detailsSubmitted: boolean
   email?: string
+  status: string
 }
 
 export default function ConnectStripePage() {
+  const { user } = useFirebaseAuth()
   const searchParams = useSearchParams()
   const [stripeStatus, setStripeStatus] = useState<StripeStatus | null>(null)
   const [isLoading, setIsLoading] = useState(true)
@@ -30,13 +33,28 @@ export default function ConnectStripePage() {
   const accountId = searchParams.get("account_id")
 
   const fetchStripeStatus = async () => {
+    if (!user) {
+      setIsLoading(false)
+      return
+    }
+
     try {
       setIsLoading(true)
-      const response = await fetch("/api/stripe/connect/status")
+      const idToken = await user.getIdToken()
+
+      const response = await fetch("/api/stripe/connect/status", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ idToken }),
+      })
+
       const data = await response.json()
 
       if (response.ok) {
         setStripeStatus(data)
+        setError(null)
       } else {
         setError(data.error || "Failed to fetch Stripe status")
       }
@@ -49,8 +67,12 @@ export default function ConnectStripePage() {
   }
 
   useEffect(() => {
-    fetchStripeStatus()
-  }, [])
+    if (user) {
+      fetchStripeStatus()
+    } else {
+      setIsLoading(false)
+    }
+  }, [user])
 
   const getStatusMessage = () => {
     if (!stripeStatus?.connected) {
@@ -86,6 +108,22 @@ export default function ConnectStripePage() {
       description: "Your account is ready to receive payments",
       variant: "default" as const,
     }
+  }
+
+  if (!user) {
+    return (
+      <div className="container mx-auto py-8 px-4 max-w-2xl">
+        <Card>
+          <CardContent className="pt-6">
+            <div className="text-center">
+              <AlertCircle className="w-12 h-12 text-yellow-500 mx-auto mb-4" />
+              <h2 className="text-xl font-semibold mb-2">Authentication Required</h2>
+              <p className="text-muted-foreground">Please log in to connect your Stripe account.</p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    )
   }
 
   return (

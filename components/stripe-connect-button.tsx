@@ -4,6 +4,7 @@ import { useState } from "react"
 import { Button } from "@/components/ui/button"
 import { useToast } from "@/hooks/use-toast"
 import { Loader2, ExternalLink } from "lucide-react"
+import { useFirebaseAuth } from "@/hooks/use-firebase-auth"
 
 interface StripeConnectButtonProps {
   isConnected?: boolean
@@ -18,23 +19,37 @@ export default function StripeConnectButton({
 }: StripeConnectButtonProps) {
   const [isLoading, setIsLoading] = useState(false)
   const { toast } = useToast()
+  const { user } = useFirebaseAuth()
 
   const handleConnect = async () => {
+    if (!user) {
+      toast({
+        title: "Authentication Required",
+        description: "Please log in to connect your Stripe account",
+        variant: "destructive",
+      })
+      return
+    }
+
     try {
       setIsLoading(true)
       console.log("🔗 Initiating Stripe Connect...")
+
+      // Get ID token
+      const idToken = await user.getIdToken()
 
       const response = await fetch("/api/stripe/connect-url", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
+        body: JSON.stringify({ idToken }),
       })
 
       const data = await response.json()
 
       if (!response.ok) {
-        throw new Error(data.error || "Failed to generate connect URL")
+        throw new Error(data.details || data.error || "Failed to generate connect URL")
       }
 
       if (data.success && data.connectUrl) {
