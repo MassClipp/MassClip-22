@@ -1,123 +1,141 @@
 import { initializeApp, getApps, cert, type App } from "firebase-admin/app"
-import { getAuth, type Auth } from "firebase-admin/auth"
-import { getFirestore, type Firestore, FieldValue } from "firebase-admin/firestore"
-import type { NextRequest } from "next/server"
+import { getFirestore, FieldValue, type Firestore } from "firebase-admin/firestore"
+import { getAuth, type Auth, type DecodedIdToken } from "firebase-admin/auth"
 
-let app: App
-let auth: Auth
-let firestore: Firestore
-let adminDb: Firestore
+/* -------------------------------------------------------------------------- */
+/*                              App initialisation                            */
+/* -------------------------------------------------------------------------- */
 
-// Initialize Firebase Admin SDK
+/**
+ * Initialise the Firebase Admin SDK exactly once (avoids double-init in
+ * serverless / hot-reload scenarios).
+ * All logic calling `auth` / `db` must import from this file.
+ */
 export function initializeFirebaseAdmin(): App {
-  if (getApps().length === 0) {
-    try {
-      const privateKey = process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n")
-
-      if (!privateKey || !process.env.FIREBASE_PROJECT_ID || !process.env.FIREBASE_CLIENT_EMAIL) {
-        throw new Error("Missing Firebase Admin configuration")
-      }
-
-      app = initializeApp({
-        credential: cert({
-          projectId: process.env.FIREBASE_PROJECT_ID,
-          clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-          privateKey: privateKey,
-        }),
-        projectId: process.env.FIREBASE_PROJECT_ID,
-      })
-
-      console.log("✅ Firebase Admin initialized successfully")
-    } catch (error) {
-      console.error("❌ Firebase Admin initialization failed:", error)
-      throw error
-    }
-  } else {
-    app = getApps()[0]
+  if (getApps().length > 0) {
+    return getApps()[0]!
   }
 
-  // Initialize services
-  auth = getAuth(app)
-  firestore = getFirestore(app)
-  adminDb = firestore
+  const { FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, FIREBASE_PRIVATE_KEY } = process.env
 
-  return app
+  if (!FIREBASE_PROJECT_ID || !FIREBASE_CLIENT_EMAIL || !FIREBASE_PRIVATE_KEY) {
+    throw new Error(
+      "Missing Firebase Admin credentials. Make sure " +
+        "FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL and FIREBASE_PRIVATE_KEY " +
+        "environment variables are set.",
+    )
+  }
+
+  // Firebase Admin expects real line breaks in the private key
+  const privateKey = FIREBASE_PRIVATE_KEY.replace(/\\n/g, "\n")
+
+  return initializeApp({
+    credential: cert({
+      projectId: FIREBASE_PROJECT_ID,
+      clientEmail: FIREBASE_CLIENT_EMAIL,
+      privateKey,
+    }),
+    projectId: FIREBASE_PROJECT_ID,
+  })
 }
 
-// Initialize on import
-initializeFirebaseAdmin()
+/* -------------------------------------------------------------------------- */
+/*                             Lazy loaded singletons                         */
+/* -------------------------------------------------------------------------- */
 
-// Retry utility function
-export async function withRetry<T>(operation: () => Promise<T>, maxRetries = 3, delay = 1000): Promise<T> {
-  let lastError: Error
+const adminApp = initializeFirebaseAdmin()
+export const db: Firestore = getFirestore(adminApp)
+export const auth: Auth = getAuth(adminApp)
+
+// Add all the required exports
+export const adminAuth = auth
+export const adminDb = db
+export const firestore = db
+
+// Recommended for better Firestore reliability
+db.settings({ ignoreUndefinedProperties: true })
+
+/* -------------------------------------------------------------------------- */
+/*                                 Utilities                                  */
+/* -------------------------------------------------------------------------- */
+
+/**
+ * Generic retry helper with exponential back-off – useful for flaky Firestore
+ * operations.
+ */
+export async function withRetry<T>(op: () => Promise<T>, maxRetries = 3, delay = 1_000): Promise<T> {
+  let lastError: unknown
 
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
-      return await operation()
-    } catch (error) {
-      lastError = error as Error
-      console.warn(`Attempt ${attempt} failed:`, error)
+      return await op()
+    } catch (err) {
+      lastError = err
+      console.error(`❌ Firestore attempt ${attempt} failed`, err)
 
-      if (attempt === maxRetries) {
-        break
+      if (attempt < maxRetries) {
+        await new Promise((r) => setTimeout(r, delay))
+        delay *= 2 // exponential back-off
       }
-
-      // Wait before retrying
-      await new Promise((resolve) => setTimeout(resolve, delay * attempt))
     }
   }
 
-  throw lastError!
+  throw lastError
 }
 
-// Get authenticated user from request headers
-export async function getAuthenticatedUser(headers: Headers): Promise<{ uid: string; email?: string }> {
-  const authHeader = headers.get("authorization")
-
-  if (!authHeader?.startsWith("Bearer ")) {
-    throw new Error("Missing or invalid authorization header")
-  }
-
-  const idToken = authHeader.substring(7)
-
-  try {
-    const decodedToken = await auth.verifyIdToken(idToken)
-    return {
-      uid: decodedToken.uid,
-      email: decodedToken.email,
-    }
-  } catch (error) {
-    console.error("Token verification failed:", error)
-    throw new Error("Invalid authentication token")
-  }
+/**
+ * Verify a Firebase ID token and return its decoded contents.
+ */
+export async function verifyIdToken(idToken: string): Promise<DecodedIdToken> {
+  return auth.verifyIdToken(idToken)
 }
 
-// Alternative method to get user from request body
-export async function getUserFromRequest(request: NextRequest): Promise<{ uid: string; email?: string }> {
-  try {
-    const body = await request.json()
-    const { idToken } = body
+/**
+ * Extract the authenticated user (uid/email) from HTTP request headers.
+ * Works with both `fetch` `Headers` and a simple key/value map.
+ */
+export async function getAuthenticatedUser(
+  headers: Headers | Record<string, string>,
+): Promise<{ uid: string; email?: string }> {
+  const get = (key: string) => (headers instanceof Headers ? headers.get(key) : headers[key])
 
-    if (!idToken) {
-      throw new Error("No ID token provided")
-    }
-
-    const decodedToken = await auth.verifyIdToken(idToken)
-    return {
-      uid: decodedToken.uid,
-      email: decodedToken.email,
-    }
-  } catch (error) {
-    console.error("Failed to get user from request:", error)
-    throw error
+  const authHeader = get("authorization") ?? ""
+  if (!authHeader.startsWith("Bearer ")) {
+    throw new Error("Missing Bearer token")
   }
+
+  const token = authHeader.slice(7)
+  const decoded = await verifyIdToken(token)
+
+  return { uid: decoded.uid, email: decoded.email }
 }
 
-// Export initialized instances
-export { auth, firestore, adminDb, FieldValue }
+/**
+ * Example helper used elsewhere in the codebase to upsert a user profile.
+ */
+export async function createOrUpdateUserProfile(userId: string, profileData: Record<string, unknown>) {
+  return withRetry(async () => {
+    const ref = db.collection("users").doc(userId)
+    const now = new Date()
 
-// Export the app instance
-export { app }
+    if ((await ref.get()).exists) {
+      await ref.update({ ...profileData, updatedAt: now })
+    } else {
+      await ref.set({ ...profileData, createdAt: now, updatedAt: now })
+    }
 
-// Additional utility exports
-export const db = adminDb
+    return ref.id
+  })
+}
+
+/* -------------------------------------------------------------------------- */
+/*                           Re-export Firestore types                        */
+/* -------------------------------------------------------------------------- */
+
+export { FieldValue }
+
+// Legacy export for backward compatibility
+export const firebaseDb = {
+  auth: () => auth,
+  firestore: () => firestore,
+}

@@ -1,111 +1,78 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { adminDb } from "@/lib/firebase-admin"
 import Stripe from "stripe"
+import { adminDb } from "@/lib/firebase-admin"
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: "2024-06-20",
 })
 
-export async function GET(request: NextRequest) {
+export async function POST(request: NextRequest) {
   try {
-    console.log("🔄 Processing Stripe OAuth callback...")
-
-    const { searchParams } = new URL(request.url)
-    const code = searchParams.get("code")
-    const state = searchParams.get("state")
-    const error = searchParams.get("error")
-    const errorDescription = searchParams.get("error_description")
-
-    // Handle OAuth errors
-    if (error) {
-      console.error("❌ OAuth error:", error, errorDescription)
-      const redirectUrl = new URL("/dashboard/connect-stripe", request.url)
-      redirectUrl.searchParams.set("error", error)
-      if (errorDescription) {
-        redirectUrl.searchParams.set("description", errorDescription)
-      }
-      return NextResponse.redirect(redirectUrl)
-    }
+    const { code, state } = await request.json()
 
     if (!code || !state) {
-      console.error("❌ Missing code or state parameter")
-      const redirectUrl = new URL("/dashboard/connect-stripe", request.url)
-      redirectUrl.searchParams.set("error", "missing_parameters")
-      return NextResponse.redirect(redirectUrl)
+      return NextResponse.json({ error: "Missing authorization code or state parameter" }, { status: 400 })
     }
 
-    // Verify state parameter
-    const stateDoc = await adminDb.collection("stripe_oauth_states").doc(state).get()
+    // Exchange the authorization code for access token
+    const response = await stripe.oauth.token({
+      grant_type: "authorization_code",
+      code,
+    })
 
-    if (!stateDoc.exists) {
-      console.error("❌ Invalid state parameter")
-      const redirectUrl = new URL("/dashboard/connect-stripe", request.url)
-      redirectUrl.searchParams.set("error", "invalid_state")
-      return NextResponse.redirect(redirectUrl)
+    const { stripe_user_id: accountId } = response
+
+    if (!accountId) {
+      return NextResponse.json({ error: "Failed to get Stripe account ID" }, { status: 400 })
     }
 
-    const stateData = stateDoc.data()!
-    const userId = stateData.userId
+    // Get account details from Stripe
+    const account = await stripe.accounts.retrieve(accountId)
 
-    // Check if state has expired
-    if (new Date() > stateData.expiresAt.toDate()) {
-      console.error("❌ State parameter expired")
-      await adminDb.collection("stripe_oauth_states").doc(state).delete()
-      const redirectUrl = new URL("/dashboard/connect-stripe", request.url)
-      redirectUrl.searchParams.set("error", "expired_state")
-      return NextResponse.redirect(redirectUrl)
-    }
-
-    console.log("✅ State verified for user:", userId)
-
-    try {
-      // Exchange authorization code for access token
-      const response = await stripe.oauth.token({
-        grant_type: "authorization_code",
-        code,
-      })
-
-      const accountId = response.stripe_user_id
-      console.log("✅ Got Stripe account ID:", accountId)
-
-      // Get account details
-      const account = await stripe.accounts.retrieve(accountId)
-      console.log("📊 Account details retrieved")
-
-      // Update user profile with Stripe account info
-      await adminDb.collection("users").doc(userId).update({
+    // Update user record in Firestore
+    await adminDb
+      .collection("users")
+      .doc(state)
+      .update({
         stripeAccountId: accountId,
-        stripeConnected: true,
+        stripeAccountStatus: account.details_submitted ? "active" : "pending",
         stripeChargesEnabled: account.charges_enabled,
         stripePayoutsEnabled: account.payouts_enabled,
         stripeDetailsSubmitted: account.details_submitted,
-        stripeEmail: account.email,
+        stripeConnectedAt: new Date(),
         updatedAt: new Date(),
       })
 
-      console.log("✅ User profile updated with Stripe info")
-
-      // Clean up state document
-      await adminDb.collection("stripe_oauth_states").doc(state).delete()
-
-      // Redirect to success page
-      const redirectUrl = new URL("/dashboard/connect-stripe", request.url)
-      redirectUrl.searchParams.set("success", "true")
-      redirectUrl.searchParams.set("account_id", accountId)
-
-      return NextResponse.redirect(redirectUrl)
-    } catch (stripeError: any) {
-      console.error("❌ Stripe API error:", stripeError)
-      const redirectUrl = new URL("/dashboard/connect-stripe", request.url)
-      redirectUrl.searchParams.set("error", "callback_failed")
-      redirectUrl.searchParams.set("description", stripeError.message)
-      return NextResponse.redirect(redirectUrl)
-    }
+    return NextResponse.json({
+      success: true,
+      accountId,
+      status: account.details_submitted ? "active" : "pending",
+    })
   } catch (error: any) {
-    console.error("❌ OAuth callback error:", error)
-    const redirectUrl = new URL("/dashboard/connect-stripe", request.url)
-    redirectUrl.searchParams.set("error", "callback_failed")
-    redirectUrl.searchParams.set("description", error.message)
-    return NextResponse.redirect(redirectUrl)
+    console.error("OAuth callback error:", error)
+
+    // Handle specific Stripe errors
+    if (error.type === "StripeInvalidRequestError") {
+      return NextResponse.json({ error: "Invalid authorization code" }, { status: 400 })
+    }
+
+    return NextResponse.json({ error: "Failed to process OAuth callback" }, { status: 500 })
   }
+}
+
+// Keep GET handler for direct Stripe redirects (fallback)
+export async function GET(request: NextRequest) {
+  const searchParams = request.nextUrl.searchParams
+  const code = searchParams.get("code")
+  const state = searchParams.get("state")
+  const error = searchParams.get("error")
+
+  // Redirect to the frontend callback page with parameters
+  const callbackUrl = new URL("/dashboard/connect-stripe/callback", request.url)
+
+  if (code) callbackUrl.searchParams.set("code", code)
+  if (state) callbackUrl.searchParams.set("state", state)
+  if (error) callbackUrl.searchParams.set("error", error)
+
+  return NextResponse.redirect(callbackUrl)
 }

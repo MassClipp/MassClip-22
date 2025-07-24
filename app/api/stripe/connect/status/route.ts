@@ -1,46 +1,20 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { getUserFromRequest, adminDb } from "@/lib/firebase-admin"
 import Stripe from "stripe"
+import { adminDb } from "@/lib/firebase-admin"
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: "2024-06-20",
 })
 
-export async function GET(request: NextRequest) {
+export async function POST(request: NextRequest) {
   try {
-    // Get user from authorization header or return public status
-    let userId: string | null = null
-
-    try {
-      const authHeader = request.headers.get("authorization")
-      if (authHeader?.startsWith("Bearer ")) {
-        const idToken = authHeader.substring(7)
-        const { auth } = await import("@/lib/firebase-admin")
-        const decodedToken = await auth.verifyIdToken(idToken)
-        userId = decodedToken.uid
-      }
-    } catch (error) {
-      // If no valid auth, return default status
-      return NextResponse.json({
-        connected: false,
-        chargesEnabled: false,
-        payoutsEnabled: false,
-        detailsSubmitted: false,
-        status: "not_authenticated",
-      })
-    }
+    const { userId } = await request.json()
 
     if (!userId) {
-      return NextResponse.json({
-        connected: false,
-        chargesEnabled: false,
-        payoutsEnabled: false,
-        detailsSubmitted: false,
-        status: "not_authenticated",
-      })
+      return NextResponse.json({ error: "User ID is required" }, { status: 400 })
     }
 
-    // Get user profile
+    // Get user data from Firestore
     const userDoc = await adminDb.collection("users").doc(userId).get()
 
     if (!userDoc.exists) {
@@ -49,14 +23,14 @@ export async function GET(request: NextRequest) {
         chargesEnabled: false,
         payoutsEnabled: false,
         detailsSubmitted: false,
-        status: "user_not_found",
+        status: "not_connected",
       })
     }
 
     const userData = userDoc.data()!
-    const stripeAccountId = userData.stripeAccountId
+    const accountId = userData.stripeAccountId
 
-    if (!stripeAccountId) {
+    if (!accountId) {
       return NextResponse.json({
         connected: false,
         chargesEnabled: false,
@@ -66,116 +40,55 @@ export async function GET(request: NextRequest) {
       })
     }
 
+    // Get fresh account data from Stripe
     try {
-      // Get fresh account data from Stripe
-      const account = await stripe.accounts.retrieve(stripeAccountId)
+      const account = await stripe.accounts.retrieve(accountId)
 
-      // Update local cache
-      await adminDb.collection("users").doc(userId).update({
-        stripeChargesEnabled: account.charges_enabled,
-        stripePayoutsEnabled: account.payouts_enabled,
-        stripeDetailsSubmitted: account.details_submitted,
-        stripeEmail: account.email,
-        updatedAt: new Date(),
-      })
+      // Update our local data with fresh info from Stripe
+      await adminDb
+        .collection("users")
+        .doc(userId)
+        .update({
+          stripeChargesEnabled: account.charges_enabled,
+          stripePayoutsEnabled: account.payouts_enabled,
+          stripeDetailsSubmitted: account.details_submitted,
+          stripeAccountStatus: account.details_submitted ? "active" : "pending",
+          updatedAt: new Date(),
+        })
 
       return NextResponse.json({
         connected: true,
-        accountId: stripeAccountId,
+        accountId,
         chargesEnabled: account.charges_enabled,
         payoutsEnabled: account.payouts_enabled,
         detailsSubmitted: account.details_submitted,
-        email: account.email,
-        status: account.charges_enabled && account.payouts_enabled ? "active" : "pending",
+        status: account.details_submitted ? "active" : "pending",
       })
     } catch (stripeError: any) {
-      console.error("Error fetching Stripe account:", stripeError)
+      // If account doesn't exist in Stripe, clean up our records
+      if (stripeError.code === "account_invalid") {
+        await adminDb.collection("users").doc(userId).update({
+          stripeAccountId: null,
+          stripeAccountStatus: null,
+          stripeChargesEnabled: false,
+          stripePayoutsEnabled: false,
+          stripeDetailsSubmitted: false,
+          updatedAt: new Date(),
+        })
 
-      // Return cached data if Stripe API fails
-      return NextResponse.json({
-        connected: true,
-        accountId: stripeAccountId,
-        chargesEnabled: userData.stripeChargesEnabled || false,
-        payoutsEnabled: userData.stripePayoutsEnabled || false,
-        detailsSubmitted: userData.stripeDetailsSubmitted || false,
-        email: userData.stripeEmail,
-        status: "error_fetching_status",
-      })
+        return NextResponse.json({
+          connected: false,
+          chargesEnabled: false,
+          payoutsEnabled: false,
+          detailsSubmitted: false,
+          status: "not_connected",
+        })
+      }
+
+      throw stripeError
     }
-  } catch (error: any) {
+  } catch (error) {
     console.error("Error checking Stripe status:", error)
-    return NextResponse.json({ error: "Failed to check Stripe status", details: error.message }, { status: 500 })
-  }
-}
-
-export async function POST(request: NextRequest) {
-  try {
-    const { uid } = await getUserFromRequest(request)
-
-    // Get user profile
-    const userDoc = await adminDb.collection("users").doc(uid).get()
-
-    if (!userDoc.exists) {
-      return NextResponse.json({
-        connected: false,
-        chargesEnabled: false,
-        payoutsEnabled: false,
-        detailsSubmitted: false,
-        status: "user_not_found",
-      })
-    }
-
-    const userData = userDoc.data()!
-    const stripeAccountId = userData.stripeAccountId
-
-    if (!stripeAccountId) {
-      return NextResponse.json({
-        connected: false,
-        chargesEnabled: false,
-        payoutsEnabled: false,
-        detailsSubmitted: false,
-        status: "not_connected",
-      })
-    }
-
-    try {
-      // Get fresh account data from Stripe
-      const account = await stripe.accounts.retrieve(stripeAccountId)
-
-      // Update local cache
-      await adminDb.collection("users").doc(uid).update({
-        stripeChargesEnabled: account.charges_enabled,
-        stripePayoutsEnabled: account.payouts_enabled,
-        stripeDetailsSubmitted: account.details_submitted,
-        stripeEmail: account.email,
-        updatedAt: new Date(),
-      })
-
-      return NextResponse.json({
-        connected: true,
-        accountId: stripeAccountId,
-        chargesEnabled: account.charges_enabled,
-        payoutsEnabled: account.payouts_enabled,
-        detailsSubmitted: account.details_submitted,
-        email: account.email,
-        status: account.charges_enabled && account.payouts_enabled ? "active" : "pending",
-      })
-    } catch (stripeError: any) {
-      console.error("Error fetching Stripe account:", stripeError)
-
-      // Return cached data if Stripe API fails
-      return NextResponse.json({
-        connected: true,
-        accountId: stripeAccountId,
-        chargesEnabled: userData.stripeChargesEnabled || false,
-        payoutsEnabled: userData.stripePayoutsEnabled || false,
-        detailsSubmitted: userData.stripeDetailsSubmitted || false,
-        email: userData.stripeEmail,
-        status: "error_fetching_status",
-      })
-    }
-  } catch (error: any) {
-    console.error("Error checking Stripe status:", error)
-    return NextResponse.json({ error: "Failed to check Stripe status", details: error.message }, { status: 500 })
+    return NextResponse.json({ error: "Failed to check status" }, { status: 500 })
   }
 }
