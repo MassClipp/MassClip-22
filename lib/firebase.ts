@@ -6,10 +6,6 @@ import { getFirestore, type Firestore, connectFirestoreEmulator } from "firebase
 import { getStorage, type FirebaseStorage, connectStorageEmulator } from "firebase/storage"
 import { getFirebaseConfig } from "./firebase-config"
 
-// Re-export everything from firebase-config for backward compatibility
-export * from "./firebase-config"
-export { default } from "./firebase-config"
-
 // Singleton pattern for Firebase initialization
 let firebaseApp: FirebaseApp | null = null
 let firebaseAuth: Auth | null = null

@@ -1,168 +1,227 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback } from "react"
 import {
+  type User,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
-  signOut,
-  onAuthStateChanged,
-  sendPasswordResetEmail,
-  updatePassword,
-  updateProfile,
   signInWithPopup,
   GoogleAuthProvider,
+  signOut as firebaseSignOut,
+  onAuthStateChanged,
+  sendPasswordResetEmail,
 } from "firebase/auth"
-import { auth } from "@/lib/firebase-config"
+import { doc, setDoc, getDoc } from "firebase/firestore"
+import { auth, db, isFirebaseConfigured } from "@/lib/firebase"
 
-export interface AuthUser {
-  uid: string
-  email: string | null
-  displayName: string | null
-  photoURL: string | null
-  emailVerified: boolean
+interface AuthResult {
+  success: boolean
+  error?: string
+  user?: User | null
 }
 
 export function useFirebaseAuth() {
-  const [user, setUser] = useState<AuthUser | null>(null)
+  const [user, setUser] = useState<User | null>(null)
   const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  const [authChecked, setAuthChecked] = useState(false)
+  const [firebaseReady, setFirebaseReady] = useState(isFirebaseConfigured())
 
+  // Set up auth state listener
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
-      if (firebaseUser) {
-        setUser({
-          uid: firebaseUser.uid,
-          email: firebaseUser.email,
-          displayName: firebaseUser.displayName,
-          photoURL: firebaseUser.photoURL,
-          emailVerified: firebaseUser.emailVerified,
-        })
-      } else {
-        setUser(null)
-      }
+    if (!auth) {
+      console.error("Firebase auth not initialized")
       setLoading(false)
-    })
+      setAuthChecked(true)
+      return
+    }
 
+    console.log("Setting up auth state listener")
+    const unsubscribe = onAuthStateChanged(
+      auth,
+      (user) => {
+        console.log("Auth state changed:", user ? "User logged in" : "No user")
+        setUser(user)
+        setLoading(false)
+        setAuthChecked(true)
+      },
+      (error) => {
+        console.error("Auth state change error:", error)
+        setLoading(false)
+        setAuthChecked(true)
+      },
+    )
+
+    // Cleanup subscription
     return () => unsubscribe()
   }, [])
 
-  const signIn = async (email: string, password: string) => {
-    try {
-      setError(null)
-      setLoading(true)
-      const result = await signInWithEmailAndPassword(auth, email, password)
-      return result.user
-    } catch (error: any) {
-      setError(error.message)
-      throw error
-    } finally {
-      setLoading(false)
+  // Check Firebase readiness periodically
+  useEffect(() => {
+    if (firebaseReady) return
+
+    const checkInterval = setInterval(() => {
+      const ready = isFirebaseConfigured()
+      if (ready) {
+        console.log("Firebase is now configured")
+        setFirebaseReady(true)
+        clearInterval(checkInterval)
+      }
+    }, 1000)
+
+    return () => clearInterval(checkInterval)
+  }, [firebaseReady])
+
+  const signIn = useCallback(async (email: string, password: string): Promise<AuthResult> => {
+    if (!auth) {
+      return { success: false, error: "Firebase auth not initialized" }
     }
-  }
 
-  const signUp = async (email: string, password: string, displayName?: string) => {
     try {
-      setError(null)
-      setLoading(true)
-      const result = await createUserWithEmailAndPassword(auth, email, password)
+      const userCredential = await signInWithEmailAndPassword(auth, email, password)
+      return { success: true, user: userCredential.user }
+    } catch (error: any) {
+      console.error("Sign in error:", error)
+      return {
+        success: false,
+        error: error.message || "Failed to sign in",
+      }
+    }
+  }, [])
 
-      if (displayName && result.user) {
-        await updateProfile(result.user, { displayName })
+  const signUp = useCallback(
+    async (email: string, password: string, username?: string, displayName?: string): Promise<AuthResult> => {
+      if (!auth || !db) {
+        return { success: false, error: "Firebase not fully initialized" }
       }
 
-      return result.user
-    } catch (error: any) {
-      setError(error.message)
-      throw error
-    } finally {
-      setLoading(false)
-    }
-  }
+      try {
+        const userCredential = await createUserWithEmailAndPassword(auth, email, password)
+        const user = userCredential.user
 
-  const signInWithGoogle = async () => {
+        // Create user profile in Firestore
+        if (username || displayName) {
+          await setDoc(doc(db, "users", user.uid), {
+            email: user.email,
+            username: username || "",
+            displayName: displayName || "",
+            createdAt: new Date(),
+            plan: "free",
+          })
+
+          if (username) {
+            await setDoc(doc(db, "usernames", username), {
+              uid: user.uid,
+              createdAt: new Date(),
+            })
+          }
+        }
+
+        return { success: true, user }
+      } catch (error: any) {
+        console.error("Sign up error:", error)
+        return {
+          success: false,
+          error: error.message || "Failed to create account",
+        }
+      }
+    },
+    [],
+  )
+
+  const signInWithGoogle = useCallback(async (username?: string, displayName?: string): Promise<AuthResult> => {
+    if (!auth || !db) {
+      return { success: false, error: "Firebase not fully initialized" }
+    }
+
     try {
-      setError(null)
-      setLoading(true)
       const provider = new GoogleAuthProvider()
-      const result = await signInWithPopup(auth, provider)
-      return result.user
-    } catch (error: any) {
-      setError(error.message)
-      throw error
-    } finally {
-      setLoading(false)
-    }
-  }
+      const userCredential = await signInWithPopup(auth, provider)
+      const user = userCredential.user
 
-  const logout = async () => {
-    try {
-      setError(null)
-      await signOut(auth)
-    } catch (error: any) {
-      setError(error.message)
-      throw error
-    }
-  }
+      // Check if user profile exists, create if not
+      const userDoc = await getDoc(doc(db, "users", user.uid))
 
-  const resetPassword = async (email: string) => {
+      if (!userDoc.exists()) {
+        await setDoc(doc(db, "users", user.uid), {
+          email: user.email,
+          username: username || "",
+          displayName: displayName || user.displayName || "",
+          createdAt: new Date(),
+          plan: "free",
+        })
+
+        if (username) {
+          await setDoc(doc(db, "usernames", username), {
+            uid: user.uid,
+            createdAt: new Date(),
+          })
+        }
+      }
+
+      return { success: true, user }
+    } catch (error: any) {
+      console.error("Google sign in error:", error)
+      return {
+        success: false,
+        error: error.message || "Failed to sign in with Google",
+      }
+    }
+  }, [])
+
+  const resetPassword = useCallback(async (email: string): Promise<AuthResult> => {
+    if (!auth) {
+      return { success: false, error: "Firebase auth not initialized" }
+    }
+
     try {
-      setError(null)
       await sendPasswordResetEmail(auth, email)
+      return { success: true }
     } catch (error: any) {
-      setError(error.message)
-      throw error
-    }
-  }
-
-  const changePassword = async (newPassword: string) => {
-    try {
-      setError(null)
-      if (!auth.currentUser) {
-        throw new Error("No user logged in")
+      console.error("Password reset error:", error)
+      return {
+        success: false,
+        error: error.message || "Failed to send reset email",
       }
-      await updatePassword(auth.currentUser, newPassword)
-    } catch (error: any) {
-      setError(error.message)
-      throw error
     }
-  }
+  }, [])
 
-  const updateUserProfile = async (profile: { displayName?: string; photoURL?: string }) => {
-    try {
-      setError(null)
-      if (!auth.currentUser) {
-        throw new Error("No user logged in")
-      }
-      await updateProfile(auth.currentUser, profile)
-    } catch (error: any) {
-      setError(error.message)
-      throw error
+  const signOut = useCallback(async (): Promise<AuthResult> => {
+    if (!auth) {
+      return { success: false, error: "Firebase auth not initialized" }
     }
-  }
 
-  const getIdToken = async () => {
     try {
-      if (!auth.currentUser) {
-        throw new Error("No user logged in")
+      await firebaseSignOut(auth)
+
+      // Clear session cookie
+      try {
+        await fetch("/api/auth/logout", {
+          method: "POST",
+          credentials: "include",
+        })
+      } catch (error) {
+        console.error("Error clearing session:", error)
       }
-      return await auth.currentUser.getIdToken()
+
+      return { success: true }
     } catch (error: any) {
-      setError(error.message)
-      throw error
+      console.error("Sign out error:", error)
+      return {
+        success: false,
+        error: error.message || "Failed to sign out",
+      }
     }
-  }
+  }, [])
 
   return {
     user,
     loading,
-    error,
+    authChecked,
+    firebaseReady,
     signIn,
     signUp,
     signInWithGoogle,
-    logout,
     resetPassword,
-    changePassword,
-    updateUserProfile,
-    getIdToken,
+    signOut,
   }
 }
