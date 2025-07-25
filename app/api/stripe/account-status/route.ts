@@ -61,6 +61,24 @@ export async function GET(request: NextRequest) {
     const actionsRequired = hasCurrentlyDue || hasPastDue || hasPendingVerification
     const isFullyEnabled = account.charges_enabled && account.payouts_enabled && account.details_submitted
 
+    // Create account link if actions are required
+    let actionUrl = null
+    if (actionsRequired) {
+      try {
+        console.log(`🔗 [Account Status] Creating account link for required actions`)
+        const accountLink = await stripe.accountLinks.create({
+          account: stripeAccountId,
+          refresh_url: `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/connect-stripe/callback?refresh=true`,
+          return_url: `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/connect-stripe/callback?completed=true`,
+          type: "account_onboarding",
+        })
+        actionUrl = accountLink.url
+        console.log(`✅ [Account Status] Account link created: ${actionUrl}`)
+      } catch (linkError) {
+        console.error("❌ [Account Status] Error creating account link:", linkError)
+      }
+    }
+
     // Get human-readable requirement descriptions
     const getRequirementDescription = (requirement: string) => {
       const descriptions: Record<string, string> = {
@@ -100,6 +118,7 @@ export async function GET(request: NextRequest) {
       accountId: stripeAccountId,
       isFullyEnabled,
       actionsRequired,
+      actionUrl,
       charges_enabled: account.charges_enabled,
       payouts_enabled: account.payouts_enabled,
       details_submitted: account.details_submitted,
@@ -117,6 +136,7 @@ export async function GET(request: NextRequest) {
     console.log(`✅ [Account Status] Status check complete:`, {
       isFullyEnabled,
       actionsRequired,
+      hasActionUrl: !!actionUrl,
       requirementCounts: {
         currently_due: response.requirements.currently_due.length,
         past_due: response.requirements.past_due.length,

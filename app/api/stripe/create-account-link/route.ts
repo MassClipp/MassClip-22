@@ -27,29 +27,18 @@ export async function POST(request: NextRequest) {
     const stripeAccountId = userData?.stripeAccountId
 
     if (!stripeAccountId) {
-      return NextResponse.json(
-        {
-          error: "No Stripe account connected",
-        },
-        { status: 400 },
-      )
+      return NextResponse.json({ error: "No Stripe account connected" }, { status: 400 })
     }
-
-    const baseUrl = new URL(request.url).origin
 
     // Create account link
     const accountLink = await stripe.accountLinks.create({
       account: stripeAccountId,
-      refresh_url: `${baseUrl}/dashboard/connect-stripe/callback?refresh=true`,
-      return_url: `${baseUrl}/dashboard/connect-stripe/callback?completed=true`,
-      type: type as any, // 'account_onboarding' or 'account_update'
+      refresh_url: `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/connect-stripe/callback?refresh=true`,
+      return_url: `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/connect-stripe/callback?completed=true`,
+      type: type as "account_onboarding" | "account_update",
     })
 
-    console.log(`✅ [Account Link] Created account link:`, {
-      accountId: stripeAccountId,
-      url: accountLink.url,
-      expires_at: accountLink.expires_at,
-    })
+    console.log(`✅ [Account Link] Account link created: ${accountLink.url}`)
 
     return NextResponse.json({
       url: accountLink.url,

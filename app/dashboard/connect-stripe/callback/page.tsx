@@ -3,13 +3,14 @@
 import { useEffect, useState } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
-import { CheckCircle, XCircle, AlertCircle, Loader2, ExternalLink, Clock } from "lucide-react"
+import { CheckCircle, XCircle, AlertCircle, Loader2, Clock, AlertTriangle } from "lucide-react"
 
 interface AccountStatus {
   connected: boolean
   accountId?: string
   isFullyEnabled: boolean
   actionsRequired: boolean
+  actionUrl?: string
   charges_enabled: boolean
   payouts_enabled: boolean
   details_submitted: boolean
@@ -29,7 +30,7 @@ export default function StripeCallbackPage() {
   const router = useRouter()
   const [isProcessing, setIsProcessing] = useState(true)
   const [accountStatus, setAccountStatus] = useState<AccountStatus | null>(null)
-  const [isCreatingLink, setIsCreatingLink] = useState(false)
+  const [isLoadingAction, setIsLoadingAction] = useState(false)
 
   const success = searchParams.get("success")
   const completed = searchParams.get("completed")
@@ -47,7 +48,7 @@ export default function StripeCallbackPage() {
     })
 
     const fetchAccountStatus = async () => {
-      if (success === "true" || completed === "true") {
+      if (success === "true" || completed === "true" || refresh === "true") {
         try {
           console.log("🔍 [Callback Page] Fetching account status...")
           const response = await fetch("/api/stripe/account-status")
@@ -81,34 +82,14 @@ export default function StripeCallbackPage() {
     router.push("/dashboard")
   }
 
-  const handleCompleteSetup = async () => {
-    if (!accountStatus?.accountId) return
+  const handleActionRequired = () => {
+    if (!accountStatus?.actionUrl) return
 
-    setIsCreatingLink(true)
-    try {
-      console.log("🔗 [Callback Page] Creating account link for setup completion")
-      const response = await fetch("/api/stripe/create-account-link", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          type: "account_onboarding",
-        }),
-      })
+    setIsLoadingAction(true)
+    console.log("🔗 [Callback Page] Redirecting to Stripe action URL:", accountStatus.actionUrl)
 
-      if (response.ok) {
-        const { url } = await response.json()
-        console.log("✅ [Callback Page] Redirecting to Stripe onboarding:", url)
-        window.location.href = url
-      } else {
-        console.error("❌ [Callback Page] Failed to create account link")
-      }
-    } catch (error) {
-      console.error("❌ [Callback Page] Error creating account link:", error)
-    } finally {
-      setIsCreatingLink(false)
-    }
+    // Redirect to Stripe's action URL
+    window.location.href = accountStatus.actionUrl
   }
 
   if (isProcessing) {
@@ -135,9 +116,10 @@ export default function StripeCallbackPage() {
     )
   }
 
-  if (success === "true" || completed === "true") {
+  if (success === "true" || completed === "true" || refresh === "true") {
     const isFullySetup = accountStatus?.isFullyEnabled && !accountStatus?.actionsRequired
     const hasRequirements = accountStatus?.actionsRequired
+    const hasActionUrl = accountStatus?.actionUrl
 
     return (
       <div className="min-h-screen bg-black flex items-center justify-center">
@@ -206,7 +188,7 @@ export default function StripeCallbackPage() {
               {hasRequirements && (
                 <div className="w-full bg-yellow-500/5 rounded-lg p-4 border border-yellow-500/20">
                   <div className="flex items-start space-x-3">
-                    <AlertCircle className="h-4 w-4 text-yellow-400 mt-0.5 flex-shrink-0" strokeWidth={1.5} />
+                    <AlertTriangle className="h-4 w-4 text-yellow-400 mt-0.5 flex-shrink-0" strokeWidth={1.5} />
                     <div className="space-y-2 flex-1">
                       <h3 className="text-sm font-light text-yellow-400">Action Required</h3>
                       <p className="text-xs text-white/70 font-light">
@@ -233,26 +215,28 @@ export default function StripeCallbackPage() {
 
               {/* Action buttons */}
               <div className="flex flex-col space-y-3 w-full">
-                {hasRequirements && (
+                {/* Action Required button - only shows when there are requirements and action URL */}
+                {hasRequirements && hasActionUrl && (
                   <Button
-                    onClick={handleCompleteSetup}
-                    disabled={isCreatingLink}
-                    className="w-full bg-yellow-500 text-black hover:bg-yellow-400 font-light tracking-wide transition-all duration-200 border-0"
+                    onClick={handleActionRequired}
+                    disabled={isLoadingAction}
+                    className="w-full bg-red-600 text-white hover:bg-red-700 font-light tracking-wide transition-all duration-200 border-0"
                   >
-                    {isCreatingLink ? (
+                    {isLoadingAction ? (
                       <>
                         <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                        Creating Link...
+                        Loading...
                       </>
                     ) : (
                       <>
-                        <ExternalLink className="h-4 w-4 mr-2" />
-                        Complete Setup
+                        <AlertTriangle className="h-4 w-4 mr-2" />
+                        Action Required
                       </>
                     )}
                   </Button>
                 )}
 
+                {/* Continue to Dashboard button */}
                 <Button
                   onClick={handleDashboard}
                   variant={hasRequirements ? "outline" : "default"}
