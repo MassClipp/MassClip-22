@@ -31,6 +31,7 @@ export default function StripeCallbackPage() {
   const [isProcessing, setIsProcessing] = useState(true)
   const [accountStatus, setAccountStatus] = useState<AccountStatus | null>(null)
   const [isLoadingAction, setIsLoadingAction] = useState(false)
+  const [statusError, setStatusError] = useState<string | null>(null)
 
   const success = searchParams.get("success")
   const completed = searchParams.get("completed")
@@ -52,13 +53,19 @@ export default function StripeCallbackPage() {
         try {
           console.log("🔍 [Callback Page] Fetching account status...")
           const response = await fetch("/api/stripe/account-status")
+
           if (response.ok) {
             const status = await response.json()
-            console.log("📊 [Callback Page] Account status:", status)
+            console.log("📊 [Callback Page] Account status received:", status)
             setAccountStatus(status)
+          } else {
+            const errorData = await response.json()
+            console.error("❌ [Callback Page] Error response:", errorData)
+            setStatusError(errorData.error || "Failed to fetch account status")
           }
         } catch (error) {
           console.error("❌ [Callback Page] Error fetching account status:", error)
+          setStatusError("Network error while fetching account status")
         }
       }
     }
@@ -83,7 +90,10 @@ export default function StripeCallbackPage() {
   }
 
   const handleActionRequired = () => {
-    if (!accountStatus?.actionUrl) return
+    if (!accountStatus?.actionUrl) {
+      console.error("❌ [Callback Page] No action URL available")
+      return
+    }
 
     setIsLoadingAction(true)
     console.log("🔗 [Callback Page] Redirecting to Stripe action URL:", accountStatus.actionUrl)
@@ -120,6 +130,14 @@ export default function StripeCallbackPage() {
     const isFullySetup = accountStatus?.isFullyEnabled && !accountStatus?.actionsRequired
     const hasRequirements = accountStatus?.actionsRequired
     const hasActionUrl = accountStatus?.actionUrl
+
+    console.log("🔍 [Callback Page] Render conditions:", {
+      accountStatus: !!accountStatus,
+      isFullySetup,
+      hasRequirements,
+      hasActionUrl,
+      statusError,
+    })
 
     return (
       <div className="min-h-screen bg-black flex items-center justify-center">
@@ -184,6 +202,19 @@ export default function StripeCallbackPage() {
                 </div>
               </div>
 
+              {/* Error message if status fetch failed */}
+              {statusError && (
+                <div className="w-full bg-red-500/5 rounded-lg p-4 border border-red-500/20">
+                  <div className="flex items-start space-x-3">
+                    <AlertCircle className="h-4 w-4 text-red-400 mt-0.5 flex-shrink-0" strokeWidth={1.5} />
+                    <div className="space-y-1">
+                      <h3 className="text-sm font-light text-red-400">Status Check Failed</h3>
+                      <p className="text-xs text-white/70 font-light">{statusError}</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* Requirements section */}
               {hasRequirements && (
                 <div className="w-full bg-yellow-500/5 rounded-lg p-4 border border-yellow-500/20">
@@ -209,6 +240,18 @@ export default function StripeCallbackPage() {
                         ))}
                       </div>
                     </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Debug info in development */}
+              {process.env.NODE_ENV === "development" && (
+                <div className="w-full bg-blue-500/5 rounded-lg p-4 border border-blue-500/20">
+                  <div className="text-xs text-blue-400 font-mono space-y-1">
+                    <div>hasRequirements: {String(hasRequirements)}</div>
+                    <div>hasActionUrl: {String(hasActionUrl)}</div>
+                    <div>actionUrl: {accountStatus?.actionUrl || "null"}</div>
+                    <div>actionsRequired: {String(accountStatus?.actionsRequired)}</div>
                   </div>
                 </div>
               )}

@@ -14,7 +14,7 @@ export async function POST(request: NextRequest) {
 
     const { type = "account_onboarding" } = await request.json()
 
-    console.log(`🔗 [Account Link] Creating account link for user: ${session.user.id}, type: ${type}`)
+    console.log(`🔗 [Account Link] Creating account link for user: ${session.user.id}`)
 
     // Get user's Stripe account ID from Firestore
     const userDoc = await adminDb.collection("users").doc(session.user.id).get()
@@ -30,12 +30,14 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "No Stripe account connected" }, { status: 400 })
     }
 
+    console.log(`🔗 [Account Link] Creating ${type} link for account: ${stripeAccountId}`)
+
     // Create account link
     const accountLink = await stripe.accountLinks.create({
       account: stripeAccountId,
       refresh_url: `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/connect-stripe/callback?refresh=true`,
       return_url: `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/connect-stripe/callback?completed=true`,
-      type: type as "account_onboarding" | "account_update",
+      type: type as any,
     })
 
     console.log(`✅ [Account Link] Account link created: ${accountLink.url}`)
