@@ -1,83 +1,67 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { verifyIdToken } from "@/lib/auth-utils"
-import Stripe from "stripe"
-
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: "2023-10-16",
-})
+import { stripe } from "@/lib/stripe"
+import { adminDb } from "@/lib/firebase-admin"
+import { getServerSession } from "next-auth"
+import { authOptions } from "@/app/api/auth/[...nextauth]/route"
 
 export async function POST(request: NextRequest) {
   try {
-    console.log(`🔗 [Create Account Link] Starting account link creation`)
+    const session = await getServerSession(authOptions)
 
-    // Verify authentication
-    const decodedToken = await verifyIdToken(request)
-    if (!decodedToken) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Authentication required",
-          code: "UNAUTHORIZED",
-        },
-        { status: 401 },
-      )
+    if (!session?.user?.id) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const userId = decodedToken.uid
-    console.log(`✅ [Create Account Link] User authenticated: ${userId}`)
+    const { type = "account_onboarding" } = await request.json()
 
-    // Parse request body
-    const { accountId, returnUrl, refreshUrl } = await request.json()
+    console.log(`🔗 [Account Link] Creating account link for user: ${session.user.id}, type: ${type}`)
 
-    if (!accountId) {
+    // Get user's Stripe account ID from Firestore
+    const userDoc = await adminDb.collection("users").doc(session.user.id).get()
+
+    if (!userDoc.exists) {
+      return NextResponse.json({ error: "User not found" }, { status: 404 })
+    }
+
+    const userData = userDoc.data()
+    const stripeAccountId = userData?.stripeAccountId
+
+    if (!stripeAccountId) {
       return NextResponse.json(
         {
-          success: false,
-          error: "Account ID is required",
-          code: "MISSING_ACCOUNT_ID",
+          error: "No Stripe account connected",
         },
         { status: 400 },
       )
     }
 
-    console.log(`🔗 [Create Account Link] Creating link for account: ${accountId}`)
+    const baseUrl = new URL(request.url).origin
 
-    // Create account link for onboarding
+    // Create account link
     const accountLink = await stripe.accountLinks.create({
-      account: accountId,
-      refresh_url: refreshUrl || `${process.env.NEXT_PUBLIC_SITE_URL}/dashboard/connect-stripe`,
-      return_url: returnUrl || `${process.env.NEXT_PUBLIC_SITE_URL}/dashboard/stripe/success`,
-      type: "account_onboarding",
+      account: stripeAccountId,
+      refresh_url: `${baseUrl}/dashboard/connect-stripe/callback?refresh=true`,
+      return_url: `${baseUrl}/dashboard/connect-stripe/callback?completed=true`,
+      type: type as any, // 'account_onboarding' or 'account_update'
     })
 
-    console.log(`✅ [Create Account Link] Account link created successfully`)
+    console.log(`✅ [Account Link] Created account link:`, {
+      accountId: stripeAccountId,
+      url: accountLink.url,
+      expires_at: accountLink.expires_at,
+    })
 
     return NextResponse.json({
-      success: true,
       url: accountLink.url,
-      accountId,
-      expiresAt: accountLink.expires_at,
+      expires_at: accountLink.expires_at,
     })
-  } catch (error) {
-    console.error("❌ [Create Account Link] Error:", error)
-
-    if (error instanceof Stripe.errors.StripeError) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: "Stripe error",
-          details: error.message,
-          code: error.code,
-        },
-        { status: 400 },
-      )
-    }
+  } catch (error: any) {
+    console.error("❌ [Account Link] Error creating account link:", error)
 
     return NextResponse.json(
       {
-        success: false,
         error: "Failed to create account link",
-        code: "INTERNAL_ERROR",
+        details: error.message,
       },
       { status: 500 },
     )
