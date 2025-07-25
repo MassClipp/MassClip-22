@@ -1,172 +1,190 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { useRouter, useSearchParams } from "next/navigation"
+import { useSearchParams, useRouter } from "next/navigation"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Loader2, CheckCircle, XCircle, AlertTriangle } from "lucide-react"
-import { useFirebaseAuth } from "@/hooks/use-firebase-auth"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { CheckCircle, XCircle, AlertCircle, Loader2 } from "lucide-react"
 
 export default function StripeCallbackPage() {
-  const router = useRouter()
   const searchParams = useSearchParams()
-  const { user } = useFirebaseAuth()
-  const [status, setStatus] = useState<"loading" | "success" | "error">("loading")
-  const [message, setMessage] = useState("")
-  const [errorDetails, setErrorDetails] = useState("")
+  const router = useRouter()
+  const [isProcessing, setIsProcessing] = useState(true)
+
+  const success = searchParams.get("success")
+  const error = searchParams.get("error")
+  const errorDescription = searchParams.get("error_description")
 
   useEffect(() => {
-    const processCallback = async () => {
-      console.log("🔄 [Callback Page] Starting callback processing")
+    console.log("🔄 [Callback Page] Processing callback with params:", {
+      success,
+      error,
+      errorDescription,
+    })
 
-      const code = searchParams.get("code")
-      const state = searchParams.get("state")
-      const error = searchParams.get("error")
+    // Check localStorage for debugging info
+    const debugInfo = localStorage.getItem("stripe_oauth_debug")
+    const backupState = localStorage.getItem("stripe_oauth_state")
 
-      console.log("📝 [Callback Page] URL parameters:", {
-        code: code ? `${code.substring(0, 10)}...` : "missing",
-        state: state ? `${state.substring(0, 20)}...` : "missing",
-        error,
-      })
-
-      if (error) {
-        console.error("❌ [Callback Page] Stripe error:", error)
-        setStatus("error")
-        setMessage(`Stripe connection was cancelled or failed: ${error}`)
-        setErrorDetails(`Stripe returned error: ${error}`)
-        return
-      }
-
-      if (!code || !state) {
-        console.error("❌ [Callback Page] Missing parameters:", { code: !!code, state: !!state })
-        setStatus("error")
-        setMessage("Missing required parameters from Stripe")
-        setErrorDetails("Code or state parameter is missing from the callback URL")
-        return
-      }
-
-      if (!user) {
-        console.error("❌ [Callback Page] User not authenticated")
-        setStatus("error")
-        setMessage("User not authenticated")
-        setErrorDetails("Firebase user is not available")
-        return
-      }
-
-      console.log("👤 [Callback Page] Processing for user:", user.uid)
-
-      try {
-        console.log("📡 [Callback Page] Sending POST request to OAuth callback")
-
-        const response = await fetch("/api/stripe/connect/oauth-callback", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            code,
-            state,
-          }),
-        })
-
-        console.log("📨 [Callback Page] Response status:", response.status)
-
-        const data = await response.json()
-        console.log("📋 [Callback Page] Response data:", data)
-
-        if (response.ok && data.success) {
-          console.log("✅ [Callback Page] Success!")
-          setStatus("success")
-          setMessage("Successfully connected your Stripe account!")
-
-          // Redirect to earnings page after a short delay
-          setTimeout(() => {
-            router.push("/dashboard/earnings")
-          }, 2000)
-        } else {
-          console.error("❌ [Callback Page] API error:", data)
-          setStatus("error")
-          setMessage(data.error || "Failed to process OAuth callback")
-          setErrorDetails(data.details || "No additional details available")
-        }
-      } catch (fetchError) {
-        console.error("💥 [Callback Page] Fetch error:", fetchError)
-        setStatus("error")
-        setMessage("Failed to process OAuth callback")
-        setErrorDetails(fetchError instanceof Error ? fetchError.message : "Network error occurred")
-      }
+    if (debugInfo) {
+      console.log("🔍 [Callback Page] Debug info from localStorage:", JSON.parse(debugInfo))
     }
 
-    if (user) {
-      processCallback()
+    if (backupState) {
+      console.log("🔍 [Callback Page] Backup state from localStorage:", backupState)
     }
-  }, [searchParams, user, router])
 
-  const handleTryAgain = () => {
+    // Simulate processing time for better UX
+    const timer = setTimeout(() => {
+      setIsProcessing(false)
+    }, 1500)
+
+    return () => clearTimeout(timer)
+  }, [success, error, errorDescription])
+
+  const handleRetry = () => {
+    console.log("🔄 [Callback Page] User clicked retry")
     router.push("/dashboard/connect-stripe")
   }
 
-  const handleReturnToDashboard = () => {
+  const handleDashboard = () => {
+    console.log("✅ [Callback Page] User returning to dashboard")
     router.push("/dashboard")
   }
 
+  if (isProcessing) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <Card className="w-full max-w-md">
+          <CardContent className="pt-6">
+            <div className="flex flex-col items-center space-y-4">
+              <Loader2 className="h-8 w-8 animate-spin text-blue-600" />
+              <h2 className="text-lg font-semibold">Processing Connection</h2>
+              <p className="text-sm text-gray-600 text-center">
+                We're setting up your Stripe connection. This will only take a moment...
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  if (success === "true") {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <Card className="w-full max-w-md">
+          <CardHeader className="text-center">
+            <div className="mx-auto mb-4">
+              <CheckCircle className="h-12 w-12 text-green-600" />
+            </div>
+            <CardTitle className="text-green-800">Connection Successful!</CardTitle>
+            <CardDescription>Your Stripe account has been successfully connected to MassClip.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Alert className="mb-4">
+              <CheckCircle className="h-4 w-4" />
+              <AlertDescription>You can now start receiving payments for your premium content.</AlertDescription>
+            </Alert>
+            <Button onClick={handleDashboard} className="w-full">
+              Go to Dashboard
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  // Error state
+  const getErrorMessage = (errorCode: string | null, description: string | null) => {
+    switch (errorCode) {
+      case "invalid_state":
+        return {
+          title: "Invalid state parameter - session may have expired",
+          description: "The OAuth state was not found in our database. Please try connecting again.",
+          suggestion:
+            "This usually happens if you took too long to complete the connection or if there was a browser issue.",
+        }
+      case "expired_state":
+        return {
+          title: "Session Expired",
+          description: "Your connection session has expired. Please start the connection process again.",
+          suggestion: "For security reasons, connection sessions expire after 15 minutes.",
+        }
+      case "used_state":
+        return {
+          title: "Connection Already Processed",
+          description: "This connection has already been completed.",
+          suggestion: "If you need to reconnect, please start a new connection process.",
+        }
+      case "token_exchange_failed":
+        return {
+          title: "Token Exchange Failed",
+          description: "Failed to complete the connection with Stripe.",
+          suggestion: "This is usually a temporary issue. Please try connecting again.",
+        }
+      case "processing_failed":
+        return {
+          title: "Processing Error",
+          description: description || "An error occurred while processing your connection.",
+          suggestion: "Please try connecting again. If the problem persists, contact support.",
+        }
+      case "access_denied":
+        return {
+          title: "Access Denied",
+          description: "You denied access to connect your Stripe account.",
+          suggestion: "To use premium features, you need to connect your Stripe account.",
+        }
+      default:
+        return {
+          title: "Connection Failed",
+          description: description || "An unexpected error occurred during the connection process.",
+          suggestion: "Please try connecting again. If the problem persists, contact support.",
+        }
+    }
+  }
+
+  const errorInfo = getErrorMessage(error, errorDescription)
+
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
+    <div className="min-h-screen flex items-center justify-center bg-gray-50">
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
           <div className="mx-auto mb-4">
-            {status === "loading" && <Loader2 className="h-12 w-12 animate-spin text-blue-500" />}
-            {status === "success" && <CheckCircle className="h-12 w-12 text-green-500" />}
-            {status === "error" && <XCircle className="h-12 w-12 text-red-500" />}
+            <XCircle className="h-12 w-12 text-red-600" />
           </div>
-          <CardTitle>
-            {status === "loading" && "Processing Connection..."}
-            {status === "success" && "Connection Successful!"}
-            {status === "error" && "Connection Failed"}
-          </CardTitle>
-          <CardDescription>
-            {status === "loading" && "Please wait while we connect your Stripe account"}
-            {status === "success" && "Your Stripe account has been successfully connected"}
-            {status === "error" && "There was an issue connecting your account"}
-          </CardDescription>
+          <CardTitle className="text-red-800">Connection Failed</CardTitle>
+          <CardDescription>There was an issue connecting your account</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          {message && (
-            <div
-              className={`p-3 rounded-md text-sm ${
-                status === "error"
-                  ? "bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-400"
-                  : "bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-400"
-              }`}
-            >
-              {message}
+          <Alert variant="destructive">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>{errorInfo.title}</AlertDescription>
+          </Alert>
+
+          <div className="bg-gray-50 p-3 rounded-md">
+            <h4 className="font-medium text-sm mb-1">Error Details:</h4>
+            <p className="text-sm text-gray-600 mb-2">{errorInfo.description}</p>
+            <p className="text-xs text-gray-500">{errorInfo.suggestion}</p>
+          </div>
+
+          {process.env.NODE_ENV === "development" && (
+            <div className="bg-yellow-50 p-3 rounded-md border border-yellow-200">
+              <h4 className="font-medium text-sm mb-1 text-yellow-800">Debug Info:</h4>
+              <p className="text-xs text-yellow-700">Error: {error}</p>
+              <p className="text-xs text-yellow-700">Description: {errorDescription}</p>
             </div>
           )}
 
-          {errorDetails && status === "error" && (
-            <div className="p-3 rounded-md text-xs bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400">
-              <div className="flex items-center gap-2 mb-2">
-                <AlertTriangle className="h-4 w-4" />
-                <span className="font-medium">Error Details:</span>
-              </div>
-              <pre className="whitespace-pre-wrap">{errorDetails}</pre>
-            </div>
-          )}
-
-          {status === "error" && (
-            <div className="space-y-2">
-              <Button onClick={handleTryAgain} className="w-full" variant="destructive">
-                Try Again
-              </Button>
-              <Button onClick={handleReturnToDashboard} className="w-full bg-transparent" variant="outline">
-                Return to Dashboard
-              </Button>
-            </div>
-          )}
-
-          {status === "success" && (
-            <div className="text-center text-sm text-gray-600 dark:text-gray-400">Redirecting to earnings page...</div>
-          )}
+          <div className="flex space-x-2">
+            <Button onClick={handleRetry} className="flex-1">
+              Try Again
+            </Button>
+            <Button onClick={handleDashboard} variant="outline" className="flex-1 bg-transparent">
+              Return to Dashboard
+            </Button>
+          </div>
         </CardContent>
       </Card>
     </div>

@@ -1,10 +1,6 @@
-import { initializeApp, getApps, cert, type App } from "firebase-admin/app"
+import { initializeApp as initializeAdminApp, getApps, cert, type App } from "firebase-admin/app"
 import { getFirestore, FieldValue, type Firestore } from "firebase-admin/firestore"
 import { getAuth, type Auth, type DecodedIdToken } from "firebase-admin/auth"
-
-/* -------------------------------------------------------------------------- */
-/*                              App initialisation                            */
-/* -------------------------------------------------------------------------- */
 
 /**
  * Initialise the Firebase Admin SDK exactly once (avoids double-init in
@@ -13,12 +9,14 @@ import { getAuth, type Auth, type DecodedIdToken } from "firebase-admin/auth"
  */
 export function initializeFirebaseAdmin(): App {
   if (getApps().length > 0) {
+    console.log("🔄 [Firebase Admin] Using existing Firebase Admin instance")
     return getApps()[0]!
   }
 
   const { FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL, FIREBASE_PRIVATE_KEY } = process.env
 
   if (!FIREBASE_PROJECT_ID || !FIREBASE_CLIENT_EMAIL || !FIREBASE_PRIVATE_KEY) {
+    console.error("❌ [Firebase Admin] Missing Firebase Admin credentials in environment variables")
     throw new Error(
       "Missing Firebase Admin credentials. Make sure " +
         "FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL and FIREBASE_PRIVATE_KEY " +
@@ -26,38 +24,44 @@ export function initializeFirebaseAdmin(): App {
     )
   }
 
-  // Firebase Admin expects real line breaks in the private key
-  const privateKey = FIREBASE_PRIVATE_KEY.replace(/\\n/g, "\n")
+  try {
+    console.log("🔄 [Firebase Admin] Initializing Firebase Admin SDK")
 
-  return initializeApp({
-    credential: cert({
+    // Firebase Admin expects real line breaks in the private key
+    const privateKey = FIREBASE_PRIVATE_KEY.replace(/\\n/g, "\n")
+
+    const app = initializeAdminApp({
+      credential: cert({
+        projectId: FIREBASE_PROJECT_ID,
+        clientEmail: FIREBASE_CLIENT_EMAIL,
+        privateKey,
+      }),
       projectId: FIREBASE_PROJECT_ID,
-      clientEmail: FIREBASE_CLIENT_EMAIL,
-      privateKey,
-    }),
-    projectId: FIREBASE_PROJECT_ID,
-  })
+    })
+
+    console.log("✅ [Firebase Admin] Firebase Admin SDK initialized successfully")
+    return app
+  } catch (error: any) {
+    console.error("❌ [Firebase Admin] Failed to initialize Firebase Admin SDK:", error.message)
+    console.error("❌ [Firebase Admin] Error stack:", error.stack)
+    throw new Error(`Failed to initialize Firebase Admin: ${error.message}`)
+  }
 }
 
-/* -------------------------------------------------------------------------- */
-/*                             Lazy loaded singletons                         */
-/* -------------------------------------------------------------------------- */
-
+// Initialize on import
 const adminApp = initializeFirebaseAdmin()
 export const db: Firestore = getFirestore(adminApp)
 export const auth: Auth = getAuth(adminApp)
 
-// Add all the required exports
-export const adminAuth = auth
+// Export the required adminDb and adminAuth aliases
 export const adminDb = db
+export const adminAuth = auth
+
+// Add all the other required exports
 export const firestore = db
 
 // Recommended for better Firestore reliability
 db.settings({ ignoreUndefinedProperties: true })
-
-/* -------------------------------------------------------------------------- */
-/*                                 Utilities                                  */
-/* -------------------------------------------------------------------------- */
 
 /**
  * Generic retry helper with exponential back-off – useful for flaky Firestore
@@ -71,9 +75,10 @@ export async function withRetry<T>(op: () => Promise<T>, maxRetries = 3, delay =
       return await op()
     } catch (err) {
       lastError = err
-      console.error(`❌ Firestore attempt ${attempt} failed`, err)
+      console.error(`❌ [Firestore] Attempt ${attempt} failed:`, err)
 
       if (attempt < maxRetries) {
+        console.log(`🔄 [Firestore] Retrying in ${delay}ms...`)
         await new Promise((r) => setTimeout(r, delay))
         delay *= 2 // exponential back-off
       }
@@ -87,7 +92,15 @@ export async function withRetry<T>(op: () => Promise<T>, maxRetries = 3, delay =
  * Verify a Firebase ID token and return its decoded contents.
  */
 export async function verifyIdToken(idToken: string): Promise<DecodedIdToken> {
-  return auth.verifyIdToken(idToken)
+  try {
+    console.log("🔄 [Auth] Verifying Firebase ID token")
+    const decodedToken = await auth.verifyIdToken(idToken)
+    console.log(`✅ [Auth] Token verified for user: ${decodedToken.uid}`)
+    return decodedToken
+  } catch (error: any) {
+    console.error(`❌ [Auth] Token verification failed: ${error.message}`)
+    throw error
+  }
 }
 
 /**
@@ -101,13 +114,19 @@ export async function getAuthenticatedUser(
 
   const authHeader = get("authorization") ?? ""
   if (!authHeader.startsWith("Bearer ")) {
+    console.error("❌ [Auth] Missing Bearer token in authorization header")
     throw new Error("Missing Bearer token")
   }
 
   const token = authHeader.slice(7)
-  const decoded = await verifyIdToken(token)
-
-  return { uid: decoded.uid, email: decoded.email }
+  try {
+    const decoded = await verifyIdToken(token)
+    console.log(`✅ [Auth] Authenticated user: ${decoded.uid} (${decoded.email || "no email"})`)
+    return { uid: decoded.uid, email: decoded.email }
+  } catch (error) {
+    console.error("❌ [Auth] Failed to authenticate user:", error)
+    throw new Error(`Authentication failed: ${error instanceof Error ? error.message : "Unknown error"}`)
+  }
 }
 
 /**
@@ -118,13 +137,23 @@ export async function createOrUpdateUserProfile(userId: string, profileData: Rec
     const ref = db.collection("users").doc(userId)
     const now = new Date()
 
-    if ((await ref.get()).exists) {
-      await ref.update({ ...profileData, updatedAt: now })
-    } else {
-      await ref.set({ ...profileData, createdAt: now, updatedAt: now })
-    }
+    try {
+      const docSnapshot = await ref.get()
 
-    return ref.id
+      if (docSnapshot.exists) {
+        console.log(`🔄 [Firestore] Updating user profile for ${userId}`)
+        await ref.update({ ...profileData, updatedAt: now })
+      } else {
+        console.log(`🔄 [Firestore] Creating new user profile for ${userId}`)
+        await ref.set({ ...profileData, createdAt: now, updatedAt: now })
+      }
+
+      console.log(`✅ [Firestore] User profile saved for ${userId}`)
+      return ref.id
+    } catch (error) {
+      console.error(`❌ [Firestore] Failed to save user profile for ${userId}:`, error)
+      throw error
+    }
   })
 }
 
