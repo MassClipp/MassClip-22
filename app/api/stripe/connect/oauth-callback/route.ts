@@ -69,6 +69,19 @@ export async function POST(request: NextRequest) {
     const stateData = stateDoc.data()
     console.log("📋 [OAuth Callback] State data:", stateData)
 
+    // Check if state has expired
+    if (stateData?.expiresAt && stateData.expiresAt.toDate() < new Date()) {
+      console.error("❌ [OAuth Callback] State has expired:", stateData.expiresAt.toDate())
+      await adminDb.collection("stripe_oauth_states").doc(state).delete()
+      return NextResponse.json(
+        {
+          error: "OAuth session expired",
+          details: "The OAuth session has expired. Please try connecting again.",
+        },
+        { status: 400 },
+      )
+    }
+
     const userId = stateData?.userId
 
     if (!userId) {
