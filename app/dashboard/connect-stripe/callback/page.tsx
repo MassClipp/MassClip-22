@@ -23,6 +23,7 @@ interface AccountStatus {
   disabled_reason?: string
   country?: string
   business_type?: string
+  error?: string
 }
 
 export default function StripeCallbackPage() {
@@ -52,19 +53,30 @@ export default function StripeCallbackPage() {
       if (success === "true" || completed === "true" || refresh === "true") {
         try {
           console.log("🔍 [Callback Page] Fetching account status...")
-          const response = await fetch("/api/stripe/account-status")
+          const response = await fetch("/api/stripe/account-status", {
+            method: "GET",
+            headers: {
+              "Content-Type": "application/json",
+            },
+          })
+
+          console.log("📡 [Callback Page] Response status:", response.status)
 
           if (response.ok) {
             const status = await response.json()
             console.log("📊 [Callback Page] Account status received:", status)
             setAccountStatus(status)
+
+            if (status.error) {
+              setStatusError(status.error)
+            }
           } else {
-            const errorData = await response.json()
+            const errorData = await response.json().catch(() => ({ error: "Unknown error" }))
             console.error("❌ [Callback Page] Error response:", errorData)
-            setStatusError(errorData.error || "Failed to fetch account status")
+            setStatusError(errorData.error || `HTTP ${response.status} error`)
           }
         } catch (error) {
-          console.error("❌ [Callback Page] Error fetching account status:", error)
+          console.error("❌ [Callback Page] Network error fetching account status:", error)
           setStatusError("Network error while fetching account status")
         }
       }
@@ -252,6 +264,7 @@ export default function StripeCallbackPage() {
                     <div>hasActionUrl: {String(hasActionUrl)}</div>
                     <div>actionUrl: {accountStatus?.actionUrl || "null"}</div>
                     <div>actionsRequired: {String(accountStatus?.actionsRequired)}</div>
+                    <div>connected: {String(accountStatus?.connected)}</div>
                   </div>
                 </div>
               )}

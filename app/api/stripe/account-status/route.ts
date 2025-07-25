@@ -9,6 +9,7 @@ export async function GET(request: NextRequest) {
     const session = await getServerSession(authOptions)
 
     if (!session?.user?.id) {
+      console.error("❌ [Account Status] No session found")
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
@@ -18,6 +19,7 @@ export async function GET(request: NextRequest) {
     const userDoc = await adminDb.collection("users").doc(session.user.id).get()
 
     if (!userDoc.exists) {
+      console.error("❌ [Account Status] User document not found")
       return NextResponse.json({ error: "User not found" }, { status: 404 })
     }
 
@@ -25,6 +27,7 @@ export async function GET(request: NextRequest) {
     const stripeAccountId = userData?.stripeAccountId
 
     if (!stripeAccountId) {
+      console.error("❌ [Account Status] No Stripe account ID found for user")
       return NextResponse.json(
         {
           connected: false,
@@ -73,7 +76,7 @@ export async function GET(request: NextRequest) {
           type: "account_onboarding",
         })
         actionUrl = accountLink.url
-        console.log(`✅ [Account Status] Account link created: ${actionUrl}`)
+        console.log(`✅ [Account Status] Account link created successfully`)
       } catch (linkError) {
         console.error("❌ [Account Status] Error creating account link:", linkError)
       }
@@ -153,6 +156,8 @@ export async function GET(request: NextRequest) {
       {
         error: "Failed to check account status",
         details: error.message,
+        connected: false,
+        actionsRequired: false,
       },
       { status: 500 },
     )

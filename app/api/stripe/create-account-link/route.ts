@@ -12,9 +12,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const { type = "account_onboarding" } = await request.json()
+    const body = await request.json()
+    const { type = "account_onboarding" } = body
 
-    console.log(`🔗 [Account Link] Creating account link for user: ${session.user.id}`)
+    console.log(`🔗 [Account Link] Creating link for user: ${session.user.id}, type: ${type}`)
 
     // Get user's Stripe account ID from Firestore
     const userDoc = await adminDb.collection("users").doc(session.user.id).get()
@@ -30,17 +31,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "No Stripe account connected" }, { status: 400 })
     }
 
-    console.log(`🔗 [Account Link] Creating ${type} link for account: ${stripeAccountId}`)
-
     // Create account link
     const accountLink = await stripe.accountLinks.create({
       account: stripeAccountId,
       refresh_url: `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/connect-stripe/callback?refresh=true`,
       return_url: `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/connect-stripe/callback?completed=true`,
-      type: type as any,
+      type: type as "account_onboarding" | "account_update",
     })
 
-    console.log(`✅ [Account Link] Account link created: ${accountLink.url}`)
+    console.log(`✅ [Account Link] Link created successfully`)
 
     return NextResponse.json({
       url: accountLink.url,
