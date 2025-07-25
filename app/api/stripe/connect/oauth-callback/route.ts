@@ -1,6 +1,5 @@
-import type { NextRequest } from "next/server"
+import { type NextRequest, NextResponse } from "next/server"
 import { adminDb } from "@/lib/firebase-admin"
-import { redirect } from "next/navigation"
 
 export async function GET(request: NextRequest) {
   console.log("🔄 [OAuth Callback] Processing Stripe OAuth callback")
@@ -20,16 +19,22 @@ export async function GET(request: NextRequest) {
   // Handle Stripe errors
   if (error) {
     console.error(`❌ [OAuth Callback] Stripe returned error: ${error} - ${errorDescription}`)
-    return redirect(
-      `/dashboard/connect-stripe/callback?error=${encodeURIComponent(error)}&error_description=${encodeURIComponent(errorDescription || "")}`,
+    return NextResponse.redirect(
+      new URL(
+        `/dashboard/connect-stripe/callback?error=${encodeURIComponent(error)}&error_description=${encodeURIComponent(errorDescription || "")}`,
+        request.url,
+      ),
     )
   }
 
   // Validate required parameters
   if (!code || !state) {
     console.error(`❌ [OAuth Callback] Missing required parameters - code: ${!!code}, state: ${!!state}`)
-    return redirect(
-      `/dashboard/connect-stripe/callback?error=invalid_request&error_description=${encodeURIComponent("Missing authorization code or state parameter")}`,
+    return NextResponse.redirect(
+      new URL(
+        `/dashboard/connect-stripe/callback?error=invalid_request&error_description=${encodeURIComponent("Missing authorization code or state parameter")}`,
+        request.url,
+      ),
     )
   }
 
@@ -54,8 +59,11 @@ export async function GET(request: NextRequest) {
         console.log(`   - State: ${doc.id}, Created: ${doc.data().createdAt?.toDate()}, User: ${doc.data().userId}`)
       })
 
-      return redirect(
-        `/dashboard/connect-stripe/callback?error=invalid_state&error_description=${encodeURIComponent("OAuth state not found in database - session may have expired")}`,
+      return NextResponse.redirect(
+        new URL(
+          `/dashboard/connect-stripe/callback?error=invalid_state&error_description=${encodeURIComponent("OAuth state not found in database - session may have expired")}`,
+          request.url,
+        ),
       )
     }
 
@@ -73,16 +81,22 @@ export async function GET(request: NextRequest) {
     if (stateData.expiresAt && stateData.expiresAt.toDate() < new Date()) {
       console.error(`❌ [OAuth Callback] State has expired: ${state}`)
       await adminDb.collection("stripe_oauth_states").doc(state).delete()
-      return redirect(
-        `/dashboard/connect-stripe/callback?error=expired_state&error_description=${encodeURIComponent("OAuth state has expired - please try connecting again")}`,
+      return NextResponse.redirect(
+        new URL(
+          `/dashboard/connect-stripe/callback?error=expired_state&error_description=${encodeURIComponent("OAuth state has expired - please try connecting again")}`,
+          request.url,
+        ),
       )
     }
 
     // Check if state has already been used
     if (stateData.used) {
       console.error(`❌ [OAuth Callback] State has already been used: ${state}`)
-      return redirect(
-        `/dashboard/connect-stripe/callback?error=used_state&error_description=${encodeURIComponent("OAuth state has already been used")}`,
+      return NextResponse.redirect(
+        new URL(
+          `/dashboard/connect-stripe/callback?error=used_state&error_description=${encodeURIComponent("OAuth state has already been used")}`,
+          request.url,
+        ),
       )
     }
 
@@ -111,8 +125,11 @@ export async function GET(request: NextRequest) {
         statusText: tokenResponse.statusText,
         body: errorText,
       })
-      return redirect(
-        `/dashboard/connect-stripe/callback?error=token_exchange_failed&error_description=${encodeURIComponent("Failed to exchange authorization code for access token")}`,
+      return NextResponse.redirect(
+        new URL(
+          `/dashboard/connect-stripe/callback?error=token_exchange_failed&error_description=${encodeURIComponent("Failed to exchange authorization code for access token")}`,
+          request.url,
+        ),
       )
     }
 
@@ -138,7 +155,7 @@ export async function GET(request: NextRequest) {
     console.log(`🎉 [OAuth Callback] OAuth flow completed successfully for user: ${stateData.userId}`)
 
     // Redirect to success page
-    return redirect("/dashboard/connect-stripe/callback?success=true")
+    return NextResponse.redirect(new URL("/dashboard/connect-stripe/callback?success=true", request.url))
   } catch (error: any) {
     console.error("❌ [OAuth Callback] Error processing callback:", error)
 
@@ -152,8 +169,11 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    return redirect(
-      `/dashboard/connect-stripe/callback?error=processing_failed&error_description=${encodeURIComponent(error.message)}`,
+    return NextResponse.redirect(
+      new URL(
+        `/dashboard/connect-stripe/callback?error=processing_failed&error_description=${encodeURIComponent(error.message)}`,
+        request.url,
+      ),
     )
   }
 }
