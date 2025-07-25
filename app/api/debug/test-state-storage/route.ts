@@ -9,22 +9,22 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "userId required" }, { status: 400 })
     }
 
-    // Test state storage
+    // Generate test state
     const testState = `test_${userId}_${Date.now()}_${Math.random().toString(36).substring(7)}`
 
+    // Store state
     await adminDb
       .collection("stripe_oauth_states")
       .doc(testState)
       .set({
         userId,
         createdAt: new Date(),
-        expiresAt: new Date(Date.now() + 10 * 60 * 1000),
+        expiresAt: new Date(Date.now() + 10 * 60 * 1000), // 10 minutes
         test: true,
       })
 
-    // Test state retrieval
+    // Retrieve state
     const stateDoc = await adminDb.collection("stripe_oauth_states").doc(testState).get()
-
     const stateData = stateDoc.data()
 
     // Clean up
@@ -32,15 +32,17 @@ export async function POST(request: Request) {
 
     return NextResponse.json({
       success: true,
-      message: "State storage/retrieval successful",
+      message: "State storage/retrieval working",
       testState,
       retrievedData: stateData,
     })
   } catch (error: any) {
+    console.error("State storage test error:", error)
     return NextResponse.json(
       {
         error: "State storage test failed",
         details: error.message,
+        stack: error.stack,
       },
       { status: 500 },
     )

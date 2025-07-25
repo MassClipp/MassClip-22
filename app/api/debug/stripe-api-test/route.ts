@@ -12,15 +12,17 @@ export async function GET() {
     })
 
     // Test Stripe API connection
-    const account = await stripe.accounts.list({ limit: 1 })
+    const account = await stripe.accounts.retrieve()
 
     return NextResponse.json({
       success: true,
-      message: "Stripe API connection successful",
-      accountsCount: account.data.length,
-      stripeVersion: "2024-06-20",
+      message: "Stripe API connected successfully",
+      accountId: account.id,
+      country: account.country,
+      type: account.type,
     })
   } catch (error: any) {
+    console.error("Stripe API test error:", error)
     return NextResponse.json(
       {
         error: "Stripe API connection failed",

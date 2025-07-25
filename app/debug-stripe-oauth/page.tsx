@@ -54,10 +54,10 @@ export default function DebugStripeOAuthPage() {
       if (envResponse.ok) {
         updateTest("Environment Check", "success", "Environment variables loaded", envData)
       } else {
-        updateTest("Environment Check", "error", envData.error || "Failed to check environment")
+        updateTest("Environment Check", "error", envData.error || "Failed to check environment", envData)
       }
     } catch (error) {
-      updateTest("Environment Check", "error", `Error: ${error}`)
+      updateTest("Environment Check", "error", `Network error: ${error}`)
     }
 
     // Test 3: Test Firebase Admin connection
@@ -69,10 +69,10 @@ export default function DebugStripeOAuthPage() {
       if (firebaseResponse.ok) {
         updateTest("Firebase Admin", "success", "Firebase Admin connected", firebaseData)
       } else {
-        updateTest("Firebase Admin", "error", firebaseData.error || "Firebase Admin connection failed")
+        updateTest("Firebase Admin", "error", firebaseData.error || "Firebase Admin connection failed", firebaseData)
       }
     } catch (error) {
-      updateTest("Firebase Admin", "error", `Error: ${error}`)
+      updateTest("Firebase Admin", "error", `Network error: ${error}`)
     }
 
     // Test 4: Test Stripe API connection
@@ -84,10 +84,10 @@ export default function DebugStripeOAuthPage() {
       if (stripeResponse.ok) {
         updateTest("Stripe API", "success", "Stripe API connected", stripeData)
       } else {
-        updateTest("Stripe API", "error", stripeData.error || "Stripe API connection failed")
+        updateTest("Stripe API", "error", stripeData.error || "Stripe API connection failed", stripeData)
       }
     } catch (error) {
-      updateTest("Stripe API", "error", `Error: ${error}`)
+      updateTest("Stripe API", "error", `Network error: ${error}`)
     }
 
     // Test 5: Test OAuth URL generation
@@ -107,10 +107,14 @@ export default function DebugStripeOAuthPage() {
           state: oauthData.state,
         })
       } else {
-        updateTest("OAuth URL Generation", "error", oauthData.error || "Failed to generate OAuth URL", oauthData)
+        updateTest("OAuth URL Generation", "error", oauthData.error || "Failed to generate OAuth URL", {
+          status: oauthResponse.status,
+          statusText: oauthResponse.statusText,
+          response: oauthData,
+        })
       }
     } catch (error) {
-      updateTest("OAuth URL Generation", "error", `Error: ${error}`)
+      updateTest("OAuth URL Generation", "error", `Network error: ${error}`)
     }
 
     // Test 6: Test state storage/retrieval
@@ -126,10 +130,10 @@ export default function DebugStripeOAuthPage() {
       if (stateResponse.ok) {
         updateTest("State Management", "success", "State storage/retrieval working", stateData)
       } else {
-        updateTest("State Management", "error", stateData.error || "State management failed")
+        updateTest("State Management", "error", stateData.error || "State management failed", stateData)
       }
     } catch (error) {
-      updateTest("State Management", "error", `Error: ${error}`)
+      updateTest("State Management", "error", `Network error: ${error}`)
     }
 
     setIsRunning(false)
@@ -137,6 +141,8 @@ export default function DebugStripeOAuthPage() {
 
   const testOAuthCallback = async () => {
     if (!user) return
+
+    updateTest("OAuth Callback Test", "pending", "Testing OAuth callback processing...")
 
     try {
       const idToken = await user.getIdToken()
@@ -152,16 +158,19 @@ export default function DebugStripeOAuthPage() {
       })
 
       const data = await response.json()
-      console.log("OAuth callback test result:", data)
 
       updateTest(
         "OAuth Callback Test",
         response.ok ? "success" : "error",
         response.ok ? "OAuth callback test passed" : data.error || "OAuth callback test failed",
-        data,
+        {
+          status: response.status,
+          statusText: response.statusText,
+          response: data,
+        },
       )
     } catch (error) {
-      updateTest("OAuth Callback Test", "error", `Error: ${error}`)
+      updateTest("OAuth Callback Test", "error", `Network error: ${error}`)
     }
   }
 
@@ -244,12 +253,18 @@ export default function DebugStripeOAuthPage() {
                     </div>
                     <p className="text-sm text-gray-600 mb-2">{test.message}</p>
                     {test.details && (
-                      <details className="mt-2">
-                        <summary className="cursor-pointer text-sm font-medium text-blue-600">View Details</summary>
-                        <pre className="mt-2 p-2 bg-gray-100 rounded text-xs overflow-auto">
-                          {JSON.stringify(test.details, null, 2)}
-                        </pre>
-                      </details>
+                      <div className="mt-2">
+                        <details className="cursor-pointer">
+                          <summary className="text-sm font-medium text-blue-600 hover:text-blue-800">
+                            View Details
+                          </summary>
+                          <div className="mt-2 p-3 bg-gray-50 rounded border">
+                            <pre className="text-xs overflow-auto whitespace-pre-wrap">
+                              {JSON.stringify(test.details, null, 2)}
+                            </pre>
+                          </div>
+                        </details>
+                      </div>
                     )}
                   </div>
                 ))}

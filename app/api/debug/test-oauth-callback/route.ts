@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server"
-import { adminDb } from "@/lib/firebase-admin"
-import Stripe from "stripe"
+import { adminDb, auth } from "@/lib/firebase-admin"
 
 export async function POST(request: Request) {
   try {
@@ -10,48 +9,36 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "userId and idToken required" }, { status: 400 })
     }
 
-    // Verify Firebase ID token
+    // Test Firebase token verification
+    let decodedToken
     try {
-      const decodedToken = await adminDb.auth().verifyIdToken(idToken)
-      if (decodedToken.uid !== userId) {
-        return NextResponse.json({ error: "Token verification failed" }, { status: 401 })
-      }
-    } catch (error: any) {
+      decodedToken = await auth.verifyIdToken(idToken)
+      console.log("Token verified successfully:", decodedToken.uid)
+    } catch (tokenError: any) {
+      console.error("Token verification failed:", tokenError)
       return NextResponse.json(
         {
           error: "Firebase token verification failed",
-          details: error.message,
+          details: tokenError.message,
+          code: tokenError.code,
         },
         { status: 401 },
       )
     }
 
-    // Test Stripe initialization
-    if (!process.env.STRIPE_SECRET_KEY) {
-      return NextResponse.json({ error: "STRIPE_SECRET_KEY not configured" }, { status: 500 })
-    }
-
-    const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
-      apiVersion: "2024-06-20",
-    })
-
-    // Test user document update (without actually updating)
-    const userDocRef = adminDb.collection("users").doc(userId)
-    const userDoc = await userDocRef.get()
+    // Test user document access
+    const userDoc = await adminDb.collection("users").doc(userId).get()
+    const userData = userDoc.data()
 
     return NextResponse.json({
       success: true,
-      message: "OAuth callback simulation successful",
-      tests: {
-        firebaseTokenVerification: "passed",
-        stripeInitialization: "passed",
-        userDocumentAccess: userDoc.exists ? "passed" : "user_doc_not_found",
-        firestoreConnection: "passed",
-      },
-      userId,
+      message: "OAuth callback test passed",
+      tokenValid: true,
       userExists: userDoc.exists,
+      userData: userData ? { ...userData, createdAt: userData.createdAt?.toDate?.() } : null,
     })
   } catch (error: any) {
+    console.error("OAuth callback test error:", error)
     return NextResponse.json(
       {
         error: "OAuth callback test failed",
