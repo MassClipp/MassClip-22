@@ -1,16 +1,17 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { useSearchParams, useRouter } from "next/navigation"
+import { useRouter, useSearchParams } from "next/navigation"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Alert, AlertDescription } from "@/components/ui/alert"
-import { CheckCircle, AlertCircle, Loader2, ArrowRight } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { Loader2, CheckCircle, XCircle } from "lucide-react"
+import { useFirebaseAuth } from "@/hooks/use-firebase-auth"
 
 export default function StripeCallbackPage() {
-  const searchParams = useSearchParams()
   const router = useRouter()
-  const [status, setStatus] = useState<"processing" | "success" | "error">("processing")
+  const searchParams = useSearchParams()
+  const { user } = useFirebaseAuth()
+  const [status, setStatus] = useState<"loading" | "success" | "error">("loading")
   const [message, setMessage] = useState("")
 
   useEffect(() => {
@@ -19,121 +20,124 @@ export default function StripeCallbackPage() {
       const state = searchParams.get("state")
       const error = searchParams.get("error")
 
-      // Handle Stripe errors
       if (error) {
         setStatus("error")
-        setMessage("Connection was cancelled or failed. Please try again.")
+        setMessage(`Stripe connection was cancelled or failed: ${error}`)
         return
       }
 
-      // Check for required parameters
       if (!code || !state) {
         setStatus("error")
-        setMessage("Missing required parameters. Please try connecting again.")
+        setMessage("Missing required parameters from Stripe")
+        return
+      }
+
+      if (!user) {
+        setStatus("error")
+        setMessage("User not authenticated")
         return
       }
 
       try {
-        // Call our backend API to process the OAuth callback
+        // Get the user's ID token
+        const idToken = await user.getIdToken()
+
+        // Send the code and state to our backend
         const response = await fetch("/api/stripe/connect/oauth-callback", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
           },
-          body: JSON.stringify({ code, state }),
+          body: JSON.stringify({
+            code,
+            state,
+            idToken,
+          }),
         })
 
         const data = await response.json()
 
         if (response.ok && data.success) {
           setStatus("success")
-          setMessage("Your Stripe account has been successfully connected!")
+          setMessage("Successfully connected your Stripe account!")
 
-          // Redirect to main connect page with success parameter after 2 seconds
+          // Redirect to earnings page after a short delay
           setTimeout(() => {
-            router.push("/dashboard/connect-stripe?success=true")
+            router.push("/dashboard/earnings")
           }, 2000)
         } else {
           setStatus("error")
-          setMessage(data.error || "Failed to connect your Stripe account. Please try again.")
+          setMessage(data.error || "Failed to process OAuth callback")
         }
       } catch (error) {
         console.error("Error processing callback:", error)
         setStatus("error")
-        setMessage("An unexpected error occurred. Please try again.")
+        setMessage("Failed to process OAuth callback")
       }
     }
 
-    processCallback()
-  }, [searchParams, router])
+    if (user) {
+      processCallback()
+    }
+  }, [searchParams, user, router])
 
-  const handleRetry = () => {
+  const handleTryAgain = () => {
     router.push("/dashboard/connect-stripe")
   }
 
-  const handleContinue = () => {
-    router.push("/dashboard/connect-stripe?success=true")
+  const handleReturnToDashboard = () => {
+    router.push("/dashboard")
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
-      <div className="max-w-md w-full">
-        <Card>
-          <CardHeader className="text-center">
-            <div className="mx-auto mb-4">
-              {status === "processing" && <Loader2 className="h-12 w-12 animate-spin text-blue-600" />}
-              {status === "success" && <CheckCircle className="h-12 w-12 text-green-600" />}
-              {status === "error" && <AlertCircle className="h-12 w-12 text-red-600" />}
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 dark:bg-gray-900">
+      <Card className="w-full max-w-md">
+        <CardHeader className="text-center">
+          <div className="mx-auto mb-4">
+            {status === "loading" && <Loader2 className="h-12 w-12 animate-spin text-blue-500" />}
+            {status === "success" && <CheckCircle className="h-12 w-12 text-green-500" />}
+            {status === "error" && <XCircle className="h-12 w-12 text-red-500" />}
+          </div>
+          <CardTitle>
+            {status === "loading" && "Processing Connection..."}
+            {status === "success" && "Connection Successful!"}
+            {status === "error" && "Connection Failed"}
+          </CardTitle>
+          <CardDescription>
+            {status === "loading" && "Please wait while we connect your Stripe account"}
+            {status === "success" && "Your Stripe account has been successfully connected"}
+            {status === "error" && "There was an issue connecting your account"}
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {message && (
+            <div
+              className={`p-3 rounded-md text-sm ${
+                status === "error"
+                  ? "bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-400"
+                  : "bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-400"
+              }`}
+            >
+              {message}
             </div>
-            <CardTitle className="text-xl">
-              {status === "processing" && "Processing Connection..."}
-              {status === "success" && "Connection Successful!"}
-              {status === "error" && "Connection Failed"}
-            </CardTitle>
-            <CardDescription>
-              {status === "processing" && "Please wait while we connect your Stripe account"}
-              {status === "success" && "Your Stripe account is now connected"}
-              {status === "error" && "There was an issue connecting your account"}
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {message && (
-              <Alert variant={status === "error" ? "destructive" : "default"}>
-                <AlertDescription>{message}</AlertDescription>
-              </Alert>
-            )}
+          )}
 
-            {status === "processing" && (
-              <div className="text-center text-sm text-muted-foreground">
-                <p>This may take a few moments...</p>
-              </div>
-            )}
+          {status === "error" && (
+            <div className="space-y-2">
+              <Button onClick={handleTryAgain} className="w-full" variant="destructive">
+                Try Again
+              </Button>
+              <Button onClick={handleReturnToDashboard} className="w-full bg-transparent" variant="outline">
+                Return to Dashboard
+              </Button>
+            </div>
+          )}
 
-            {status === "success" && (
-              <div className="space-y-4">
-                <div className="text-center text-sm text-muted-foreground">
-                  <p>Redirecting you to the dashboard...</p>
-                </div>
-                <Button onClick={handleContinue} className="w-full">
-                  Continue to Dashboard
-                  <ArrowRight className="ml-2 h-4 w-4" />
-                </Button>
-              </div>
-            )}
-
-            {status === "error" && (
-              <div className="space-y-2">
-                <Button onClick={handleRetry} className="w-full">
-                  Try Again
-                </Button>
-                <Button variant="outline" onClick={() => router.push("/dashboard")} className="w-full">
-                  Return to Dashboard
-                </Button>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
+          {status === "success" && (
+            <div className="text-center text-sm text-gray-600 dark:text-gray-400">Redirecting to earnings page...</div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   )
 }
