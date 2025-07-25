@@ -38,8 +38,14 @@ export async function POST(request: NextRequest) {
 
     console.log(`👤 [OAuth] Authenticated user: ${userId}`)
 
-    // Get base URL for redirect
-    const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || getSiteUrl()
+    // Get base URL for redirect - ensure it includes protocol
+    let baseUrl = process.env.NEXT_PUBLIC_BASE_URL || getSiteUrl()
+
+    // Ensure the base URL includes the protocol
+    if (baseUrl && !baseUrl.startsWith("http")) {
+      baseUrl = `https://${baseUrl}`
+    }
+
     console.log(`🌐 [OAuth] Using base URL: ${baseUrl}`)
 
     // Generate a state parameter for security
