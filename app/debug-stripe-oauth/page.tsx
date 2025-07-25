@@ -4,7 +4,7 @@ import { useState } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Loader2, CheckCircle, XCircle, AlertCircle } from "lucide-react"
+import { Loader2, CheckCircle, XCircle, AlertCircle, ChevronDown, ChevronRight } from "lucide-react"
 import { useFirebaseAuth } from "@/hooks/use-firebase-auth"
 
 interface TestResult {
@@ -12,6 +12,7 @@ interface TestResult {
   status: "pending" | "success" | "error" | "warning"
   message: string
   details?: any
+  expanded?: boolean
 }
 
 export default function DebugStripeOAuthPage() {
@@ -28,7 +29,15 @@ export default function DebugStripeOAuthPage() {
         existing.details = details
         return [...prev]
       }
-      return [...prev, { name, status, message, details }]
+      return [...prev, { name, status, message, details, expanded: false }]
+    })
+  }
+
+  const toggleExpanded = (index: number) => {
+    setTests((prev) => {
+      const updated = [...prev]
+      updated[index].expanded = !updated[index].expanded
+      return updated
     })
   }
 
@@ -57,7 +66,7 @@ export default function DebugStripeOAuthPage() {
         updateTest("Environment Check", "error", envData.error || "Failed to check environment", envData)
       }
     } catch (error) {
-      updateTest("Environment Check", "error", `Network error: ${error}`)
+      updateTest("Environment Check", "error", `Network error: ${error}`, { error: String(error) })
     }
 
     // Test 3: Test Firebase Admin connection
@@ -72,7 +81,7 @@ export default function DebugStripeOAuthPage() {
         updateTest("Firebase Admin", "error", firebaseData.error || "Firebase Admin connection failed", firebaseData)
       }
     } catch (error) {
-      updateTest("Firebase Admin", "error", `Network error: ${error}`)
+      updateTest("Firebase Admin", "error", `Network error: ${error}`, { error: String(error) })
     }
 
     // Test 4: Test Stripe API connection
@@ -87,7 +96,7 @@ export default function DebugStripeOAuthPage() {
         updateTest("Stripe API", "error", stripeData.error || "Stripe API connection failed", stripeData)
       }
     } catch (error) {
-      updateTest("Stripe API", "error", `Network error: ${error}`)
+      updateTest("Stripe API", "error", `Network error: ${error}`, { error: String(error) })
     }
 
     // Test 5: Test OAuth URL generation
@@ -99,7 +108,13 @@ export default function DebugStripeOAuthPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ idToken }),
       })
-      const oauthData = await oauthResponse.json()
+
+      let oauthData
+      try {
+        oauthData = await oauthResponse.json()
+      } catch (parseError) {
+        oauthData = { parseError: "Failed to parse JSON response", status: oauthResponse.status }
+      }
 
       if (oauthResponse.ok) {
         updateTest("OAuth URL Generation", "success", "OAuth URL generated successfully", {
@@ -111,10 +126,14 @@ export default function DebugStripeOAuthPage() {
           status: oauthResponse.status,
           statusText: oauthResponse.statusText,
           response: oauthData,
+          headers: Object.fromEntries(oauthResponse.headers.entries()),
         })
       }
     } catch (error) {
-      updateTest("OAuth URL Generation", "error", `Network error: ${error}`)
+      updateTest("OAuth URL Generation", "error", `Network error: ${error}`, {
+        error: String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+      })
     }
 
     // Test 6: Test state storage/retrieval
@@ -133,7 +152,7 @@ export default function DebugStripeOAuthPage() {
         updateTest("State Management", "error", stateData.error || "State management failed", stateData)
       }
     } catch (error) {
-      updateTest("State Management", "error", `Network error: ${error}`)
+      updateTest("State Management", "error", `Network error: ${error}`, { error: String(error) })
     }
 
     setIsRunning(false)
@@ -147,7 +166,6 @@ export default function DebugStripeOAuthPage() {
     try {
       const idToken = await user.getIdToken()
 
-      // Test with mock data
       const response = await fetch("/api/debug/test-oauth-callback", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -170,7 +188,7 @@ export default function DebugStripeOAuthPage() {
         },
       )
     } catch (error) {
-      updateTest("OAuth Callback Test", "error", `Network error: ${error}`)
+      updateTest("OAuth Callback Test", "error", `Network error: ${error}`, { error: String(error) })
     }
   }
 
@@ -250,20 +268,28 @@ export default function DebugStripeOAuthPage() {
                         <h3 className="ml-2 font-medium">{test.name}</h3>
                         {getStatusBadge(test.status)}
                       </div>
+                      {test.details && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => toggleExpanded(index)}
+                          className="flex items-center gap-1"
+                        >
+                          {test.expanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
+                          Details
+                        </Button>
+                      )}
                     </div>
                     <p className="text-sm text-gray-600 mb-2">{test.message}</p>
-                    {test.details && (
-                      <div className="mt-2">
-                        <details className="cursor-pointer">
-                          <summary className="text-sm font-medium text-blue-600 hover:text-blue-800">
-                            View Details
-                          </summary>
-                          <div className="mt-2 p-3 bg-gray-50 rounded border">
-                            <pre className="text-xs overflow-auto whitespace-pre-wrap">
-                              {JSON.stringify(test.details, null, 2)}
-                            </pre>
-                          </div>
-                        </details>
+
+                    {test.details && test.expanded && (
+                      <div className="mt-3 p-4 bg-gray-50 border rounded-md">
+                        <h4 className="font-medium text-sm mb-2">Error Details:</h4>
+                        <div className="bg-white p-3 rounded border">
+                          <pre className="text-xs overflow-auto whitespace-pre-wrap max-h-96">
+                            {JSON.stringify(test.details, null, 2)}
+                          </pre>
+                        </div>
                       </div>
                     )}
                   </div>

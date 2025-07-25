@@ -1,91 +1,118 @@
-import { type NextRequest, NextResponse } from "next/server"
-import { getSiteUrl } from "@/lib/url-utils"
-import { db } from "@/lib/firebase-admin"
+import { NextResponse } from "next/server"
+import { adminDb, auth } from "@/lib/firebase-admin"
+import Stripe from "stripe"
 
-export async function POST(request: NextRequest) {
+export async function POST(request: Request) {
   try {
-    console.log("🔧 [OAuth] Starting Stripe Connect OAuth flow...")
+    console.log("OAuth route called")
 
-    // Get the Stripe Connect client ID - always use live
-    const clientId = process.env.STRIPE_CLIENT_ID
+    const { idToken } = await request.json()
+    console.log("ID token received:", !!idToken)
 
-    if (!clientId) {
-      console.error("❌ [OAuth] STRIPE_CLIENT_ID environment variable is not set")
+    if (!idToken) {
+      console.log("No ID token provided")
+      return NextResponse.json({ error: "ID token required" }, { status: 400 })
+    }
+
+    // Verify Firebase ID token
+    let decodedToken
+    try {
+      decodedToken = await auth.verifyIdToken(idToken)
+      console.log("Token verified for user:", decodedToken.uid)
+    } catch (error: any) {
+      console.error("Token verification failed:", error)
       return NextResponse.json(
         {
-          error: "Stripe Connect not configured",
-          details: "STRIPE_CLIENT_ID environment variable is missing",
-          suggestion: "Add STRIPE_CLIENT_ID to your environment variables in Vercel dashboard",
+          error: "Invalid ID token",
+          details: error.message,
+          code: error.code,
+        },
+        { status: 401 },
+      )
+    }
+
+    const userId = decodedToken.uid
+
+    // Check environment variables
+    if (!process.env.STRIPE_SECRET_KEY) {
+      console.error("STRIPE_SECRET_KEY not configured")
+      return NextResponse.json({ error: "Stripe not configured - missing STRIPE_SECRET_KEY" }, { status: 500 })
+    }
+
+    if (!process.env.STRIPE_CLIENT_ID) {
+      console.error("STRIPE_CLIENT_ID not configured")
+      return NextResponse.json({ error: "Stripe not configured - missing STRIPE_CLIENT_ID" }, { status: 500 })
+    }
+
+    // Initialize Stripe
+    const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
+      apiVersion: "2024-06-20",
+    })
+
+    // Generate state parameter
+    const state = `${userId}_${Date.now()}_${Math.random().toString(36).substring(7)}`
+    console.log("Generated state:", state)
+
+    // Store state in Firestore
+    try {
+      await adminDb
+        .collection("stripe_oauth_states")
+        .doc(state)
+        .set({
+          userId,
+          createdAt: new Date(),
+          expiresAt: new Date(Date.now() + 10 * 60 * 1000), // 10 minutes
+        })
+      console.log("State stored in Firestore")
+    } catch (error: any) {
+      console.error("Failed to store state:", error)
+      return NextResponse.json(
+        {
+          error: "Failed to store OAuth state",
+          details: error.message,
         },
         { status: 500 },
       )
     }
 
-    console.log(`✅ [OAuth] Using Stripe Client ID: ${clientId.substring(0, 20)}...`)
-
-    // Parse request body
-    const body = await request.json()
-    const { idToken } = body
-
-    if (!idToken) {
-      console.error("❌ [OAuth] No ID token provided")
-      return NextResponse.json({ error: "Authentication required" }, { status: 401 })
+    // Construct base URL
+    let baseUrl = process.env.NEXT_PUBLIC_BASE_URL
+    if (!baseUrl) {
+      console.error("NEXT_PUBLIC_BASE_URL not configured")
+      return NextResponse.json({ error: "Base URL not configured" }, { status: 500 })
     }
 
-    // Verify the Firebase ID token
-    const decodedToken = await db.auth().verifyIdToken(idToken)
-    const userId = decodedToken.uid
-
-    console.log(`👤 [OAuth] Authenticated user: ${userId}`)
-
-    // Get base URL for redirect - ensure it includes protocol
-    let baseUrl = process.env.NEXT_PUBLIC_BASE_URL || getSiteUrl()
-
-    // Ensure the base URL includes the protocol
-    if (baseUrl && !baseUrl.startsWith("http")) {
+    // Ensure baseUrl has protocol
+    if (!baseUrl.startsWith("http://") && !baseUrl.startsWith("https://")) {
       baseUrl = `https://${baseUrl}`
     }
 
-    console.log(`🌐 [OAuth] Using base URL: ${baseUrl}`)
+    const redirectUri = `${baseUrl}/api/stripe/connect/oauth-callback`
+    console.log("Redirect URI:", redirectUri)
 
-    // Generate a state parameter for security
-    const state = `${userId}_${Date.now()}_${Math.random().toString(36).substring(7)}`
-
-    // Store the state in Firestore for verification
-    await db
-      .firestore()
-      .collection("stripe_oauth_states")
-      .doc(state)
-      .set({
-        userId,
-        createdAt: new Date(),
-        expiresAt: new Date(Date.now() + 10 * 60 * 1000), // 10 minutes
-      })
-
-    console.log(`🔐 [OAuth] Generated state: ${state}`)
-
-    // Build the OAuth URL
+    // Create Stripe OAuth URL
     const oauthUrl = new URL("https://connect.stripe.com/oauth/authorize")
     oauthUrl.searchParams.set("response_type", "code")
-    oauthUrl.searchParams.set("client_id", clientId)
+    oauthUrl.searchParams.set("client_id", process.env.STRIPE_CLIENT_ID)
     oauthUrl.searchParams.set("scope", "read_write")
-    oauthUrl.searchParams.set("redirect_uri", `${baseUrl}/api/stripe/connect/oauth-callback`)
+    oauthUrl.searchParams.set("redirect_uri", redirectUri)
     oauthUrl.searchParams.set("state", state)
 
     const finalUrl = oauthUrl.toString()
-    console.log(`🔗 [OAuth] Generated OAuth URL: ${finalUrl}`)
+    console.log("Final OAuth URL:", finalUrl)
 
     return NextResponse.json({
-      success: true,
       oauthUrl: finalUrl,
       state,
+      redirectUri,
     })
   } catch (error: any) {
-    console.error("❌ [OAuth] Error in OAuth flow:", error)
+    console.error("OAuth route error:", error)
     return NextResponse.json(
       {
         error: "Failed to initiate OAuth flow",
         details: error.message,
+        stack: error.stack,
       },
       { status: 500 },
     )
