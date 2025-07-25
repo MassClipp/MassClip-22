@@ -1,0 +1,263 @@
+"use client"
+
+import { useState } from "react"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
+import { Loader2, CheckCircle, XCircle, AlertCircle } from "lucide-react"
+import { useFirebaseAuth } from "@/hooks/use-firebase-auth"
+
+interface TestResult {
+  name: string
+  status: "pending" | "success" | "error" | "warning"
+  message: string
+  details?: any
+}
+
+export default function DebugStripeOAuthPage() {
+  const { user } = useFirebaseAuth()
+  const [tests, setTests] = useState<TestResult[]>([])
+  const [isRunning, setIsRunning] = useState(false)
+
+  const updateTest = (name: string, status: TestResult["status"], message: string, details?: any) => {
+    setTests((prev) => {
+      const existing = prev.find((t) => t.name === name)
+      if (existing) {
+        existing.status = status
+        existing.message = message
+        existing.details = details
+        return [...prev]
+      }
+      return [...prev, { name, status, message, details }]
+    })
+  }
+
+  const runTests = async () => {
+    setIsRunning(true)
+    setTests([])
+
+    // Test 1: Check user authentication
+    updateTest("User Authentication", "pending", "Checking Firebase auth...")
+    if (!user) {
+      updateTest("User Authentication", "error", "User not authenticated")
+      setIsRunning(false)
+      return
+    }
+    updateTest("User Authentication", "success", `Authenticated as ${user.uid}`)
+
+    // Test 2: Check environment variables
+    updateTest("Environment Check", "pending", "Checking environment variables...")
+    try {
+      const envResponse = await fetch("/api/debug/stripe-oauth-env")
+      const envData = await envResponse.json()
+
+      if (envResponse.ok) {
+        updateTest("Environment Check", "success", "Environment variables loaded", envData)
+      } else {
+        updateTest("Environment Check", "error", envData.error || "Failed to check environment")
+      }
+    } catch (error) {
+      updateTest("Environment Check", "error", `Error: ${error}`)
+    }
+
+    // Test 3: Test Firebase Admin connection
+    updateTest("Firebase Admin", "pending", "Testing Firebase Admin connection...")
+    try {
+      const firebaseResponse = await fetch("/api/debug/firebase-admin-test")
+      const firebaseData = await firebaseResponse.json()
+
+      if (firebaseResponse.ok) {
+        updateTest("Firebase Admin", "success", "Firebase Admin connected", firebaseData)
+      } else {
+        updateTest("Firebase Admin", "error", firebaseData.error || "Firebase Admin connection failed")
+      }
+    } catch (error) {
+      updateTest("Firebase Admin", "error", `Error: ${error}`)
+    }
+
+    // Test 4: Test Stripe API connection
+    updateTest("Stripe API", "pending", "Testing Stripe API connection...")
+    try {
+      const stripeResponse = await fetch("/api/debug/stripe-api-test")
+      const stripeData = await stripeResponse.json()
+
+      if (stripeResponse.ok) {
+        updateTest("Stripe API", "success", "Stripe API connected", stripeData)
+      } else {
+        updateTest("Stripe API", "error", stripeData.error || "Stripe API connection failed")
+      }
+    } catch (error) {
+      updateTest("Stripe API", "error", `Error: ${error}`)
+    }
+
+    // Test 5: Test OAuth URL generation
+    updateTest("OAuth URL Generation", "pending", "Testing OAuth URL generation...")
+    try {
+      const idToken = await user.getIdToken()
+      const oauthResponse = await fetch("/api/stripe/connect/oauth", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ idToken }),
+      })
+      const oauthData = await oauthResponse.json()
+
+      if (oauthResponse.ok) {
+        updateTest("OAuth URL Generation", "success", "OAuth URL generated successfully", {
+          url: oauthData.oauthUrl,
+          state: oauthData.state,
+        })
+      } else {
+        updateTest("OAuth URL Generation", "error", oauthData.error || "Failed to generate OAuth URL", oauthData)
+      }
+    } catch (error) {
+      updateTest("OAuth URL Generation", "error", `Error: ${error}`)
+    }
+
+    // Test 6: Test state storage/retrieval
+    updateTest("State Management", "pending", "Testing state parameter storage...")
+    try {
+      const stateResponse = await fetch("/api/debug/test-state-storage", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId: user.uid }),
+      })
+      const stateData = await stateResponse.json()
+
+      if (stateResponse.ok) {
+        updateTest("State Management", "success", "State storage/retrieval working", stateData)
+      } else {
+        updateTest("State Management", "error", stateData.error || "State management failed")
+      }
+    } catch (error) {
+      updateTest("State Management", "error", `Error: ${error}`)
+    }
+
+    setIsRunning(false)
+  }
+
+  const testOAuthCallback = async () => {
+    if (!user) return
+
+    try {
+      const idToken = await user.getIdToken()
+
+      // Test with mock data
+      const response = await fetch("/api/debug/test-oauth-callback", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId: user.uid,
+          idToken,
+        }),
+      })
+
+      const data = await response.json()
+      console.log("OAuth callback test result:", data)
+
+      updateTest(
+        "OAuth Callback Test",
+        response.ok ? "success" : "error",
+        response.ok ? "OAuth callback test passed" : data.error || "OAuth callback test failed",
+        data,
+      )
+    } catch (error) {
+      updateTest("OAuth Callback Test", "error", `Error: ${error}`)
+    }
+  }
+
+  const getStatusIcon = (status: TestResult["status"]) => {
+    switch (status) {
+      case "pending":
+        return <Loader2 className="h-4 w-4 animate-spin text-blue-500" />
+      case "success":
+        return <CheckCircle className="h-4 w-4 text-green-500" />
+      case "error":
+        return <XCircle className="h-4 w-4 text-red-500" />
+      case "warning":
+        return <AlertCircle className="h-4 w-4 text-yellow-500" />
+    }
+  }
+
+  const getStatusBadge = (status: TestResult["status"]) => {
+    const variants = {
+      pending: "secondary",
+      success: "default",
+      error: "destructive",
+      warning: "outline",
+    } as const
+
+    return (
+      <Badge variant={variants[status]} className="ml-2">
+        {status.toUpperCase()}
+      </Badge>
+    )
+  }
+
+  return (
+    <div className="container mx-auto py-8 px-4">
+      <div className="max-w-4xl mx-auto space-y-6">
+        <Card>
+          <CardHeader>
+            <CardTitle>Stripe OAuth Debug Console</CardTitle>
+            <CardDescription>Comprehensive testing suite to diagnose Stripe OAuth connection issues</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex gap-4">
+              <Button onClick={runTests} disabled={isRunning || !user}>
+                {isRunning ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Running Tests...
+                  </>
+                ) : (
+                  "Run All Tests"
+                )}
+              </Button>
+              <Button onClick={testOAuthCallback} disabled={!user} variant="outline">
+                Test OAuth Callback
+              </Button>
+            </div>
+
+            {!user && (
+              <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-md">
+                <p className="text-yellow-800">Please log in to run the tests</p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {tests.length > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Test Results</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                {tests.map((test, index) => (
+                  <div key={index} className="border rounded-lg p-4">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center">
+                        {getStatusIcon(test.status)}
+                        <h3 className="ml-2 font-medium">{test.name}</h3>
+                        {getStatusBadge(test.status)}
+                      </div>
+                    </div>
+                    <p className="text-sm text-gray-600 mb-2">{test.message}</p>
+                    {test.details && (
+                      <details className="mt-2">
+                        <summary className="cursor-pointer text-sm font-medium text-blue-600">View Details</summary>
+                        <pre className="mt-2 p-2 bg-gray-100 rounded text-xs overflow-auto">
+                          {JSON.stringify(test.details, null, 2)}
+                        </pre>
+                      </details>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+      </div>
+    </div>
+  )
+}
