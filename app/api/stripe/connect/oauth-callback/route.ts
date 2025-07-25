@@ -1,111 +1,82 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { adminDb } from "@/lib/firebase-admin"
+import { db } from "@/lib/firebase-server"
 
 export async function GET(request: NextRequest) {
-  console.log("🔄 [OAuth Callback] Processing Stripe OAuth callback")
-
-  const { searchParams } = new URL(request.url)
+  const searchParams = request.nextUrl.searchParams
   const code = searchParams.get("code")
   const state = searchParams.get("state")
   const error = searchParams.get("error")
-  const errorDescription = searchParams.get("error_description")
 
-  console.log(`📥 [OAuth Callback] Received parameters:`)
-  console.log(`   - code: ${code ? "present" : "missing"}`)
-  console.log(`   - state: ${state || "missing"}`)
-  console.log(`   - error: ${error || "none"}`)
-  console.log(`   - error_description: ${errorDescription || "none"}`)
+  console.log("🔄 [OAuth Callback] Received callback with params:", {
+    code: code ? "present" : "missing",
+    state: state ? "present" : "missing",
+    error,
+  })
 
-  // Handle Stripe errors
+  const baseUrl = new URL(request.url).origin
+
+  // Handle OAuth errors from Stripe
   if (error) {
-    console.error(`❌ [OAuth Callback] Stripe returned error: ${error} - ${errorDescription}`)
-    return NextResponse.redirect(
-      new URL(
-        `/dashboard/connect-stripe/callback?error=${encodeURIComponent(error)}&error_description=${encodeURIComponent(errorDescription || "")}`,
-        request.url,
-      ),
-    )
+    console.log("❌ [OAuth Callback] OAuth error from Stripe:", error)
+    const callbackUrl = new URL("/dashboard/connect-stripe/callback", baseUrl)
+    callbackUrl.searchParams.set("error", error)
+    callbackUrl.searchParams.set("error_description", "OAuth error from Stripe")
+    return NextResponse.redirect(callbackUrl)
   }
 
   // Validate required parameters
   if (!code || !state) {
-    console.error(`❌ [OAuth Callback] Missing required parameters - code: ${!!code}, state: ${!!state}`)
-    return NextResponse.redirect(
-      new URL(
-        `/dashboard/connect-stripe/callback?error=invalid_request&error_description=${encodeURIComponent("Missing authorization code or state parameter")}`,
-        request.url,
-      ),
-    )
+    console.log("❌ [OAuth Callback] Missing required parameters")
+    const callbackUrl = new URL("/dashboard/connect-stripe/callback", baseUrl)
+    callbackUrl.searchParams.set("error", "missing_parameters")
+    callbackUrl.searchParams.set("error_description", "Missing authorization code or state")
+    return NextResponse.redirect(callbackUrl)
   }
 
   try {
-    console.log(`🔍 [OAuth Callback] Looking up state: ${state}`)
-
-    // Look up the state in Firestore
-    const stateDoc = await adminDb.collection("stripe_oauth_states").doc(state).get()
+    // Verify state parameter
+    console.log("🔍 [OAuth Callback] Verifying state parameter:", state)
+    const stateDoc = await db.collection("oauth_states").doc(state).get()
 
     if (!stateDoc.exists) {
-      console.error(`❌ [OAuth Callback] State not found in database: ${state}`)
-
-      // Debug: Check for recent states
-      const recentStates = await adminDb
-        .collection("stripe_oauth_states")
-        .where("createdAt", ">", new Date(Date.now() - 30 * 60 * 1000))
-        .limit(5)
-        .get()
-
-      console.log(`🔍 [OAuth Callback] Recent states in database: ${recentStates.size}`)
-      recentStates.forEach((doc) => {
-        console.log(`   - State: ${doc.id}, Created: ${doc.data().createdAt?.toDate()}, User: ${doc.data().userId}`)
-      })
-
-      return NextResponse.redirect(
-        new URL(
-          `/dashboard/connect-stripe/callback?error=invalid_state&error_description=${encodeURIComponent("OAuth state not found in database - session may have expired")}`,
-          request.url,
-        ),
-      )
+      console.log("❌ [OAuth Callback] Invalid state - not found in database")
+      const callbackUrl = new URL("/dashboard/connect-stripe/callback", baseUrl)
+      callbackUrl.searchParams.set("error", "invalid_state")
+      callbackUrl.searchParams.set("error_description", "Invalid state parameter - session may have expired")
+      return NextResponse.redirect(callbackUrl)
     }
 
-    const stateData = stateDoc.data()!
-    console.log(`✅ [OAuth Callback] Found state for user: ${stateData.userId}`)
-    console.log(`📊 [OAuth Callback] State data:`, {
-      userId: stateData.userId,
-      email: stateData.email,
-      createdAt: stateData.createdAt?.toDate(),
-      expiresAt: stateData.expiresAt?.toDate(),
-      used: stateData.used,
+    const stateData = stateDoc.data()
+    console.log("✅ [OAuth Callback] State data found:", {
+      userId: stateData?.userId,
+      createdAt: stateData?.createdAt,
+      used: stateData?.used,
     })
 
-    // Check if state has expired
-    if (stateData.expiresAt && stateData.expiresAt.toDate() < new Date()) {
-      console.error(`❌ [OAuth Callback] State has expired: ${state}`)
-      await adminDb.collection("stripe_oauth_states").doc(state).delete()
-      return NextResponse.redirect(
-        new URL(
-          `/dashboard/connect-stripe/callback?error=expired_state&error_description=${encodeURIComponent("OAuth state has expired - please try connecting again")}`,
-          request.url,
-        ),
-      )
+    // Check if state is expired (15 minutes)
+    const stateAge = Date.now() - stateData?.createdAt
+    if (stateAge > 15 * 60 * 1000) {
+      console.log("❌ [OAuth Callback] State expired")
+      const callbackUrl = new URL("/dashboard/connect-stripe/callback", baseUrl)
+      callbackUrl.searchParams.set("error", "expired_state")
+      callbackUrl.searchParams.set("error_description", "Session expired")
+      return NextResponse.redirect(callbackUrl)
     }
 
-    // Check if state has already been used
-    if (stateData.used) {
-      console.error(`❌ [OAuth Callback] State has already been used: ${state}`)
-      return NextResponse.redirect(
-        new URL(
-          `/dashboard/connect-stripe/callback?error=used_state&error_description=${encodeURIComponent("OAuth state has already been used")}`,
-          request.url,
-        ),
-      )
+    // Check if state was already used
+    if (stateData?.used) {
+      console.log("❌ [OAuth Callback] State already used")
+      const callbackUrl = new URL("/dashboard/connect-stripe/callback", baseUrl)
+      callbackUrl.searchParams.set("error", "used_state")
+      callbackUrl.searchParams.set("error_description", "Connection already processed")
+      return NextResponse.redirect(callbackUrl)
     }
 
     // Mark state as used
-    console.log(`🔒 [OAuth Callback] Marking state as used: ${state}`)
-    await adminDb.collection("stripe_oauth_states").doc(state).update({ used: true, usedAt: new Date() })
+    await stateDoc.ref.update({ used: true, usedAt: Date.now() })
 
-    // Exchange code for access token
-    console.log(`🔄 [OAuth Callback] Exchanging code for access token`)
+    // Exchange authorization code for access token
+    console.log("🔄 [OAuth Callback] Exchanging code for access token")
     const tokenResponse = await fetch("https://connect.stripe.com/oauth/token", {
       method: "POST",
       headers: {
@@ -113,67 +84,48 @@ export async function GET(request: NextRequest) {
       },
       body: new URLSearchParams({
         client_secret: process.env.STRIPE_SECRET_KEY!,
-        code: code,
+        code,
         grant_type: "authorization_code",
       }),
     })
 
     if (!tokenResponse.ok) {
       const errorText = await tokenResponse.text()
-      console.error(`❌ [OAuth Callback] Token exchange failed:`, {
-        status: tokenResponse.status,
-        statusText: tokenResponse.statusText,
-        body: errorText,
-      })
-      return NextResponse.redirect(
-        new URL(
-          `/dashboard/connect-stripe/callback?error=token_exchange_failed&error_description=${encodeURIComponent("Failed to exchange authorization code for access token")}`,
-          request.url,
-        ),
-      )
+      console.log("❌ [OAuth Callback] Token exchange failed:", errorText)
+      const callbackUrl = new URL("/dashboard/connect-stripe/callback", baseUrl)
+      callbackUrl.searchParams.set("error", "token_exchange_failed")
+      callbackUrl.searchParams.set("error_description", "Failed to exchange authorization code")
+      return NextResponse.redirect(callbackUrl)
     }
 
     const tokenData = await tokenResponse.json()
-    console.log(`✅ [OAuth Callback] Token exchange successful for account: ${tokenData.stripe_user_id}`)
+    console.log("✅ [OAuth Callback] Token exchange successful:", {
+      stripe_user_id: tokenData.stripe_user_id,
+      scope: tokenData.scope,
+    })
 
-    // Store Stripe account info in user's profile
-    console.log(`💾 [OAuth Callback] Storing Stripe account info for user: ${stateData.userId}`)
-    await adminDb.collection("users").doc(stateData.userId).update({
+    // Save Stripe account info to user profile
+    const userId = stateData.userId
+    await db.collection("users").doc(userId).update({
       stripeAccountId: tokenData.stripe_user_id,
       stripeAccessToken: tokenData.access_token,
       stripeRefreshToken: tokenData.refresh_token,
-      stripePublishableKey: tokenData.stripe_publishable_key,
-      stripeConnectedAt: new Date(),
       stripeScope: tokenData.scope,
-      updatedAt: new Date(),
+      stripeConnectedAt: Date.now(),
+      stripeConnectionStatus: "connected",
     })
 
-    // Clean up the used state
-    console.log(`🧹 [OAuth Callback] Cleaning up used state: ${state}`)
-    await adminDb.collection("stripe_oauth_states").doc(state).delete()
-
-    console.log(`🎉 [OAuth Callback] OAuth flow completed successfully for user: ${stateData.userId}`)
+    console.log("✅ [OAuth Callback] User profile updated with Stripe info")
 
     // Redirect to success page
-    return NextResponse.redirect(new URL("/dashboard/connect-stripe/callback?success=true", request.url))
-  } catch (error: any) {
-    console.error("❌ [OAuth Callback] Error processing callback:", error)
-
-    // Clean up state on error
-    if (state) {
-      try {
-        await adminDb.collection("stripe_oauth_states").doc(state).delete()
-        console.log(`🧹 [OAuth Callback] Cleaned up state after error: ${state}`)
-      } catch (cleanupError) {
-        console.error(`❌ [OAuth Callback] Failed to clean up state: ${cleanupError}`)
-      }
-    }
-
-    return NextResponse.redirect(
-      new URL(
-        `/dashboard/connect-stripe/callback?error=processing_failed&error_description=${encodeURIComponent(error.message)}`,
-        request.url,
-      ),
-    )
+    const callbackUrl = new URL("/dashboard/connect-stripe/callback", baseUrl)
+    callbackUrl.searchParams.set("success", "true")
+    return NextResponse.redirect(callbackUrl)
+  } catch (error) {
+    console.error("❌ [OAuth Callback] Processing error:", error)
+    const callbackUrl = new URL("/dashboard/connect-stripe/callback", baseUrl)
+    callbackUrl.searchParams.set("error", "processing_failed")
+    callbackUrl.searchParams.set("error_description", error instanceof Error ? error.message : "Unknown error")
+    return NextResponse.redirect(callbackUrl)
   }
 }
