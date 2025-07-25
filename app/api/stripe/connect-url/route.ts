@@ -71,7 +71,7 @@ export async function POST(request: NextRequest) {
     oauthUrl.searchParams.set("response_type", "code")
     oauthUrl.searchParams.set("client_id", clientId)
     oauthUrl.searchParams.set("scope", "read_write")
-    oauthUrl.searchParams.set("redirect_uri", `${baseUrl}/dashboard/earnings/api/stripe/connect/oauth-callback`)
+    oauthUrl.searchParams.set("redirect_uri", `${baseUrl}/api/stripe/connect/oauth-callback`)
     oauthUrl.searchParams.set("state", state)
 
     const finalUrl = oauthUrl.toString()
