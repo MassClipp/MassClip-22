@@ -1,31 +1,42 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { stripe } from "@/lib/stripe"
-import { adminDb } from "@/lib/firebase-admin"
-import { getServerSession } from "next-auth"
-import { authOptions } from "@/app/api/auth/[...nextauth]/route"
+import { adminDb, getAuthenticatedUser } from "@/lib/firebase-admin"
 
 export async function GET(request: NextRequest) {
   try {
     console.log("🔍 [Account Status] Starting account status check...")
 
-    const session = await getServerSession(authOptions)
-
-    if (!session?.user?.id) {
-      console.error("❌ [Account Status] No session found")
+    // Use Firebase auth instead of NextAuth
+    let userId: string
+    try {
+      const authUser = await getAuthenticatedUser(request.headers)
+      userId = authUser.uid
+      console.log(`🔍 [Account Status] Authenticated user: ${userId}`)
+    } catch (authError) {
+      console.error("❌ [Account Status] Authentication failed:", authError)
       return NextResponse.json(
         {
-          error: "Unauthorized",
+          error: "Authentication required",
           connected: false,
           actionsRequired: false,
+          charges_enabled: false,
+          payouts_enabled: false,
+          details_submitted: false,
+          requirements: {
+            currently_due: [],
+            past_due: [],
+            eventually_due: [],
+            pending_verification: [],
+          },
         },
         { status: 401 },
       )
     }
 
-    console.log(`🔍 [Account Status] Checking status for user: ${session.user.id}`)
+    console.log(`🔍 [Account Status] Checking status for user: ${userId}`)
 
     // Get user's Stripe account ID from Firestore
-    const userDoc = await adminDb.collection("users").doc(session.user.id).get()
+    const userDoc = await adminDb.collection("users").doc(userId).get()
 
     if (!userDoc.exists) {
       console.error("❌ [Account Status] User document not found")
@@ -34,6 +45,15 @@ export async function GET(request: NextRequest) {
           error: "User not found",
           connected: false,
           actionsRequired: false,
+          charges_enabled: false,
+          payouts_enabled: false,
+          details_submitted: false,
+          requirements: {
+            currently_due: [],
+            past_due: [],
+            eventually_due: [],
+            pending_verification: [],
+          },
         },
         { status: 404 },
       )

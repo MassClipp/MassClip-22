@@ -6,26 +6,14 @@ export async function POST(request: NextRequest) {
     const { accountId } = await request.json()
 
     if (!accountId) {
-      return NextResponse.json({ error: "Missing accountId parameter" }, { status: 400 })
+      return NextResponse.json({ error: "Account ID is required" }, { status: 400 })
     }
 
-    console.log(`🔍 [Direct Stripe Lookup] Fetching account: ${accountId}`)
+    console.log(`🔍 [Stripe Account] Fetching account details for: ${accountId}`)
 
     const account = await stripe.accounts.retrieve(accountId)
 
-    console.log(`✅ [Direct Stripe Lookup] Account retrieved successfully:`, {
-      id: account.id,
-      charges_enabled: account.charges_enabled,
-      payouts_enabled: account.payouts_enabled,
-      details_submitted: account.details_submitted,
-      business_type: account.business_type,
-      country: account.country,
-      requirements: {
-        currently_due: account.requirements?.currently_due?.length || 0,
-        past_due: account.requirements?.past_due?.length || 0,
-        eventually_due: account.requirements?.eventually_due?.length || 0,
-      },
-    })
+    console.log(`✅ [Stripe Account] Account retrieved successfully`)
 
     return NextResponse.json({
       success: true,
@@ -39,17 +27,16 @@ export async function POST(request: NextRequest) {
         created: account.created,
         requirements: account.requirements,
         capabilities: account.capabilities,
-        business_profile: account.business_profile,
+        settings: account.settings,
       },
     })
   } catch (error: any) {
-    console.error("❌ [Direct Stripe Lookup] Error:", error)
+    console.error("❌ [Stripe Account] Error:", error)
     return NextResponse.json(
       {
         error: "Failed to retrieve Stripe account",
         details: error.message,
-        code: error.code,
-        type: error.type,
+        stripeError: error.type || "unknown",
       },
       { status: 500 },
     )

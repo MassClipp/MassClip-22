@@ -6,29 +6,29 @@ export async function POST(request: NextRequest) {
     const { userId } = await request.json()
 
     if (!userId) {
-      return NextResponse.json({ error: "Missing userId parameter" }, { status: 400 })
+      return NextResponse.json({ error: "User ID is required" }, { status: 400 })
     }
 
-    console.log(`🔍 [Profile Lookup] Looking up user: ${userId}`)
+    console.log(`🔍 [Profile Lookup] Looking up profile for user: ${userId}`)
 
     const userDoc = await adminDb.collection("users").doc(userId).get()
 
     if (!userDoc.exists) {
-      console.log(`❌ [Profile Lookup] User document not found: ${userId}`)
+      console.log(`❌ [Profile Lookup] User document not found for: ${userId}`)
       return NextResponse.json({
         exists: false,
         profile: null,
-        error: "User document not found",
+        error: "User profile not found",
       })
     }
 
-    const userData = userDoc.data()
-    console.log(`✅ [Profile Lookup] User document found with fields:`, Object.keys(userData || {}))
+    const profileData = userDoc.data()
+    console.log(`✅ [Profile Lookup] Profile found for ${userId}`)
 
     return NextResponse.json({
       exists: true,
-      profile: userData,
-      documentId: userDoc.id,
+      profile: profileData,
+      hasStripeAccountId: !!profileData?.stripeAccountId,
     })
   } catch (error: any) {
     console.error("❌ [Profile Lookup] Error:", error)
@@ -36,6 +36,8 @@ export async function POST(request: NextRequest) {
       {
         error: "Failed to lookup user profile",
         details: error.message,
+        exists: false,
+        profile: null,
       },
       { status: 500 },
     )
