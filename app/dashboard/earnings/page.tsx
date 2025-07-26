@@ -192,20 +192,22 @@ export default function EarningsPage() {
 
   if (authLoading || loading) {
     return (
-      <div className="container mx-auto px-4 py-8">
-        <div className="space-y-6">
-          <Skeleton className="h-8 w-48" />
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {[...Array(4)].map((_, i) => (
-              <Card key={i} className="bg-zinc-900/60 border-zinc-800/50">
-                <CardHeader className="pb-2">
-                  <Skeleton className="h-4 w-24" />
-                </CardHeader>
-                <CardContent>
-                  <Skeleton className="h-8 w-32" />
-                </CardContent>
-              </Card>
-            ))}
+      <div className="min-h-screen bg-zinc-950">
+        <div className="container mx-auto px-4 py-8">
+          <div className="space-y-6">
+            <Skeleton className="h-8 w-48 bg-zinc-800" />
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+              {[...Array(4)].map((_, i) => (
+                <Card key={i} className="bg-zinc-900/80 border-zinc-800/60">
+                  <CardHeader className="pb-2">
+                    <Skeleton className="h-4 w-24 bg-zinc-700" />
+                  </CardHeader>
+                  <CardContent>
+                    <Skeleton className="h-8 w-32 bg-zinc-700" />
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
           </div>
         </div>
       </div>
@@ -215,127 +217,146 @@ export default function EarningsPage() {
   // Show connection prompt if not connected or not fully enabled
   if (!stripeStatus?.connected || !stripeStatus?.isFullyEnabled) {
     return (
-      <div className="container mx-auto px-4 py-8">
-        <div className="max-w-4xl mx-auto">
-          <div className="text-center mb-8">
-            <div className="w-16 h-16 bg-blue-500/20 rounded-full flex items-center justify-center mx-auto mb-4">
-              <CreditCard className="w-8 h-8 text-blue-400" />
+      <div className="min-h-screen bg-zinc-950">
+        <div className="container mx-auto px-4 py-8">
+          <div className="max-w-4xl mx-auto">
+            <div className="text-center mb-8">
+              <div className="w-16 h-16 bg-blue-500/20 rounded-full flex items-center justify-center mx-auto mb-4 border border-blue-500/30">
+                <CreditCard className="w-8 h-8 text-blue-400" />
+              </div>
+              <h1 className="text-3xl font-bold text-white mb-2">Connect Your Stripe Account</h1>
+              <p className="text-zinc-400">Start accepting payments and track your earnings</p>
             </div>
-            <h1 className="text-3xl font-bold text-white mb-2">Connect Your Stripe Account</h1>
-            <p className="text-zinc-400">Start accepting payments and track your earnings</p>
+
+            {/* Connection Status */}
+            {stripeStatus?.connected && (
+              <Card className="bg-zinc-900/80 border-zinc-800/60 mb-6">
+                <CardHeader>
+                  <CardTitle className="text-white flex items-center gap-2">
+                    <AlertCircle className="w-5 h-5 text-yellow-400" />
+                    Account Setup Required
+                  </CardTitle>
+                  <CardDescription className="text-zinc-400">
+                    Your Stripe account is connected but needs additional setup to accept payments
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="flex items-center gap-2">
+                      <div
+                        className={`w-2 h-2 rounded-full ${stripeStatus.charges_enabled ? "bg-green-400" : "bg-red-400"}`}
+                      />
+                      <span className="text-sm text-zinc-300">Accept Payments</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <div
+                        className={`w-2 h-2 rounded-full ${stripeStatus.payouts_enabled ? "bg-green-400" : "bg-red-400"}`}
+                      />
+                      <span className="text-sm text-zinc-300">Receive Payouts</span>
+                    </div>
+                  </div>
+
+                  {stripeStatus.actionsRequired && stripeStatus.actionUrl && (
+                    <div className="pt-4">
+                      <Button onClick={() => (window.location.href = stripeStatus.actionUrl!)} className="w-full">
+                        <ExternalLink className="w-4 h-4 mr-2" />
+                        Complete Setup
+                      </Button>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Connection Options */}
+            <div className="grid md:grid-cols-2 gap-6 mb-8">
+              <Card className="bg-blue-500/10 border-blue-500/30">
+                <CardHeader>
+                  <CardTitle className="text-white flex items-center gap-2">
+                    <CreditCard className="w-5 h-5" />
+                    Create New Stripe Account
+                  </CardTitle>
+                  <CardDescription className="text-zinc-400">
+                    Set up a new Stripe account to start accepting payments
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2 text-sm text-zinc-300">
+                      <CheckCircle className="w-4 h-4 text-green-400" />
+                      Quick 5-minute setup
+                    </div>
+                    <div className="flex items-center gap-2 text-sm text-zinc-300">
+                      <CheckCircle className="w-4 h-4 text-green-400" />
+                      2.9% + 30¢ per transaction
+                    </div>
+                    <div className="flex items-center gap-2 text-sm text-zinc-300">
+                      <CheckCircle className="w-4 h-4 text-green-400" />
+                      Automatic payouts to your bank
+                    </div>
+                  </div>
+                  <Button onClick={connectStripe} className="w-full">
+                    <ExternalLink className="w-4 h-4 mr-2" />
+                    Create Stripe Account
+                  </Button>
+                  <p className="text-xs text-zinc-500">You'll be redirected to Stripe to complete setup</p>
+                </CardContent>
+              </Card>
+
+              <Card className="bg-green-500/10 border-green-500/30">
+                <CardHeader>
+                  <CardTitle className="text-white flex items-center gap-2">
+                    <ExternalLink className="w-5 h-5" />
+                    Already Have a Stripe Account?
+                  </CardTitle>
+                  <CardDescription className="text-zinc-400">
+                    Securely connect your existing Stripe account through Stripe Connect
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2 text-sm text-zinc-300">
+                      <CheckCircle className="w-4 h-4 text-green-400" />
+                      Secure OAuth connection
+                    </div>
+                    <div className="flex items-center gap-2 text-sm text-zinc-300">
+                      <CheckCircle className="w-4 h-4 text-green-400" />
+                      No manual account IDs needed
+                    </div>
+                    <div className="flex items-center gap-2 text-sm text-zinc-300">
+                      <CheckCircle className="w-4 h-4 text-green-400" />
+                      Stripe handles account verification
+                    </div>
+                  </div>
+                  <Button
+                    onClick={connectStripe}
+                    variant="outline"
+                    className="w-full bg-transparent border-zinc-700 hover:bg-zinc-800"
+                  >
+                    <ExternalLink className="w-4 h-4 mr-2" />
+                    Connect with Stripe
+                  </Button>
+                  <p className="text-xs text-zinc-500">
+                    Stripe will detect your existing account and connect it securely
+                  </p>
+                </CardContent>
+              </Card>
+            </div>
+
+            <Button
+              onClick={refreshData}
+              variant="outline"
+              className="w-full bg-transparent border-zinc-700 hover:bg-zinc-800"
+              disabled={refreshing}
+            >
+              {refreshing ? (
+                <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <RefreshCw className="w-4 h-4 mr-2" />
+              )}
+              Refresh Status
+            </Button>
           </div>
-
-          {/* Connection Status */}
-          {stripeStatus?.connected && (
-            <Card className="bg-zinc-900/60 border-zinc-800/50 mb-6">
-              <CardHeader>
-                <CardTitle className="text-white flex items-center gap-2">
-                  <AlertCircle className="w-5 h-5 text-yellow-400" />
-                  Account Setup Required
-                </CardTitle>
-                <CardDescription>
-                  Your Stripe account is connected but needs additional setup to accept payments
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="flex items-center gap-2">
-                    <div
-                      className={`w-2 h-2 rounded-full ${stripeStatus.charges_enabled ? "bg-green-400" : "bg-red-400"}`}
-                    />
-                    <span className="text-sm text-zinc-300">Accept Payments</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div
-                      className={`w-2 h-2 rounded-full ${stripeStatus.payouts_enabled ? "bg-green-400" : "bg-red-400"}`}
-                    />
-                    <span className="text-sm text-zinc-300">Receive Payouts</span>
-                  </div>
-                </div>
-
-                {stripeStatus.actionsRequired && stripeStatus.actionUrl && (
-                  <div className="pt-4">
-                    <Button onClick={() => (window.location.href = stripeStatus.actionUrl!)} className="w-full">
-                      <ExternalLink className="w-4 h-4 mr-2" />
-                      Complete Setup
-                    </Button>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Connection Options */}
-          <div className="grid md:grid-cols-2 gap-6 mb-8">
-            <Card className="bg-blue-500/10 border-blue-500/20">
-              <CardHeader>
-                <CardTitle className="text-white flex items-center gap-2">
-                  <CreditCard className="w-5 h-5" />
-                  Create New Stripe Account
-                </CardTitle>
-                <CardDescription>Set up a new Stripe account to start accepting payments</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2 text-sm text-zinc-300">
-                    <CheckCircle className="w-4 h-4 text-green-400" />
-                    Quick 5-minute setup
-                  </div>
-                  <div className="flex items-center gap-2 text-sm text-zinc-300">
-                    <CheckCircle className="w-4 h-4 text-green-400" />
-                    2.9% + 30¢ per transaction
-                  </div>
-                  <div className="flex items-center gap-2 text-sm text-zinc-300">
-                    <CheckCircle className="w-4 h-4 text-green-400" />
-                    Automatic payouts to your bank
-                  </div>
-                </div>
-                <Button onClick={connectStripe} className="w-full">
-                  <ExternalLink className="w-4 h-4 mr-2" />
-                  Create Stripe Account
-                </Button>
-                <p className="text-xs text-zinc-500">You'll be redirected to Stripe to complete setup</p>
-              </CardContent>
-            </Card>
-
-            <Card className="bg-green-500/10 border-green-500/20">
-              <CardHeader>
-                <CardTitle className="text-white flex items-center gap-2">
-                  <ExternalLink className="w-5 h-5" />
-                  Already Have a Stripe Account?
-                </CardTitle>
-                <CardDescription>Securely connect your existing Stripe account through Stripe Connect</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-2">
-                  <div className="flex items-center gap-2 text-sm text-zinc-300">
-                    <CheckCircle className="w-4 h-4 text-green-400" />
-                    Secure OAuth connection
-                  </div>
-                  <div className="flex items-center gap-2 text-sm text-zinc-300">
-                    <CheckCircle className="w-4 h-4 text-green-400" />
-                    No manual account IDs needed
-                  </div>
-                  <div className="flex items-center gap-2 text-sm text-zinc-300">
-                    <CheckCircle className="w-4 h-4 text-green-400" />
-                    Stripe handles account verification
-                  </div>
-                </div>
-                <Button onClick={connectStripe} variant="outline" className="w-full bg-transparent">
-                  <ExternalLink className="w-4 h-4 mr-2" />
-                  Connect with Stripe
-                </Button>
-                <p className="text-xs text-zinc-500">
-                  Stripe will detect your existing account and connect it securely
-                </p>
-              </CardContent>
-            </Card>
-          </div>
-
-          <Button onClick={refreshData} variant="outline" className="w-full bg-transparent" disabled={refreshing}>
-            {refreshing ? <RefreshCw className="w-4 h-4 mr-2 animate-spin" /> : <RefreshCw className="w-4 h-4 mr-2" />}
-            Refresh Status
-          </Button>
         </div>
       </div>
     )
@@ -343,295 +364,340 @@ export default function EarningsPage() {
 
   // Show earnings dashboard when fully connected and enabled
   return (
-    <div className="container mx-auto px-4 py-8">
-      <div className="space-y-6">
-        {/* Header */}
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold text-white">Earnings Dashboard</h1>
-            <p className="text-zinc-400">Track your revenue and performance in real-time</p>
+    <div className="min-h-screen bg-zinc-950">
+      <div className="container mx-auto px-4 py-8">
+        <div className="space-y-6">
+          {/* Header */}
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-3xl font-bold text-white">Earnings Dashboard</h1>
+              <p className="text-zinc-400">Track your revenue and performance in real-time</p>
+            </div>
+            <Button
+              onClick={refreshData}
+              variant="outline"
+              size="sm"
+              disabled={refreshing}
+              className="bg-transparent border-zinc-700 hover:bg-zinc-800"
+            >
+              {refreshing ? (
+                <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+              ) : (
+                <RefreshCw className="w-4 h-4 mr-2" />
+              )}
+              Refresh
+            </Button>
           </div>
-          <Button onClick={refreshData} variant="outline" size="sm" disabled={refreshing} className="bg-transparent">
-            {refreshing ? <RefreshCw className="w-4 h-4 mr-2 animate-spin" /> : <RefreshCw className="w-4 h-4 mr-2" />}
-            Refresh
-          </Button>
-        </div>
 
-        {/* Key Metrics */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          <Card className="bg-zinc-900/60 border-zinc-800/50 relative overflow-hidden">
-            <div className="absolute inset-0 bg-gradient-to-br from-green-500/10 to-transparent" />
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 relative">
-              <CardTitle className="text-sm font-medium text-zinc-300">Total Earnings</CardTitle>
-              <DollarSign className="h-4 w-4 text-green-400" />
-            </CardHeader>
-            <CardContent className="relative">
-              <div className="text-2xl font-bold text-white">${earnings?.totalEarnings?.toFixed(2) || "0.00"}</div>
-              <p className="text-xs text-zinc-400">All time revenue</p>
-            </CardContent>
-          </Card>
+          {/* Key Metrics */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            <Card className="bg-zinc-900/80 border-zinc-800/60 relative overflow-hidden">
+              <div className="absolute inset-0 bg-gradient-to-br from-green-500/15 to-transparent" />
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 relative">
+                <CardTitle className="text-sm font-medium text-zinc-300">Total Earnings</CardTitle>
+                <DollarSign className="h-4 w-4 text-green-400" />
+              </CardHeader>
+              <CardContent className="relative">
+                <div className="text-2xl font-bold text-white">${earnings?.totalEarnings?.toFixed(2) || "0.00"}</div>
+                <p className="text-xs text-zinc-500">All time revenue</p>
+              </CardContent>
+            </Card>
 
-          <Card className="bg-zinc-900/60 border-zinc-800/50 relative overflow-hidden">
-            <div className="absolute inset-0 bg-gradient-to-br from-blue-500/10 to-transparent" />
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 relative">
-              <CardTitle className="text-sm font-medium text-zinc-300">This Month</CardTitle>
-              <TrendingUp className="h-4 w-4 text-blue-400" />
-            </CardHeader>
-            <CardContent className="relative">
-              <div className="text-2xl font-bold text-white">${earnings?.thisMonth?.toFixed(2) || "0.00"}</div>
-              <div className="flex items-center text-xs text-zinc-400">
-                {earnings?.thisMonth && earnings?.lastMonth ? (
-                  earnings.thisMonth > earnings.lastMonth ? (
-                    <>
-                      <ArrowUpRight className="w-3 h-3 text-green-400 mr-1" />
-                      <span className="text-green-400">
-                        +{(((earnings.thisMonth - earnings.lastMonth) / earnings.lastMonth) * 100).toFixed(1)}%
-                      </span>
-                    </>
+            <Card className="bg-zinc-900/80 border-zinc-800/60 relative overflow-hidden">
+              <div className="absolute inset-0 bg-gradient-to-br from-blue-500/15 to-transparent" />
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 relative">
+                <CardTitle className="text-sm font-medium text-zinc-300">This Month</CardTitle>
+                <TrendingUp className="h-4 w-4 text-blue-400" />
+              </CardHeader>
+              <CardContent className="relative">
+                <div className="text-2xl font-bold text-white">${earnings?.thisMonth?.toFixed(2) || "0.00"}</div>
+                <div className="flex items-center text-xs text-zinc-500">
+                  {earnings?.thisMonth && earnings?.lastMonth ? (
+                    earnings.thisMonth > earnings.lastMonth ? (
+                      <>
+                        <ArrowUpRight className="w-3 h-3 text-green-400 mr-1" />
+                        <span className="text-green-400">
+                          +{(((earnings.thisMonth - earnings.lastMonth) / earnings.lastMonth) * 100).toFixed(1)}%
+                        </span>
+                      </>
+                    ) : (
+                      <>
+                        <ArrowDownRight className="w-3 h-3 text-red-400 mr-1" />
+                        <span className="text-red-400">
+                          {(((earnings.thisMonth - earnings.lastMonth) / earnings.lastMonth) * 100).toFixed(1)}%
+                        </span>
+                      </>
+                    )
                   ) : (
-                    <>
-                      <ArrowDownRight className="w-3 h-3 text-red-400 mr-1" />
-                      <span className="text-red-400">
-                        {(((earnings.thisMonth - earnings.lastMonth) / earnings.lastMonth) * 100).toFixed(1)}%
-                      </span>
-                    </>
-                  )
-                ) : (
-                  "vs last month"
-                )}
+                    "vs last month"
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-zinc-900/80 border-zinc-800/60 relative overflow-hidden">
+              <div className="absolute inset-0 bg-gradient-to-br from-purple-500/15 to-transparent" />
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 relative">
+                <CardTitle className="text-sm font-medium text-zinc-300">Transactions</CardTitle>
+                <CreditCard className="h-4 w-4 text-purple-400" />
+              </CardHeader>
+              <CardContent className="relative">
+                <div className="text-2xl font-bold text-white">{earnings?.totalTransactions || 0}</div>
+                <p className="text-xs text-zinc-500">Total sales</p>
+              </CardContent>
+            </Card>
+
+            <Card className="bg-zinc-900/80 border-zinc-800/60 relative overflow-hidden">
+              <div className="absolute inset-0 bg-gradient-to-br from-orange-500/15 to-transparent" />
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 relative">
+                <CardTitle className="text-sm font-medium text-zinc-300">Avg Order Value</CardTitle>
+                <Users className="h-4 w-4 text-orange-400" />
+              </CardHeader>
+              <CardContent className="relative">
+                <div className="text-2xl font-bold text-white">
+                  ${earnings?.averageOrderValue?.toFixed(2) || "0.00"}
+                </div>
+                <p className="text-xs text-zinc-500">Per transaction</p>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Detailed Analytics */}
+          <Tabs defaultValue="overview" className="space-y-4">
+            <TabsList className="bg-zinc-900/80 border-zinc-800/60">
+              <TabsTrigger value="overview" className="data-[state=active]:bg-zinc-800 data-[state=active]:text-white">
+                Overview
+              </TabsTrigger>
+              <TabsTrigger
+                value="transactions"
+                className="data-[state=active]:bg-zinc-800 data-[state=active]:text-white"
+              >
+                Transactions
+              </TabsTrigger>
+              <TabsTrigger value="products" className="data-[state=active]:bg-zinc-800 data-[state=active]:text-white">
+                Products
+              </TabsTrigger>
+              <TabsTrigger value="analytics" className="data-[state=active]:bg-zinc-800 data-[state=active]:text-white">
+                Analytics
+              </TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="overview" className="space-y-4">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                {/* Tech Revenue Chart */}
+                <Card className="bg-zinc-900/80 border-zinc-800/60 relative overflow-hidden">
+                  <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/5 to-purple-500/5" />
+                  <CardHeader className="relative">
+                    <CardTitle className="text-white flex items-center gap-2">
+                      <BarChart3 className="w-5 h-5 text-cyan-400" />
+                      Revenue Analytics
+                    </CardTitle>
+                    <CardDescription className="text-zinc-400">
+                      Real-time sales performance over the last 6 months
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="relative p-0">
+                    <TechRevenueChart data={earnings?.monthlyData || []} />
+                  </CardContent>
+                </Card>
+
+                {/* Recent Activity */}
+                <Card className="bg-zinc-900/80 border-zinc-800/60">
+                  <CardHeader>
+                    <CardTitle className="text-white">Recent Transactions</CardTitle>
+                    <CardDescription className="text-zinc-400">Your latest sales activity</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {earnings?.recentTransactions?.length ? (
+                      <div className="space-y-3">
+                        {earnings.recentTransactions.slice(0, 5).map((transaction) => (
+                          <div
+                            key={transaction.id}
+                            className="flex items-center justify-between p-3 bg-zinc-950/50 rounded-lg border border-zinc-800/50"
+                          >
+                            <div>
+                              <p className="text-sm font-medium text-white">{transaction.product}</p>
+                              <p className="text-xs text-zinc-500">{transaction.customer}</p>
+                            </div>
+                            <div className="text-right">
+                              <p className="text-sm font-medium text-white">${transaction.amount.toFixed(2)}</p>
+                              <p className="text-xs text-zinc-500">{transaction.date}</p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="h-32 flex items-center justify-center text-zinc-500">
+                        <div className="text-center">
+                          <CreditCard className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                          <p>No transactions yet</p>
+                        </div>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
               </div>
-            </CardContent>
-          </Card>
+            </TabsContent>
 
-          <Card className="bg-zinc-900/60 border-zinc-800/50 relative overflow-hidden">
-            <div className="absolute inset-0 bg-gradient-to-br from-purple-500/10 to-transparent" />
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 relative">
-              <CardTitle className="text-sm font-medium text-zinc-300">Transactions</CardTitle>
-              <CreditCard className="h-4 w-4 text-purple-400" />
-            </CardHeader>
-            <CardContent className="relative">
-              <div className="text-2xl font-bold text-white">{earnings?.totalTransactions || 0}</div>
-              <p className="text-xs text-zinc-400">Total sales</p>
-            </CardContent>
-          </Card>
-
-          <Card className="bg-zinc-900/60 border-zinc-800/50 relative overflow-hidden">
-            <div className="absolute inset-0 bg-gradient-to-br from-orange-500/10 to-transparent" />
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 relative">
-              <CardTitle className="text-sm font-medium text-zinc-300">Avg Order Value</CardTitle>
-              <Users className="h-4 w-4 text-orange-400" />
-            </CardHeader>
-            <CardContent className="relative">
-              <div className="text-2xl font-bold text-white">${earnings?.averageOrderValue?.toFixed(2) || "0.00"}</div>
-              <p className="text-xs text-zinc-400">Per transaction</p>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Detailed Analytics */}
-        <Tabs defaultValue="overview" className="space-y-4">
-          <TabsList className="bg-zinc-900/60 border-zinc-800/50">
-            <TabsTrigger value="overview">Overview</TabsTrigger>
-            <TabsTrigger value="transactions">Transactions</TabsTrigger>
-            <TabsTrigger value="products">Products</TabsTrigger>
-            <TabsTrigger value="analytics">Analytics</TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="overview" className="space-y-4">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Tech Revenue Chart */}
-              <Card className="bg-zinc-900/60 border-zinc-800/50 relative overflow-hidden">
-                <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/5 to-purple-500/5" />
-                <CardHeader className="relative">
-                  <CardTitle className="text-white flex items-center gap-2">
-                    <BarChart3 className="w-5 h-5 text-cyan-400" />
-                    Revenue Analytics
-                  </CardTitle>
-                  <CardDescription>Real-time sales performance over the last 6 months</CardDescription>
-                </CardHeader>
-                <CardContent className="relative">
-                  <TechRevenueChart data={earnings?.monthlyData || []} />
-                </CardContent>
-              </Card>
-
-              {/* Recent Activity */}
-              <Card className="bg-zinc-900/60 border-zinc-800/50">
+            <TabsContent value="transactions" className="space-y-4">
+              <Card className="bg-zinc-900/80 border-zinc-800/60">
                 <CardHeader>
-                  <CardTitle className="text-white">Recent Transactions</CardTitle>
-                  <CardDescription>Your latest sales activity</CardDescription>
+                  <CardTitle className="text-white">All Transactions</CardTitle>
+                  <CardDescription className="text-zinc-400">Complete transaction history</CardDescription>
                 </CardHeader>
                 <CardContent>
-                  {earnings?.recentTransactions?.length ? (
-                    <div className="space-y-3">
-                      {earnings.recentTransactions.slice(0, 5).map((transaction) => (
-                        <div key={transaction.id} className="flex items-center justify-between">
-                          <div>
-                            <p className="text-sm font-medium text-white">{transaction.product}</p>
-                            <p className="text-xs text-zinc-400">{transaction.customer}</p>
+                  <div className="h-64 flex items-center justify-center text-zinc-500">
+                    <div className="text-center">
+                      <Calendar className="w-12 h-12 mx-auto mb-2 opacity-50" />
+                      <p>Transaction history will appear here</p>
+                      <p className="text-sm">Make your first sale to see detailed transaction data</p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </TabsContent>
+
+            <TabsContent value="products" className="space-y-4">
+              <Card className="bg-zinc-900/80 border-zinc-800/60">
+                <CardHeader>
+                  <CardTitle className="text-white">Top Performing Products</CardTitle>
+                  <CardDescription className="text-zinc-400">Your best-selling content</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {earnings?.topProducts?.length ? (
+                    <div className="space-y-4">
+                      {earnings.topProducts.map((product, index) => (
+                        <div
+                          key={index}
+                          className="flex items-center justify-between p-3 bg-zinc-950/50 rounded-lg border border-zinc-800/50"
+                        >
+                          <div className="flex items-center gap-3">
+                            <div className="w-8 h-8 bg-zinc-800 rounded flex items-center justify-center text-sm font-medium text-white">
+                              {index + 1}
+                            </div>
+                            <div>
+                              <p className="text-sm font-medium text-white">{product.name}</p>
+                              <p className="text-xs text-zinc-500">{product.sales} sales</p>
+                            </div>
                           </div>
                           <div className="text-right">
-                            <p className="text-sm font-medium text-white">${transaction.amount.toFixed(2)}</p>
-                            <p className="text-xs text-zinc-400">{transaction.date}</p>
+                            <p className="text-sm font-medium text-white">${product.revenue.toFixed(2)}</p>
                           </div>
                         </div>
                       ))}
                     </div>
                   ) : (
-                    <div className="h-32 flex items-center justify-center text-zinc-400">
+                    <div className="h-32 flex items-center justify-center text-zinc-500">
                       <div className="text-center">
-                        <CreditCard className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                        <p>No transactions yet</p>
+                        <TrendingUp className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                        <p>Product performance data will appear here</p>
                       </div>
                     </div>
                   )}
                 </CardContent>
               </Card>
-            </div>
-          </TabsContent>
+            </TabsContent>
 
-          <TabsContent value="transactions" className="space-y-4">
-            <Card className="bg-zinc-900/60 border-zinc-800/50">
-              <CardHeader>
-                <CardTitle className="text-white">All Transactions</CardTitle>
-                <CardDescription>Complete transaction history</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="h-64 flex items-center justify-center text-zinc-400">
-                  <div className="text-center">
-                    <Calendar className="w-12 h-12 mx-auto mb-2 opacity-50" />
-                    <p>Transaction history will appear here</p>
-                    <p className="text-sm">Make your first sale to see detailed transaction data</p>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="products" className="space-y-4">
-            <Card className="bg-zinc-900/60 border-zinc-800/50">
-              <CardHeader>
-                <CardTitle className="text-white">Top Performing Products</CardTitle>
-                <CardDescription>Your best-selling content</CardDescription>
-              </CardHeader>
-              <CardContent>
-                {earnings?.topProducts?.length ? (
-                  <div className="space-y-4">
-                    {earnings.topProducts.map((product, index) => (
-                      <div key={index} className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 bg-zinc-800 rounded flex items-center justify-center text-sm font-medium text-white">
-                            {index + 1}
-                          </div>
-                          <div>
-                            <p className="text-sm font-medium text-white">{product.name}</p>
-                            <p className="text-xs text-zinc-400">{product.sales} sales</p>
-                          </div>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-sm font-medium text-white">${product.revenue.toFixed(2)}</p>
-                        </div>
+            <TabsContent value="analytics" className="space-y-4">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <Card className="bg-zinc-900/80 border-zinc-800/60">
+                  <CardHeader>
+                    <CardTitle className="text-white">Conversion Metrics</CardTitle>
+                    <CardDescription className="text-zinc-400">Track your sales performance</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div>
+                      <div className="flex justify-between text-sm mb-1">
+                        <span className="text-zinc-300">Conversion Rate</span>
+                        <span className="text-white">2.4%</span>
                       </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="h-32 flex items-center justify-center text-zinc-400">
-                    <div className="text-center">
-                      <TrendingUp className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                      <p>Product performance data will appear here</p>
+                      <Progress value={24} className="h-2 bg-zinc-800" />
                     </div>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          </TabsContent>
+                    <div>
+                      <div className="flex justify-between text-sm mb-1">
+                        <span className="text-zinc-300">Customer Retention</span>
+                        <span className="text-white">68%</span>
+                      </div>
+                      <Progress value={68} className="h-2 bg-zinc-800" />
+                    </div>
+                    <div>
+                      <div className="flex justify-between text-sm mb-1">
+                        <span className="text-zinc-300">Revenue Growth</span>
+                        <span className="text-white">12%</span>
+                      </div>
+                      <Progress value={12} className="h-2 bg-zinc-800" />
+                    </div>
+                  </CardContent>
+                </Card>
 
-          <TabsContent value="analytics" className="space-y-4">
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <Card className="bg-zinc-900/60 border-zinc-800/50">
-                <CardHeader>
-                  <CardTitle className="text-white">Conversion Metrics</CardTitle>
-                  <CardDescription>Track your sales performance</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div>
-                    <div className="flex justify-between text-sm mb-1">
-                      <span className="text-zinc-300">Conversion Rate</span>
-                      <span className="text-white">2.4%</span>
+                <Card className="bg-zinc-900/80 border-zinc-800/60">
+                  <CardHeader>
+                    <CardTitle className="text-white">Payout Information</CardTitle>
+                    <CardDescription className="text-zinc-400">Your earnings and payout schedule</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="flex justify-between p-3 bg-zinc-950/50 rounded-lg border border-zinc-800/50">
+                      <span className="text-zinc-300">Available Balance</span>
+                      <span className="text-white font-medium">
+                        ${earnings?.balance?.available?.toFixed(2) || "0.00"}
+                      </span>
                     </div>
-                    <Progress value={24} className="h-2" />
-                  </div>
-                  <div>
-                    <div className="flex justify-between text-sm mb-1">
-                      <span className="text-zinc-300">Customer Retention</span>
-                      <span className="text-white">68%</span>
+                    <div className="flex justify-between p-3 bg-zinc-950/50 rounded-lg border border-zinc-800/50">
+                      <span className="text-zinc-300">Pending Balance</span>
+                      <span className="text-white font-medium">
+                        ${earnings?.balance?.pending?.toFixed(2) || "0.00"}
+                      </span>
                     </div>
-                    <Progress value={68} className="h-2" />
-                  </div>
-                  <div>
-                    <div className="flex justify-between text-sm mb-1">
-                      <span className="text-zinc-300">Revenue Growth</span>
-                      <span className="text-white">12%</span>
+                    <div className="flex justify-between p-3 bg-zinc-950/50 rounded-lg border border-zinc-800/50">
+                      <span className="text-zinc-300">Next Payout</span>
+                      <span className="text-white font-medium">-</span>
                     </div>
-                    <Progress value={12} className="h-2" />
-                  </div>
-                </CardContent>
-              </Card>
+                    <div className="pt-2 border-t border-zinc-800">
+                      <p className="text-xs text-zinc-500">Payouts are processed automatically every 2 business days</p>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+            </TabsContent>
+          </Tabs>
 
-              <Card className="bg-zinc-900/60 border-zinc-800/50">
-                <CardHeader>
-                  <CardTitle className="text-white">Payout Information</CardTitle>
-                  <CardDescription>Your earnings and payout schedule</CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="flex justify-between">
-                    <span className="text-zinc-300">Available Balance</span>
-                    <span className="text-white font-medium">
-                      ${earnings?.balance?.available?.toFixed(2) || "0.00"}
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-zinc-300">Pending Balance</span>
-                    <span className="text-white font-medium">${earnings?.balance?.pending?.toFixed(2) || "0.00"}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-zinc-300">Next Payout</span>
-                    <span className="text-white font-medium">-</span>
-                  </div>
-                  <div className="pt-2 border-t border-zinc-800">
-                    <p className="text-xs text-zinc-400">Payouts are processed automatically every 2 business days</p>
-                  </div>
-                </CardContent>
-              </Card>
-            </div>
-          </TabsContent>
-        </Tabs>
-
-        {/* Stripe Dashboard Quick Actions */}
-        <Card className="bg-zinc-900/60 border-zinc-800/50">
-          <CardHeader>
-            <CardTitle className="text-white flex items-center gap-2">
-              <Settings className="w-5 h-5 text-blue-400" />
-              Stripe Account Management
-            </CardTitle>
-            <CardDescription>Quick access to your Stripe dashboard and account settings</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <Button onClick={openStripeDashboard} variant="outline" className="bg-transparent">
-                <ExternalLink className="w-4 h-4 mr-2" />
-                Stripe Dashboard
-              </Button>
-              <Button onClick={openStripeExpress} variant="outline" className="bg-transparent">
-                <Eye className="w-4 h-4 mr-2" />
-                Express Dashboard
-              </Button>
-              <Button variant="outline" className="bg-transparent">
-                <Download className="w-4 h-4 mr-2" />
-                Download Reports
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+          {/* Stripe Dashboard Quick Actions */}
+          <Card className="bg-zinc-900/80 border-zinc-800/60">
+            <CardHeader>
+              <CardTitle className="text-white flex items-center gap-2">
+                <Settings className="w-5 h-5 text-blue-400" />
+                Stripe Account Management
+              </CardTitle>
+              <CardDescription className="text-zinc-400">
+                Quick access to your Stripe dashboard and account settings
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <Button
+                  onClick={openStripeDashboard}
+                  variant="outline"
+                  className="bg-transparent border-zinc-700 hover:bg-zinc-800"
+                >
+                  <ExternalLink className="w-4 h-4 mr-2" />
+                  Stripe Dashboard
+                </Button>
+                <Button
+                  onClick={openStripeExpress}
+                  variant="outline"
+                  className="bg-transparent border-zinc-700 hover:bg-zinc-800"
+                >
+                  <Eye className="w-4 h-4 mr-2" />
+                  Express Dashboard
+                </Button>
+                <Button variant="outline" className="bg-transparent border-zinc-700 hover:bg-zinc-800">
+                  <Download className="w-4 h-4 mr-2" />
+                  Download Reports
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
       </div>
     </div>
   )
