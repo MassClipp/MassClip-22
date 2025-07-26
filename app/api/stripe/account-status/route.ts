@@ -6,11 +6,20 @@ import { authOptions } from "@/app/api/auth/[...nextauth]/route"
 
 export async function GET(request: NextRequest) {
   try {
+    console.log("🔍 [Account Status] Starting account status check...")
+
     const session = await getServerSession(authOptions)
 
     if (!session?.user?.id) {
       console.error("❌ [Account Status] No session found")
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+      return NextResponse.json(
+        {
+          error: "Unauthorized",
+          connected: false,
+          actionsRequired: false,
+        },
+        { status: 401 },
+      )
     }
 
     console.log(`🔍 [Account Status] Checking status for user: ${session.user.id}`)
@@ -20,11 +29,20 @@ export async function GET(request: NextRequest) {
 
     if (!userDoc.exists) {
       console.error("❌ [Account Status] User document not found")
-      return NextResponse.json({ error: "User not found" }, { status: 404 })
+      return NextResponse.json(
+        {
+          error: "User not found",
+          connected: false,
+          actionsRequired: false,
+        },
+        { status: 404 },
+      )
     }
 
     const userData = userDoc.data()
     const stripeAccountId = userData?.stripeAccountId
+
+    console.log(`🔍 [Account Status] User data found. StripeAccountId: ${stripeAccountId}`)
 
     if (!stripeAccountId) {
       console.error("❌ [Account Status] No Stripe account ID found for user")
@@ -32,37 +50,51 @@ export async function GET(request: NextRequest) {
         {
           connected: false,
           error: "No Stripe account connected",
+          actionsRequired: false,
+          charges_enabled: false,
+          payouts_enabled: false,
+          details_submitted: false,
+          requirements: {
+            currently_due: [],
+            past_due: [],
+            eventually_due: [],
+            pending_verification: [],
+          },
         },
         { status: 200 },
       )
     }
 
-    console.log(`🔍 [Account Status] Fetching account details for: ${stripeAccountId}`)
+    console.log(`🔍 [Account Status] Fetching account details from Stripe for: ${stripeAccountId}`)
 
     // Fetch account details from Stripe
     const account = await stripe.accounts.retrieve(stripeAccountId)
 
-    console.log(`📊 [Account Status] Account details:`, {
+    console.log(`📊 [Account Status] Raw Stripe account data:`, {
       id: account.id,
       charges_enabled: account.charges_enabled,
       payouts_enabled: account.payouts_enabled,
       details_submitted: account.details_submitted,
-      requirements: {
-        currently_due: account.requirements?.currently_due?.length || 0,
-        eventually_due: account.requirements?.eventually_due?.length || 0,
-        past_due: account.requirements?.past_due?.length || 0,
-        pending_verification: account.requirements?.pending_verification?.length || 0,
-      },
+      business_type: account.business_type,
+      country: account.country,
+      requirements: account.requirements,
     })
 
     // Determine if actions are required
     const hasCurrentlyDue = (account.requirements?.currently_due?.length || 0) > 0
     const hasPastDue = (account.requirements?.past_due?.length || 0) > 0
-    const hasEventuallyDue = (account.requirements?.eventually_due?.length || 0) > 0
     const hasPendingVerification = (account.requirements?.pending_verification?.length || 0) > 0
 
     const actionsRequired = hasCurrentlyDue || hasPastDue || hasPendingVerification
     const isFullyEnabled = account.charges_enabled && account.payouts_enabled && account.details_submitted
+
+    console.log(`📊 [Account Status] Computed status:`, {
+      isFullyEnabled,
+      actionsRequired,
+      hasCurrentlyDue,
+      hasPastDue,
+      hasPendingVerification,
+    })
 
     // Create account link if actions are required
     let actionUrl = null
@@ -136,10 +168,13 @@ export async function GET(request: NextRequest) {
       business_type: account.business_type,
     }
 
-    console.log(`✅ [Account Status] Status check complete:`, {
-      isFullyEnabled,
-      actionsRequired,
-      hasActionUrl: !!actionUrl,
+    console.log(`✅ [Account Status] Final response:`, {
+      connected: response.connected,
+      isFullyEnabled: response.isFullyEnabled,
+      actionsRequired: response.actionsRequired,
+      hasActionUrl: !!response.actionUrl,
+      charges_enabled: response.charges_enabled,
+      payouts_enabled: response.payouts_enabled,
       requirementCounts: {
         currently_due: response.requirements.currently_due.length,
         past_due: response.requirements.past_due.length,
@@ -151,6 +186,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(response)
   } catch (error: any) {
     console.error("❌ [Account Status] Error checking account status:", error)
+    console.error("❌ [Account Status] Error stack:", error.stack)
 
     return NextResponse.json(
       {
@@ -158,6 +194,15 @@ export async function GET(request: NextRequest) {
         details: error.message,
         connected: false,
         actionsRequired: false,
+        charges_enabled: false,
+        payouts_enabled: false,
+        details_submitted: false,
+        requirements: {
+          currently_due: [],
+          past_due: [],
+          eventually_due: [],
+          pending_verification: [],
+        },
       },
       { status: 500 },
     )

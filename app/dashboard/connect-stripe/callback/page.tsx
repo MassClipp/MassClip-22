@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
-import { CheckCircle, XCircle, AlertCircle, Loader2, Clock, AlertTriangle } from "lucide-react"
+import { CheckCircle, XCircle, AlertCircle, Loader2, Clock, AlertTriangle, RefreshCw } from "lucide-react"
 
 interface AccountStatus {
   connected: boolean
@@ -33,12 +33,93 @@ export default function StripeCallbackPage() {
   const [accountStatus, setAccountStatus] = useState<AccountStatus | null>(null)
   const [isLoadingAction, setIsLoadingAction] = useState(false)
   const [statusError, setStatusError] = useState<string | null>(null)
+  const [retryCount, setRetryCount] = useState(0)
 
   const success = searchParams.get("success")
   const completed = searchParams.get("completed")
   const refresh = searchParams.get("refresh")
   const error = searchParams.get("error")
   const errorDescription = searchParams.get("error_description")
+
+  const fetchAccountStatus = async (attempt = 1) => {
+    try {
+      console.log(`🔍 [Callback Page] Fetching account status (attempt ${attempt})...`)
+
+      const response = await fetch("/api/stripe/account-status", {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        cache: "no-store",
+      })
+
+      console.log(`📡 [Callback Page] Response status: ${response.status}`)
+
+      if (response.ok) {
+        const status = await response.json()
+        console.log("📊 [Callback Page] Account status received:", status)
+        setAccountStatus(status)
+        setStatusError(null)
+
+        if (status.error && !status.connected) {
+          setStatusError(status.error)
+        }
+      } else {
+        const errorText = await response.text()
+        console.error("❌ [Callback Page] Error response:", {
+          status: response.status,
+          statusText: response.statusText,
+          body: errorText,
+        })
+
+        let errorData
+        try {
+          errorData = JSON.parse(errorText)
+        } catch {
+          errorData = { error: `HTTP ${response.status}: ${response.statusText}` }
+        }
+
+        setStatusError(errorData.error || `HTTP ${response.status} error`)
+
+        // Set a fallback status for display purposes
+        setAccountStatus({
+          connected: false,
+          isFullyEnabled: false,
+          actionsRequired: false,
+          charges_enabled: false,
+          payouts_enabled: false,
+          details_submitted: false,
+          requirements: {
+            currently_due: [],
+            past_due: [],
+            eventually_due: [],
+            pending_verification: [],
+          },
+          error: errorData.error,
+        })
+      }
+    } catch (error) {
+      console.error("❌ [Callback Page] Network error fetching account status:", error)
+      setStatusError("Network error while fetching account status")
+
+      // Set a fallback status for display purposes
+      setAccountStatus({
+        connected: false,
+        isFullyEnabled: false,
+        actionsRequired: false,
+        charges_enabled: false,
+        payouts_enabled: false,
+        details_submitted: false,
+        requirements: {
+          currently_due: [],
+          past_due: [],
+          eventually_due: [],
+          pending_verification: [],
+        },
+        error: "Network error",
+      })
+    }
+  }
 
   useEffect(() => {
     console.log("🔄 [Callback Page] Processing callback with params:", {
@@ -49,51 +130,32 @@ export default function StripeCallbackPage() {
       errorDescription,
     })
 
-    const fetchAccountStatus = async () => {
+    const processCallback = async () => {
       if (success === "true" || completed === "true" || refresh === "true") {
-        try {
-          console.log("🔍 [Callback Page] Fetching account status...")
-          const response = await fetch("/api/stripe/account-status", {
-            method: "GET",
-            headers: {
-              "Content-Type": "application/json",
-            },
-          })
+        // Simulate processing time for better UX
+        await new Promise((resolve) => setTimeout(resolve, 1500))
+        setIsProcessing(false)
 
-          console.log("📡 [Callback Page] Response status:", response.status)
-
-          if (response.ok) {
-            const status = await response.json()
-            console.log("📊 [Callback Page] Account status received:", status)
-            setAccountStatus(status)
-
-            if (status.error) {
-              setStatusError(status.error)
-            }
-          } else {
-            const errorData = await response.json().catch(() => ({ error: "Unknown error" }))
-            console.error("❌ [Callback Page] Error response:", errorData)
-            setStatusError(errorData.error || `HTTP ${response.status} error`)
-          }
-        } catch (error) {
-          console.error("❌ [Callback Page] Network error fetching account status:", error)
-          setStatusError("Network error while fetching account status")
-        }
+        // Fetch account status with retry logic
+        await fetchAccountStatus(1)
+      } else {
+        setIsProcessing(false)
       }
     }
 
-    // Simulate processing time for better UX
-    const timer = setTimeout(() => {
-      setIsProcessing(false)
-      fetchAccountStatus()
-    }, 1500)
-
-    return () => clearTimeout(timer)
+    processCallback()
   }, [success, completed, refresh, error, errorDescription])
 
   const handleRetry = () => {
     console.log("🔄 [Callback Page] User clicked retry")
     router.push("/dashboard/connect-stripe")
+  }
+
+  const handleRefreshStatus = async () => {
+    console.log("🔄 [Callback Page] User clicked refresh status")
+    setRetryCount((prev) => prev + 1)
+    setStatusError(null)
+    await fetchAccountStatus(retryCount + 2)
   }
 
   const handleDashboard = () => {
@@ -149,6 +211,7 @@ export default function StripeCallbackPage() {
       hasRequirements,
       hasActionUrl,
       statusError,
+      connected: accountStatus?.connected,
     })
 
     return (
@@ -166,6 +229,13 @@ export default function StripeCallbackPage() {
                       <CheckCircle className="h-8 w-8 text-green-400" strokeWidth={1.5} />
                     </div>
                   </>
+                ) : statusError ? (
+                  <>
+                    <div className="absolute inset-0 bg-red-500/30 rounded-full blur-lg" />
+                    <div className="relative bg-red-500/10 rounded-full p-4 border border-red-500/20">
+                      <XCircle className="h-8 w-8 text-red-400" strokeWidth={1.5} />
+                    </div>
+                  </>
                 ) : (
                   <>
                     <div className="absolute inset-0 bg-yellow-500/30 rounded-full blur-lg" />
@@ -179,12 +249,14 @@ export default function StripeCallbackPage() {
               {/* Title and description */}
               <div className="text-center space-y-3">
                 <h1 className="text-2xl font-light text-white tracking-wide">
-                  {isFullySetup ? "Setup Complete!" : "Connection Successful"}
+                  {statusError ? "Connection Issue" : isFullySetup ? "Setup Complete!" : "Connection Successful"}
                 </h1>
                 <p className="text-sm text-white/70 font-light leading-relaxed max-w-sm">
-                  {isFullySetup
-                    ? "Your Stripe account is fully configured and ready to receive payments."
-                    : "Your Stripe account has been connected, but additional setup is required."}
+                  {statusError
+                    ? "There was an issue checking your account status. You can try refreshing or continue to dashboard."
+                    : isFullySetup
+                      ? "Your Stripe account is fully configured and ready to receive payments."
+                      : "Your Stripe account has been connected, but additional setup may be required."}
                 </p>
               </div>
 
@@ -192,7 +264,7 @@ export default function StripeCallbackPage() {
               <div className="w-full space-y-3">
                 <div className="flex items-center justify-between bg-white/5 rounded-lg px-4 py-3 border border-white/10">
                   <span className="text-xs text-white/80 font-light">Account Connected</span>
-                  <div className="w-2 h-2 bg-green-400 rounded-full" />
+                  <div className={`w-2 h-2 rounded-full ${accountStatus?.connected ? "bg-green-400" : "bg-red-400"}`} />
                 </div>
 
                 <div className="flex items-center justify-between bg-white/5 rounded-lg px-4 py-3 border border-white/10">
@@ -219,7 +291,7 @@ export default function StripeCallbackPage() {
                 <div className="w-full bg-red-500/5 rounded-lg p-4 border border-red-500/20">
                   <div className="flex items-start space-x-3">
                     <AlertCircle className="h-4 w-4 text-red-400 mt-0.5 flex-shrink-0" strokeWidth={1.5} />
-                    <div className="space-y-1">
+                    <div className="space-y-1 flex-1">
                       <h3 className="text-sm font-light text-red-400">Status Check Failed</h3>
                       <p className="text-xs text-white/70 font-light">{statusError}</p>
                     </div>
@@ -228,7 +300,7 @@ export default function StripeCallbackPage() {
               )}
 
               {/* Requirements section */}
-              {hasRequirements && (
+              {hasRequirements && !statusError && (
                 <div className="w-full bg-yellow-500/5 rounded-lg p-4 border border-yellow-500/20">
                   <div className="flex items-start space-x-3">
                     <AlertTriangle className="h-4 w-4 text-yellow-400 mt-0.5 flex-shrink-0" strokeWidth={1.5} />
@@ -260,19 +332,34 @@ export default function StripeCallbackPage() {
               {process.env.NODE_ENV === "development" && (
                 <div className="w-full bg-blue-500/5 rounded-lg p-4 border border-blue-500/20">
                   <div className="text-xs text-blue-400 font-mono space-y-1">
-                    <div>hasRequirements: {String(hasRequirements)}</div>
-                    <div>hasActionUrl: {String(hasActionUrl)}</div>
-                    <div>actionUrl: {accountStatus?.actionUrl || "null"}</div>
-                    <div>actionsRequired: {String(accountStatus?.actionsRequired)}</div>
                     <div>connected: {String(accountStatus?.connected)}</div>
+                    <div>isFullyEnabled: {String(accountStatus?.isFullyEnabled)}</div>
+                    <div>actionsRequired: {String(accountStatus?.actionsRequired)}</div>
+                    <div>hasActionUrl: {String(!!accountStatus?.actionUrl)}</div>
+                    <div>charges_enabled: {String(accountStatus?.charges_enabled)}</div>
+                    <div>payouts_enabled: {String(accountStatus?.payouts_enabled)}</div>
+                    <div>statusError: {statusError || "null"}</div>
+                    <div>retryCount: {retryCount}</div>
                   </div>
                 </div>
               )}
 
               {/* Action buttons */}
               <div className="flex flex-col space-y-3 w-full">
+                {/* Refresh Status button - shows when there's an error */}
+                {statusError && (
+                  <Button
+                    onClick={handleRefreshStatus}
+                    variant="outline"
+                    className="w-full bg-transparent border-blue-500/20 text-blue-400 hover:bg-blue-500/5 font-light tracking-wide transition-all duration-200"
+                  >
+                    <RefreshCw className="h-4 w-4 mr-2" />
+                    Refresh Status
+                  </Button>
+                )}
+
                 {/* Action Required button - only shows when there are requirements and action URL */}
-                {hasRequirements && hasActionUrl && (
+                {hasRequirements && hasActionUrl && !statusError && (
                   <Button
                     onClick={handleActionRequired}
                     disabled={isLoadingAction}
@@ -286,7 +373,7 @@ export default function StripeCallbackPage() {
                     ) : (
                       <>
                         <AlertTriangle className="h-4 w-4 mr-2" />
-                        Action Required
+                        Complete Setup
                       </>
                     )}
                   </Button>
@@ -295,9 +382,9 @@ export default function StripeCallbackPage() {
                 {/* Continue to Dashboard button */}
                 <Button
                   onClick={handleDashboard}
-                  variant={hasRequirements ? "outline" : "default"}
+                  variant={hasRequirements && !statusError ? "outline" : "default"}
                   className={
-                    hasRequirements
+                    hasRequirements && !statusError
                       ? "w-full bg-transparent border-white/20 text-white/80 hover:bg-white/5 font-light tracking-wide transition-all duration-200"
                       : "w-full bg-white text-black hover:bg-white/90 font-light tracking-wide transition-all duration-200 border-0"
                   }
@@ -312,7 +399,7 @@ export default function StripeCallbackPage() {
     )
   }
 
-  // Error state
+  // Error state (when URL params indicate an error)
   const getErrorMessage = (errorCode: string | null, description: string | null) => {
     switch (errorCode) {
       case "invalid_state":
