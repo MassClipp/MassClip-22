@@ -1,34 +1,45 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { stripe } from "@/lib/stripe"
-import { adminDb } from "@/lib/firebase-admin"
-import { getServerSession } from "next-auth"
-import { authOptions } from "@/app/api/auth/[...nextauth]/route"
+import { adminDb, getAuthenticatedUser } from "@/lib/firebase-admin"
 
 export async function GET(request: NextRequest) {
   try {
-    console.log("🔍 [Account Status] Starting account status check...")
+    console.log("🔍 [Account Status Fixed] Starting account status check...")
 
-    const session = await getServerSession(authOptions)
+    // Try to get authenticated user from Firebase token
+    let userId: string
+    try {
+      const authUser = await getAuthenticatedUser(request.headers)
+      userId = authUser.uid
+      console.log(`🔍 [Account Status Fixed] Authenticated via Firebase: ${userId}`)
+    } catch (authError) {
+      // Fall back to query parameter for debugging
+      const searchParams = request.nextUrl.searchParams
+      const debugUserId = searchParams.get("userId")
 
-    if (!session?.user?.id) {
-      console.error("❌ [Account Status] No session found")
-      return NextResponse.json(
-        {
-          error: "Unauthorized",
-          connected: false,
-          actionsRequired: false,
-        },
-        { status: 401 },
-      )
+      if (debugUserId) {
+        userId = debugUserId
+        console.log(`🔍 [Account Status Fixed] Using debug userId: ${userId}`)
+      } else {
+        console.error("❌ [Account Status Fixed] No authentication found")
+        return NextResponse.json(
+          {
+            error: "Unauthorized - no Firebase token or debug userId",
+            connected: false,
+            actionsRequired: false,
+          },
+          { status: 401 },
+        )
+      }
     }
 
-    console.log(`🔍 [Account Status] Checking status for user: ${session.user.id}`)
+    console.log(`🔍 [Account Status Fixed] Checking status for user: ${userId}`)
 
     // Get user's Stripe account ID from Firestore
-    const userDoc = await adminDb.collection("users").doc(session.user.id).get()
+    const userDoc = await adminDb.collection("users").doc(userId).get()
 
     if (!userDoc.exists) {
-      console.error("❌ [Account Status] User document not found")
+      console.error("❌ [Account Status Fixed] User document not found")
       return NextResponse.json(
         {
           error: "User not found",
@@ -42,10 +53,10 @@ export async function GET(request: NextRequest) {
     const userData = userDoc.data()
     const stripeAccountId = userData?.stripeAccountId
 
-    console.log(`🔍 [Account Status] User data found. StripeAccountId: ${stripeAccountId}`)
+    console.log(`🔍 [Account Status Fixed] User data found. StripeAccountId: ${stripeAccountId}`)
 
     if (!stripeAccountId) {
-      console.error("❌ [Account Status] No Stripe account ID found for user")
+      console.error("❌ [Account Status Fixed] No Stripe account ID found for user")
       return NextResponse.json(
         {
           connected: false,
@@ -65,12 +76,12 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    console.log(`🔍 [Account Status] Fetching account details from Stripe for: ${stripeAccountId}`)
+    console.log(`🔍 [Account Status Fixed] Fetching account details from Stripe for: ${stripeAccountId}`)
 
     // Fetch account details from Stripe
     const account = await stripe.accounts.retrieve(stripeAccountId)
 
-    console.log(`📊 [Account Status] Raw Stripe account data:`, {
+    console.log(`📊 [Account Status Fixed] Raw Stripe account data:`, {
       id: account.id,
       charges_enabled: account.charges_enabled,
       payouts_enabled: account.payouts_enabled,
@@ -88,7 +99,7 @@ export async function GET(request: NextRequest) {
     const actionsRequired = hasCurrentlyDue || hasPastDue || hasPendingVerification
     const isFullyEnabled = account.charges_enabled && account.payouts_enabled && account.details_submitted
 
-    console.log(`📊 [Account Status] Computed status:`, {
+    console.log(`📊 [Account Status Fixed] Computed status:`, {
       isFullyEnabled,
       actionsRequired,
       hasCurrentlyDue,
@@ -100,7 +111,7 @@ export async function GET(request: NextRequest) {
     let actionUrl = null
     if (actionsRequired) {
       try {
-        console.log(`🔗 [Account Status] Creating account link for required actions`)
+        console.log(`🔗 [Account Status Fixed] Creating account link for required actions`)
         const accountLink = await stripe.accountLinks.create({
           account: stripeAccountId,
           refresh_url: `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/connect-stripe/callback?refresh=true`,
@@ -108,9 +119,9 @@ export async function GET(request: NextRequest) {
           type: "account_onboarding",
         })
         actionUrl = accountLink.url
-        console.log(`✅ [Account Status] Account link created successfully`)
+        console.log(`✅ [Account Status Fixed] Account link created successfully`)
       } catch (linkError) {
-        console.error("❌ [Account Status] Error creating account link:", linkError)
+        console.error("❌ [Account Status Fixed] Error creating account link:", linkError)
       }
     }
 
@@ -168,7 +179,7 @@ export async function GET(request: NextRequest) {
       business_type: account.business_type,
     }
 
-    console.log(`✅ [Account Status] Final response:`, {
+    console.log(`✅ [Account Status Fixed] Final response:`, {
       connected: response.connected,
       isFullyEnabled: response.isFullyEnabled,
       actionsRequired: response.actionsRequired,
@@ -185,8 +196,8 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(response)
   } catch (error: any) {
-    console.error("❌ [Account Status] Error checking account status:", error)
-    console.error("❌ [Account Status] Error stack:", error.stack)
+    console.error("❌ [Account Status Fixed] Error checking account status:", error)
+    console.error("❌ [Account Status Fixed] Error stack:", error.stack)
 
     return NextResponse.json(
       {

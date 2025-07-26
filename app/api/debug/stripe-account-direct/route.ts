@@ -3,13 +3,14 @@ import { stripe } from "@/lib/stripe"
 
 export async function POST(request: NextRequest) {
   try {
-    const { accountId } = await request.json()
+    const body = await request.json()
+    const { accountId } = body
 
     if (!accountId) {
       return NextResponse.json({ error: "Account ID is required" }, { status: 400 })
     }
 
-    console.log(`🔍 [Stripe Account] Fetching account details for: ${accountId}`)
+    console.log(`🔍 [Stripe Account] Direct lookup for account: ${accountId}`)
 
     const account = await stripe.accounts.retrieve(accountId)
 
@@ -26,6 +27,7 @@ export async function POST(request: NextRequest) {
         country: account.country,
         created: account.created,
         requirements: account.requirements,
+        type: account.type,
         capabilities: account.capabilities,
         settings: account.settings,
       },
@@ -36,7 +38,8 @@ export async function POST(request: NextRequest) {
       {
         error: "Failed to retrieve Stripe account",
         details: error.message,
-        stripeError: error.type || "unknown",
+        code: error.code,
+        type: error.type,
       },
       { status: 500 },
     )

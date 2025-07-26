@@ -5,7 +5,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { CheckCircle, XCircle, Loader2 } from "lucide-react"
-import { auth } from "@/lib/firebase"
 
 interface StripeConnectionStatusProps {
   userId: string
@@ -34,31 +33,18 @@ export function StripeConnectionStatus({ userId, onStatusChange }: StripeConnect
       setLoading(true)
       onStatusChange?.("checking")
 
-      // Get Firebase ID token for authentication
-      const user = auth.currentUser
-      if (!user) {
-        console.error("No authenticated user found")
-        onStatusChange?.("not_connected")
-        return
-      }
-
-      const idToken = await user.getIdToken()
-
-      const response = await fetch("/api/stripe/account-status", {
-        method: "GET",
+      const response = await fetch("/api/stripe/connect/status", {
+        method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${idToken}`,
         },
+        body: JSON.stringify({ userId }),
       })
 
       if (response.ok) {
         const data = await response.json()
         setStatus(data)
         onStatusChange?.(data.connected ? "connected" : "not_connected")
-      } else {
-        console.error("Failed to check status:", response.status, response.statusText)
-        onStatusChange?.("not_connected")
       }
     } catch (error) {
       console.error("Error checking Stripe status:", error)

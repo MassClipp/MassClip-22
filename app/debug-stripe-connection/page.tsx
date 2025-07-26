@@ -282,6 +282,52 @@ export default function DebugStripeConnectionPage() {
       })
     }
 
+    // Test 7: Fixed Account Status API Test (using Firebase auth)
+    addDiagnostic({
+      name: "Fixed Account Status API",
+      status: "loading",
+      message: "Testing the fixed account status endpoint with Firebase auth...",
+    })
+
+    try {
+      const idToken = await user.getIdToken()
+      const statusResponse = await fetch(`/api/stripe/account-status-fixed?userId=${user.uid}`, {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${idToken}`,
+        },
+      })
+
+      const statusText = await statusResponse.text()
+      let statusData
+
+      try {
+        statusData = JSON.parse(statusText)
+      } catch {
+        statusData = { rawResponse: statusText }
+      }
+
+      updateDiagnostic("Fixed Account Status API", {
+        status: statusResponse.ok ? "success" : "error",
+        message: statusResponse.ok
+          ? "Fixed account status API working correctly!"
+          : `Fixed account status API failed with ${statusResponse.status}`,
+        details: {
+          status: statusResponse.status,
+          statusText: statusResponse.statusText,
+          headers: Object.fromEntries(statusResponse.headers.entries()),
+          response: statusData,
+        },
+      })
+    } catch (error) {
+      updateDiagnostic("Fixed Account Status API", {
+        status: "error",
+        message: "Network error calling fixed account status API",
+        details: { error: String(error) },
+      })
+    }
+
     setIsRunning(false)
   }
 

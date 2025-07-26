@@ -3,7 +3,8 @@ import { adminDb } from "@/lib/firebase-admin"
 
 export async function POST(request: NextRequest) {
   try {
-    const { userId } = await request.json()
+    const body = await request.json()
+    const { userId } = body
 
     if (!userId) {
       return NextResponse.json({ error: "User ID is required" }, { status: 400 })
@@ -14,21 +15,20 @@ export async function POST(request: NextRequest) {
     const userDoc = await adminDb.collection("users").doc(userId).get()
 
     if (!userDoc.exists) {
-      console.log(`❌ [Profile Lookup] User document not found for: ${userId}`)
       return NextResponse.json({
         exists: false,
-        profile: null,
         error: "User profile not found",
+        profile: null,
       })
     }
 
-    const profileData = userDoc.data()
+    const profile = userDoc.data()
     console.log(`✅ [Profile Lookup] Profile found for ${userId}`)
 
     return NextResponse.json({
       exists: true,
-      profile: profileData,
-      hasStripeAccountId: !!profileData?.stripeAccountId,
+      profile: profile,
+      hasStripeAccountId: !!profile?.stripeAccountId,
     })
   } catch (error: any) {
     console.error("❌ [Profile Lookup] Error:", error)
