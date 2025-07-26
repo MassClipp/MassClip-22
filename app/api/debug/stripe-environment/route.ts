@@ -1,54 +1,27 @@
-import { type NextRequest, NextResponse } from "next/server"
+import { NextResponse } from "next/server"
 
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
-    console.log(`🔍 [Stripe Env] Checking Stripe environment configuration`)
+    const stripeSecretKey = process.env.STRIPE_SECRET_KEY
+    const stripePublishableKey = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
+    const stripeWebhookSecret = process.env.STRIPE_WEBHOOK_SECRET
 
-    const hasStripeSecretKey = !!process.env.STRIPE_SECRET_KEY
-    const hasStripePublishableKey = !!process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
-    const hasWebhookSecret = !!process.env.STRIPE_WEBHOOK_SECRET_LIVE || !!process.env.STRIPE_WEBHOOK_SECRET
-
-    const secretKeyType = process.env.STRIPE_SECRET_KEY?.startsWith("sk_live_")
-      ? "live"
-      : process.env.STRIPE_SECRET_KEY?.startsWith("sk_test_")
-        ? "test"
-        : "unknown"
-
-    const publishableKeyType = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY?.startsWith("pk_live_")
-      ? "live"
-      : process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY?.startsWith("pk_test_")
-        ? "test"
-        : "unknown"
-
-    const configured = hasStripeSecretKey && hasStripePublishableKey && hasWebhookSecret
+    const configured = !!(stripeSecretKey && stripePublishableKey)
 
     return NextResponse.json({
       configured,
-      hasStripeSecretKey,
-      hasStripePublishableKey,
-      hasWebhookSecret,
-      secretKeyType,
-      publishableKeyType,
-      keysMatch: secretKeyType === publishableKeyType,
-      environment: secretKeyType,
-      details: {
-        STRIPE_SECRET_KEY: hasStripeSecretKey
-          ? `${secretKeyType} key (${process.env.STRIPE_SECRET_KEY?.substring(0, 12)}...)`
-          : "Missing",
-        NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: hasStripePublishableKey
-          ? `${publishableKeyType} key (${process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY?.substring(0, 12)}...)`
-          : "Missing",
-        STRIPE_WEBHOOK_SECRET: hasWebhookSecret ? "Present" : "Missing",
-        STRIPE_WEBHOOK_SECRET_LIVE: !!process.env.STRIPE_WEBHOOK_SECRET_LIVE ? "Present" : "Missing",
-      },
+      hasSecretKey: !!stripeSecretKey,
+      hasPublishableKey: !!stripePublishableKey,
+      hasWebhookSecret: !!stripeWebhookSecret,
+      secretKeyPrefix: stripeSecretKey ? stripeSecretKey.substring(0, 8) + "..." : null,
+      publishableKeyPrefix: stripePublishableKey ? stripePublishableKey.substring(0, 8) + "..." : null,
+      environment: stripeSecretKey?.includes("_test_") ? "test" : "live",
     })
   } catch (error: any) {
-    console.error("❌ [Stripe Env] Error:", error)
     return NextResponse.json(
       {
-        error: "Failed to check Stripe environment",
-        details: error.message,
         configured: false,
+        error: error.message,
       },
       { status: 500 },
     )

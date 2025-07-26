@@ -3,35 +3,34 @@ import { adminDb } from "@/lib/firebase-admin"
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json()
-    const { userId } = body
+    const { userId } = await request.json()
 
     if (!userId) {
       return NextResponse.json({ error: "User ID is required" }, { status: 400 })
     }
 
-    console.log(`🔍 [Profile Lookup] Looking up profile for user: ${userId}`)
+    console.log(`🔍 [User Profile Lookup] Looking up profile for user: ${userId}`)
 
     const userDoc = await adminDb.collection("users").doc(userId).get()
 
     if (!userDoc.exists) {
+      console.log(`❌ [User Profile Lookup] User document not found for: ${userId}`)
       return NextResponse.json({
         exists: false,
-        error: "User profile not found",
         profile: null,
+        error: "User profile not found",
       })
     }
 
     const profile = userDoc.data()
-    console.log(`✅ [Profile Lookup] Profile found for ${userId}`)
+    console.log(`✅ [User Profile Lookup] Profile found with keys: ${Object.keys(profile || {})}`)
 
     return NextResponse.json({
       exists: true,
-      profile: profile,
-      hasStripeAccountId: !!profile?.stripeAccountId,
+      profile,
     })
   } catch (error: any) {
-    console.error("❌ [Profile Lookup] Error:", error)
+    console.error("❌ [User Profile Lookup] Error:", error)
     return NextResponse.json(
       {
         error: "Failed to lookup user profile",

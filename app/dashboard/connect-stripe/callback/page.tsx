@@ -4,6 +4,7 @@ import { useEffect, useState } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { CheckCircle, XCircle, AlertCircle, Loader2, Clock, AlertTriangle, RefreshCw } from "lucide-react"
+import { getAuth } from "firebase/auth"
 
 interface AccountStatus {
   connected: boolean
@@ -45,10 +46,24 @@ export default function StripeCallbackPage() {
     try {
       console.log(`🔍 [Callback Page] Fetching account status (attempt ${attempt})...`)
 
-      const response = await fetch("/api/stripe/account-status", {
+      // Get Firebase ID token for authentication
+      const auth = getAuth()
+      const currentUser = auth.currentUser
+
+      if (!currentUser) {
+        console.error("❌ [Callback Page] No authenticated user found")
+        setStatusError("User not authenticated")
+        return
+      }
+
+      const idToken = await currentUser.getIdToken()
+
+      // Use the fixed API endpoint that works with Firebase auth
+      const response = await fetch(`/api/stripe/account-status-fixed?userId=${currentUser.uid}`, {
         method: "GET",
         headers: {
           "Content-Type": "application/json",
+          Authorization: `Bearer ${idToken}`,
         },
         cache: "no-store",
       })
