@@ -5,7 +5,6 @@ import { useAuth } from "@/contexts/auth-context"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Progress } from "@/components/ui/progress"
 import {
@@ -20,7 +19,12 @@ import {
   ExternalLink,
   AlertCircle,
   CheckCircle,
+  BarChart3,
+  Settings,
+  Download,
+  Eye,
 } from "lucide-react"
+import { TechRevenueChart } from "@/components/tech-revenue-chart"
 
 interface StripeStatus {
   connected: boolean
@@ -66,6 +70,10 @@ interface EarningsData {
     revenue: number
     transactions: number
   }>
+  balance?: {
+    available: number
+    pending: number
+  }
 }
 
 export default function EarningsPage() {
@@ -169,6 +177,16 @@ export default function EarningsPage() {
       }
     } catch (error) {
       console.error("Error creating Stripe connection:", error)
+    }
+  }
+
+  const openStripeDashboard = () => {
+    window.open("https://dashboard.stripe.com", "_blank")
+  }
+
+  const openStripeExpress = () => {
+    if (stripeStatus?.accountId) {
+      window.open(`https://connect.stripe.com/express/accounts/${stripeStatus.accountId}`, "_blank")
     }
   }
 
@@ -339,41 +357,27 @@ export default function EarningsPage() {
           </Button>
         </div>
 
-        {/* Account Status Banner */}
-        <Card className="bg-green-500/10 border-green-500/20">
-          <CardContent className="flex items-center justify-between p-4">
-            <div className="flex items-center gap-3">
-              <CheckCircle className="w-5 h-5 text-green-400" />
-              <div>
-                <p className="text-white font-medium">Stripe Account Active</p>
-                <p className="text-sm text-zinc-400">Ready to accept payments and receive payouts</p>
-              </div>
-            </div>
-            <Badge variant="default" className="bg-green-500">
-              Connected
-            </Badge>
-          </CardContent>
-        </Card>
-
         {/* Key Metrics */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          <Card className="bg-zinc-900/60 border-zinc-800/50">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+          <Card className="bg-zinc-900/60 border-zinc-800/50 relative overflow-hidden">
+            <div className="absolute inset-0 bg-gradient-to-br from-green-500/10 to-transparent" />
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 relative">
               <CardTitle className="text-sm font-medium text-zinc-300">Total Earnings</CardTitle>
               <DollarSign className="h-4 w-4 text-green-400" />
             </CardHeader>
-            <CardContent>
+            <CardContent className="relative">
               <div className="text-2xl font-bold text-white">${earnings?.totalEarnings?.toFixed(2) || "0.00"}</div>
               <p className="text-xs text-zinc-400">All time revenue</p>
             </CardContent>
           </Card>
 
-          <Card className="bg-zinc-900/60 border-zinc-800/50">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+          <Card className="bg-zinc-900/60 border-zinc-800/50 relative overflow-hidden">
+            <div className="absolute inset-0 bg-gradient-to-br from-blue-500/10 to-transparent" />
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 relative">
               <CardTitle className="text-sm font-medium text-zinc-300">This Month</CardTitle>
               <TrendingUp className="h-4 w-4 text-blue-400" />
             </CardHeader>
-            <CardContent>
+            <CardContent className="relative">
               <div className="text-2xl font-bold text-white">${earnings?.thisMonth?.toFixed(2) || "0.00"}</div>
               <div className="flex items-center text-xs text-zinc-400">
                 {earnings?.thisMonth && earnings?.lastMonth ? (
@@ -399,23 +403,25 @@ export default function EarningsPage() {
             </CardContent>
           </Card>
 
-          <Card className="bg-zinc-900/60 border-zinc-800/50">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+          <Card className="bg-zinc-900/60 border-zinc-800/50 relative overflow-hidden">
+            <div className="absolute inset-0 bg-gradient-to-br from-purple-500/10 to-transparent" />
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 relative">
               <CardTitle className="text-sm font-medium text-zinc-300">Transactions</CardTitle>
               <CreditCard className="h-4 w-4 text-purple-400" />
             </CardHeader>
-            <CardContent>
+            <CardContent className="relative">
               <div className="text-2xl font-bold text-white">{earnings?.totalTransactions || 0}</div>
               <p className="text-xs text-zinc-400">Total sales</p>
             </CardContent>
           </Card>
 
-          <Card className="bg-zinc-900/60 border-zinc-800/50">
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+          <Card className="bg-zinc-900/60 border-zinc-800/50 relative overflow-hidden">
+            <div className="absolute inset-0 bg-gradient-to-br from-orange-500/10 to-transparent" />
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 relative">
               <CardTitle className="text-sm font-medium text-zinc-300">Avg Order Value</CardTitle>
               <Users className="h-4 w-4 text-orange-400" />
             </CardHeader>
-            <CardContent>
+            <CardContent className="relative">
               <div className="text-2xl font-bold text-white">${earnings?.averageOrderValue?.toFixed(2) || "0.00"}</div>
               <p className="text-xs text-zinc-400">Per transaction</p>
             </CardContent>
@@ -433,20 +439,18 @@ export default function EarningsPage() {
 
           <TabsContent value="overview" className="space-y-4">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              {/* Monthly Revenue Chart Placeholder */}
-              <Card className="bg-zinc-900/60 border-zinc-800/50">
-                <CardHeader>
-                  <CardTitle className="text-white">Monthly Revenue</CardTitle>
-                  <CardDescription>Revenue trends over the last 6 months</CardDescription>
+              {/* Tech Revenue Chart */}
+              <Card className="bg-zinc-900/60 border-zinc-800/50 relative overflow-hidden">
+                <div className="absolute inset-0 bg-gradient-to-br from-cyan-500/5 to-purple-500/5" />
+                <CardHeader className="relative">
+                  <CardTitle className="text-white flex items-center gap-2">
+                    <BarChart3 className="w-5 h-5 text-cyan-400" />
+                    Revenue Analytics
+                  </CardTitle>
+                  <CardDescription>Real-time sales performance over the last 6 months</CardDescription>
                 </CardHeader>
-                <CardContent>
-                  <div className="h-64 flex items-center justify-center text-zinc-400">
-                    <div className="text-center">
-                      <TrendingUp className="w-12 h-12 mx-auto mb-2 opacity-50" />
-                      <p>Revenue chart will appear here</p>
-                      <p className="text-sm">Connect your first sale to see data</p>
-                    </div>
-                  </div>
+                <CardContent className="relative">
+                  <TechRevenueChart data={earnings?.monthlyData || []} />
                 </CardContent>
               </Card>
 
@@ -581,11 +585,13 @@ export default function EarningsPage() {
                 <CardContent className="space-y-4">
                   <div className="flex justify-between">
                     <span className="text-zinc-300">Available Balance</span>
-                    <span className="text-white font-medium">$0.00</span>
+                    <span className="text-white font-medium">
+                      ${earnings?.balance?.available?.toFixed(2) || "0.00"}
+                    </span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-zinc-300">Pending Balance</span>
-                    <span className="text-white font-medium">$0.00</span>
+                    <span className="text-white font-medium">${earnings?.balance?.pending?.toFixed(2) || "0.00"}</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-zinc-300">Next Payout</span>
@@ -599,6 +605,33 @@ export default function EarningsPage() {
             </div>
           </TabsContent>
         </Tabs>
+
+        {/* Stripe Dashboard Quick Actions */}
+        <Card className="bg-zinc-900/60 border-zinc-800/50">
+          <CardHeader>
+            <CardTitle className="text-white flex items-center gap-2">
+              <Settings className="w-5 h-5 text-blue-400" />
+              Stripe Account Management
+            </CardTitle>
+            <CardDescription>Quick access to your Stripe dashboard and account settings</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <Button onClick={openStripeDashboard} variant="outline" className="bg-transparent">
+                <ExternalLink className="w-4 h-4 mr-2" />
+                Stripe Dashboard
+              </Button>
+              <Button onClick={openStripeExpress} variant="outline" className="bg-transparent">
+                <Eye className="w-4 h-4 mr-2" />
+                Express Dashboard
+              </Button>
+              <Button variant="outline" className="bg-transparent">
+                <Download className="w-4 h-4 mr-2" />
+                Download Reports
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
       </div>
     </div>
   )
