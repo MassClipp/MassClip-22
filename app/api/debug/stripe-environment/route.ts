@@ -1,52 +1,59 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { verifyIdToken } from "@/lib/auth-utils"
 
 export async function GET(request: NextRequest) {
   try {
-    console.log(`🔍 [Stripe Environment] Checking environment status`)
-
-    // Verify authentication
-    const decodedToken = await verifyIdToken(request)
-    if (!decodedToken) {
-      console.error(`❌ [Stripe Environment] Authentication failed`)
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-    }
-
-    // Check Stripe configuration
     const stripeSecretKey = process.env.STRIPE_SECRET_KEY
+    const stripePublishableKey = process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY
     const stripeWebhookSecret = process.env.STRIPE_WEBHOOK_SECRET
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL
 
-    const isLiveMode = stripeSecretKey?.startsWith("sk_live_")
-    const stripeKeyPrefix = stripeSecretKey?.substring(0, 12) || "Not configured"
-
-    // Check Firebase configuration
-    const firebaseProjectId = process.env.FIREBASE_PROJECT_ID
-    const firebasePrivateKey = process.env.FIREBASE_PRIVATE_KEY
-    const firebaseClientEmail = process.env.FIREBASE_CLIENT_EMAIL
-
-    const firebaseConnected = !!(firebaseProjectId && firebasePrivateKey && firebaseClientEmail)
-
-    const environmentStatus = {
-      stripeMode: isLiveMode ? "LIVE" : "TEST",
-      stripeKeyPrefix,
-      webhookConfigured: !!stripeWebhookSecret,
-      firebaseConnected,
-      environment: process.env.NODE_ENV || "development",
+    const envCheck = {
+      STRIPE_SECRET_KEY: {
+        present: !!stripeSecretKey,
+        length: stripeSecretKey?.length || 0,
+        prefix: stripeSecretKey?.substring(0, 7) || "missing",
+        isLive: stripeSecretKey?.startsWith("sk_live_") || false,
+        isTest: stripeSecretKey?.startsWith("sk_test_") || false,
+      },
+      NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY: {
+        present: !!stripePublishableKey,
+        length: stripePublishableKey?.length || 0,
+        prefix: stripePublishableKey?.substring(0, 7) || "missing",
+        isLive: stripePublishableKey?.startsWith("pk_live_") || false,
+        isTest: stripePublishableKey?.startsWith("pk_test_") || false,
+      },
+      STRIPE_WEBHOOK_SECRET: {
+        present: !!stripeWebhookSecret,
+        length: stripeWebhookSecret?.length || 0,
+        prefix: stripeWebhookSecret?.substring(0, 7) || "missing",
+      },
+      NEXT_PUBLIC_APP_URL: {
+        present: !!appUrl,
+        value: appUrl || "missing",
+      },
     }
 
-    console.log(`✅ [Stripe Environment] Environment status checked`)
+    const configured =
+      envCheck.STRIPE_SECRET_KEY.present &&
+      envCheck.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY.present &&
+      envCheck.NEXT_PUBLIC_APP_URL.present
 
-    return NextResponse.json(environmentStatus)
+    const keyMismatch = envCheck.STRIPE_SECRET_KEY.isLive !== envCheck.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY.isLive
+
+    return NextResponse.json({
+      configured,
+      keyMismatch,
+      environment: envCheck.STRIPE_SECRET_KEY.isLive ? "live" : "test",
+      checks: envCheck,
+      warnings: keyMismatch ? ["Secret key and publishable key environment mismatch"] : [],
+    })
   } catch (error: any) {
-    console.error(`❌ [Stripe Environment] Error:`, error)
+    console.error("❌ [Stripe Environment] Error:", error)
     return NextResponse.json(
       {
-        stripeMode: "UNKNOWN",
-        stripeKeyPrefix: "Error",
-        webhookConfigured: false,
-        firebaseConnected: false,
-        environment: "error",
-        error: error instanceof Error ? error.message : "Unknown error",
+        configured: false,
+        error: "Failed to check Stripe environment",
+        details: error.message,
       },
       { status: 500 },
     )
