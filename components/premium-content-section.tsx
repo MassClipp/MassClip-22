@@ -195,15 +195,25 @@ export default function PremiumContentSection({
     }
   }
 
-  // Get the best available thumbnail with priority order
+  // Get the best available thumbnail with priority order and validation
   const getBundleThumbnail = (bundle: Bundle): string => {
-    // Priority: customPreviewThumbnail > coverImage > coverImageUrl > placeholder
-    const thumbnail = bundle.customPreviewThumbnail || bundle.coverImage || bundle.coverImageUrl
+    console.log(`🖼️ [Premium Content] Getting thumbnail for bundle ${bundle.id}:`, {
+      customPreviewThumbnail: bundle.customPreviewThumbnail,
+      coverImage: bundle.coverImage,
+      coverImageUrl: bundle.coverImageUrl,
+    })
 
-    if (thumbnail && thumbnail.startsWith("http")) {
-      return thumbnail
+    // Priority: customPreviewThumbnail > coverImage > coverImageUrl > placeholder
+    const possibleUrls = [bundle.customPreviewThumbnail, bundle.coverImage, bundle.coverImageUrl].filter(Boolean) // Remove null/undefined values
+
+    for (const url of possibleUrls) {
+      if (url && typeof url === "string" && url.startsWith("http")) {
+        console.log(`✅ [Premium Content] Using thumbnail URL: ${url}`)
+        return url
+      }
     }
 
+    console.log(`⚠️ [Premium Content] No valid thumbnail found for bundle ${bundle.id}, using placeholder`)
     return "/placeholder.svg?height=400&width=400&text=Bundle"
   }
 

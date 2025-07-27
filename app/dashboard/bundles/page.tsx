@@ -500,6 +500,13 @@ export default function BundlesPage() {
     try {
       setThumbnailUploading(true)
 
+      console.log(`🖼️ [Bundles] Starting thumbnail upload for bundle: ${bundleId}`)
+      console.log(`📁 [Bundles] File details:`, {
+        name: file.name,
+        size: file.size,
+        type: file.type,
+      })
+
       const token = await user?.getIdToken()
       const formData = new FormData()
       formData.append("file", file)
@@ -519,17 +526,38 @@ export default function BundlesPage() {
       }
 
       const data = await response.json()
+
+      console.log(`✅ [Bundles] Thumbnail upload successful:`, {
+        url: data.url,
+        fileName: data.fileName,
+        bundleId: data.bundleId,
+      })
+
       setEditForm((prev) => ({
         ...prev,
         coverImage: data.url,
       }))
 
+      // Update local state immediately to show the new thumbnail
+      setProductBoxes((prev) =>
+        prev.map((box) =>
+          box.id === bundleId
+            ? {
+                ...box,
+                coverImage: data.url,
+                customPreviewThumbnail: data.url,
+                coverImageUrl: data.url,
+              }
+            : box,
+        ),
+      )
+
       toast({
         title: "Success",
-        description: "Thumbnail uploaded successfully",
+        description: "Thumbnail uploaded and saved successfully",
       })
     } catch (error) {
-      console.error("Error uploading thumbnail:", error)
+      console.error("❌ [Bundles] Error uploading thumbnail:", error)
       toast({
         title: "Error",
         description: error instanceof Error ? error.message : "Failed to upload thumbnail",
