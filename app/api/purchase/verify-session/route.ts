@@ -33,12 +33,13 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Retrieve session from Stripe
+    // Enhanced session retrieval with better error handling
     console.log("💳 [Verify Session] Retrieving Stripe session:", sessionId)
     let session
     try {
+      // First, try to retrieve the session with expanded payment_intent
       session = await stripe.checkout.sessions.retrieve(sessionId, {
-        expand: ["payment_intent"],
+        expand: ["payment_intent", "line_items"],
       })
       console.log("✅ [Verify Session] Session retrieved successfully:")
       console.log("   ID:", session.id)
@@ -48,18 +49,66 @@ export async function POST(request: NextRequest) {
       console.log("   Currency:", session.currency)
       console.log("   Customer Email:", session.customer_details?.email)
       console.log("   Metadata:", session.metadata)
+      console.log("   Created:", new Date(session.created * 1000).toISOString())
+      console.log("   Mode:", session.mode)
     } catch (error: any) {
       console.error("❌ [Verify Session] Failed to retrieve session:", error)
+
+      // Enhanced error handling for different Stripe error types
+      if (error.type === "StripeInvalidRequestError") {
+        if (error.message?.includes("No such checkout.session")) {
+          console.error("❌ [Verify Session] Session not found in Stripe")
+
+          // Check if this might be a test/live mode mismatch
+          const isLiveSession = sessionId.startsWith("cs_live_")
+          const isTestSession = sessionId.startsWith("cs_test_")
+          const currentMode = process.env.STRIPE_SECRET_KEY?.startsWith("sk_live_") ? "live" : "test"
+
+          console.log("🔍 [Verify Session] Mode analysis:", {
+            sessionId,
+            isLiveSession,
+            isTestSession,
+            currentMode,
+            stripeKeyPrefix: process.env.STRIPE_SECRET_KEY?.substring(0, 8),
+          })
+
+          if ((isLiveSession && currentMode === "test") || (isTestSession && currentMode === "live")) {
+            return NextResponse.json(
+              {
+                error: "Session mode mismatch",
+                details: `Session is from ${isLiveSession ? "live" : "test"} mode but API is in ${currentMode} mode`,
+                sessionId,
+                currentMode,
+                sessionMode: isLiveSession ? "live" : "test",
+              },
+              { status: 400 },
+            )
+          }
+
+          return NextResponse.json(
+            {
+              error: "Session not found",
+              details: "This checkout session does not exist or has expired",
+              sessionId,
+              suggestion: "Please try making a new purchase",
+            },
+            { status: 404 },
+          )
+        }
+      }
+
       return NextResponse.json(
         {
-          error: "Invalid session ID",
+          error: "Failed to retrieve session",
           details: error.message,
+          type: error.type || "unknown",
+          sessionId,
         },
         { status: 400 },
       )
     }
 
-    // Check if payment was successful
+    // Validate session status
     if (session.payment_status !== "paid") {
       console.error("❌ [Verify Session] Payment not completed:", session.payment_status)
       return NextResponse.json(
@@ -67,18 +116,29 @@ export async function POST(request: NextRequest) {
           error: "Payment not completed",
           paymentStatus: session.payment_status,
           sessionStatus: session.status,
+          sessionId: session.id,
+          details: "The payment for this session has not been completed successfully",
         },
         { status: 400 },
       )
     }
 
+    // Extract metadata
     const productBoxId = session.metadata?.productBoxId
+    const bundleId = session.metadata?.bundleId
     const sessionUserId = session.metadata?.userId
     const creatorId = session.metadata?.creatorId
 
-    if (!productBoxId) {
-      console.error("❌ [Verify Session] Missing productBoxId in session metadata")
-      return NextResponse.json({ error: "Invalid session metadata" }, { status: 400 })
+    if (!productBoxId && !bundleId) {
+      console.error("❌ [Verify Session] Missing product/bundle ID in session metadata")
+      return NextResponse.json(
+        {
+          error: "Invalid session metadata",
+          details: "No product or bundle ID found in session",
+          metadata: session.metadata,
+        },
+        { status: 400 },
+      )
     }
 
     // Use authenticated user ID if available, otherwise use session metadata
@@ -86,6 +146,7 @@ export async function POST(request: NextRequest) {
 
     console.log("📦 [Verify Session] Processing purchase:")
     console.log("   Product Box ID:", productBoxId)
+    console.log("   Bundle ID:", bundleId)
     console.log("   User ID (auth):", userId)
     console.log("   User ID (session):", sessionUserId)
     console.log("   Final User ID:", finalUserId)
@@ -105,9 +166,17 @@ export async function POST(request: NextRequest) {
     } else {
       // Create new purchase record
       console.log("💾 [Verify Session] Creating new purchase record...")
+
+      // Determine the item ID and type
+      const itemId = productBoxId || bundleId
+      const itemType = productBoxId ? "product_box" : "bundle"
+
       const purchaseData = {
         sessionId,
-        productBoxId,
+        productBoxId: productBoxId || null,
+        bundleId: bundleId || null,
+        itemId,
+        itemType,
         userId: finalUserId,
         creatorId: creatorId || null,
         amount: session.amount_total || 0,
@@ -120,6 +189,8 @@ export async function POST(request: NextRequest) {
         createdAt: new Date(),
         updatedAt: new Date(),
         stripeSessionId: sessionId,
+        verificationMethod: "direct_api",
+        verifiedAt: new Date(),
       }
 
       const purchaseRef = await db.collection("purchases").add(purchaseData)
@@ -131,21 +202,30 @@ export async function POST(request: NextRequest) {
         console.log("🔓 [Verify Session] Granting user access...")
         try {
           // Add to user's purchases subcollection
-          await db.collection("users").doc(finalUserId).collection("purchases").doc(purchaseId).set({
-            productBoxId,
-            purchaseId,
-            sessionId,
-            amount: session.amount_total,
-            purchasedAt: new Date(),
-            status: "active",
-          })
+          await db
+            .collection("users")
+            .doc(finalUserId)
+            .collection("purchases")
+            .doc(purchaseId)
+            .set({
+              productBoxId: productBoxId || null,
+              bundleId: bundleId || null,
+              itemId,
+              itemType,
+              purchaseId,
+              sessionId,
+              amount: session.amount_total,
+              purchasedAt: new Date(),
+              status: "active",
+            })
 
-          // Also update user's main document with purchase info
+          // Update user's main document with purchase info
+          const accessKey = productBoxId ? `productBoxAccess.${productBoxId}` : `bundleAccess.${bundleId}`
           await db
             .collection("users")
             .doc(finalUserId)
             .update({
-              [`productBoxAccess.${productBoxId}`]: {
+              [accessKey]: {
                 purchaseId,
                 sessionId,
                 grantedAt: new Date(),
@@ -161,26 +241,31 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      // Update product box stats
+      // Update item stats
       try {
+        const collection = productBoxId ? "productBoxes" : "bundles"
+        const docId = productBoxId || bundleId
+
         await db
-          .collection("productBoxes")
-          .doc(productBoxId)
+          .collection(collection)
+          .doc(docId!)
           .update({
             "stats.totalSales": db.FieldValue.increment(1),
             "stats.totalRevenue": db.FieldValue.increment(session.amount_total || 0),
             "stats.lastSaleAt": new Date(),
             updatedAt: new Date(),
           })
-        console.log("✅ [Verify Session] Product box stats updated")
+        console.log(`✅ [Verify Session] ${itemType} stats updated`)
       } catch (error) {
-        console.error("❌ [Verify Session] Failed to update product box stats:", error)
+        console.error(`❌ [Verify Session] Failed to update ${itemType} stats:`, error)
       }
     }
 
-    // Get product box details for response
-    const productBoxDoc = await db.collection("productBoxes").doc(productBoxId).get()
-    const productBox = productBoxDoc.exists ? productBoxDoc.data() : {}
+    // Get item details for response
+    const collection = productBoxId ? "productBoxes" : "bundles"
+    const docId = productBoxId || bundleId
+    const itemDoc = await db.collection(collection).doc(docId!).get()
+    const itemData = itemDoc.exists ? itemDoc.data() : {}
 
     console.log("✅ [Verify Session] Verification completed successfully")
 
@@ -193,16 +278,21 @@ export async function POST(request: NextRequest) {
         currency: session.currency || "usd",
         status: session.payment_status,
         customerEmail: session.customer_details?.email,
+        created: new Date(session.created * 1000).toISOString(),
       },
       purchase: {
         id: purchaseId,
-        productBoxId,
+        productBoxId: productBoxId || null,
+        bundleId: bundleId || null,
+        itemId: docId,
+        itemType: productBoxId ? "product_box" : "bundle", // Declare itemType here
         userId: finalUserId,
         amount: session.amount_total || 0,
       },
-      productBox: {
-        title: productBox?.title || "Product Box",
-        description: productBox?.description,
+      item: {
+        title: itemData?.title || `${productBoxId ? "Product Box" : "Bundle"}`, // Use productBoxId directly
+        description: itemData?.description,
+        type: productBoxId ? "product_box" : "bundle", // Use productBoxId directly
       },
     })
   } catch (error: any) {
@@ -211,6 +301,8 @@ export async function POST(request: NextRequest) {
       {
         error: "Failed to verify session",
         details: error.message,
+        type: error.name || "UnknownError",
+        stack: process.env.NODE_ENV === "development" ? error.stack : undefined,
       },
       { status: 500 },
     )
