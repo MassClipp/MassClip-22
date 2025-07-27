@@ -28,60 +28,18 @@ import { formatDistanceToNow } from "date-fns"
 import { useStripeEarnings } from "@/hooks/use-stripe-earnings"
 import { useToast } from "@/components/ui/use-toast"
 import { useRouter } from "next/navigation"
-
-// Helper function to safely convert to number with extensive validation
-const safeNumber = (value: any, fallback = 0): number => {
-  // Handle null, undefined, empty string, etc.
-  if (value === null || value === undefined || value === "") {
-    return fallback
-  }
-
-  // If it's already a number, check if it's valid
-  if (typeof value === "number") {
-    return isNaN(value) || !isFinite(value) ? fallback : value
-  }
-
-  // Try to convert to number
-  const num = Number(value)
-  return isNaN(num) || !isFinite(num) ? fallback : num
-}
-
-// Helper function to safely format currency with extensive error handling
-const formatCurrency = (value: any, fallback = "0.00"): string => {
-  try {
-    const num = safeNumber(value, 0)
-
-    // Double-check that we have a valid number before calling toFixed
-    if (typeof num !== "number" || isNaN(num) || !isFinite(num)) {
-      console.warn(`formatCurrency: Invalid number value:`, value, `Using fallback: ${fallback}`)
-      return fallback
-    }
-
-    return num.toFixed(2)
-  } catch (error) {
-    console.error(`formatCurrency error for value:`, value, error)
-    return fallback
-  }
-}
-
-// Helper function to safely format percentage
-const formatPercentage = (value: any, fallback = "0.0"): string => {
-  try {
-    const num = safeNumber(value, 0)
-    return num.toFixed(1)
-  } catch (error) {
-    console.error(`formatPercentage error for value:`, value, error)
-    return fallback
-  }
-}
+import { formatCurrency, formatPercentage, formatInteger, safeNumber, validateEarningsData } from "@/lib/format-utils"
 
 export default function EarningsPageContent() {
   const { user } = useAuth()
   const { toast } = useToast()
-  const { data, loading, error, lastUpdated, refresh, syncData } = useStripeEarnings()
+  const { data: rawData, loading, error, lastUpdated, refresh, syncData } = useStripeEarnings()
   const [syncing, setSyncing] = useState(false)
   const [unlinking, setUnlinking] = useState(false)
   const router = useRouter()
+
+  // Validate and clean the data using our bulletproof utilities
+  const data = validateEarningsData(rawData)
 
   const handleSync = async () => {
     try {
@@ -186,18 +144,18 @@ export default function EarningsPageContent() {
     )
   }
 
-  // Safe access to all data properties with extensive validation
-  const totalEarnings = safeNumber(data?.totalEarnings, 0)
-  const thisMonthEarnings = safeNumber(data?.thisMonthEarnings, 0)
-  const lastMonthEarnings = safeNumber(data?.lastMonthEarnings, 0)
-  const last30DaysEarnings = safeNumber(data?.last30DaysEarnings, 0)
-  const pendingPayout = safeNumber(data?.pendingPayout, 0)
-  const availableBalance = safeNumber(data?.availableBalance, 0)
+  // All values are now guaranteed to be safe numbers
+  const totalEarnings = data.totalEarnings
+  const thisMonthEarnings = data.thisMonthEarnings
+  const lastMonthEarnings = data.lastMonthEarnings
+  const last30DaysEarnings = data.last30DaysEarnings
+  const pendingPayout = data.pendingPayout
+  const availableBalance = data.availableBalance
 
-  const totalSales = safeNumber(data?.salesMetrics?.totalSales, 0)
-  const thisMonthSales = safeNumber(data?.salesMetrics?.thisMonthSales, 0)
-  const last30DaysSales = safeNumber(data?.salesMetrics?.last30DaysSales, 0)
-  const averageTransactionValue = safeNumber(data?.salesMetrics?.averageTransactionValue, 0)
+  const totalSales = data.salesMetrics.totalSales
+  const thisMonthSales = data.salesMetrics.thisMonthSales
+  const last30DaysSales = data.salesMetrics.last30DaysSales
+  const averageTransactionValue = data.salesMetrics.averageTransactionValue
 
   const monthlyGrowth = thisMonthEarnings > lastMonthEarnings
   const growthPercentage =
@@ -205,7 +163,7 @@ export default function EarningsPageContent() {
       ? formatPercentage(((thisMonthEarnings - lastMonthEarnings) / lastMonthEarnings) * 100)
       : "0.0"
 
-  // Generate chart data based on actual earnings with safe calculations
+  // Generate chart data with safe calculations
   const chartData = [
     { month: "Jul", earnings: Math.max(totalEarnings * 0.1, 0) },
     { month: "Aug", earnings: Math.max(totalEarnings * 0.3, 0) },
@@ -215,7 +173,7 @@ export default function EarningsPageContent() {
     { month: "Dec", earnings: totalEarnings },
   ]
 
-  const maxEarnings = Math.max(...chartData.map((d) => safeNumber(d.earnings, 0)), 1) // Ensure at least 1 to avoid division by zero
+  const maxEarnings = Math.max(...chartData.map((d) => safeNumber(d.earnings, 0)), 1)
 
   return (
     <div className="space-y-8">
@@ -314,7 +272,7 @@ export default function EarningsPageContent() {
                 <p className="text-3xl font-bold text-white">${formatCurrency(totalEarnings)}</p>
                 <p className="text-xs text-zinc-400 flex items-center gap-1">
                   <BarChart3 className="h-3 w-3" />
-                  {totalSales} total sales
+                  {formatInteger(totalSales)} total sales
                 </p>
               </div>
               <div className="p-3 bg-zinc-800/50 rounded-xl">
@@ -344,7 +302,7 @@ export default function EarningsPageContent() {
                 <p className="text-3xl font-bold text-white">${formatCurrency(thisMonthEarnings)}</p>
                 <p className="text-xs text-zinc-400 flex items-center gap-1">
                   <Activity className="h-3 w-3" />
-                  {thisMonthSales} sales
+                  {formatInteger(thisMonthSales)} sales
                 </p>
               </div>
               <div className="p-3 bg-zinc-800/50 rounded-xl">
@@ -425,7 +383,7 @@ export default function EarningsPageContent() {
                         style={{ height: `${safeHeight}px` }}
                       />
                       <span className="text-xs text-zinc-400 font-medium">{item.month}</span>
-                      <span className="text-xs text-zinc-500">${formatCurrency(itemEarnings).split(".")[0]}</span>
+                      <span className="text-xs text-zinc-500">${formatCurrency(itemEarnings, { decimals: 0 })}</span>
                     </div>
                   )
                 })}
@@ -466,7 +424,7 @@ export default function EarningsPageContent() {
             <div className="space-y-4">
               <div className="flex justify-between items-center">
                 <span className="text-sm text-zinc-300 font-medium">Last 30 Days Sales</span>
-                <span className="text-lg font-bold text-white">{last30DaysSales}</span>
+                <span className="text-lg font-bold text-white">{formatInteger(last30DaysSales)}</span>
               </div>
               <div className="space-y-2">
                 <Progress value={Math.min(last30DaysSales * 5, 100)} className="h-2 bg-zinc-800" />
@@ -480,7 +438,7 @@ export default function EarningsPageContent() {
                 <p className="text-xs text-zinc-400 mt-1">Last 30 Days</p>
               </div>
               <div className="text-center p-4 bg-zinc-800/50 rounded-xl">
-                <p className="text-2xl font-bold text-white">{totalSales}</p>
+                <p className="text-2xl font-bold text-white">{formatInteger(totalSales)}</p>
                 <p className="text-xs text-zinc-400 mt-1">Total Sales</p>
               </div>
             </div>

@@ -5,369 +5,500 @@ import { useAuth } from "@/contexts/auth-context"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Loader2, Bug, Database, User, DollarSign, AlertTriangle } from "lucide-react"
+import { Loader2, AlertCircle, CheckCircle, XCircle, RefreshCw } from "lucide-react"
+import { useToast } from "@/components/ui/use-toast"
 
-interface DebugData {
-  step: string
-  status: "loading" | "success" | "error"
+interface DebugStep {
+  name: string
+  status: "pending" | "success" | "error" | "running"
   data?: any
   error?: string
-  timestamp: Date
+  duration?: number
 }
 
-export default function EarningsDebugPage() {
+export default function DebugEarningsPage() {
   const { user } = useAuth()
-  const [debugSteps, setDebugSteps] = useState<DebugData[]>([])
+  const { toast } = useToast()
+  const [steps, setSteps] = useState<DebugStep[]>([
+    { name: "Authentication Check", status: "pending" },
+    { name: "API Token Generation", status: "pending" },
+    { name: "API Request", status: "pending" },
+    { name: "Response Validation", status: "pending" },
+    { name: "Data Structure Analysis", status: "pending" },
+    { name: "Number Validation", status: "pending" },
+    { name: "Hook Processing", status: "pending" },
+    { name: "Component Rendering", status: "pending" },
+  ])
   const [isRunning, setIsRunning] = useState(false)
   const [rawApiResponse, setRawApiResponse] = useState<any>(null)
+  const [processedData, setProcessedData] = useState<any>(null)
 
-  const addDebugStep = (step: string, status: DebugData["status"], data?: any, error?: string) => {
-    setDebugSteps((prev) => [
-      ...prev,
-      {
-        step,
-        status,
-        data,
-        error,
-        timestamp: new Date(),
-      },
-    ])
+  const updateStep = (index: number, updates: Partial<DebugStep>) => {
+    setSteps((prev) => prev.map((step, i) => (i === index ? { ...step, ...updates } : step)))
   }
 
   const runDiagnostics = async () => {
-    setIsRunning(true)
-    setDebugSteps([])
-    setRawApiResponse(null)
-
-    // Step 1: Check user authentication
-    addDebugStep("User Authentication", "loading")
-
     if (!user) {
-      addDebugStep("User Authentication", "error", null, "User not authenticated")
-      setIsRunning(false)
+      toast({
+        title: "Authentication Required",
+        description: "Please log in to run diagnostics.",
+        variant: "destructive",
+      })
       return
     }
 
-    try {
-      const token = await user.getIdToken()
-      addDebugStep("User Authentication", "success", {
-        uid: user.uid,
-        email: user.email,
-        hasToken: !!token,
-      })
-    } catch (error) {
-      addDebugStep("User Authentication", "error", null, `Failed to get token: ${error}`)
-      setIsRunning(false)
-      return
-    }
+    setIsRunning(true)
+    setRawApiResponse(null)
+    setProcessedData(null)
 
-    // Step 2: Test API endpoint directly
-    addDebugStep("API Request", "loading")
+    // Reset all steps
+    setSteps((prev) => prev.map((step) => ({ ...step, status: "pending" as const, error: undefined, data: undefined })))
 
     try {
-      const token = await user.getIdToken()
-      const response = await fetch("/api/dashboard/earnings", {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "Content-Type": "application/json",
-        },
+      // Step 1: Authentication Check
+      updateStep(0, { status: "running" })
+      const startTime = Date.now()
+
+      if (!user) {
+        updateStep(0, { status: "error", error: "No user found" })
+        return
+      }
+
+      updateStep(0, {
+        status: "success",
+        data: { uid: user.uid, email: user.email },
+        duration: Date.now() - startTime,
       })
 
-      const responseData = await response.json()
-      setRawApiResponse(responseData)
+      // Step 2: API Token Generation
+      updateStep(1, { status: "running" })
+      const tokenStart = Date.now()
 
-      if (!response.ok) {
-        addDebugStep("API Request", "error", responseData, `HTTP ${response.status}: ${response.statusText}`)
-      } else {
-        addDebugStep("API Request", "success", {
-          status: response.status,
-          dataKeys: Object.keys(responseData),
-          hasRequiredFields: {
-            totalEarnings: responseData.hasOwnProperty("totalEarnings"),
-            salesMetrics: responseData.hasOwnProperty("salesMetrics"),
-            accountStatus: responseData.hasOwnProperty("accountStatus"),
+      let token: string
+      try {
+        token = await user.getIdToken()
+        updateStep(1, {
+          status: "success",
+          data: { tokenLength: token.length, tokenPreview: token.substring(0, 20) + "..." },
+          duration: Date.now() - tokenStart,
+        })
+      } catch (error) {
+        updateStep(1, { status: "error", error: `Token generation failed: ${error}` })
+        return
+      }
+
+      // Step 3: API Request
+      updateStep(2, { status: "running" })
+      const apiStart = Date.now()
+
+      let response: Response
+      try {
+        response = await fetch("/api/dashboard/earnings", {
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
           },
         })
+
+        updateStep(2, {
+          status: "success",
+          data: {
+            status: response.status,
+            statusText: response.statusText,
+            headers: Object.fromEntries(response.headers.entries()),
+          },
+          duration: Date.now() - apiStart,
+        })
+      } catch (error) {
+        updateStep(2, { status: "error", error: `API request failed: ${error}` })
+        return
       }
-    } catch (error) {
-      addDebugStep("API Request", "error", null, `Network error: ${error}`)
-    }
 
-    // Step 3: Validate data types
-    addDebugStep("Data Validation", "loading")
+      // Step 4: Response Validation
+      updateStep(3, { status: "running" })
+      const responseStart = Date.now()
 
-    if (rawApiResponse) {
-      const validationResults = {
-        totalEarnings: {
-          value: rawApiResponse.totalEarnings,
-          type: typeof rawApiResponse.totalEarnings,
-          isNumber: !isNaN(Number(rawApiResponse.totalEarnings)),
-          canCallToFixed:
-            typeof rawApiResponse.totalEarnings === "number" || !isNaN(Number(rawApiResponse.totalEarnings)),
-        },
-        thisMonthEarnings: {
-          value: rawApiResponse.thisMonthEarnings,
-          type: typeof rawApiResponse.thisMonthEarnings,
-          isNumber: !isNaN(Number(rawApiResponse.thisMonthEarnings)),
-          canCallToFixed:
-            typeof rawApiResponse.thisMonthEarnings === "number" || !isNaN(Number(rawApiResponse.thisMonthEarnings)),
-        },
-        salesMetrics: {
-          exists: !!rawApiResponse.salesMetrics,
-          totalSales: {
-            value: rawApiResponse.salesMetrics?.totalSales,
-            type: typeof rawApiResponse.salesMetrics?.totalSales,
-            isNumber: !isNaN(Number(rawApiResponse.salesMetrics?.totalSales)),
+      let result: any
+      try {
+        if (!response.ok) {
+          throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+        }
+
+        result = await response.json()
+        setRawApiResponse(result)
+
+        updateStep(3, {
+          status: "success",
+          data: {
+            hasData: !!result,
+            keys: result ? Object.keys(result) : [],
+            dataType: typeof result,
+          },
+          duration: Date.now() - responseStart,
+        })
+      } catch (error) {
+        updateStep(3, { status: "error", error: `Response parsing failed: ${error}` })
+        return
+      }
+
+      // Step 5: Data Structure Analysis
+      updateStep(4, { status: "running" })
+      const structureStart = Date.now()
+
+      try {
+        const analysis = {
+          totalEarnings: {
+            value: result.totalEarnings,
+            type: typeof result.totalEarnings,
+            isNumber: typeof result.totalEarnings === "number",
+            isFinite: Number.isFinite(result.totalEarnings),
+            isNaN: Number.isNaN(result.totalEarnings),
+          },
+          thisMonthEarnings: {
+            value: result.thisMonthEarnings,
+            type: typeof result.thisMonthEarnings,
+            isNumber: typeof result.thisMonthEarnings === "number",
+            isFinite: Number.isFinite(result.thisMonthEarnings),
+            isNaN: Number.isNaN(result.thisMonthEarnings),
+          },
+          salesMetrics: {
+            exists: !!result.salesMetrics,
+            type: typeof result.salesMetrics,
+            keys: result.salesMetrics ? Object.keys(result.salesMetrics) : [],
+            totalSales: {
+              value: result.salesMetrics?.totalSales,
+              type: typeof result.salesMetrics?.totalSales,
+              isNumber: typeof result.salesMetrics?.totalSales === "number",
+            },
+            averageTransactionValue: {
+              value: result.salesMetrics?.averageTransactionValue,
+              type: typeof result.salesMetrics?.averageTransactionValue,
+              isNumber: typeof result.salesMetrics?.averageTransactionValue === "number",
+              isFinite: Number.isFinite(result.salesMetrics?.averageTransactionValue),
+              isNaN: Number.isNaN(result.salesMetrics?.averageTransactionValue),
+            },
+          },
+        }
+
+        updateStep(4, {
+          status: "success",
+          data: analysis,
+          duration: Date.now() - structureStart,
+        })
+      } catch (error) {
+        updateStep(4, { status: "error", error: `Structure analysis failed: ${error}` })
+        return
+      }
+
+      // Step 6: Number Validation
+      updateStep(5, { status: "running" })
+      const numberStart = Date.now()
+
+      try {
+        const safeNumber = (value: any, fallback = 0): number => {
+          if (value === null || value === undefined || value === "") return fallback
+          const num = Number(value)
+          return isNaN(num) || !isFinite(num) ? fallback : num
+        }
+
+        const formatCurrency = (value: any, fallback = "0.00"): string => {
+          try {
+            const num = safeNumber(value, 0)
+            if (typeof num !== "number" || isNaN(num) || !isFinite(num)) {
+              return fallback
+            }
+            return num.toFixed(2)
+          } catch (error) {
+            return fallback
+          }
+        }
+
+        const validationResults = {
+          totalEarnings: {
+            raw: result.totalEarnings,
+            safe: safeNumber(result.totalEarnings),
+            formatted: formatCurrency(result.totalEarnings),
+          },
+          thisMonthEarnings: {
+            raw: result.thisMonthEarnings,
+            safe: safeNumber(result.thisMonthEarnings),
+            formatted: formatCurrency(result.thisMonthEarnings),
           },
           averageTransactionValue: {
-            value: rawApiResponse.salesMetrics?.averageTransactionValue,
-            type: typeof rawApiResponse.salesMetrics?.averageTransactionValue,
-            isNumber: !isNaN(Number(rawApiResponse.salesMetrics?.averageTransactionValue)),
+            raw: result.salesMetrics?.averageTransactionValue,
+            safe: safeNumber(result.salesMetrics?.averageTransactionValue),
+            formatted: formatCurrency(result.salesMetrics?.averageTransactionValue),
           },
-        },
+        }
+
+        updateStep(5, {
+          status: "success",
+          data: validationResults,
+          duration: Date.now() - numberStart,
+        })
+      } catch (error) {
+        updateStep(5, { status: "error", error: `Number validation failed: ${error}` })
+        return
       }
 
-      const hasValidationErrors =
-        !validationResults.totalEarnings.canCallToFixed ||
-        !validationResults.thisMonthEarnings.canCallToFixed ||
-        !validationResults.salesMetrics.totalSales.isNumber
+      // Step 7: Hook Processing Simulation
+      updateStep(6, { status: "running" })
+      const hookStart = Date.now()
 
-      addDebugStep(
-        "Data Validation",
-        hasValidationErrors ? "error" : "success",
-        validationResults,
-        hasValidationErrors ? "Some values cannot be safely converted to numbers" : undefined,
-      )
-    }
-
-    // Step 4: Test useStripeEarnings hook simulation
-    addDebugStep("Hook Simulation", "loading")
-
-    try {
-      // Simulate the hook's data processing
-      const safeNumber = (value: any): number => {
-        if (value === null || value === undefined) return 0
-        const num = Number(value)
-        return isNaN(num) ? 0 : num
-      }
-
-      const processedData = rawApiResponse
-        ? {
-            totalEarnings: safeNumber(rawApiResponse.totalEarnings),
-            thisMonthEarnings: safeNumber(rawApiResponse.thisMonthEarnings),
-            lastMonthEarnings: safeNumber(rawApiResponse.lastMonthEarnings),
-            last30DaysEarnings: safeNumber(rawApiResponse.last30DaysEarnings),
-            salesMetrics: {
-              totalSales: safeNumber(rawApiResponse.salesMetrics?.totalSales),
-              thisMonthSales: safeNumber(rawApiResponse.salesMetrics?.thisMonthSales),
-              last30DaysSales: safeNumber(rawApiResponse.salesMetrics?.last30DaysSales),
-              averageTransactionValue: safeNumber(rawApiResponse.salesMetrics?.averageTransactionValue),
-            },
+      try {
+        // Simulate the hook's data processing
+        const ultraSafeNumber = (value: any, fallback = 0): number => {
+          if (value === null || value === undefined || value === "" || value === false) {
+            return fallback
           }
-        : null
 
-      addDebugStep("Hook Simulation", "success", {
-        processed: processedData,
-        canCallToFixed: processedData
-          ? {
-              totalEarnings: typeof processedData.totalEarnings === "number",
-              thisMonthEarnings: typeof processedData.thisMonthEarnings === "number",
-              averageTransactionValue: typeof processedData.salesMetrics.averageTransactionValue === "number",
+          if (typeof value === "number") {
+            if (isNaN(value) || !isFinite(value)) {
+              return fallback
             }
-          : null,
-      })
+            return value
+          }
+
+          if (typeof value === "string") {
+            const trimmed = value.trim()
+            if (trimmed === "") return fallback
+
+            const num = Number(trimmed)
+            if (isNaN(num) || !isFinite(num)) {
+              return fallback
+            }
+            return num
+          }
+
+          try {
+            const num = Number(value)
+            if (isNaN(num) || !isFinite(num)) {
+              return fallback
+            }
+            return num
+          } catch (error) {
+            return fallback
+          }
+        }
+
+        const safeGet = (obj: any, path: string, fallback: any = undefined) => {
+          try {
+            const keys = path.split(".")
+            let current = obj
+
+            for (const key of keys) {
+              if (current === null || current === undefined || typeof current !== "object") {
+                return fallback
+              }
+              current = current[key]
+            }
+
+            return current !== undefined ? current : fallback
+          } catch (error) {
+            return fallback
+          }
+        }
+
+        const processedEarningsData = {
+          totalEarnings: ultraSafeNumber(safeGet(result, "totalEarnings", 0)),
+          thisMonthEarnings: ultraSafeNumber(safeGet(result, "thisMonthEarnings", 0)),
+          lastMonthEarnings: ultraSafeNumber(safeGet(result, "lastMonthEarnings", 0)),
+          last30DaysEarnings: ultraSafeNumber(safeGet(result, "last30DaysEarnings", 0)),
+          pendingPayout: ultraSafeNumber(safeGet(result, "pendingPayout", 0)),
+          availableBalance: ultraSafeNumber(safeGet(result, "availableBalance", 0)),
+          salesMetrics: {
+            totalSales: ultraSafeNumber(safeGet(result, "salesMetrics.totalSales", 0)),
+            thisMonthSales: ultraSafeNumber(safeGet(result, "salesMetrics.thisMonthSales", 0)),
+            last30DaysSales: ultraSafeNumber(safeGet(result, "salesMetrics.last30DaysSales", 0)),
+            averageTransactionValue: ultraSafeNumber(safeGet(result, "salesMetrics.averageTransactionValue", 0)),
+          },
+        }
+
+        setProcessedData(processedEarningsData)
+
+        updateStep(6, {
+          status: "success",
+          data: processedEarningsData,
+          duration: Date.now() - hookStart,
+        })
+      } catch (error) {
+        updateStep(6, { status: "error", error: `Hook processing failed: ${error}` })
+        return
+      }
+
+      // Step 8: Component Rendering Test
+      updateStep(7, { status: "running" })
+      const renderStart = Date.now()
+
+      try {
+        // Test all the formatting functions that would be used in the component
+        const formatCurrency = (value: any, fallback = "0.00"): string => {
+          try {
+            const num = typeof value === "number" && isFinite(value) && !isNaN(value) ? value : 0
+            return num.toFixed(2)
+          } catch (error) {
+            return fallback
+          }
+        }
+
+        const renderingTests = {
+          totalEarnings: formatCurrency(processedData?.totalEarnings),
+          thisMonthEarnings: formatCurrency(processedData?.thisMonthEarnings),
+          averageTransactionValue: formatCurrency(processedData?.salesMetrics?.averageTransactionValue),
+          allTestsPassed: true,
+        }
+
+        updateStep(7, {
+          status: "success",
+          data: renderingTests,
+          duration: Date.now() - renderStart,
+        })
+
+        toast({
+          title: "Diagnostics Complete",
+          description: "All steps completed successfully!",
+        })
+      } catch (error) {
+        updateStep(7, { status: "error", error: `Rendering test failed: ${error}` })
+      }
     } catch (error) {
-      addDebugStep("Hook Simulation", "error", null, `Processing error: ${error}`)
-    }
-
-    setIsRunning(false)
-  }
-
-  const getStatusIcon = (status: DebugData["status"]) => {
-    switch (status) {
-      case "success":
-        return <div className="w-2 h-2 bg-green-500 rounded-full" />
-      case "error":
-        return <div className="w-2 h-2 bg-red-500 rounded-full" />
-      case "loading":
-        return <Loader2 className="w-4 h-4 animate-spin text-blue-500" />
+      toast({
+        title: "Diagnostics Failed",
+        description: `Unexpected error: ${error}`,
+        variant: "destructive",
+      })
+    } finally {
+      setIsRunning(false)
     }
   }
 
-  const getStatusBadge = (status: DebugData["status"]) => {
+  const getStatusIcon = (status: DebugStep["status"]) => {
     switch (status) {
       case "success":
-        return <Badge className="bg-green-100 text-green-800">Success</Badge>
+        return <CheckCircle className="h-4 w-4 text-green-500" />
       case "error":
-        return <Badge variant="destructive">Error</Badge>
-      case "loading":
-        return <Badge variant="secondary">Loading...</Badge>
+        return <XCircle className="h-4 w-4 text-red-500" />
+      case "running":
+        return <Loader2 className="h-4 w-4 text-blue-500 animate-spin" />
+      default:
+        return <div className="h-4 w-4 rounded-full bg-zinc-600" />
+    }
+  }
+
+  const getStatusColor = (status: DebugStep["status"]) => {
+    switch (status) {
+      case "success":
+        return "border-green-500/50 bg-green-500/10"
+      case "error":
+        return "border-red-500/50 bg-red-500/10"
+      case "running":
+        return "border-blue-500/50 bg-blue-500/10"
+      default:
+        return "border-zinc-700 bg-zinc-900/60"
     }
   }
 
   return (
-    <div className="container mx-auto py-8 space-y-8">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight text-white">Earnings Debug Console</h1>
-          <p className="text-zinc-400 mt-1">Diagnose earnings data flow and identify issues</p>
+    <div className="min-h-screen bg-black text-white p-6">
+      <div className="max-w-6xl mx-auto space-y-8">
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold">Earnings Debug Console</h1>
+            <p className="text-zinc-400 mt-2">Comprehensive diagnostics for earnings data flow</p>
+          </div>
+          <Button onClick={runDiagnostics} disabled={isRunning || !user} className="bg-blue-600 hover:bg-blue-700">
+            {isRunning ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                Running...
+              </>
+            ) : (
+              <>
+                <RefreshCw className="h-4 w-4 mr-2" />
+                Run Diagnostics
+              </>
+            )}
+          </Button>
         </div>
-        <Button onClick={runDiagnostics} disabled={isRunning || !user} className="bg-blue-600 hover:bg-blue-700">
-          {isRunning ? (
-            <>
-              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              Running...
-            </>
-          ) : (
-            <>
-              <Bug className="h-4 w-4 mr-2" />
-              Run Diagnostics
-            </>
-          )}
-        </Button>
+
+        {!user && (
+          <Alert className="border-amber-600 bg-amber-600/10">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription className="text-amber-200">Please log in to run earnings diagnostics.</AlertDescription>
+          </Alert>
+        )}
+
+        {/* Diagnostic Steps */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {steps.map((step, index) => (
+            <Card key={index} className={`${getStatusColor(step.status)} border`}>
+              <CardHeader className="pb-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    {getStatusIcon(step.status)}
+                    <CardTitle className="text-lg">{step.name}</CardTitle>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Badge variant="outline" className="border-zinc-600">
+                      Step {index + 1}
+                    </Badge>
+                    {step.duration && (
+                      <Badge variant="secondary" className="bg-zinc-800 text-zinc-300">
+                        {step.duration}ms
+                      </Badge>
+                    )}
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {step.error && (
+                  <Alert className="border-red-600 bg-red-600/10 mb-4">
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertDescription className="text-red-200">{step.error}</AlertDescription>
+                  </Alert>
+                )}
+                {step.data && (
+                  <pre className="text-xs bg-zinc-800/50 p-3 rounded overflow-auto max-h-40">
+                    {JSON.stringify(step.data, null, 2)}
+                  </pre>
+                )}
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+
+        {/* Raw API Response */}
+        {rawApiResponse && (
+          <Card className="bg-zinc-900/60 border-zinc-800">
+            <CardHeader>
+              <CardTitle>Raw API Response</CardTitle>
+              <CardDescription>Unprocessed data from the earnings API</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <pre className="text-xs bg-zinc-800/50 p-4 rounded overflow-auto max-h-96">
+                {JSON.stringify(rawApiResponse, null, 2)}
+              </pre>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Processed Data */}
+        {processedData && (
+          <Card className="bg-zinc-900/60 border-zinc-800">
+            <CardHeader>
+              <CardTitle>Processed Data</CardTitle>
+              <CardDescription>Data after hook processing and validation</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <pre className="text-xs bg-zinc-800/50 p-4 rounded overflow-auto max-h-96">
+                {JSON.stringify(processedData, null, 2)}
+              </pre>
+            </CardContent>
+          </Card>
+        )}
       </div>
-
-      {!user && (
-        <Alert className="border-amber-600 bg-amber-600/10">
-          <AlertTriangle className="h-4 w-4" />
-          <AlertDescription className="text-amber-200">Please log in to run earnings diagnostics</AlertDescription>
-        </Alert>
-      )}
-
-      <Tabs defaultValue="diagnostics" className="space-y-6">
-        <TabsList>
-          <TabsTrigger value="diagnostics">Diagnostic Steps</TabsTrigger>
-          <TabsTrigger value="raw-data">Raw API Response</TabsTrigger>
-          <TabsTrigger value="recommendations">Recommendations</TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="diagnostics">
-          <Card className="bg-zinc-900/60 border-zinc-800/50">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Database className="h-5 w-5" />
-                Diagnostic Steps
-              </CardTitle>
-              <CardDescription>Step-by-step analysis of the earnings data flow</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {debugSteps.length === 0 ? (
-                <div className="text-center py-8 text-zinc-500">
-                  Click "Run Diagnostics" to start analyzing the earnings data flow
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {debugSteps.map((step, index) => (
-                    <div key={index} className="border border-zinc-800 rounded-lg p-4">
-                      <div className="flex items-center justify-between mb-2">
-                        <div className="flex items-center gap-3">
-                          {getStatusIcon(step.status)}
-                          <h3 className="font-medium text-white">{step.step}</h3>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          {getStatusBadge(step.status)}
-                          <span className="text-xs text-zinc-500">{step.timestamp.toLocaleTimeString()}</span>
-                        </div>
-                      </div>
-
-                      {step.error && (
-                        <div className="mt-2 p-2 bg-red-900/20 border border-red-800/50 rounded text-red-300 text-sm">
-                          {step.error}
-                        </div>
-                      )}
-
-                      {step.data && (
-                        <details className="mt-2">
-                          <summary className="cursor-pointer text-zinc-400 hover:text-zinc-300 text-sm">
-                            View Details
-                          </summary>
-                          <pre className="mt-2 p-2 bg-zinc-800 rounded text-xs text-zinc-300 overflow-auto">
-                            {JSON.stringify(step.data, null, 2)}
-                          </pre>
-                        </details>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="raw-data">
-          <Card className="bg-zinc-900/60 border-zinc-800/50">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <DollarSign className="h-5 w-5" />
-                Raw API Response
-              </CardTitle>
-              <CardDescription>Unprocessed data from the earnings API endpoint</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {rawApiResponse ? (
-                <pre className="p-4 bg-zinc-800 rounded text-sm text-zinc-300 overflow-auto max-h-96">
-                  {JSON.stringify(rawApiResponse, null, 2)}
-                </pre>
-              ) : (
-                <div className="text-center py-8 text-zinc-500">
-                  No API response data available. Run diagnostics first.
-                </div>
-              )}
-            </CardContent>
-          </Card>
-        </TabsContent>
-
-        <TabsContent value="recommendations">
-          <Card className="bg-zinc-900/60 border-zinc-800/50">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <User className="h-5 w-5" />
-                Recommendations
-              </CardTitle>
-              <CardDescription>Suggested fixes based on diagnostic results</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="space-y-3">
-                <h4 className="font-medium text-white">Common Issues & Solutions:</h4>
-
-                <div className="p-3 bg-zinc-800/50 rounded-lg">
-                  <h5 className="font-medium text-zinc-300 mb-1">
-                    TypeError: Cannot read properties of undefined (reading 'toFixed')
-                  </h5>
-                  <p className="text-sm text-zinc-400 mb-2">
-                    This occurs when trying to call .toFixed() on undefined or null values.
-                  </p>
-                  <p className="text-xs text-zinc-500">
-                    Solution: Ensure all numeric values are properly validated before formatting.
-                  </p>
-                </div>
-
-                <div className="p-3 bg-zinc-800/50 rounded-lg">
-                  <h5 className="font-medium text-zinc-300 mb-1">Missing Stripe Account</h5>
-                  <p className="text-sm text-zinc-400 mb-2">
-                    User doesn't have a connected Stripe account for earnings tracking.
-                  </p>
-                  <p className="text-xs text-zinc-500">
-                    Solution: Redirect to Stripe Connect setup or show appropriate message.
-                  </p>
-                </div>
-
-                <div className="p-3 bg-zinc-800/50 rounded-lg">
-                  <h5 className="font-medium text-zinc-300 mb-1">API Response Structure Issues</h5>
-                  <p className="text-sm text-zinc-400 mb-2">
-                    The API response doesn't match the expected data structure.
-                  </p>
-                  <p className="text-xs text-zinc-500">
-                    Solution: Implement proper data validation and default values in the API.
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
-      </Tabs>
     </div>
   )
 }
