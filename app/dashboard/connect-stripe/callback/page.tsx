@@ -82,16 +82,16 @@ export default function StripeCallbackPage() {
         return
       }
 
-      const idToken = await currentUser.getIdToken()
+      const idToken = await currentUser.getIdToken(true) // Force refresh token
 
       // Use the fixed API endpoint that works with Firebase auth
-      const response = await fetch(`/api/stripe/account-status-fixed?userId=${currentUser.uid}`, {
+      const response = await fetch(`/api/stripe/account-status-fixed?userId=${currentUser.uid}&t=${Date.now()}`, {
         method: "GET",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${idToken}`,
         },
-        cache: "no-store",
+        cache: "no-store", // Force fresh data
       })
 
       console.log(`📡 [Callback Page] Response status: ${response.status}`)
@@ -182,6 +182,15 @@ export default function StripeCallbackPage() {
 
         // Fetch account status with retry logic
         await fetchAccountStatus(1)
+
+        // Signal to other tabs/components that connection was updated
+        try {
+          localStorage.setItem("stripe_connection_updated", Date.now().toString())
+          // Remove it immediately so it can be set again later
+          setTimeout(() => localStorage.removeItem("stripe_connection_updated"), 100)
+        } catch (e) {
+          console.warn("Could not update localStorage:", e)
+        }
       } else {
         setIsProcessing(false)
       }
@@ -204,7 +213,16 @@ export default function StripeCallbackPage() {
 
   const handleDashboard = () => {
     console.log("✅ [Callback Page] User returning to dashboard")
-    router.push("/dashboard")
+
+    // Signal connection update one more time before navigating
+    try {
+      localStorage.setItem("stripe_connection_updated", Date.now().toString())
+      setTimeout(() => localStorage.removeItem("stripe_connection_updated"), 100)
+    } catch (e) {
+      console.warn("Could not update localStorage:", e)
+    }
+
+    router.push("/dashboard/earnings") // Go directly to earnings page
   }
 
   const handleActionRequired = () => {
@@ -511,7 +529,7 @@ export default function StripeCallbackPage() {
                       : "w-full bg-white text-black hover:bg-white/90 font-light tracking-wide transition-all duration-200 border-0"
                   }
                 >
-                  Continue to Dashboard
+                  Continue to Earnings
                 </Button>
               </div>
             </div>
