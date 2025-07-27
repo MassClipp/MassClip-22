@@ -27,7 +27,8 @@ interface StripeEarningsData {
   monthlyBreakdown: any[]
 }
 
-const defaultEarningsData: StripeEarningsData = {
+// Create a completely safe default earnings object
+const createDefaultEarningsData = (): StripeEarningsData => ({
   totalEarnings: 0,
   thisMonthEarnings: 0,
   lastMonthEarnings: 0,
@@ -49,37 +50,96 @@ const defaultEarningsData: StripeEarningsData = {
   recentTransactions: [],
   payoutHistory: [],
   monthlyBreakdown: [],
+})
+
+// Ultra-safe number conversion with extensive validation
+const ultraSafeNumber = (value: any, fallback = 0): number => {
+  // Handle all falsy values
+  if (value === null || value === undefined || value === "" || value === false) {
+    return fallback
+  }
+
+  // If it's already a number, validate it
+  if (typeof value === "number") {
+    if (isNaN(value) || !isFinite(value)) {
+      console.warn(`ultraSafeNumber: Invalid number detected:`, value, `Using fallback: ${fallback}`)
+      return fallback
+    }
+    return value
+  }
+
+  // If it's a string, try to convert
+  if (typeof value === "string") {
+    const trimmed = value.trim()
+    if (trimmed === "") return fallback
+
+    const num = Number(trimmed)
+    if (isNaN(num) || !isFinite(num)) {
+      console.warn(`ultraSafeNumber: String conversion failed:`, value, `Using fallback: ${fallback}`)
+      return fallback
+    }
+    return num
+  }
+
+  // Try generic Number conversion as last resort
+  try {
+    const num = Number(value)
+    if (isNaN(num) || !isFinite(num)) {
+      console.warn(`ultraSafeNumber: Generic conversion failed:`, value, `Using fallback: ${fallback}`)
+      return fallback
+    }
+    return num
+  } catch (error) {
+    console.error(`ultraSafeNumber: Conversion error for value:`, value, error)
+    return fallback
+  }
 }
 
-// Helper function to safely extract numeric values
-const safeNumber = (value: any): number => {
-  if (value === null || value === undefined) return 0
-  const num = Number(value)
-  return isNaN(num) ? 0 : num
-}
-
-// Helper function to safely extract boolean values
-const safeBoolean = (value: any): boolean => {
+// Ultra-safe boolean conversion
+const ultraSafeBoolean = (value: any): boolean => {
+  if (value === null || value === undefined) return false
   return Boolean(value)
 }
 
-// Helper function to safely extract array values
-const safeArray = (value: any): any[] => {
-  return Array.isArray(value) ? value : []
+// Ultra-safe array conversion
+const ultraSafeArray = (value: any): any[] => {
+  if (Array.isArray(value)) return value
+  return []
+}
+
+// Ultra-safe object property access
+const safeGet = (obj: any, path: string, fallback: any = undefined) => {
+  try {
+    const keys = path.split(".")
+    let current = obj
+
+    for (const key of keys) {
+      if (current === null || current === undefined || typeof current !== "object") {
+        return fallback
+      }
+      current = current[key]
+    }
+
+    return current !== undefined ? current : fallback
+  } catch (error) {
+    console.warn(`safeGet: Error accessing path "${path}":`, error)
+    return fallback
+  }
 }
 
 export function useStripeEarnings() {
   const { user } = useAuth()
-  const [data, setData] = useState<StripeEarningsData>(defaultEarningsData)
+  const [data, setData] = useState<StripeEarningsData>(createDefaultEarningsData())
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
 
   const fetchEarnings = useCallback(async () => {
     if (!user) {
+      console.log("🔄 No user, setting defaults")
       setLoading(false)
       setError("User not authenticated")
-      setData(defaultEarningsData)
+      setData(createDefaultEarningsData())
       return
     }
 
@@ -87,7 +147,7 @@ export function useStripeEarnings() {
       setLoading(true)
       setError(null)
 
-      console.log("🔄 Fetching earnings data...")
+      console.log("🔄 Fetching earnings data for user:", user.uid)
 
       const token = await user.getIdToken()
       const response = await fetch("/api/dashboard/earnings", {
@@ -98,52 +158,68 @@ export function useStripeEarnings() {
       })
 
       if (!response.ok) {
-        throw new Error(`Failed to fetch earnings: ${response.status} ${response.statusText}`)
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
       }
 
       const result = await response.json()
-      console.log("📊 Raw API response:", result)
+      console.log("📊 Raw API response received:", {
+        hasData: !!result,
+        keys: result ? Object.keys(result) : [],
+        totalEarnings: result?.totalEarnings,
+        salesMetrics: result?.salesMetrics,
+      })
 
-      // Safely extract all values with proper fallbacks
+      // Ultra-safe data extraction with extensive validation
       const safeData: StripeEarningsData = {
-        totalEarnings: safeNumber(result.totalEarnings),
-        thisMonthEarnings: safeNumber(result.thisMonthEarnings),
-        lastMonthEarnings: safeNumber(result.lastMonthEarnings),
-        last30DaysEarnings: safeNumber(result.last30DaysEarnings),
-        pendingPayout: safeNumber(result.pendingPayout),
-        availableBalance: safeNumber(result.availableBalance),
+        totalEarnings: ultraSafeNumber(safeGet(result, "totalEarnings", 0)),
+        thisMonthEarnings: ultraSafeNumber(safeGet(result, "thisMonthEarnings", 0)),
+        lastMonthEarnings: ultraSafeNumber(safeGet(result, "lastMonthEarnings", 0)),
+        last30DaysEarnings: ultraSafeNumber(safeGet(result, "last30DaysEarnings", 0)),
+        pendingPayout: ultraSafeNumber(safeGet(result, "pendingPayout", 0)),
+        availableBalance: ultraSafeNumber(safeGet(result, "availableBalance", 0)),
         salesMetrics: {
-          totalSales: safeNumber(result.salesMetrics?.totalSales),
-          thisMonthSales: safeNumber(result.salesMetrics?.thisMonthSales),
-          last30DaysSales: safeNumber(result.salesMetrics?.last30DaysSales),
-          averageTransactionValue: safeNumber(result.salesMetrics?.averageTransactionValue),
+          totalSales: ultraSafeNumber(safeGet(result, "salesMetrics.totalSales", 0)),
+          thisMonthSales: ultraSafeNumber(safeGet(result, "salesMetrics.thisMonthSales", 0)),
+          last30DaysSales: ultraSafeNumber(safeGet(result, "salesMetrics.last30DaysSales", 0)),
+          averageTransactionValue: ultraSafeNumber(safeGet(result, "salesMetrics.averageTransactionValue", 0)),
         },
         accountStatus: {
-          chargesEnabled: safeBoolean(result.accountStatus?.chargesEnabled),
-          payoutsEnabled: safeBoolean(result.accountStatus?.payoutsEnabled),
-          detailsSubmitted: safeBoolean(result.accountStatus?.detailsSubmitted),
-          requirementsCount: safeNumber(result.accountStatus?.requirementsCount),
+          chargesEnabled: ultraSafeBoolean(safeGet(result, "accountStatus.chargesEnabled", false)),
+          payoutsEnabled: ultraSafeBoolean(safeGet(result, "accountStatus.payoutsEnabled", false)),
+          detailsSubmitted: ultraSafeBoolean(safeGet(result, "accountStatus.detailsSubmitted", false)),
+          requirementsCount: ultraSafeNumber(safeGet(result, "accountStatus.requirementsCount", 0)),
         },
-        recentTransactions: safeArray(result.recentTransactions),
-        payoutHistory: safeArray(result.payoutHistory),
-        monthlyBreakdown: safeArray(result.monthlyBreakdown),
+        recentTransactions: ultraSafeArray(safeGet(result, "recentTransactions", [])),
+        payoutHistory: ultraSafeArray(safeGet(result, "payoutHistory", [])),
+        monthlyBreakdown: ultraSafeArray(safeGet(result, "monthlyBreakdown", [])),
       }
 
-      console.log("✅ Processed earnings data:", safeData)
+      console.log("✅ Processed earnings data:", {
+        totalEarnings: safeData.totalEarnings,
+        totalSales: safeData.salesMetrics.totalSales,
+        allFieldsValid: {
+          totalEarnings: typeof safeData.totalEarnings === "number",
+          thisMonthEarnings: typeof safeData.thisMonthEarnings === "number",
+          salesMetrics: typeof safeData.salesMetrics === "object",
+          averageTransactionValue: typeof safeData.salesMetrics.averageTransactionValue === "number",
+        },
+      })
 
       setData(safeData)
       setLastUpdated(new Date())
     } catch (err) {
       console.error("❌ Error fetching earnings:", err)
       setError(err instanceof Error ? err.message : "Failed to fetch earnings data")
-      // Keep default data on error to prevent undefined access
-      setData(defaultEarningsData)
+
+      // Always ensure we have valid data, even on error
+      setData(createDefaultEarningsData())
     } finally {
       setLoading(false)
     }
   }, [user])
 
   const refresh = useCallback(async () => {
+    console.log("🔄 Manual refresh triggered")
     await fetchEarnings()
   }, [fetchEarnings])
 
@@ -153,6 +229,7 @@ export function useStripeEarnings() {
     }
 
     try {
+      console.log("🔄 Syncing data...")
       const token = await user.getIdToken()
       const response = await fetch("/api/dashboard/sync-stats", {
         method: "POST",
@@ -176,16 +253,21 @@ export function useStripeEarnings() {
 
   useEffect(() => {
     if (user) {
+      console.log("🔄 User changed, fetching earnings")
       fetchEarnings()
     } else {
+      console.log("🔄 No user, resetting to defaults")
       setLoading(false)
-      setData(defaultEarningsData)
+      setData(createDefaultEarningsData())
       setError(null)
     }
   }, [user, fetchEarnings])
 
+  // Final safety check - ensure data is never null/undefined
+  const safeData = data || createDefaultEarningsData()
+
   return {
-    data, // Always returns safe data, never null/undefined
+    data: safeData, // Guaranteed to be a valid StripeEarningsData object
     loading,
     error,
     lastUpdated,

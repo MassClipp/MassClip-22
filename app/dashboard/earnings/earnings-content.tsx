@@ -29,16 +29,50 @@ import { useStripeEarnings } from "@/hooks/use-stripe-earnings"
 import { useToast } from "@/components/ui/use-toast"
 import { useRouter } from "next/navigation"
 
-// Helper function to safely convert to number
-const safeNumber = (value: any): number => {
+// Helper function to safely convert to number with extensive validation
+const safeNumber = (value: any, fallback = 0): number => {
+  // Handle null, undefined, empty string, etc.
+  if (value === null || value === undefined || value === "") {
+    return fallback
+  }
+
+  // If it's already a number, check if it's valid
+  if (typeof value === "number") {
+    return isNaN(value) || !isFinite(value) ? fallback : value
+  }
+
+  // Try to convert to number
   const num = Number(value)
-  return isNaN(num) ? 0 : num
+  return isNaN(num) || !isFinite(num) ? fallback : num
 }
 
-// Helper function to safely format currency
-const formatCurrency = (value: any): string => {
-  const num = safeNumber(value)
-  return num.toFixed(2)
+// Helper function to safely format currency with extensive error handling
+const formatCurrency = (value: any, fallback = "0.00"): string => {
+  try {
+    const num = safeNumber(value, 0)
+
+    // Double-check that we have a valid number before calling toFixed
+    if (typeof num !== "number" || isNaN(num) || !isFinite(num)) {
+      console.warn(`formatCurrency: Invalid number value:`, value, `Using fallback: ${fallback}`)
+      return fallback
+    }
+
+    return num.toFixed(2)
+  } catch (error) {
+    console.error(`formatCurrency error for value:`, value, error)
+    return fallback
+  }
+}
+
+// Helper function to safely format percentage
+const formatPercentage = (value: any, fallback = "0.0"): string => {
+  try {
+    const num = safeNumber(value, 0)
+    return num.toFixed(1)
+  } catch (error) {
+    console.error(`formatPercentage error for value:`, value, error)
+    return fallback
+  }
 }
 
 export default function EarningsPageContent() {
@@ -103,7 +137,6 @@ export default function EarningsPageContent() {
     try {
       setUnlinking(true)
 
-      // Get the Firebase auth token
       const token = await user.getIdToken()
 
       const response = await fetch("/api/stripe/disconnect", {
@@ -126,7 +159,6 @@ export default function EarningsPageContent() {
         description: result.message || "Your Stripe account has been successfully disconnected.",
       })
 
-      // Refresh the page or redirect to setup
       router.refresh()
     } catch (error: any) {
       console.error("Unlink error:", error)
@@ -154,24 +186,26 @@ export default function EarningsPageContent() {
     )
   }
 
-  // Safe access to all data properties
-  const totalEarnings = safeNumber(data?.totalEarnings)
-  const thisMonthEarnings = safeNumber(data?.thisMonthEarnings)
-  const lastMonthEarnings = safeNumber(data?.lastMonthEarnings)
-  const last30DaysEarnings = safeNumber(data?.last30DaysEarnings)
-  const pendingPayout = safeNumber(data?.pendingPayout)
-  const availableBalance = safeNumber(data?.availableBalance)
+  // Safe access to all data properties with extensive validation
+  const totalEarnings = safeNumber(data?.totalEarnings, 0)
+  const thisMonthEarnings = safeNumber(data?.thisMonthEarnings, 0)
+  const lastMonthEarnings = safeNumber(data?.lastMonthEarnings, 0)
+  const last30DaysEarnings = safeNumber(data?.last30DaysEarnings, 0)
+  const pendingPayout = safeNumber(data?.pendingPayout, 0)
+  const availableBalance = safeNumber(data?.availableBalance, 0)
 
-  const totalSales = safeNumber(data?.salesMetrics?.totalSales)
-  const thisMonthSales = safeNumber(data?.salesMetrics?.thisMonthSales)
-  const last30DaysSales = safeNumber(data?.salesMetrics?.last30DaysSales)
-  const averageTransactionValue = safeNumber(data?.salesMetrics?.averageTransactionValue)
+  const totalSales = safeNumber(data?.salesMetrics?.totalSales, 0)
+  const thisMonthSales = safeNumber(data?.salesMetrics?.thisMonthSales, 0)
+  const last30DaysSales = safeNumber(data?.salesMetrics?.last30DaysSales, 0)
+  const averageTransactionValue = safeNumber(data?.salesMetrics?.averageTransactionValue, 0)
 
   const monthlyGrowth = thisMonthEarnings > lastMonthEarnings
   const growthPercentage =
-    lastMonthEarnings > 0 ? (((thisMonthEarnings - lastMonthEarnings) / lastMonthEarnings) * 100).toFixed(1) : "0"
+    lastMonthEarnings > 0
+      ? formatPercentage(((thisMonthEarnings - lastMonthEarnings) / lastMonthEarnings) * 100)
+      : "0.0"
 
-  // Generate chart data based on actual earnings
+  // Generate chart data based on actual earnings with safe calculations
   const chartData = [
     { month: "Jul", earnings: Math.max(totalEarnings * 0.1, 0) },
     { month: "Aug", earnings: Math.max(totalEarnings * 0.3, 0) },
@@ -181,7 +215,7 @@ export default function EarningsPageContent() {
     { month: "Dec", earnings: totalEarnings },
   ]
 
-  const maxEarnings = Math.max(...chartData.map((d) => d.earnings))
+  const maxEarnings = Math.max(...chartData.map((d) => safeNumber(d.earnings, 0)), 1) // Ensure at least 1 to avoid division by zero
 
   return (
     <div className="space-y-8">
@@ -199,6 +233,15 @@ export default function EarningsPageContent() {
         </div>
 
         <div className="flex gap-3">
+          <Button
+            variant="outline"
+            onClick={() => router.push("/debug-earnings")}
+            className="border-zinc-700 hover:bg-zinc-800 bg-transparent"
+          >
+            <AlertCircle className="h-4 w-4 mr-2" />
+            Debug
+          </Button>
+
           <Button
             variant="outline"
             onClick={handleSync}
@@ -243,7 +286,16 @@ export default function EarningsPageContent() {
       {error && (
         <Alert className="border-amber-600 bg-amber-600/10">
           <AlertCircle className="h-4 w-4" />
-          <AlertDescription className="text-amber-200">{error}</AlertDescription>
+          <AlertDescription className="text-amber-200">
+            {error}
+            <Button
+              variant="link"
+              className="p-0 h-auto ml-2 text-amber-200 underline"
+              onClick={() => router.push("/debug-earnings")}
+            >
+              Debug this issue
+            </Button>
+          </AlertDescription>
         </Alert>
       )}
 
@@ -361,18 +413,22 @@ export default function EarningsPageContent() {
           <CardContent>
             <div className="space-y-4">
               <div className="flex items-end justify-between h-48 px-4 py-2 bg-zinc-800/30 rounded-lg">
-                {chartData.map((item, index) => (
-                  <div key={item.month} className="flex flex-col items-center gap-2">
-                    <div
-                      className="w-8 bg-gradient-to-t from-green-600 to-green-400 rounded-t-sm transition-all duration-300 hover:from-green-500 hover:to-green-300"
-                      style={{
-                        height: `${Math.max(maxEarnings > 0 ? (item.earnings / maxEarnings) * 160 : 8, 8)}px`,
-                      }}
-                    />
-                    <span className="text-xs text-zinc-400 font-medium">{item.month}</span>
-                    <span className="text-xs text-zinc-500">${formatCurrency(item.earnings).split(".")[0]}</span>
-                  </div>
-                ))}
+                {chartData.map((item, index) => {
+                  const itemEarnings = safeNumber(item.earnings, 0)
+                  const heightPercentage = maxEarnings > 0 ? (itemEarnings / maxEarnings) * 160 : 8
+                  const safeHeight = Math.max(heightPercentage, 8)
+
+                  return (
+                    <div key={item.month} className="flex flex-col items-center gap-2">
+                      <div
+                        className="w-8 bg-gradient-to-t from-green-600 to-green-400 rounded-t-sm transition-all duration-300 hover:from-green-500 hover:to-green-300"
+                        style={{ height: `${safeHeight}px` }}
+                      />
+                      <span className="text-xs text-zinc-400 font-medium">{item.month}</span>
+                      <span className="text-xs text-zinc-500">${formatCurrency(itemEarnings).split(".")[0]}</span>
+                    </div>
+                  )
+                })}
               </div>
               <div className="flex items-center justify-between text-sm">
                 <span className="text-zinc-400">6-month earnings trend</span>
