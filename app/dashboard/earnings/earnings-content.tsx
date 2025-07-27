@@ -29,6 +29,18 @@ import { useStripeEarnings } from "@/hooks/use-stripe-earnings"
 import { useToast } from "@/components/ui/use-toast"
 import { useRouter } from "next/navigation"
 
+// Helper function to safely convert to number
+const safeNumber = (value: any): number => {
+  const num = Number(value)
+  return isNaN(num) ? 0 : num
+}
+
+// Helper function to safely format currency
+const formatCurrency = (value: any): string => {
+  const num = safeNumber(value)
+  return num.toFixed(2)
+}
+
 export default function EarningsPageContent() {
   const { user } = useAuth()
   const { toast } = useToast()
@@ -142,52 +154,18 @@ export default function EarningsPageContent() {
     )
   }
 
-  // Provide safe default values with proper null checks
-  const stats = data || {
-    totalEarnings: 0,
-    thisMonthEarnings: 0,
-    lastMonthEarnings: 0,
-    last30DaysEarnings: 0,
-    pendingPayout: 0,
-    availableBalance: 0,
-    salesMetrics: {
-      totalSales: 0,
-      thisMonthSales: 0,
-      last30DaysSales: 0,
-      averageTransactionValue: 0,
-    },
-    accountStatus: {
-      chargesEnabled: false,
-      payoutsEnabled: false,
-      detailsSubmitted: false,
-      requirementsCount: 0,
-    },
-    recentTransactions: [],
-    payoutHistory: [],
-    monthlyBreakdown: [],
-  }
+  // Safe access to all data properties
+  const totalEarnings = safeNumber(data?.totalEarnings)
+  const thisMonthEarnings = safeNumber(data?.thisMonthEarnings)
+  const lastMonthEarnings = safeNumber(data?.lastMonthEarnings)
+  const last30DaysEarnings = safeNumber(data?.last30DaysEarnings)
+  const pendingPayout = safeNumber(data?.pendingPayout)
+  const availableBalance = safeNumber(data?.availableBalance)
 
-  // Safe access to nested properties with fallbacks
-  const totalEarnings = stats.totalEarnings || 0
-  const thisMonthEarnings = stats.thisMonthEarnings || 0
-  const lastMonthEarnings = stats.lastMonthEarnings || 0
-  const last30DaysEarnings = stats.last30DaysEarnings || 0
-  const pendingPayout = stats.pendingPayout || 0
-  const availableBalance = stats.availableBalance || 0
-
-  const salesMetrics = stats.salesMetrics || {
-    totalSales: 0,
-    thisMonthSales: 0,
-    last30DaysSales: 0,
-    averageTransactionValue: 0,
-  }
-
-  const accountStatus = stats.accountStatus || {
-    chargesEnabled: false,
-    payoutsEnabled: false,
-    detailsSubmitted: false,
-    requirementsCount: 0,
-  }
+  const totalSales = safeNumber(data?.salesMetrics?.totalSales)
+  const thisMonthSales = safeNumber(data?.salesMetrics?.thisMonthSales)
+  const last30DaysSales = safeNumber(data?.salesMetrics?.last30DaysSales)
+  const averageTransactionValue = safeNumber(data?.salesMetrics?.averageTransactionValue)
 
   const monthlyGrowth = thisMonthEarnings > lastMonthEarnings
   const growthPercentage =
@@ -202,6 +180,8 @@ export default function EarningsPageContent() {
     { month: "Nov", earnings: Math.max(totalEarnings * 0.9, 0) },
     { month: "Dec", earnings: totalEarnings },
   ]
+
+  const maxEarnings = Math.max(...chartData.map((d) => d.earnings))
 
   return (
     <div className="space-y-8">
@@ -279,10 +259,10 @@ export default function EarningsPageContent() {
                     All Time
                   </Badge>
                 </div>
-                <p className="text-3xl font-bold text-white">${totalEarnings.toFixed(2)}</p>
+                <p className="text-3xl font-bold text-white">${formatCurrency(totalEarnings)}</p>
                 <p className="text-xs text-zinc-400 flex items-center gap-1">
                   <BarChart3 className="h-3 w-3" />
-                  {salesMetrics.totalSales} total sales
+                  {totalSales} total sales
                 </p>
               </div>
               <div className="p-3 bg-zinc-800/50 rounded-xl">
@@ -309,10 +289,10 @@ export default function EarningsPageContent() {
                     </div>
                   )}
                 </div>
-                <p className="text-3xl font-bold text-white">${thisMonthEarnings.toFixed(2)}</p>
+                <p className="text-3xl font-bold text-white">${formatCurrency(thisMonthEarnings)}</p>
                 <p className="text-xs text-zinc-400 flex items-center gap-1">
                   <Activity className="h-3 w-3" />
-                  {salesMetrics.thisMonthSales} sales
+                  {thisMonthSales} sales
                 </p>
               </div>
               <div className="p-3 bg-zinc-800/50 rounded-xl">
@@ -332,7 +312,7 @@ export default function EarningsPageContent() {
                     Ready
                   </Badge>
                 </div>
-                <p className="text-3xl font-bold text-white">${availableBalance.toFixed(2)}</p>
+                <p className="text-3xl font-bold text-white">${formatCurrency(availableBalance)}</p>
                 <p className="text-xs text-zinc-400">Ready for payout</p>
               </div>
               <div className="p-3 bg-zinc-800/50 rounded-xl">
@@ -352,7 +332,7 @@ export default function EarningsPageContent() {
                     Processing
                   </Badge>
                 </div>
-                <p className="text-3xl font-bold text-white">${pendingPayout.toFixed(2)}</p>
+                <p className="text-3xl font-bold text-white">${formatCurrency(pendingPayout)}</p>
                 <p className="text-xs text-zinc-400">In processing</p>
               </div>
               <div className="p-3 bg-zinc-800/50 rounded-xl">
@@ -386,11 +366,11 @@ export default function EarningsPageContent() {
                     <div
                       className="w-8 bg-gradient-to-t from-green-600 to-green-400 rounded-t-sm transition-all duration-300 hover:from-green-500 hover:to-green-300"
                       style={{
-                        height: `${Math.max((item.earnings / Math.max(...chartData.map((d) => d.earnings))) * 160, 8)}px`,
+                        height: `${Math.max(maxEarnings > 0 ? (item.earnings / maxEarnings) * 160 : 8, 8)}px`,
                       }}
                     />
                     <span className="text-xs text-zinc-400 font-medium">{item.month}</span>
-                    <span className="text-xs text-zinc-500">${item.earnings.toFixed(0)}</span>
+                    <span className="text-xs text-zinc-500">${formatCurrency(item.earnings).split(".")[0]}</span>
                   </div>
                 ))}
               </div>
@@ -419,10 +399,10 @@ export default function EarningsPageContent() {
             <div className="space-y-4">
               <div className="flex justify-between items-center">
                 <span className="text-sm text-zinc-300 font-medium">Average Transaction Value</span>
-                <span className="text-lg font-bold text-white">${salesMetrics.averageTransactionValue.toFixed(2)}</span>
+                <span className="text-lg font-bold text-white">${formatCurrency(averageTransactionValue)}</span>
               </div>
               <div className="space-y-2">
-                <Progress value={Math.min(salesMetrics.averageTransactionValue * 4, 100)} className="h-2 bg-zinc-800" />
+                <Progress value={Math.min(averageTransactionValue * 4, 100)} className="h-2 bg-zinc-800" />
                 <p className="text-xs text-zinc-500">Target: $25.00 per transaction</p>
               </div>
             </div>
@@ -430,21 +410,21 @@ export default function EarningsPageContent() {
             <div className="space-y-4">
               <div className="flex justify-between items-center">
                 <span className="text-sm text-zinc-300 font-medium">Last 30 Days Sales</span>
-                <span className="text-lg font-bold text-white">{salesMetrics.last30DaysSales}</span>
+                <span className="text-lg font-bold text-white">{last30DaysSales}</span>
               </div>
               <div className="space-y-2">
-                <Progress value={Math.min(salesMetrics.last30DaysSales * 5, 100)} className="h-2 bg-zinc-800" />
+                <Progress value={Math.min(last30DaysSales * 5, 100)} className="h-2 bg-zinc-800" />
                 <p className="text-xs text-zinc-500">Target: 20 sales per month</p>
               </div>
             </div>
 
             <div className="grid grid-cols-2 gap-4 pt-4">
               <div className="text-center p-4 bg-zinc-800/50 rounded-xl">
-                <p className="text-2xl font-bold text-white">${last30DaysEarnings.toFixed(2)}</p>
+                <p className="text-2xl font-bold text-white">${formatCurrency(last30DaysEarnings)}</p>
                 <p className="text-xs text-zinc-400 mt-1">Last 30 Days</p>
               </div>
               <div className="text-center p-4 bg-zinc-800/50 rounded-xl">
-                <p className="text-2xl font-bold text-white">{salesMetrics.totalSales}</p>
+                <p className="text-2xl font-bold text-white">{totalSales}</p>
                 <p className="text-xs text-zinc-400 mt-1">Total Sales</p>
               </div>
             </div>
