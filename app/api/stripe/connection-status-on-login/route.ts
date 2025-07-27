@@ -1,127 +1,105 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { requireAuth } from "@/lib/auth-utils"
-import { db } from "@/lib/firebase-server"
+import { adminDb, getAuthenticatedUser } from "@/lib/firebase-admin"
 import { stripe } from "@/lib/stripe"
 
 export async function GET(request: NextRequest) {
-  try {
-    // Require authentication
-    const decodedToken = await requireAuth(request)
-    const userId = decodedToken.uid
+  console.log("🔄 [Login Status Check] Checking Stripe connection status on login")
 
-    console.log("🔍 [Login Status Check] Checking Stripe status for user:", userId)
+  try {
+    // Get authenticated user
+    const headers = Object.fromEntries(request.headers.entries())
+    const user = await getAuthenticatedUser(headers)
+    console.log(`✅ [Login Status Check] Authenticated user: ${user.uid}`)
 
     // Get current user data
-    const userDoc = await db.collection("users").doc(userId).get()
-    if (!userDoc.exists) {
-      return NextResponse.json({
-        connected: false,
-        error: "User not found",
-        needsConnection: true,
-      })
-    }
-
+    const userDoc = await adminDb.collection("users").doc(user.uid).get()
     const userData = userDoc.data()
-    const stripeAccountId = userData?.stripeAccountId
-    const lastUpdate = userData?.lastStripeUpdate
-    const cachedStatus = userData?.stripeAccountStatus
 
-    if (!stripeAccountId) {
-      console.log("❌ [Login Status Check] No Stripe account ID found")
+    if (!userData?.stripeAccountId) {
+      console.log("ℹ️ [Login Status Check] No Stripe account connected")
       return NextResponse.json({
         connected: false,
-        needsConnection: true,
+        status: "not_connected",
         message: "No Stripe account connected",
       })
     }
 
-    // Check if we have recent cached status (less than 5 minutes old)
-    const now = Date.now()
-    const cacheAge = lastUpdate ? now - lastUpdate : Number.POSITIVE_INFINITY
-    const cacheValid = cacheAge < 5 * 60 * 1000 // 5 minutes
+    const stripeAccountId = userData.stripeAccountId
+    const lastUpdate = userData.lastStripeUpdate?.toDate()
+    const cacheAge = lastUpdate ? Date.now() - lastUpdate.getTime() : Number.POSITIVE_INFINITY
+    const cacheMaxAge = 5 * 60 * 1000 // 5 minutes
 
-    if (cacheValid && cachedStatus) {
-      console.log("✅ [Login Status Check] Using cached status (age:", Math.round(cacheAge / 1000), "seconds)")
+    console.log(`🔍 [Login Status Check] Found Stripe account: ${stripeAccountId}`)
+    console.log(`⏰ [Login Status Check] Cache age: ${Math.round(cacheAge / 1000)}s (max: ${cacheMaxAge / 1000}s)`)
 
-      const connectionStatus = cachedStatus.charges_enabled && cachedStatus.payouts_enabled ? "verified" : "pending"
-      const hasRequirements =
-        (cachedStatus.requirements?.currently_due?.length || 0) > 0 ||
-        (cachedStatus.requirements?.past_due?.length || 0) > 0
-
+    // If cache is fresh, return cached data
+    if (cacheAge < cacheMaxAge && userData.stripeAccountStatus) {
+      console.log("✅ [Login Status Check] Using cached status")
       return NextResponse.json({
         connected: true,
-        accountId: stripeAccountId,
-        status: connectionStatus,
-        isFullyEnabled: cachedStatus.charges_enabled && cachedStatus.payouts_enabled,
-        actionsRequired: hasRequirements,
-        charges_enabled: cachedStatus.charges_enabled,
-        payouts_enabled: cachedStatus.payouts_enabled,
-        details_submitted: cachedStatus.details_submitted,
-        requirements: cachedStatus.requirements,
-        disabled_reason: cachedStatus.disabled_reason,
-        country: cachedStatus.country,
-        business_type: cachedStatus.business_type,
-        lastChecked: lastUpdate,
-        fromCache: true,
+        status: userData.stripeConnectionStatus || "unknown",
+        account_id: stripeAccountId,
+        account_status: userData.stripeAccountStatus,
+        last_updated: lastUpdate?.toISOString(),
+        cached: true,
       })
     }
 
-    // Cache is stale or missing, fetch fresh status
-    console.log("🔄 [Login Status Check] Cache stale, fetching fresh status from Stripe")
+    // Cache is stale, fetch fresh data from Stripe
+    console.log("🔄 [Login Status Check] Cache stale, fetching fresh data from Stripe...")
 
     let stripeAccount
     try {
       stripeAccount = await stripe.accounts.retrieve(stripeAccountId)
+      console.log("✅ [Login Status Check] Fresh Stripe data retrieved")
     } catch (stripeError: any) {
-      console.error("❌ [Login Status Check] Stripe API error:", stripeError)
+      console.error("❌ [Login Status Check] Failed to retrieve Stripe account:", stripeError)
 
-      // If account doesn't exist, clear it from user profile
-      if (stripeError.code === "resource_missing") {
-        await db.collection("users").doc(userId).update({
+      // Handle deleted/invalid accounts
+      if (stripeError.code === "account_invalid" || stripeError.code === "resource_missing") {
+        console.log("🗑️ [Login Status Check] Stripe account no longer exists, clearing user data")
+
+        await adminDb.collection("users").doc(user.uid).update({
           stripeAccountId: null,
           stripeConnectionStatus: "disconnected",
           stripeAccountStatus: null,
-          lastStripeUpdate: now,
+          lastStripeUpdate: new Date(),
         })
 
         return NextResponse.json({
           connected: false,
-          needsConnection: true,
-          error: "Stripe account no longer exists",
-          accountDeleted: true,
+          status: "disconnected",
+          message: "Stripe account no longer exists",
+          action_required: "reconnect",
         })
       }
 
-      // For other errors, return cached status if available
-      if (cachedStatus) {
-        console.log("⚠️ [Login Status Check] Stripe error, falling back to cached status")
-        const connectionStatus = cachedStatus.charges_enabled && cachedStatus.payouts_enabled ? "verified" : "pending"
-
+      // For other errors, return cached data if available
+      if (userData.stripeAccountStatus) {
+        console.log("⚠️ [Login Status Check] Stripe API error, returning cached data")
         return NextResponse.json({
           connected: true,
-          accountId: stripeAccountId,
-          status: connectionStatus,
-          isFullyEnabled: cachedStatus.charges_enabled && cachedStatus.payouts_enabled,
-          charges_enabled: cachedStatus.charges_enabled,
-          payouts_enabled: cachedStatus.payouts_enabled,
-          details_submitted: cachedStatus.details_submitted,
-          lastChecked: lastUpdate,
-          fromCache: true,
-          warning: "Could not fetch fresh status from Stripe",
+          status: userData.stripeConnectionStatus || "unknown",
+          account_id: stripeAccountId,
+          account_status: userData.stripeAccountStatus,
+          last_updated: lastUpdate?.toISOString(),
+          cached: true,
+          warning: "Could not verify current status with Stripe",
         })
       }
 
       return NextResponse.json(
         {
-          connected: false,
-          error: "Failed to check Stripe account status",
-          stripeError: stripeError.message,
+          error: "Failed to verify Stripe connection",
+          code: "STRIPE_API_ERROR",
+          details: stripeError.message,
         },
         { status: 500 },
       )
     }
 
-    // Update cache with fresh status
+    // Update cache with fresh data
+    const now = new Date()
     const connectionStatus = stripeAccount.charges_enabled && stripeAccount.payouts_enabled ? "verified" : "pending"
 
     const updateData = {
@@ -144,63 +122,33 @@ export async function GET(request: NextRequest) {
       },
     }
 
-    // Update cache in background (don't wait for it)
-    db.collection("users")
-      .doc(userId)
+    // Update cache in background (don't await to avoid slowing down login)
+    adminDb
+      .collection("users")
+      .doc(user.uid)
       .update(updateData)
       .catch((error) => {
         console.error("❌ [Login Status Check] Failed to update cache:", error)
       })
 
-    console.log("✅ [Login Status Check] Fresh status retrieved and cached")
-
-    const hasRequirements =
-      (stripeAccount.requirements?.currently_due?.length || 0) > 0 ||
-      (stripeAccount.requirements?.past_due?.length || 0) > 0
+    console.log("✅ [Login Status Check] Fresh status retrieved and cached:", connectionStatus)
 
     return NextResponse.json({
       connected: true,
-      accountId: stripeAccountId,
       status: connectionStatus,
-      isFullyEnabled: stripeAccount.charges_enabled && stripeAccount.payouts_enabled,
-      actionsRequired: hasRequirements,
-      charges_enabled: stripeAccount.charges_enabled,
-      payouts_enabled: stripeAccount.payouts_enabled,
-      details_submitted: stripeAccount.details_submitted,
-      requirements: {
-        currently_due:
-          stripeAccount.requirements?.currently_due?.map((field) => ({
-            field,
-            description: `Complete ${field.replace(/_/g, " ")}`,
-          })) || [],
-        past_due:
-          stripeAccount.requirements?.past_due?.map((field) => ({
-            field,
-            description: `Complete ${field.replace(/_/g, " ")} (Past Due)`,
-          })) || [],
-        eventually_due:
-          stripeAccount.requirements?.eventually_due?.map((field) => ({
-            field,
-            description: `Complete ${field.replace(/_/g, " ")} (Eventually Due)`,
-          })) || [],
-        pending_verification:
-          stripeAccount.requirements?.pending_verification?.map((field) => ({
-            field,
-            description: `Verification pending for ${field.replace(/_/g, " ")}`,
-          })) || [],
-      },
-      disabled_reason: stripeAccount.requirements?.disabled_reason,
-      country: stripeAccount.country,
-      business_type: stripeAccount.business_type,
-      lastChecked: now,
-      fromCache: false,
+      account_id: stripeAccountId,
+      account_status: updateData.stripeAccountStatus,
+      last_updated: now.toISOString(),
+      cached: false,
     })
-  } catch (error) {
+  } catch (error: any) {
     console.error("❌ [Login Status Check] Error:", error)
+
     return NextResponse.json(
       {
-        connected: false,
-        error: error instanceof Error ? error.message : "Unknown error",
+        error: "Failed to check Stripe connection status",
+        code: "STATUS_CHECK_FAILED",
+        details: error.message,
       },
       { status: 500 },
     )

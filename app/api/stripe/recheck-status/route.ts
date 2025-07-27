@@ -1,71 +1,80 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { requireAuth } from "@/lib/auth-utils"
-import { db } from "@/lib/firebase-server"
+import { adminDb, getAuthenticatedUser } from "@/lib/firebase-admin"
 import { stripe } from "@/lib/stripe"
 
 export async function POST(request: NextRequest) {
-  try {
-    // Require authentication
-    const decodedToken = await requireAuth(request)
-    const userId = decodedToken.uid
+  console.log("🔄 [Recheck Status] Starting Stripe status recheck")
 
-    console.log("🔄 [Recheck Status] Starting status recheck for user:", userId)
+  try {
+    // Get authenticated user
+    const headers = Object.fromEntries(request.headers.entries())
+    const user = await getAuthenticatedUser(headers)
+    console.log(`✅ [Recheck Status] Authenticated user: ${user.uid}`)
 
     // Get current user data
-    const userDoc = await db.collection("users").doc(userId).get()
-    if (!userDoc.exists) {
-      return NextResponse.json({ error: "User not found" }, { status: 404 })
-    }
-
+    const userDoc = await adminDb.collection("users").doc(user.uid).get()
     const userData = userDoc.data()
-    const stripeAccountId = userData?.stripeAccountId
 
-    if (!stripeAccountId) {
-      return NextResponse.json({
-        connected: false,
-        error: "No Stripe account connected",
-        needsConnection: true,
-      })
+    if (!userData?.stripeAccountId) {
+      console.log("❌ [Recheck Status] No Stripe account ID found")
+      return NextResponse.json(
+        {
+          error: "No Stripe account connected",
+          code: "NO_STRIPE_ACCOUNT",
+        },
+        { status: 400 },
+      )
     }
 
-    console.log("🔍 [Recheck Status] Fetching fresh status from Stripe for account:", stripeAccountId)
+    const stripeAccountId = userData.stripeAccountId
+    console.log(`🔍 [Recheck Status] Fetching fresh status for account: ${stripeAccountId}`)
 
-    // Fetch fresh status from Stripe
+    // Fetch fresh account status from Stripe
     let stripeAccount
     try {
       stripeAccount = await stripe.accounts.retrieve(stripeAccountId)
+      console.log("✅ [Recheck Status] Fresh Stripe account data retrieved:", {
+        id: stripeAccount.id,
+        charges_enabled: stripeAccount.charges_enabled,
+        payouts_enabled: stripeAccount.payouts_enabled,
+        details_submitted: stripeAccount.details_submitted,
+        requirements_currently_due: stripeAccount.requirements?.currently_due?.length || 0,
+        requirements_past_due: stripeAccount.requirements?.past_due?.length || 0,
+      })
     } catch (stripeError: any) {
-      console.error("❌ [Recheck Status] Stripe API error:", stripeError)
+      console.error("❌ [Recheck Status] Failed to retrieve Stripe account:", stripeError)
 
-      // If account doesn't exist, clear it from user profile
-      if (stripeError.code === "resource_missing") {
-        await db.collection("users").doc(userId).update({
+      // Handle deleted/invalid accounts
+      if (stripeError.code === "account_invalid" || stripeError.code === "resource_missing") {
+        console.log("🗑️ [Recheck Status] Stripe account no longer exists, clearing user data")
+
+        await adminDb.collection("users").doc(user.uid).update({
           stripeAccountId: null,
           stripeConnectionStatus: "disconnected",
           stripeAccountStatus: null,
-          lastStripeUpdate: Date.now(),
+          lastStripeUpdate: new Date(),
         })
 
         return NextResponse.json({
-          connected: false,
-          error: "Stripe account no longer exists",
-          needsConnection: true,
-          accountDeleted: true,
+          success: false,
+          status: "disconnected",
+          message: "Stripe account no longer exists",
+          action_required: "reconnect",
         })
       }
 
       return NextResponse.json(
         {
-          connected: false,
-          error: "Failed to check Stripe account status",
-          stripeError: stripeError.message,
+          error: "Failed to fetch Stripe account status",
+          code: "STRIPE_API_ERROR",
+          details: stripeError.message,
         },
         { status: 500 },
       )
     }
 
-    // Update user profile with fresh status
-    const now = Date.now()
+    // Update status in Firestore
+    const now = new Date()
     const connectionStatus = stripeAccount.charges_enabled && stripeAccount.payouts_enabled ? "verified" : "pending"
 
     const updateData = {
@@ -88,73 +97,27 @@ export async function POST(request: NextRequest) {
       },
     }
 
-    await db.collection("users").doc(userId).update(updateData)
+    console.log("🔄 [Recheck Status] Updating user profile with fresh data...")
+    await adminDb.collection("users").doc(user.uid).update(updateData)
 
-    console.log("✅ [Recheck Status] Status updated successfully:", connectionStatus)
-
-    // Create account link if actions are required
-    let actionUrl = null
-    const hasRequirements =
-      (stripeAccount.requirements?.currently_due?.length || 0) > 0 ||
-      (stripeAccount.requirements?.past_due?.length || 0) > 0
-
-    if (hasRequirements) {
-      try {
-        const accountLink = await stripe.accountLinks.create({
-          account: stripeAccountId,
-          refresh_url: `${new URL(request.url).origin}/dashboard/connect-stripe/callback?refresh=true`,
-          return_url: `${new URL(request.url).origin}/dashboard/connect-stripe/callback?completed=true`,
-          type: "account_onboarding",
-        })
-        actionUrl = accountLink.url
-      } catch (linkError) {
-        console.error("❌ [Recheck Status] Failed to create account link:", linkError)
-      }
-    }
+    console.log("✅ [Recheck Status] Status rechecked successfully:", connectionStatus)
 
     return NextResponse.json({
-      connected: true,
-      accountId: stripeAccountId,
+      success: true,
       status: connectionStatus,
-      isFullyEnabled: stripeAccount.charges_enabled && stripeAccount.payouts_enabled,
-      actionsRequired: hasRequirements,
-      actionUrl,
-      charges_enabled: stripeAccount.charges_enabled,
-      payouts_enabled: stripeAccount.payouts_enabled,
-      details_submitted: stripeAccount.details_submitted,
-      requirements: {
-        currently_due:
-          stripeAccount.requirements?.currently_due?.map((field) => ({
-            field,
-            description: `Complete ${field.replace(/_/g, " ")}`,
-          })) || [],
-        past_due:
-          stripeAccount.requirements?.past_due?.map((field) => ({
-            field,
-            description: `Complete ${field.replace(/_/g, " ")} (Past Due)`,
-          })) || [],
-        eventually_due:
-          stripeAccount.requirements?.eventually_due?.map((field) => ({
-            field,
-            description: `Complete ${field.replace(/_/g, " ")} (Eventually Due)`,
-          })) || [],
-        pending_verification:
-          stripeAccount.requirements?.pending_verification?.map((field) => ({
-            field,
-            description: `Verification pending for ${field.replace(/_/g, " ")}`,
-          })) || [],
-      },
-      disabled_reason: stripeAccount.requirements?.disabled_reason,
-      country: stripeAccount.country,
-      business_type: stripeAccount.business_type,
-      lastChecked: now,
+      account_id: stripeAccountId,
+      account_status: updateData.stripeAccountStatus,
+      last_updated: now.toISOString(),
+      message: "Stripe status updated successfully",
     })
-  } catch (error) {
+  } catch (error: any) {
     console.error("❌ [Recheck Status] Error:", error)
+
     return NextResponse.json(
       {
-        connected: false,
-        error: error instanceof Error ? error.message : "Unknown error",
+        error: "Failed to recheck Stripe status",
+        code: "RECHECK_FAILED",
+        details: error.message,
       },
       { status: 500 },
     )

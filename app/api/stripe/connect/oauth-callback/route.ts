@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { db } from "@/lib/firebase-server"
+import { adminDb } from "@/lib/firebase-admin"
 import { stripe } from "@/lib/stripe"
 
 export async function GET(request: NextRequest) {
@@ -36,12 +36,26 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    // Verify state parameter
+    // 🔥 FIX: Use the correct collection name that matches the OAuth initiation
     console.log("🔍 [OAuth Callback] Verifying state parameter:", state)
-    const stateDoc = await db.collection("oauth_states").doc(state).get()
+    const stateDoc = await adminDb.collection("stripe_oauth_states").doc(state).get()
 
     if (!stateDoc.exists) {
       console.log("❌ [OAuth Callback] Invalid state - not found in database")
+
+      // Debug: Check what states exist
+      const recentStates = await adminDb
+        .collection("stripe_oauth_states")
+        .where("createdAt", ">", new Date(Date.now() - 60 * 60 * 1000))
+        .orderBy("createdAt", "desc")
+        .limit(5)
+        .get()
+
+      console.log("🔍 [OAuth Callback] Recent states found:", recentStates.size)
+      recentStates.docs.forEach((doc) => {
+        console.log("  State:", doc.id, "Data:", doc.data())
+      })
+
       const callbackUrl = new URL("/dashboard/connect-stripe/callback", baseUrl)
       callbackUrl.searchParams.set("error", "invalid_state")
       callbackUrl.searchParams.set("error_description", "Invalid state parameter - session may have expired")
@@ -49,12 +63,12 @@ export async function GET(request: NextRequest) {
     }
 
     const stateData = stateDoc.data()
-    const stateAge = Date.now() - stateData?.createdAt
+    const stateAge = Date.now() - stateData?.createdAt?.toMillis()
     const userId = stateData?.userId
 
     console.log("✅ [OAuth Callback] State data found:", {
       userId,
-      createdAt: stateData?.createdAt,
+      createdAt: stateData?.createdAt?.toDate(),
       used: stateData?.used,
       ageMinutes: Math.round(stateAge / (1000 * 60)),
     })
@@ -66,7 +80,7 @@ export async function GET(request: NextRequest) {
 
       // Check if user already has a connection - if so, redirect to success
       if (userId) {
-        const userDoc = await db.collection("users").doc(userId).get()
+        const userDoc = await adminDb.collection("users").doc(userId).get()
         const userData = userDoc.data()
 
         if (userData?.stripeAccountId && userData?.stripeConnectionStatus === "verified") {
@@ -90,7 +104,7 @@ export async function GET(request: NextRequest) {
 
       // Check if the connection was successful
       if (userId) {
-        const userDoc = await db.collection("users").doc(userId).get()
+        const userDoc = await adminDb.collection("users").doc(userId).get()
         const userData = userDoc.data()
 
         if (userData?.stripeAccountId && userData?.stripeConnectionStatus === "verified") {
@@ -109,7 +123,7 @@ export async function GET(request: NextRequest) {
     }
 
     // Mark state as used immediately
-    await stateDoc.ref.update({ used: true, usedAt: Date.now() })
+    await stateDoc.ref.update({ used: true, usedAt: new Date() })
 
     // Exchange authorization code for access token
     console.log("🔄 [OAuth Callback] Exchanging code for access token")
@@ -166,7 +180,7 @@ export async function GET(request: NextRequest) {
     }
 
     // 🔥 KEY FIX: Store comprehensive account status in Firestore
-    const now = Date.now()
+    const now = new Date()
     const connectionStatus = stripeAccount.charges_enabled && stripeAccount.payouts_enabled ? "verified" : "pending"
 
     const updateData = {
@@ -198,10 +212,10 @@ export async function GET(request: NextRequest) {
     }
 
     console.log("🔄 [OAuth Callback] Updating user profile with comprehensive data...")
-    await db.collection("users").doc(userId).update(updateData)
+    await adminDb.collection("users").doc(userId).update(updateData)
 
     // Verify the update was successful
-    const updatedUserDoc = await db.collection("users").doc(userId).get()
+    const updatedUserDoc = await adminDb.collection("users").doc(userId).get()
     const updatedUserData = updatedUserDoc.data()
 
     if (!updatedUserData?.stripeAccountId || !updatedUserData?.stripeAccountStatus) {

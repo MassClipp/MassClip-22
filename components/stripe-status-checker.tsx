@@ -1,343 +1,305 @@
 "use client"
 
-import { useEffect, useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { RefreshCw, CheckCircle, AlertTriangle, XCircle, ExternalLink, Loader2 } from "lucide-react"
-import { getAuth } from "firebase/auth"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { useToast } from "@/hooks/use-toast"
+import { useFirebaseAuth } from "@/hooks/use-firebase-auth"
+import { CheckCircle, XCircle, Clock, AlertTriangle, RefreshCw } from "lucide-react"
 
-interface StripeStatus {
-  connected: boolean
-  accountId?: string
-  status?: string
-  isFullyEnabled: boolean
-  actionsRequired: boolean
-  actionUrl?: string
+interface StripeAccountStatus {
   charges_enabled: boolean
   payouts_enabled: boolean
   details_submitted: boolean
+  country: string
+  business_type: string
+  disabled_reason: string | null
   requirements: {
-    currently_due: Array<{ field: string; description: string }>
-    past_due: Array<{ field: string; description: string }>
-    eventually_due: Array<{ field: string; description: string }>
-    pending_verification: Array<{ field: string; description: string }>
+    currently_due: string[]
+    past_due: string[]
+    eventually_due: string[]
+    pending_verification: string[]
   }
-  disabled_reason?: string
-  country?: string
-  business_type?: string
-  lastChecked?: number
-  fromCache?: boolean
+  last_verified: string
+}
+
+interface ConnectionStatus {
+  connected: boolean
+  status: string
+  account_id?: string
+  account_status?: StripeAccountStatus
+  last_updated?: string
+  cached?: boolean
   warning?: string
-  error?: string
-  needsConnection?: boolean
-  accountDeleted?: boolean
+  message?: string
+  action_required?: string
 }
 
 export function StripeStatusChecker() {
-  const [status, setStatus] = useState<StripeStatus | null>(null)
+  const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [isRechecking, setIsRechecking] = useState(false)
-  const [lastUpdate, setLastUpdate] = useState<Date | null>(null)
+  const { toast } = useToast()
+  const { user } = useFirebaseAuth()
 
-  const checkStatus = async (isRecheck = false) => {
+  const checkStatus = async (showToast = false) => {
+    if (!user) return
+
     try {
-      if (isRecheck) {
-        setIsRechecking(true)
-      } else {
-        setIsLoading(true)
-      }
-
-      const auth = getAuth()
-      const currentUser = auth.currentUser
-
-      if (!currentUser) {
-        setStatus({
-          connected: false,
-          error: "User not authenticated",
-          needsConnection: true,
-          isFullyEnabled: false,
-          actionsRequired: false,
-          charges_enabled: false,
-          payouts_enabled: false,
-          details_submitted: false,
-          requirements: {
-            currently_due: [],
-            past_due: [],
-            eventually_due: [],
-            pending_verification: [],
-          },
-        })
-        return
-      }
-
-      const idToken = await currentUser.getIdToken()
-      const endpoint = isRecheck ? "/api/stripe/recheck-status" : "/api/stripe/connection-status-on-login"
-      const method = isRecheck ? "POST" : "GET"
-
-      const response = await fetch(endpoint, {
-        method,
+      const idToken = await user.getIdToken()
+      const response = await fetch("/api/stripe/connection-status-on-login", {
         headers: {
-          "Content-Type": "application/json",
           Authorization: `Bearer ${idToken}`,
         },
       })
 
-      if (response.ok) {
-        const data = await response.json()
-        setStatus(data)
-        setLastUpdate(new Date())
-        console.log("✅ [Status Checker] Status updated:", data)
-      } else {
-        const errorData = await response.json()
-        setStatus({
-          connected: false,
-          error: errorData.error || "Failed to check status",
-          needsConnection: true,
-          isFullyEnabled: false,
-          actionsRequired: false,
-          charges_enabled: false,
-          payouts_enabled: false,
-          details_submitted: false,
-          requirements: {
-            currently_due: [],
-            past_due: [],
-            eventually_due: [],
-            pending_verification: [],
-          },
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.details || data.error || "Failed to check status")
+      }
+
+      setConnectionStatus(data)
+
+      if (showToast) {
+        toast({
+          title: "Status Updated",
+          description: "Stripe connection status has been refreshed",
         })
       }
-    } catch (error) {
-      console.error("❌ [Status Checker] Error:", error)
-      setStatus({
-        connected: false,
-        error: "Network error",
-        needsConnection: true,
-        isFullyEnabled: false,
-        actionsRequired: false,
-        charges_enabled: false,
-        payouts_enabled: false,
-        details_submitted: false,
-        requirements: {
-          currently_due: [],
-          past_due: [],
-          eventually_due: [],
-          pending_verification: [],
+    } catch (error: any) {
+      console.error("Failed to check Stripe status:", error)
+      if (showToast) {
+        toast({
+          title: "Status Check Failed",
+          description: error.message,
+          variant: "destructive",
+        })
+      }
+    }
+  }
+
+  const recheckStatus = async () => {
+    if (!user) return
+
+    setIsRechecking(true)
+    try {
+      const idToken = await user.getIdToken()
+      const response = await fetch("/api/stripe/recheck-status", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${idToken}`,
         },
       })
+
+      const data = await response.json()
+
+      if (!response.ok) {
+        throw new Error(data.details || data.error || "Failed to recheck status")
+      }
+
+      // Update local state with fresh data
+      setConnectionStatus({
+        connected: data.success,
+        status: data.status,
+        account_id: data.account_id,
+        account_status: data.account_status,
+        last_updated: data.last_updated,
+        cached: false,
+      })
+
+      toast({
+        title: "Status Rechecked",
+        description: data.message || "Stripe status updated successfully",
+      })
+    } catch (error: any) {
+      console.error("Failed to recheck Stripe status:", error)
+      toast({
+        title: "Recheck Failed",
+        description: error.message,
+        variant: "destructive",
+      })
     } finally {
-      setIsLoading(false)
       setIsRechecking(false)
     }
   }
 
   useEffect(() => {
-    checkStatus()
-  }, [])
-
-  const handleRecheck = () => {
-    checkStatus(true)
-  }
-
-  const handleCompleteSetup = () => {
-    if (status?.actionUrl) {
-      window.location.href = status.actionUrl
+    if (user) {
+      setIsLoading(true)
+      checkStatus().finally(() => setIsLoading(false))
     }
-  }
-
-  const handleConnect = () => {
-    window.location.href = "/dashboard/connect-stripe"
-  }
+  }, [user])
 
   if (isLoading) {
     return (
-      <Card className="w-full">
-        <CardContent className="flex items-center justify-center py-8">
-          <div className="flex items-center space-x-2">
-            <Loader2 className="h-4 w-4 animate-spin" />
-            <span className="text-sm text-muted-foreground">Checking Stripe connection...</span>
-          </div>
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <RefreshCw className="h-4 w-4 animate-spin" />
+            Checking Stripe Connection...
+          </CardTitle>
+        </CardHeader>
+      </Card>
+    )
+  }
+
+  if (!connectionStatus) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-red-600">
+            <XCircle className="h-4 w-4" />
+            Connection Check Failed
+          </CardTitle>
+          <CardDescription>Unable to verify Stripe connection status</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Button onClick={() => checkStatus(true)} variant="outline">
+            <RefreshCw className="h-4 w-4 mr-2" />
+            Retry
+          </Button>
         </CardContent>
       </Card>
     )
   }
 
-  if (!status) {
+  if (!connectionStatus.connected) {
     return (
-      <Card className="w-full border-red-200 bg-red-50">
-        <CardContent className="py-6">
-          <div className="flex items-center space-x-2">
-            <XCircle className="h-5 w-5 text-red-500" />
-            <span className="text-sm text-red-700">Failed to load Stripe status</span>
-          </div>
-        </CardContent>
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-gray-600">
+            <XCircle className="h-4 w-4" />
+            No Stripe Connection
+          </CardTitle>
+          <CardDescription>
+            {connectionStatus.message || "Connect your Stripe account to start receiving payments"}
+          </CardDescription>
+        </CardHeader>
+        {connectionStatus.action_required === "reconnect" && (
+          <CardContent>
+            <Alert>
+              <AlertTriangle className="h-4 w-4" />
+              <AlertDescription>
+                Your previous Stripe connection is no longer valid. Please reconnect your account.
+              </AlertDescription>
+            </Alert>
+          </CardContent>
+        )}
       </Card>
     )
   }
+
+  const { account_status } = connectionStatus
+  const isFullyVerified = account_status?.charges_enabled && account_status?.payouts_enabled
 
   return (
-    <Card className="w-full">
+    <Card>
       <CardHeader>
-        <div className="flex items-center justify-between">
-          <CardTitle className="text-lg flex items-center gap-2">
-            Stripe Connection Status
-            {status.connected ? (
-              status.isFullyEnabled ? (
-                <Badge variant="default" className="bg-green-100 text-green-800">
-                  <CheckCircle className="h-3 w-3 mr-1" />
-                  Verified
-                </Badge>
-              ) : (
-                <Badge variant="secondary" className="bg-yellow-100 text-yellow-800">
-                  <AlertTriangle className="h-3 w-3 mr-1" />
-                  Pending
-                </Badge>
-              )
-            ) : (
-              <Badge variant="destructive">
-                <XCircle className="h-3 w-3 mr-1" />
-                Not Connected
-              </Badge>
-            )}
-          </CardTitle>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleRecheck}
-            disabled={isRechecking}
-            className="flex items-center gap-2 bg-transparent"
-          >
-            <RefreshCw className={`h-4 w-4 ${isRechecking ? "animate-spin" : ""}`} />
-            {isRechecking ? "Checking..." : "Recheck"}
-          </Button>
-        </div>
+        <CardTitle className="flex items-center gap-2">
+          {isFullyVerified ? (
+            <CheckCircle className="h-4 w-4 text-green-600" />
+          ) : (
+            <Clock className="h-4 w-4 text-yellow-600" />
+          )}
+          Stripe Connection Status
+          <Badge variant={isFullyVerified ? "default" : "secondary"}>{connectionStatus.status}</Badge>
+        </CardTitle>
+        <CardDescription>
+          Account ID: {connectionStatus.account_id}
+          {connectionStatus.cached && " (cached)"}
+        </CardDescription>
       </CardHeader>
 
       <CardContent className="space-y-4">
-        {/* Connection Status Grid */}
-        <div className="grid grid-cols-3 gap-4">
-          <div className="text-center">
-            <div className={`w-3 h-3 rounded-full mx-auto mb-1 ${status.connected ? "bg-green-500" : "bg-red-500"}`} />
-            <div className="text-xs text-muted-foreground">Connected</div>
-          </div>
-          <div className="text-center">
-            <div
-              className={`w-3 h-3 rounded-full mx-auto mb-1 ${status.charges_enabled ? "bg-green-500" : "bg-yellow-500"}`}
-            />
-            <div className="text-xs text-muted-foreground">Payments</div>
-          </div>
-          <div className="text-center">
-            <div
-              className={`w-3 h-3 rounded-full mx-auto mb-1 ${status.payouts_enabled ? "bg-green-500" : "bg-yellow-500"}`}
-            />
-            <div className="text-xs text-muted-foreground">Payouts</div>
-          </div>
-        </div>
-
-        {/* Account Info */}
-        {status.connected && (
-          <div className="bg-muted/50 rounded-lg p-3 space-y-2">
-            <div className="flex justify-between text-sm">
-              <span className="text-muted-foreground">Account ID:</span>
-              <span className="font-mono text-xs">{status.accountId}</span>
-            </div>
-            {status.country && (
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Country:</span>
-                <span>{status.country.toUpperCase()}</span>
-              </div>
-            )}
-            {status.business_type && (
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">Business Type:</span>
-                <span className="capitalize">{status.business_type.replace(/_/g, " ")}</span>
-              </div>
-            )}
-          </div>
+        {connectionStatus.warning && (
+          <Alert>
+            <AlertTriangle className="h-4 w-4" />
+            <AlertDescription>{connectionStatus.warning}</AlertDescription>
+          </Alert>
         )}
 
-        {/* Requirements */}
-        {status.connected && status.actionsRequired && (
-          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-            <div className="flex items-start space-x-3">
-              <AlertTriangle className="h-5 w-5 text-yellow-600 mt-0.5" />
-              <div className="flex-1">
-                <h4 className="font-medium text-yellow-800 mb-2">Action Required</h4>
-                <div className="space-y-1">
-                  {status.requirements.currently_due.map((req, index) => (
-                    <div key={index} className="text-sm text-yellow-700">
-                      • {req.description}
-                    </div>
-                  ))}
-                  {status.requirements.past_due.map((req, index) => (
-                    <div key={index} className="text-sm text-red-700 font-medium">
-                      • {req.description} (Past Due)
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Error State */}
-        {status.error && (
-          <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-            <div className="flex items-start space-x-3">
-              <XCircle className="h-5 w-5 text-red-600 mt-0.5" />
-              <div className="flex-1">
-                <h4 className="font-medium text-red-800 mb-1">Connection Issue</h4>
-                <p className="text-sm text-red-700">{status.error}</p>
-                {status.accountDeleted && (
-                  <p className="text-xs text-red-600 mt-1">Your Stripe account may have been deleted or deactivated.</p>
+        {account_status && (
+          <div className="space-y-3">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="flex items-center gap-2">
+                {account_status.charges_enabled ? (
+                  <CheckCircle className="h-4 w-4 text-green-600" />
+                ) : (
+                  <XCircle className="h-4 w-4 text-red-600" />
                 )}
+                <span className="text-sm">Charges Enabled</span>
               </div>
-            </div>
-          </div>
-        )}
-
-        {/* Warning */}
-        {status.warning && (
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-            <div className="flex items-start space-x-3">
-              <AlertTriangle className="h-5 w-5 text-blue-600 mt-0.5" />
-              <div className="flex-1">
-                <p className="text-sm text-blue-700">{status.warning}</p>
-                {status.fromCache && status.lastChecked && (
-                  <p className="text-xs text-blue-600 mt-1">
-                    Last successful check: {new Date(status.lastChecked).toLocaleString()}
-                  </p>
+              <div className="flex items-center gap-2">
+                {account_status.payouts_enabled ? (
+                  <CheckCircle className="h-4 w-4 text-green-600" />
+                ) : (
+                  <XCircle className="h-4 w-4 text-red-600" />
                 )}
+                <span className="text-sm">Payouts Enabled</span>
               </div>
             </div>
+
+            <div className="text-sm text-gray-600">
+              <p>Country: {account_status.country}</p>
+              <p>Business Type: {account_status.business_type}</p>
+              {account_status.disabled_reason && (
+                <p className="text-red-600">Disabled: {account_status.disabled_reason}</p>
+              )}
+            </div>
+
+            {account_status.requirements.currently_due.length > 0 && (
+              <Alert>
+                <AlertTriangle className="h-4 w-4" />
+                <AlertDescription>
+                  <strong>Action Required:</strong> Complete these requirements in your Stripe dashboard:
+                  <ul className="list-disc list-inside mt-1">
+                    {account_status.requirements.currently_due.map((req, index) => (
+                      <li key={index} className="text-xs">
+                        {req.replace(/_/g, " ")}
+                      </li>
+                    ))}
+                  </ul>
+                </AlertDescription>
+              </Alert>
+            )}
+
+            {account_status.requirements.past_due.length > 0 && (
+              <Alert variant="destructive">
+                <XCircle className="h-4 w-4" />
+                <AlertDescription>
+                  <strong>Past Due:</strong> These requirements are overdue:
+                  <ul className="list-disc list-inside mt-1">
+                    {account_status.requirements.past_due.map((req, index) => (
+                      <li key={index} className="text-xs">
+                        {req.replace(/_/g, " ")}
+                      </li>
+                    ))}
+                  </ul>
+                </AlertDescription>
+              </Alert>
+            )}
           </div>
         )}
 
-        {/* Action Buttons */}
         <div className="flex gap-2">
-          {status.needsConnection ? (
-            <Button onClick={handleConnect} className="flex-1">
-              Connect Stripe Account
-            </Button>
-          ) : status.actionsRequired && status.actionUrl ? (
-            <Button onClick={handleCompleteSetup} className="flex-1">
-              <ExternalLink className="h-4 w-4 mr-2" />
-              Complete Setup
-            </Button>
-          ) : status.isFullyEnabled ? (
-            <div className="flex-1 text-center py-2 text-sm text-green-600 font-medium">
-              ✅ Your Stripe account is fully set up and ready!
-            </div>
-          ) : null}
-        </div>
+          <Button onClick={recheckStatus} disabled={isRechecking} variant="outline" size="sm">
+            {isRechecking ? (
+              <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+            ) : (
+              <RefreshCw className="h-4 w-4 mr-2" />
+            )}
+            Recheck Status
+          </Button>
 
-        {/* Last Update Info */}
-        {lastUpdate && (
-          <div className="text-xs text-muted-foreground text-center">
-            Last updated: {lastUpdate.toLocaleString()}
-            {status.fromCache && " (cached)"}
-          </div>
-        )}
+          {connectionStatus.last_updated && (
+            <div className="text-xs text-gray-500 flex items-center">
+              Last updated: {new Date(connectionStatus.last_updated).toLocaleString()}
+            </div>
+          )}
+        </div>
       </CardContent>
     </Card>
   )
