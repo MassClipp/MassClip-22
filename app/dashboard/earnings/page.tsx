@@ -1,20 +1,15 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Progress } from "@/components/ui/progress"
-import {
-  formatCurrency,
-  formatNumber,
-  formatPercentage,
-  safeNumber,
-  validateEarningsData,
-  createDefaultEarningsData,
-} from "@/lib/format-utils"
-import { DollarSign, TrendingUp, CreditCard, Users, AlertCircle, CheckCircle, Clock } from "lucide-react"
+import { Badge } from "@/components/ui/badge"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Skeleton } from "@/components/ui/skeleton"
+import { DollarSign, TrendingUp, Users, CreditCard, RefreshCw, AlertCircle, ExternalLink, Settings } from "lucide-react"
+import { formatCurrency, formatInteger, formatPercentage } from "@/lib/format-utils"
+import Link from "next/link"
 
 interface EarningsData {
   totalEarnings: number
@@ -29,56 +24,61 @@ interface EarningsData {
     last30DaysSales: number
     averageTransactionValue: number
   }
-  accountStatus: {
-    chargesEnabled: boolean
-    payoutsEnabled: boolean
-    detailsSubmitted: boolean
-    requirementsCount: number
-  }
   recentTransactions: any[]
   payoutHistory: any[]
   monthlyBreakdown: any[]
 }
 
+interface ApiResponse {
+  success?: boolean
+  data: EarningsData
+  error?: string
+  message?: string
+  needsStripeConnection?: boolean
+  dataSource?: string
+  lastUpdated?: string
+}
+
 export default function EarningsPage() {
-  const [earningsData, setEarningsData] = useState<EarningsData>(createDefaultEarningsData())
+  const [data, setData] = useState<EarningsData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [needsStripeConnection, setNeedsStripeConnection] = useState(false)
+  const [dataSource, setDataSource] = useState<string>("unknown")
+  const [lastUpdated, setLastUpdated] = useState<string | null>(null)
 
   const fetchEarningsData = async () => {
     try {
-      console.log("🔍 Fetching earnings data...")
       setLoading(true)
       setError(null)
 
+      console.log("🔄 Fetching earnings data...")
       const response = await fetch("/api/dashboard/earnings", {
         method: "GET",
         headers: {
           "Content-Type": "application/json",
-          "Cache-Control": "no-cache",
         },
       })
 
-      console.log("📡 Response status:", response.status)
+      const result: ApiResponse = await response.json()
+      console.log("📊 Earnings API response:", result)
 
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: Failed to fetch earnings data`)
+      if (result.needsStripeConnection) {
+        setNeedsStripeConnection(true)
+        setError(result.message || "Stripe account connection required")
+      } else if (result.error && result.dataSource !== "fallback") {
+        setError(result.message || result.error)
+      } else {
+        setError(null)
+        setNeedsStripeConnection(false)
       }
 
-      const data = await response.json()
-      console.log("📊 Raw earnings data received:", data)
-
-      // Validate and sanitize the data
-      const validatedData = validateEarningsData(data)
-      console.log("✅ Validated earnings data:", validatedData)
-
-      setEarningsData(validatedData)
+      setData(result.data)
+      setDataSource(result.dataSource || "unknown")
+      setLastUpdated(result.lastUpdated || null)
     } catch (err) {
-      console.error("❌ Error fetching earnings:", err)
-      setError(err instanceof Error ? err.message : "Failed to load earnings data")
-
-      // Set safe default data on error
-      setEarningsData(createDefaultEarningsData())
+      console.error("💥 Failed to fetch earnings:", err)
+      setError("Failed to load earnings data")
     } finally {
       setLoading(false)
     }
@@ -88,25 +88,37 @@ export default function EarningsPage() {
     fetchEarningsData()
   }, [])
 
-  // Calculate growth percentage safely
-  const calculateGrowth = (current: number, previous: number): number => {
-    const safeCurrent = safeNumber(current, 0)
-    const safePrevious = safeNumber(previous, 0)
-
-    if (safePrevious === 0) return safeCurrent > 0 ? 100 : 0
-    return ((safeCurrent - safePrevious) / safePrevious) * 100
+  const calculateGrowthPercentage = (current: number, previous: number): number => {
+    if (previous === 0) return current > 0 ? 100 : 0
+    return ((current - previous) / previous) * 100
   }
 
-  const monthlyGrowth = calculateGrowth(earningsData.thisMonthEarnings, earningsData.lastMonthEarnings)
+  const monthlyGrowth = data ? calculateGrowthPercentage(data.thisMonthEarnings, data.lastMonthEarnings) : 0
 
   if (loading) {
     return (
-      <div className="container mx-auto p-6">
-        <div className="flex items-center justify-center min-h-[400px]">
-          <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-            <p className="text-gray-600">Loading earnings data...</p>
+      <div className="container mx-auto p-6 space-y-6">
+        <div className="flex justify-between items-center">
+          <div>
+            <Skeleton className="h-8 w-64 mb-2" />
+            <Skeleton className="h-4 w-48" />
           </div>
+          <Skeleton className="h-10 w-20" />
+        </div>
+
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          {[...Array(4)].map((_, i) => (
+            <Card key={i}>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <Skeleton className="h-4 w-24" />
+                <Skeleton className="h-4 w-4" />
+              </CardHeader>
+              <CardContent>
+                <Skeleton className="h-8 w-32 mb-1" />
+                <Skeleton className="h-3 w-20" />
+              </CardContent>
+            </Card>
+          ))}
         </div>
       </div>
     )
@@ -114,77 +126,62 @@ export default function EarningsPage() {
 
   return (
     <div className="container mx-auto p-6 space-y-6">
-      <div className="flex items-center justify-between">
+      {/* Header */}
+      <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold">Earnings Dashboard</h1>
-          <p className="text-gray-600">Track your revenue and performance</p>
+          <h1 className="text-3xl font-bold tracking-tight">Earnings Dashboard</h1>
+          <p className="text-muted-foreground">Track your revenue and performance</p>
         </div>
-        <Button onClick={fetchEarningsData} disabled={loading}>
-          {loading ? "Refreshing..." : "Refresh"}
-        </Button>
+        <div className="flex gap-2">
+          <Button onClick={fetchEarningsData} variant="outline" size="sm" disabled={loading}>
+            <RefreshCw className={`h-4 w-4 mr-2 ${loading ? "animate-spin" : ""}`} />
+            Refresh
+          </Button>
+        </div>
       </div>
 
-      {error && (
-        <Card className="border-red-200 bg-red-50">
-          <CardContent className="flex items-center gap-2 pt-6">
-            <AlertCircle className="h-5 w-5 text-red-600" />
-            <p className="text-red-700">{error}</p>
-          </CardContent>
-        </Card>
+      {/* Connection Status Alert */}
+      {needsStripeConnection && (
+        <Alert>
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription className="flex items-center justify-between">
+            <span>Connect your Stripe account to view earnings data</span>
+            <Link href="/dashboard/connect-stripe">
+              <Button size="sm" variant="outline">
+                Connect Stripe <ExternalLink className="h-3 w-3 ml-1" />
+              </Button>
+            </Link>
+          </AlertDescription>
+        </Alert>
       )}
 
-      {/* Account Status */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <CreditCard className="h-5 w-5" />
-            Account Status
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-            <div className="flex items-center gap-2">
-              {earningsData.accountStatus.chargesEnabled ? (
-                <CheckCircle className="h-4 w-4 text-green-600" />
-              ) : (
-                <AlertCircle className="h-4 w-4 text-red-600" />
-              )}
-              <span className="text-sm">Charges Enabled</span>
-            </div>
-            <div className="flex items-center gap-2">
-              {earningsData.accountStatus.payoutsEnabled ? (
-                <CheckCircle className="h-4 w-4 text-green-600" />
-              ) : (
-                <AlertCircle className="h-4 w-4 text-red-600" />
-              )}
-              <span className="text-sm">Payouts Enabled</span>
-            </div>
-            <div className="flex items-center gap-2">
-              {earningsData.accountStatus.detailsSubmitted ? (
-                <CheckCircle className="h-4 w-4 text-green-600" />
-              ) : (
-                <AlertCircle className="h-4 w-4 text-red-600" />
-              )}
-              <span className="text-sm">Details Submitted</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <Badge variant={earningsData.accountStatus.requirementsCount === 0 ? "default" : "destructive"}>
-                {formatNumber(earningsData.accountStatus.requirementsCount)} Requirements
-              </Badge>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+      {/* Error Alert */}
+      {error && !needsStripeConnection && (
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
 
-      {/* Main Earnings Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+      {/* Data Source Badge */}
+      {dataSource && (
+        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Badge variant={dataSource === "stripe" ? "default" : "secondary"}>
+            {dataSource === "stripe" ? "Live Stripe Data" : "Demo Data"}
+          </Badge>
+          {lastUpdated && <span>Last updated: {new Date(lastUpdated).toLocaleString()}</span>}
+        </div>
+      )}
+
+      {/* Main Metrics */}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Earnings</CardTitle>
             <DollarSign className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{formatCurrency(earningsData.totalEarnings)}</div>
+            <div className="text-2xl font-bold">{formatCurrency(data?.totalEarnings || 0)}</div>
             <p className="text-xs text-muted-foreground">All-time revenue</p>
           </CardContent>
         </Card>
@@ -195,18 +192,21 @@ export default function EarningsPage() {
             <TrendingUp className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{formatCurrency(earningsData.thisMonthEarnings)}</div>
-            <p className="text-xs text-muted-foreground">{formatPercentage(monthlyGrowth)} from last month</p>
+            <div className="text-2xl font-bold">{formatCurrency(data?.thisMonthEarnings || 0)}</div>
+            <p className="text-xs text-muted-foreground">
+              {monthlyGrowth >= 0 ? "+" : ""}
+              {formatPercentage(monthlyGrowth)} from last month
+            </p>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Available Balance</CardTitle>
-            <Clock className="h-4 w-4 text-muted-foreground" />
+            <CreditCard className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{formatCurrency(earningsData.availableBalance)}</div>
+            <div className="text-2xl font-bold">{formatCurrency(data?.availableBalance || 0)}</div>
             <p className="text-xs text-muted-foreground">Ready for payout</p>
           </CardContent>
         </Card>
@@ -217,15 +217,15 @@ export default function EarningsPage() {
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{formatNumber(earningsData.salesMetrics.totalSales)}</div>
+            <div className="text-2xl font-bold">{formatInteger(data?.salesMetrics?.totalSales || 0)}</div>
             <p className="text-xs text-muted-foreground">
-              {formatCurrency(earningsData.salesMetrics.averageTransactionValue)} avg order
+              {formatCurrency(data?.salesMetrics?.averageTransactionValue || 0)} avg order
             </p>
           </CardContent>
         </Card>
       </div>
 
-      {/* Detailed Tabs */}
+      {/* Detailed View */}
       <Tabs defaultValue="overview" className="space-y-4">
         <TabsList>
           <TabsTrigger value="overview">Overview</TabsTrigger>
@@ -234,23 +234,23 @@ export default function EarningsPage() {
         </TabsList>
 
         <TabsContent value="overview" className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="grid gap-4 md:grid-cols-2">
             <Card>
               <CardHeader>
                 <CardTitle>Recent Performance</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="flex justify-between items-center">
-                  <span className="text-sm">Last 30 Days</span>
-                  <span className="font-bold">{formatCurrency(earningsData.last30DaysEarnings)}</span>
+                <div className="flex justify-between">
+                  <span className="text-sm font-medium">Last 30 Days</span>
+                  <span className="text-sm font-bold">{formatCurrency(data?.last30DaysEarnings || 0)}</span>
                 </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm">This Month Sales</span>
-                  <span className="font-bold">{formatNumber(earningsData.salesMetrics.thisMonthSales)}</span>
+                <div className="flex justify-between">
+                  <span className="text-sm font-medium">This Month Sales</span>
+                  <span className="text-sm font-bold">{formatInteger(data?.salesMetrics?.thisMonthSales || 0)}</span>
                 </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm">Last 30 Days Sales</span>
-                  <span className="font-bold">{formatNumber(earningsData.salesMetrics.last30DaysSales)}</span>
+                <div className="flex justify-between">
+                  <span className="text-sm font-medium">Last 30 Days Sales</span>
+                  <span className="text-sm font-bold">{formatInteger(data?.salesMetrics?.last30DaysSales || 0)}</span>
                 </div>
               </CardContent>
             </Card>
@@ -260,78 +260,63 @@ export default function EarningsPage() {
                 <CardTitle>Payout Information</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="flex justify-between items-center">
-                  <span className="text-sm">Pending Payout</span>
-                  <span className="font-bold">{formatCurrency(earningsData.pendingPayout)}</span>
+                <div className="flex justify-between">
+                  <span className="text-sm font-medium">Pending Payout</span>
+                  <span className="text-sm font-bold">{formatCurrency(data?.pendingPayout || 0)}</span>
                 </div>
-                <div className="flex justify-between items-center">
-                  <span className="text-sm">Available Balance</span>
-                  <span className="font-bold text-green-600">{formatCurrency(earningsData.availableBalance)}</span>
+                <div className="flex justify-between">
+                  <span className="text-sm font-medium">Available Balance</span>
+                  <span className="text-sm font-bold text-green-600">
+                    {formatCurrency(data?.availableBalance || 0)}
+                  </span>
                 </div>
-                <Progress value={earningsData.availableBalance > 0 ? 100 : 0} className="w-full" />
+                <div className="pt-2">
+                  <Link href="/dashboard/settings/stripe">
+                    <Button variant="outline" size="sm" className="w-full bg-transparent">
+                      <Settings className="h-4 w-4 mr-2" />
+                      Manage Payouts
+                    </Button>
+                  </Link>
+                </div>
               </CardContent>
             </Card>
           </div>
         </TabsContent>
 
-        <TabsContent value="transactions" className="space-y-4">
+        <TabsContent value="transactions">
           <Card>
             <CardHeader>
               <CardTitle>Recent Transactions</CardTitle>
+              <CardDescription>Your latest sales and payments</CardDescription>
             </CardHeader>
             <CardContent>
-              {earningsData.recentTransactions && earningsData.recentTransactions.length > 0 ? (
+              {data?.recentTransactions?.length ? (
                 <div className="space-y-2">
-                  {earningsData.recentTransactions.map((transaction, index) => (
-                    <div
-                      key={transaction.id || index}
-                      className="flex justify-between items-center p-3 border rounded-lg"
-                    >
+                  {data.recentTransactions.map((transaction, index) => (
+                    <div key={index} className="flex justify-between items-center p-2 border rounded">
                       <div>
-                        <p className="font-medium">{transaction.description || "Transaction"}</p>
-                        <p className="text-sm text-gray-600">
-                          {transaction.created ? new Date(transaction.created).toLocaleDateString() : "No date"}
-                        </p>
+                        <p className="font-medium">{transaction.description || "Sale"}</p>
+                        <p className="text-sm text-muted-foreground">{transaction.date}</p>
                       </div>
-                      <div className="text-right">
-                        <p className="font-bold">{formatCurrency(transaction.amount)}</p>
-                        <Badge variant="outline">{transaction.status || "completed"}</Badge>
-                      </div>
+                      <span className="font-bold">{formatCurrency(transaction.amount || 0)}</span>
                     </div>
                   ))}
                 </div>
               ) : (
-                <div className="text-center py-8 text-gray-500">
-                  <p>No recent transactions found</p>
-                </div>
+                <p className="text-muted-foreground text-center py-8">No recent transactions</p>
               )}
             </CardContent>
           </Card>
         </TabsContent>
 
-        <TabsContent value="analytics" className="space-y-4">
+        <TabsContent value="analytics">
           <Card>
             <CardHeader>
-              <CardTitle>Monthly Breakdown</CardTitle>
+              <CardTitle>Analytics</CardTitle>
+              <CardDescription>Detailed performance metrics</CardDescription>
             </CardHeader>
             <CardContent>
-              {earningsData.monthlyBreakdown && earningsData.monthlyBreakdown.length > 0 ? (
-                <div className="space-y-2">
-                  {earningsData.monthlyBreakdown.map((month, index) => (
-                    <div key={index} className="flex justify-between items-center p-2 border rounded">
-                      <span className="font-medium">{month.month}</span>
-                      <div className="text-right">
-                        <p className="font-bold">{formatCurrency(month.earnings)}</p>
-                        <p className="text-sm text-gray-600">{formatNumber(month.transactionCount)} sales</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-center py-8 text-gray-500">
-                  <p>No monthly data available</p>
-                </div>
-              )}
+              <p className="text-muted-foreground text-center py-8">Analytics coming soon</p>
             </CardContent>
           </Card>
         </TabsContent>

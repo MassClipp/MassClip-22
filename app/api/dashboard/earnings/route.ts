@@ -1,140 +1,77 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { getFirestore } from "firebase-admin/firestore"
-import { initializeApp, getApps, cert } from "firebase-admin/app"
-import { createDefaultEarningsData, safeNumber } from "@/lib/format-utils"
-
-// Initialize Firebase Admin
-if (!getApps().length) {
-  initializeApp({
-    credential: cert({
-      projectId: process.env.FIREBASE_PROJECT_ID,
-      clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-      privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n"),
-    }),
-  })
-}
-
-const db = getFirestore()
+import { getServerSession } from "next-auth"
+import { authOptions } from "@/auth"
+import { db } from "@/lib/firebase-server"
+import { StripeEarningsService } from "@/lib/stripe-earnings-service"
+import { validateEarningsData } from "@/lib/format-utils"
 
 export async function GET(request: NextRequest) {
   try {
-    console.log("🚀 Earnings API called")
+    console.log("🔍 Starting earnings API request...")
 
-    // Create safe default data structure
-    const defaultData = createDefaultEarningsData()
-    console.log("📊 Default data structure created:", defaultData)
-
-    // For now, return enhanced mock data with safe numbers
-    const mockData = {
-      totalEarnings: safeNumber(2450.75, 0),
-      thisMonthEarnings: safeNumber(850.25, 0),
-      lastMonthEarnings: safeNumber(725.5, 0),
-      last30DaysEarnings: safeNumber(950.75, 0),
-      pendingPayout: safeNumber(125.5, 0),
-      availableBalance: safeNumber(325.25, 0),
-      salesMetrics: {
-        totalSales: safeNumber(87, 0),
-        thisMonthSales: safeNumber(28, 0),
-        last30DaysSales: safeNumber(35, 0),
-        averageTransactionValue: safeNumber(28.17, 0),
-      },
-      accountStatus: {
-        chargesEnabled: true,
-        payoutsEnabled: true,
-        detailsSubmitted: true,
-        requirementsCount: safeNumber(0, 0),
-      },
-      recentTransactions: [
-        {
-          id: "txn_1",
-          description: "Premium Video Bundle",
-          amount: safeNumber(49.99, 0),
-          created: new Date().toISOString(),
-          status: "completed",
-          currency: "USD",
-        },
-        {
-          id: "txn_2",
-          description: "Individual Video Purchase",
-          amount: safeNumber(19.99, 0),
-          created: new Date(Date.now() - 86400000).toISOString(),
-          status: "completed",
-          currency: "USD",
-        },
-        {
-          id: "txn_3",
-          description: "Subscription Payment",
-          amount: safeNumber(29.99, 0),
-          created: new Date(Date.now() - 172800000).toISOString(),
-          status: "completed",
-          currency: "USD",
-        },
-      ],
-      payoutHistory: [],
-      monthlyBreakdown: [
-        {
-          month: "Jan 2024",
-          earnings: safeNumber(725.5, 0),
-          transactionCount: safeNumber(25, 0),
-        },
-        {
-          month: "Feb 2024",
-          earnings: safeNumber(850.25, 0),
-          transactionCount: safeNumber(28, 0),
-        },
-        {
-          month: "Mar 2024",
-          earnings: safeNumber(950.75, 0),
-          transactionCount: safeNumber(35, 0),
-        },
-      ],
+    // Get authenticated session
+    const session = await getServerSession(authOptions)
+    if (!session?.user?.id) {
+      console.log("❌ No authenticated session found")
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    console.log("📊 Mock data prepared with safe numbers:", mockData)
+    const userId = session.user.id
+    console.log("✅ Authenticated user:", userId)
 
-    // Validate all numbers in the response
-    const validateNumbers = (obj: any, path = ""): void => {
-      for (const [key, value] of Object.entries(obj)) {
-        const currentPath = path ? `${path}.${key}` : key
-
-        if (typeof value === "number") {
-          if (!isFinite(value) || isNaN(value)) {
-            console.error(`❌ Invalid number at ${currentPath}:`, value)
-            throw new Error(`Invalid number detected at ${currentPath}`)
-          }
-          console.log(`✅ Valid number at ${currentPath}:`, value)
-        } else if (typeof value === "object" && value !== null && !Array.isArray(value)) {
-          validateNumbers(value, currentPath)
-        }
-      }
+    // Get user profile from Firestore
+    const userDoc = await db.collection("users").doc(userId).get()
+    if (!userDoc.exists) {
+      console.log("❌ User profile not found in Firestore")
+      return NextResponse.json({ error: "User profile not found" }, { status: 404 })
     }
 
-    // Validate the mock data
-    validateNumbers(mockData)
-    console.log("✅ All numbers validated successfully")
+    const userData = userDoc.data()
+    const stripeAccountId = userData?.stripeAccountId
 
-    return NextResponse.json(mockData, {
-      status: 200,
-      headers: {
-        "Cache-Control": "no-cache, no-store, must-revalidate",
-        Pragma: "no-cache",
-        Expires: "0",
-      },
+    if (!stripeAccountId) {
+      console.log("⚠️ No Stripe account connected for user")
+      return NextResponse.json(
+        {
+          error: "No Stripe account connected",
+          message: "Please connect your Stripe account to view earnings",
+          needsStripeConnection: true,
+          data: validateEarningsData(null),
+        },
+        { status: 200 },
+      )
+    }
+
+    console.log("💳 Found Stripe account:", stripeAccountId)
+
+    // Fetch real earnings data from Stripe
+    const stripeEarningsService = new StripeEarningsService()
+    const earningsData = await stripeEarningsService.getEarningsData(stripeAccountId)
+
+    console.log("📊 Raw Stripe earnings data:", earningsData)
+
+    // Validate and format the data
+    const validatedData = validateEarningsData(earningsData)
+    console.log("✅ Validated earnings data:", validatedData)
+
+    return NextResponse.json({
+      success: true,
+      data: validatedData,
+      dataSource: "stripe",
+      lastUpdated: new Date().toISOString(),
     })
   } catch (error) {
-    console.error("❌ Earnings API error:", error)
+    console.error("💥 Earnings API error:", error)
 
-    // Return safe fallback response even on error
-    const fallbackResponse = createDefaultEarningsData()
-    console.log("📊 Returning fallback response:", fallbackResponse)
-
-    return NextResponse.json(fallbackResponse, {
-      status: 200, // Return 200 to prevent client-side errors
-      headers: {
-        "Cache-Control": "no-cache, no-store, must-revalidate",
-        Pragma: "no-cache",
-        Expires: "0",
+    // Return safe fallback data on error
+    return NextResponse.json(
+      {
+        error: "Failed to fetch earnings data",
+        message: error instanceof Error ? error.message : "Unknown error occurred",
+        data: validateEarningsData(null),
+        dataSource: "fallback",
       },
-    })
+      { status: 200 },
+    )
   }
 }
