@@ -8,7 +8,7 @@ export async function GET(request: NextRequest) {
 
     const environmentStatus = {
       stripeMode: "UNKNOWN",
-      stripeKeyPrefix: "Not configured",
+      stripeKeyPrefix: "NOT_SET",
       webhookConfigured: false,
       firebaseConnected: false,
       environment: process.env.NODE_ENV || "unknown",
@@ -16,15 +16,14 @@ export async function GET(request: NextRequest) {
       apiEndpointsAvailable: [] as string[],
       timestamp: new Date().toISOString(),
       errors: [] as string[],
-      warnings: [] as string[],
     }
 
-    // Check Stripe configuration
+    // Check Stripe Configuration
     try {
-      const stripeKey = process.env.STRIPE_SECRET_KEY
-      if (stripeKey) {
-        environmentStatus.stripeKeyPrefix = stripeKey.substring(0, 8)
-        environmentStatus.stripeMode = stripeKey.startsWith("sk_live_") ? "LIVE" : "TEST"
+      const secretKey = process.env.STRIPE_SECRET_KEY
+      if (secretKey) {
+        environmentStatus.stripeKeyPrefix = secretKey.substring(0, 8)
+        environmentStatus.stripeMode = secretKey.startsWith("sk_live_") ? "LIVE" : "TEST"
 
         // Test Stripe connection
         const account = await stripe.accounts.retrieve()
@@ -34,86 +33,68 @@ export async function GET(request: NextRequest) {
         environmentStatus.errors.push("STRIPE_SECRET_KEY not configured")
       }
     } catch (error: any) {
-      console.error("❌ [Environment Debug] Stripe error:", error)
-      environmentStatus.errors.push(`Stripe connection failed: ${error.message}`)
+      console.error("❌ [Environment Debug] Stripe connection failed:", error)
+      environmentStatus.errors.push(`Stripe error: ${error.message}`)
     }
 
-    // Check Firebase connection
+    // Check Firebase Connection
     try {
-      // Test Firestore connection by attempting to read a collection
+      // Try to read from Firestore to test connection
       const testQuery = await db.collection("users").limit(1).get()
       environmentStatus.firebaseConnected = true
       console.log("✅ [Environment Debug] Firebase connected")
     } catch (error: any) {
-      console.error("❌ [Environment Debug] Firebase error:", error)
-      environmentStatus.errors.push(`Firebase connection failed: ${error.message}`)
+      console.error("❌ [Environment Debug] Firebase connection failed:", error)
+      environmentStatus.firebaseConnected = false
+      environmentStatus.errors.push(`Firebase error: ${error.message}`)
     }
 
-    // Check webhook configuration
+    // Check Webhook Configuration
     try {
-      if (environmentStatus.stripeConnected) {
-        const webhookEndpoints = await stripe.webhookEndpoints.list({ limit: 10 })
-        const currentDomain = process.env.NEXT_PUBLIC_SITE_URL || process.env.VERCEL_URL
+      const webhookEndpoints = await stripe.webhookEndpoints.list({ limit: 10 })
+      const currentDomain = process.env.NEXT_PUBLIC_SITE_URL || process.env.VERCEL_URL
 
-        if (currentDomain) {
-          const hasWebhook = webhookEndpoints.data.some(
-            (webhook) => webhook.url.includes(currentDomain) || webhook.url.includes("massclip.pro"),
-          )
-          environmentStatus.webhookConfigured = hasWebhook
+      if (currentDomain) {
+        const hasWebhook = webhookEndpoints.data.some(
+          (webhook) =>
+            webhook.url.includes(currentDomain) ||
+            webhook.url.includes("massclip.pro") ||
+            webhook.url.includes("localhost"),
+        )
+        environmentStatus.webhookConfigured = hasWebhook
 
-          if (!hasWebhook) {
-            environmentStatus.warnings.push("No webhook configured for current domain")
-          }
+        if (hasWebhook) {
+          console.log("✅ [Environment Debug] Webhook configured")
         } else {
-          environmentStatus.warnings.push("NEXT_PUBLIC_SITE_URL not configured")
+          console.log("⚠️ [Environment Debug] No webhook found for current domain")
+          environmentStatus.errors.push("No webhook configured for current domain")
         }
       }
     } catch (error: any) {
-      console.error("❌ [Environment Debug] Webhook check error:", error)
-      environmentStatus.warnings.push(`Could not check webhook configuration: ${error.message}`)
+      console.error("❌ [Environment Debug] Webhook check failed:", error)
+      environmentStatus.errors.push(`Webhook check failed: ${error.message}`)
     }
 
-    // Check environment variables
-    const requiredEnvVars = [
-      "STRIPE_SECRET_KEY",
-      "STRIPE_WEBHOOK_SECRET",
-      "NEXT_PUBLIC_SITE_URL",
-      "FIREBASE_PROJECT_ID",
-      "FIREBASE_CLIENT_EMAIL",
-      "FIREBASE_PRIVATE_KEY",
-    ]
-
-    const missingEnvVars = requiredEnvVars.filter((envVar) => !process.env[envVar])
-    if (missingEnvVars.length > 0) {
-      environmentStatus.errors.push(`Missing environment variables: ${missingEnvVars.join(", ")}`)
-    }
-
-    // Check webhook secrets
-    const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET_LIVE || process.env.STRIPE_WEBHOOK_SECRET
-    if (!webhookSecret) {
-      environmentStatus.errors.push("No webhook secret configured")
-    }
-
-    // List available API endpoints (this is a simplified check)
+    // List available API endpoints
     environmentStatus.apiEndpointsAvailable = [
       "/api/purchase/verify-session",
       "/api/debug/stripe-environment",
       "/api/debug/purchase-session-analysis",
-      "/api/stripe/checkout",
+      "/api/stripe/webhook/route",
       "/api/health",
-      "/api/webhooks/stripe",
     ]
 
-    console.log("✅ [Environment Debug] Environment check complete")
-    console.log("   Stripe Mode:", environmentStatus.stripeMode)
-    console.log("   Firebase Connected:", environmentStatus.firebaseConnected)
-    console.log("   Webhook Configured:", environmentStatus.webhookConfigured)
-    console.log("   Errors:", environmentStatus.errors.length)
-    console.log("   Warnings:", environmentStatus.warnings.length)
+    console.log("✅ [Environment Debug] Environment check complete:", {
+      stripeMode: environmentStatus.stripeMode,
+      stripeConnected: environmentStatus.stripeConnected,
+      firebaseConnected: environmentStatus.firebaseConnected,
+      webhookConfigured: environmentStatus.webhookConfigured,
+      errorsCount: environmentStatus.errors.length,
+    })
 
     return NextResponse.json(environmentStatus)
   } catch (error: any) {
-    console.error("❌ [Environment Debug] Check failed:", error)
+    console.error("❌ [Environment Debug] Environment check failed:", error)
     return NextResponse.json(
       {
         error: "Environment check failed",

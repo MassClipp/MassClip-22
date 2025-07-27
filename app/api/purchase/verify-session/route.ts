@@ -35,6 +35,9 @@ export async function POST(request: NextRequest) {
 
     // Enhanced session retrieval with better error handling
     console.log("💳 [Verify Session] Retrieving Stripe session:", sessionId)
+    console.log("   Stripe mode:", process.env.STRIPE_SECRET_KEY?.startsWith("sk_live_") ? "LIVE" : "TEST")
+    console.log("   Session ID prefix:", sessionId.substring(0, 8))
+
     let session
     try {
       // First, try to retrieve the session with expanded payment_intent
@@ -50,6 +53,10 @@ export async function POST(request: NextRequest) {
       console.log("   Customer Email:", session.customer_details?.email)
       console.log("   Metadata:", session.metadata)
       console.log("   Created:", new Date(session.created * 1000).toISOString())
+      console.log(
+        "   Expires At:",
+        session.expires_at ? new Date(session.expires_at * 1000).toISOString() : "No expiration",
+      )
       console.log("   Mode:", session.mode)
     } catch (error: any) {
       console.error("❌ [Verify Session] Failed to retrieve session:", error)
@@ -63,13 +70,15 @@ export async function POST(request: NextRequest) {
           const isLiveSession = sessionId.startsWith("cs_live_")
           const isTestSession = sessionId.startsWith("cs_test_")
           const currentMode = process.env.STRIPE_SECRET_KEY?.startsWith("sk_live_") ? "live" : "test"
+          const currentKeyPrefix = process.env.STRIPE_SECRET_KEY?.substring(0, 8) || "unknown"
 
           console.log("🔍 [Verify Session] Mode analysis:", {
-            sessionId,
+            sessionId: sessionId.substring(0, 20) + "...",
             isLiveSession,
             isTestSession,
             currentMode,
-            stripeKeyPrefix: process.env.STRIPE_SECRET_KEY?.substring(0, 8),
+            currentKeyPrefix,
+            stripeKeyConfigured: !!process.env.STRIPE_SECRET_KEY,
           })
 
           if ((isLiveSession && currentMode === "test") || (isTestSession && currentMode === "live")) {
@@ -80,6 +89,8 @@ export async function POST(request: NextRequest) {
                 sessionId,
                 currentMode,
                 sessionMode: isLiveSession ? "live" : "test",
+                stripeKeyPrefix: currentKeyPrefix,
+                suggestion: "Verify you're using the correct Stripe keys for your environment",
               },
               { status: 400 },
             )
@@ -88,21 +99,33 @@ export async function POST(request: NextRequest) {
           return NextResponse.json(
             {
               error: "Session not found",
-              details: "This checkout session does not exist or has expired",
+              details: "This checkout session does not exist in Stripe or has been deleted",
               sessionId,
-              suggestion: "Please try making a new purchase",
+              sessionPrefix: sessionId.substring(0, 8),
+              stripeMode: currentMode,
+              possibleCauses: [
+                "Session ID is incorrect or truncated",
+                "Session was never created",
+                "Using wrong Stripe account",
+                "Session was created in different mode (test vs live)",
+                "Session has been deleted from Stripe dashboard",
+              ],
+              suggestion: "Please verify the session ID and try making a new purchase",
             },
             { status: 404 },
           )
         }
       }
 
+      // Network or other errors
       return NextResponse.json(
         {
           error: "Failed to retrieve session",
           details: error.message,
           type: error.type || "unknown",
           sessionId,
+          stripeMode: process.env.STRIPE_SECRET_KEY?.startsWith("sk_live_") ? "live" : "test",
+          timestamp: new Date().toISOString(),
         },
         { status: 400 },
       )

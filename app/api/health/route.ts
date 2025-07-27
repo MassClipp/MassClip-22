@@ -4,55 +4,62 @@ import { db } from "@/lib/firebase-admin"
 
 export async function GET(request: NextRequest) {
   try {
-    console.log("🏥 [Health Check] Starting health check...")
-
-    const health = {
+    const healthCheck = {
       status: "healthy",
       timestamp: new Date().toISOString(),
       services: {
-        stripe: false,
-        firebase: false,
-        database: false,
+        stripe: { status: "unknown", details: "" },
+        firebase: { status: "unknown", details: "" },
+        database: { status: "unknown", details: "" },
       },
-      version: process.env.npm_package_version || "unknown",
-      environment: process.env.NODE_ENV || "unknown",
-      uptime: process.uptime(),
-      errors: [] as string[],
+      environment: {
+        nodeEnv: process.env.NODE_ENV,
+        stripeMode: process.env.STRIPE_SECRET_KEY?.startsWith("sk_live_") ? "live" : "test",
+        domain: process.env.NEXT_PUBLIC_SITE_URL || process.env.VERCEL_URL || "unknown",
+      },
     }
 
-    // Check Stripe
+    // Test Stripe
     try {
-      await stripe.accounts.retrieve()
-      health.services.stripe = true
-      console.log("✅ [Health Check] Stripe OK")
+      const account = await stripe.accounts.retrieve()
+      healthCheck.services.stripe.status = "healthy"
+      healthCheck.services.stripe.details = `Connected to account: ${account.id}`
     } catch (error: any) {
-      health.services.stripe = false
-      health.errors.push(`Stripe: ${error.message}`)
-      console.error("❌ [Health Check] Stripe failed:", error.message)
+      healthCheck.services.stripe.status = "unhealthy"
+      healthCheck.services.stripe.details = error.message
+      healthCheck.status = "degraded"
     }
 
-    // Check Firebase
+    // Test Firebase/Firestore
     try {
-      await db.collection("health").limit(1).get()
-      health.services.firebase = true
-      health.services.database = true
-      console.log("✅ [Health Check] Firebase OK")
+      const startTime = Date.now()
+      await db.collection("_health_check").doc("test").set({
+        timestamp: new Date(),
+        test: true,
+      })
+      const responseTime = Date.now() - startTime
+
+      healthCheck.services.firebase.status = "healthy"
+      healthCheck.services.firebase.details = `Response time: ${responseTime}ms`
+      healthCheck.services.database = healthCheck.services.firebase
     } catch (error: any) {
-      health.services.firebase = false
-      health.services.database = false
-      health.errors.push(`Firebase: ${error.message}`)
-      console.error("❌ [Health Check] Firebase failed:", error.message)
+      healthCheck.services.firebase.status = "unhealthy"
+      healthCheck.services.firebase.details = error.message
+      healthCheck.services.database = healthCheck.services.firebase
+      healthCheck.status = "degraded"
     }
 
     // Determine overall status
-    const allServicesHealthy = Object.values(health.services).every((service) => service === true)
-    health.status = allServicesHealthy ? "healthy" : "degraded"
+    const allHealthy = Object.values(healthCheck.services).every((service) => service.status === "healthy")
+    if (!allHealthy && healthCheck.status === "healthy") {
+      healthCheck.status = "degraded"
+    }
 
-    const statusCode = health.status === "healthy" ? 200 : 503
+    const statusCode = healthCheck.status === "healthy" ? 200 : 503
 
-    console.log(`${health.status === "healthy" ? "✅" : "⚠️"} [Health Check] Overall status: ${health.status}`)
+    console.log(`🏥 [Health Check] Overall status: ${healthCheck.status}`)
 
-    return NextResponse.json(health, { status: statusCode })
+    return NextResponse.json(healthCheck, { status: statusCode })
   } catch (error: any) {
     console.error("❌ [Health Check] Health check failed:", error)
     return NextResponse.json(
@@ -60,11 +67,6 @@ export async function GET(request: NextRequest) {
         status: "unhealthy",
         timestamp: new Date().toISOString(),
         error: error.message,
-        services: {
-          stripe: false,
-          firebase: false,
-          database: false,
-        },
       },
       { status: 503 },
     )
