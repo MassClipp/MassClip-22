@@ -1,173 +1,239 @@
 /**
- * Ultra-safe number formatting utilities
- * Handles all edge cases to prevent toFixed() errors
+ * Ultra-safe number formatting utilities with comprehensive error handling
  */
 
-// Type guard to check if a value is a valid number
-export const isValidNumber = (value: any): value is number => {
-  return typeof value === "number" && isFinite(value) && !isNaN(value)
-}
+// Safe number conversion with extensive logging
+export function safeNumber(value: any, fallback = 0): number {
+  console.log("safeNumber input:", { value, type: typeof value, fallback })
 
-// Ultra-safe number conversion with extensive validation
-export const safeNumber = (value: any, fallback = 0): number => {
-  // Handle null, undefined, empty string, boolean false
-  if (value === null || value === undefined || value === "" || value === false) {
+  if (value === null || value === undefined) {
+    console.log("safeNumber: null/undefined, returning fallback:", fallback)
     return fallback
   }
 
-  // If it's already a number, validate it thoroughly
   if (typeof value === "number") {
-    // Check for NaN, Infinity, -Infinity
-    if (!isFinite(value) || isNaN(value)) {
-      console.warn(`safeNumber: Invalid number detected:`, value, `Using fallback: ${fallback}`)
+    if (isNaN(value) || !isFinite(value)) {
+      console.log("safeNumber: invalid number, returning fallback:", fallback)
       return fallback
     }
+    console.log("safeNumber: valid number:", value)
     return value
   }
 
-  // Handle string conversion
   if (typeof value === "string") {
-    const trimmed = value.trim()
-    if (trimmed === "" || trimmed === "null" || trimmed === "undefined") {
+    const parsed = Number.parseFloat(value)
+    if (isNaN(parsed) || !isFinite(parsed)) {
+      console.log("safeNumber: invalid string number, returning fallback:", fallback)
       return fallback
     }
-
-    // Try to parse the string
-    const parsed = Number(trimmed)
-    if (!isFinite(parsed) || isNaN(parsed)) {
-      console.warn(`safeNumber: String conversion failed:`, value, `Using fallback: ${fallback}`)
-      return fallback
-    }
+    console.log("safeNumber: parsed string to number:", parsed)
     return parsed
   }
 
-  // Handle boolean conversion
-  if (typeof value === "boolean") {
-    return value ? 1 : 0
-  }
-
-  // Try generic Number conversion as last resort
-  try {
-    const converted = Number(value)
-    if (!isFinite(converted) || isNaN(converted)) {
-      console.warn(`safeNumber: Generic conversion failed:`, value, `Using fallback: ${fallback}`)
-      return fallback
-    }
-    return converted
-  } catch (error) {
-    console.error(`safeNumber: Conversion error for value:`, value, error)
-    return fallback
-  }
+  console.log("safeNumber: unknown type, returning fallback:", fallback)
+  return fallback
 }
 
 // Ultra-safe currency formatting
-export const formatCurrency = (
-  value: any,
-  options: {
-    fallback?: string
-    decimals?: number
-    prefix?: string
-    suffix?: string
-  } = {},
-): string => {
-  const { fallback = "0.00", decimals = 2, prefix = "", suffix = "" } = options
+export function formatCurrency(amount: any): string {
+  console.log("formatCurrency input:", { amount, type: typeof amount })
+
+  const safeAmount = safeNumber(amount, 0)
+  console.log("formatCurrency safeAmount:", safeAmount)
 
   try {
-    // Convert to safe number first
-    const num = safeNumber(value, 0)
-
-    // Double-check that we have a valid number
-    if (!isValidNumber(num)) {
-      console.warn(`formatCurrency: Invalid number after conversion:`, value, `→`, num, `Using fallback: ${fallback}`)
-      return fallback
-    }
-
-    // Ensure decimals is a valid number
-    const safeDecimals = safeNumber(decimals, 2)
-    if (safeDecimals < 0 || safeDecimals > 20) {
-      console.warn(`formatCurrency: Invalid decimals:`, decimals, `Using 2`)
-      return `${prefix}${num.toFixed(2)}${suffix}`
-    }
-
-    return `${prefix}${num.toFixed(safeDecimals)}${suffix}`
+    const formatted = new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: "USD",
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(safeAmount)
+    console.log("formatCurrency result:", formatted)
+    return formatted
   } catch (error) {
-    console.error(`formatCurrency: Formatting error for value:`, value, error)
+    console.error("formatCurrency error:", error)
+    return `$${safeAmount.toFixed(2)}`
+  }
+}
+
+// Ultra-safe percentage formatting
+export function formatPercentage(value: any): string {
+  console.log("formatPercentage input:", { value, type: typeof value })
+
+  const safeValue = safeNumber(value, 0)
+  console.log("formatPercentage safeValue:", safeValue)
+
+  try {
+    const formatted = `${safeValue.toFixed(1)}%`
+    console.log("formatPercentage result:", formatted)
+    return formatted
+  } catch (error) {
+    console.error("formatPercentage error:", error)
+    return "0.0%"
+  }
+}
+
+// Ultra-safe number formatting with decimals
+export function formatNumber(value: any, decimals = 0): string {
+  console.log("formatNumber input:", { value, type: typeof value, decimals })
+
+  const safeValue = safeNumber(value, 0)
+  console.log("formatNumber safeValue:", safeValue)
+
+  try {
+    const formatted = safeValue.toFixed(decimals)
+    console.log("formatNumber result:", formatted)
+    return formatted
+  } catch (error) {
+    console.error("formatNumber error:", error)
+    return "0"
+  }
+}
+
+// Safe integer formatting (missing export)
+export function formatInteger(value: any, fallback = "0"): string {
+  console.log("formatInteger input:", { value, type: typeof value, fallback })
+
+  const safeValue = safeNumber(value, 0)
+  console.log("formatInteger safeValue:", safeValue)
+
+  try {
+    const formatted = Math.round(safeValue).toString()
+    console.log("formatInteger result:", formatted)
+    return formatted
+  } catch (error) {
+    console.error("formatInteger error:", error)
     return fallback
   }
 }
 
-// Safe percentage formatting
-export const formatPercentage = (
-  value: any,
-  options: {
-    fallback?: string
-    decimals?: number
-    suffix?: string
-  } = {},
-): string => {
-  const { fallback = "0.0", decimals = 1, suffix = "%" } = options
+// Safe duration formatting
+export function formatDuration(seconds: any): string {
+  console.log("formatDuration input:", { seconds, type: typeof seconds })
+
+  const safeSeconds = safeNumber(seconds, 0)
+  console.log("formatDuration safeSeconds:", safeSeconds)
 
   try {
-    const num = safeNumber(value, 0)
+    const hours = Math.floor(safeSeconds / 3600)
+    const minutes = Math.floor((safeSeconds % 3600) / 60)
+    const remainingSeconds = Math.floor(safeSeconds % 60)
 
-    if (!isValidNumber(num)) {
-      console.warn(`formatPercentage: Invalid number:`, value, `Using fallback: ${fallback}`)
-      return fallback
+    if (hours > 0) {
+      const formatted = `${hours}:${minutes.toString().padStart(2, "0")}:${remainingSeconds.toString().padStart(2, "0")}`
+      console.log("formatDuration result (with hours):", formatted)
+      return formatted
+    } else {
+      const formatted = `${minutes}:${remainingSeconds.toString().padStart(2, "0")}`
+      console.log("formatDuration result (minutes only):", formatted)
+      return formatted
     }
-
-    const safeDecimals = safeNumber(decimals, 1)
-    return `${num.toFixed(safeDecimals)}${suffix}`
   } catch (error) {
-    console.error(`formatPercentage: Formatting error for value:`, value, error)
-    return fallback
+    console.error("formatDuration error:", error)
+    return "0:00"
   }
 }
 
-// Safe integer formatting
-export const formatInteger = (value: any, fallback = "0"): string => {
-  try {
-    const num = safeNumber(value, 0)
+// Safe date formatting
+export function formatDate(date: any): string {
+  console.log("formatDate input:", { date, type: typeof date })
 
-    if (!isValidNumber(num)) {
-      console.warn(`formatInteger: Invalid number:`, value, `Using fallback: ${fallback}`)
-      return fallback
+  try {
+    if (!date) {
+      console.log("formatDate: no date provided, returning default")
+      return "N/A"
     }
 
-    return Math.round(num).toString()
+    const dateObj = date instanceof Date ? date : new Date(date)
+    if (isNaN(dateObj.getTime())) {
+      console.log("formatDate: invalid date, returning default")
+      return "N/A"
+    }
+
+    const formatted = dateObj.toLocaleDateString("en-US", {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+    })
+    console.log("formatDate result:", formatted)
+    return formatted
   } catch (error) {
-    console.error(`formatInteger: Formatting error for value:`, value, error)
-    return fallback
+    console.error("formatDate error:", error)
+    return "N/A"
   }
 }
 
-// Safe number with commas
-export const formatNumberWithCommas = (
-  value: any,
-  options: {
-    fallback?: string
-    decimals?: number
-  } = {},
-): string => {
-  const { fallback = "0", decimals = 0 } = options
+// Create default earnings data structure (missing export)
+export function createDefaultEarningsData() {
+  console.log("Creating default earnings data structure")
 
-  try {
-    const num = safeNumber(value, 0)
-
-    if (!isValidNumber(num)) {
-      console.warn(`formatNumberWithCommas: Invalid number:`, value, `Using fallback: ${fallback}`)
-      return fallback
-    }
-
-    const safeDecimals = safeNumber(decimals, 0)
-    return num.toFixed(safeDecimals).replace(/\B(?=(\d{3})+(?!\d))/g, ",")
-  } catch (error) {
-    console.error(`formatNumberWithCommas: Formatting error for value:`, value, error)
-    return fallback
+  const defaultData = {
+    totalEarnings: 0,
+    thisMonthEarnings: 0,
+    lastMonthEarnings: 0,
+    last30DaysEarnings: 0,
+    pendingPayout: 0,
+    availableBalance: 0,
+    salesMetrics: {
+      totalSales: 0,
+      thisMonthSales: 0,
+      last30DaysSales: 0,
+      averageTransactionValue: 0,
+    },
+    accountStatus: {
+      chargesEnabled: false,
+      payoutsEnabled: false,
+      detailsSubmitted: false,
+      requirementsCount: 0,
+    },
+    recentTransactions: [],
+    payoutHistory: [],
+    monthlyBreakdown: [],
   }
+
+  console.log("Default earnings data created:", defaultData)
+  return defaultData
+}
+
+// Validate earnings data structure
+export function validateEarningsData(data: any): any {
+  console.log("validateEarningsData input:", data)
+
+  if (!data || typeof data !== "object") {
+    console.warn("validateEarningsData: Invalid data structure, using defaults")
+    return createDefaultEarningsData()
+  }
+
+  const validated = {
+    totalEarnings: safeNumber(data?.totalEarnings, 0),
+    thisMonthEarnings: safeNumber(data?.thisMonthEarnings, 0),
+    lastMonthEarnings: safeNumber(data?.lastMonthEarnings, 0),
+    last30DaysEarnings: safeNumber(data?.last30DaysEarnings, 0),
+    pendingPayout: safeNumber(data?.pendingPayout, 0),
+    availableBalance: safeNumber(data?.availableBalance, 0),
+    salesMetrics: {
+      totalSales: safeNumber(data?.salesMetrics?.totalSales, 0),
+      thisMonthSales: safeNumber(data?.salesMetrics?.thisMonthSales, 0),
+      last30DaysSales: safeNumber(data?.salesMetrics?.last30DaysSales, 0),
+      averageTransactionValue: safeNumber(data?.salesMetrics?.averageTransactionValue, 0),
+    },
+    accountStatus: {
+      chargesEnabled: Boolean(data?.accountStatus?.chargesEnabled),
+      payoutsEnabled: Boolean(data?.accountStatus?.payoutsEnabled),
+      detailsSubmitted: Boolean(data?.accountStatus?.detailsSubmitted),
+      requirementsCount: safeNumber(data?.accountStatus?.requirementsCount, 0),
+    },
+    recentTransactions: Array.isArray(data?.recentTransactions) ? data.recentTransactions : [],
+    payoutHistory: Array.isArray(data?.payoutHistory) ? data.payoutHistory : [],
+    monthlyBreakdown: Array.isArray(data?.monthlyBreakdown) ? data.monthlyBreakdown : [],
+  }
+
+  console.log("validateEarningsData result:", validated)
+  return validated
 }
 
 // Safe object property access
-export const safeGet = (obj: any, path: string, fallback: any = undefined) => {
+export function safeGet(obj: any, path: string, fallback: any = undefined) {
   try {
     if (!obj || typeof obj !== "object") {
       return fallback
@@ -190,59 +256,24 @@ export const safeGet = (obj: any, path: string, fallback: any = undefined) => {
   }
 }
 
-// Validate and clean earnings data structure
-export const validateEarningsData = (data: any) => {
-  if (!data || typeof data !== "object") {
-    console.warn("validateEarningsData: Invalid data structure, using defaults")
-    return createDefaultEarningsData()
-  }
+// Safe number with commas formatting
+export function formatNumberWithCommas(value: any, decimals = 0): string {
+  console.log("formatNumberWithCommas input:", { value, type: typeof value, decimals })
 
-  return {
-    totalEarnings: safeNumber(safeGet(data, "totalEarnings", 0)),
-    thisMonthEarnings: safeNumber(safeGet(data, "thisMonthEarnings", 0)),
-    lastMonthEarnings: safeNumber(safeGet(data, "lastMonthEarnings", 0)),
-    last30DaysEarnings: safeNumber(safeGet(data, "last30DaysEarnings", 0)),
-    pendingPayout: safeNumber(safeGet(data, "pendingPayout", 0)),
-    availableBalance: safeNumber(safeGet(data, "availableBalance", 0)),
-    salesMetrics: {
-      totalSales: safeNumber(safeGet(data, "salesMetrics.totalSales", 0)),
-      thisMonthSales: safeNumber(safeGet(data, "salesMetrics.thisMonthSales", 0)),
-      last30DaysSales: safeNumber(safeGet(data, "salesMetrics.last30DaysSales", 0)),
-      averageTransactionValue: safeNumber(safeGet(data, "salesMetrics.averageTransactionValue", 0)),
-    },
-    accountStatus: {
-      chargesEnabled: Boolean(safeGet(data, "accountStatus.chargesEnabled", false)),
-      payoutsEnabled: Boolean(safeGet(data, "accountStatus.payoutsEnabled", false)),
-      detailsSubmitted: Boolean(safeGet(data, "accountStatus.detailsSubmitted", false)),
-      requirementsCount: safeNumber(safeGet(data, "accountStatus.requirementsCount", 0)),
-    },
-    recentTransactions: Array.isArray(safeGet(data, "recentTransactions")) ? data.recentTransactions : [],
-    payoutHistory: Array.isArray(safeGet(data, "payoutHistory")) ? data.payoutHistory : [],
-    monthlyBreakdown: Array.isArray(safeGet(data, "monthlyBreakdown")) ? data.monthlyBreakdown : [],
+  const safeValue = safeNumber(value, 0)
+  console.log("formatNumberWithCommas safeValue:", safeValue)
+
+  try {
+    const formatted = safeValue.toFixed(decimals).replace(/\B(?=(\d{3})+(?!\d))/g, ",")
+    console.log("formatNumberWithCommas result:", formatted)
+    return formatted
+  } catch (error) {
+    console.error("formatNumberWithCommas error:", error)
+    return "0"
   }
 }
 
-// Create default earnings data structure
-export const createDefaultEarningsData = () => ({
-  totalEarnings: 0,
-  thisMonthEarnings: 0,
-  lastMonthEarnings: 0,
-  last30DaysEarnings: 0,
-  pendingPayout: 0,
-  availableBalance: 0,
-  salesMetrics: {
-    totalSales: 0,
-    thisMonthSales: 0,
-    last30DaysSales: 0,
-    averageTransactionValue: 0,
-  },
-  accountStatus: {
-    chargesEnabled: false,
-    payoutsEnabled: false,
-    detailsSubmitted: false,
-    requirementsCount: 0,
-  },
-  recentTransactions: [],
-  payoutHistory: [],
-  monthlyBreakdown: [],
-})
+// Type guard to check if a value is a valid number
+export function isValidNumber(value: any): value is number {
+  return typeof value === "number" && isFinite(value) && !isNaN(value)
+}
