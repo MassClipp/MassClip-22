@@ -62,15 +62,28 @@ export default function PremiumContentSection({
         },
       })
 
+      console.log(`📡 [Premium Content] API response status: ${response.status}`)
+
       if (!response.ok) {
         if (response.status === 404) {
           setBundles([])
           return
         }
-        throw new Error(`Failed to fetch bundles: ${response.status}`)
+
+        let errorMessage = `Failed to fetch bundles: ${response.status}`
+        try {
+          const errorData = await response.json()
+          errorMessage = errorData.error || errorData.details || errorMessage
+        } catch (e) {
+          // Use default error message if JSON parsing fails
+        }
+
+        throw new Error(errorMessage)
       }
 
       const data = await response.json()
+      console.log(`📦 [Premium Content] API response data:`, data)
+
       const creatorBundles = data.productBoxes || data.bundles || []
 
       // Filter only active bundles and convert to Bundle format
@@ -97,7 +110,15 @@ export default function PremiumContentSection({
       console.log(`✅ [Premium Content] Loaded ${activeBundles.length} active bundles`)
     } catch (err) {
       console.error("❌ [Premium Content] Error:", err)
-      setError(err instanceof Error ? err.message : "Failed to load premium content")
+      const errorMessage = err instanceof Error ? err.message : "Failed to load premium content"
+      setError(errorMessage)
+
+      // Show toast for debugging
+      toast({
+        title: "Debug Info",
+        description: `Error fetching premium content: ${errorMessage}`,
+        variant: "destructive",
+      })
     } finally {
       setLoading(false)
     }
@@ -204,7 +225,7 @@ export default function PremiumContentSection({
     })
 
     // Priority: customPreviewThumbnail > coverImage > coverImageUrl > placeholder
-    const possibleUrls = [bundle.customPreviewThumbnail, bundle.coverImage, bundle.coverImageUrl].filter(Boolean) // Remove null/undefined values
+    const possibleUrls = [bundle.customPreviewThumbnail, bundle.coverImage, bundle.coverImageUrl].filter(Boolean)
 
     for (const url of possibleUrls) {
       if (url && typeof url === "string" && url.startsWith("http")) {
@@ -236,7 +257,8 @@ export default function PremiumContentSection({
     return (
       <div className="text-center py-12">
         <AlertCircle className="h-8 w-8 text-red-500 mx-auto mb-3" />
-        <p className="text-zinc-400 mb-4">{error}</p>
+        <p className="text-zinc-400 mb-2">Failed to load premium content</p>
+        <p className="text-sm text-zinc-500 mb-4">{error}</p>
         <Button
           onClick={fetchCreatorBundles}
           variant="outline"
@@ -255,6 +277,11 @@ export default function PremiumContentSection({
         <Package className="h-12 w-12 text-zinc-600 mx-auto mb-4" />
         <h3 className="text-lg font-medium text-white mb-2">No Premium Content</h3>
         <p className="text-zinc-400">This creator hasn't published any premium bundles yet.</p>
+        {isOwner && (
+          <Button onClick={() => router.push("/dashboard/bundles")} className="mt-4" variant="outline">
+            Create Your First Bundle
+          </Button>
+        )}
       </div>
     )
   }
@@ -271,7 +298,7 @@ export default function PremiumContentSection({
           >
             <Card className="bg-zinc-900/50 border-zinc-800 overflow-hidden hover:border-zinc-700 transition-all duration-300 group">
               <div className="relative">
-                {/* Bundle Thumbnail - Changed to square aspect ratio */}
+                {/* Bundle Thumbnail */}
                 <div className="aspect-square bg-zinc-800 overflow-hidden">
                   <img
                     src={getBundleThumbnail(bundle) || "/placeholder.svg"}
@@ -279,7 +306,6 @@ export default function PremiumContentSection({
                     className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-300"
                     style={{ objectFit: "cover" }}
                     onError={(e) => {
-                      // Fallback to package icon if image fails to load
                       const target = e.target as HTMLImageElement
                       target.style.display = "none"
                       const parent = target.parentElement
