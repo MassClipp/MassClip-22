@@ -1,72 +1,32 @@
-import { type NextRequest, NextResponse } from "next/server"
-import { stripe } from "@/lib/stripe"
-import { db } from "@/lib/firebase-admin"
+import { NextResponse } from "next/server"
 
-export async function GET(request: NextRequest) {
+export async function GET() {
   try {
-    const healthCheck = {
-      status: "healthy",
+    // Basic health checks
+    const checks = {
       timestamp: new Date().toISOString(),
-      services: {
-        stripe: { status: "unknown", details: "" },
-        firebase: { status: "unknown", details: "" },
-        database: { status: "unknown", details: "" },
+      environment: process.env.NODE_ENV,
+      stripeConfigured: !!process.env.STRIPE_SECRET_KEY,
+      webhookConfigured: !!(process.env.STRIPE_WEBHOOK_SECRET_LIVE || process.env.STRIPE_WEBHOOK_SECRET),
+      firebaseConfigured: !!process.env.FIREBASE_PROJECT_ID,
+    }
+
+    const allHealthy = Object.values(checks).every((check) => (typeof check === "boolean" ? check : true))
+
+    return NextResponse.json(
+      {
+        status: allHealthy ? "healthy" : "degraded",
+        checks,
       },
-      environment: {
-        nodeEnv: process.env.NODE_ENV,
-        stripeMode: process.env.STRIPE_SECRET_KEY?.startsWith("sk_live_") ? "live" : "test",
-        domain: process.env.NEXT_PUBLIC_SITE_URL || process.env.VERCEL_URL || "unknown",
+      {
+        status: allHealthy ? 200 : 503,
       },
-    }
-
-    // Test Stripe
-    try {
-      const account = await stripe.accounts.retrieve()
-      healthCheck.services.stripe.status = "healthy"
-      healthCheck.services.stripe.details = `Connected to account: ${account.id}`
-    } catch (error: any) {
-      healthCheck.services.stripe.status = "unhealthy"
-      healthCheck.services.stripe.details = error.message
-      healthCheck.status = "degraded"
-    }
-
-    // Test Firebase/Firestore
-    try {
-      const startTime = Date.now()
-      await db.collection("_health_check").doc("test").set({
-        timestamp: new Date(),
-        test: true,
-      })
-      const responseTime = Date.now() - startTime
-
-      healthCheck.services.firebase.status = "healthy"
-      healthCheck.services.firebase.details = `Response time: ${responseTime}ms`
-      healthCheck.services.database = healthCheck.services.firebase
-    } catch (error: any) {
-      healthCheck.services.firebase.status = "unhealthy"
-      healthCheck.services.firebase.details = error.message
-      healthCheck.services.database = healthCheck.services.firebase
-      healthCheck.status = "degraded"
-    }
-
-    // Determine overall status
-    const allHealthy = Object.values(healthCheck.services).every((service) => service.status === "healthy")
-    if (!allHealthy && healthCheck.status === "healthy") {
-      healthCheck.status = "degraded"
-    }
-
-    const statusCode = healthCheck.status === "healthy" ? 200 : 503
-
-    console.log(`🏥 [Health Check] Overall status: ${healthCheck.status}`)
-
-    return NextResponse.json(healthCheck, { status: statusCode })
-  } catch (error: any) {
-    console.error("❌ [Health Check] Health check failed:", error)
+    )
+  } catch (error) {
     return NextResponse.json(
       {
         status: "unhealthy",
-        timestamp: new Date().toISOString(),
-        error: error.message,
+        error: "Health check failed",
       },
       { status: 503 },
     )

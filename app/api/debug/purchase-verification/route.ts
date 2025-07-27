@@ -1,81 +1,84 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { auth } from "@/lib/firebase-admin"
+import { stripe } from "@/lib/stripe"
+import { db } from "@/lib/firebase-admin"
 
 export async function POST(request: NextRequest) {
   try {
-    // Verify authentication
-    const authHeader = request.headers.get("Authorization")
-    if (!authHeader?.startsWith("Bearer ")) {
+    const { sessionId, userId } = await request.json()
+
+    if (!sessionId) {
       return NextResponse.json(
         {
-          error: "Authentication required",
-          details: "Please provide a valid Bearer token",
+          success: false,
+          error: "Session ID is required",
         },
-        { status: 401 },
+        { status: 400 },
       )
     }
 
-    const idToken = authHeader.replace("Bearer ", "")
-
-    try {
-      const decodedToken = await auth.verifyIdToken(idToken)
-      console.log("✅ [Purchase Verification Debug] User authenticated:", decodedToken.uid)
-    } catch (error: any) {
-      console.error("❌ [Purchase Verification Debug] Auth failed:", error)
-      return NextResponse.json(
-        {
-          error: "Invalid authentication token",
-          details: error.message,
-        },
-        { status: 401 },
-      )
-    }
-
-    const body = await request.json()
-    const { sessionId, productBoxId, test } = body
-
-    console.log("🔍 [Purchase Verification Debug] Debug request:", {
+    const results = {
       sessionId,
-      productBoxId,
-      test,
-      timestamp: new Date().toISOString(),
+      userId,
+      stripeSession: null as any,
+      firestorePurchase: null as any,
+      userPurchase: null as any,
+      errors: [] as string[],
+      recommendations: [] as string[],
+    }
+
+    // Check Stripe session
+    try {
+      results.stripeSession = await stripe.checkout.sessions.retrieve(sessionId)
+    } catch (error: any) {
+      results.errors.push(`Stripe session error: ${error.message}`)
+      results.recommendations.push("Verify the session ID is correct and exists in your Stripe account")
+    }
+
+    // Check Firestore purchase record
+    try {
+      const purchaseDoc = await db.collection("purchases").doc(sessionId).get()
+      if (purchaseDoc.exists) {
+        results.firestorePurchase = purchaseDoc.data()
+      } else {
+        results.errors.push("No purchase record found in Firestore")
+        results.recommendations.push("Check if webhook processed the purchase or run manual verification")
+      }
+    } catch (error: any) {
+      results.errors.push(`Firestore error: ${error.message}`)
+    }
+
+    // Check user's purchase history if userId provided
+    if (userId) {
+      try {
+        const userPurchaseQuery = await db
+          .collection("users")
+          .doc(userId)
+          .collection("purchases")
+          .where("sessionId", "==", sessionId)
+          .limit(1)
+          .get()
+
+        if (!userPurchaseQuery.empty) {
+          results.userPurchase = userPurchaseQuery.docs[0].data()
+        } else {
+          results.errors.push("No purchase record found in user's purchase history")
+          results.recommendations.push("User may not have access to purchased content")
+        }
+      } catch (error: any) {
+        results.errors.push(`User purchase lookup error: ${error.message}`)
+      }
+    }
+
+    return NextResponse.json({
+      success: results.errors.length === 0,
+      results,
     })
-
-    const debugInfo = {
-      timestamp: new Date().toISOString(),
-      requestData: { sessionId, productBoxId, test },
-      environment: {
-        nodeEnv: process.env.NODE_ENV,
-        stripeMode: process.env.STRIPE_SECRET_KEY?.startsWith("sk_live_") ? "live" : "test",
-        hasStripeKey: !!process.env.STRIPE_SECRET_KEY,
-        hasWebhookSecret: !!(process.env.STRIPE_WEBHOOK_SECRET_LIVE || process.env.STRIPE_WEBHOOK_SECRET),
-        domain: process.env.NEXT_PUBLIC_SITE_URL || process.env.VERCEL_URL,
-      },
-      services: {
-        stripe: "Available",
-        firebase: "Available",
-        database: "Available",
-      },
-      recommendations: [
-        "Check if the session ID exists in Stripe",
-        "Verify you're using the correct Stripe mode (test vs live)",
-        "Ensure webhook is configured and accessible",
-        "Check if purchase was processed by webhook",
-      ],
-    }
-
-    if (test) {
-      debugInfo.recommendations.unshift("✅ API endpoint is working correctly")
-    }
-
-    return NextResponse.json(debugInfo)
-  } catch (error: any) {
-    console.error("❌ [Purchase Verification Debug] Debug failed:", error)
+  } catch (error) {
+    console.error("Purchase verification error:", error)
     return NextResponse.json(
       {
-        error: "Debug request failed",
-        details: error.message,
-        timestamp: new Date().toISOString(),
+        success: false,
+        error: "Verification failed",
       },
       { status: 500 },
     )

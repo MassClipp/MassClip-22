@@ -3,27 +3,28 @@ import Stripe from "stripe"
 import { db } from "@/lib/firebase-admin"
 import { UnifiedPurchaseService } from "@/lib/unified-purchase-service"
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY_LIVE || process.env.STRIPE_SECRET_KEY!, {
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: "2024-06-20",
 })
 
-// Determine which webhook secret to use based on environment and Stripe key
-const stripeSecretKey = process.env.STRIPE_SECRET_KEY_LIVE || process.env.STRIPE_SECRET_KEY!
+// Use the correct webhook secret based on your environment setup
 const isProduction = process.env.NODE_ENV === "production"
-const usingLiveKey = stripeSecretKey?.startsWith("sk_live_")
-const usingTestKey = stripeSecretKey?.startsWith("sk_test_")
+const secretKey = process.env.STRIPE_SECRET_KEY!
+const isLiveKey = secretKey?.startsWith("sk_live_")
 
 let webhookSecret: string
-if (isProduction && usingLiveKey) {
-  webhookSecret = process.env.STRIPE_WEBHOOK_SECRET_LIVE!
+if (isProduction && isLiveKey) {
+  // In production with live keys, use live webhook secret
+  webhookSecret = process.env.STRIPE_WEBHOOK_SECRET_LIVE || process.env.STRIPE_WEBHOOK_SECRET!
   console.log("🔴 [Stripe Webhook] Using LIVE webhook secret for PRODUCTION")
-} else if (!isProduction && usingTestKey) {
+} else if (!isProduction && !isLiveKey) {
+  // In development with test keys, use test webhook secret
   webhookSecret = process.env.STRIPE_WEBHOOK_SECRET_TEST || process.env.STRIPE_WEBHOOK_SECRET!
   console.log("🟢 [Stripe Webhook] Using TEST webhook secret for DEVELOPMENT")
 } else {
   // Fallback to general webhook secret
   webhookSecret = process.env.STRIPE_WEBHOOK_SECRET!
-  console.log("⚠️ [Stripe Webhook] Using general webhook secret - verify environment configuration")
+  console.log("⚠️ [Stripe Webhook] Using general webhook secret")
 }
 
 if (!webhookSecret) {
@@ -42,20 +43,20 @@ export async function POST(request: NextRequest) {
     try {
       event = stripe.webhooks.constructEvent(body, signature, webhookSecret)
       console.log(
-        `✅ [Stripe Webhook] Signature verified for event: ${event.type} in ${usingLiveKey ? "LIVE" : "TEST"} mode`,
+        `✅ [Stripe Webhook] Signature verified for event: ${event.type} in ${isLiveKey ? "LIVE" : "TEST"} mode`,
       )
     } catch (err: any) {
       console.error(`❌ [Stripe Webhook] Webhook signature verification failed:`, {
         error: err.message,
         environment: process.env.NODE_ENV,
-        usingLiveKey,
-        usingTestKey,
+        isLiveKey,
         webhookSecretLength: webhookSecret?.length,
+        hasSignature: !!signature,
       })
       return NextResponse.json({ error: "Invalid signature" }, { status: 400 })
     }
 
-    console.log(`🔔 [Stripe Webhook] Processing event: ${event.type} (${usingLiveKey ? "LIVE" : "TEST"} mode)`)
+    console.log(`🔔 [Stripe Webhook] Processing event: ${event.type} (${isLiveKey ? "LIVE" : "TEST"} mode)`)
 
     // Handle checkout.session.completed event (backup to direct verification)
     if (event.type === "checkout.session.completed") {
@@ -141,7 +142,7 @@ async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session) 
       accessUrl: `/product-box/${productBoxId}/content`,
       verificationMethod: "webhook_backup", // Mark as webhook backup
       webhookProcessedAt: new Date(),
-      environment: usingLiveKey ? "live" : "test", // Track which environment processed this
+      environment: isLiveKey ? "live" : "test", // Track which environment processed this
     }
 
     // Write to main purchases collection with document ID as sessionId for easy lookup
@@ -168,7 +169,7 @@ async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session) 
       creatorUsername: creatorData?.username || "",
       accessUrl: `/product-box/${productBoxId}/content`,
       verificationMethod: "webhook_backup",
-      environment: usingLiveKey ? "live" : "test",
+      environment: isLiveKey ? "live" : "test",
     }
 
     await db.collection("users").doc(buyerUid).collection("purchases").add(legacyPurchaseData)
@@ -206,7 +207,7 @@ async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session) 
           productTitle: productBoxData.title || "Untitled Product Box",
           buyerEmail: session.customer_email || "",
           verificationMethod: "webhook_backup",
-          environment: usingLiveKey ? "live" : "test",
+          environment: isLiveKey ? "live" : "test",
         })
 
       // Increment the creator's total sales
@@ -221,7 +222,7 @@ async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session) 
     }
 
     console.log(
-      `✅ [Webhook] Successfully processed webhook for session: ${session.id} in ${usingLiveKey ? "LIVE" : "TEST"} mode`,
+      `✅ [Webhook] Successfully processed webhook for session: ${session.id} in ${isLiveKey ? "LIVE" : "TEST"} mode`,
     )
   } catch (error) {
     console.error("❌ [Webhook] Error handling checkout.session.completed:", error)
