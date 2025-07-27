@@ -51,9 +51,26 @@ const defaultEarningsData: StripeEarningsData = {
   monthlyBreakdown: [],
 }
 
+// Helper function to safely extract numeric values
+const safeNumber = (value: any): number => {
+  if (value === null || value === undefined) return 0
+  const num = Number(value)
+  return isNaN(num) ? 0 : num
+}
+
+// Helper function to safely extract boolean values
+const safeBoolean = (value: any): boolean => {
+  return Boolean(value)
+}
+
+// Helper function to safely extract array values
+const safeArray = (value: any): any[] => {
+  return Array.isArray(value) ? value : []
+}
+
 export function useStripeEarnings() {
   const { user } = useAuth()
-  const [data, setData] = useState<StripeEarningsData | null>(null)
+  const [data, setData] = useState<StripeEarningsData>(defaultEarningsData)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
@@ -62,12 +79,15 @@ export function useStripeEarnings() {
     if (!user) {
       setLoading(false)
       setError("User not authenticated")
+      setData(defaultEarningsData)
       return
     }
 
     try {
       setLoading(true)
       setError(null)
+
+      console.log("🔄 Fetching earnings data...")
 
       const token = await user.getIdToken()
       const response = await fetch("/api/dashboard/earnings", {
@@ -78,42 +98,45 @@ export function useStripeEarnings() {
       })
 
       if (!response.ok) {
-        throw new Error(`Failed to fetch earnings: ${response.status}`)
+        throw new Error(`Failed to fetch earnings: ${response.status} ${response.statusText}`)
       }
 
       const result = await response.json()
+      console.log("📊 Raw API response:", result)
 
-      // Ensure all numeric values are properly set with fallbacks
+      // Safely extract all values with proper fallbacks
       const safeData: StripeEarningsData = {
-        totalEarnings: Number(result.totalEarnings) || 0,
-        thisMonthEarnings: Number(result.thisMonthEarnings) || 0,
-        lastMonthEarnings: Number(result.lastMonthEarnings) || 0,
-        last30DaysEarnings: Number(result.last30DaysEarnings) || 0,
-        pendingPayout: Number(result.pendingPayout) || 0,
-        availableBalance: Number(result.availableBalance) || 0,
+        totalEarnings: safeNumber(result.totalEarnings),
+        thisMonthEarnings: safeNumber(result.thisMonthEarnings),
+        lastMonthEarnings: safeNumber(result.lastMonthEarnings),
+        last30DaysEarnings: safeNumber(result.last30DaysEarnings),
+        pendingPayout: safeNumber(result.pendingPayout),
+        availableBalance: safeNumber(result.availableBalance),
         salesMetrics: {
-          totalSales: Number(result.salesMetrics?.totalSales) || 0,
-          thisMonthSales: Number(result.salesMetrics?.thisMonthSales) || 0,
-          last30DaysSales: Number(result.salesMetrics?.last30DaysSales) || 0,
-          averageTransactionValue: Number(result.salesMetrics?.averageTransactionValue) || 0,
+          totalSales: safeNumber(result.salesMetrics?.totalSales),
+          thisMonthSales: safeNumber(result.salesMetrics?.thisMonthSales),
+          last30DaysSales: safeNumber(result.salesMetrics?.last30DaysSales),
+          averageTransactionValue: safeNumber(result.salesMetrics?.averageTransactionValue),
         },
         accountStatus: {
-          chargesEnabled: Boolean(result.accountStatus?.chargesEnabled),
-          payoutsEnabled: Boolean(result.accountStatus?.payoutsEnabled),
-          detailsSubmitted: Boolean(result.accountStatus?.detailsSubmitted),
-          requirementsCount: Number(result.accountStatus?.requirementsCount) || 0,
+          chargesEnabled: safeBoolean(result.accountStatus?.chargesEnabled),
+          payoutsEnabled: safeBoolean(result.accountStatus?.payoutsEnabled),
+          detailsSubmitted: safeBoolean(result.accountStatus?.detailsSubmitted),
+          requirementsCount: safeNumber(result.accountStatus?.requirementsCount),
         },
-        recentTransactions: Array.isArray(result.recentTransactions) ? result.recentTransactions : [],
-        payoutHistory: Array.isArray(result.payoutHistory) ? result.payoutHistory : [],
-        monthlyBreakdown: Array.isArray(result.monthlyBreakdown) ? result.monthlyBreakdown : [],
+        recentTransactions: safeArray(result.recentTransactions),
+        payoutHistory: safeArray(result.payoutHistory),
+        monthlyBreakdown: safeArray(result.monthlyBreakdown),
       }
+
+      console.log("✅ Processed earnings data:", safeData)
 
       setData(safeData)
       setLastUpdated(new Date())
     } catch (err) {
-      console.error("Error fetching earnings:", err)
+      console.error("❌ Error fetching earnings:", err)
       setError(err instanceof Error ? err.message : "Failed to fetch earnings data")
-      // Set default data on error to prevent undefined access
+      // Keep default data on error to prevent undefined access
       setData(defaultEarningsData)
     } finally {
       setLoading(false)
@@ -156,13 +179,13 @@ export function useStripeEarnings() {
       fetchEarnings()
     } else {
       setLoading(false)
-      setData(null)
+      setData(defaultEarningsData)
       setError(null)
     }
   }, [user, fetchEarnings])
 
   return {
-    data: data || defaultEarningsData, // Always return safe data
+    data, // Always returns safe data, never null/undefined
     loading,
     error,
     lastUpdated,
