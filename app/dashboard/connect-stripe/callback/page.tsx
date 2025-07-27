@@ -3,8 +3,10 @@
 import { useEffect, useState } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
-import { CheckCircle, XCircle, AlertCircle, Loader2, Clock, AlertTriangle, RefreshCw } from "lucide-react"
+import { CheckCircle, XCircle, AlertCircle, Loader2, Clock, AlertTriangle, RefreshCw, Info, Copy } from "lucide-react"
 import { getAuth } from "firebase/auth"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
 
 interface AccountStatus {
   connected: boolean
@@ -27,6 +29,12 @@ interface AccountStatus {
   error?: string
 }
 
+interface DebugInfo {
+  source: string
+  timestamp: string
+  [key: string]: any
+}
+
 export default function StripeCallbackPage() {
   const searchParams = useSearchParams()
   const router = useRouter()
@@ -35,12 +43,30 @@ export default function StripeCallbackPage() {
   const [isLoadingAction, setIsLoadingAction] = useState(false)
   const [statusError, setStatusError] = useState<string | null>(null)
   const [retryCount, setRetryCount] = useState(0)
+  const [debugInfo, setDebugInfo] = useState<DebugInfo | null>(null)
+  const [showDebugDetails, setShowDebugDetails] = useState(false)
 
   const success = searchParams.get("success")
   const completed = searchParams.get("completed")
   const refresh = searchParams.get("refresh")
+  const recovered = searchParams.get("recovered")
+  const alreadyConnected = searchParams.get("already_connected")
   const error = searchParams.get("error")
   const errorDescription = searchParams.get("error_description")
+  const debugInfoParam = searchParams.get("debug_info")
+
+  // Parse debug info if available
+  useEffect(() => {
+    if (debugInfoParam) {
+      try {
+        const parsed = JSON.parse(debugInfoParam)
+        setDebugInfo(parsed)
+        console.log("🔍 [Callback Page] Debug info:", parsed)
+      } catch (e) {
+        console.error("❌ [Callback Page] Failed to parse debug info:", e)
+      }
+    }
+  }, [debugInfoParam])
 
   const fetchAccountStatus = async (attempt = 1) => {
     try {
@@ -141,8 +167,11 @@ export default function StripeCallbackPage() {
       success,
       completed,
       refresh,
+      recovered,
+      alreadyConnected,
       error,
       errorDescription,
+      hasDebugInfo: !!debugInfoParam,
     })
 
     const processCallback = async () => {
@@ -191,6 +220,12 @@ export default function StripeCallbackPage() {
     window.location.href = accountStatus.actionUrl
   }
 
+  const copyDebugInfo = () => {
+    if (debugInfo) {
+      navigator.clipboard.writeText(JSON.stringify(debugInfo, null, 2))
+    }
+  }
+
   if (isProcessing) {
     return (
       <div className="min-h-screen bg-black flex items-center justify-center">
@@ -219,6 +254,8 @@ export default function StripeCallbackPage() {
     const isFullySetup = accountStatus?.isFullyEnabled && !accountStatus?.actionsRequired
     const hasRequirements = accountStatus?.actionsRequired
     const hasActionUrl = accountStatus?.actionUrl
+    const isRecovered = recovered === "true"
+    const wasAlreadyConnected = alreadyConnected === "true"
 
     console.log("🔍 [Callback Page] Render conditions:", {
       accountStatus: !!accountStatus,
@@ -227,14 +264,16 @@ export default function StripeCallbackPage() {
       hasActionUrl,
       statusError,
       connected: accountStatus?.connected,
+      isRecovered,
+      wasAlreadyConnected,
     })
 
     return (
-      <div className="min-h-screen bg-black flex items-center justify-center">
-        <div className="relative">
+      <div className="min-h-screen bg-black flex items-center justify-center p-4">
+        <div className="relative max-w-2xl w-full">
           <div className="absolute inset-0 bg-gradient-to-br from-white/5 to-transparent rounded-lg blur-xl" />
-          <div className="relative bg-black border border-white/10 rounded-lg p-12 max-w-lg w-full backdrop-blur-sm">
-            <div className="flex flex-col items-center space-y-8">
+          <div className="relative bg-black border border-white/10 rounded-lg p-8 backdrop-blur-sm">
+            <div className="flex flex-col items-center space-y-6">
               {/* Status icon */}
               <div className="relative">
                 {isFullySetup ? (
@@ -264,16 +303,47 @@ export default function StripeCallbackPage() {
               {/* Title and description */}
               <div className="text-center space-y-3">
                 <h1 className="text-2xl font-light text-white tracking-wide">
-                  {statusError ? "Connection Issue" : isFullySetup ? "Setup Complete!" : "Connection Successful"}
+                  {statusError
+                    ? "Connection Issue"
+                    : isRecovered
+                      ? "Connection Recovered!"
+                      : wasAlreadyConnected
+                        ? "Already Connected!"
+                        : isFullySetup
+                          ? "Setup Complete!"
+                          : "Connection Successful"}
                 </h1>
                 <p className="text-sm text-white/70 font-light leading-relaxed max-w-sm">
                   {statusError
                     ? "There was an issue checking your account status. You can try refreshing or continue to dashboard."
-                    : isFullySetup
-                      ? "Your Stripe account is fully configured and ready to receive payments."
-                      : "Your Stripe account has been connected, but additional setup may be required."}
+                    : isRecovered
+                      ? "Your existing Stripe connection was found and restored successfully."
+                      : wasAlreadyConnected
+                        ? "Your Stripe account was already connected to your profile."
+                        : isFullySetup
+                          ? "Your Stripe account is fully configured and ready to receive payments."
+                          : "Your Stripe account has been connected, but additional setup may be required."}
                 </p>
               </div>
+
+              {/* Recovery/Already Connected Notice */}
+              {(isRecovered || wasAlreadyConnected) && (
+                <div className="w-full bg-blue-500/5 rounded-lg p-4 border border-blue-500/20">
+                  <div className="flex items-start space-x-3">
+                    <Info className="h-4 w-4 text-blue-400 mt-0.5 flex-shrink-0" strokeWidth={1.5} />
+                    <div className="space-y-1">
+                      <h3 className="text-sm font-light text-blue-400">
+                        {isRecovered ? "Session Recovery" : "Existing Connection"}
+                      </h3>
+                      <p className="text-xs text-white/70 font-light">
+                        {isRecovered
+                          ? "Your session expired, but we found your existing Stripe connection and restored it."
+                          : "This connection was already processed successfully."}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* Status indicators */}
               <div className="w-full space-y-3">
@@ -343,20 +413,57 @@ export default function StripeCallbackPage() {
                 </div>
               )}
 
-              {/* Debug info in development */}
-              {process.env.NODE_ENV === "development" && (
-                <div className="w-full bg-blue-500/5 rounded-lg p-4 border border-blue-500/20">
-                  <div className="text-xs text-blue-400 font-mono space-y-1">
-                    <div>connected: {String(accountStatus?.connected)}</div>
-                    <div>isFullyEnabled: {String(accountStatus?.isFullyEnabled)}</div>
-                    <div>actionsRequired: {String(accountStatus?.actionsRequired)}</div>
-                    <div>hasActionUrl: {String(!!accountStatus?.actionUrl)}</div>
-                    <div>charges_enabled: {String(accountStatus?.charges_enabled)}</div>
-                    <div>payouts_enabled: {String(accountStatus?.payouts_enabled)}</div>
-                    <div>statusError: {statusError || "null"}</div>
-                    <div>retryCount: {retryCount}</div>
-                  </div>
-                </div>
+              {/* Debug info section */}
+              {debugInfo && (
+                <Card className="w-full bg-zinc-900/60 border-zinc-800/50">
+                  <CardHeader className="pb-3">
+                    <div className="flex items-center justify-between">
+                      <CardTitle className="text-sm font-light text-zinc-300 flex items-center gap-2">
+                        <Info className="h-4 w-4" />
+                        Debug Information
+                      </CardTitle>
+                      <div className="flex items-center gap-2">
+                        <Badge variant="outline" className="text-xs">
+                          {debugInfo.source}
+                        </Badge>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setShowDebugDetails(!showDebugDetails)}
+                          className="h-6 px-2 text-xs"
+                        >
+                          {showDebugDetails ? "Hide" : "Show"}
+                        </Button>
+                      </div>
+                    </div>
+                  </CardHeader>
+                  {showDebugDetails && (
+                    <CardContent className="pt-0">
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs text-zinc-400">Timestamp:</span>
+                          <span className="text-xs text-zinc-300 font-mono">
+                            {new Date(debugInfo.timestamp).toLocaleString()}
+                          </span>
+                        </div>
+
+                        <div className="bg-zinc-800/50 rounded p-3 relative">
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={copyDebugInfo}
+                            className="absolute top-1 right-1 h-6 w-6 p-0"
+                          >
+                            <Copy className="h-3 w-3" />
+                          </Button>
+                          <pre className="text-xs text-zinc-300 font-mono overflow-auto max-h-32">
+                            {JSON.stringify(debugInfo, null, 2)}
+                          </pre>
+                        </div>
+                      </div>
+                    </CardContent>
+                  )}
+                </Card>
               )}
 
               {/* Action buttons */}
@@ -419,33 +526,40 @@ export default function StripeCallbackPage() {
     switch (errorCode) {
       case "invalid_state":
         return {
-          title: "Session Expired",
-          description: "Your connection session has expired. Please try connecting again.",
-          suggestion: "This usually happens if you took too long to complete the connection.",
+          title: "Session Issue",
+          description: description || "Your connection session was invalid or corrupted.",
+          suggestion: "This can happen if you took too long or if there was a browser issue. Try connecting again.",
         }
       case "expired_state":
         return {
           title: "Session Expired",
-          description: "Your connection session has expired. Please start the connection process again.",
-          suggestion: "For security reasons, connection sessions expire after 15 minutes.",
+          description: description || "Your connection session has expired.",
+          suggestion:
+            "For security reasons, connection sessions expire after 30 minutes. Please start a new connection.",
         }
       case "used_state":
         return {
-          title: "Already Connected",
-          description: "This connection has already been completed.",
-          suggestion: "If you need to reconnect, please start a new connection process.",
+          title: "Already Processed",
+          description: description || "This connection has already been completed.",
+          suggestion: "If you need to reconnect, please start a new connection process from the dashboard.",
         }
       case "token_exchange_failed":
         return {
           title: "Connection Failed",
-          description: "Failed to complete the connection with Stripe.",
-          suggestion: "This is usually a temporary issue. Please try connecting again.",
+          description: description || "Failed to complete the connection with Stripe.",
+          suggestion: "This is usually a temporary issue with Stripe's servers. Please try connecting again.",
         }
       case "processing_failed":
         return {
           title: "Processing Error",
           description: description || "An error occurred while processing your connection.",
           suggestion: "Please try connecting again. If the problem persists, contact support.",
+        }
+      case "profile_update_failed":
+        return {
+          title: "Save Failed",
+          description: description || "Failed to save your Stripe connection to your profile.",
+          suggestion: "Your Stripe account was connected but we couldn't save it. Please try again.",
         }
       case "access_denied":
         return {
@@ -465,11 +579,11 @@ export default function StripeCallbackPage() {
   const errorInfo = getErrorMessage(error, errorDescription)
 
   return (
-    <div className="min-h-screen bg-black flex items-center justify-center">
-      <div className="relative">
+    <div className="min-h-screen bg-black flex items-center justify-center p-4">
+      <div className="relative max-w-2xl w-full">
         <div className="absolute inset-0 bg-gradient-to-br from-red-500/5 to-transparent rounded-lg blur-xl" />
-        <div className="relative bg-black border border-white/10 rounded-lg p-12 max-w-md w-full backdrop-blur-sm">
-          <div className="flex flex-col items-center space-y-8">
+        <div className="relative bg-black border border-white/10 rounded-lg p-8 backdrop-blur-sm">
+          <div className="flex flex-col items-center space-y-6">
             {/* Error icon */}
             <div className="relative">
               <div className="absolute inset-0 bg-red-500/30 rounded-full blur-lg" />
@@ -481,14 +595,14 @@ export default function StripeCallbackPage() {
             {/* Title and description */}
             <div className="text-center space-y-3">
               <h1 className="text-2xl font-light text-white tracking-wide">{errorInfo.title}</h1>
-              <p className="text-sm text-white/70 font-light leading-relaxed">{errorInfo.description}</p>
+              <p className="text-sm text-white/70 font-light leading-relaxed max-w-sm">{errorInfo.description}</p>
             </div>
 
             {/* Error details */}
             <div className="w-full bg-white/5 rounded-lg p-4 border border-white/10">
               <div className="flex items-start space-x-3">
                 <AlertCircle className="h-4 w-4 text-yellow-400 mt-0.5 flex-shrink-0" strokeWidth={1.5} />
-                <div className="space-y-1">
+                <div className="space-y-1 flex-1">
                   <p className="text-xs text-white/80 font-light">{errorInfo.suggestion}</p>
                   {process.env.NODE_ENV === "development" && (
                     <div className="text-xs text-white/50 font-mono">
@@ -498,6 +612,63 @@ export default function StripeCallbackPage() {
                 </div>
               </div>
             </div>
+
+            {/* Debug info section for errors */}
+            {debugInfo && (
+              <Card className="w-full bg-zinc-900/60 border-zinc-800/50">
+                <CardHeader className="pb-3">
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="text-sm font-light text-zinc-300 flex items-center gap-2">
+                      <Info className="h-4 w-4" />
+                      Error Debug Information
+                    </CardTitle>
+                    <div className="flex items-center gap-2">
+                      <Badge variant="destructive" className="text-xs">
+                        {debugInfo.source}
+                      </Badge>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setShowDebugDetails(!showDebugDetails)}
+                        className="h-6 px-2 text-xs"
+                      >
+                        {showDebugDetails ? "Hide" : "Show"}
+                      </Button>
+                    </div>
+                  </div>
+                </CardHeader>
+                {showDebugDetails && (
+                  <CardContent className="pt-0">
+                    <div className="space-y-3">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs text-zinc-400">Error Time:</span>
+                        <span className="text-xs text-zinc-300 font-mono">
+                          {new Date(debugInfo.timestamp).toLocaleString()}
+                        </span>
+                      </div>
+
+                      <div className="bg-zinc-800/50 rounded p-3 relative">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={copyDebugInfo}
+                          className="absolute top-1 right-1 h-6 w-6 p-0"
+                        >
+                          <Copy className="h-3 w-3" />
+                        </Button>
+                        <pre className="text-xs text-zinc-300 font-mono overflow-auto max-h-32">
+                          {JSON.stringify(debugInfo, null, 2)}
+                        </pre>
+                      </div>
+
+                      <p className="text-xs text-zinc-400">
+                        Copy this information if you need to contact support about this error.
+                      </p>
+                    </div>
+                  </CardContent>
+                )}
+              </Card>
+            )}
 
             {/* Action buttons */}
             <div className="flex space-x-3 w-full">
