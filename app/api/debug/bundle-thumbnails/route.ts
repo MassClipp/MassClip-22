@@ -1,125 +1,127 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { db } from "@/lib/firebase-admin"
+import { getFirestore } from "firebase-admin/firestore"
+import { initializeApp, getApps, cert } from "firebase-admin/app"
+
+// Initialize Firebase Admin
+if (!getApps().length) {
+  const serviceAccount = {
+    type: "service_account",
+    project_id: process.env.FIREBASE_PROJECT_ID,
+    private_key_id: process.env.FIREBASE_PRIVATE_KEY_ID,
+    private_key: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n"),
+    client_email: process.env.FIREBASE_CLIENT_EMAIL,
+    client_id: process.env.FIREBASE_CLIENT_ID,
+    auth_uri: "https://accounts.google.com/o/oauth2/auth",
+    token_uri: "https://oauth2.googleapis.com/token",
+    auth_provider_x509_cert_url: "https://www.googleapis.com/oauth2/v1/certs",
+    client_x509_cert_url: `https://www.googleapis.com/robot/v1/metadata/x509/${process.env.FIREBASE_CLIENT_EMAIL}`,
+  }
+
+  initializeApp({
+    credential: cert(serviceAccount as any),
+  })
+}
+
+const db = getFirestore()
 
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
+    const bundleId = searchParams.get("bundleId")
     const creatorId = searchParams.get("creatorId")
 
     console.log("🔍 [Bundle Thumbnails Debug] Starting diagnostic...")
 
     let query = db.collection("bundles")
+
+    if (bundleId) {
+      console.log(`🎯 [Bundle Thumbnails Debug] Checking specific bundle: ${bundleId}`)
+      const bundleDoc = await db.collection("bundles").doc(bundleId).get()
+
+      if (!bundleDoc.exists) {
+        return NextResponse.json({ error: "Bundle not found" }, { status: 404 })
+      }
+
+      const data = bundleDoc.data()
+      const thumbnailInfo = {
+        bundleId: bundleDoc.id,
+        title: data?.title,
+        coverImage: data?.coverImage,
+        customPreviewThumbnail: data?.customPreviewThumbnail,
+        coverImageUrl: data?.coverImageUrl,
+        thumbnailUrl: data?.thumbnailUrl,
+        createdAt: data?.createdAt,
+        updatedAt: data?.updatedAt,
+        thumbnailUploadedAt: data?.thumbnailUploadedAt,
+        hasValidThumbnail: !!(data?.coverImage || data?.customPreviewThumbnail || data?.coverImageUrl),
+      }
+
+      return NextResponse.json({
+        success: true,
+        bundle: thumbnailInfo,
+        message: "Bundle thumbnail diagnostic complete",
+      })
+    }
+
     if (creatorId) {
       query = query.where("creatorId", "==", creatorId)
-      console.log("🔍 [Bundle Thumbnails Debug] Filtering by creator:", creatorId)
     }
 
-    const bundlesSnapshot = await query.get()
-    const bundles = []
-    let totalBundles = 0
-    let bundlesWithThumbnails = 0
-    let bundlesWithMultipleThumbnailFields = 0
+    const snapshot = await db.collection("bundles").get()
+    const bundles: any[] = []
 
-    for (const doc of bundlesSnapshot.docs) {
+    snapshot.forEach((doc) => {
       const data = doc.data()
-      totalBundles++
-
-      const thumbnailFields = {
-        coverImage: data.coverImage || null,
-        customPreviewThumbnail: data.customPreviewThumbnail || null,
-        coverImageUrl: data.coverImageUrl || null,
-        thumbnailUrl: data.thumbnailUrl || null,
-      }
-
-      const availableFields = Object.values(thumbnailFields).filter(Boolean)
-      const hasAnyThumbnail = availableFields.length > 0
-
-      if (hasAnyThumbnail) {
-        bundlesWithThumbnails++
-      }
-
-      if (availableFields.length > 1) {
-        bundlesWithMultipleThumbnailFields++
-      }
-
-      const bundleInfo = {
-        id: doc.id,
-        title: data.title || "Untitled",
+      const thumbnailInfo = {
+        bundleId: doc.id,
+        title: data.title,
         creatorId: data.creatorId,
-        createdAt: data.createdAt?.toDate?.()?.toISOString() || null,
-        thumbnailUploadedAt: data.thumbnailUploadedAt?.toDate?.()?.toISOString() || null,
-        thumbnailFields,
-        hasAnyThumbnail,
-        availableFieldsCount: availableFields.length,
-        primaryThumbnailUrl:
-          thumbnailFields.customPreviewThumbnail ||
-          thumbnailFields.coverImage ||
-          thumbnailFields.coverImageUrl ||
-          thumbnailFields.thumbnailUrl,
+        coverImage: data.coverImage,
+        customPreviewThumbnail: data.customPreviewThumbnail,
+        coverImageUrl: data.coverImageUrl,
+        thumbnailUrl: data.thumbnailUrl,
+        createdAt: data.createdAt,
+        updatedAt: data.updatedAt,
+        thumbnailUploadedAt: data.thumbnailUploadedAt,
+        hasValidThumbnail: !!(data.coverImage || data.customPreviewThumbnail || data.coverImageUrl),
+        thumbnailFields: {
+          coverImage: !!data.coverImage,
+          customPreviewThumbnail: !!data.customPreviewThumbnail,
+          coverImageUrl: !!data.coverImageUrl,
+          thumbnailUrl: !!data.thumbnailUrl,
+        },
       }
+      bundles.push(thumbnailInfo)
+    })
 
-      bundles.push(bundleInfo)
+    const stats = {
+      totalBundles: bundles.length,
+      bundlesWithThumbnails: bundles.filter((b) => b.hasValidThumbnail).length,
+      bundlesWithoutThumbnails: bundles.filter((b) => !b.hasValidThumbnail).length,
+      thumbnailFieldStats: {
+        coverImage: bundles.filter((b) => b.thumbnailFields.coverImage).length,
+        customPreviewThumbnail: bundles.filter((b) => b.thumbnailFields.customPreviewThumbnail).length,
+        coverImageUrl: bundles.filter((b) => b.thumbnailFields.coverImageUrl).length,
+        thumbnailUrl: bundles.filter((b) => b.thumbnailFields.thumbnailUrl).length,
+      },
     }
 
-    const statistics = {
-      totalBundles,
-      bundlesWithThumbnails,
-      bundlesWithoutThumbnails: totalBundles - bundlesWithThumbnails,
-      bundlesWithMultipleThumbnailFields,
-      thumbnailCoverage: totalBundles > 0 ? ((bundlesWithThumbnails / totalBundles) * 100).toFixed(1) + "%" : "0%",
-    }
-
-    console.log("📊 [Bundle Thumbnails Debug] Statistics:", statistics)
+    console.log("📊 [Bundle Thumbnails Debug] Statistics:", stats)
 
     return NextResponse.json({
       success: true,
-      statistics,
-      bundles: bundles.sort((a, b) => {
-        // Sort by: no thumbnail first, then by creation date
-        if (a.hasAnyThumbnail !== b.hasAnyThumbnail) {
-          return a.hasAnyThumbnail ? 1 : -1
-        }
-        return new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime()
-      }),
-      recommendations: generateRecommendations(statistics, bundles),
+      bundles,
+      stats,
+      message: "Bundle thumbnails diagnostic complete",
     })
   } catch (error) {
     console.error("❌ [Bundle Thumbnails Debug] Error:", error)
-    return NextResponse.json({ error: "Failed to analyze bundle thumbnails" }, { status: 500 })
+    return NextResponse.json(
+      {
+        error: "Failed to run diagnostic",
+        details: error instanceof Error ? error.message : "Unknown error",
+      },
+      { status: 500 },
+    )
   }
-}
-
-function generateRecommendations(statistics: any, bundles: any[]) {
-  const recommendations = []
-
-  if (statistics.bundlesWithoutThumbnails > 0) {
-    recommendations.push({
-      type: "missing_thumbnails",
-      message: `${statistics.bundlesWithoutThumbnails} bundles are missing thumbnails`,
-      action: "Upload thumbnails for better user experience",
-      priority: "high",
-    })
-  }
-
-  const bundlesWithInconsistentFields = bundles.filter((b) => b.hasAnyThumbnail && b.availableFieldsCount === 1)
-
-  if (bundlesWithInconsistentFields.length > 0) {
-    recommendations.push({
-      type: "inconsistent_fields",
-      message: `${bundlesWithInconsistentFields.length} bundles have thumbnails in only one field`,
-      action: "Consider updating thumbnail upload process to populate all fields",
-      priority: "medium",
-    })
-  }
-
-  if (statistics.thumbnailCoverage === "100%") {
-    recommendations.push({
-      type: "excellent",
-      message: "All bundles have thumbnails!",
-      action: "Great job maintaining visual consistency",
-      priority: "info",
-    })
-  }
-
-  return recommendations
 }

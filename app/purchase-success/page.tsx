@@ -4,7 +4,7 @@ import { useEffect, useState } from "react"
 import { useAuth } from "@/contexts/auth-context"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { CheckCircle, XCircle, Loader2, RefreshCw, ExternalLink, Copy, AlertTriangle, Clock, Info } from "lucide-react"
+import { CheckCircle, XCircle, Loader2, RefreshCw, ExternalLink, Copy, AlertTriangle } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 
 interface PurchaseDetails {
@@ -14,61 +14,39 @@ interface PurchaseDetails {
     currency: string
     status: string
     customerEmail?: string
-    created?: string
   }
   purchase: {
     id: string
-    productBoxId?: string
-    bundleId?: string
-    itemId: string
-    itemType: string
+    productBoxId: string
     userId: string
     amount: number
   }
-  item: {
+  productBox: {
     title: string
     description?: string
-    type: string
   }
   alreadyProcessed?: boolean
-}
-
-interface ErrorDetails {
-  error: string
-  details?: string
-  type?: string
-  sessionId?: string
-  currentMode?: string
-  sessionMode?: string
-  suggestion?: string
 }
 
 export default function PurchaseSuccessPage() {
   const { user } = useAuth()
   const { toast } = useToast()
   const [verificationStatus, setVerificationStatus] = useState<"loading" | "success" | "error">("loading")
-  const [errorDetails, setErrorDetails] = useState<ErrorDetails | null>(null)
+  const [errorMessage, setErrorMessage] = useState("")
   const [sessionId, setSessionId] = useState<string | null>(null)
   const [productBoxId, setProductBoxId] = useState<string | null>(null)
   const [purchaseDetails, setPurchaseDetails] = useState<PurchaseDetails | null>(null)
   const [isRetrying, setIsRetrying] = useState(false)
-  const [retryCount, setRetryCount] = useState(0)
-  const [maxRetries] = useState(3)
 
-  const verifyPurchase = async (sessionId: string, isRetry = false) => {
+  const verifyPurchase = async (sessionId: string) => {
     try {
       console.log("🔍 [Purchase Success] Starting verification...")
       console.log("   Session ID:", sessionId)
       console.log("   Current domain:", window.location.origin)
       console.log("   Full URL:", window.location.href)
       console.log("   User authenticated:", !!user)
-      console.log("   Is retry:", isRetry)
-      console.log("   Retry count:", retryCount)
 
-      if (!isRetry) {
-        setVerificationStatus("loading")
-        setErrorDetails(null)
-      }
+      setVerificationStatus("loading")
 
       // Get auth token if user is available
       let idToken = null
@@ -100,63 +78,27 @@ export default function PurchaseSuccessPage() {
       if (data.success) {
         setVerificationStatus("success")
         setPurchaseDetails(data)
-        setErrorDetails(null)
         toast({
           title: data.alreadyProcessed ? "Purchase Already Processed" : "Purchase Verified!",
           description: "Your access has been granted successfully.",
         })
       } else {
         setVerificationStatus("error")
-        setErrorDetails(data)
+        setErrorMessage(data.error || data.message || "Verification failed")
         console.error("❌ [Purchase Success] Verification failed:", data)
-
-        // Show specific error messages based on error type
-        if (data.error === "Session mode mismatch") {
-          toast({
-            title: "Configuration Issue",
-            description: "There's a mismatch between test and live modes. Please contact support.",
-            variant: "destructive",
-          })
-        } else if (data.error === "Session not found") {
-          toast({
-            title: "Session Expired",
-            description: "This checkout session has expired. Please try making a new purchase.",
-            variant: "destructive",
-          })
-        } else {
-          toast({
-            title: "Verification Failed",
-            description: data.details || data.error || "Unknown error occurred",
-            variant: "destructive",
-          })
-        }
       }
     } catch (error) {
       console.error("❌ [Purchase Success] Verification error:", error)
       setVerificationStatus("error")
-      setErrorDetails({
-        error: "Network Error",
-        details: "Failed to verify purchase. Please check your connection and try again.",
-        type: "NetworkError",
-      })
-      toast({
-        title: "Network Error",
-        description: "Failed to connect to verification service. Please try again.",
-        variant: "destructive",
-      })
+      setErrorMessage("Network error: Failed to verify purchase. Please check your connection and try again.")
     }
   }
 
   const handleRetry = async () => {
-    if (!sessionId || retryCount >= maxRetries) return
+    if (!sessionId) return
 
     setIsRetrying(true)
-    setRetryCount((prev) => prev + 1)
-
-    // Add delay before retry
-    await new Promise((resolve) => setTimeout(resolve, 1000))
-
-    await verifyPurchase(sessionId, true)
+    await verifyPurchase(sessionId)
     setIsRetrying(false)
   }
 
@@ -170,34 +112,11 @@ export default function PurchaseSuccessPage() {
     }
   }
 
-  const copyErrorDetails = () => {
-    if (errorDetails) {
-      const errorText = JSON.stringify(errorDetails, null, 2)
-      navigator.clipboard.writeText(errorText)
-      toast({
-        title: "Copied",
-        description: "Error details copied to clipboard",
-      })
-    }
-  }
-
   const formatAmount = (amount: number, currency: string) => {
     return new Intl.NumberFormat("en-US", {
       style: "currency",
       currency: currency.toUpperCase(),
     }).format(amount / 100)
-  }
-
-  const getContentUrl = () => {
-    if (!purchaseDetails) return "/dashboard"
-
-    const { purchase } = purchaseDetails
-    if (purchase.productBoxId) {
-      return `/product-box/${purchase.productBoxId}/content`
-    } else if (purchase.bundleId) {
-      return `/bundle/${purchase.bundleId}/content`
-    }
-    return "/dashboard/purchases"
   }
 
   useEffect(() => {
@@ -216,11 +135,7 @@ export default function PurchaseSuccessPage() {
     if (!sessionIdFromUrl) {
       console.error("❌ [Purchase Success] No session ID found in URL")
       setVerificationStatus("error")
-      setErrorDetails({
-        error: "Invalid URL",
-        details: "No session ID found in URL. This link may be invalid or expired.",
-        suggestion: "Please try making a new purchase or contact support if you believe this is an error.",
-      })
+      setErrorMessage("No session ID found in URL. This link may be invalid or expired.")
       return
     }
 
@@ -233,9 +148,9 @@ export default function PurchaseSuccessPage() {
 
   // Handle user authentication changes
   useEffect(() => {
-    if (user && sessionId && verificationStatus === "error" && retryCount < maxRetries) {
+    if (user && sessionId && verificationStatus === "error") {
       console.log("👤 [Purchase Success] User authenticated, retrying verification...")
-      verifyPurchase(sessionId, true)
+      verifyPurchase(sessionId)
     }
   }, [user, sessionId, verificationStatus])
 
@@ -301,7 +216,6 @@ export default function PurchaseSuccessPage() {
                 <div>Session: {sessionId}</div>
                 <div>Domain: {typeof window !== "undefined" ? window.location.origin : "Loading..."}</div>
                 <div>User: {user ? "Authenticated" : "Not authenticated"}</div>
-                <div>Attempt: {retryCount + 1}</div>
               </div>
             </div>
           )}
@@ -320,12 +234,8 @@ export default function PurchaseSuccessPage() {
                   <h3 className="font-semibold text-gray-900 mb-2">Purchase Details</h3>
                   <div className="space-y-2 text-sm">
                     <div>
-                      <span className="text-gray-600">Item:</span>{" "}
-                      <span className="font-medium">{purchaseDetails.item.title}</span>
-                    </div>
-                    <div>
-                      <span className="text-gray-600">Type:</span>{" "}
-                      <span className="font-medium capitalize">{purchaseDetails.item.type.replace("_", " ")}</span>
+                      <span className="text-gray-600">Product:</span>{" "}
+                      <span className="font-medium">{purchaseDetails.productBox.title}</span>
                     </div>
                     <div>
                       <span className="text-gray-600">Amount:</span>{" "}
@@ -341,14 +251,6 @@ export default function PurchaseSuccessPage() {
                       <div>
                         <span className="text-gray-600">Email:</span>{" "}
                         <span className="font-medium">{purchaseDetails.session.customerEmail}</span>
-                      </div>
-                    )}
-                    {purchaseDetails.session.created && (
-                      <div>
-                        <span className="text-gray-600">Date:</span>{" "}
-                        <span className="font-medium">
-                          {new Date(purchaseDetails.session.created).toLocaleDateString()}
-                        </span>
                       </div>
                     )}
                   </div>
@@ -373,7 +275,12 @@ export default function PurchaseSuccessPage() {
               </div>
 
               <div className="flex gap-3">
-                <Button onClick={() => (window.location.href = getContentUrl())} className="flex-1">
+                <Button
+                  onClick={() =>
+                    (window.location.href = `/product-box/${purchaseDetails.purchase.productBoxId}/content`)
+                  }
+                  className="flex-1"
+                >
                   <ExternalLink className="h-4 w-4 mr-2" />
                   View Content
                 </Button>
@@ -388,74 +295,24 @@ export default function PurchaseSuccessPage() {
             </div>
           )}
 
-          {verificationStatus === "error" && errorDetails && (
+          {verificationStatus === "error" && (
             <div className="space-y-4">
               <div className="bg-red-50 border border-red-200 rounded-lg p-4">
                 <div className="flex items-start gap-2">
                   <AlertTriangle className="h-5 w-5 text-red-500 mt-0.5 flex-shrink-0" />
-                  <div className="flex-1">
-                    <p className="text-red-600 font-medium">{errorDetails.error}</p>
-                    {errorDetails.details && <p className="text-red-600 text-sm mt-1">{errorDetails.details}</p>}
-                    {errorDetails.suggestion && (
-                      <p className="text-red-700 text-sm mt-2 font-medium">{errorDetails.suggestion}</p>
-                    )}
+                  <div>
+                    <p className="text-red-600 font-medium">Verification Failed</p>
+                    <p className="text-red-600 text-sm mt-1">{errorMessage}</p>
                   </div>
                 </div>
               </div>
 
-              {/* Mode mismatch specific help */}
-              {errorDetails.error === "Session mode mismatch" && (
-                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-                  <div className="flex items-start gap-2">
-                    <Info className="h-5 w-5 text-yellow-600 mt-0.5 flex-shrink-0" />
-                    <div>
-                      <p className="text-yellow-800 font-medium">Configuration Issue Detected</p>
-                      <p className="text-yellow-700 text-sm mt-1">
-                        Your session is from {errorDetails.sessionMode} mode but the API is in{" "}
-                        {errorDetails.currentMode} mode. This usually happens during development or deployment
-                        transitions.
-                      </p>
-                      <p className="text-yellow-700 text-sm mt-2">
-                        Please contact support with your session ID for assistance.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {/* Session expired specific help */}
-              {errorDetails.error === "Session not found" && (
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                  <div className="flex items-start gap-2">
-                    <Clock className="h-5 w-5 text-blue-600 mt-0.5 flex-shrink-0" />
-                    <div>
-                      <p className="text-blue-800 font-medium">Session Expired</p>
-                      <p className="text-blue-700 text-sm mt-1">
-                        Checkout sessions expire after 24 hours for security reasons. If you completed your payment
-                        recently, it may still be processing.
-                      </p>
-                      <p className="text-blue-700 text-sm mt-2">
-                        Try refreshing the page or check your email for a confirmation.
-                      </p>
-                    </div>
-                  </div>
-                </div>
-              )}
-
               <div className="bg-gray-50 p-4 rounded-lg">
-                <div className="flex items-center justify-between mb-2">
-                  <h3 className="font-semibold text-gray-900">Debug Information</h3>
-                  <Button variant="ghost" size="sm" onClick={copyErrorDetails} className="h-6 px-2">
-                    <Copy className="h-3 w-3" />
-                  </Button>
-                </div>
+                <h3 className="font-semibold text-gray-900 mb-2">Debug Information</h3>
                 <div className="space-y-2 text-sm text-gray-600">
                   <div>Current Domain: {typeof window !== "undefined" ? window.location.origin : "Loading..."}</div>
+                  <div>Full URL: {typeof window !== "undefined" ? window.location.href : "Loading..."}</div>
                   <div>User Authenticated: {user ? "Yes" : "No"}</div>
-                  <div>Error Type: {errorDetails.type || "Unknown"}</div>
-                  <div>
-                    Retry Count: {retryCount}/{maxRetries}
-                  </div>
                   {productBoxId && <div>Product Box ID: {productBoxId}</div>}
                   <div className="flex items-center gap-2">
                     <span>Session ID:</span>
@@ -468,23 +325,16 @@ export default function PurchaseSuccessPage() {
               </div>
 
               <div className="flex gap-3">
-                <Button
-                  onClick={handleRetry}
-                  disabled={isRetrying || retryCount >= maxRetries}
-                  className="flex-1"
-                  variant="outline"
-                >
+                <Button onClick={handleRetry} disabled={isRetrying} className="flex-1 bg-transparent" variant="outline">
                   {isRetrying ? (
                     <>
                       <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                       Retrying...
                     </>
-                  ) : retryCount >= maxRetries ? (
-                    "Max Retries Reached"
                   ) : (
                     <>
                       <RefreshCw className="h-4 w-4 mr-2" />
-                      Retry Verification ({retryCount}/{maxRetries})
+                      Retry Verification
                     </>
                   )}
                 </Button>
