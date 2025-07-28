@@ -28,19 +28,15 @@ export async function POST(request: NextRequest) {
         console.log("✅ [Verify Session] Token verified for user:", userId)
       } catch (error) {
         console.error("❌ [Verify Session] Token verification failed:", error)
-        // Don't return error here - allow anonymous verification
+        // Continue without authentication for now
         console.log("⚠️ [Verify Session] Continuing without authentication...")
       }
     }
 
-    // Enhanced session retrieval with better error handling
+    // Retrieve session from Stripe
     console.log("💳 [Verify Session] Retrieving Stripe session:", sessionId)
-    console.log("   Stripe mode:", process.env.STRIPE_SECRET_KEY?.startsWith("sk_live_") ? "LIVE" : "TEST")
-    console.log("   Session ID prefix:", sessionId.substring(0, 8))
-
     let session
     try {
-      // First, try to retrieve the session with expanded payment_intent
       session = await stripe.checkout.sessions.retrieve(sessionId, {
         expand: ["payment_intent", "line_items"],
       })
@@ -52,86 +48,19 @@ export async function POST(request: NextRequest) {
       console.log("   Currency:", session.currency)
       console.log("   Customer Email:", session.customer_details?.email)
       console.log("   Metadata:", session.metadata)
-      console.log("   Created:", new Date(session.created * 1000).toISOString())
-      console.log(
-        "   Expires At:",
-        session.expires_at ? new Date(session.expires_at * 1000).toISOString() : "No expiration",
-      )
-      console.log("   Mode:", session.mode)
     } catch (error: any) {
       console.error("❌ [Verify Session] Failed to retrieve session:", error)
-
-      // Enhanced error handling for different Stripe error types
-      if (error.type === "StripeInvalidRequestError") {
-        if (error.message?.includes("No such checkout.session")) {
-          console.error("❌ [Verify Session] Session not found in Stripe")
-
-          // Check if this might be a test/live mode mismatch
-          const isLiveSession = sessionId.startsWith("cs_live_")
-          const isTestSession = sessionId.startsWith("cs_test_")
-          const currentMode = process.env.STRIPE_SECRET_KEY?.startsWith("sk_live_") ? "live" : "test"
-          const currentKeyPrefix = process.env.STRIPE_SECRET_KEY?.substring(0, 8) || "unknown"
-
-          console.log("🔍 [Verify Session] Mode analysis:", {
-            sessionId: sessionId.substring(0, 20) + "...",
-            isLiveSession,
-            isTestSession,
-            currentMode,
-            currentKeyPrefix,
-            stripeKeyConfigured: !!process.env.STRIPE_SECRET_KEY,
-          })
-
-          if ((isLiveSession && currentMode === "test") || (isTestSession && currentMode === "live")) {
-            return NextResponse.json(
-              {
-                error: "Session mode mismatch",
-                details: `Session is from ${isLiveSession ? "live" : "test"} mode but API is in ${currentMode} mode`,
-                sessionId,
-                currentMode,
-                sessionMode: isLiveSession ? "live" : "test",
-                stripeKeyPrefix: currentKeyPrefix,
-                suggestion: "Verify you're using the correct Stripe keys for your environment",
-              },
-              { status: 400 },
-            )
-          }
-
-          return NextResponse.json(
-            {
-              error: "Session not found",
-              details: "This checkout session does not exist in Stripe or has been deleted",
-              sessionId,
-              sessionPrefix: sessionId.substring(0, 8),
-              stripeMode: currentMode,
-              possibleCauses: [
-                "Session ID is incorrect or truncated",
-                "Session was never created",
-                "Using wrong Stripe account",
-                "Session was created in different mode (test vs live)",
-                "Session has been deleted from Stripe dashboard",
-              ],
-              suggestion: "Please verify the session ID and try making a new purchase",
-            },
-            { status: 404 },
-          )
-        }
-      }
-
-      // Network or other errors
       return NextResponse.json(
         {
-          error: "Failed to retrieve session",
+          error: "Session not found",
           details: error.message,
-          type: error.type || "unknown",
           sessionId,
-          stripeMode: process.env.STRIPE_SECRET_KEY?.startsWith("sk_live_") ? "live" : "test",
-          timestamp: new Date().toISOString(),
         },
-        { status: 400 },
+        { status: 404 },
       )
     }
 
-    // Validate session status
+    // Check if payment was successful
     if (session.payment_status !== "paid") {
       console.error("❌ [Verify Session] Payment not completed:", session.payment_status)
       return NextResponse.json(
@@ -139,14 +68,11 @@ export async function POST(request: NextRequest) {
           error: "Payment not completed",
           paymentStatus: session.payment_status,
           sessionStatus: session.status,
-          sessionId: session.id,
-          details: "The payment for this session has not been completed successfully",
         },
         { status: 400 },
       )
     }
 
-    // Extract metadata
     const productBoxId = session.metadata?.productBoxId
     const bundleId = session.metadata?.bundleId
     const sessionUserId = session.metadata?.userId
@@ -154,14 +80,7 @@ export async function POST(request: NextRequest) {
 
     if (!productBoxId && !bundleId) {
       console.error("❌ [Verify Session] Missing product/bundle ID in session metadata")
-      return NextResponse.json(
-        {
-          error: "Invalid session metadata",
-          details: "No product or bundle ID found in session",
-          metadata: session.metadata,
-        },
-        { status: 400 },
-      )
+      return NextResponse.json({ error: "Invalid session metadata" }, { status: 400 })
     }
 
     // Use authenticated user ID if available, otherwise use session metadata
@@ -170,8 +89,6 @@ export async function POST(request: NextRequest) {
     console.log("📦 [Verify Session] Processing purchase:")
     console.log("   Product Box ID:", productBoxId)
     console.log("   Bundle ID:", bundleId)
-    console.log("   User ID (auth):", userId)
-    console.log("   User ID (session):", sessionUserId)
     console.log("   Final User ID:", finalUserId)
     console.log("   Creator ID:", creatorId)
 
@@ -190,7 +107,6 @@ export async function POST(request: NextRequest) {
       // Create new purchase record
       console.log("💾 [Verify Session] Creating new purchase record...")
 
-      // Determine the item ID and type
       const itemId = productBoxId || bundleId
       const itemType = productBoxId ? "product_box" : "bundle"
 
@@ -212,7 +128,7 @@ export async function POST(request: NextRequest) {
         createdAt: new Date(),
         updatedAt: new Date(),
         stripeSessionId: sessionId,
-        verificationMethod: "direct_api",
+        verificationMethod: "manual_verification",
         verifiedAt: new Date(),
       }
 
@@ -260,7 +176,6 @@ export async function POST(request: NextRequest) {
           console.log("✅ [Verify Session] User access granted")
         } catch (error) {
           console.error("❌ [Verify Session] Failed to grant user access:", error)
-          // Don't fail the whole verification if access granting fails
         }
       }
 
@@ -301,7 +216,6 @@ export async function POST(request: NextRequest) {
         currency: session.currency || "usd",
         status: session.payment_status,
         customerEmail: session.customer_details?.email,
-        created: new Date(session.created * 1000).toISOString(),
       },
       purchase: {
         id: purchaseId,
@@ -324,8 +238,6 @@ export async function POST(request: NextRequest) {
       {
         error: "Failed to verify session",
         details: error.message,
-        type: error.name || "UnknownError",
-        stack: process.env.NODE_ENV === "development" ? error.stack : undefined,
       },
       { status: 500 },
     )
