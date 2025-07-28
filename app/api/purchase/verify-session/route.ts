@@ -32,25 +32,92 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // First, try to get the session metadata to find the connected account
-    console.log("🔍 [Verify Session] Looking for existing purchase record to get connected account...")
-
+    // Strategy 1: Check if we have this session in our database already
+    console.log("🔍 [Verify Session] Strategy 1: Looking for existing purchase record...")
     let connectedAccountId = null
     let creatorId = null
+    let existingPurchase = null
 
-    // Check if we have this session in our database already
     const existingPurchaseQuery = await db.collection("purchases").where("sessionId", "==", sessionId).limit(1).get()
 
     if (!existingPurchaseQuery.empty) {
-      const purchaseData = existingPurchaseQuery.docs[0].data()
+      existingPurchase = existingPurchaseQuery.docs[0]
+      const purchaseData = existingPurchase.data()
       creatorId = purchaseData.creatorId
       connectedAccountId = purchaseData.connectedAccountId
       console.log("📦 [Verify Session] Found existing purchase with creatorId:", creatorId)
       console.log("🔗 [Verify Session] Connected account from purchase:", connectedAccountId)
     }
 
-    // If we have a creatorId but no connected account, get it from creator profile
+    // Strategy 2: If no existing purchase, try to find connected accounts from recent sessions
+    const connectedAccounts = [] // Declare connectedAccounts variable here
+
+    if (!connectedAccountId) {
+      console.log("🔍 [Verify Session] Strategy 2: Searching all connected accounts...")
+
+      // Get all users with Stripe accounts
+      const usersWithStripeQuery = await db.collection("users").where("stripeAccountId", "!=", null).get()
+
+      usersWithStripeQuery.forEach((doc) => {
+        const userData = doc.data()
+        if (userData.stripeAccountId) {
+          connectedAccounts.push({
+            accountId: userData.stripeAccountId,
+            userId: doc.id,
+            username: userData.username || userData.displayName || "Unknown",
+          })
+        }
+      })
+
+      console.log(`🔍 [Verify Session] Found ${connectedAccounts.length} connected accounts to search`)
+
+      // Try each connected account
+      for (const account of connectedAccounts) {
+        try {
+          console.log(`🔍 [Verify Session] Trying connected account: ${account.accountId} (${account.username})`)
+
+          const session = await retrieveSessionSmart(sessionId, account.accountId)
+
+          if (session) {
+            console.log(`✅ [Verify Session] Found session in connected account: ${account.accountId}`)
+            connectedAccountId = account.accountId
+            creatorId = account.userId
+
+            // Store this information for future use
+            const productBoxId = session.metadata?.productBoxId
+            const bundleId = session.metadata?.bundleId
+
+            if (productBoxId || bundleId) {
+              console.log("💾 [Verify Session] Caching connected account info for future lookups...")
+
+              // Update the product box or bundle with the connected account info
+              const collection = productBoxId ? "productBoxes" : "bundles"
+              const docId = productBoxId || bundleId
+
+              try {
+                await db.collection(collection).doc(docId!).update({
+                  connectedAccountId: connectedAccountId,
+                  creatorId: creatorId,
+                  updatedAt: new Date(),
+                })
+                console.log(`✅ [Verify Session] Updated ${collection} with connected account info`)
+              } catch (updateError) {
+                console.error(`❌ [Verify Session] Failed to update ${collection}:`, updateError)
+              }
+            }
+
+            break // Found it, stop searching
+          }
+        } catch (error: any) {
+          console.log(`⚠️ [Verify Session] Account ${account.accountId} failed: ${error.message}`)
+          continue // Try next account
+        }
+      }
+    }
+
+    // Strategy 3: If we have creatorId but no connected account, get it from creator profile
     if (creatorId && !connectedAccountId) {
+      console.log("🔍 [Verify Session] Strategy 3: Getting connected account from creator profile...")
       try {
         const creatorDoc = await db.collection("users").doc(creatorId).get()
         if (creatorDoc.exists) {
@@ -63,9 +130,11 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Enhanced session retrieval with Stripe Connect support
-    console.log("💳 [Verify Session] Retrieving Stripe session:", sessionId)
+    // Final attempt to retrieve the session
+    console.log("💳 [Verify Session] Final session retrieval attempt...")
+    console.log("   Session ID:", sessionId)
     console.log("   Connected Account ID:", connectedAccountId || "None (will try platform account)")
+    console.log("   Creator ID:", creatorId || "Unknown")
 
     let session
     let retrievalMethod = "unknown"
@@ -85,24 +154,24 @@ export async function POST(request: NextRequest) {
       console.log("   Retrieval Method:", retrievalMethod)
       console.log("   Connected Account:", connectedAccountId || "Platform")
     } catch (error: any) {
-      console.error("❌ [Verify Session] Failed to retrieve session:", error)
+      console.error("❌ [Verify Session] All retrieval strategies failed:", error)
 
       if (error.type === "StripeInvalidRequestError" && error.message?.includes("No such checkout.session")) {
-        console.error("❌ [Verify Session] Session not found - likely Stripe Connect issue")
+        console.error("❌ [Verify Session] Session not found in any account")
 
-        // Enhanced error response for Stripe Connect issues
         return NextResponse.json(
           {
             error: "Session not found",
-            details: "This checkout session could not be found. This might be a Stripe Connect configuration issue.",
+            details: "This checkout session could not be found in any Stripe account.",
             sessionId,
             sessionPrefix: sessionId.substring(0, 8),
+            searchedAccounts: connectedAccounts.length, // Use connectedAccounts variable here
             possibleCauses: [
-              "Session was created in a connected Stripe account but we're looking in the platform account",
-              "Connected account ID is missing or incorrect",
-              "Session was created with different API credentials",
+              "Session was created in a connected account that we don't have access to",
               "Session has expired (24 hour limit)",
               "Session was deleted from Stripe dashboard",
+              "Connected account was disconnected after session creation",
+              "Session was created with different API credentials",
             ],
             debugInfo: {
               hasConnectedAccountId: !!connectedAccountId,
@@ -111,15 +180,14 @@ export async function POST(request: NextRequest) {
               retrievalMethod,
               sessionType: sessionId.startsWith("cs_live_") ? "live" : "test",
               stripeMode: process.env.STRIPE_SECRET_KEY?.startsWith("sk_live_") ? "live" : "test",
+              searchedAccountsCount: connectedAccounts.length, // Use connectedAccounts variable here
             },
-            suggestion:
-              "If this is a Stripe Connect setup, ensure the connected account ID is properly stored and retrieved.",
+            suggestion: "The session may have been created in a connected account that is no longer accessible.",
           },
           { status: 404 },
         )
       }
 
-      // Other Stripe errors
       return NextResponse.json(
         {
           error: "Failed to retrieve session",
@@ -183,20 +251,32 @@ export async function POST(request: NextRequest) {
     console.log("   Creator ID:", sessionCreatorId)
     console.log("   Connected Account:", connectedAccountId)
 
-    // Check if purchase already exists
-    console.log("🔍 [Verify Session] Checking for existing purchase...")
+    // Check if purchase already exists (reuse existing purchase if found)
     let purchaseId
     let alreadyProcessed = false
 
-    if (!existingPurchaseQuery.empty) {
+    if (existingPurchase) {
       console.log("ℹ️ [Verify Session] Purchase already exists")
-      purchaseId = existingPurchaseQuery.docs[0].id
+      purchaseId = existingPurchase.id
       alreadyProcessed = true
+
+      // Update the existing purchase with any missing information
+      try {
+        await existingPurchase.ref.update({
+          connectedAccountId: connectedAccountId || null,
+          creatorId: sessionCreatorId || creatorId || null,
+          retrievalMethod,
+          verifiedAt: new Date(),
+          updatedAt: new Date(),
+        })
+        console.log("✅ [Verify Session] Updated existing purchase with new info")
+      } catch (updateError) {
+        console.error("❌ [Verify Session] Failed to update existing purchase:", updateError)
+      }
     } else {
       // Create new purchase record
       console.log("💾 [Verify Session] Creating new purchase record...")
 
-      // Determine the item ID and type
       const itemId = productBoxId || bundleId
       const itemType = productBoxId ? "product_box" : "bundle"
 
@@ -207,7 +287,7 @@ export async function POST(request: NextRequest) {
         itemId,
         itemType,
         userId: finalUserId,
-        creatorId: sessionCreatorId || null,
+        creatorId: sessionCreatorId || creatorId || null,
         connectedAccountId: connectedAccountId || null,
         amount: session.amount_total || 0,
         currency: session.currency || "usd",
@@ -268,7 +348,6 @@ export async function POST(request: NextRequest) {
           console.log("✅ [Verify Session] User access granted")
         } catch (error) {
           console.error("❌ [Verify Session] Failed to grant user access:", error)
-          // Don't fail the whole verification if access granting fails
         }
       }
 
@@ -320,7 +399,7 @@ export async function POST(request: NextRequest) {
         itemId: docId,
         itemType: productBoxId ? "product_box" : "bundle",
         userId: finalUserId,
-        creatorId: sessionCreatorId,
+        creatorId: sessionCreatorId || creatorId,
         amount: session.amount_total || 0,
       },
       item: {
