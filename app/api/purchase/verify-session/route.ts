@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { stripe, retrieveSessionWithAccount } from "@/lib/stripe"
+import { retrieveSessionSmart } from "@/lib/stripe"
 import { auth, db } from "@/lib/firebase-admin"
 
 export async function POST(request: NextRequest) {
@@ -44,17 +44,19 @@ export async function POST(request: NextRequest) {
     if (!existingPurchaseQuery.empty) {
       const purchaseData = existingPurchaseQuery.docs[0].data()
       creatorId = purchaseData.creatorId
+      connectedAccountId = purchaseData.connectedAccountId
       console.log("📦 [Verify Session] Found existing purchase with creatorId:", creatorId)
+      console.log("🔗 [Verify Session] Connected account from purchase:", connectedAccountId)
     }
 
-    // If we have a creatorId, get their connected account ID
-    if (creatorId) {
+    // If we have a creatorId but no connected account, get it from creator profile
+    if (creatorId && !connectedAccountId) {
       try {
         const creatorDoc = await db.collection("users").doc(creatorId).get()
         if (creatorDoc.exists) {
           const creatorData = creatorDoc.data()
           connectedAccountId = creatorData?.stripeAccountId
-          console.log("🔗 [Verify Session] Found connected account ID:", connectedAccountId)
+          console.log("🔗 [Verify Session] Found connected account ID from creator:", connectedAccountId)
         }
       } catch (error) {
         console.error("❌ [Verify Session] Failed to get creator's connected account:", error)
@@ -63,39 +65,14 @@ export async function POST(request: NextRequest) {
 
     // Enhanced session retrieval with Stripe Connect support
     console.log("💳 [Verify Session] Retrieving Stripe session:", sessionId)
-    console.log("   Connected Account ID:", connectedAccountId || "None (platform account)")
+    console.log("   Connected Account ID:", connectedAccountId || "None (will try platform account)")
 
     let session
     let retrievalMethod = "unknown"
 
     try {
-      if (connectedAccountId) {
-        // Try with connected account first
-        console.log("🔗 [Verify Session] Attempting retrieval with connected account:", connectedAccountId)
-        session = await retrieveSessionWithAccount(sessionId, connectedAccountId)
-        retrievalMethod = "connected_account"
-        console.log("✅ [Verify Session] Session retrieved from connected account")
-      } else {
-        // Try platform account first
-        console.log("🏢 [Verify Session] Attempting retrieval with platform account")
-        try {
-          session = await stripe.checkout.sessions.retrieve(sessionId, {
-            expand: ["payment_intent", "line_items"],
-          })
-          retrievalMethod = "platform_account"
-          console.log("✅ [Verify Session] Session retrieved from platform account")
-        } catch (platformError: any) {
-          console.log("⚠️ [Verify Session] Platform account retrieval failed, trying to find connected account...")
-
-          // If platform fails, try to find the connected account from session metadata
-          // We'll need to try a different approach - check recent sessions or use webhook data
-
-          // For now, let's try to extract creator info from the session ID pattern or other means
-          // This is a fallback - ideally we should have the connected account ID from purchase creation
-
-          throw platformError // Re-throw for now, will handle below
-        }
-      }
+      session = await retrieveSessionSmart(sessionId, connectedAccountId)
+      retrievalMethod = connectedAccountId ? "connected_account" : "platform_account"
 
       console.log("✅ [Verify Session] Session retrieved successfully:")
       console.log("   ID:", session.id)
