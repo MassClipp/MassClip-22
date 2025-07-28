@@ -37,14 +37,18 @@ export default function PurchaseSuccessPage() {
   const [productBoxId, setProductBoxId] = useState<string | null>(null)
   const [purchaseDetails, setPurchaseDetails] = useState<PurchaseDetails | null>(null)
   const [isRetrying, setIsRetrying] = useState(false)
+  const [retryCount, setRetryCount] = useState(0)
+  const [hasAttemptedVerification, setHasAttemptedVerification] = useState(false)
 
-  const verifyPurchase = async (sessionId: string) => {
+  const verifyPurchase = async (sessionId: string, isManualRetry = false) => {
     try {
       console.log("🔍 [Purchase Success] Starting verification...")
       console.log("   Session ID:", sessionId)
       console.log("   Current domain:", window.location.origin)
       console.log("   Full URL:", window.location.href)
       console.log("   User authenticated:", !!user)
+      console.log("   Is manual retry:", isManualRetry)
+      console.log("   Retry count:", retryCount)
 
       setVerificationStatus("loading")
 
@@ -78,6 +82,7 @@ export default function PurchaseSuccessPage() {
       if (data.success) {
         setVerificationStatus("success")
         setPurchaseDetails(data)
+        setRetryCount(0) // Reset retry count on success
         toast({
           title: data.alreadyProcessed ? "Purchase Already Processed" : "Purchase Verified!",
           description: "Your access has been granted successfully.",
@@ -85,20 +90,31 @@ export default function PurchaseSuccessPage() {
       } else {
         setVerificationStatus("error")
         setErrorMessage(data.error || data.message || "Verification failed")
+
+        // Increment retry count only for manual retries
+        if (isManualRetry) {
+          setRetryCount((prev) => prev + 1)
+        }
+
         console.error("❌ [Purchase Success] Verification failed:", data)
       }
     } catch (error) {
       console.error("❌ [Purchase Success] Verification error:", error)
       setVerificationStatus("error")
       setErrorMessage("Network error: Failed to verify purchase. Please check your connection and try again.")
+
+      // Increment retry count only for manual retries
+      if (isManualRetry) {
+        setRetryCount((prev) => prev + 1)
+      }
     }
   }
 
   const handleRetry = async () => {
-    if (!sessionId) return
+    if (!sessionId || retryCount >= 5) return
 
     setIsRetrying(true)
-    await verifyPurchase(sessionId)
+    await verifyPurchase(sessionId, true) // Mark as manual retry
     setIsRetrying(false)
   }
 
@@ -119,6 +135,7 @@ export default function PurchaseSuccessPage() {
     }).format(amount / 100)
   }
 
+  // Extract URL parameters and start initial verification
   useEffect(() => {
     console.log("🔗 [Purchase Success] Page loaded, extracting URL parameters...")
     console.log("   Full URL:", window.location.href)
@@ -142,17 +159,12 @@ export default function PurchaseSuccessPage() {
     setSessionId(sessionIdFromUrl)
     setProductBoxId(productBoxIdFromUrl)
 
-    // Start verification (works with or without user authentication)
-    verifyPurchase(sessionIdFromUrl)
-  }, []) // Remove user dependency to start verification immediately
-
-  // Handle user authentication changes
-  useEffect(() => {
-    if (user && sessionId && verificationStatus === "error") {
-      console.log("👤 [Purchase Success] User authenticated, retrying verification...")
-      verifyPurchase(sessionId)
+    // Start initial verification (only once)
+    if (!hasAttemptedVerification) {
+      setHasAttemptedVerification(true)
+      verifyPurchase(sessionIdFromUrl, false) // Not a manual retry
     }
-  }, [user, sessionId, verificationStatus])
+  }, [hasAttemptedVerification])
 
   if (!sessionId) {
     return (
@@ -216,6 +228,7 @@ export default function PurchaseSuccessPage() {
                 <div>Session: {sessionId}</div>
                 <div>Domain: {typeof window !== "undefined" ? window.location.origin : "Loading..."}</div>
                 <div>User: {user ? "Authenticated" : "Not authenticated"}</div>
+                <div>Retry count: {retryCount}</div>
               </div>
             </div>
           )}
@@ -313,6 +326,7 @@ export default function PurchaseSuccessPage() {
                   <div>Current Domain: {typeof window !== "undefined" ? window.location.origin : "Loading..."}</div>
                   <div>Full URL: {typeof window !== "undefined" ? window.location.href : "Loading..."}</div>
                   <div>User Authenticated: {user ? "Yes" : "No"}</div>
+                  <div>Retry Count: {retryCount}/5</div>
                   {productBoxId && <div>Product Box ID: {productBoxId}</div>}
                   <div className="flex items-center gap-2">
                     <span>Session ID:</span>
@@ -325,16 +339,23 @@ export default function PurchaseSuccessPage() {
               </div>
 
               <div className="flex gap-3">
-                <Button onClick={handleRetry} disabled={isRetrying} className="flex-1 bg-transparent" variant="outline">
+                <Button
+                  onClick={handleRetry}
+                  disabled={isRetrying || retryCount >= 5}
+                  className="flex-1"
+                  variant="outline"
+                >
                   {isRetrying ? (
                     <>
                       <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                       Retrying...
                     </>
+                  ) : retryCount >= 5 ? (
+                    "Max Retries Reached"
                   ) : (
                     <>
                       <RefreshCw className="h-4 w-4 mr-2" />
-                      Retry Verification
+                      Retry Verification ({retryCount}/5)
                     </>
                   )}
                 </Button>
