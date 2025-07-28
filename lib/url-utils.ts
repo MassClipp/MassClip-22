@@ -6,18 +6,19 @@
  * Returns the appropriate site URL based on environment
  */
 export function getSiteUrl(): string {
-  // In production, always use the production domain
-  if (process.env.VERCEL_ENV === "production") {
-    return "https://massclip.pro"
-  }
-
   // In preview/development, use the current URL if available
   if (typeof window !== "undefined") {
     return window.location.origin
   }
 
-  // Server-side: check for Vercel preview URL
+  // Server-side: check for Vercel preview URL first
   if (process.env.VERCEL_URL && process.env.VERCEL_ENV !== "production") {
+    // Fix the preview URL format - use git branch URL instead of deployment URL
+    if (process.env.VERCEL_GIT_COMMIT_REF) {
+      const projectName = process.env.VERCEL_URL.split(".")[0]
+      const teamSlug = process.env.VERCEL_URL.split(".").slice(-3, -2)[0] // Extract team slug
+      return `https://${projectName}-git-${process.env.VERCEL_GIT_COMMIT_REF}-${teamSlug}.vercel.app`
+    }
     return `https://${process.env.VERCEL_URL}`
   }
 

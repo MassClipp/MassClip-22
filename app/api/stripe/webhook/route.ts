@@ -33,12 +33,41 @@ if (!webhookSecret) {
 }
 
 export async function POST(request: NextRequest) {
-  console.log("⚠️ [Stripe Webhook] DISABLED - Using manual verification flow only")
+  try {
+    const body = await request.text()
+    const signature = request.headers.get("stripe-signature")!
 
-  return NextResponse.json({
-    message: "Webhook disabled - using manual verification only",
-    status: "disabled",
-  })
+    let event: Stripe.Event
+
+    try {
+      event = stripe.webhooks.constructEvent(body, signature, webhookSecret)
+      console.log(
+        `✅ [Stripe Webhook] Signature verified for event: ${event.type} in ${isLiveKey ? "LIVE" : "TEST"} mode`,
+      )
+    } catch (err: any) {
+      console.error(`❌ [Stripe Webhook] Webhook signature verification failed:`, {
+        error: err.message,
+        environment: process.env.NODE_ENV,
+        isLiveKey,
+        webhookSecretLength: webhookSecret?.length,
+        hasSignature: !!signature,
+      })
+      return NextResponse.json({ error: "Invalid signature" }, { status: 400 })
+    }
+
+    console.log(`🔔 [Stripe Webhook] Processing event: ${event.type} (${isLiveKey ? "LIVE" : "TEST"} mode)`)
+
+    // Handle checkout.session.completed event
+    if (event.type === "checkout.session.completed") {
+      const session = event.data.object as Stripe.Checkout.Session
+      await handleCheckoutSessionCompleted(session)
+    }
+
+    return NextResponse.json({ received: true })
+  } catch (error) {
+    console.error("❌ [Stripe Webhook] Error handling webhook:", error)
+    return NextResponse.json({ error: "Webhook handler failed" }, { status: 500 })
+  }
 }
 
 async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session) {

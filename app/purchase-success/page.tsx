@@ -17,17 +17,13 @@ interface PurchaseDetails {
   }
   purchase: {
     id: string
-    productBoxId: string | null
-    bundleId: string | null
-    itemId: string
-    itemType: string
+    productBoxId: string
     userId: string
     amount: number
   }
-  item: {
+  productBox: {
     title: string
     description?: string
-    type: string
   }
   alreadyProcessed?: boolean
 }
@@ -38,13 +34,16 @@ export default function PurchaseSuccessPage() {
   const [verificationStatus, setVerificationStatus] = useState<"loading" | "success" | "error">("loading")
   const [errorMessage, setErrorMessage] = useState("")
   const [sessionId, setSessionId] = useState<string | null>(null)
+  const [productBoxId, setProductBoxId] = useState<string | null>(null)
   const [purchaseDetails, setPurchaseDetails] = useState<PurchaseDetails | null>(null)
   const [isRetrying, setIsRetrying] = useState(false)
 
   const verifyPurchase = async (sessionId: string) => {
     try {
-      console.log("🔍 [Purchase Success] Starting manual verification...")
+      console.log("🔍 [Purchase Success] Starting verification...")
       console.log("   Session ID:", sessionId)
+      console.log("   Current domain:", window.location.origin)
+      console.log("   Full URL:", window.location.href)
       console.log("   User authenticated:", !!user)
 
       setVerificationStatus("loading")
@@ -85,7 +84,7 @@ export default function PurchaseSuccessPage() {
         })
       } else {
         setVerificationStatus("error")
-        setErrorMessage(data.error || data.details || "Verification failed")
+        setErrorMessage(data.error || data.message || "Verification failed")
         console.error("❌ [Purchase Success] Verification failed:", data)
       }
     } catch (error) {
@@ -122,27 +121,32 @@ export default function PurchaseSuccessPage() {
 
   useEffect(() => {
     console.log("🔗 [Purchase Success] Page loaded, extracting URL parameters...")
+    console.log("   Full URL:", window.location.href)
+    console.log("   Search params:", window.location.search)
 
-    // Get session_id from URL
+    // Get parameters from URL
     const urlParams = new URLSearchParams(window.location.search)
     const sessionIdFromUrl = urlParams.get("session_id")
+    const productBoxIdFromUrl = urlParams.get("product_box_id")
 
     console.log("   Session ID from URL:", sessionIdFromUrl)
+    console.log("   Product Box ID from URL:", productBoxIdFromUrl)
 
     if (!sessionIdFromUrl) {
-      console.error("❌ [Purchase Success] No session_id found in URL")
+      console.error("❌ [Purchase Success] No session ID found in URL")
       setVerificationStatus("error")
-      setErrorMessage("No session_id found in URL. This link may be invalid or expired.")
+      setErrorMessage("No session ID found in URL. This link may be invalid or expired.")
       return
     }
 
     setSessionId(sessionIdFromUrl)
+    setProductBoxId(productBoxIdFromUrl)
 
-    // Start verification immediately
+    // Start verification (works with or without user authentication)
     verifyPurchase(sessionIdFromUrl)
-  }, [])
+  }, []) // Remove user dependency to start verification immediately
 
-  // Retry verification when user authenticates
+  // Handle user authentication changes
   useEffect(() => {
     if (user && sessionId && verificationStatus === "error") {
       console.log("👤 [Purchase Success] User authenticated, retrying verification...")
@@ -161,7 +165,10 @@ export default function PurchaseSuccessPage() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <p className="text-gray-600">This purchase verification link is missing the session_id parameter.</p>
+            <p className="text-gray-600">This purchase verification link is invalid or expired.</p>
+            <div className="text-sm text-gray-500">
+              <div>Current URL: {typeof window !== "undefined" ? window.location.href : "Loading..."}</div>
+            </div>
             <Button onClick={() => (window.location.href = "/dashboard")} className="w-full">
               Go to Dashboard
             </Button>
@@ -207,6 +214,7 @@ export default function PurchaseSuccessPage() {
               <div className="animate-pulse text-gray-600">Processing your payment verification...</div>
               <div className="text-sm text-gray-500 space-y-1">
                 <div>Session: {sessionId}</div>
+                <div>Domain: {typeof window !== "undefined" ? window.location.origin : "Loading..."}</div>
                 <div>User: {user ? "Authenticated" : "Not authenticated"}</div>
               </div>
             </div>
@@ -227,11 +235,7 @@ export default function PurchaseSuccessPage() {
                   <div className="space-y-2 text-sm">
                     <div>
                       <span className="text-gray-600">Product:</span>{" "}
-                      <span className="font-medium">{purchaseDetails.item.title}</span>
-                    </div>
-                    <div>
-                      <span className="text-gray-600">Type:</span>{" "}
-                      <span className="font-medium capitalize">{purchaseDetails.item.type.replace("_", " ")}</span>
+                      <span className="font-medium">{purchaseDetails.productBox.title}</span>
                     </div>
                     <div>
                       <span className="text-gray-600">Amount:</span>{" "}
@@ -271,17 +275,15 @@ export default function PurchaseSuccessPage() {
               </div>
 
               <div className="flex gap-3">
-                {purchaseDetails.purchase.productBoxId && (
-                  <Button
-                    onClick={() =>
-                      (window.location.href = `/product-box/${purchaseDetails.purchase.productBoxId}/content`)
-                    }
-                    className="flex-1"
-                  >
-                    <ExternalLink className="h-4 w-4 mr-2" />
-                    View Content
-                  </Button>
-                )}
+                <Button
+                  onClick={() =>
+                    (window.location.href = `/product-box/${purchaseDetails.purchase.productBoxId}/content`)
+                  }
+                  className="flex-1"
+                >
+                  <ExternalLink className="h-4 w-4 mr-2" />
+                  View Content
+                </Button>
                 <Button
                   onClick={() => (window.location.href = "/dashboard/purchases")}
                   variant="outline"
@@ -308,7 +310,10 @@ export default function PurchaseSuccessPage() {
               <div className="bg-gray-50 p-4 rounded-lg">
                 <h3 className="font-semibold text-gray-900 mb-2">Debug Information</h3>
                 <div className="space-y-2 text-sm text-gray-600">
+                  <div>Current Domain: {typeof window !== "undefined" ? window.location.origin : "Loading..."}</div>
+                  <div>Full URL: {typeof window !== "undefined" ? window.location.href : "Loading..."}</div>
                   <div>User Authenticated: {user ? "Yes" : "No"}</div>
+                  {productBoxId && <div>Product Box ID: {productBoxId}</div>}
                   <div className="flex items-center gap-2">
                     <span>Session ID:</span>
                     <Button variant="ghost" size="sm" onClick={copySessionId} className="h-6 px-2">
