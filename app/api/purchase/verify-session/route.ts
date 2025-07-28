@@ -1,5 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { stripe } from "@/lib/stripe"
+import { stripe, retrieveSessionWithAccount } from "@/lib/stripe"
 import { auth, db } from "@/lib/firebase-admin"
 
 export async function POST(request: NextRequest) {
@@ -18,65 +18,6 @@ export async function POST(request: NextRequest) {
 
     console.log("🔍 [Verify Session] Processing session:", sessionId)
 
-    // ENHANCED STRIPE KEY LOGGING
-    const stripeSecretKey = process.env.STRIPE_SECRET_KEY
-    const stripeTestKey = process.env.STRIPE_SECRET_KEY_TEST
-    const stripeLiveKey = process.env.STRIPE_SECRET_KEY_LIVE || process.env.STRIPE_SECRET_KEY
-
-    console.log("🔑 [Verify Session] STRIPE KEY ANALYSIS:")
-    console.log("   STRIPE_SECRET_KEY exists:", !!stripeSecretKey)
-    console.log("   STRIPE_SECRET_KEY prefix:", stripeSecretKey?.substring(0, 8) || "NOT_SET")
-    console.log("   STRIPE_SECRET_KEY_TEST exists:", !!stripeTestKey)
-    console.log("   STRIPE_SECRET_KEY_TEST prefix:", stripeTestKey?.substring(0, 8) || "NOT_SET")
-    console.log("   STRIPE_SECRET_KEY_LIVE exists:", !!stripeLiveKey)
-    console.log("   STRIPE_SECRET_KEY_LIVE prefix:", stripeLiveKey?.substring(0, 8) || "NOT_SET")
-    console.log("   Session ID prefix:", sessionId.substring(0, 8))
-    console.log("   Session is LIVE:", sessionId.startsWith("cs_live_"))
-    console.log("   Session is TEST:", sessionId.startsWith("cs_test_"))
-
-    // Check what key the stripe instance is actually using
-    console.log("   Stripe instance key prefix:", stripe.getApiField("key")?.substring(0, 8) || "UNKNOWN")
-
-    // Determine expected key type based on session
-    const sessionIsLive = sessionId.startsWith("cs_live_")
-    const sessionIsTest = sessionId.startsWith("cs_test_")
-    const currentKeyIsLive = stripeSecretKey?.startsWith("sk_live_")
-    const currentKeyIsTest = stripeSecretKey?.startsWith("sk_test_")
-
-    console.log("🔍 [Verify Session] KEY MISMATCH ANALYSIS:")
-    console.log("   Session type:", sessionIsLive ? "LIVE" : sessionIsTest ? "TEST" : "UNKNOWN")
-    console.log("   Current key type:", currentKeyIsLive ? "LIVE" : currentKeyIsTest ? "TEST" : "UNKNOWN")
-    console.log("   Key/Session match:", (sessionIsLive && currentKeyIsLive) || (sessionIsTest && currentKeyIsTest))
-
-    if ((sessionIsLive && !currentKeyIsLive) || (sessionIsTest && !currentKeyIsTest)) {
-      console.error("❌ [Verify Session] CRITICAL: Key/Session type mismatch detected!")
-      console.error("   This will cause 'Session not found' errors")
-      console.error("   Session expects:", sessionIsLive ? "LIVE key (sk_live_)" : "TEST key (sk_test_)")
-      console.error("   But using:", currentKeyIsLive ? "LIVE key" : currentKeyIsTest ? "TEST key" : "UNKNOWN key")
-
-      return NextResponse.json(
-        {
-          error: "Stripe key configuration error",
-          details: "Session type does not match configured Stripe key",
-          sessionType: sessionIsLive ? "live" : "test",
-          keyType: currentKeyIsLive ? "live" : currentKeyIsTest ? "test" : "unknown",
-          sessionId: sessionId.substring(0, 20) + "...",
-          keyPrefix: stripeSecretKey?.substring(0, 8) || "NOT_SET",
-          suggestion: sessionIsLive
-            ? "Configure STRIPE_SECRET_KEY with a live key (sk_live_)"
-            : "Configure STRIPE_SECRET_KEY with a test key (sk_test_)",
-          environmentCheck: {
-            hasStripeSecretKey: !!stripeSecretKey,
-            hasStripeTestKey: !!stripeTestKey,
-            hasStripeLiveKey: !!stripeLiveKey,
-            nodeEnv: process.env.NODE_ENV,
-            vercelEnv: process.env.VERCEL_ENV,
-          },
-        },
-        { status: 400 },
-      )
-    }
-
     // Verify Firebase token if provided
     let userId = null
     if (idToken) {
@@ -87,21 +28,75 @@ export async function POST(request: NextRequest) {
         console.log("✅ [Verify Session] Token verified for user:", userId)
       } catch (error) {
         console.error("❌ [Verify Session] Token verification failed:", error)
-        // Don't return error here - allow anonymous verification
         console.log("⚠️ [Verify Session] Continuing without authentication...")
       }
     }
 
-    // Enhanced session retrieval with better error handling
+    // First, try to get the session metadata to find the connected account
+    console.log("🔍 [Verify Session] Looking for existing purchase record to get connected account...")
+
+    let connectedAccountId = null
+    let creatorId = null
+
+    // Check if we have this session in our database already
+    const existingPurchaseQuery = await db.collection("purchases").where("sessionId", "==", sessionId).limit(1).get()
+
+    if (!existingPurchaseQuery.empty) {
+      const purchaseData = existingPurchaseQuery.docs[0].data()
+      creatorId = purchaseData.creatorId
+      console.log("📦 [Verify Session] Found existing purchase with creatorId:", creatorId)
+    }
+
+    // If we have a creatorId, get their connected account ID
+    if (creatorId) {
+      try {
+        const creatorDoc = await db.collection("users").doc(creatorId).get()
+        if (creatorDoc.exists) {
+          const creatorData = creatorDoc.data()
+          connectedAccountId = creatorData?.stripeAccountId
+          console.log("🔗 [Verify Session] Found connected account ID:", connectedAccountId)
+        }
+      } catch (error) {
+        console.error("❌ [Verify Session] Failed to get creator's connected account:", error)
+      }
+    }
+
+    // Enhanced session retrieval with Stripe Connect support
     console.log("💳 [Verify Session] Retrieving Stripe session:", sessionId)
-    console.log("   Using Stripe key:", stripeSecretKey?.substring(0, 8) + "..." + stripeSecretKey?.substring(-4))
+    console.log("   Connected Account ID:", connectedAccountId || "None (platform account)")
 
     let session
+    let retrievalMethod = "unknown"
+
     try {
-      // First, try to retrieve the session with expanded payment_intent
-      session = await stripe.checkout.sessions.retrieve(sessionId, {
-        expand: ["payment_intent", "line_items"],
-      })
+      if (connectedAccountId) {
+        // Try with connected account first
+        console.log("🔗 [Verify Session] Attempting retrieval with connected account:", connectedAccountId)
+        session = await retrieveSessionWithAccount(sessionId, connectedAccountId)
+        retrievalMethod = "connected_account"
+        console.log("✅ [Verify Session] Session retrieved from connected account")
+      } else {
+        // Try platform account first
+        console.log("🏢 [Verify Session] Attempting retrieval with platform account")
+        try {
+          session = await stripe.checkout.sessions.retrieve(sessionId, {
+            expand: ["payment_intent", "line_items"],
+          })
+          retrievalMethod = "platform_account"
+          console.log("✅ [Verify Session] Session retrieved from platform account")
+        } catch (platformError: any) {
+          console.log("⚠️ [Verify Session] Platform account retrieval failed, trying to find connected account...")
+
+          // If platform fails, try to find the connected account from session metadata
+          // We'll need to try a different approach - check recent sessions or use webhook data
+
+          // For now, let's try to extract creator info from the session ID pattern or other means
+          // This is a fallback - ideally we should have the connected account ID from purchase creation
+
+          throw platformError // Re-throw for now, will handle below
+        }
+      }
+
       console.log("✅ [Verify Session] Session retrieved successfully:")
       console.log("   ID:", session.id)
       console.log("   Payment Status:", session.payment_status)
@@ -110,102 +105,54 @@ export async function POST(request: NextRequest) {
       console.log("   Currency:", session.currency)
       console.log("   Customer Email:", session.customer_details?.email)
       console.log("   Metadata:", session.metadata)
-      console.log("   Created:", new Date(session.created * 1000).toISOString())
-      console.log(
-        "   Expires At:",
-        session.expires_at ? new Date(session.expires_at * 1000).toISOString() : "No expiration",
-      )
-      console.log("   Mode:", session.mode)
+      console.log("   Retrieval Method:", retrievalMethod)
+      console.log("   Connected Account:", connectedAccountId || "Platform")
     } catch (error: any) {
       console.error("❌ [Verify Session] Failed to retrieve session:", error)
 
-      // Enhanced error handling for different Stripe error types
-      if (error.type === "StripeInvalidRequestError") {
-        if (error.message?.includes("No such checkout.session")) {
-          console.error("❌ [Verify Session] Session not found in Stripe")
+      if (error.type === "StripeInvalidRequestError" && error.message?.includes("No such checkout.session")) {
+        console.error("❌ [Verify Session] Session not found - likely Stripe Connect issue")
 
-          // Check if this might be a test/live mode mismatch
-          const isLiveSession = sessionId.startsWith("cs_live_")
-          const isTestSession = sessionId.startsWith("cs_test_")
-          const currentMode = process.env.STRIPE_SECRET_KEY?.startsWith("sk_live_") ? "live" : "test"
-          const currentKeyPrefix = process.env.STRIPE_SECRET_KEY?.substring(0, 8) || "unknown"
-
-          console.log("🔍 [Verify Session] Mode analysis:", {
-            sessionId: sessionId.substring(0, 20) + "...",
-            isLiveSession,
-            isTestSession,
-            currentMode,
-            currentKeyPrefix,
-            stripeKeyConfigured: !!process.env.STRIPE_SECRET_KEY,
-          })
-
-          if ((isLiveSession && currentMode === "test") || (isTestSession && currentMode === "live")) {
-            return NextResponse.json(
-              {
-                error: "Session mode mismatch",
-                details: `Session is from ${isLiveSession ? "live" : "test"} mode but API is in ${currentMode} mode`,
-                sessionId,
-                currentMode,
-                sessionMode: isLiveSession ? "live" : "test",
-                stripeKeyPrefix: currentKeyPrefix,
-                suggestion: "Verify you're using the correct Stripe keys for your environment",
-                debugInfo: {
-                  sessionPrefix: sessionId.substring(0, 8),
-                  keyPrefix: currentKeyPrefix,
-                  expectedKeyType: isLiveSession ? "sk_live_" : "sk_test_",
-                  actualKeyType: currentKeyPrefix,
-                  environmentVars: {
-                    hasStripeSecretKey: !!process.env.STRIPE_SECRET_KEY,
-                    hasStripeTestKey: !!process.env.STRIPE_SECRET_KEY_TEST,
-                    hasStripeLiveKey: !!process.env.STRIPE_SECRET_KEY_LIVE,
-                    nodeEnv: process.env.NODE_ENV,
-                    vercelEnv: process.env.VERCEL_ENV,
-                  },
-                },
-              },
-              { status: 400 },
-            )
-          }
-
-          return NextResponse.json(
-            {
-              error: "Session not found",
-              details: "This checkout session does not exist in Stripe or has been deleted",
-              sessionId,
-              sessionPrefix: sessionId.substring(0, 8),
-              stripeMode: currentMode,
-              possibleCauses: [
-                "Session ID is incorrect or truncated",
-                "Session was never created",
-                "Using wrong Stripe account",
-                "Session was created in different mode (test vs live)",
-                "Session has been deleted from Stripe dashboard",
-              ],
-              suggestion: "Please verify the session ID and try making a new purchase",
-              debugInfo: {
-                stripeKeyPrefix: currentKeyPrefix,
-                sessionType: isLiveSession ? "live" : isTestSession ? "test" : "unknown",
-                keyType: currentMode,
-                mismatch: (isLiveSession && currentMode === "test") || (isTestSession && currentMode === "live"),
-              },
+        // Enhanced error response for Stripe Connect issues
+        return NextResponse.json(
+          {
+            error: "Session not found",
+            details: "This checkout session could not be found. This might be a Stripe Connect configuration issue.",
+            sessionId,
+            sessionPrefix: sessionId.substring(0, 8),
+            possibleCauses: [
+              "Session was created in a connected Stripe account but we're looking in the platform account",
+              "Connected account ID is missing or incorrect",
+              "Session was created with different API credentials",
+              "Session has expired (24 hour limit)",
+              "Session was deleted from Stripe dashboard",
+            ],
+            debugInfo: {
+              hasConnectedAccountId: !!connectedAccountId,
+              connectedAccountId: connectedAccountId || null,
+              creatorId: creatorId || null,
+              retrievalMethod,
+              sessionType: sessionId.startsWith("cs_live_") ? "live" : "test",
+              stripeMode: process.env.STRIPE_SECRET_KEY?.startsWith("sk_live_") ? "live" : "test",
             },
-            { status: 404 },
-          )
-        }
+            suggestion:
+              "If this is a Stripe Connect setup, ensure the connected account ID is properly stored and retrieved.",
+          },
+          { status: 404 },
+        )
       }
 
-      // Network or other errors
+      // Other Stripe errors
       return NextResponse.json(
         {
           error: "Failed to retrieve session",
           details: error.message,
           type: error.type || "unknown",
           sessionId,
-          stripeMode: process.env.STRIPE_SECRET_KEY?.startsWith("sk_live_") ? "live" : "test",
-          timestamp: new Date().toISOString(),
           debugInfo: {
-            stripeKeyPrefix: process.env.STRIPE_SECRET_KEY?.substring(0, 8) || "NOT_SET",
-            sessionPrefix: sessionId.substring(0, 8),
+            connectedAccountId,
+            creatorId,
+            retrievalMethod,
             errorType: error.type,
             errorCode: error.code,
           },
@@ -233,7 +180,7 @@ export async function POST(request: NextRequest) {
     const productBoxId = session.metadata?.productBoxId
     const bundleId = session.metadata?.bundleId
     const sessionUserId = session.metadata?.userId
-    const creatorId = session.metadata?.creatorId
+    const sessionCreatorId = session.metadata?.creatorId || creatorId
 
     if (!productBoxId && !bundleId) {
       console.error("❌ [Verify Session] Missing product/bundle ID in session metadata")
@@ -256,12 +203,11 @@ export async function POST(request: NextRequest) {
     console.log("   User ID (auth):", userId)
     console.log("   User ID (session):", sessionUserId)
     console.log("   Final User ID:", finalUserId)
-    console.log("   Creator ID:", creatorId)
+    console.log("   Creator ID:", sessionCreatorId)
+    console.log("   Connected Account:", connectedAccountId)
 
     // Check if purchase already exists
     console.log("🔍 [Verify Session] Checking for existing purchase...")
-    const existingPurchaseQuery = await db.collection("purchases").where("sessionId", "==", sessionId).limit(1).get()
-
     let purchaseId
     let alreadyProcessed = false
 
@@ -284,7 +230,8 @@ export async function POST(request: NextRequest) {
         itemId,
         itemType,
         userId: finalUserId,
-        creatorId: creatorId || null,
+        creatorId: sessionCreatorId || null,
+        connectedAccountId: connectedAccountId || null,
         amount: session.amount_total || 0,
         currency: session.currency || "usd",
         status: "completed",
@@ -296,6 +243,7 @@ export async function POST(request: NextRequest) {
         updatedAt: new Date(),
         stripeSessionId: sessionId,
         verificationMethod: "direct_api",
+        retrievalMethod,
         verifiedAt: new Date(),
       }
 
@@ -385,6 +333,8 @@ export async function POST(request: NextRequest) {
         status: session.payment_status,
         customerEmail: session.customer_details?.email,
         created: new Date(session.created * 1000).toISOString(),
+        connectedAccount: connectedAccountId,
+        retrievalMethod,
       },
       purchase: {
         id: purchaseId,
@@ -393,6 +343,7 @@ export async function POST(request: NextRequest) {
         itemId: docId,
         itemType: productBoxId ? "product_box" : "bundle",
         userId: finalUserId,
+        creatorId: sessionCreatorId,
         amount: session.amount_total || 0,
       },
       item: {
