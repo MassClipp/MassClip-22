@@ -1,14 +1,14 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { RefreshCw, Copy, CheckCircle, XCircle, AlertTriangle } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 
-interface StripeAccountInfo {
+interface StripeDebugInfo {
   timestamp: string
   environment: {
     NODE_ENV: string
@@ -21,54 +21,35 @@ interface StripeAccountInfo {
     environment_variables: Record<string, string | null>
   }
   stripe_account: {
-    info: {
-      id: string
-      email: string
-      display_name: string
-      country: string
-      default_currency: string
-      type: string
-      charges_enabled: boolean
-      payouts_enabled: boolean
-      details_submitted: boolean
-    } | null
+    info: any
     error: string | null
   }
   session_test: {
     session_id: string
-    result: {
-      id: string
-      status: string
-      payment_status: string
-      customer_email: string
-      amount_total: number
-      currency: string
-      created: string
-    } | null
+    result: any
     error: string | null
   }
   recommendations: string[]
 }
 
-export default function StripeAccountInfoPage() {
-  const [accountInfo, setAccountInfo] = useState<StripeAccountInfo | null>(null)
+export default function StripeAccountDebugPage() {
+  const [debugInfo, setDebugInfo] = useState<StripeDebugInfo | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const { toast } = useToast()
 
-  const fetchAccountInfo = async () => {
+  const fetchDebugInfo = async () => {
     setLoading(true)
     setError(null)
 
     try {
       const response = await fetch("/api/debug/stripe-account-info")
-      const data = await response.json()
-
       if (!response.ok) {
-        throw new Error(data.message || "Failed to fetch account info")
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
       }
 
-      setAccountInfo(data)
+      const data = await response.json()
+      setDebugInfo(data)
     } catch (err: any) {
       setError(err.message)
     } finally {
@@ -77,25 +58,22 @@ export default function StripeAccountInfoPage() {
   }
 
   useEffect(() => {
-    fetchAccountInfo()
+    fetchDebugInfo()
   }, [])
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text)
     toast({
       title: "Copied to clipboard",
-      description: "Information copied successfully",
+      description: "Text has been copied to your clipboard",
     })
   }
 
-  const getStatusIcon = (condition: boolean | null) => {
-    if (condition === null) return <AlertTriangle className="h-4 w-4 text-yellow-500" />
-    return condition ? <CheckCircle className="h-4 w-4 text-green-500" /> : <XCircle className="h-4 w-4 text-red-500" />
-  }
-
-  const getKeyTypeBadge = (keyType: string) => {
-    const variant = keyType === "LIVE" ? "default" : keyType === "TEST" ? "secondary" : "destructive"
-    return <Badge variant={variant}>{keyType}</Badge>
+  const getStatusIcon = (recommendation: string) => {
+    if (recommendation.startsWith("✅")) return <CheckCircle className="h-4 w-4 text-green-500" />
+    if (recommendation.startsWith("❌")) return <XCircle className="h-4 w-4 text-red-500" />
+    if (recommendation.startsWith("⚠️")) return <AlertTriangle className="h-4 w-4 text-yellow-500" />
+    return null
   }
 
   if (loading) {
@@ -113,11 +91,11 @@ export default function StripeAccountInfoPage() {
       <div className="container mx-auto p-6">
         <Card className="border-red-200">
           <CardHeader>
-            <CardTitle className="text-red-600">Error Loading Account Info</CardTitle>
+            <CardTitle className="text-red-600">Error Loading Debug Info</CardTitle>
           </CardHeader>
           <CardContent>
             <p className="text-red-600 mb-4">{error}</p>
-            <Button onClick={fetchAccountInfo} variant="outline">
+            <Button onClick={fetchDebugInfo} variant="outline">
               <RefreshCw className="h-4 w-4 mr-2" />
               Retry
             </Button>
@@ -127,8 +105,6 @@ export default function StripeAccountInfoPage() {
     )
   }
 
-  if (!accountInfo) return null
-
   return (
     <div className="container mx-auto p-6 space-y-6">
       <div className="flex items-center justify-between">
@@ -136,38 +112,51 @@ export default function StripeAccountInfoPage() {
           <h1 className="text-3xl font-bold">Stripe Account Debug Info</h1>
           <p className="text-muted-foreground">Detailed information about your Stripe configuration and account</p>
         </div>
-        <Button onClick={fetchAccountInfo} variant="outline">
+        <Button onClick={fetchDebugInfo} variant="outline">
           <RefreshCw className="h-4 w-4 mr-2" />
           Refresh
         </Button>
       </div>
 
-      {/* Environment Info */}
+      {/* Environment Information */}
       <Card>
         <CardHeader>
           <CardTitle>Environment Information</CardTitle>
           <CardDescription>Current deployment environment details</CardDescription>
         </CardHeader>
-        <CardContent className="space-y-2">
+        <CardContent className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
-              <span className="font-medium">NODE_ENV:</span>
-              <Badge variant="outline" className="ml-2">
-                {accountInfo.environment.NODE_ENV}
-              </Badge>
+              <label className="text-sm font-medium">NODE_ENV:</label>
+              <div className="flex items-center gap-2">
+                <Badge variant={debugInfo?.environment.NODE_ENV === "production" ? "default" : "secondary"}>
+                  {debugInfo?.environment.NODE_ENV}
+                </Badge>
+              </div>
             </div>
             <div>
-              <span className="font-medium">VERCEL_ENV:</span>
-              <Badge variant="outline" className="ml-2">
-                {accountInfo.environment.VERCEL_ENV || "N/A"}
-              </Badge>
+              <label className="text-sm font-medium">VERCEL_ENV:</label>
+              <div className="flex items-center gap-2">
+                <Badge variant={debugInfo?.environment.VERCEL_ENV === "production" ? "default" : "secondary"}>
+                  {debugInfo?.environment.VERCEL_ENV}
+                </Badge>
+              </div>
             </div>
             <div>
-              <span className="font-medium">VERCEL_URL:</span>
-              <span className="ml-2 text-sm text-muted-foreground">{accountInfo.environment.VERCEL_URL || "N/A"}</span>
+              <label className="text-sm font-medium">VERCEL_URL:</label>
+              <div className="flex items-center gap-2">
+                <code className="text-sm bg-muted px-2 py-1 rounded">{debugInfo?.environment.VERCEL_URL}</code>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => copyToClipboard(debugInfo?.environment.VERCEL_URL || "")}
+                >
+                  <Copy className="h-3 w-3" />
+                </Button>
+              </div>
             </div>
           </div>
-          <p className="text-xs text-muted-foreground">Last updated: {accountInfo.timestamp}</p>
+          <div className="text-xs text-muted-foreground">Last updated: {debugInfo?.timestamp}</div>
         </CardContent>
       </Card>
 
@@ -176,46 +165,44 @@ export default function StripeAccountInfoPage() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             Stripe Configuration
-            {getKeyTypeBadge(accountInfo.stripe_config.active_key_type)}
+            <Badge variant={debugInfo?.stripe_config.active_key_type === "LIVE" ? "default" : "destructive"}>
+              {debugInfo?.stripe_config.active_key_type}
+            </Badge>
           </CardTitle>
           <CardDescription>Active Stripe keys and environment variables</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div>
-            <span className="font-medium">Active Secret Key:</span>
-            <div className="flex items-center gap-2 mt-1">
-              <code className="bg-muted px-2 py-1 rounded text-sm">
-                {accountInfo.stripe_config.active_key_prefix || "Not set"}
-              </code>
-              {accountInfo.stripe_config.active_key_prefix && (
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => copyToClipboard(accountInfo.stripe_config.active_key_prefix!)}
-                >
-                  <Copy className="h-3 w-3" />
-                </Button>
-              )}
+            <label className="text-sm font-medium">Active Secret Key:</label>
+            <div className="flex items-center gap-2">
+              <code className="text-sm bg-muted px-2 py-1 rounded">{debugInfo?.stripe_config.active_key_prefix}</code>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => copyToClipboard(debugInfo?.stripe_config.active_key_prefix || "")}
+              >
+                <Copy className="h-3 w-3" />
+              </Button>
             </div>
           </div>
 
           <Separator />
 
           <div>
-            <h4 className="font-medium mb-3">Environment Variables</h4>
-            <div className="grid grid-cols-1 gap-2">
-              {Object.entries(accountInfo.stripe_config.environment_variables).map(([key, value]) => (
-                <div key={key} className="flex items-center justify-between p-2 bg-muted/50 rounded">
+            <label className="text-sm font-medium mb-2 block">Environment Variables</label>
+            <div className="space-y-2">
+              {Object.entries(debugInfo?.stripe_config.environment_variables || {}).map(([key, value]) => (
+                <div key={key} className="flex items-center justify-between p-2 bg-muted rounded">
                   <span className="font-mono text-sm">{key}</span>
                   <div className="flex items-center gap-2">
                     {value ? (
                       <>
-                        <code className="text-xs bg-background px-2 py-1 rounded">{value}</code>
+                        <code className="text-sm">{value}</code>
                         <CheckCircle className="h-4 w-4 text-green-500" />
                       </>
                     ) : (
                       <>
-                        <span className="text-xs text-muted-foreground">Not set</span>
+                        <span className="text-muted-foreground text-sm">null</span>
                         <XCircle className="h-4 w-4 text-red-500" />
                       </>
                     )}
@@ -230,71 +217,22 @@ export default function StripeAccountInfoPage() {
       {/* Stripe Account Info */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            Stripe Account Information
-            {getStatusIcon(!!accountInfo.stripe_account.info)}
-          </CardTitle>
+          <CardTitle>Stripe Account Information</CardTitle>
           <CardDescription>Details about the connected Stripe account</CardDescription>
         </CardHeader>
         <CardContent>
-          {accountInfo.stripe_account.info ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <span className="font-medium">Account ID:</span>
-                <div className="flex items-center gap-2 mt-1">
-                  <code className="bg-muted px-2 py-1 rounded text-sm">{accountInfo.stripe_account.info.id}</code>
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => copyToClipboard(accountInfo.stripe_account.info!.id)}
-                  >
-                    <Copy className="h-3 w-3" />
-                  </Button>
-                </div>
-              </div>
-              <div>
-                <span className="font-medium">Email:</span>
-                <p className="text-sm text-muted-foreground mt-1">{accountInfo.stripe_account.info.email}</p>
-              </div>
-              <div>
-                <span className="font-medium">Display Name:</span>
-                <p className="text-sm text-muted-foreground mt-1">
-                  {accountInfo.stripe_account.info.display_name || "N/A"}
-                </p>
-              </div>
-              <div>
-                <span className="font-medium">Country:</span>
-                <Badge variant="outline" className="ml-2">
-                  {accountInfo.stripe_account.info.country}
-                </Badge>
-              </div>
-              <div>
-                <span className="font-medium">Currency:</span>
-                <Badge variant="outline" className="ml-2">
-                  {accountInfo.stripe_account.info.default_currency.toUpperCase()}
-                </Badge>
-              </div>
-              <div>
-                <span className="font-medium">Account Type:</span>
-                <Badge variant="outline" className="ml-2">
-                  {accountInfo.stripe_account.info.type}
-                </Badge>
-              </div>
-              <div className="flex items-center gap-4">
-                <div className="flex items-center gap-2">
-                  {getStatusIcon(accountInfo.stripe_account.info.charges_enabled)}
-                  <span className="text-sm">Charges Enabled</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  {getStatusIcon(accountInfo.stripe_account.info.payouts_enabled)}
-                  <span className="text-sm">Payouts Enabled</span>
-                </div>
-              </div>
+          {debugInfo?.stripe_account.error ? (
+            <div className="text-red-600 p-4 bg-red-50 rounded">
+              <strong>Error:</strong> {debugInfo.stripe_account.error}
             </div>
           ) : (
-            <div className="text-red-600">
-              <p className="font-medium">Failed to retrieve account information</p>
-              <p className="text-sm mt-1">{accountInfo.stripe_account.error}</p>
+            <div className="space-y-2">
+              {Object.entries(debugInfo?.stripe_account.info || {}).map(([key, value]) => (
+                <div key={key} className="flex justify-between">
+                  <span className="font-medium">{key.replace(/_/g, " ").toUpperCase()}:</span>
+                  <span>{String(value)}</span>
+                </div>
+              ))}
             </div>
           )}
         </CardContent>
@@ -303,58 +241,35 @@ export default function StripeAccountInfoPage() {
       {/* Session Test */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            Session Lookup Test
-            {getStatusIcon(!!accountInfo.session_test.result)}
-          </CardTitle>
-          <CardDescription>Testing session retrieval with the problematic session ID</CardDescription>
+          <CardTitle>Session Lookup Test</CardTitle>
+          <CardDescription>Testing the problematic session ID</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
             <div>
-              <span className="font-medium">Test Session ID:</span>
-              <div className="flex items-center gap-2 mt-1">
-                <code className="bg-muted px-2 py-1 rounded text-sm break-all">
-                  {accountInfo.session_test.session_id}
-                </code>
-                <Button size="sm" variant="ghost" onClick={() => copyToClipboard(accountInfo.session_test.session_id)}>
+              <label className="text-sm font-medium">Session ID:</label>
+              <div className="flex items-center gap-2">
+                <code className="text-sm bg-muted px-2 py-1 rounded">{debugInfo?.session_test.session_id}</code>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => copyToClipboard(debugInfo?.session_test.session_id || "")}
+                >
                   <Copy className="h-3 w-3" />
                 </Button>
               </div>
             </div>
 
-            {accountInfo.session_test.result ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-green-50 rounded-lg">
-                <div>
-                  <span className="font-medium text-green-800">Status:</span>
-                  <Badge variant="outline" className="ml-2">
-                    {accountInfo.session_test.result.status}
-                  </Badge>
-                </div>
-                <div>
-                  <span className="font-medium text-green-800">Payment Status:</span>
-                  <Badge variant="outline" className="ml-2">
-                    {accountInfo.session_test.result.payment_status}
-                  </Badge>
-                </div>
-                <div>
-                  <span className="font-medium text-green-800">Amount:</span>
-                  <span className="ml-2">
-                    {accountInfo.session_test.result.amount_total / 100}{" "}
-                    {accountInfo.session_test.result.currency.toUpperCase()}
-                  </span>
-                </div>
-                <div>
-                  <span className="font-medium text-green-800">Created:</span>
-                  <span className="ml-2 text-sm">
-                    {new Date(accountInfo.session_test.result.created).toLocaleString()}
-                  </span>
-                </div>
+            {debugInfo?.session_test.error ? (
+              <div className="text-red-600 p-4 bg-red-50 rounded">
+                <strong>❌ Stripe Lookup</strong>
+                <br />
+                {debugInfo.session_test.error}
               </div>
             ) : (
-              <div className="p-4 bg-red-50 rounded-lg">
-                <p className="font-medium text-red-800">Session Lookup Failed</p>
-                <p className="text-sm text-red-600 mt-1">{accountInfo.session_test.error}</p>
+              <div className="text-green-600 p-4 bg-green-50 rounded">
+                <strong>✅ Session Found</strong>
+                <pre className="mt-2 text-sm">{JSON.stringify(debugInfo?.session_test.result, null, 2)}</pre>
               </div>
             )}
           </div>
@@ -364,21 +279,15 @@ export default function StripeAccountInfoPage() {
       {/* Recommendations */}
       <Card>
         <CardHeader>
-          <CardTitle>Recommendations</CardTitle>
-          <CardDescription>Analysis and suggestions based on your configuration</CardDescription>
+          <CardTitle>Analysis & Recommendations</CardTitle>
+          <CardDescription>Automated analysis of potential issues</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="space-y-2">
-            {accountInfo.recommendations.map((rec, index) => (
-              <div key={index} className="flex items-start gap-2">
-                {rec.startsWith("✅") ? (
-                  <CheckCircle className="h-4 w-4 text-green-500 mt-0.5" />
-                ) : rec.startsWith("⚠️") ? (
-                  <AlertTriangle className="h-4 w-4 text-yellow-500 mt-0.5" />
-                ) : (
-                  <XCircle className="h-4 w-4 text-red-500 mt-0.5" />
-                )}
-                <span className="text-sm">{rec.replace(/^[✅⚠️❌]\s*/, "")}</span>
+            {debugInfo?.recommendations.map((rec, index) => (
+              <div key={index} className="flex items-center gap-2 p-2 rounded">
+                {getStatusIcon(rec)}
+                <span className="text-sm">{rec}</span>
               </div>
             ))}
           </div>
