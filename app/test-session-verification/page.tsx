@@ -7,19 +7,56 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { CheckCircle, XCircle, Loader2, Copy, AlertTriangle } from "lucide-react"
+import { Badge } from "@/components/ui/badge"
+import { Separator } from "@/components/ui/separator"
+import { CheckCircle, XCircle, Loader2, Copy, Play, User, AlertTriangle } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
+
+interface VerificationResult {
+  success: boolean
+  alreadyProcessed?: boolean
+  session?: {
+    id: string
+    amount: number
+    currency: string
+    status: string
+    customerEmail?: string
+    created: string
+    connectedAccount?: string
+    retrievalMethod: string
+  }
+  purchase?: {
+    id: string
+    productBoxId?: string
+    bundleId?: string
+    itemId: string
+    itemType: string
+    userId?: string
+    creatorId?: string
+    amount: number
+  }
+  item?: {
+    title: string
+    description?: string
+    type: string
+  }
+  error?: string
+  details?: string
+  debugInfo?: any
+}
 
 export default function TestSessionVerificationPage() {
   const { user } = useAuth()
   const { toast } = useToast()
   const [sessionId, setSessionId] = useState("")
   const [isLoading, setIsLoading] = useState(false)
-  const [result, setResult] = useState<any>(null)
-  const [error, setError] = useState<string | null>(null)
-  const [rawResponse, setRawResponse] = useState<string>("")
+  const [result, setResult] = useState<VerificationResult | null>(null)
+  const [rawResponse, setRawResponse] = useState("")
 
-  const testVerification = async () => {
+  // Pre-fill with the failing session ID from the screenshot
+  const testSessionId = "cs_live_b1nWEQLVQfzG1DHnX67k8vINgNGjAbIJnISHjUrGUeXf6AxwRnUtGUIGOZ"
+
+  const handleVerification = async () => {
     if (!sessionId.trim()) {
       toast({
         title: "Error",
@@ -31,7 +68,6 @@ export default function TestSessionVerificationPage() {
 
     setIsLoading(true)
     setResult(null)
-    setError(null)
     setRawResponse("")
 
     try {
@@ -61,36 +97,40 @@ export default function TestSessionVerificationPage() {
         }),
       })
 
-      console.log("📊 [Test] Response status:", response.status)
-
       const data = await response.json()
-      console.log("📊 [Test] Response data:", data)
-
       setRawResponse(JSON.stringify(data, null, 2))
 
-      if (response.ok && data.success) {
-        setResult(data)
-        setError(null)
+      console.log("📊 [Test] Verification response:", data)
+      console.log("   Status:", response.status)
+      console.log("   Success:", data.success)
+
+      setResult(data)
+
+      if (data.success) {
         toast({
           title: "Success!",
-          description: "Session verification completed successfully",
+          description: "Session verified successfully",
         })
       } else {
-        setError(data.error || data.message || "Verification failed")
-        setResult(data)
         toast({
           title: "Verification Failed",
-          description: data.error || "Unknown error occurred",
+          description: data.error || "Unknown error",
           variant: "destructive",
         })
       }
     } catch (error: any) {
-      console.error("❌ [Test] Network error:", error)
-      setError(`Network error: ${error.message}`)
-      setRawResponse(JSON.stringify({ error: error.message, type: "NetworkError" }, null, 2))
+      console.error("❌ [Test] Verification test failed:", error)
+      const errorResult = {
+        success: false,
+        error: "Network Error",
+        details: error.message,
+      }
+      setResult(errorResult)
+      setRawResponse(JSON.stringify(errorResult, null, 2))
+
       toast({
         title: "Network Error",
-        description: "Failed to connect to the API",
+        description: "Failed to connect to verification API",
         variant: "destructive",
       })
     } finally {
@@ -98,259 +138,255 @@ export default function TestSessionVerificationPage() {
     }
   }
 
-  const copyResponse = () => {
-    navigator.clipboard.writeText(rawResponse)
+  const copyToClipboard = (text: string, label: string) => {
+    navigator.clipboard.writeText(text)
     toast({
       title: "Copied",
-      description: "Response copied to clipboard",
+      description: `${label} copied to clipboard`,
     })
   }
 
-  const copySessionId = () => {
-    navigator.clipboard.writeText(sessionId)
-    toast({
-      title: "Copied",
-      description: "Session ID copied to clipboard",
-    })
-  }
-
-  const fillTestSession = () => {
-    setSessionId("cs_live_b1HRh5PlcJKwAoQ2bStam9QjRnHWGoarNc7mSJikquf2XSvDa4CNVSwUCt")
+  const formatAmount = (amount: number, currency: string) => {
+    return new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: currency.toUpperCase(),
+    }).format(amount / 100)
   }
 
   return (
     <div className="min-h-screen bg-gray-50 p-4">
       <div className="max-w-4xl mx-auto space-y-6">
+        {/* Header */}
         <Card>
           <CardHeader>
-            <CardTitle>Session Verification Test</CardTitle>
+            <CardTitle className="flex items-center gap-2">
+              <Play className="h-5 w-5" />
+              Session Verification Test
+            </CardTitle>
             <CardDescription>
               Test the purchase session verification API with any Stripe checkout session ID
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
+            {/* User Status */}
+            <div className="flex items-center gap-2 text-sm">
+              <User className="h-4 w-4" />
+              <span>User Status:</span>
+              <Badge variant={user ? "default" : "secondary"}>
+                {user ? `Authenticated (${user.email})` : "Not Authenticated"}
+              </Badge>
+            </div>
+
+            {/* Session ID Input */}
             <div className="space-y-2">
-              <Label htmlFor="sessionId">Stripe Session ID</Label>
+              <Label htmlFor="sessionId">Stripe Checkout Session ID</Label>
               <div className="flex gap-2">
                 <Input
                   id="sessionId"
-                  placeholder="cs_live_... or cs_test_..."
                   value={sessionId}
                   onChange={(e) => setSessionId(e.target.value)}
+                  placeholder="cs_live_... or cs_test_..."
                   className="font-mono text-sm"
                 />
-                <Button variant="outline" size="sm" onClick={copySessionId} disabled={!sessionId}>
-                  <Copy className="h-4 w-4" />
+                <Button variant="outline" size="sm" onClick={() => setSessionId(testSessionId)} disabled={isLoading}>
+                  Use Test Session
                 </Button>
               </div>
             </div>
 
-            <div className="flex gap-2">
-              <Button onClick={testVerification} disabled={isLoading || !sessionId.trim()} className="flex-1">
-                {isLoading ? (
-                  <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Verifying...
-                  </>
-                ) : (
-                  "Test Verification"
-                )}
-              </Button>
-              <Button variant="outline" onClick={fillTestSession}>
-                Fill Test Session
-              </Button>
-            </div>
-
-            <div className="bg-gray-100 p-3 rounded-lg text-sm space-y-1">
-              <div>
-                <strong>Current User:</strong> {user ? `${user.email} (${user.uid})` : "Not authenticated"}
-              </div>
-              <div>
-                <strong>Domain:</strong> {typeof window !== "undefined" ? window.location.origin : "Loading..."}
-              </div>
-              <div>
-                <strong>Timestamp:</strong> {new Date().toISOString()}
-              </div>
-            </div>
+            {/* Test Button */}
+            <Button onClick={handleVerification} disabled={isLoading || !sessionId.trim()} className="w-full">
+              {isLoading ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Verifying Session...
+                </>
+              ) : (
+                <>
+                  <Play className="h-4 w-4 mr-2" />
+                  Test Verification
+                </>
+              )}
+            </Button>
           </CardContent>
         </Card>
 
-        {(result || error) && (
+        {/* Results */}
+        {result && (
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                {result?.success ? (
-                  <>
-                    <CheckCircle className="h-5 w-5 text-green-500" />
-                    Verification Successful
-                  </>
+                {result.success ? (
+                  <CheckCircle className="h-5 w-5 text-green-500" />
                 ) : (
-                  <>
-                    <XCircle className="h-5 w-5 text-red-500" />
-                    Verification Failed
-                  </>
+                  <XCircle className="h-5 w-5 text-red-500" />
                 )}
+                Verification Result
               </CardTitle>
+              <CardDescription>
+                {result.success ? "Session verified successfully" : "Verification failed"}
+              </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
-              {result?.success && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="bg-green-50 p-4 rounded-lg">
-                    <h3 className="font-semibold text-green-900 mb-2">Session Details</h3>
-                    <div className="space-y-1 text-sm text-green-800">
-                      <div>
-                        <strong>ID:</strong> {result.session?.id}
-                      </div>
-                      <div>
-                        <strong>Amount:</strong> ${(result.session?.amount / 100).toFixed(2)}{" "}
-                        {result.session?.currency?.toUpperCase()}
-                      </div>
-                      <div>
-                        <strong>Status:</strong> {result.session?.status}
-                      </div>
-                      <div>
-                        <strong>Email:</strong> {result.session?.customerEmail || "N/A"}
-                      </div>
-                      <div>
-                        <strong>Connected Account:</strong> {result.session?.connectedAccount || "Platform"}
-                      </div>
-                      <div>
-                        <strong>Retrieval Method:</strong> {result.session?.retrievalMethod}
-                      </div>
-                    </div>
+            <CardContent className="space-y-6">
+              {result.success ? (
+                <div className="space-y-6">
+                  {/* Success Status */}
+                  <div className="flex items-center gap-2">
+                    <Badge variant="default" className="bg-green-100 text-green-800">
+                      {result.alreadyProcessed ? "Already Processed" : "Newly Verified"}
+                    </Badge>
                   </div>
 
-                  <div className="bg-blue-50 p-4 rounded-lg">
-                    <h3 className="font-semibold text-blue-900 mb-2">Purchase Details</h3>
-                    <div className="space-y-1 text-sm text-blue-800">
-                      <div>
-                        <strong>Purchase ID:</strong> {result.purchase?.id}
-                      </div>
-                      <div>
-                        <strong>Item Type:</strong> {result.purchase?.itemType}
-                      </div>
-                      <div>
-                        <strong>Product Box ID:</strong> {result.purchase?.productBoxId || "N/A"}
-                      </div>
-                      <div>
-                        <strong>Bundle ID:</strong> {result.purchase?.bundleId || "N/A"}
-                      </div>
-                      <div>
-                        <strong>Creator ID:</strong> {result.purchase?.creatorId || "N/A"}
-                      </div>
-                      <div>
-                        <strong>User ID:</strong> {result.purchase?.userId || "N/A"}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="bg-gray-50 p-4 rounded-lg md:col-span-2">
-                    <h3 className="font-semibold text-gray-900 mb-2">Item Details</h3>
-                    <div className="space-y-1 text-sm text-gray-800">
-                      <div>
-                        <strong>Title:</strong> {result.item?.title}
-                      </div>
-                      <div>
-                        <strong>Description:</strong> {result.item?.description || "N/A"}
-                      </div>
-                      <div>
-                        <strong>Type:</strong> {result.item?.type}
-                      </div>
-                      <div>
-                        <strong>Already Processed:</strong> {result.alreadyProcessed ? "Yes" : "No"}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {error && (
-                <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-                  <div className="flex items-start gap-2">
-                    <AlertTriangle className="h-5 w-5 text-red-500 mt-0.5 flex-shrink-0" />
-                    <div>
-                      <p className="text-red-600 font-medium">Error Details</p>
-                      <p className="text-red-600 text-sm mt-1">{error}</p>
-
-                      {result?.debugInfo && (
-                        <div className="mt-3 space-y-1 text-xs text-red-700">
-                          <div>
-                            <strong>Connected Account ID:</strong> {result.debugInfo.connectedAccountId || "None"}
-                          </div>
-                          <div>
-                            <strong>Creator ID:</strong> {result.debugInfo.creatorId || "None"}
-                          </div>
-                          <div>
-                            <strong>Retrieval Method:</strong> {result.debugInfo.retrievalMethod || "Unknown"}
-                          </div>
-                          <div>
-                            <strong>Session Type:</strong> {result.debugInfo.sessionType || "Unknown"}
-                          </div>
-                          <div>
-                            <strong>Stripe Mode:</strong> {result.debugInfo.stripeMode || "Unknown"}
-                          </div>
-                          {result.debugInfo.searchedAccountsCount !== undefined && (
-                            <div>
-                              <strong>Searched Accounts:</strong> {result.debugInfo.searchedAccountsCount}
+                  {/* Session Details */}
+                  {result.session && (
+                    <div className="space-y-3">
+                      <h3 className="font-semibold text-lg">Session Details</h3>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="bg-gray-50 p-3 rounded-lg space-y-2">
+                          <div className="text-sm">
+                            <span className="text-gray-600">Session ID:</span>
+                            <div className="font-mono text-xs break-all flex items-center gap-2">
+                              {result.session.id}
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => copyToClipboard(result.session!.id, "Session ID")}
+                                className="h-6 px-2"
+                              >
+                                <Copy className="h-3 w-3" />
+                              </Button>
                             </div>
-                          )}
+                          </div>
+                          <div className="text-sm">
+                            <span className="text-gray-600">Amount:</span>{" "}
+                            <span className="font-medium">
+                              {formatAmount(result.session.amount, result.session.currency)}
+                            </span>
+                          </div>
+                          <div className="text-sm">
+                            <span className="text-gray-600">Status:</span>{" "}
+                            <Badge variant="default">{result.session.status}</Badge>
+                          </div>
                         </div>
-                      )}
 
-                      {result?.possibleCauses && (
-                        <div className="mt-3">
-                          <p className="text-red-600 text-sm font-medium">Possible Causes:</p>
-                          <ul className="list-disc list-inside text-xs text-red-700 mt-1 space-y-1">
-                            {result.possibleCauses.map((cause: string, index: number) => (
-                              <li key={index}>{cause}</li>
-                            ))}
-                          </ul>
+                        <div className="bg-gray-50 p-3 rounded-lg space-y-2">
+                          <div className="text-sm">
+                            <span className="text-gray-600">Customer Email:</span>{" "}
+                            <span className="font-medium">{result.session.customerEmail || "N/A"}</span>
+                          </div>
+                          <div className="text-sm">
+                            <span className="text-gray-600">Connected Account:</span>{" "}
+                            <span className="font-mono text-xs">{result.session.connectedAccount || "Platform"}</span>
+                          </div>
+                          <div className="text-sm">
+                            <span className="text-gray-600">Retrieval Method:</span>{" "}
+                            <Badge variant="outline">{result.session.retrievalMethod}</Badge>
+                          </div>
                         </div>
-                      )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Purchase Details */}
+                  {result.purchase && (
+                    <div className="space-y-3">
+                      <h3 className="font-semibold text-lg">Purchase Details</h3>
+                      <div className="bg-gray-50 p-3 rounded-lg space-y-2">
+                        <div className="text-sm">
+                          <span className="text-gray-600">Purchase ID:</span>{" "}
+                          <span className="font-mono text-xs">{result.purchase.id}</span>
+                        </div>
+                        <div className="text-sm">
+                          <span className="text-gray-600">Item Type:</span>{" "}
+                          <Badge variant="outline">{result.purchase.itemType}</Badge>
+                        </div>
+                        <div className="text-sm">
+                          <span className="text-gray-600">Item ID:</span>{" "}
+                          <span className="font-mono text-xs">{result.purchase.itemId}</span>
+                        </div>
+                        {result.purchase.creatorId && (
+                          <div className="text-sm">
+                            <span className="text-gray-600">Creator ID:</span>{" "}
+                            <span className="font-mono text-xs">{result.purchase.creatorId}</span>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Item Details */}
+                  {result.item && (
+                    <div className="space-y-3">
+                      <h3 className="font-semibold text-lg">Item Details</h3>
+                      <div className="bg-gray-50 p-3 rounded-lg space-y-2">
+                        <div className="text-sm">
+                          <span className="text-gray-600">Title:</span>{" "}
+                          <span className="font-medium">{result.item.title}</span>
+                        </div>
+                        {result.item.description && (
+                          <div className="text-sm">
+                            <span className="text-gray-600">Description:</span> <span>{result.item.description}</span>
+                          </div>
+                        )}
+                        <div className="text-sm">
+                          <span className="text-gray-600">Type:</span>{" "}
+                          <Badge variant="outline">{result.item.type}</Badge>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {/* Error Details */}
+                  <div className="bg-red-50 border border-red-200 rounded-lg p-4">
+                    <div className="flex items-start gap-2">
+                      <AlertTriangle className="h-5 w-5 text-red-500 mt-0.5 flex-shrink-0" />
+                      <div>
+                        <p className="text-red-600 font-medium">{result.error}</p>
+                        {result.details && <p className="text-red-600 text-sm mt-1">{result.details}</p>}
+                      </div>
                     </div>
                   </div>
+
+                  {/* Debug Information */}
+                  {result.debugInfo && (
+                    <div className="bg-gray-50 p-4 rounded-lg">
+                      <h3 className="font-semibold text-gray-900 mb-2">Debug Information</h3>
+                      <div className="space-y-2 text-sm text-gray-600">
+                        {Object.entries(result.debugInfo).map(([key, value]) => (
+                          <div key={key}>
+                            <span className="font-medium">{key}:</span>{" "}
+                            <span className="font-mono">{JSON.stringify(value)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
+
+              <Separator />
+
+              {/* Raw Response */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <h3 className="font-semibold text-lg">Raw API Response</h3>
+                  <Button variant="outline" size="sm" onClick={() => copyToClipboard(rawResponse, "Raw response")}>
+                    <Copy className="h-4 w-4 mr-2" />
+                    Copy Response
+                  </Button>
+                </div>
+                <Textarea
+                  value={rawResponse}
+                  readOnly
+                  className="font-mono text-xs h-64 resize-none"
+                  placeholder="API response will appear here..."
+                />
+              </div>
             </CardContent>
           </Card>
         )}
-
-        {rawResponse && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center justify-between">
-                Raw API Response
-                <Button variant="outline" size="sm" onClick={copyResponse}>
-                  <Copy className="h-4 w-4 mr-2" />
-                  Copy
-                </Button>
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <Textarea
-                value={rawResponse}
-                readOnly
-                className="font-mono text-xs h-64 resize-none"
-                placeholder="API response will appear here..."
-              />
-            </CardContent>
-          </Card>
-        )}
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Instructions</CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-2 text-sm text-gray-600">
-            <p>1. Enter a Stripe checkout session ID (starts with cs_live_ or cs_test_)</p>
-            <p>2. Click "Test Verification" to test the API</p>
-            <p>3. View the results and debug information below</p>
-            <p>4. Check the browser console for detailed logs</p>
-            <p className="text-blue-600">
-              💡 Tip: Use "Fill Test Session" to populate the failing session ID from your screenshot
-            </p>
-          </CardContent>
-        </Card>
       </div>
     </div>
   )
