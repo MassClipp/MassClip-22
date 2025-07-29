@@ -22,6 +22,9 @@ import {
   Star,
   ChevronDown,
   ChevronUp,
+  Download,
+  Clock,
+  HardDrive,
 } from "lucide-react"
 import Link from "next/link"
 
@@ -69,7 +72,6 @@ interface Purchase {
   status: string
   source?: string
   anonymousAccess?: boolean
-  // Enhanced bundle data
   bundleData?: BundleData
 }
 
@@ -123,61 +125,8 @@ export default function PurchasesPage() {
         console.log("📦 [Purchases] Anonymous purchases response:", anonymousData)
 
         if (anonymousData.purchases && anonymousData.purchases.length > 0) {
-          // Process and enrich the purchase data with bundle information
-          const enrichedPurchases = await Promise.all(
-            anonymousData.purchases.map(async (purchase: Purchase) => {
-              console.log("🔍 [Purchases] Processing purchase:", purchase.id)
-
-              // Try to get the bundle ID from various fields
-              const bundleId = purchase.bundleId || purchase.itemId || purchase.productBoxId
-
-              if (bundleId) {
-                console.log(`📦 [Purchases] Fetching bundle data for bundle ID: ${bundleId}`)
-
-                // Fetch bundle data from bundles collection
-                const bundleData = await fetchBundleData(bundleId)
-
-                if (bundleData) {
-                  // Update purchase with bundle data
-                  purchase.bundleData = bundleData
-                  purchase.productBoxTitle = bundleData.title || purchase.productBoxTitle
-                  purchase.productBoxDescription = bundleData.description || purchase.productBoxDescription
-                  purchase.productBoxThumbnail = bundleData.thumbnailUrl || purchase.productBoxThumbnail
-                  purchase.totalItems = 1 // Each bundle is typically one item
-                  purchase.totalSize = bundleData.fileSize || 0
-
-                  // Create items array from bundle data
-                  if (bundleData.downloadUrl) {
-                    const contentType = this.getContentTypeFromFileType(bundleData.fileType)
-                    purchase.items = [
-                      {
-                        id: bundleData.id,
-                        title: bundleData.title,
-                        fileUrl: bundleData.downloadUrl,
-                        thumbnailUrl: bundleData.thumbnailUrl,
-                        fileSize: bundleData.fileSize,
-                        duration: bundleData.duration,
-                        contentType: contentType,
-                      },
-                    ]
-                  }
-
-                  console.log(`✅ [Purchases] Enhanced purchase with bundle data:`, {
-                    title: purchase.productBoxTitle,
-                    items: purchase.totalItems,
-                    size: purchase.totalSize,
-                    bundleId: bundleId,
-                  })
-                } else {
-                  console.warn(`⚠️ [Purchases] Could not fetch bundle data for ${bundleId}`)
-                }
-              }
-
-              return purchase
-            }),
-          )
-
-          setPurchases(enrichedPurchases)
+          // The anonymous API now returns fully enriched purchases with bundle data
+          setPurchases(anonymousData.purchases)
           setLoading(false)
           return
         }
@@ -205,7 +154,7 @@ export default function PurchasesPage() {
           (data.purchases || []).map(async (purchase: Purchase) => {
             const bundleId = purchase.bundleId || purchase.itemId || purchase.productBoxId
 
-            if (bundleId) {
+            if (bundleId && !purchase.bundleData) {
               const bundleData = await fetchBundleData(bundleId)
 
               if (bundleData) {
@@ -217,7 +166,7 @@ export default function PurchasesPage() {
                 purchase.totalSize = bundleData.fileSize || 0
 
                 if (bundleData.downloadUrl) {
-                  const contentType = this.getContentTypeFromFileType(bundleData.fileType)
+                  const contentType = getContentTypeFromFileType(bundleData.fileType)
                   purchase.items = [
                     {
                       id: bundleData.id,
@@ -286,7 +235,7 @@ export default function PurchasesPage() {
   }
 
   const formatDuration = (seconds: number): string => {
-    if (seconds === 0) return ""
+    if (!seconds || seconds === 0) return ""
     const minutes = Math.floor(seconds / 60)
     const remainingSeconds = seconds % 60
     if (minutes === 0) return `${remainingSeconds}s`
@@ -304,6 +253,14 @@ export default function PurchasesPage() {
       default:
         return <FileText className="h-4 w-4 text-gray-500" />
     }
+  }
+
+  const getFileTypeIcon = (fileType: string) => {
+    const type = fileType.toLowerCase()
+    if (type.includes("video")) return <Video className="h-4 w-4 text-blue-500" />
+    if (type.includes("audio")) return <Music className="h-4 w-4 text-green-500" />
+    if (type.includes("image")) return <ImageIcon className="h-4 w-4 text-purple-500" />
+    return <FileText className="h-4 w-4 text-gray-500" />
   }
 
   // Loading state
@@ -418,6 +375,7 @@ export default function PurchasesPage() {
       <div className="grid gap-6">
         {purchases.map((purchase, index) => {
           const isExpanded = expandedPurchases.has(purchase.id)
+          const bundleData = purchase.bundleData
 
           return (
             <Card
@@ -432,9 +390,9 @@ export default function PurchasesPage() {
                 <div className="flex items-start space-x-4 mb-4">
                   {/* Thumbnail */}
                   <div className="w-20 h-20 bg-gray-800 rounded-lg overflow-hidden flex-shrink-0">
-                    {purchase.productBoxThumbnail ? (
+                    {purchase.productBoxThumbnail || bundleData?.thumbnailUrl ? (
                       <img
-                        src={purchase.productBoxThumbnail || "/placeholder.svg"}
+                        src={purchase.productBoxThumbnail || bundleData?.thumbnailUrl || "/placeholder.svg"}
                         alt={purchase.productBoxTitle}
                         className="w-full h-full object-cover"
                         onError={(e) => {
@@ -453,17 +411,26 @@ export default function PurchasesPage() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-start justify-between mb-2">
                       <div className="flex-1">
-                        <h3 className="text-xl font-bold text-white mb-1 line-clamp-1">{purchase.productBoxTitle}</h3>
-                        <p className="text-white/70 text-sm mb-2 line-clamp-2">{purchase.productBoxDescription}</p>
+                        <h3 className="text-xl font-bold text-white mb-1 line-clamp-1">
+                          {bundleData?.title || purchase.productBoxTitle}
+                        </h3>
+                        <p className="text-white/70 text-sm mb-2 line-clamp-2">
+                          {bundleData?.description || purchase.productBoxDescription}
+                        </p>
                         <div className="flex items-center space-x-4 text-sm text-white/60">
                           <span className="flex items-center">
                             <User className="h-4 w-4 mr-1" />
-                            {purchase.creatorName}
+                            {purchase.creatorName || "Unknown Creator"}
                           </span>
                           <span className="flex items-center">
                             <DollarSign className="h-4 w-4 mr-1" />${purchase.amount.toFixed(2)}{" "}
                             {purchase.currency.toUpperCase()}
                           </span>
+                          {purchase.anonymousAccess && (
+                            <span className="text-xs bg-orange-500/20 text-orange-300 px-2 py-1 rounded">
+                              Anonymous
+                            </span>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -474,12 +441,14 @@ export default function PurchasesPage() {
                 <div className="grid grid-cols-3 gap-4 p-4 bg-white/5 rounded-lg mb-4">
                   <div className="text-center">
                     <div className="text-lg font-bold text-white">
-                      {purchase.totalItems || purchase.items?.length || 0}
+                      {purchase.totalItems || purchase.items?.length || 1}
                     </div>
                     <div className="text-sm text-white/60">Items</div>
                   </div>
                   <div className="text-center">
-                    <div className="text-lg font-bold text-white">{formatFileSize(purchase.totalSize || 0)}</div>
+                    <div className="text-lg font-bold text-white">
+                      {formatFileSize(bundleData?.fileSize || purchase.totalSize || 0)}
+                    </div>
                     <div className="text-sm text-white/60">Total Size</div>
                   </div>
                   <div className="text-center">
@@ -488,20 +457,43 @@ export default function PurchasesPage() {
                   </div>
                 </div>
 
-                {/* Bundle Details */}
-                {purchase.bundleData && (
-                  <div className="mb-4 p-3 bg-white/5 rounded-lg">
-                    <div className="flex items-center space-x-2 text-sm text-white/80">
-                      <Video className="h-4 w-4" />
-                      <span>{purchase.bundleData.fileType}</span>
-                      {purchase.bundleData.duration && (
-                        <>
-                          <span>•</span>
-                          <span>{formatDuration(purchase.bundleData.duration)}</span>
-                        </>
-                      )}
-                      <span>•</span>
-                      <span>{purchase.bundleData.downloadCount} downloads</span>
+                {/* Enhanced Bundle Details */}
+                {bundleData && (
+                  <div className="mb-4 p-4 bg-white/5 rounded-lg">
+                    <div className="flex items-center justify-between mb-3">
+                      <h4 className="text-sm font-semibold text-white flex items-center">
+                        {getFileTypeIcon(bundleData.fileType)}
+                        <span className="ml-2">Bundle Details</span>
+                      </h4>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4 text-sm">
+                      <div className="space-y-2">
+                        <div className="flex items-center text-white/80">
+                          <FileText className="h-4 w-4 mr-2" />
+                          <span className="font-medium">Type:</span>
+                          <span className="ml-1 text-white/60">{bundleData.fileType}</span>
+                        </div>
+                        {bundleData.duration && (
+                          <div className="flex items-center text-white/80">
+                            <Clock className="h-4 w-4 mr-2" />
+                            <span className="font-medium">Duration:</span>
+                            <span className="ml-1 text-white/60">{formatDuration(bundleData.duration)}</span>
+                          </div>
+                        )}
+                      </div>
+                      <div className="space-y-2">
+                        <div className="flex items-center text-white/80">
+                          <HardDrive className="h-4 w-4 mr-2" />
+                          <span className="font-medium">Size:</span>
+                          <span className="ml-1 text-white/60">{formatFileSize(bundleData.fileSize)}</span>
+                        </div>
+                        <div className="flex items-center text-white/80">
+                          <Download className="h-4 w-4 mr-2" />
+                          <span className="font-medium">Downloads:</span>
+                          <span className="ml-1 text-white/60">{bundleData.downloadCount || 0}</span>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 )}
@@ -550,21 +542,23 @@ export default function PurchasesPage() {
                     variant="outline"
                     className="bg-transparent border-white/20 text-white hover:bg-white/10 flex-1"
                   >
-                    <Link href={`/product-box/${purchase.productBoxId}/content`}>
+                    <Link href={`/product-box/${purchase.bundleId || purchase.productBoxId}/content`}>
                       <Eye className="w-4 h-4 mr-2" />
                       View Content
                     </Link>
                   </Button>
-                  <Button
-                    asChild
-                    variant="outline"
-                    className="bg-transparent border-white/20 text-white hover:bg-white/10"
-                  >
-                    <Link href={`/creator/${purchase.creatorUsername}`}>
-                      <User className="w-4 h-4 mr-2" />
-                      Creator Profile
-                    </Link>
-                  </Button>
+                  {purchase.creatorUsername && (
+                    <Button
+                      asChild
+                      variant="outline"
+                      className="bg-transparent border-white/20 text-white hover:bg-white/10"
+                    >
+                      <Link href={`/creator/${purchase.creatorUsername}`}>
+                        <User className="w-4 h-4 mr-2" />
+                        Creator Profile
+                      </Link>
+                    </Button>
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -573,17 +567,17 @@ export default function PurchasesPage() {
       </div>
 
       <style jsx>{`
-       @keyframes fadeInUp {
-         from {
-           opacity: 0;
-           transform: translateY(20px);
-         }
-         to {
-           opacity: 1;
-           transform: translateY(0);
-         }
-       }
-     `}</style>
+        @keyframes fadeInUp {
+          from {
+            opacity: 0;
+            transform: translateY(20px);
+          }
+          to {
+            opacity: 1;
+            transform: translateY(0);
+          }
+        }
+      `}</style>
     </div>
   )
 }

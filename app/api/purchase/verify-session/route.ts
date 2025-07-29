@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { retrieveSessionSmart } from "@/lib/stripe"
 import { auth, db } from "@/lib/firebase-admin"
+import { UnifiedPurchaseService } from "@/lib/unified-purchase-service"
 
 export async function POST(request: NextRequest) {
   try {
@@ -50,7 +51,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Strategy 2: If no existing purchase, try to find connected accounts from recent sessions
-    const connectedAccounts = [] // Declare connectedAccounts variable here
+    const connectedAccounts = []
 
     if (!connectedAccountId) {
       console.log("🔍 [Verify Session] Strategy 2: Searching all connected accounts...")
@@ -165,7 +166,7 @@ export async function POST(request: NextRequest) {
             details: "This checkout session could not be found in any Stripe account.",
             sessionId,
             sessionPrefix: sessionId.substring(0, 8),
-            searchedAccounts: connectedAccounts.length, // Use connectedAccounts variable here
+            searchedAccounts: connectedAccounts.length,
             possibleCauses: [
               "Session was created in a connected account that we don't have access to",
               "Session has expired (24 hour limit)",
@@ -180,7 +181,7 @@ export async function POST(request: NextRequest) {
               retrievalMethod,
               sessionType: sessionId.startsWith("cs_live_") ? "live" : "test",
               stripeMode: process.env.STRIPE_SECRET_KEY?.startsWith("sk_live_") ? "live" : "test",
-              searchedAccountsCount: connectedAccounts.length, // Use connectedAccounts variable here
+              searchedAccountsCount: connectedAccounts.length,
             },
             suggestion: "The session may have been created in a connected account that is no longer accessible.",
           },
@@ -240,7 +241,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Use authenticated user ID if available, otherwise use session metadata
-    const finalUserId = userId || sessionUserId
+    const finalUserId = userId || sessionUserId || "anonymous"
 
     console.log("📦 [Verify Session] Processing purchase:")
     console.log("   Product Box ID:", productBoxId)
@@ -250,6 +251,30 @@ export async function POST(request: NextRequest) {
     console.log("   Final User ID:", finalUserId)
     console.log("   Creator ID:", sessionCreatorId)
     console.log("   Connected Account:", connectedAccountId)
+
+    // Get bundle data if this is a bundle purchase
+    let bundleData = null
+    const itemId = productBoxId || bundleId
+
+    if (bundleId) {
+      console.log("📦 [Verify Session] Fetching bundle data from bundles collection...")
+      try {
+        const bundleDoc = await db.collection("bundles").doc(bundleId).get()
+        if (bundleDoc.exists) {
+          bundleData = bundleDoc.data()
+          console.log("✅ [Verify Session] Bundle data retrieved:", {
+            title: bundleData?.title,
+            fileSize: bundleData?.fileSize,
+            fileType: bundleData?.fileType,
+            downloadUrl: bundleData?.downloadUrl ? "Present" : "Missing",
+          })
+        } else {
+          console.warn("⚠️ [Verify Session] Bundle document not found:", bundleId)
+        }
+      } catch (error) {
+        console.error("❌ [Verify Session] Error fetching bundle data:", error)
+      }
+    }
 
     // Check if purchase already exists (reuse existing purchase if found)
     let purchaseId
@@ -262,25 +287,34 @@ export async function POST(request: NextRequest) {
 
       // Update the existing purchase with any missing information
       try {
-        await existingPurchase.ref.update({
+        const updateData: any = {
           connectedAccountId: connectedAccountId || null,
           creatorId: sessionCreatorId || creatorId || null,
           retrievalMethod,
           verifiedAt: new Date(),
           updatedAt: new Date(),
-        })
+        }
+
+        // Add bundle data if available
+        if (bundleData) {
+          updateData.bundleData = bundleData
+          updateData.itemTitle = bundleData.title || updateData.itemTitle
+          updateData.itemDescription = bundleData.description || updateData.itemDescription
+          updateData.thumbnailUrl = bundleData.thumbnailUrl || updateData.thumbnailUrl
+        }
+
+        await existingPurchase.ref.update(updateData)
         console.log("✅ [Verify Session] Updated existing purchase with new info")
       } catch (updateError) {
         console.error("❌ [Verify Session] Failed to update existing purchase:", updateError)
       }
     } else {
-      // Create new purchase record
+      // Create new purchase record with comprehensive bundle data
       console.log("💾 [Verify Session] Creating new purchase record...")
 
-      const itemId = productBoxId || bundleId
       const itemType = productBoxId ? "product_box" : "bundle"
 
-      const purchaseData = {
+      const purchaseData: any = {
         sessionId,
         productBoxId: productBoxId || null,
         bundleId: bundleId || null,
@@ -304,12 +338,49 @@ export async function POST(request: NextRequest) {
         verifiedAt: new Date(),
       }
 
+      // Add bundle-specific data
+      if (bundleData) {
+        purchaseData.bundleData = bundleData
+        purchaseData.itemTitle = bundleData.title || "Untitled Bundle"
+        purchaseData.itemDescription = bundleData.description || ""
+        purchaseData.thumbnailUrl = bundleData.thumbnailUrl || ""
+        purchaseData.fileSize = bundleData.fileSize || 0
+        purchaseData.fileType = bundleData.fileType || ""
+        purchaseData.downloadUrl = bundleData.downloadUrl || ""
+        purchaseData.duration = bundleData.duration || null
+
+        console.log("📦 [Verify Session] Added bundle data to purchase:", {
+          title: purchaseData.itemTitle,
+          fileSize: purchaseData.fileSize,
+          fileType: purchaseData.fileType,
+          hasDownloadUrl: !!purchaseData.downloadUrl,
+        })
+      }
+
       const purchaseRef = await db.collection("purchases").add(purchaseData)
       purchaseId = purchaseRef.id
       console.log("✅ [Verify Session] Purchase record created:", purchaseId)
 
+      // Create unified purchase record using the service
+      if (finalUserId !== "anonymous") {
+        try {
+          await UnifiedPurchaseService.createUnifiedPurchase(finalUserId, {
+            productBoxId: productBoxId || bundleId!, // Use bundleId as productBoxId for compatibility
+            sessionId,
+            amount: (session.amount_total || 0) / 100, // Convert from cents
+            currency: session.currency || "usd",
+            creatorId: sessionCreatorId || creatorId || "",
+            userEmail: session.customer_details?.email,
+            userName: session.customer_details?.name || "User",
+          })
+          console.log("✅ [Verify Session] Unified purchase record created")
+        } catch (unifiedError) {
+          console.error("❌ [Verify Session] Failed to create unified purchase:", unifiedError)
+        }
+      }
+
       // Grant user access if we have a user ID
-      if (finalUserId) {
+      if (finalUserId && finalUserId !== "anonymous") {
         console.log("🔓 [Verify Session] Granting user access...")
         try {
           // Add to user's purchases subcollection
@@ -328,6 +399,7 @@ export async function POST(request: NextRequest) {
               amount: session.amount_total,
               purchasedAt: new Date(),
               status: "active",
+              bundleData: bundleData || null,
             })
 
           // Update user's main document with purchase info
@@ -371,11 +443,26 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Get item details for response
-    const collection = productBoxId ? "productBoxes" : "bundles"
-    const docId = productBoxId || bundleId
-    const itemDoc = await db.collection(collection).doc(docId!).get()
-    const itemData = itemDoc.exists ? itemDoc.data() : {}
+    // Get item details for response (prefer bundle data if available)
+    let itemData: any = {}
+
+    if (bundleData) {
+      itemData = {
+        title: bundleData.title || "Untitled Bundle",
+        description: bundleData.description || "",
+        thumbnailUrl: bundleData.thumbnailUrl || "",
+        fileSize: bundleData.fileSize || 0,
+        fileType: bundleData.fileType || "",
+        downloadUrl: bundleData.downloadUrl || "",
+        duration: bundleData.duration || null,
+      }
+    } else {
+      // Fallback to fetching from collection
+      const collection = productBoxId ? "productBoxes" : "bundles"
+      const docId = productBoxId || bundleId
+      const itemDoc = await db.collection(collection).doc(docId!).get()
+      itemData = itemDoc.exists ? itemDoc.data() : {}
+    }
 
     console.log("✅ [Verify Session] Verification completed successfully")
 
@@ -396,16 +483,21 @@ export async function POST(request: NextRequest) {
         id: purchaseId,
         productBoxId: productBoxId || null,
         bundleId: bundleId || null,
-        itemId: docId,
+        itemId: itemId,
         itemType: productBoxId ? "product_box" : "bundle",
         userId: finalUserId,
         creatorId: sessionCreatorId || creatorId,
         amount: session.amount_total || 0,
+        bundleData: bundleData,
       },
       item: {
         title: itemData?.title || `${productBoxId ? "Product Box" : "Bundle"}`,
         description: itemData?.description,
         type: productBoxId ? "product_box" : "bundle",
+        fileSize: itemData?.fileSize || 0,
+        fileType: itemData?.fileType || "",
+        downloadUrl: itemData?.downloadUrl || "",
+        duration: itemData?.duration || null,
       },
     })
   } catch (error: any) {
