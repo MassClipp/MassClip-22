@@ -3,8 +3,8 @@
 import { useEffect, useState } from "react"
 import { useAuth } from "@/contexts/auth-context"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { CheckCircle, XCircle, Loader2, RefreshCw, ExternalLink, Copy, AlertTriangle } from "lucide-react"
+import { Card, CardContent } from "@/components/ui/card"
+import { CheckCircle, XCircle, Loader2, RefreshCw, ExternalLink, AlertTriangle } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 
 interface PurchaseDetails {
@@ -118,23 +118,6 @@ export default function PurchaseSuccessPage() {
     setIsRetrying(false)
   }
 
-  const copySessionId = () => {
-    if (sessionId) {
-      navigator.clipboard.writeText(sessionId)
-      toast({
-        title: "Copied",
-        description: "Session ID copied to clipboard",
-      })
-    }
-  }
-
-  const formatAmount = (amount: number, currency: string) => {
-    return new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency: currency.toUpperCase(),
-    }).format(amount / 100)
-  }
-
   // Extract URL parameters and start initial verification
   useEffect(() => {
     console.log("🔗 [Purchase Success] Page loaded, extracting URL parameters...")
@@ -168,21 +151,21 @@ export default function PurchaseSuccessPage() {
 
   if (!sessionId) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <Card className="w-full max-w-md">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <XCircle className="h-5 w-5 text-red-500" />
-              Invalid Purchase Link
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <p className="text-gray-600">This purchase verification link is invalid or expired.</p>
-            <div className="text-sm text-gray-500">
-              <div>Current URL: {typeof window !== "undefined" ? window.location.href : "Loading..."}</div>
+      <div className="min-h-screen bg-gradient-to-br from-black via-gray-900 to-black flex items-center justify-center p-4">
+        <Card className="w-full max-w-md bg-white/5 border-white/10 backdrop-blur-sm">
+          <CardContent className="p-8 text-center space-y-6">
+            <div className="flex items-center justify-center">
+              <XCircle className="h-12 w-12 text-red-400" />
             </div>
-            <Button onClick={() => (window.location.href = "/dashboard")} className="w-full">
-              Go to Dashboard
+            <div className="space-y-2">
+              <h1 className="text-xl font-light text-white">Invalid Link</h1>
+              <p className="text-sm text-gray-400 font-light">This purchase verification link is invalid or expired.</p>
+            </div>
+            <Button
+              onClick={() => (window.location.href = "/dashboard")}
+              className="w-full bg-white text-black hover:bg-gray-100 font-light"
+            >
+              Return to Dashboard
             </Button>
           </CardContent>
         </Card>
@@ -191,159 +174,65 @@ export default function PurchaseSuccessPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
-      <Card className="w-full max-w-2xl">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            {verificationStatus === "loading" && (
-              <>
-                <Loader2 className="h-5 w-5 animate-spin text-blue-500" />
-                Verifying Purchase
-              </>
-            )}
-            {verificationStatus === "success" && (
-              <>
-                <CheckCircle className="h-5 w-5 text-green-500" />
-                Purchase Verified!
-              </>
-            )}
-            {verificationStatus === "error" && (
-              <>
-                <XCircle className="h-5 w-5 text-red-500" />
-                Verification Failed
-              </>
-            )}
-          </CardTitle>
-          <CardDescription>
-            {verificationStatus === "loading" && "Please wait while we verify your payment with Stripe..."}
-            {verificationStatus === "success" && "Your purchase has been confirmed and access granted."}
-            {verificationStatus === "error" && "There was an issue verifying your purchase."}
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-6">
+    <div className="min-h-screen bg-gradient-to-br from-black via-gray-900 to-black flex items-center justify-center p-4">
+      <Card className="w-full max-w-md bg-white/5 border-white/10 backdrop-blur-sm">
+        <CardContent className="p-8 text-center space-y-8">
           {verificationStatus === "loading" && (
-            <div className="text-center space-y-4">
-              <div className="animate-pulse text-gray-600">Processing your payment verification...</div>
-              <div className="text-sm text-gray-500 space-y-1">
-                <div>Session: {sessionId}</div>
-                <div>Domain: {typeof window !== "undefined" ? window.location.origin : "Loading..."}</div>
-                <div>User: {user ? "Authenticated" : "Not authenticated"}</div>
-                <div>Retry count: {retryCount}</div>
+            <>
+              <div className="flex items-center justify-center">
+                <Loader2 className="h-12 w-12 animate-spin text-white" />
               </div>
-            </div>
+              <div className="space-y-2">
+                <h1 className="text-xl font-light text-white">Verifying Purchase</h1>
+                <p className="text-sm text-gray-400 font-light">Please wait while we confirm your payment...</p>
+              </div>
+            </>
           )}
 
           {verificationStatus === "success" && purchaseDetails && (
-            <div className="space-y-6">
-              <div className="text-center">
-                <p className="text-green-600 font-medium text-lg">
-                  🎉 {purchaseDetails.alreadyProcessed ? "Purchase Confirmed!" : "Payment Successful!"}
-                </p>
-                <p className="text-gray-600 mt-2">You now have access to your purchased content.</p>
+            <>
+              <div className="flex items-center justify-center">
+                <CheckCircle className="h-12 w-12 text-green-400" />
               </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="bg-gray-50 p-4 rounded-lg">
-                  <h3 className="font-semibold text-gray-900 mb-2">Purchase Details</h3>
-                  <div className="space-y-2 text-sm">
-                    <div>
-                      <span className="text-gray-600">Product:</span>{" "}
-                      <span className="font-medium">{purchaseDetails.item.title}</span>
-                    </div>
-                    <div>
-                      <span className="text-gray-600">Amount:</span>{" "}
-                      <span className="font-medium">
-                        {formatAmount(purchaseDetails.session.amount, purchaseDetails.session.currency)}
-                      </span>
-                    </div>
-                    <div>
-                      <span className="text-gray-600">Status:</span>{" "}
-                      <span className="font-medium text-green-600">{purchaseDetails.session.status}</span>
-                    </div>
-                    {purchaseDetails.session.customerEmail && (
-                      <div>
-                        <span className="text-gray-600">Email:</span>{" "}
-                        <span className="font-medium">{purchaseDetails.session.customerEmail}</span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                <div className="bg-gray-50 p-4 rounded-lg">
-                  <h3 className="font-semibold text-gray-900 mb-2">Session Info</h3>
-                  <div className="space-y-2 text-sm">
-                    <div>
-                      <span className="text-gray-600">Purchase ID:</span>{" "}
-                      <span className="font-mono text-xs">{purchaseDetails.purchase.id}</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-gray-600">Session ID:</span>
-                      <Button variant="ghost" size="sm" onClick={copySessionId} className="h-6 px-2">
-                        <Copy className="h-3 w-3" />
-                      </Button>
-                    </div>
-                    <div className="font-mono text-xs text-gray-500 break-all">{sessionId}</div>
-                  </div>
-                </div>
+              <div className="space-y-2">
+                <h1 className="text-xl font-light text-white">Purchase Complete</h1>
+                <p className="text-sm text-gray-400 font-light">{purchaseDetails.item.title}</p>
               </div>
-
-              <div className="flex gap-3">
+              <div className="space-y-3">
                 <Button
                   onClick={() =>
                     (window.location.href = `/product-box/${purchaseDetails.purchase.productBoxId}/content`)
                   }
-                  className="flex-1"
+                  className="w-full bg-white text-black hover:bg-gray-100 font-light"
                 >
                   <ExternalLink className="h-4 w-4 mr-2" />
-                  View Content
+                  Access Bundle
                 </Button>
                 <Button
                   onClick={() => (window.location.href = "/dashboard/purchases")}
-                  variant="outline"
-                  className="flex-1"
+                  variant="ghost"
+                  className="w-full text-gray-400 hover:text-white hover:bg-white/5 font-light"
                 >
-                  My Purchases
+                  View All Purchases
                 </Button>
               </div>
-            </div>
+            </>
           )}
 
           {verificationStatus === "error" && (
-            <div className="space-y-4">
-              <div className="bg-red-50 border border-red-200 rounded-lg p-4">
-                <div className="flex items-start gap-2">
-                  <AlertTriangle className="h-5 w-5 text-red-500 mt-0.5 flex-shrink-0" />
-                  <div>
-                    <p className="text-red-600 font-medium">Verification Failed</p>
-                    <p className="text-red-600 text-sm mt-1">{errorMessage}</p>
-                  </div>
-                </div>
+            <>
+              <div className="flex items-center justify-center">
+                <AlertTriangle className="h-12 w-12 text-red-400" />
               </div>
-
-              <div className="bg-gray-50 p-4 rounded-lg">
-                <h3 className="font-semibold text-gray-900 mb-2">Debug Information</h3>
-                <div className="space-y-2 text-sm text-gray-600">
-                  <div>Current Domain: {typeof window !== "undefined" ? window.location.origin : "Loading..."}</div>
-                  <div>Full URL: {typeof window !== "undefined" ? window.location.href : "Loading..."}</div>
-                  <div>User Authenticated: {user ? "Yes" : "No"}</div>
-                  <div>Retry Count: {retryCount}/5</div>
-                  {productBoxId && <div>Product Box ID: {productBoxId}</div>}
-                  <div className="flex items-center gap-2">
-                    <span>Session ID:</span>
-                    <Button variant="ghost" size="sm" onClick={copySessionId} className="h-6 px-2">
-                      <Copy className="h-3 w-3" />
-                    </Button>
-                  </div>
-                  <div className="font-mono text-xs break-all">{sessionId}</div>
-                </div>
+              <div className="space-y-2">
+                <h1 className="text-xl font-light text-white">Verification Failed</h1>
+                <p className="text-sm text-gray-400 font-light">{errorMessage}</p>
               </div>
-
-              <div className="flex gap-3">
+              <div className="space-y-3">
                 <Button
                   onClick={handleRetry}
                   disabled={isRetrying || retryCount >= 5}
-                  className="flex-1"
-                  variant="outline"
+                  className="w-full bg-white text-black hover:bg-gray-100 font-light"
                 >
                   {isRetrying ? (
                     <>
@@ -355,24 +244,22 @@ export default function PurchaseSuccessPage() {
                   ) : (
                     <>
                       <RefreshCw className="h-4 w-4 mr-2" />
-                      Retry Verification ({retryCount}/5)
+                      Try Again ({retryCount}/5)
                     </>
                   )}
                 </Button>
-                <Button onClick={() => (window.location.href = "/dashboard")} variant="outline">
-                  Go to Dashboard
+                <Button
+                  onClick={() => (window.location.href = "/dashboard")}
+                  variant="ghost"
+                  className="w-full text-gray-400 hover:text-white hover:bg-white/5 font-light"
+                >
+                  Return to Dashboard
                 </Button>
               </div>
-
               {!user && (
-                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                  <p className="text-blue-600 text-sm">
-                    💡 <strong>Tip:</strong> If you're not logged in, try logging in first and then retry verification.
-                    Your purchase is still valid.
-                  </p>
-                </div>
+                <div className="text-xs text-gray-500 font-light">💡 Try logging in first, then retry verification</div>
               )}
-            </div>
+            </>
           )}
         </CardContent>
       </Card>
