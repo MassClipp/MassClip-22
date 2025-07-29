@@ -17,7 +17,6 @@ interface PurchaseDetails {
   }
   purchase: {
     id: string
-    productBoxId: string
     bundleId?: string
     itemId?: string
     userId: string
@@ -37,7 +36,6 @@ export default function PurchaseSuccessPage() {
   const [verificationStatus, setVerificationStatus] = useState<"loading" | "success" | "error">("loading")
   const [errorMessage, setErrorMessage] = useState("")
   const [sessionId, setSessionId] = useState<string | null>(null)
-  const [productBoxId, setProductBoxId] = useState<string | null>(null)
   const [purchaseDetails, setPurchaseDetails] = useState<PurchaseDetails | null>(null)
   const [isRetrying, setIsRetrying] = useState(false)
   const [retryCount, setRetryCount] = useState(0)
@@ -124,15 +122,13 @@ export default function PurchaseSuccessPage() {
   const getContentUrl = () => {
     if (!purchaseDetails) return "/dashboard"
 
-    // Try different possible ID fields in order of preference for bundles
-    const bundleId =
-      purchaseDetails.purchase.bundleId || purchaseDetails.purchase.itemId || purchaseDetails.item.id || productBoxId
+    // Get bundle ID from purchase details (from session metadata)
+    const bundleId = purchaseDetails.purchase.bundleId || purchaseDetails.purchase.itemId || purchaseDetails.item.id
 
     console.log("🔗 [Purchase Success] Determining content URL...")
     console.log("   Bundle ID from purchase.bundleId:", purchaseDetails.purchase.bundleId)
     console.log("   Item ID from purchase.itemId:", purchaseDetails.purchase.itemId)
     console.log("   Item ID from item.id:", purchaseDetails.item.id)
-    console.log("   Bundle ID from URL:", productBoxId)
     console.log("   Final selected ID:", bundleId)
 
     if (!bundleId || bundleId === "null") {
@@ -150,15 +146,11 @@ export default function PurchaseSuccessPage() {
     console.log("   Full URL:", window.location.href)
     console.log("   Search params:", window.location.search)
 
-    // Get parameters from URL
+    // Get session ID from URL - this is the only parameter we need
     const urlParams = new URLSearchParams(window.location.search)
     const sessionIdFromUrl = urlParams.get("session_id")
-    const bundleIdFromUrl = urlParams.get("bundle_id") // Changed from product_box_id
-    const productBoxIdFromUrl = urlParams.get("product_box_id") // Keep as fallback
 
     console.log("   Session ID from URL:", sessionIdFromUrl)
-    console.log("   Bundle ID from URL:", bundleIdFromUrl)
-    console.log("   Product Box ID from URL:", productBoxIdFromUrl)
 
     if (!sessionIdFromUrl) {
       console.error("❌ [Purchase Success] No session ID found in URL")
@@ -168,7 +160,6 @@ export default function PurchaseSuccessPage() {
     }
 
     setSessionId(sessionIdFromUrl)
-    setProductBoxId(bundleIdFromUrl || productBoxIdFromUrl) // Prefer bundleId
 
     // Start initial verification (only once)
     if (!hasAttemptedVerification) {
