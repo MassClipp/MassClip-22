@@ -18,10 +18,13 @@ interface PurchaseDetails {
   purchase: {
     id: string
     productBoxId: string
+    bundleId?: string
+    itemId?: string
     userId: string
     amount: number
   }
   item: {
+    id?: string
     title: string
     description?: string
   }
@@ -118,6 +121,33 @@ export default function PurchaseSuccessPage() {
     setIsRetrying(false)
   }
 
+  const getContentUrl = () => {
+    if (!purchaseDetails) return "/dashboard"
+
+    // Try different possible ID fields in order of preference
+    const bundleId =
+      purchaseDetails.purchase.bundleId ||
+      purchaseDetails.purchase.itemId ||
+      purchaseDetails.item.id ||
+      purchaseDetails.purchase.productBoxId ||
+      productBoxId
+
+    console.log("🔗 [Purchase Success] Determining content URL...")
+    console.log("   Bundle ID from purchase.bundleId:", purchaseDetails.purchase.bundleId)
+    console.log("   Item ID from purchase.itemId:", purchaseDetails.purchase.itemId)
+    console.log("   Item ID from item.id:", purchaseDetails.item.id)
+    console.log("   Product Box ID from purchase.productBoxId:", purchaseDetails.purchase.productBoxId)
+    console.log("   Product Box ID from URL:", productBoxId)
+    console.log("   Final selected ID:", bundleId)
+
+    if (!bundleId || bundleId === "null") {
+      console.error("❌ [Purchase Success] No valid bundle ID found")
+      return "/dashboard/purchases"
+    }
+
+    return `/product-box/${bundleId}/content`
+  }
+
   // Extract URL parameters and start initial verification
   useEffect(() => {
     console.log("🔗 [Purchase Success] Page loaded, extracting URL parameters...")
@@ -200,9 +230,7 @@ export default function PurchaseSuccessPage() {
               </div>
               <div className="space-y-3">
                 <Button
-                  onClick={() =>
-                    (window.location.href = `/product-box/${purchaseDetails.purchase.productBoxId}/content`)
-                  }
+                  onClick={() => (window.location.href = getContentUrl())}
                   className="w-full bg-white text-black hover:bg-gray-100 font-light"
                 >
                   <ExternalLink className="h-4 w-4 mr-2" />
