@@ -25,6 +25,20 @@ import {
 } from "lucide-react"
 import Link from "next/link"
 
+interface BundleData {
+  id: string
+  title: string
+  description: string
+  thumbnailUrl?: string
+  fileSize: number
+  duration?: number
+  fileType: string
+  downloadCount: number
+  creatorId: string
+  createdAt: any
+  downloadUrl: string
+}
+
 interface PurchaseItem {
   id: string
   title: string
@@ -38,6 +52,8 @@ interface PurchaseItem {
 interface Purchase {
   id: string
   productBoxId: string
+  bundleId?: string
+  itemId?: string
   productBoxTitle: string
   productBoxDescription: string
   productBoxThumbnail: string
@@ -53,6 +69,8 @@ interface Purchase {
   status: string
   source?: string
   anonymousAccess?: boolean
+  // Enhanced bundle data
+  bundleData?: BundleData
 }
 
 export default function PurchasesPage() {
@@ -66,10 +84,34 @@ export default function PurchasesPage() {
     fetchPurchases()
   }, [user])
 
+  const fetchBundleData = async (bundleId: string): Promise<BundleData | null> => {
+    try {
+      console.log(`🔍 [Purchases] Fetching bundle data for: ${bundleId}`)
+
+      const response = await fetch(`/api/bundles/${bundleId}`, {
+        credentials: "include",
+      })
+
+      if (response.ok) {
+        const bundleData = await response.json()
+        console.log(`✅ [Purchases] Bundle data fetched:`, bundleData)
+        return bundleData
+      } else {
+        console.warn(`⚠️ [Purchases] Failed to fetch bundle data for ${bundleId}:`, response.status)
+        return null
+      }
+    } catch (error) {
+      console.error(`❌ [Purchases] Error fetching bundle data for ${bundleId}:`, error)
+      return null
+    }
+  }
+
   const fetchPurchases = async () => {
     try {
       setLoading(true)
       setError(null)
+
+      console.log("🔄 [Purchases] Fetching purchases...")
 
       // Try to fetch anonymous purchases first (no auth required)
       const anonymousResponse = await fetch("/api/user/anonymous-purchases", {
@@ -78,8 +120,64 @@ export default function PurchasesPage() {
 
       if (anonymousResponse.ok) {
         const anonymousData = await anonymousResponse.json()
+        console.log("📦 [Purchases] Anonymous purchases response:", anonymousData)
+
         if (anonymousData.purchases && anonymousData.purchases.length > 0) {
-          setPurchases(anonymousData.purchases)
+          // Process and enrich the purchase data with bundle information
+          const enrichedPurchases = await Promise.all(
+            anonymousData.purchases.map(async (purchase: Purchase) => {
+              console.log("🔍 [Purchases] Processing purchase:", purchase.id)
+
+              // Try to get the bundle ID from various fields
+              const bundleId = purchase.bundleId || purchase.itemId || purchase.productBoxId
+
+              if (bundleId) {
+                console.log(`📦 [Purchases] Fetching bundle data for bundle ID: ${bundleId}`)
+
+                // Fetch bundle data from bundles collection
+                const bundleData = await fetchBundleData(bundleId)
+
+                if (bundleData) {
+                  // Update purchase with bundle data
+                  purchase.bundleData = bundleData
+                  purchase.productBoxTitle = bundleData.title || purchase.productBoxTitle
+                  purchase.productBoxDescription = bundleData.description || purchase.productBoxDescription
+                  purchase.productBoxThumbnail = bundleData.thumbnailUrl || purchase.productBoxThumbnail
+                  purchase.totalItems = 1 // Each bundle is typically one item
+                  purchase.totalSize = bundleData.fileSize || 0
+
+                  // Create items array from bundle data
+                  if (bundleData.downloadUrl) {
+                    const contentType = this.getContentTypeFromFileType(bundleData.fileType)
+                    purchase.items = [
+                      {
+                        id: bundleData.id,
+                        title: bundleData.title,
+                        fileUrl: bundleData.downloadUrl,
+                        thumbnailUrl: bundleData.thumbnailUrl,
+                        fileSize: bundleData.fileSize,
+                        duration: bundleData.duration,
+                        contentType: contentType,
+                      },
+                    ]
+                  }
+
+                  console.log(`✅ [Purchases] Enhanced purchase with bundle data:`, {
+                    title: purchase.productBoxTitle,
+                    items: purchase.totalItems,
+                    size: purchase.totalSize,
+                    bundleId: bundleId,
+                  })
+                } else {
+                  console.warn(`⚠️ [Purchases] Could not fetch bundle data for ${bundleId}`)
+                }
+              }
+
+              return purchase
+            }),
+          )
+
+          setPurchases(enrichedPurchases)
           setLoading(false)
           return
         }
@@ -87,6 +185,7 @@ export default function PurchasesPage() {
 
       // If user is authenticated, try to fetch authenticated purchases
       if (user) {
+        console.log("👤 [Purchases] Fetching authenticated purchases...")
         const idToken = await user.getIdToken()
         const response = await fetch("/api/user/unified-purchases", {
           headers: {
@@ -99,18 +198,71 @@ export default function PurchasesPage() {
         }
 
         const data = await response.json()
-        setPurchases(data.purchases || [])
+        console.log("📦 [Purchases] Authenticated purchases response:", data)
+
+        // Process and enrich authenticated purchases with bundle data
+        const enrichedPurchases = await Promise.all(
+          (data.purchases || []).map(async (purchase: Purchase) => {
+            const bundleId = purchase.bundleId || purchase.itemId || purchase.productBoxId
+
+            if (bundleId) {
+              const bundleData = await fetchBundleData(bundleId)
+
+              if (bundleData) {
+                purchase.bundleData = bundleData
+                purchase.productBoxTitle = bundleData.title || purchase.productBoxTitle
+                purchase.productBoxDescription = bundleData.description || purchase.productBoxDescription
+                purchase.productBoxThumbnail = bundleData.thumbnailUrl || purchase.productBoxThumbnail
+                purchase.totalItems = 1
+                purchase.totalSize = bundleData.fileSize || 0
+
+                if (bundleData.downloadUrl) {
+                  const contentType = this.getContentTypeFromFileType(bundleData.fileType)
+                  purchase.items = [
+                    {
+                      id: bundleData.id,
+                      title: bundleData.title,
+                      fileUrl: bundleData.downloadUrl,
+                      thumbnailUrl: bundleData.thumbnailUrl,
+                      fileSize: bundleData.fileSize,
+                      duration: bundleData.duration,
+                      contentType: contentType,
+                    },
+                  ]
+                }
+              }
+            }
+
+            return purchase
+          }),
+        )
+
+        setPurchases(enrichedPurchases)
       } else {
         // No user and no anonymous purchases
         setPurchases([])
       }
     } catch (err: any) {
-      console.error("Error fetching purchases:", err)
+      console.error("❌ [Purchases] Error fetching purchases:", err)
       setError(err.message)
       setPurchases([])
     } finally {
       setLoading(false)
     }
+  }
+
+  const getContentTypeFromFileType = (fileType: string): "video" | "audio" | "image" | "document" => {
+    if (!fileType) return "document"
+
+    const type = fileType.toLowerCase()
+    if (type.includes("video") || type.includes("mp4") || type.includes("mov") || type.includes("avi")) {
+      return "video"
+    } else if (type.includes("audio") || type.includes("mp3") || type.includes("wav")) {
+      return "audio"
+    } else if (type.includes("image") || type.includes("jpg") || type.includes("png") || type.includes("gif")) {
+      return "image"
+    }
+    return "document"
   }
 
   const togglePurchaseExpansion = (purchaseId: string) => {
@@ -321,7 +473,9 @@ export default function PurchasesPage() {
                 {/* Content Summary */}
                 <div className="grid grid-cols-3 gap-4 p-4 bg-white/5 rounded-lg mb-4">
                   <div className="text-center">
-                    <div className="text-lg font-bold text-white">{purchase.totalItems || 0}</div>
+                    <div className="text-lg font-bold text-white">
+                      {purchase.totalItems || purchase.items?.length || 0}
+                    </div>
                     <div className="text-sm text-white/60">Items</div>
                   </div>
                   <div className="text-center">
@@ -333,6 +487,24 @@ export default function PurchasesPage() {
                     <div className="text-sm text-white/60">Lifetime</div>
                   </div>
                 </div>
+
+                {/* Bundle Details */}
+                {purchase.bundleData && (
+                  <div className="mb-4 p-3 bg-white/5 rounded-lg">
+                    <div className="flex items-center space-x-2 text-sm text-white/80">
+                      <Video className="h-4 w-4" />
+                      <span>{purchase.bundleData.fileType}</span>
+                      {purchase.bundleData.duration && (
+                        <>
+                          <span>•</span>
+                          <span>{formatDuration(purchase.bundleData.duration)}</span>
+                        </>
+                      )}
+                      <span>•</span>
+                      <span>{purchase.bundleData.downloadCount} downloads</span>
+                    </div>
+                  </div>
+                )}
 
                 {/* Collapsible Content Items */}
                 {purchase.items && purchase.items.length > 0 && (
