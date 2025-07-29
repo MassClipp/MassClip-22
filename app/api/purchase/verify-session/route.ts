@@ -221,35 +221,41 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Extract metadata
+    // Extract metadata - prioritize bundleId for bundle purchases
+    const bundleId = session.metadata?.bundleId || session.metadata?.itemId
     const productBoxId = session.metadata?.productBoxId
-    const bundleId = session.metadata?.bundleId
     const sessionUserId = session.metadata?.userId
     const sessionCreatorId = session.metadata?.creatorId || creatorId
 
-    if (!productBoxId && !bundleId) {
-      console.error("❌ [Verify Session] Missing product/bundle ID in session metadata")
+    // Determine if this is a bundle or product box purchase
+    const isBundle = !!bundleId
+    const itemId = bundleId || productBoxId
+    const itemType = isBundle ? "bundle" : "product_box"
+
+    if (!itemId) {
+      console.error("❌ [Verify Session] Missing bundle/product ID in session metadata")
       return NextResponse.json(
         {
           error: "Invalid session metadata",
-          details: "No product or bundle ID found in session",
+          details: "No bundle or product ID found in session",
           metadata: session.metadata,
         },
         { status: 400 },
       )
     }
 
-    // Use authenticated user ID if available, otherwise use session metadata
-    const finalUserId = userId || sessionUserId
-
     console.log("📦 [Verify Session] Processing purchase:")
-    console.log("   Product Box ID:", productBoxId)
     console.log("   Bundle ID:", bundleId)
+    console.log("   Product Box ID:", productBoxId)
+    console.log("   Item Type:", itemType)
+    console.log("   Final Item ID:", itemId)
     console.log("   User ID (auth):", userId)
     console.log("   User ID (session):", sessionUserId)
-    console.log("   Final User ID:", finalUserId)
     console.log("   Creator ID:", sessionCreatorId)
     console.log("   Connected Account:", connectedAccountId)
+
+    // Use authenticated user ID if available, otherwise use session metadata
+    const finalUserId = userId || sessionUserId
 
     // Check if purchase already exists (reuse existing purchase if found)
     let purchaseId
@@ -277,13 +283,10 @@ export async function POST(request: NextRequest) {
       // Create new purchase record
       console.log("💾 [Verify Session] Creating new purchase record...")
 
-      const itemId = productBoxId || bundleId
-      const itemType = productBoxId ? "product_box" : "bundle"
-
       const purchaseData = {
         sessionId,
-        productBoxId: productBoxId || null,
         bundleId: bundleId || null,
+        productBoxId: productBoxId || null,
         itemId,
         itemType,
         userId: finalUserId,
@@ -319,8 +322,8 @@ export async function POST(request: NextRequest) {
             .collection("purchases")
             .doc(purchaseId)
             .set({
-              productBoxId: productBoxId || null,
               bundleId: bundleId || null,
+              productBoxId: productBoxId || null,
               itemId,
               itemType,
               purchaseId,
@@ -331,7 +334,7 @@ export async function POST(request: NextRequest) {
             })
 
           // Update user's main document with purchase info
-          const accessKey = productBoxId ? `productBoxAccess.${productBoxId}` : `bundleAccess.${bundleId}`
+          const accessKey = bundleId ? `bundleAccess.${bundleId}` : `productBoxAccess.${productBoxId}`
           await db
             .collection("users")
             .doc(finalUserId)
@@ -353,8 +356,8 @@ export async function POST(request: NextRequest) {
 
       // Update item stats
       try {
-        const collection = productBoxId ? "productBoxes" : "bundles"
-        const docId = productBoxId || bundleId
+        const collection = bundleId ? "bundles" : "productBoxes"
+        const docId = itemId
 
         await db
           .collection(collection)
@@ -372,8 +375,8 @@ export async function POST(request: NextRequest) {
     }
 
     // Get item details for response
-    const collection = productBoxId ? "productBoxes" : "bundles"
-    const docId = productBoxId || bundleId
+    const collection = bundleId ? "bundles" : "productBoxes"
+    const docId = itemId
     const itemDoc = await db.collection(collection).doc(docId!).get()
     const itemData = itemDoc.exists ? itemDoc.data() : {}
 
@@ -394,18 +397,18 @@ export async function POST(request: NextRequest) {
       },
       purchase: {
         id: purchaseId,
-        productBoxId: productBoxId || null,
         bundleId: bundleId || null,
+        productBoxId: productBoxId || null,
         itemId: docId,
-        itemType: productBoxId ? "product_box" : "bundle",
+        itemType,
         userId: finalUserId,
         creatorId: sessionCreatorId || creatorId,
         amount: session.amount_total || 0,
       },
       item: {
-        title: itemData?.title || `${productBoxId ? "Product Box" : "Bundle"}`,
+        title: itemData?.title || `${bundleId ? "Bundle" : "Product Box"}`,
         description: itemData?.description,
-        type: productBoxId ? "product_box" : "bundle",
+        type: itemType,
       },
     })
   } catch (error: any) {

@@ -53,7 +53,8 @@ export interface UnifiedPurchaseItem {
 
 export interface UnifiedPurchase {
   id: string
-  productBoxId: string
+  productBoxId?: string
+  bundleId?: string
   itemId?: string // Add compatibility field
   productBoxTitle: string
   productBoxDescription?: string
@@ -87,7 +88,8 @@ export class UnifiedPurchaseService {
   static async createUnifiedPurchase(
     userId: string,
     purchaseData: {
-      productBoxId: string
+      bundleId?: string
+      productBoxId?: string
       sessionId: string
       amount: number
       currency: string
@@ -98,6 +100,19 @@ export class UnifiedPurchaseService {
   ): Promise<string> {
     try {
       console.log(`🔄 [Unified Purchase] Creating unified purchase for user ${userId}`)
+
+      // Determine if this is a bundle or product box purchase
+      const bundleId = purchaseData.bundleId
+      const productBoxId = purchaseData.productBoxId
+      const isBundle = !!bundleId
+      const itemId = bundleId || productBoxId
+      const itemType = isBundle ? "bundle" : "product_box"
+
+      if (!itemId) {
+        throw new Error("Either bundleId or productBoxId must be provided")
+      }
+
+      console.log(`📦 [Unified Purchase] Processing ${itemType} purchase: ${itemId}`)
 
       // Get user details if authenticated
       let userEmail = purchaseData.userEmail || ""
@@ -117,35 +132,39 @@ export class UnifiedPurchaseService {
         }
       }
 
-      // Get product box details
-      const productBoxDoc = await getDb().collection("productBoxes").doc(purchaseData.productBoxId).get()
-      if (!productBoxDoc.exists) {
-        throw new Error(`Product box ${purchaseData.productBoxId} not found`)
+      // Get item details from the appropriate collection
+      const collection = isBundle ? "bundles" : "productBoxes"
+      const itemDoc = await getDb().collection(collection).doc(itemId).get()
+      if (!itemDoc.exists) {
+        throw new Error(`${itemType} ${itemId} not found`)
       }
-      const productBoxData = productBoxDoc.data()!
+      const itemData = itemDoc.data()!
 
       // Get creator details
       const creatorDoc = await getDb().collection("users").doc(purchaseData.creatorId).get()
       const creatorData = creatorDoc.exists ? creatorDoc.data() : null
 
-      // Get all content items for this product box with enhanced metadata
-      const contentItems = await this.fetchAllContentItems(purchaseData.productBoxId)
+      // Get all content items for this item
+      const contentItems = isBundle
+        ? await this.fetchBundleContentItems(itemId)
+        : await this.fetchAllContentItems(itemId)
 
       console.log(`📦 [Unified Purchase] Found ${contentItems.length} content items`)
 
-      // Create unified purchase document with proper user identification
+      // Create unified purchase document
       const unifiedPurchase: UnifiedPurchase = {
         id: purchaseData.sessionId,
-        productBoxId: purchaseData.productBoxId, // Primary field
-        itemId: purchaseData.productBoxId, // Compatibility field
-        productBoxTitle: productBoxData.title || "Untitled Product Box",
-        productBoxDescription: productBoxData.description || "",
-        productBoxThumbnail: productBoxData.thumbnailUrl || productBoxData.customPreviewThumbnail || "",
+        bundleId: bundleId || null,
+        productBoxId: productBoxId || null,
+        itemId: itemId,
+        productBoxTitle: itemData.title || `Untitled ${itemType}`,
+        productBoxDescription: itemData.description || "",
+        productBoxThumbnail: itemData.thumbnailUrl || itemData.customPreviewThumbnail || "",
         creatorId: purchaseData.creatorId,
         creatorName: creatorData?.displayName || creatorData?.name || "Unknown Creator",
         creatorUsername: creatorData?.username || "",
 
-        // Enhanced user identification - CRITICAL FIX
+        // Enhanced user identification
         buyerUid: userId,
         userId: userId,
         userEmail: userEmail,
@@ -157,17 +176,18 @@ export class UnifiedPurchaseService {
         currency: purchaseData.currency,
         sessionId: purchaseData.sessionId,
         items: contentItems,
-        itemNames: contentItems.map((item) => item.displayTitle), // Explicit content names
-        contentTitles: contentItems.map((item) => item.displayTitle), // Alternative field
+        itemNames: contentItems.map((item) => item.displayTitle),
+        contentTitles: contentItems.map((item) => item.displayTitle),
         totalItems: contentItems.length,
         totalSize: contentItems.reduce((sum, item) => sum + (item.fileSize || 0), 0),
       }
 
-      console.log(`💾 [Unified Purchase] Saving unified purchase with user identification:`, {
+      console.log(`💾 [Unified Purchase] Saving unified purchase for ${itemType}:`, {
         userId: unifiedPurchase.userId,
         userEmail: unifiedPurchase.userEmail,
         userName: unifiedPurchase.userName,
-        isAuthenticated: unifiedPurchase.isAuthenticated,
+        itemType,
+        itemId,
         itemNames: unifiedPurchase.itemNames,
       })
 
@@ -175,12 +195,11 @@ export class UnifiedPurchaseService {
       const purchaseRef = doc(getDb(), "userPurchases", userId, "purchases", purchaseData.sessionId)
       await setDoc(purchaseRef, unifiedPurchase)
 
-      // Also save to bundlePurchases collection for easy access
-      await setDoc(doc(getDb(), "bundlePurchases", purchaseData.sessionId), unifiedPurchase)
+      // Also save to appropriate purchases collection for easy access
+      const purchasesCollection = isBundle ? "bundlePurchases" : "productBoxPurchases"
+      await setDoc(doc(getDb(), purchasesCollection, purchaseData.sessionId), unifiedPurchase)
 
-      console.log(
-        `✅ [Unified Purchase] Created unified purchase ${purchaseData.sessionId} for user ${userId} (${userName})`,
-      )
+      console.log(`✅ [Unified Purchase] Created unified purchase ${purchaseData.sessionId} for ${itemType} ${itemId}`)
       return purchaseData.sessionId
     } catch (error) {
       console.error(`❌ [Unified Purchase] Error creating unified purchase:`, error)
@@ -291,6 +310,133 @@ export class UnifiedPurchaseService {
     } catch (error) {
       console.error(`❌ [Content Fetch] Error fetching content items:`, error)
       return []
+    }
+  }
+
+  /**
+   * Fetch content items specifically for bundles
+   */
+  private static async fetchBundleContentItems(bundleId: string): Promise<UnifiedPurchaseItem[]> {
+    const items: UnifiedPurchaseItem[] = []
+
+    try {
+      console.log(`📊 [Bundle Content Fetch] Fetching content for bundle: ${bundleId}`)
+
+      // Get the bundle document
+      const bundleDoc = await getDb().collection("bundles").doc(bundleId).get()
+
+      if (!bundleDoc.exists) {
+        console.error(`❌ [Bundle Content Fetch] Bundle ${bundleId} not found`)
+        return []
+      }
+
+      const bundleData = bundleDoc.data()!
+      console.log(`📦 [Bundle Content Fetch] Bundle data:`, {
+        title: bundleData.title,
+        fileUrl: bundleData.downloadUrl || bundleData.fileUrl,
+        fileSize: bundleData.fileSize,
+        fileType: bundleData.fileType,
+      })
+
+      // For bundles, the bundle itself is typically the content item
+      if (bundleData.downloadUrl || bundleData.fileUrl) {
+        const item = this.normalizeBundleItem(bundleId, bundleData)
+        if (item) {
+          items.push(item)
+          console.log(`✅ [Bundle Content Fetch] Added bundle as content item`)
+        }
+      }
+
+      // Also check if the bundle has associated content items
+      if (bundleData.contentItems && Array.isArray(bundleData.contentItems)) {
+        console.log(`📊 [Bundle Content Fetch] Bundle has ${bundleData.contentItems.length} associated content items`)
+
+        for (const contentItemId of bundleData.contentItems) {
+          try {
+            const contentDoc = await getDb().collection("uploads").doc(contentItemId).get()
+            if (contentDoc.exists) {
+              const contentData = contentDoc.data()!
+              const item = this.normalizeContentItem(contentItemId, contentData, "uploads (via bundle)")
+              if (item) items.push(item)
+            }
+          } catch (error) {
+            console.warn(`⚠️ [Bundle Content Fetch] Error fetching content item ${contentItemId}:`, error)
+          }
+        }
+      }
+
+      console.log(`✅ [Bundle Content Fetch] Total items found: ${items.length}`)
+      return items
+    } catch (error) {
+      console.error(`❌ [Bundle Content Fetch] Error fetching bundle content:`, error)
+      return []
+    }
+  }
+
+  /**
+   * Normalize bundle data into a content item
+   */
+  private static normalizeBundleItem(id: string, data: any): UnifiedPurchaseItem | null {
+    try {
+      const fileUrl = data.downloadUrl || data.fileUrl || ""
+
+      if (!fileUrl || !fileUrl.startsWith("http")) {
+        console.warn(`⚠️ [Bundle Normalize] Skipping bundle ${id} - no valid URL`)
+        return null
+      }
+
+      // Determine content type from file type
+      const fileType = data.fileType || data.mimeType || "application/octet-stream"
+      let contentType: "video" | "audio" | "image" | "document" = "document"
+
+      if (fileType.toLowerCase().includes("video") || fileUrl.toLowerCase().includes(".mp4")) {
+        contentType = "video"
+      } else if (fileType.toLowerCase().includes("audio") || fileUrl.toLowerCase().includes(".mp3")) {
+        contentType = "audio"
+      } else if (fileType.toLowerCase().includes("image") || fileUrl.toLowerCase().includes(".jpg")) {
+        contentType = "image"
+      }
+
+      const displayTitle = data.title || `Bundle ${id.slice(-6)}`
+      const fileSize = data.fileSize || data.size || 0
+
+      const item: UnifiedPurchaseItem = {
+        id,
+        title: displayTitle,
+        fileUrl,
+        mimeType: fileType,
+        fileSize,
+        thumbnailUrl: data.thumbnailUrl || "",
+        contentType,
+        duration: data.duration || undefined,
+        filename: data.filename || `${displayTitle}.${this.getFileExtension(fileType)}`,
+
+        // Display formatting
+        displayTitle,
+        displaySize: this.formatFileSize(fileSize),
+        displayDuration: data.duration ? this.formatDuration(data.duration) : undefined,
+
+        // Additional metadata
+        description: data.description || undefined,
+        tags: data.tags || [],
+        category: data.category || undefined,
+        uploadedAt: data.createdAt || new Date(),
+        creatorId: data.creatorId || undefined,
+        isPublic: data.isPublic !== false,
+      }
+
+      console.log(`✅ [Bundle Normalize] Normalized bundle item:`, {
+        id: item.id,
+        title: item.displayTitle,
+        contentType: item.contentType,
+        size: item.displaySize,
+        hasValidUrl: !!item.fileUrl,
+      })
+
+      return item
+    } catch (error) {
+      console.error(`❌ [Bundle Normalize] Error normalizing bundle ${id}:`, error)
+      return null
     }
   }
 
