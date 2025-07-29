@@ -58,33 +58,3 @@ export async function retrieveSessionSmart(sessionId: string, connectedAccountId
     throw error
   }
 }
-
-// Add the missing export - alias for retrieveSessionSmart
-export const retrieveStripeSession = retrieveSessionSmart
-
-// Additional helper functions for common Stripe operations
-export async function createCheckoutSession(params: Stripe.Checkout.SessionCreateParams, connectedAccountId?: string) {
-  try {
-    const options: Stripe.RequestOptions = connectedAccountId ? { stripeAccount: connectedAccountId } : {}
-
-    const session = await stripe.checkout.sessions.create(params, options)
-    console.log(`✅ [Stripe] Created checkout session: ${session.id}`)
-    return session
-  } catch (error: any) {
-    console.error(`❌ [Stripe] Failed to create checkout session:`, error)
-    throw error
-  }
-}
-
-export async function retrievePaymentIntent(paymentIntentId: string, connectedAccountId?: string) {
-  try {
-    const options: Stripe.RequestOptions = connectedAccountId ? { stripeAccount: connectedAccountId } : {}
-
-    const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId, options)
-    console.log(`✅ [Stripe] Retrieved payment intent: ${paymentIntent.id}`)
-    return paymentIntent
-  } catch (error: any) {
-    console.error(`❌ [Stripe] Failed to retrieve payment intent:`, error)
-    throw error
-  }
-}
