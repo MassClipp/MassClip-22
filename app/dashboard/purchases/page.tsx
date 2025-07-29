@@ -71,6 +71,8 @@ export default function PurchasesPage() {
       setLoading(true)
       setError(null)
 
+      console.log("🔄 [Purchases] Fetching purchases...")
+
       // Try to fetch anonymous purchases first (no auth required)
       const anonymousResponse = await fetch("/api/user/anonymous-purchases", {
         credentials: "include",
@@ -78,8 +80,49 @@ export default function PurchasesPage() {
 
       if (anonymousResponse.ok) {
         const anonymousData = await anonymousResponse.json()
+        console.log("📦 [Purchases] Anonymous purchases response:", anonymousData)
+
         if (anonymousData.purchases && anonymousData.purchases.length > 0) {
-          setPurchases(anonymousData.purchases)
+          // Process and enrich the purchase data
+          const enrichedPurchases = await Promise.all(
+            anonymousData.purchases.map(async (purchase: Purchase) => {
+              console.log("🔍 [Purchases] Processing purchase:", purchase.id)
+
+              // If items data is missing or incomplete, try to fetch it
+              if (!purchase.items || purchase.items.length === 0 || purchase.totalItems === 0) {
+                console.log("⚠️ [Purchases] Missing items data, fetching from product box...")
+
+                try {
+                  const contentResponse = await fetch(`/api/product-box/${purchase.productBoxId}/content`, {
+                    credentials: "include",
+                  })
+
+                  if (contentResponse.ok) {
+                    const contentData = await contentResponse.json()
+                    console.log("📁 [Purchases] Content data:", contentData)
+
+                    if (contentData.items && contentData.items.length > 0) {
+                      purchase.items = contentData.items
+                      purchase.totalItems = contentData.items.length
+                      purchase.totalSize = contentData.items.reduce(
+                        (total: number, item: PurchaseItem) => total + (item.fileSize || 0),
+                        0,
+                      )
+                      console.log(
+                        `✅ [Purchases] Updated purchase with ${purchase.totalItems} items, ${purchase.totalSize} bytes`,
+                      )
+                    }
+                  }
+                } catch (contentError) {
+                  console.error("❌ [Purchases] Error fetching content:", contentError)
+                }
+              }
+
+              return purchase
+            }),
+          )
+
+          setPurchases(enrichedPurchases)
           setLoading(false)
           return
         }
@@ -87,6 +130,7 @@ export default function PurchasesPage() {
 
       // If user is authenticated, try to fetch authenticated purchases
       if (user) {
+        console.log("👤 [Purchases] Fetching authenticated purchases...")
         const idToken = await user.getIdToken()
         const response = await fetch("/api/user/unified-purchases", {
           headers: {
@@ -99,13 +143,46 @@ export default function PurchasesPage() {
         }
 
         const data = await response.json()
-        setPurchases(data.purchases || [])
+        console.log("📦 [Purchases] Authenticated purchases response:", data)
+
+        // Process and enrich authenticated purchases too
+        const enrichedPurchases = await Promise.all(
+          (data.purchases || []).map(async (purchase: Purchase) => {
+            if (!purchase.items || purchase.items.length === 0 || purchase.totalItems === 0) {
+              try {
+                const idToken = await user.getIdToken()
+                const contentResponse = await fetch(`/api/product-box/${purchase.productBoxId}/content`, {
+                  headers: {
+                    Authorization: `Bearer ${idToken}`,
+                  },
+                })
+
+                if (contentResponse.ok) {
+                  const contentData = await contentResponse.json()
+                  if (contentData.items && contentData.items.length > 0) {
+                    purchase.items = contentData.items
+                    purchase.totalItems = contentData.items.length
+                    purchase.totalSize = contentData.items.reduce(
+                      (total: number, item: PurchaseItem) => total + (item.fileSize || 0),
+                      0,
+                    )
+                  }
+                }
+              } catch (contentError) {
+                console.error("❌ [Purchases] Error fetching authenticated content:", contentError)
+              }
+            }
+            return purchase
+          }),
+        )
+
+        setPurchases(enrichedPurchases)
       } else {
         // No user and no anonymous purchases
         setPurchases([])
       }
     } catch (err: any) {
-      console.error("Error fetching purchases:", err)
+      console.error("❌ [Purchases] Error fetching purchases:", err)
       setError(err.message)
       setPurchases([])
     } finally {
@@ -321,7 +398,9 @@ export default function PurchasesPage() {
                 {/* Content Summary */}
                 <div className="grid grid-cols-3 gap-4 p-4 bg-white/5 rounded-lg mb-4">
                   <div className="text-center">
-                    <div className="text-lg font-bold text-white">{purchase.totalItems || 0}</div>
+                    <div className="text-lg font-bold text-white">
+                      {purchase.totalItems || purchase.items?.length || 0}
+                    </div>
                     <div className="text-sm text-white/60">Items</div>
                   </div>
                   <div className="text-center">
