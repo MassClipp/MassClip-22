@@ -21,7 +21,7 @@ interface PurchaseDetails {
     userId: string
     amount: number
   }
-  productBox: {
+  item: {
     title: string
     description?: string
   }
@@ -248,7 +248,7 @@ export default function PurchaseSuccessPage() {
                   <div className="space-y-2 text-sm">
                     <div>
                       <span className="text-gray-600">Product:</span>{" "}
-                      <span className="font-medium">{purchaseDetails.productBox.title}</span>
+                      <span className="font-medium">{purchaseDetails.item.title}</span>
                     </div>
                     <div>
                       <span className="text-gray-600">Amount:</span>{" "}
