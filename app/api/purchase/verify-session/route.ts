@@ -40,8 +40,6 @@ export async function POST(request: NextRequest) {
 
     // Verify Firebase token if provided
     let userId = null
-    let creatorData = {}
-    let finalCreatorId = ""
     if (idToken) {
       try {
         console.log("🔐 [Verify Session] Verifying Firebase token...")
@@ -54,13 +52,15 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    const db = getAdminDb()
+
     // Strategy 1: Check if we have this session in our database already
     console.log("🔍 [Verify Session] Strategy 1: Looking for existing purchase record...")
     let connectedAccountId = null
     let creatorId = null
     let existingPurchase = null
+    let bundleId = null
 
-    const db = getAdminDb()
     const existingPurchaseQuery = await db.collection("purchases").where("sessionId", "==", sessionId).limit(1).get()
 
     if (!existingPurchaseQuery.empty) {
@@ -68,8 +68,11 @@ export async function POST(request: NextRequest) {
       const purchaseData = existingPurchase.data()
       creatorId = purchaseData.creatorId
       connectedAccountId = purchaseData.connectedAccountId
-      console.log("📦 [Verify Session] Found existing purchase with creatorId:", creatorId)
-      console.log("🔗 [Verify Session] Connected account from purchase:", connectedAccountId)
+      bundleId = purchaseData.bundleId || purchaseData.itemId // Get bundleId from existing purchase
+      console.log("📦 [Verify Session] Found existing purchase with:")
+      console.log("   - creatorId:", creatorId)
+      console.log("   - connectedAccountId:", connectedAccountId)
+      console.log("   - bundleId:", bundleId)
     }
 
     // Strategy 2: If no existing purchase, try to find connected accounts from recent sessions
@@ -107,9 +110,10 @@ export async function POST(request: NextRequest) {
             creatorId = account.userId
 
             // Store this information for future use
-            const bundleId = session.metadata?.bundleId
+            const sessionBundleId = session.metadata?.bundleId
 
-            if (bundleId) {
+            if (sessionBundleId) {
+              bundleId = sessionBundleId
               console.log("💾 [Verify Session] Caching connected account info for bundle:", bundleId)
 
               try {
@@ -139,10 +143,9 @@ export async function POST(request: NextRequest) {
       try {
         const creatorDoc = await db.collection("users").doc(creatorId).get()
         if (creatorDoc.exists) {
-          const creatorDataTemp = creatorDoc.data()
-          connectedAccountId = creatorDataTemp?.stripeAccountId
+          const creatorData = creatorDoc.data()
+          connectedAccountId = creatorData?.stripeAccountId
           console.log("🔗 [Verify Session] Found connected account ID from creator:", connectedAccountId)
-          creatorData = creatorDataTemp!
         }
       } catch (error) {
         console.error("❌ [Verify Session] Failed to get creator's connected account:", error)
@@ -240,24 +243,27 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Extract metadata - look for bundleId in session metadata
-    const bundleId = session.metadata?.bundleId || session.metadata?.bundle_id
+    // Extract bundleId - use existing purchase bundleId or session metadata
+    if (!bundleId) {
+      bundleId = session.metadata?.bundleId || session.metadata?.bundle_id
+    }
+
     const sessionUserId = session.metadata?.userId
-    finalCreatorId = session.metadata?.creatorId || creatorId
+    const sessionCreatorId = session.metadata?.creatorId || creatorId
 
     console.log("📦 [Verify Session] Processing bundle purchase:")
     console.log("   Bundle ID:", bundleId)
     console.log("   User ID (auth):", userId)
     console.log("   User ID (session):", sessionUserId)
-    console.log("   Creator ID:", finalCreatorId)
+    console.log("   Creator ID:", sessionCreatorId)
     console.log("   Connected Account:", connectedAccountId)
 
     if (!bundleId) {
-      console.error("❌ [Verify Session] Missing bundle ID in session metadata")
+      console.error("❌ [Verify Session] Missing bundle ID")
       return NextResponse.json(
         {
           error: "Invalid session metadata",
-          details: "No bundle ID found in session metadata",
+          details: "No bundle ID found in session metadata or existing purchase",
           metadata: session.metadata,
         },
         { status: 400 },
@@ -267,7 +273,7 @@ export async function POST(request: NextRequest) {
     // Use authenticated user ID if available, otherwise use session metadata
     const finalUserId = userId || sessionUserId
 
-    // Get bundle details from Firestore - THIS IS THE KEY FIX
+    // CRITICAL FIX: Always fetch bundle data regardless of new/existing purchase
     console.log("📦 [Verify Session] Fetching bundle details from Firestore...")
     const bundleDoc = await db.collection("bundles").doc(bundleId).get()
 
@@ -298,39 +304,17 @@ export async function POST(request: NextRequest) {
 
     // Get creator details
     console.log("👤 [Verify Session] Fetching creator details...")
-    if (!finalCreatorId) {
-      finalCreatorId = creatorId || bundleData.creatorId || ""
-    }
-    const creatorDoc = await db.collection("users").doc(finalCreatorId).get()
-    if (creatorDoc.exists) {
-      creatorData = creatorDoc.data()!
-      console.log("✅ [Verify Session] Creator data retrieved:", {
-        id: finalCreatorId,
-        name: creatorData.displayName || creatorData.name,
-        username: creatorData.username,
-      })
-    }
-
-    // If we have a userId, record the purchase
-    if (userId) {
-      try {
-        const purchaseData = {
-          userId,
-          sessionId: session.id,
-          paymentIntentId: session.payment_intent?.id || session.payment_intent,
-          bundleId: bundleId || null,
-          productType: "bundle",
-          amount: session.amount_total,
-          currency: session.currency,
-          status: "completed",
-          createdAt: new Date(),
-          metadata: session.metadata || {},
-        }
-
-        await db.collection("purchases").add(purchaseData)
-        console.log("✅ [Verify Session] Purchase recorded for user:", userId)
-      } catch (error) {
-        console.error("❌ [Verify Session] Error recording purchase:", error)
+    const finalCreatorId = sessionCreatorId || creatorId || bundleData.creatorId || ""
+    let creatorData = {}
+    if (finalCreatorId) {
+      const creatorDoc = await db.collection("users").doc(finalCreatorId).get()
+      if (creatorDoc.exists) {
+        creatorData = creatorDoc.data()!
+        console.log("✅ [Verify Session] Creator data retrieved:", {
+          id: finalCreatorId,
+          name: creatorData.displayName || creatorData.name,
+          username: creatorData.username,
+        })
       }
     }
 
@@ -347,7 +331,7 @@ export async function POST(request: NextRequest) {
       try {
         await existingPurchase.ref.update({
           connectedAccountId: connectedAccountId || null,
-          creatorId: creatorId || null,
+          creatorId: finalCreatorId || null,
           retrievalMethod,
           verifiedAt: new Date(),
           updatedAt: new Date(),
@@ -365,8 +349,8 @@ export async function POST(request: NextRequest) {
         bundleId,
         itemId: bundleId,
         itemType: "bundle",
-        userId: userId,
-        creatorId: creatorId || null,
+        userId: finalUserId,
+        creatorId: finalCreatorId || null,
         connectedAccountId: connectedAccountId || null,
         amount: session.amount_total || 0,
         currency: session.currency || "usd",
@@ -388,11 +372,11 @@ export async function POST(request: NextRequest) {
       console.log("✅ [Verify Session] Purchase record created:", purchaseId)
 
       // Grant user access if we have a user ID
-      if (userId) {
+      if (finalUserId) {
         console.log("🔓 [Verify Session] Granting user access...")
         try {
           // Add to user's purchases subcollection
-          await db.collection("users").doc(userId).collection("purchases").doc(purchaseId).set({
+          await db.collection("users").doc(finalUserId).collection("purchases").doc(purchaseId).set({
             bundleId,
             itemId: bundleId,
             itemType: "bundle",
@@ -406,7 +390,7 @@ export async function POST(request: NextRequest) {
           // Update user's main document with bundle access
           await db
             .collection("users")
-            .doc(userId)
+            .doc(finalUserId)
             .update({
               [`bundleAccess.${bundleId}`]: {
                 purchaseId,
@@ -452,9 +436,9 @@ export async function POST(request: NextRequest) {
       productBoxTitle: bundleData?.title || "Bundle",
       productBoxDescription: bundleData?.description || "",
       productBoxThumbnail: bundleData?.thumbnailUrl || "",
-      creatorId: creatorId || null,
-      creatorName: "Unknown Creator", // Placeholder, will be updated later
-      creatorUsername: "", // Placeholder, will be updated later
+      creatorId: finalCreatorId || null,
+      creatorName: creatorData?.displayName || creatorData?.name || "Unknown Creator",
+      creatorUsername: creatorData?.username || "",
       amount: session.amount_total || 0,
       currency: session.currency || "usd",
       purchasedAt: new Date(),
@@ -480,11 +464,11 @@ export async function POST(request: NextRequest) {
       totalItems: 1,
       totalSize: bundleData?.fileSize || 0,
       // User identification
-      buyerUid: userId || "anonymous",
-      userId: userId || "anonymous",
+      buyerUid: finalUserId || "anonymous",
+      userId: finalUserId || "anonymous",
       userEmail: session.customer_details?.email || "",
       userName: "User",
-      isAuthenticated: !!userId,
+      isAuthenticated: !!finalUserId,
     }
 
     try {
@@ -497,8 +481,8 @@ export async function POST(request: NextRequest) {
       console.log("✅ [Verify Session] Created unifiedPurchases record")
 
       // 3. If user is authenticated, also create in user's purchases subcollection
-      if (userId && userId !== "anonymous") {
-        await db.collection("users").doc(userId).collection("purchases").doc(sessionId).set(unifiedPurchaseData)
+      if (finalUserId && finalUserId !== "anonymous") {
+        await db.collection("users").doc(finalUserId).collection("purchases").doc(sessionId).set(unifiedPurchaseData)
         console.log("✅ [Verify Session] Created user purchases record")
       }
 
@@ -516,12 +500,6 @@ export async function POST(request: NextRequest) {
     } catch (error) {
       console.error("❌ [Verify Session] Failed to create purchase records:", error)
     }
-
-    // Update unified purchase data with creator details
-    unifiedPurchaseData.creatorName = creatorData?.displayName || creatorData?.name || "Unknown Creator"
-    unifiedPurchaseData.creatorUsername = creatorData?.username || ""
-
-    console.log("✅ [Verify Session] Updated unified purchase data with creator details")
 
     console.log("✅ [Verify Session] Verification completed successfully")
 
