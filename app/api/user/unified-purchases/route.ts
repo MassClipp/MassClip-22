@@ -1,108 +1,224 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { auth, db } from "@/lib/firebase-admin"
+import { verifyIdTokenFromRequest } from "@/lib/auth-utils"
+import { db } from "@/lib/firebase-admin"
 
 export async function GET(request: NextRequest) {
   try {
     console.log("🔍 [Unified Purchases] Fetching user purchases...")
 
-    // Extract and verify Firebase ID token
-    const authHeader = request.headers.get("authorization")
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    // Verify the user is authenticated
+    const decodedToken = await verifyIdTokenFromRequest(request)
+    if (!decodedToken) {
+      console.error("❌ [Unified Purchases] Authentication required")
       return NextResponse.json({ error: "Authentication required" }, { status: 401 })
     }
 
-    const idToken = authHeader.substring(7)
-    let decodedToken
-    try {
-      decodedToken = await auth.verifyIdToken(idToken)
-      console.log("✅ [Unified Purchases] Firebase token verified for user:", decodedToken.uid)
-    } catch (error) {
-      console.error("❌ [Unified Purchases] Firebase token verification failed:", error)
-      return NextResponse.json({ error: "Invalid authentication token" }, { status: 401 })
-    }
-
     const userId = decodedToken.uid
-    const userEmail = decodedToken.email
+    console.log("🔍 [Unified Purchases] Fetching purchases for user:", userId)
 
-    console.log("🔍 [Unified Purchases] Looking up purchases for user:", { userId, userEmail })
+    // Get purchases from multiple sources
+    const purchases: any[] = []
 
-    // Query bundlePurchases by userId
-    const bundlePurchasesQuery = await db.collection("bundlePurchases").where("userId", "==", userId).get()
+    // 1. Check bundlePurchases collection
+    const bundlePurchasesQuery = await db
+      .collection("bundlePurchases")
+      .where("buyerUid", "==", userId)
+      .orderBy("purchasedAt", "desc")
+      .get()
 
-    // Also query by email as fallback for purchases that might have been created before user ID was properly set
-    const emailPurchasesQuery = userEmail
-      ? await db.collection("bundlePurchases").where("userEmail", "==", userEmail).get()
-      : { docs: [] }
+    console.log(`📦 [Unified Purchases] Found ${bundlePurchasesQuery.size} bundle purchases`)
 
-    // Combine and deduplicate purchases
-    const allPurchases = new Map()
-
-    // Add purchases found by userId
-    bundlePurchasesQuery.docs.forEach((doc) => {
+    bundlePurchasesQuery.forEach((doc) => {
       const data = doc.data()
-      allPurchases.set(doc.id, {
+      purchases.push({
         id: doc.id,
+        type: "bundle",
         ...data,
-        source: "userId_match",
+        purchaseId: doc.id,
+        sessionId: data.sessionId || doc.id,
       })
     })
 
-    // Add purchases found by email (if not already added)
-    emailPurchasesQuery.docs.forEach((doc) => {
-      if (!allPurchases.has(doc.id)) {
-        const data = doc.data()
-        allPurchases.set(doc.id, {
-          id: doc.id,
-          ...data,
-          source: "email_match",
-        })
+    // 2. Check main purchases collection
+    const mainPurchasesQuery = await db
+      .collection("purchases")
+      .where("buyerUid", "==", userId)
+      .orderBy("purchasedAt", "desc")
+      .get()
 
-        // Update this purchase with the correct userId for future queries
-        if (data.userId === "anonymous") {
-          console.log("🔄 [Unified Purchases] Updating anonymous purchase with user ID:", doc.id)
-          doc.ref
-            .update({
-              userId: userId,
-              buyerUid: userId,
-              isAuthenticated: true,
-              updatedAt: new Date(),
-            })
-            .catch((error) => {
-              console.error("❌ [Unified Purchases] Failed to update purchase:", error)
-            })
-        }
+    console.log(`📦 [Unified Purchases] Found ${mainPurchasesQuery.size} main purchases`)
+
+    mainPurchasesQuery.forEach((doc) => {
+      const data = doc.data()
+      // Avoid duplicates by checking if we already have this session
+      const existingPurchase = purchases.find((p) => p.sessionId === data.sessionId)
+      if (!existingPurchase) {
+        purchases.push({
+          id: doc.id,
+          type: data.type || "product_box",
+          ...data,
+          purchaseId: doc.id,
+        })
       }
     })
 
-    const purchases = Array.from(allPurchases.values())
+    // 3. Check user's personal purchases subcollection
+    const userPurchasesQuery = await db
+      .collection("users")
+      .doc(userId)
+      .collection("purchases")
+      .orderBy("purchasedAt", "desc")
+      .get()
 
-    console.log(`✅ [Unified Purchases] Found ${purchases.length} purchases for user ${userId}`)
+    console.log(`📦 [Unified Purchases] Found ${userPurchasesQuery.size} user subcollection purchases`)
 
-    // Transform purchases for frontend consumption
-    const transformedPurchases = purchases.map((purchase) => ({
-      id: purchase.id,
-      bundleId: purchase.bundleId || purchase.productBoxId,
-      bundleTitle: purchase.bundleTitle || purchase.productTitle || "Untitled Bundle",
-      bundleDescription: purchase.bundleDescription || purchase.productDescription || "",
-      thumbnailUrl: purchase.thumbnailUrl || purchase.customPreviewThumbnail || "",
-      contents: purchase.contents || purchase.items || [],
-      contentCount: purchase.contentCount || purchase.totalItems || 0,
-      amount: purchase.amount || 0,
-      currency: purchase.currency || "usd",
-      purchasedAt: purchase.purchasedAt || purchase.createdAt,
-      status: purchase.status || "completed",
-      sessionId: purchase.sessionId || purchase.id,
-      accessUrl: `/product-box/${purchase.bundleId || purchase.productBoxId}/content`,
-      source: purchase.source,
-    }))
+    userPurchasesQuery.forEach((doc) => {
+      const data = doc.data()
+      // Avoid duplicates
+      const existingPurchase = purchases.find((p) => p.sessionId === data.sessionId)
+      if (!existingPurchase) {
+        purchases.push({
+          id: doc.id,
+          type: data.type || "product_box",
+          ...data,
+          purchaseId: doc.id,
+        })
+      }
+    })
+
+    // Remove duplicates and sort by purchase date
+    const uniquePurchases = purchases.reduce((acc, current) => {
+      const existing = acc.find((item) => item.sessionId === current.sessionId)
+      if (!existing) {
+        acc.push(current)
+      }
+      return acc
+    }, [] as any[])
+
+    // Sort by purchase date (most recent first)
+    uniquePurchases.sort((a, b) => {
+      const dateA = a.purchasedAt?.toDate?.() || a.purchasedAt || new Date(0)
+      const dateB = b.purchasedAt?.toDate?.() || b.purchasedAt || new Date(0)
+      return dateB.getTime() - dateA.getTime()
+    })
+
+    console.log(`✅ [Unified Purchases] Returning ${uniquePurchases.length} unique purchases for user ${userId}`)
+    console.log(
+      `📝 [Unified Purchases] Purchase titles:`,
+      uniquePurchases.map((p) => p.bundleTitle || p.productTitle),
+    )
 
     return NextResponse.json({
       success: true,
-      purchases: transformedPurchases,
-      totalPurchases: transformedPurchases.length,
+      purchases: uniquePurchases,
+      totalPurchases: uniquePurchases.length,
+      userId: userId,
     })
   } catch (error) {
     console.error("❌ [Unified Purchases] Error:", error)
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
+    return NextResponse.json(
+      {
+        error: "Failed to fetch purchases",
+      },
+      { status: 500 },
+    )
+  }
+}
+
+// POST endpoint to check access for a specific product/bundle
+export async function POST(request: NextRequest) {
+  try {
+    console.log("🔍 [Unified Purchases] Checking access for specific item...")
+
+    // Verify the user is authenticated
+    const decodedToken = await verifyIdTokenFromRequest(request)
+    if (!decodedToken) {
+      console.error("❌ [Unified Purchases] Authentication required")
+      return NextResponse.json({ hasAccess: false, error: "Authentication required" }, { status: 401 })
+    }
+
+    const { productBoxId, bundleId } = await request.json()
+    const itemId = productBoxId || bundleId
+    const userId = decodedToken.uid
+
+    if (!itemId) {
+      return NextResponse.json({ hasAccess: false, error: "Product or bundle ID required" }, { status: 400 })
+    }
+
+    console.log("🔍 [Unified Purchases] Checking access:", {
+      userId,
+      itemId,
+      type: productBoxId ? "product_box" : "bundle",
+    })
+
+    // Check bundlePurchases collection
+    let hasAccess = false
+    let purchaseDetails = null
+
+    if (bundleId) {
+      const bundlePurchaseQuery = await db
+        .collection("bundlePurchases")
+        .where("buyerUid", "==", userId)
+        .where("bundleId", "==", bundleId)
+        .limit(1)
+        .get()
+
+      if (!bundlePurchaseQuery.empty) {
+        hasAccess = true
+        purchaseDetails = bundlePurchaseQuery.docs[0].data()
+        console.log("✅ [Unified Purchases] Bundle access confirmed via bundlePurchases")
+      }
+    }
+
+    if (productBoxId && !hasAccess) {
+      const productPurchaseQuery = await db
+        .collection("bundlePurchases")
+        .where("buyerUid", "==", userId)
+        .where("productBoxId", "==", productBoxId)
+        .limit(1)
+        .get()
+
+      if (!productPurchaseQuery.empty) {
+        hasAccess = true
+        purchaseDetails = productPurchaseQuery.docs[0].data()
+        console.log("✅ [Unified Purchases] Product box access confirmed via bundlePurchases")
+      }
+    }
+
+    // Check main purchases collection as fallback
+    if (!hasAccess) {
+      const field = bundleId ? "bundleId" : "productBoxId"
+      const mainPurchaseQuery = await db
+        .collection("purchases")
+        .where("buyerUid", "==", userId)
+        .where(field, "==", itemId)
+        .limit(1)
+        .get()
+
+      if (!mainPurchaseQuery.empty) {
+        hasAccess = true
+        purchaseDetails = mainPurchaseQuery.docs[0].data()
+        console.log("✅ [Unified Purchases] Access confirmed via main purchases collection")
+      }
+    }
+
+    console.log(`${hasAccess ? "✅" : "❌"} [Unified Purchases] Access result:`, { userId, itemId, hasAccess })
+
+    return NextResponse.json({
+      hasAccess,
+      purchaseDetails,
+      userId,
+      itemId,
+      itemType: productBoxId ? "product_box" : "bundle",
+    })
+  } catch (error) {
+    console.error("❌ [Unified Purchases] Error checking access:", error)
+    return NextResponse.json(
+      {
+        hasAccess: false,
+        error: "Failed to check access",
+      },
+      { status: 500 },
+    )
   }
 }
