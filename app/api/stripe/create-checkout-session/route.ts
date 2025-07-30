@@ -127,6 +127,7 @@ export async function POST(request: NextRequest) {
     const protocol = request.headers.get("x-forwarded-proto") || "https"
     const currentDomain = `${protocol}://${host}`
 
+    // After token verification, update the sessionMetadata to include the actual user ID
     const sessionMetadata: any = {
       bundleId: bundleId,
       creatorId: bundle.creatorId || "",
@@ -134,8 +135,11 @@ export async function POST(request: NextRequest) {
       timestamp: new Date().toISOString(),
     }
 
+    // CRITICAL: Add the verified Firebase UID to metadata
     if (userId) {
       sessionMetadata.userId = userId
+      sessionMetadata.buyerUid = userId
+      sessionMetadata.userEmail = userEmail || ""
     }
 
     const sessionParams: Stripe.Checkout.SessionCreateParams = {
