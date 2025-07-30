@@ -31,7 +31,7 @@ interface PurchaseDetails {
 }
 
 export default function PurchaseSuccessPage() {
-  const { user } = useAuth()
+  const { user, loading, authChecked } = useAuth()
   const { toast } = useToast()
   const [verificationStatus, setVerificationStatus] = useState<"loading" | "success" | "error">("loading")
   const [errorMessage, setErrorMessage] = useState("")
@@ -48,6 +48,7 @@ export default function PurchaseSuccessPage() {
       console.log("   Current domain:", window.location.origin)
       console.log("   Full URL:", window.location.href)
       console.log("   User authenticated:", !!user)
+      console.log("   User ID:", user?.uid || "none")
       console.log("   Is manual retry:", isManualRetry)
       console.log("   Retry count:", retryCount)
 
@@ -57,11 +58,14 @@ export default function PurchaseSuccessPage() {
       let idToken = null
       if (user) {
         try {
-          idToken = await user.getIdToken(true)
-          console.log("🔐 [Purchase Success] Auth token obtained")
+          console.log("🔐 [Purchase Success] Getting fresh auth token...")
+          idToken = await user.getIdToken(true) // Force refresh
+          console.log("✅ [Purchase Success] Auth token obtained")
         } catch (error) {
           console.error("❌ [Purchase Success] Failed to get auth token:", error)
         }
+      } else {
+        console.log("⚠️ [Purchase Success] No authenticated user, proceeding anonymously")
       }
 
       const response = await fetch("/api/purchase/verify-session", {
@@ -86,7 +90,9 @@ export default function PurchaseSuccessPage() {
         setRetryCount(0) // Reset retry count on success
         toast({
           title: data.alreadyProcessed ? "Purchase Already Processed" : "Purchase Verified!",
-          description: "Your access has been granted successfully.",
+          description: user
+            ? "Your access has been granted to your account."
+            : "Your purchase has been verified. Sign in to access from your account.",
         })
       } else {
         setVerificationStatus("error")
@@ -140,11 +146,14 @@ export default function PurchaseSuccessPage() {
     return `/product-box/${bundleId}/content`
   }
 
-  // Extract URL parameters and start initial verification
+  // Extract URL parameters and start verification when auth is ready
   useEffect(() => {
     console.log("🔗 [Purchase Success] Page loaded, extracting URL parameters...")
     console.log("   Full URL:", window.location.href)
     console.log("   Search params:", window.location.search)
+    console.log("   Auth loading:", loading)
+    console.log("   Auth checked:", authChecked)
+    console.log("   User:", user ? "authenticated" : "not authenticated")
 
     // Get session ID from URL - this is the only parameter we need
     const urlParams = new URLSearchParams(window.location.search)
@@ -161,12 +170,20 @@ export default function PurchaseSuccessPage() {
 
     setSessionId(sessionIdFromUrl)
 
-    // Start initial verification (only once)
+    // Wait for auth to finish loading before starting verification
+    if (loading || !authChecked) {
+      console.log("⏳ [Purchase Success] Waiting for auth to finish loading...")
+      return
+    }
+
+    // Start verification only once auth is ready and we haven't attempted yet
     if (!hasAttemptedVerification) {
+      console.log("🚀 [Purchase Success] Auth is ready, starting verification...")
+      console.log("   User status:", user ? `authenticated (${user.uid})` : "not authenticated")
       setHasAttemptedVerification(true)
       verifyPurchase(sessionIdFromUrl, false) // Not a manual retry
     }
-  }, [hasAttemptedVerification])
+  }, [loading, authChecked, user, hasAttemptedVerification]) // Add auth dependencies
 
   if (!sessionId) {
     return (
@@ -186,6 +203,25 @@ export default function PurchaseSuccessPage() {
             >
               Return to Dashboard
             </Button>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  // Show loading while auth is initializing
+  if (loading || !authChecked) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-black via-gray-900 to-black flex items-center justify-center p-4">
+        <Card className="w-full max-w-md bg-white/5 border-white/10 backdrop-blur-sm">
+          <CardContent className="p-8 text-center space-y-6">
+            <div className="flex items-center justify-center">
+              <Loader2 className="h-12 w-12 animate-spin text-white" />
+            </div>
+            <div className="space-y-2">
+              <h1 className="text-xl font-light text-white">Initializing</h1>
+              <p className="text-sm text-gray-400 font-light">Preparing to verify your purchase...</p>
+            </div>
           </CardContent>
         </Card>
       </div>
