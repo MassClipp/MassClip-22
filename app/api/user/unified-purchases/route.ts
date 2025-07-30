@@ -1,26 +1,22 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { auth, db } from "@/lib/firebase-admin"
-import { collection, query, getDocs, orderBy } from "firebase/firestore"
 
 export async function GET(request: NextRequest) {
   try {
     const authHeader = request.headers.get("authorization")
-    const { searchParams } = new URL(request.url)
-    const userIdFromParams = searchParams.get("userId")
-
-    if (!authHeader?.startsWith("Bearer ") && !userIdFromParams) {
-      return NextResponse.json({ error: "Authentication required or User ID is missing" }, { status: 401 })
+    if (!authHeader?.startsWith("Bearer ")) {
+      return NextResponse.json({ error: "Authentication required" }, { status: 401 })
     }
 
-    const idToken = authHeader?.split("Bearer ")[1]
-    const decodedToken = idToken ? await auth.verifyIdToken(idToken) : null
-    const userId = idToken ? decodedToken.uid : userIdFromParams
+    const idToken = authHeader.split("Bearer ")[1]
+    const decodedToken = await auth.verifyIdToken(idToken)
+    const userId = decodedToken.uid
 
     console.log(`🔍 [Unified Purchases API] Fetching purchases for user: ${userId}`)
 
     const allPurchases: any[] = []
 
-    // Helper function to get bundle details including thumbnail
+    // Helper function to get bundle details including thumbnail (fallback only)
     const getBundleDetails = async (bundleId: string) => {
       try {
         const bundleDoc = await db.collection("bundles").doc(bundleId).get()
@@ -39,7 +35,7 @@ export async function GET(request: NextRequest) {
       return null
     }
 
-    // Helper function to get creator details
+    // Helper function to get creator details (fallback only)
     const getCreatorDetails = async (creatorId: string) => {
       try {
         const creatorDoc = await db.collection("users").doc(creatorId).get()
@@ -56,7 +52,7 @@ export async function GET(request: NextRequest) {
       return { username: "Unknown" }
     }
 
-    // 1. Check bundlePurchases collection (primary source) - ENHANCED
+    // 1. Check bundlePurchases collection (primary source) - ENHANCED with stored data
     try {
       const bundlePurchasesQuery = db
         .collection("bundlePurchases")
@@ -70,17 +66,28 @@ export async function GET(request: NextRequest) {
         const data = doc.data()
         const bundleId = data.bundleId || data.productBoxId
 
-        // Use stored bundle data directly (no need to re-fetch)
+        // Use stored bundle data directly (no need to re-fetch if we have complete data)
+        const hasCompleteData = data.productBoxTitle && data.creatorName && data.items
+
+        let bundleDetails = null
+        let creatorDetails = null
+
+        if (!hasCompleteData) {
+          // Fallback: fetch missing data
+          bundleDetails = await getBundleDetails(bundleId)
+          creatorDetails = await getCreatorDetails(data.creatorId)
+        }
+
         allPurchases.push({
           id: doc.id,
           productBoxId: bundleId,
-          bundleTitle: data.bundleTitle || data.productBoxTitle || "Untitled Bundle",
-          productBoxTitle: data.productBoxTitle || data.bundleTitle || "Untitled Bundle",
-          productBoxDescription: data.productBoxDescription || data.description || "Premium content bundle",
-          thumbnailUrl: data.thumbnailUrl || data.productBoxThumbnail,
-          productBoxThumbnail: data.productBoxThumbnail || data.thumbnailUrl,
-          creatorUsername: data.creatorUsername || "unknown",
-          creatorName: data.creatorName || data.creatorUsername || "Unknown Creator",
+          bundleTitle: data.bundleTitle || data.productBoxTitle || bundleDetails?.title || "Untitled Bundle",
+          productBoxTitle: data.productBoxTitle || data.bundleTitle || bundleDetails?.title || "Untitled Bundle",
+          productBoxDescription: data.productBoxDescription || bundleDetails?.description || "Premium content bundle",
+          thumbnailUrl: data.thumbnailUrl || data.productBoxThumbnail || bundleDetails?.thumbnail,
+          productBoxThumbnail: data.productBoxThumbnail || data.thumbnailUrl || bundleDetails?.thumbnail,
+          creatorUsername: data.creatorUsername || creatorDetails?.username || "unknown",
+          creatorName: data.creatorName || creatorDetails?.displayName || creatorDetails?.username || "Unknown Creator",
           creatorId: data.creatorId,
           purchaseDate: data.purchasedAt || data.createdAt || data.completedAt,
           purchasedAt: data.purchasedAt || data.createdAt || data.completedAt,
@@ -88,10 +95,10 @@ export async function GET(request: NextRequest) {
           currency: data.currency || "usd",
           status: data.status,
           source: "bundlePurchases",
-          contents: data.items || [],
-          items: data.items || [],
-          contentCount: data.totalItems || 1,
-          totalItems: data.totalItems || 1,
+          contents: data.items || data.contents || [],
+          items: data.items || data.contents || [],
+          contentCount: data.totalItems || data.contentCount || 1,
+          totalItems: data.totalItems || data.contentCount || 1,
           totalSize: data.totalSize || 0,
         })
       }
@@ -185,7 +192,9 @@ export async function GET(request: NextRequest) {
             currency: data.currency || "usd",
             status: data.status,
             source: "unifiedPurchases",
+            contents: data.items || [],
             items: data.items || [],
+            contentCount: data.totalItems || 0,
             totalItems: data.totalItems || 0,
             totalSize: data.totalSize || 0,
           })
@@ -240,23 +249,17 @@ export async function GET(request: NextRequest) {
       console.warn(`⚠️ [Unified Purchases] Error checking purchases:`, error)
     }
 
-    // Query user's purchases subcollection
-    const userPurchasesRef = collection(db, "users", userId, "purchases")
-    const userPurchasesQuery = query(userPurchasesRef, orderBy("purchaseDate", "desc"))
-
-    const userPurchasesSnap = await getDocs(userPurchasesQuery)
-    userPurchasesSnap.forEach((doc) => {
-      const data = doc.data()
-      allPurchases.push({
-        id: doc.id,
-        ...data,
-      })
+    // Sort by purchase date (newest first)
+    allPurchases.sort((a, b) => {
+      const dateA = new Date(a.purchasedAt || 0).getTime()
+      const dateB = new Date(b.purchasedAt || 0).getTime()
+      return dateB - dateA
     })
 
-    console.log(`📦 Found ${allPurchases.length} purchases for user`)
+    console.log(`✅ [Unified Purchases API] Total unique purchases found: ${allPurchases.length}`)
+    console.log(`📦 [Unified Purchases API] Sample purchase data:`, allPurchases[0] || "No purchases")
 
     return NextResponse.json({
-      success: true,
       purchases: allPurchases,
       totalCount: allPurchases.length,
       userId,
