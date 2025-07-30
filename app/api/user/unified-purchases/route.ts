@@ -1,16 +1,20 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { auth, db } from "@/lib/firebase-admin"
+import { collection, query, getDocs, orderBy } from "firebase/firestore"
 
 export async function GET(request: NextRequest) {
   try {
     const authHeader = request.headers.get("authorization")
-    if (!authHeader?.startsWith("Bearer ")) {
-      return NextResponse.json({ error: "Authentication required" }, { status: 401 })
+    const { searchParams } = new URL(request.url)
+    const userIdFromParams = searchParams.get("userId")
+
+    if (!authHeader?.startsWith("Bearer ") && !userIdFromParams) {
+      return NextResponse.json({ error: "Authentication required or User ID is missing" }, { status: 401 })
     }
 
-    const idToken = authHeader.split("Bearer ")[1]
-    const decodedToken = await auth.verifyIdToken(idToken)
-    const userId = decodedToken.uid
+    const idToken = authHeader?.split("Bearer ")[1]
+    const decodedToken = idToken ? await auth.verifyIdToken(idToken) : null
+    const userId = idToken ? decodedToken.uid : userIdFromParams
 
     console.log(`🔍 [Unified Purchases API] Fetching purchases for user: ${userId}`)
 
@@ -52,7 +56,7 @@ export async function GET(request: NextRequest) {
       return { username: "Unknown" }
     }
 
-    // 1. Check bundlePurchases collection (primary source)
+    // 1. Check bundlePurchases collection (primary source) - ENHANCED
     try {
       const bundlePurchasesQuery = db
         .collection("bundlePurchases")
@@ -66,31 +70,28 @@ export async function GET(request: NextRequest) {
         const data = doc.data()
         const bundleId = data.bundleId || data.productBoxId
 
-        // Get bundle details including thumbnail
-        const bundleDetails = await getBundleDetails(bundleId)
-        const creatorDetails = await getCreatorDetails(data.creatorId)
-
+        // Use stored bundle data directly (no need to re-fetch)
         allPurchases.push({
           id: doc.id,
           productBoxId: bundleId,
-          bundleTitle: bundleDetails?.title || data.bundleTitle || "Untitled Bundle",
-          productBoxTitle: bundleDetails?.title || data.bundleTitle || "Untitled Bundle",
-          productBoxDescription: bundleDetails?.description || data.description || "Premium content bundle",
-          thumbnailUrl: bundleDetails?.thumbnail,
-          productBoxThumbnail: bundleDetails?.thumbnail,
-          creatorUsername: creatorDetails.username,
-          creatorName: creatorDetails.displayName || creatorDetails.username,
+          bundleTitle: data.bundleTitle || data.productBoxTitle || "Untitled Bundle",
+          productBoxTitle: data.productBoxTitle || data.bundleTitle || "Untitled Bundle",
+          productBoxDescription: data.productBoxDescription || data.description || "Premium content bundle",
+          thumbnailUrl: data.thumbnailUrl || data.productBoxThumbnail,
+          productBoxThumbnail: data.productBoxThumbnail || data.thumbnailUrl,
+          creatorUsername: data.creatorUsername || "unknown",
+          creatorName: data.creatorName || data.creatorUsername || "Unknown Creator",
           creatorId: data.creatorId,
-          purchaseDate: data.createdAt || data.completedAt,
-          purchasedAt: data.createdAt || data.completedAt,
+          purchaseDate: data.purchasedAt || data.createdAt || data.completedAt,
+          purchasedAt: data.purchasedAt || data.createdAt || data.completedAt,
           amount: data.amount || 0,
           currency: data.currency || "usd",
           status: data.status,
           source: "bundlePurchases",
-          contents: data.contents || [],
-          items: data.contents || [],
-          contentCount: data.contentCount || 0,
-          totalItems: data.contentCount || 0,
+          contents: data.items || [],
+          items: data.items || [],
+          contentCount: data.totalItems || 1,
+          totalItems: data.totalItems || 1,
           totalSize: data.totalSize || 0,
         })
       }
@@ -184,9 +185,7 @@ export async function GET(request: NextRequest) {
             currency: data.currency || "usd",
             status: data.status,
             source: "unifiedPurchases",
-            contents: data.items || [],
             items: data.items || [],
-            contentCount: data.totalItems || 0,
             totalItems: data.totalItems || 0,
             totalSize: data.totalSize || 0,
           })
@@ -241,16 +240,23 @@ export async function GET(request: NextRequest) {
       console.warn(`⚠️ [Unified Purchases] Error checking purchases:`, error)
     }
 
-    // Sort by purchase date (newest first)
-    allPurchases.sort((a, b) => {
-      const dateA = new Date(a.purchasedAt || 0).getTime()
-      const dateB = new Date(b.purchasedAt || 0).getTime()
-      return dateB - dateA
+    // Query user's purchases subcollection
+    const userPurchasesRef = collection(db, "users", userId, "purchases")
+    const userPurchasesQuery = query(userPurchasesRef, orderBy("purchaseDate", "desc"))
+
+    const userPurchasesSnap = await getDocs(userPurchasesQuery)
+    userPurchasesSnap.forEach((doc) => {
+      const data = doc.data()
+      allPurchases.push({
+        id: doc.id,
+        ...data,
+      })
     })
 
-    console.log(`✅ [Unified Purchases API] Total unique purchases found: ${allPurchases.length}`)
+    console.log(`📦 Found ${allPurchases.length} purchases for user`)
 
     return NextResponse.json({
+      success: true,
       purchases: allPurchases,
       totalCount: allPurchases.length,
       userId,
