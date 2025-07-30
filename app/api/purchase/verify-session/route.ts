@@ -2,6 +2,21 @@ import { type NextRequest, NextResponse } from "next/server"
 import { retrieveSessionSmart } from "@/lib/stripe"
 import { auth, db } from "@/lib/firebase-admin"
 
+// Helper function to determine content type from file type
+function getContentTypeFromFileType(fileType: string): "video" | "audio" | "image" | "document" {
+  if (!fileType) return "document"
+
+  const type = fileType.toLowerCase()
+  if (type.includes("video") || type.includes("mp4") || type.includes("mov") || type.includes("avi")) {
+    return "video"
+  } else if (type.includes("audio") || type.includes("mp3") || type.includes("wav")) {
+    return "audio"
+  } else if (type.includes("image") || type.includes("jpg") || type.includes("png") || type.includes("gif")) {
+    return "image"
+  }
+  return "document"
+}
+
 export async function POST(request: NextRequest) {
   try {
     console.log("🔍 [Verify Session] Starting session verification...")
@@ -243,6 +258,17 @@ export async function POST(request: NextRequest) {
     // Use authenticated user ID if available, otherwise use session metadata
     const finalUserId = userId || sessionUserId
 
+    // Get bundle details for response
+    const bundleDoc = await db.collection("bundles").doc(bundleId).get()
+    const bundleData = bundleDoc.exists ? bundleDoc.data() : {}
+
+    // Get creator details
+    const creatorDoc = await db
+      .collection("users")
+      .doc(sessionCreatorId || creatorId || "")
+      .get()
+    const creatorData = creatorDoc.exists ? creatorDoc.data() : {}
+
     // Check if purchase already exists (reuse existing purchase if found)
     let purchaseId
     let alreadyProcessed = false
@@ -349,73 +375,97 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // After creating the main purchase record, also create records in bundlePurchases and unifiedPurchases
-    if (!alreadyProcessed) {
-      // Create bundlePurchases record
-      try {
-        const bundlePurchaseData = {
-          sessionId,
-          bundleId,
-          buyerUid: finalUserId || "anonymous",
-          userId: finalUserId || "anonymous",
-          creatorId: sessionCreatorId || creatorId || null,
-          amount: session.amount_total || 0,
-          currency: session.currency || "usd",
-          status: "completed",
-          customerEmail: session.customer_details?.email || null,
-          createdAt: new Date(),
-          completedAt: new Date(),
-        }
+    // CRITICAL: Create purchase records in the collections that the purchases page queries
+    console.log("💾 [Verify Session] Creating purchase records for purchases page...")
 
-        await db.collection("bundlePurchases").doc(sessionId).set(bundlePurchaseData)
-        console.log("✅ [Verify Session] Bundle purchase record created")
-      } catch (error) {
-        console.error("❌ [Verify Session] Failed to create bundle purchase record:", error)
-      }
-
-      // Create unifiedPurchases record
-      try {
-        const unifiedPurchaseData = {
-          id: sessionId,
-          bundleId,
-          productBoxId: bundleId, // For compatibility
-          userId: finalUserId || "anonymous",
-          buyerUid: finalUserId || "anonymous",
-          creatorId: sessionCreatorId || creatorId || null,
-          amount: session.amount_total || 0,
-          currency: session.currency || "usd",
-          status: "completed",
-          purchaseDate: new Date(),
-          purchasedAt: new Date(),
-        }
-
-        await db.collection("unifiedPurchases").doc(sessionId).set(unifiedPurchaseData)
-        console.log("✅ [Verify Session] Unified purchase record created")
-      } catch (error) {
-        console.error("❌ [Verify Session] Failed to create unified purchase record:", error)
-      }
+    // Create the unified purchase record that the purchases page expects
+    const unifiedPurchaseData = {
+      id: sessionId,
+      productBoxId: bundleId, // For compatibility with existing code
+      bundleId: bundleId,
+      itemId: bundleId,
+      productBoxTitle: bundleData?.title || "Bundle",
+      productBoxDescription: bundleData?.description || "",
+      productBoxThumbnail: bundleData?.thumbnailUrl || "",
+      creatorId: sessionCreatorId || creatorId || null,
+      creatorName: creatorData?.displayName || creatorData?.name || "Unknown Creator",
+      creatorUsername: creatorData?.username || "",
+      amount: session.amount_total || 0,
+      currency: session.currency || "usd",
+      purchasedAt: new Date(),
+      status: "completed",
+      sessionId: sessionId,
+      // Bundle-specific data
+      bundleData: {
+        id: bundleId,
+        title: bundleData?.title || "Bundle",
+        description: bundleData?.description || "",
+        thumbnailUrl: bundleData?.thumbnailUrl || "",
+        fileSize: bundleData?.fileSize || 0,
+        duration: bundleData?.duration || 0,
+        fileType: bundleData?.fileType || "unknown",
+        downloadCount: bundleData?.downloadCount || 0,
+        creatorId: sessionCreatorId || creatorId || null,
+        createdAt: bundleData?.createdAt || new Date(),
+        downloadUrl: bundleData?.downloadUrl || bundleData?.fileUrl || "",
+      },
+      // Items array for compatibility
+      items: bundleData?.downloadUrl
+        ? [
+            {
+              id: bundleId,
+              title: bundleData?.title || "Bundle",
+              fileUrl: bundleData?.downloadUrl || bundleData?.fileUrl || "",
+              thumbnailUrl: bundleData?.thumbnailUrl || "",
+              fileSize: bundleData?.fileSize || 0,
+              duration: bundleData?.duration || 0,
+              contentType: getContentTypeFromFileType(bundleData?.fileType || ""),
+            },
+          ]
+        : [],
+      totalItems: 1,
+      totalSize: bundleData?.fileSize || 0,
+      // User identification
+      buyerUid: finalUserId || "anonymous",
+      userId: finalUserId || "anonymous",
+      userEmail: session.customer_details?.email || "",
+      userName: "User",
+      isAuthenticated: !!finalUserId,
     }
 
-    // Get bundle details for response
-    const bundleDoc = await db.collection("bundles").doc(bundleId).get()
-    const bundleData = bundleDoc.exists ? bundleDoc.data() : {}
+    try {
+      // 1. Create in bundlePurchases collection (for anonymous purchases API)
+      await db.collection("bundlePurchases").doc(sessionId).set(unifiedPurchaseData)
+      console.log("✅ [Verify Session] Created bundlePurchases record")
 
-    // Get creator details for response
-    const creatorDoc = await db
-      .collection("users")
-      .doc(sessionCreatorId || creatorId || "")
-      .get()
-    const creatorData = creatorDoc.exists ? creatorDoc.data() : {}
+      // 2. Create in unifiedPurchases collection (for unified purchases API)
+      await db.collection("unifiedPurchases").doc(sessionId).set(unifiedPurchaseData)
+      console.log("✅ [Verify Session] Created unifiedPurchases record")
 
-    console.log("📊 [Verify Session] Final response data:")
-    console.log("   Success:", true)
-    console.log("   Already Processed:", alreadyProcessed)
-    console.log("   Purchase ID:", purchaseId)
-    console.log("   Bundle ID:", bundleId)
-    console.log("   Bundle Title:", bundleData?.title)
-    console.log("   User ID:", finalUserId)
+      // 3. If user is authenticated, also create in user's purchases subcollection
+      if (finalUserId && finalUserId !== "anonymous") {
+        await db.collection("users").doc(finalUserId).collection("purchases").doc(sessionId).set(unifiedPurchaseData)
+        console.log("✅ [Verify Session] Created user purchases record")
+      }
 
-    const responseData = {
+      // 4. Create session-based purchase record for anonymous access
+      await db
+        .collection("sessionPurchases")
+        .doc(sessionId)
+        .set({
+          ...unifiedPurchaseData,
+          sessionId: sessionId,
+          createdAt: new Date(),
+          expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days
+        })
+      console.log("✅ [Verify Session] Created session-based purchase record")
+    } catch (error) {
+      console.error("❌ [Verify Session] Failed to create purchase records:", error)
+    }
+
+    console.log("✅ [Verify Session] Verification completed successfully")
+
+    return NextResponse.json({
       success: true,
       alreadyProcessed,
       session: {
@@ -443,7 +493,7 @@ export async function POST(request: NextRequest) {
         description: bundleData?.description || "",
         type: "bundle",
         thumbnailUrl: bundleData?.thumbnailUrl || "",
-        downloadUrl: bundleData?.downloadUrl || "",
+        downloadUrl: bundleData?.downloadUrl || bundleData?.fileUrl || "",
         fileSize: bundleData?.fileSize || 0,
         creator: {
           id: sessionCreatorId || creatorId,
@@ -451,13 +501,7 @@ export async function POST(request: NextRequest) {
           username: creatorData?.username || "",
         },
       },
-    }
-
-    console.log("📊 [Verify Session] Response data being sent:", JSON.stringify(responseData, null, 2))
-
-    console.log("✅ [Verify Session] Verification completed successfully")
-
-    return NextResponse.json(responseData)
+    })
   } catch (error: any) {
     console.error("❌ [Verify Session] Verification failed:", error)
     return NextResponse.json(

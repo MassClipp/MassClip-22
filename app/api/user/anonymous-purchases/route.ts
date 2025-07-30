@@ -3,80 +3,121 @@ import { db } from "@/lib/firebase-admin"
 
 export async function GET(request: NextRequest) {
   try {
-    // Get access token from cookies
-    const accessToken = request.cookies.get("purchase_access_token")?.value
+    console.log("🔍 [Anonymous Purchases] Fetching anonymous purchases...")
 
-    if (!accessToken) {
-      return NextResponse.json({ purchases: [] })
-    }
+    const url = new URL(request.url)
+    const sessionId = url.searchParams.get("sessionId")
+    const email = url.searchParams.get("email")
 
-    // Query anonymous purchases using the access token
-    const anonymousPurchasesRef = db.collection("anonymousPurchases")
-    const snapshot = await anonymousPurchasesRef.where("accessToken", "==", accessToken).get()
-
-    if (snapshot.empty) {
-      return NextResponse.json({ purchases: [] })
-    }
+    console.log("📝 [Anonymous Purchases] Query params:", { sessionId, email })
 
     const purchases = []
-    for (const doc of snapshot.docs) {
-      const purchaseData = doc.data()
 
-      // Get product box details
-      const productBoxRef = db.collection("productBoxes").doc(purchaseData.productBoxId)
-      const productBoxDoc = await productBoxRef.get()
+    // Strategy 1: Look up by session ID
+    if (sessionId) {
+      console.log("🔍 [Anonymous Purchases] Looking up by session ID:", sessionId)
 
-      if (!productBoxDoc.exists) {
-        continue
-      }
+      // Check multiple collections for the session
+      const collections = ["bundlePurchases", "unifiedPurchases", "sessionPurchases"]
 
-      const productBoxData = productBoxDoc.data()
+      for (const collectionName of collections) {
+        try {
+          const purchaseDoc = await db.collection(collectionName).doc(sessionId).get()
 
-      // Get creator details
-      const creatorRef = db.collection("users").doc(productBoxData.creatorId)
-      const creatorDoc = await creatorRef.get()
-      const creatorData = creatorDoc.exists ? creatorDoc.data() : {}
+          if (purchaseDoc.exists) {
+            const purchaseData = purchaseDoc.data()
+            console.log(`✅ [Anonymous Purchases] Found purchase in ${collectionName}:`, purchaseData?.productBoxTitle)
 
-      // Get content items
-      const contentRef = db.collection("productBoxContent")
-      const contentSnapshot = await contentRef.where("productBoxId", "==", purchaseData.productBoxId).get()
-
-      const items = contentSnapshot.docs.map((contentDoc) => {
-        const content = contentDoc.data()
-        return {
-          id: contentDoc.id,
-          title: content.title || content.fileName || "Untitled",
-          fileUrl: content.fileUrl || content.downloadUrl,
-          thumbnailUrl: content.thumbnailUrl,
-          fileSize: content.fileSize || 0,
-          duration: content.duration || 0,
-          contentType: content.contentType || "document",
+            purchases.push({
+              id: purchaseDoc.id,
+              ...purchaseData,
+              source: collectionName,
+              anonymousAccess: true,
+            })
+            break // Found it, no need to check other collections
+          }
+        } catch (error) {
+          console.warn(`⚠️ [Anonymous Purchases] Error checking ${collectionName}:`, error)
         }
-      })
-
-      purchases.push({
-        id: doc.id,
-        productBoxId: purchaseData.productBoxId,
-        productBoxTitle: productBoxData.title,
-        productBoxDescription: productBoxData.description,
-        productBoxThumbnail: productBoxData.thumbnailUrl,
-        creatorId: productBoxData.creatorId,
-        creatorName: creatorData.displayName || creatorData.name || "Unknown Creator",
-        creatorUsername: creatorData.username || "unknown",
-        amount: purchaseData.amount || 0,
-        currency: purchaseData.currency || "usd",
-        items,
-        totalItems: items.length,
-        totalSize: items.reduce((sum, item) => sum + (item.fileSize || 0), 0),
-        purchasedAt: purchaseData.purchasedAt || new Date().toISOString(),
-        status: "completed",
-        anonymousAccess: true,
-      })
+      }
     }
 
-    return NextResponse.json({ purchases })
+    // Strategy 2: Look up by email if no session ID or no results
+    if (purchases.length === 0 && email) {
+      console.log("🔍 [Anonymous Purchases] Looking up by email:", email)
+
+      try {
+        const emailQuery = await db
+          .collection("bundlePurchases")
+          .where("userEmail", "==", email)
+          .orderBy("purchasedAt", "desc")
+          .limit(10)
+          .get()
+
+        emailQuery.forEach((doc) => {
+          const purchaseData = doc.data()
+          console.log(`✅ [Anonymous Purchases] Found purchase by email:`, purchaseData?.productBoxTitle)
+
+          purchases.push({
+            id: doc.id,
+            ...purchaseData,
+            source: "bundlePurchases (email)",
+            anonymousAccess: true,
+          })
+        })
+      } catch (error) {
+        console.warn("⚠️ [Anonymous Purchases] Error querying by email:", error)
+      }
+    }
+
+    // Strategy 3: Check recent purchases from cookies/session
+    if (purchases.length === 0) {
+      console.log("🔍 [Anonymous Purchases] Checking recent session purchases...")
+
+      try {
+        // Get recent purchases from the last 7 days
+        const recentDate = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)
+
+        const recentQuery = await db
+          .collection("sessionPurchases")
+          .where("createdAt", ">=", recentDate)
+          .orderBy("createdAt", "desc")
+          .limit(5)
+          .get()
+
+        recentQuery.forEach((doc) => {
+          const purchaseData = doc.data()
+          console.log(`✅ [Anonymous Purchases] Found recent purchase:`, purchaseData?.productBoxTitle)
+
+          purchases.push({
+            id: doc.id,
+            ...purchaseData,
+            source: "sessionPurchases (recent)",
+            anonymousAccess: true,
+          })
+        })
+      } catch (error) {
+        console.warn("⚠️ [Anonymous Purchases] Error querying recent purchases:", error)
+      }
+    }
+
+    console.log(`📊 [Anonymous Purchases] Found ${purchases.length} purchases`)
+
+    return NextResponse.json({
+      success: true,
+      purchases: purchases,
+      count: purchases.length,
+      queryMethod: sessionId ? "sessionId" : email ? "email" : "recent",
+    })
   } catch (error) {
-    console.error("Error fetching anonymous purchases:", error)
-    return NextResponse.json({ purchases: [] })
+    console.error("❌ [Anonymous Purchases] Error:", error)
+    return NextResponse.json(
+      {
+        success: false,
+        error: "Failed to fetch anonymous purchases",
+        details: error instanceof Error ? error.message : "Unknown error",
+      },
+      { status: 500 },
+    )
   }
 }
