@@ -1,225 +1,203 @@
 "use client"
 
-import { useEffect, useState } from "react"
-import { useAuth } from "@/contexts/auth-context"
+import { useEffect, useState, Suspense } from "react"
+import { useSearchParams, useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
-import { CheckCircle, XCircle, Loader2, RefreshCw, ExternalLink, AlertTriangle } from "lucide-react"
-import { useToast } from "@/hooks/use-toast"
+import { CheckCircle, ExternalLink, AlertCircle } from "lucide-react"
+import { useAuth } from "@/contexts/auth-context"
 
-interface PurchaseDetails {
-  session: {
+interface VerificationResponse {
+  success: boolean
+  alreadyProcessed?: boolean
+  session?: {
     id: string
-    amount: number
+    payment_status: string
+    amount_total: number
     currency: string
-    status: string
-    customerEmail?: string
   }
-  purchase: {
+  purchase?: any
+  item?: {
     id: string
-    bundleId?: string
-    itemId?: string
-    userId: string
-    amount: number
-  }
-  item: {
-    id?: string
     title: string
     description?: string
+    creator?: {
+      username: string
+      displayName?: string
+    }
   }
-  alreadyProcessed?: boolean
+  error?: string
 }
 
-export default function PurchaseSuccessPage() {
-  const { user, loading } = useAuth()
-  const { toast } = useToast()
+function PurchaseSuccessContent() {
+  const searchParams = useSearchParams()
+  const router = useRouter()
+  const { user, loading: authLoading } = useAuth()
   const [verificationStatus, setVerificationStatus] = useState<"loading" | "success" | "error">("loading")
-  const [errorMessage, setErrorMessage] = useState("")
-  const [sessionId, setSessionId] = useState<string | null>(null)
-  const [purchaseDetails, setPurchaseDetails] = useState<PurchaseDetails | null>(null)
-  const [isRetrying, setIsRetrying] = useState(false)
-  const [retryCount, setRetryCount] = useState(0)
-  const [hasAttemptedVerification, setHasAttemptedVerification] = useState(false)
+  const [verificationData, setVerificationData] = useState<VerificationResponse | null>(null)
+  const [isManualRetry, setIsManualRetry] = useState(false)
 
-  const verifyPurchase = async (sessionId: string, isManualRetry = false) => {
+  const sessionId = searchParams.get("session_id")
+
+  useEffect(() => {
+    console.log("🔍 [Purchase Success] Page loaded, extracting URL parameters...")
+
+    const urlParams = new URLSearchParams(window.location.search)
+    const sessionIdFromUrl = urlParams.get("session_id")
+
+    console.log("📋 [Purchase Success] Search params:", {
+      sessionId: sessionIdFromUrl,
+      fullUrl: window.location.href,
+      currentDomain: window.location.hostname,
+    })
+
+    if (sessionIdFromUrl) {
+      console.log("✅ [Purchase Success] Session ID from URL:", sessionIdFromUrl)
+    } else {
+      console.error("❌ [Purchase Success] No session_id found in URL")
+    }
+  }, [])
+
+  useEffect(() => {
+    if (authLoading) {
+      console.log("⏳ [Purchase Success] Auth loading...")
+      return
+    }
+
+    if (!user) {
+      console.log("❌ [Purchase Success] User not authenticated")
+      setVerificationStatus("error")
+      setVerificationData({ success: false, error: "Authentication required" })
+      return
+    }
+
+    console.log("✅ [Purchase Success] User authenticated:", user.uid)
+
+    if (!sessionId) {
+      console.error("❌ [Purchase Success] No session ID found")
+      setVerificationStatus("error")
+      setVerificationData({ success: false, error: "No session ID provided" })
+      return
+    }
+
+    verifyPurchase()
+  }, [user, authLoading, sessionId, isManualRetry])
+
+  const verifyPurchase = async () => {
+    if (!user || !sessionId) return
+
     try {
-      console.log("🔍 [Purchase Success] Starting verification...")
-      console.log("   Session ID:", sessionId)
-      console.log("   Current domain:", window.location.origin)
-      console.log("   Full URL:", window.location.href)
-      console.log("   User authenticated:", !!user)
-      console.log("   User ID:", user?.uid || "none")
-      console.log("   Is manual retry:", isManualRetry)
-      console.log("   Retry count:", retryCount)
-
+      console.log("🔄 [Purchase Success] Starting verification...")
       setVerificationStatus("loading")
 
-      // Get auth token if user is available
-      let idToken = null
-      if (user) {
-        try {
-          console.log("🔐 [Purchase Success] Getting fresh auth token...")
-          idToken = await user.getIdToken(true) // Force refresh
-          console.log("✅ [Purchase Success] Auth token obtained")
-        } catch (error) {
-          console.error("❌ [Purchase Success] Failed to get auth token:", error)
-        }
-      } else {
-        console.log("⚠️ [Purchase Success] No authenticated user, proceeding anonymously")
-      }
+      // Get fresh auth token
+      const token = await user.getIdToken(true)
+      console.log("🔑 [Purchase Success] Auth token obtained")
 
       const response = await fetch("/api/purchase/verify-session", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({
-          sessionId,
-          idToken,
-        }),
+        body: JSON.stringify({ sessionId }),
       })
 
-      console.log("📊 [Purchase Success] Verification response status:", response.status)
+      console.log("📡 [Purchase Success] Verification response status:", response.status)
 
       const data = await response.json()
-      console.log("📊 [Purchase Success] Verification response:", data)
+      console.log("📋 [Purchase Success] Verification response:", data)
 
       if (data.success) {
         setVerificationStatus("success")
-        setPurchaseDetails(data)
-        setRetryCount(0) // Reset retry count on success
-        toast({
-          title: data.alreadyProcessed ? "Purchase Already Processed" : "Purchase Verified!",
-          description: user
-            ? "Your access has been granted to your account."
-            : "Your purchase has been verified. Sign in to access from your account.",
-        })
+        setVerificationData(data)
+        console.log("✅ [Purchase Success] Verification successful")
       } else {
         setVerificationStatus("error")
-        setErrorMessage(data.error || data.message || "Verification failed")
-
-        // Increment retry count only for manual retries
-        if (isManualRetry) {
-          setRetryCount((prev) => prev + 1)
-        }
-
-        console.error("❌ [Purchase Success] Verification failed:", data)
+        setVerificationData(data)
+        console.error("❌ [Purchase Success] Verification failed:", data.error)
       }
     } catch (error) {
       console.error("❌ [Purchase Success] Verification error:", error)
       setVerificationStatus("error")
-      setErrorMessage("Network error: Failed to verify purchase. Please check your connection and try again.")
-
-      // Increment retry count only for manual retries
-      if (isManualRetry) {
-        setRetryCount((prev) => prev + 1)
-      }
+      setVerificationData({ success: false, error: "Network error occurred" })
     }
   }
 
-  const handleRetry = async () => {
-    if (!sessionId || retryCount >= 5) return
-
-    setIsRetrying(true)
-    await verifyPurchase(sessionId, true) // Mark as manual retry
-    setIsRetrying(false)
+  const handleRetry = () => {
+    console.log("🔄 [Purchase Success] Manual retry triggered")
+    setIsManualRetry(!isManualRetry)
   }
 
-  const getContentUrl = () => {
-    if (!purchaseDetails) return "/dashboard"
-
-    // Get bundle ID from purchase details (from session metadata)
-    const bundleId = purchaseDetails.purchase.bundleId || purchaseDetails.purchase.itemId || purchaseDetails.item.id
-
-    console.log("🔗 [Purchase Success] Determining content URL...")
-    console.log("   Bundle ID from purchase.bundleId:", purchaseDetails.purchase.bundleId)
-    console.log("   Item ID from purchase.itemId:", purchaseDetails.purchase.itemId)
-    console.log("   Item ID from item.id:", purchaseDetails.item.id)
-    console.log("   Final selected ID:", bundleId)
-
-    if (!bundleId || bundleId === "null") {
-      console.error("❌ [Purchase Success] No valid bundle ID found")
-      return "/dashboard/purchases"
+  const handleAccessBundle = () => {
+    if (verificationData?.item?.id) {
+      router.push(`/product-box/${verificationData.item.id}/content`)
+    } else {
+      router.push("/dashboard/purchases")
     }
-
-    // For bundles, redirect to the bundle content page
-    return `/product-box/${bundleId}/content`
   }
 
-  // Extract URL parameters and start verification when auth is ready
-  useEffect(() => {
-    console.log("🔗 [Purchase Success] Page loaded, extracting URL parameters...")
-    console.log("   Full URL:", window.location.href)
-    console.log("   Search params:", window.location.search)
-    console.log("   Auth loading:", loading)
-    console.log("   User:", user ? "authenticated" : "not authenticated")
+  const handleViewPurchases = () => {
+    router.push("/dashboard/purchases")
+  }
 
-    // Get session ID from URL - this is the only parameter we need
-    const urlParams = new URLSearchParams(window.location.search)
-    const sessionIdFromUrl = urlParams.get("session_id")
-
-    console.log("   Session ID from URL:", sessionIdFromUrl)
-
-    if (!sessionIdFromUrl) {
-      console.error("❌ [Purchase Success] No session ID found in URL")
-      setVerificationStatus("error")
-      setErrorMessage("No session ID found in URL. This link may be invalid or expired.")
-      return
-    }
-
-    setSessionId(sessionIdFromUrl)
-
-    // Wait for auth to finish loading before starting verification
-    if (loading) {
-      console.log("⏳ [Purchase Success] Waiting for auth to finish loading...")
-      return
-    }
-
-    // Start verification only once auth is ready and we haven't attempted yet
-    if (!hasAttemptedVerification) {
-      console.log("🚀 [Purchase Success] Auth is ready, starting verification...")
-      console.log("   User status:", user ? `authenticated (${user.uid})` : "not authenticated")
-      setHasAttemptedVerification(true)
-      verifyPurchase(sessionIdFromUrl, false) // Not a manual retry
-    }
-  }, [loading, user, hasAttemptedVerification]) // Remove authChecked since it doesn't exist
-
-  if (!sessionId) {
+  if (authLoading) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-black via-gray-900 to-black flex items-center justify-center p-4">
-        <Card className="w-full max-w-md bg-white/5 border-white/10 backdrop-blur-sm">
-          <CardContent className="p-8 text-center space-y-6">
-            <div className="flex items-center justify-center">
-              <XCircle className="h-12 w-12 text-red-400" />
-            </div>
-            <div className="space-y-2">
-              <h1 className="text-xl font-light text-white">Invalid Link</h1>
-              <p className="text-sm text-gray-400 font-light">This purchase verification link is invalid or expired.</p>
-            </div>
-            <Button
-              onClick={() => (window.location.href = "/dashboard")}
-              className="w-full bg-white text-black hover:bg-gray-100 font-light"
-            >
-              Return to Dashboard
-            </Button>
+      <div className="min-h-screen flex items-center justify-center">
+        <Card className="w-full max-w-md">
+          <CardContent className="p-8 text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+            <p>Loading...</p>
           </CardContent>
         </Card>
       </div>
     )
   }
 
-  // Show loading while auth is initializing
-  if (loading) {
+  if (!user) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-black via-gray-900 to-black flex items-center justify-center p-4">
-        <Card className="w-full max-w-md bg-white/5 border-white/10 backdrop-blur-sm">
-          <CardContent className="p-8 text-center space-y-6">
-            <div className="flex items-center justify-center">
-              <Loader2 className="h-12 w-12 animate-spin text-white" />
-            </div>
+      <div className="min-h-screen flex items-center justify-center">
+        <Card className="w-full max-w-md">
+          <CardContent className="p-8 text-center">
+            <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
+            <h1 className="text-xl font-semibold mb-2">Authentication Required</h1>
+            <p className="text-gray-600 mb-4">Please log in to view your purchase.</p>
+            <Button onClick={() => router.push("/login")}>Go to Login</Button>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  if (verificationStatus === "loading") {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <Card className="w-full max-w-md">
+          <CardContent className="p-8 text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+            <h1 className="text-xl font-semibold mb-2">Verifying Purchase</h1>
+            <p className="text-gray-600">Please wait while we confirm your purchase...</p>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  if (verificationStatus === "error") {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <Card className="w-full max-w-md">
+          <CardContent className="p-8 text-center">
+            <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
+            <h1 className="text-xl font-semibold mb-2">Verification Failed</h1>
+            <p className="text-gray-600 mb-4">{verificationData?.error || "Unable to verify your purchase"}</p>
             <div className="space-y-2">
-              <h1 className="text-xl font-light text-white">Initializing</h1>
-              <p className="text-sm text-gray-400 font-light">Preparing to verify your purchase...</p>
+              <Button onClick={handleRetry} className="w-full">
+                Try Again
+              </Button>
+              <Button variant="outline" onClick={handleViewPurchases} className="w-full bg-transparent">
+                View My Purchases
+              </Button>
             </div>
           </CardContent>
         </Card>
@@ -228,93 +206,52 @@ export default function PurchaseSuccessPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-black via-gray-900 to-black flex items-center justify-center p-4">
-      <Card className="w-full max-w-md bg-white/5 border-white/10 backdrop-blur-sm">
-        <CardContent className="p-8 text-center space-y-8">
-          {verificationStatus === "loading" && (
-            <>
-              <div className="flex items-center justify-center">
-                <Loader2 className="h-12 w-12 animate-spin text-white" />
-              </div>
-              <div className="space-y-2">
-                <h1 className="text-xl font-light text-white">Verifying Purchase</h1>
-                <p className="text-sm text-gray-400 font-light">Please wait while we confirm your payment...</p>
-              </div>
-            </>
+    <div className="min-h-screen flex items-center justify-center bg-gray-50">
+      <Card className="w-full max-w-md">
+        <CardContent className="p-8 text-center">
+          <CheckCircle className="h-16 w-16 text-green-500 mx-auto mb-6" />
+
+          <h1 className="text-2xl font-bold text-gray-900 mb-2">Purchase Complete</h1>
+
+          {verificationData?.item?.title && <p className="text-gray-600 mb-6">{verificationData.item.title}</p>}
+
+          {verificationData?.alreadyProcessed && (
+            <p className="text-sm text-blue-600 mb-4">This purchase was already processed</p>
           )}
 
-          {verificationStatus === "success" && purchaseDetails && (
-            <>
-              <div className="flex items-center justify-center">
-                <CheckCircle className="h-12 w-12 text-green-400" />
-              </div>
-              <div className="space-y-2">
-                <h1 className="text-xl font-light text-white">Purchase Complete</h1>
-                <p className="text-sm text-gray-400 font-light">{purchaseDetails.item.title}</p>
-              </div>
-              <div className="space-y-3">
-                <Button
-                  onClick={() => (window.location.href = getContentUrl())}
-                  className="w-full bg-white text-black hover:bg-gray-100 font-light"
-                >
-                  <ExternalLink className="h-4 w-4 mr-2" />
-                  Access Bundle
-                </Button>
-                <Button
-                  onClick={() => (window.location.href = "/dashboard/purchases")}
-                  variant="ghost"
-                  className="w-full text-gray-400 hover:text-white hover:bg-white/5 font-light"
-                >
-                  View All Purchases
-                </Button>
-              </div>
-            </>
-          )}
+          <div className="space-y-3">
+            <Button onClick={handleAccessBundle} className="w-full" size="lg">
+              <ExternalLink className="h-4 w-4 mr-2" />
+              Access Bundle
+            </Button>
 
-          {verificationStatus === "error" && (
-            <>
-              <div className="flex items-center justify-center">
-                <AlertTriangle className="h-12 w-12 text-red-400" />
-              </div>
-              <div className="space-y-2">
-                <h1 className="text-xl font-light text-white">Verification Failed</h1>
-                <p className="text-sm text-gray-400 font-light">{errorMessage}</p>
-              </div>
-              <div className="space-y-3">
-                <Button
-                  onClick={handleRetry}
-                  disabled={isRetrying || retryCount >= 5}
-                  className="w-full bg-white text-black hover:bg-gray-100 font-light"
-                >
-                  {isRetrying ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Retrying...
-                    </>
-                  ) : retryCount >= 5 ? (
-                    "Max Retries Reached"
-                  ) : (
-                    <>
-                      <RefreshCw className="h-4 w-4 mr-2" />
-                      Try Again ({retryCount}/5)
-                    </>
-                  )}
-                </Button>
-                <Button
-                  onClick={() => (window.location.href = "/dashboard")}
-                  variant="ghost"
-                  className="w-full text-gray-400 hover:text-white hover:bg-white/5 font-light"
-                >
-                  Return to Dashboard
-                </Button>
-              </div>
-              {!user && (
-                <div className="text-xs text-gray-500 font-light">💡 Try logging in first, then retry verification</div>
-              )}
-            </>
+            <Button variant="outline" onClick={handleViewPurchases} className="w-full bg-transparent">
+              View All Purchases
+            </Button>
+          </div>
+
+          {verificationData?.session && (
+            <div className="mt-6 pt-4 border-t text-sm text-gray-500">
+              <p>Session: {verificationData.session.id}</p>
+              <p>Status: {verificationData.session.payment_status}</p>
+            </div>
           )}
         </CardContent>
       </Card>
     </div>
+  )
+}
+
+export default function PurchaseSuccessPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen flex items-center justify-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+        </div>
+      }
+    >
+      <PurchaseSuccessContent />
+    </Suspense>
   )
 }

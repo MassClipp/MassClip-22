@@ -1,8 +1,10 @@
 import { initializeApp, getApps, cert } from "firebase-admin/app"
 import { getFirestore } from "firebase-admin/firestore"
+import { getAuth } from "firebase-admin/auth"
 
 let adminApp: any = null
 let adminDb: any = null
+let adminAuth: any = null
 
 export function getFirebaseAdmin() {
   if (!adminApp) {
@@ -32,6 +34,7 @@ export function getFirebaseAdmin() {
       }
 
       adminDb = getFirestore(adminApp)
+      adminAuth = getAuth(adminApp)
       console.log("✅ Firebase Admin initialized successfully")
     } catch (error) {
       console.error("❌ Firebase Admin initialization failed:", error)
@@ -39,7 +42,7 @@ export function getFirebaseAdmin() {
     }
   }
 
-  return { app: adminApp, db: adminDb }
+  return { app: adminApp, db: adminDb, auth: adminAuth }
 }
 
 export function getAdminDb() {
@@ -47,11 +50,20 @@ export function getAdminDb() {
   return db
 }
 
+export function getAdminAuth() {
+  const { auth } = getFirebaseAdmin()
+  return auth
+}
+
 // Export the Firestore database instance
 export const db = getFirebaseAdmin().db
+
+// Export the Firebase Auth instance
+export const auth = getFirebaseAdmin().auth
 
 // For compatibility with existing code
 export default {
   app: getFirebaseAdmin().app,
   db: getFirebaseAdmin().db,
+  auth: getFirebaseAdmin().auth,
 }
