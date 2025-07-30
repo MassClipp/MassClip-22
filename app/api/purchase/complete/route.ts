@@ -12,7 +12,7 @@ export async function POST(request: NextRequest) {
       isAnonymous: !buyerUid || buyerUid === "anonymous",
     })
 
-    // CRITICAL: Verify and enhance user authentication
+    // CRITICAL: Verify and enhance user authentication - PREVENT ANONYMOUS PURCHASES
     let verifiedUser = null
     let finalBuyerUid = buyerUid
     let finalUserEmail = userEmail
