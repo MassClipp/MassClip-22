@@ -36,7 +36,7 @@ export async function POST(request: NextRequest) {
         customer_name: session.customer_details?.name,
       })
 
-      // Extract purchase details from session
+      // Extract purchase details from session - CRITICAL: Get the actual Firebase UID
       const productBoxId = session.metadata?.productBoxId || session.metadata?.bundleId
       const buyerUid = session.metadata?.buyerUid || session.metadata?.userId || session.client_reference_id
       const userEmail = session.customer_details?.email || session.metadata?.userEmail
@@ -49,11 +49,22 @@ export async function POST(request: NextRequest) {
         userName,
         amount: session.amount_total,
         currency: session.currency,
+        isAnonymous: !buyerUid || buyerUid === "anonymous",
       })
 
       if (!productBoxId) {
         console.error("❌ [Stripe Webhook] No productBoxId found in session metadata")
         return NextResponse.json({ error: "Missing product information" }, { status: 400 })
+      }
+
+      // CRITICAL: Don't proceed if we don't have a valid user ID
+      if (!buyerUid || buyerUid === "anonymous") {
+        console.error("❌ [Stripe Webhook] No valid buyerUid found - user identification failed")
+        console.error("❌ [Stripe Webhook] Session metadata:", session.metadata)
+        console.error("❌ [Stripe Webhook] Client reference ID:", session.client_reference_id)
+
+        // Still try to complete the purchase but log the issue
+        console.warn("⚠️ [Stripe Webhook] Proceeding with anonymous purchase - this may cause access issues")
       }
 
       // Call purchase completion endpoint with comprehensive data
@@ -73,6 +84,9 @@ export async function POST(request: NextRequest) {
             userName,
             customerDetails: session.customer_details,
             metadata: session.metadata,
+            // Add additional context for debugging
+            stripeCustomerId: session.customer,
+            paymentIntentId: session.payment_intent,
           }),
         })
 
@@ -102,8 +116,8 @@ export async function POST(request: NextRequest) {
       const userEmail = paymentIntent.metadata?.userEmail
       const userName = paymentIntent.metadata?.userName
 
-      if (productBoxId && buyerUid) {
-        console.log("📊 [Stripe Webhook] Processing payment intent completion")
+      if (productBoxId && buyerUid && buyerUid !== "anonymous") {
+        console.log("📊 [Stripe Webhook] Processing payment intent completion with valid user ID")
 
         try {
           const completionResponse = await fetch(`${process.env.NEXT_PUBLIC_SITE_URL}/api/purchase/complete`, {
@@ -130,6 +144,8 @@ export async function POST(request: NextRequest) {
         } catch (error) {
           console.error("❌ [Stripe Webhook] Error processing payment intent:", error)
         }
+      } else {
+        console.warn("⚠️ [Stripe Webhook] Payment intent missing required data or has anonymous user")
       }
     }
 

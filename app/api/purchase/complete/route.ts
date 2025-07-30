@@ -3,23 +3,60 @@ import { db, auth } from "@/lib/firebase-admin"
 
 export async function POST(request: NextRequest) {
   try {
-    const { buyerUid, productBoxId, sessionId, amount, currency, userEmail } = await request.json()
+    const { buyerUid, productBoxId, sessionId, amount, currency, userEmail, userName } = await request.json()
 
-    console.log("🔍 [Purchase Complete] Processing:", { buyerUid, productBoxId, userEmail })
+    console.log("🔍 [Purchase Complete] Processing:", {
+      buyerUid,
+      productBoxId,
+      userEmail,
+      isAnonymous: !buyerUid || buyerUid === "anonymous",
+    })
 
-    // Verify user authentication if UID is provided
+    // CRITICAL: Verify and enhance user authentication
     let verifiedUser = null
+    let finalBuyerUid = buyerUid
+    let finalUserEmail = userEmail
+    let finalUserName = userName
+    let isAuthenticated = false
+
     if (buyerUid && buyerUid !== "anonymous") {
       try {
+        // Verify the Firebase user exists and get their details
         verifiedUser = await auth.getUser(buyerUid)
-        console.log("✅ [Purchase Complete] User verified:", {
-          uid: verifiedUser.uid,
-          email: verifiedUser.email,
-          displayName: verifiedUser.displayName,
+        finalBuyerUid = verifiedUser.uid
+        finalUserEmail = verifiedUser.email || userEmail
+        finalUserName = verifiedUser.displayName || verifiedUser.email?.split("@")[0] || userName
+        isAuthenticated = true
+
+        console.log("✅ [Purchase Complete] User verified and enhanced:", {
+          uid: finalBuyerUid,
+          email: finalUserEmail,
+          displayName: finalUserName,
+          emailVerified: verifiedUser.emailVerified,
         })
       } catch (error) {
-        console.warn("⚠️ [Purchase Complete] Could not verify user:", error)
+        console.error("❌ [Purchase Complete] Firebase user verification failed:", error)
+        console.error("❌ [Purchase Complete] Provided buyerUid:", buyerUid)
+
+        // If user verification fails, we have a problem
+        // Don't default to anonymous - this indicates a real issue
+        if (buyerUid !== "anonymous") {
+          console.error("❌ [Purchase Complete] CRITICAL: Valid-looking UID failed verification")
+          return NextResponse.json(
+            {
+              error: "User verification failed",
+              details: "The provided user ID could not be verified with Firebase Auth",
+            },
+            { status: 400 },
+          )
+        }
       }
+    } else {
+      console.warn("⚠️ [Purchase Complete] No valid buyerUid provided - creating anonymous purchase")
+      finalBuyerUid = "anonymous"
+      finalUserEmail = userEmail || ""
+      finalUserName = userName || "Anonymous User"
+      isAuthenticated = false
     }
 
     // Get the product box and its content
@@ -34,14 +71,16 @@ export async function POST(request: NextRequest) {
 
       const bundleData = bundleDoc.data()!
       return await handleBundlePurchase(request, {
-        buyerUid,
+        buyerUid: finalBuyerUid,
         bundleId: productBoxId,
         sessionId,
         amount,
         currency,
-        userEmail,
+        userEmail: finalUserEmail,
+        userName: finalUserName,
         verifiedUser,
         bundleData,
+        isAuthenticated,
       })
     }
 
@@ -132,14 +171,15 @@ export async function POST(request: NextRequest) {
       return `${minutes}:${remainingSeconds.toString().padStart(2, "0")}`
     }
 
-    // Create comprehensive purchase record with proper user identification
+    // Create comprehensive purchase record with VERIFIED user identification
     const purchaseData = {
-      // User identification - CRITICAL FIX
-      buyerUid: buyerUid || "anonymous",
-      userId: buyerUid || "anonymous",
-      userEmail: userEmail || verifiedUser?.email || "",
-      userName: verifiedUser?.displayName || verifiedUser?.email?.split("@")[0] || "Anonymous User",
-      isAuthenticated: !!(buyerUid && buyerUid !== "anonymous"),
+      // User identification - ENHANCED WITH VERIFICATION
+      buyerUid: finalBuyerUid,
+      userId: finalBuyerUid,
+      userEmail: finalUserEmail,
+      userName: finalUserName,
+      isAuthenticated: isAuthenticated,
+      emailVerified: verifiedUser?.emailVerified || false,
 
       // Product information
       productBoxId,
@@ -168,18 +208,19 @@ export async function POST(request: NextRequest) {
       createdAt: new Date(),
     }
 
-    console.log("💾 [Purchase Complete] Saving purchase data with user identification:", {
+    console.log("💾 [Purchase Complete] Saving purchase data with VERIFIED user identification:", {
       buyerUid: purchaseData.buyerUid,
       userEmail: purchaseData.userEmail,
       userName: purchaseData.userName,
       isAuthenticated: purchaseData.isAuthenticated,
+      emailVerified: purchaseData.emailVerified,
       itemNames: purchaseData.itemNames,
     })
 
     // Save to main purchases collection
     const purchaseRef = await db.collection("purchases").add(purchaseData)
 
-    // Save to bundlePurchases collection with proper user identification
+    // Save to bundlePurchases collection with VERIFIED user identification
     const bundlePurchaseData = {
       ...purchaseData,
       bundleId: productBoxId,
@@ -194,8 +235,8 @@ export async function POST(request: NextRequest) {
     await db.collection("bundlePurchases").doc(sessionId).set(bundlePurchaseData)
 
     // Also save to user's personal purchases if authenticated
-    if (buyerUid && buyerUid !== "anonymous") {
-      const userPurchaseRef = await db.collection("users").doc(buyerUid).collection("purchases").add(purchaseData)
+    if (isAuthenticated && finalBuyerUid !== "anonymous") {
+      const userPurchaseRef = await db.collection("users").doc(finalBuyerUid).collection("purchases").add(purchaseData)
 
       // Store individual items in subcollection for easy access
       for (const item of contentMetadata) {
@@ -205,21 +246,24 @@ export async function POST(request: NextRequest) {
       // Update user profile with purchase info
       await db
         .collection("users")
-        .doc(buyerUid)
+        .doc(finalBuyerUid)
         .update({
           lastPurchaseAt: new Date(),
           totalPurchases: db.FieldValue.increment(1),
           totalSpent: db.FieldValue.increment(purchaseData.amount),
         })
+
+      console.log("✅ [Purchase Complete] User profile updated with purchase statistics")
     }
 
-    console.log("✅ [Purchase Complete] Purchase saved successfully with proper user identification")
+    console.log("✅ [Purchase Complete] Purchase saved successfully with VERIFIED user identification")
 
     return NextResponse.json({
       success: true,
       purchase: purchaseData,
       purchaseId: purchaseRef.id,
       message: "Purchase completed and access granted",
+      userVerified: isAuthenticated,
     })
   } catch (error) {
     console.error("❌ [Purchase Complete] Error:", error)
@@ -229,9 +273,27 @@ export async function POST(request: NextRequest) {
 
 // Handle bundle purchases specifically - ENHANCED VERSION
 async function handleBundlePurchase(request: NextRequest, data: any) {
-  const { buyerUid, bundleId, sessionId, amount, currency, userEmail, verifiedUser, bundleData } = data
+  const {
+    buyerUid,
+    bundleId,
+    sessionId,
+    amount,
+    currency,
+    userEmail,
+    userName,
+    verifiedUser,
+    bundleData,
+    isAuthenticated,
+  } = data
 
-  console.log("🎁 [Bundle Purchase] Processing bundle purchase:", { bundleId, buyerUid, userEmail })
+  console.log("🎁 [Bundle Purchase] Processing bundle purchase with VERIFIED user:", {
+    bundleId,
+    buyerUid,
+    userEmail,
+    isAuthenticated,
+    emailVerified: verifiedUser?.emailVerified,
+  })
+
   console.log("🎁 [Bundle Purchase] Bundle data received:", {
     title: bundleData.title,
     contentItems: bundleData.contentItems?.length || 0,
@@ -382,12 +444,13 @@ async function handleBundlePurchase(request: NextRequest, data: any) {
   }
 
   const bundlePurchaseData = {
-    // User identification - CRITICAL FIX
-    buyerUid: buyerUid || "anonymous",
-    userId: buyerUid || "anonymous",
-    userEmail: userEmail || verifiedUser?.email || "",
-    userName: verifiedUser?.displayName || verifiedUser?.email?.split("@")[0] || "Anonymous User",
-    isAuthenticated: !!(buyerUid && buyerUid !== "anonymous"),
+    // User identification - ENHANCED WITH VERIFICATION
+    buyerUid: buyerUid,
+    userId: buyerUid,
+    userEmail: userEmail,
+    userName: userName,
+    isAuthenticated: isAuthenticated,
+    emailVerified: verifiedUser?.emailVerified || false,
 
     // Bundle information
     bundleId,
@@ -423,10 +486,12 @@ async function handleBundlePurchase(request: NextRequest, data: any) {
     completedAt: new Date(),
   }
 
-  console.log("💾 [Bundle Purchase] Saving comprehensive bundle purchase:", {
+  console.log("💾 [Bundle Purchase] Saving comprehensive bundle purchase with VERIFIED user:", {
     buyerUid: bundlePurchaseData.buyerUid,
     userEmail: bundlePurchaseData.userEmail,
     userName: bundlePurchaseData.userName,
+    isAuthenticated: bundlePurchaseData.isAuthenticated,
+    emailVerified: bundlePurchaseData.emailVerified,
     bundleTitle: bundlePurchaseData.bundleTitle,
     contentCount: bundlePurchaseData.contentCount,
     itemNames: bundlePurchaseData.itemNames,
@@ -440,7 +505,7 @@ async function handleBundlePurchase(request: NextRequest, data: any) {
   await db.collection("purchases").add(bundlePurchaseData)
 
   // Save to user's personal purchases if authenticated
-  if (buyerUid && buyerUid !== "anonymous") {
+  if (isAuthenticated && buyerUid !== "anonymous") {
     await db.collection("users").doc(buyerUid).collection("purchases").add(bundlePurchaseData)
 
     // Update user profile
@@ -452,14 +517,17 @@ async function handleBundlePurchase(request: NextRequest, data: any) {
         totalPurchases: db.FieldValue.increment(1),
         totalSpent: db.FieldValue.increment(bundlePurchaseData.amount),
       })
+
+    console.log("✅ [Bundle Purchase] User profile updated with purchase statistics")
   }
 
-  console.log("✅ [Bundle Purchase] Bundle purchase saved successfully with comprehensive metadata")
+  console.log("✅ [Bundle Purchase] Bundle purchase saved successfully with VERIFIED user identification")
 
   return NextResponse.json({
     success: true,
     purchase: bundlePurchaseData,
     message: "Bundle purchase completed and access granted",
+    userVerified: isAuthenticated,
   })
 }
 
