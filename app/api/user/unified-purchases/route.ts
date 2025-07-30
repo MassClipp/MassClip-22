@@ -1,279 +1,396 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { auth, db } from "@/lib/firebase-admin"
+import { getAdminDb, getAdminAuth } from "@/lib/firebase-server"
 
 export async function GET(request: NextRequest) {
   try {
+    console.log("🔍 [Unified Purchases] Starting unified purchases fetch...")
+
+    // Get user ID from query params or auth header
+    const { searchParams } = new URL(request.url)
+    const userId = searchParams.get("userId")
     const authHeader = request.headers.get("authorization")
-    if (!authHeader?.startsWith("Bearer ")) {
-      return NextResponse.json({ error: "Authentication required" }, { status: 401 })
-    }
 
-    const idToken = authHeader.split("Bearer ")[1]
-    const decodedToken = await auth.verifyIdToken(idToken)
-    const userId = decodedToken.uid
+    let finalUserId = userId
 
-    console.log(`🔍 [Unified Purchases API] Fetching purchases for user: ${userId}`)
-
-    const allPurchases: any[] = []
-
-    // Helper function to get bundle details including thumbnail (fallback only)
-    const getBundleDetails = async (bundleId: string) => {
+    // If no userId provided, try to get from auth token
+    if (!finalUserId && authHeader?.startsWith("Bearer ")) {
       try {
-        const bundleDoc = await db.collection("bundles").doc(bundleId).get()
-        if (bundleDoc.exists) {
-          const bundleData = bundleDoc.data()
-          return {
-            title: bundleData?.title || "Untitled Bundle",
-            thumbnail: bundleData?.customPreviewThumbnail || bundleData?.thumbnailUrl,
-            description: bundleData?.description,
-            creatorId: bundleData?.creatorId,
-          }
-        }
+        const idToken = authHeader.split("Bearer ")[1]
+        const decodedToken = await getAdminAuth().verifyIdToken(idToken)
+        finalUserId = decodedToken.uid
+        console.log("✅ [Unified Purchases] User ID from token:", finalUserId)
       } catch (error) {
-        console.warn(`⚠️ [Unified Purchases] Could not fetch bundle ${bundleId}:`, error)
+        console.error("❌ [Unified Purchases] Token verification failed:", error)
+        return NextResponse.json({ error: "Invalid authentication token" }, { status: 401 })
       }
-      return null
     }
 
-    // Helper function to get creator details (fallback only)
-    const getCreatorDetails = async (creatorId: string) => {
-      try {
-        const creatorDoc = await db.collection("users").doc(creatorId).get()
-        if (creatorDoc.exists) {
-          const creatorData = creatorDoc.data()
-          return {
-            username: creatorData?.username || "Unknown",
-            displayName: creatorData?.displayName,
-          }
-        }
-      } catch (error) {
-        console.warn(`⚠️ [Unified Purchases] Could not fetch creator ${creatorId}:`, error)
-      }
-      return { username: "Unknown" }
+    if (!finalUserId) {
+      console.error("❌ [Unified Purchases] No user ID provided")
+      return NextResponse.json({ error: "User ID is required" }, { status: 400 })
     }
 
-    // 1. Check bundlePurchases collection (primary source) - ENHANCED with stored data
+    console.log("🔍 [Unified Purchases] Fetching purchases for user:", finalUserId)
+
+    const db = getAdminDb()
+    const purchases = []
+
+    // Strategy 1: Get from bundlePurchases collection (most complete data)
+    console.log("📦 [Unified Purchases] Fetching from bundlePurchases collection...")
     try {
-      const bundlePurchasesQuery = db
+      const bundlePurchasesQuery = await db
         .collection("bundlePurchases")
-        .where("buyerUid", "==", userId)
-        .where("status", "==", "completed")
+        .where("userId", "==", finalUserId)
+        .orderBy("purchasedAt", "desc")
+        .get()
 
-      const bundleSnapshot = await bundlePurchasesQuery.get()
-      console.log(`✅ [Unified Purchases] Found ${bundleSnapshot.size} bundlePurchases`)
+      console.log(`📦 [Unified Purchases] Found ${bundlePurchasesQuery.size} bundle purchases`)
 
-      for (const doc of bundleSnapshot.docs) {
+      bundlePurchasesQuery.forEach((doc) => {
         const data = doc.data()
-        const bundleId = data.bundleId || data.productBoxId
-
-        // Use stored bundle data directly (no need to re-fetch if we have complete data)
-        const hasCompleteData = data.productBoxTitle && data.creatorName && data.items
-
-        let bundleDetails = null
-        let creatorDetails = null
-
-        if (!hasCompleteData) {
-          // Fallback: fetch missing data
-          bundleDetails = await getBundleDetails(bundleId)
-          creatorDetails = await getCreatorDetails(data.creatorId)
-        }
-
-        allPurchases.push({
+        console.log("📦 [Bundle Purchase]:", {
           id: doc.id,
-          productBoxId: bundleId,
-          bundleTitle: data.bundleTitle || data.productBoxTitle || bundleDetails?.title || "Untitled Bundle",
-          productBoxTitle: data.productBoxTitle || data.bundleTitle || bundleDetails?.title || "Untitled Bundle",
-          productBoxDescription: data.productBoxDescription || bundleDetails?.description || "Premium content bundle",
-          thumbnailUrl: data.thumbnailUrl || data.productBoxThumbnail || bundleDetails?.thumbnail,
-          productBoxThumbnail: data.productBoxThumbnail || data.thumbnailUrl || bundleDetails?.thumbnail,
-          creatorUsername: data.creatorUsername || creatorDetails?.username || "unknown",
-          creatorName: data.creatorName || creatorDetails?.displayName || creatorDetails?.username || "Unknown Creator",
-          creatorId: data.creatorId,
-          purchaseDate: data.purchasedAt || data.createdAt || data.completedAt,
-          purchasedAt: data.purchasedAt || data.createdAt || data.completedAt,
-          amount: data.amount || 0,
-          currency: data.currency || "usd",
-          status: data.status,
-          source: "bundlePurchases",
-          contents: data.items || data.contents || [],
-          items: data.items || data.contents || [],
-          contentCount: data.totalItems || data.contentCount || 1,
-          totalItems: data.totalItems || data.contentCount || 1,
-          totalSize: data.totalSize || 0,
+          title: data.productBoxTitle || data.bundleTitle,
+          hasDownloadUrl: !!(data.downloadUrl || data.items?.[0]?.fileUrl),
+          itemsCount: data.items?.length || 0,
         })
-      }
+
+        const purchase = normalizePurchaseData(doc.id, data, "bundlePurchases")
+        if (purchase) {
+          purchases.push(purchase)
+        }
+      })
     } catch (error) {
-      console.warn(`⚠️ [Unified Purchases] Error checking bundlePurchases:`, error)
+      console.error("❌ [Unified Purchases] Error fetching bundle purchases:", error)
     }
 
-    // 2. Check productBoxPurchases collection
+    // Strategy 2: Get from user's purchases subcollection
+    console.log("👤 [Unified Purchases] Fetching from user purchases subcollection...")
     try {
-      const productBoxPurchasesQuery = db
-        .collection("productBoxPurchases")
-        .where("buyerUid", "==", userId)
-        .where("status", "==", "completed")
+      const userPurchasesQuery = await db
+        .collection("users")
+        .doc(finalUserId)
+        .collection("purchases")
+        .orderBy("purchasedAt", "desc")
+        .get()
 
-      const productBoxSnapshot = await productBoxPurchasesQuery.get()
-      console.log(`✅ [Unified Purchases] Found ${productBoxSnapshot.size} productBoxPurchases`)
+      console.log(`👤 [Unified Purchases] Found ${userPurchasesQuery.size} user purchases`)
 
-      for (const doc of productBoxSnapshot.docs) {
+      for (const doc of userPurchasesQuery.docs) {
         const data = doc.data()
-        const bundleId = data.productBoxId
 
-        // Check if we already have this purchase
-        const existingPurchase = allPurchases.find((p) => p.productBoxId === bundleId)
-        if (!existingPurchase) {
-          // Get bundle details including thumbnail
-          const bundleDetails = await getBundleDetails(bundleId)
-          const creatorDetails = await getCreatorDetails(data.creatorId)
+        // Skip if we already have this purchase from bundlePurchases
+        if (purchases.some((p) => p.sessionId === data.sessionId)) {
+          console.log("⏭️ [Unified Purchases] Skipping duplicate purchase:", data.sessionId)
+          continue
+        }
 
-          allPurchases.push({
-            id: doc.id,
-            productBoxId: bundleId,
-            bundleTitle: bundleDetails?.title || "Untitled Bundle",
-            productBoxTitle: bundleDetails?.title || "Untitled Bundle",
-            productBoxDescription: bundleDetails?.description || data.description || "Premium content bundle",
-            thumbnailUrl: bundleDetails?.thumbnail,
-            productBoxThumbnail: bundleDetails?.thumbnail,
-            creatorUsername: creatorDetails.username,
-            creatorName: creatorDetails.displayName || creatorDetails.username,
-            creatorId: data.creatorId,
-            purchaseDate: data.createdAt || data.completedAt,
-            purchasedAt: data.createdAt || data.completedAt,
-            amount: data.amount || 0,
-            currency: data.currency || "usd",
-            status: data.status,
-            source: "productBoxPurchases",
-            items: data.items || [],
-            totalItems: data.totalItems || 0,
-            totalSize: data.totalSize || 0,
-          })
+        console.log("👤 [User Purchase]:", {
+          id: doc.id,
+          sessionId: data.sessionId,
+          bundleId: data.bundleId || data.productBoxId,
+          hasItems: !!(data.items?.length || data.contents?.length),
+        })
+
+        // If this purchase doesn't have complete data, try to enhance it
+        let enhancedData = data
+        if (!data.items?.length && !data.contents?.length && (data.bundleId || data.productBoxId)) {
+          console.log("🔄 [Unified Purchases] Enhancing purchase with bundle data...")
+          enhancedData = await enhancePurchaseWithBundleData(data, db)
+        }
+
+        const purchase = normalizePurchaseData(doc.id, enhancedData, "userPurchases")
+        if (purchase) {
+          purchases.push(purchase)
         }
       }
     } catch (error) {
-      console.warn(`⚠️ [Unified Purchases] Error checking productBoxPurchases:`, error)
+      console.error("❌ [Unified Purchases] Error fetching user purchases:", error)
     }
 
-    // 3. Check unifiedPurchases collection
+    // Strategy 3: Get from main purchases collection as fallback
+    console.log("🔍 [Unified Purchases] Fetching from main purchases collection...")
     try {
-      const unifiedPurchasesQuery = db
-        .collection("unifiedPurchases")
-        .where("userId", "==", userId)
-        .where("status", "==", "completed")
+      const mainPurchasesQuery = await db
+        .collection("purchases")
+        .where("userId", "==", finalUserId)
+        .orderBy("createdAt", "desc")
+        .get()
 
-      const unifiedSnapshot = await unifiedPurchasesQuery.get()
-      console.log(`✅ [Unified Purchases] Found ${unifiedSnapshot.size} unifiedPurchases`)
+      console.log(`🔍 [Unified Purchases] Found ${mainPurchasesQuery.size} main purchases`)
 
-      for (const doc of unifiedSnapshot.docs) {
+      for (const doc of mainPurchasesQuery.docs) {
         const data = doc.data()
-        const bundleId = data.productBoxId || data.bundleId
 
-        // Check if we already have this purchase
-        const existingPurchase = allPurchases.find((p) => p.productBoxId === bundleId)
-        if (!existingPurchase) {
-          // Get bundle details including thumbnail
-          const bundleDetails = await getBundleDetails(bundleId)
-          const creatorDetails = await getCreatorDetails(data.creatorId)
+        // Skip if we already have this purchase
+        if (purchases.some((p) => p.sessionId === data.sessionId)) {
+          console.log("⏭️ [Unified Purchases] Skipping duplicate purchase:", data.sessionId)
+          continue
+        }
 
-          allPurchases.push({
-            id: doc.id,
-            productBoxId: bundleId,
-            bundleTitle: bundleDetails?.title || data.bundleTitle || "Untitled Bundle",
-            productBoxTitle: bundleDetails?.title || data.bundleTitle || "Untitled Bundle",
-            productBoxDescription: bundleDetails?.description || data.description || "Premium content bundle",
-            thumbnailUrl: bundleDetails?.thumbnail,
-            productBoxThumbnail: bundleDetails?.thumbnail,
-            creatorUsername: creatorDetails.username,
-            creatorName: creatorDetails.displayName || creatorDetails.username,
-            creatorId: data.creatorId,
-            purchaseDate: data.purchaseDate || data.createdAt,
-            purchasedAt: data.purchaseDate || data.createdAt,
-            amount: data.amount || 0,
-            currency: data.currency || "usd",
-            status: data.status,
-            source: "unifiedPurchases",
-            contents: data.items || [],
-            items: data.items || [],
-            contentCount: data.totalItems || 0,
-            totalItems: data.totalItems || 0,
-            totalSize: data.totalSize || 0,
-          })
+        console.log("🔍 [Main Purchase]:", {
+          id: doc.id,
+          sessionId: data.sessionId,
+          bundleId: data.bundleId || data.productBoxId,
+          status: data.status,
+        })
+
+        // Enhance with bundle data if needed
+        let enhancedData = data
+        if (!data.items?.length && !data.contents?.length && (data.bundleId || data.productBoxId)) {
+          console.log("🔄 [Unified Purchases] Enhancing main purchase with bundle data...")
+          enhancedData = await enhancePurchaseWithBundleData(data, db)
+        }
+
+        const purchase = normalizePurchaseData(doc.id, enhancedData, "purchases")
+        if (purchase) {
+          purchases.push(purchase)
         }
       }
     } catch (error) {
-      console.warn(`⚠️ [Unified Purchases] Error checking unifiedPurchases:`, error)
+      console.error("❌ [Unified Purchases] Error fetching main purchases:", error)
     }
 
-    // 4. Check purchases collection (legacy)
-    try {
-      const purchasesQuery = db.collection("purchases").where("userId", "==", userId).where("status", "==", "completed")
+    // Remove duplicates and sort by purchase date
+    const uniquePurchases = purchases
+      .filter((purchase, index, self) => index === self.findIndex((p) => p.sessionId === purchase.sessionId))
+      .sort((a, b) => new Date(b.purchasedAt).getTime() - new Date(a.purchasedAt).getTime())
 
-      const purchasesSnapshot = await purchasesQuery.get()
-      console.log(`✅ [Unified Purchases] Found ${purchasesSnapshot.size} legacy purchases`)
-
-      for (const doc of purchasesSnapshot.docs) {
-        const data = doc.data()
-        const bundleId = data.productBoxId || data.bundleId || data.itemId
-
-        // Check if we already have this purchase
-        const existingPurchase = allPurchases.find((p) => p.productBoxId === bundleId)
-        if (!existingPurchase) {
-          // Get bundle details including thumbnail
-          const bundleDetails = await getBundleDetails(bundleId)
-          const creatorDetails = await getCreatorDetails(data.creatorId)
-
-          allPurchases.push({
-            id: doc.id,
-            productBoxId: bundleId,
-            bundleTitle: bundleDetails?.title || data.itemTitle || "Untitled Bundle",
-            productBoxTitle: bundleDetails?.title || data.itemTitle || "Untitled Bundle",
-            productBoxDescription: bundleDetails?.description || data.itemDescription || "Premium content bundle",
-            thumbnailUrl: bundleDetails?.thumbnail || data.thumbnailUrl,
-            productBoxThumbnail: bundleDetails?.thumbnail || data.thumbnailUrl,
-            creatorUsername: creatorDetails.username,
-            creatorName: creatorDetails.displayName || creatorDetails.username,
-            creatorId: data.creatorId,
-            purchaseDate: data.purchasedAt || data.createdAt,
-            purchasedAt: data.purchasedAt || data.createdAt,
-            amount: data.amount || 0,
-            currency: data.currency || "usd",
-            status: data.status,
-            source: "purchases",
-            items: data.items || [],
-            totalItems: data.totalItems || 0,
-            totalSize: data.totalSize || 0,
-          })
-        }
-      }
-    } catch (error) {
-      console.warn(`⚠️ [Unified Purchases] Error checking purchases:`, error)
-    }
-
-    // Sort by purchase date (newest first)
-    allPurchases.sort((a, b) => {
-      const dateA = new Date(a.purchasedAt || 0).getTime()
-      const dateB = new Date(b.purchasedAt || 0).getTime()
-      return dateB - dateA
-    })
-
-    console.log(`✅ [Unified Purchases API] Total unique purchases found: ${allPurchases.length}`)
-    console.log(`📦 [Unified Purchases API] Sample purchase data:`, allPurchases[0] || "No purchases")
+    console.log(`✅ [Unified Purchases] Returning ${uniquePurchases.length} unique purchases`)
+    console.log(
+      "📊 [Unified Purchases] Purchase summary:",
+      uniquePurchases.map((p) => ({
+        title: p.productBoxTitle,
+        itemsCount: p.totalItems,
+        hasDownloadUrl: p.items.some((item) => !!item.fileUrl),
+        purchaseDate: p.purchasedAt,
+      })),
+    )
 
     return NextResponse.json({
-      purchases: allPurchases,
-      totalCount: allPurchases.length,
-      userId,
-      timestamp: new Date().toISOString(),
+      success: true,
+      purchases: uniquePurchases,
+      totalCount: uniquePurchases.length,
     })
   } catch (error: any) {
-    console.error(`❌ [Unified Purchases API] Error:`, error)
+    console.error("❌ [Unified Purchases] Error:", error)
     return NextResponse.json(
       {
         error: "Failed to fetch purchases",
         details: error.message,
-        purchases: [],
       },
       { status: 500 },
     )
   }
+}
+
+// Normalize purchase data to unified format
+function normalizePurchaseData(id: string, data: any, source: string): any | null {
+  try {
+    // Get bundle/product box ID
+    const bundleId = data.bundleId || data.productBoxId || data.itemId
+    if (!bundleId) {
+      console.warn(`⚠️ [Normalize] Skipping purchase ${id} - no bundle/product ID`)
+      return null
+    }
+
+    // Get items from various possible fields
+    let items = data.items || data.contents || []
+
+    // If no items but we have bundle data, create item from bundle
+    if (!items.length && data.downloadUrl) {
+      items = [
+        {
+          id: bundleId,
+          title: data.productBoxTitle || data.bundleTitle || "Bundle",
+          fileUrl: data.downloadUrl,
+          thumbnailUrl: data.productBoxThumbnail || data.thumbnailUrl || "",
+          fileSize: data.fileSize || 0,
+          duration: data.duration || 0,
+          contentType: data.fileType?.includes("video")
+            ? "video"
+            : data.fileType?.includes("audio")
+              ? "audio"
+              : data.fileType?.includes("image")
+                ? "image"
+                : "document",
+          mimeType: data.fileType || "application/octet-stream",
+          filename: `${data.productBoxTitle || data.bundleTitle || "bundle"}.${getFileExtension(data.fileType)}`,
+          displayTitle: data.productBoxTitle || data.bundleTitle || "Bundle",
+          displaySize: formatFileSize(data.fileSize || 0),
+          displayDuration: data.duration ? formatDuration(data.duration) : undefined,
+        },
+      ]
+    }
+
+    // Ensure all items have required fields
+    items = items.map((item: any) => ({
+      id: item.id || bundleId,
+      title: item.title || item.displayTitle || "Untitled",
+      fileUrl: item.fileUrl || item.downloadUrl || "",
+      thumbnailUrl: item.thumbnailUrl || "",
+      fileSize: item.fileSize || 0,
+      duration: item.duration || 0,
+      contentType: item.contentType || "document",
+      mimeType: item.mimeType || "application/octet-stream",
+      filename: item.filename || `${item.title || "file"}.file`,
+      displayTitle: item.displayTitle || item.title || "Untitled",
+      displaySize: item.displaySize || formatFileSize(item.fileSize || 0),
+      displayDuration: item.displayDuration || (item.duration ? formatDuration(item.duration) : undefined),
+    }))
+
+    const purchase = {
+      id: data.sessionId || id,
+      sessionId: data.sessionId || id,
+      bundleId: data.bundleId || null,
+      productBoxId: data.productBoxId || bundleId,
+      itemId: bundleId,
+      productBoxTitle: data.productBoxTitle || data.bundleTitle || "Untitled Purchase",
+      productBoxDescription: data.productBoxDescription || data.description || "",
+      productBoxThumbnail: data.productBoxThumbnail || data.thumbnailUrl || "",
+      creatorId: data.creatorId || "",
+      creatorName: data.creatorName || "Unknown Creator",
+      creatorUsername: data.creatorUsername || "",
+      buyerUid: data.buyerUid || data.userId || "",
+      userId: data.userId || data.buyerUid || "",
+      userEmail: data.userEmail || data.customerEmail || "",
+      userName: data.userName || "User",
+      isAuthenticated: data.isAuthenticated !== false,
+      purchasedAt: data.purchasedAt || data.purchaseDate || data.createdAt || new Date(),
+      amount: data.amount || 0,
+      currency: data.currency || "usd",
+      items: items,
+      itemNames: items.map((item: any) => item.displayTitle),
+      contentTitles: items.map((item: any) => item.displayTitle),
+      totalItems: items.length,
+      totalSize: items.reduce((sum: number, item: any) => sum + (item.fileSize || 0), 0),
+      source: source,
+    }
+
+    console.log(`✅ [Normalize] Normalized purchase from ${source}:`, {
+      id: purchase.id,
+      title: purchase.productBoxTitle,
+      itemsCount: purchase.totalItems,
+      hasValidItems: purchase.items.every((item: any) => !!item.fileUrl),
+    })
+
+    return purchase
+  } catch (error) {
+    console.error(`❌ [Normalize] Error normalizing purchase ${id} from ${source}:`, error)
+    return null
+  }
+}
+
+// Enhance purchase data with bundle information
+async function enhancePurchaseWithBundleData(purchaseData: any, db: any): Promise<any> {
+  try {
+    const bundleId = purchaseData.bundleId || purchaseData.productBoxId
+    if (!bundleId) {
+      return purchaseData
+    }
+
+    console.log("🔄 [Enhance] Fetching bundle data for:", bundleId)
+
+    // Try bundles collection first
+    let bundleDoc = await db.collection("bundles").doc(bundleId).get()
+    let bundleData = null
+    let collection = "bundles"
+
+    if (bundleDoc.exists) {
+      bundleData = bundleDoc.data()
+    } else {
+      // Try productBoxes collection
+      bundleDoc = await db.collection("productBoxes").doc(bundleId).get()
+      if (bundleDoc.exists) {
+        bundleData = bundleDoc.data()
+        collection = "productBoxes"
+      }
+    }
+
+    if (!bundleData) {
+      console.warn("⚠️ [Enhance] Bundle not found:", bundleId)
+      return purchaseData
+    }
+
+    console.log(`✅ [Enhance] Found bundle in ${collection}:`, {
+      title: bundleData.title,
+      hasDownloadUrl: !!(bundleData.downloadUrl || bundleData.fileUrl),
+      fileSize: bundleData.fileSize,
+    })
+
+    // Enhance purchase data with bundle information
+    const enhancedData = {
+      ...purchaseData,
+      productBoxTitle: bundleData.title || purchaseData.productBoxTitle,
+      bundleTitle: bundleData.title || purchaseData.bundleTitle,
+      productBoxDescription: bundleData.description || purchaseData.productBoxDescription,
+      productBoxThumbnail: bundleData.thumbnailUrl || purchaseData.productBoxThumbnail,
+      downloadUrl: bundleData.downloadUrl || bundleData.fileUrl || purchaseData.downloadUrl,
+      fileSize: bundleData.fileSize || purchaseData.fileSize,
+      duration: bundleData.duration || purchaseData.duration,
+      fileType: bundleData.fileType || purchaseData.fileType,
+      tags: bundleData.tags || purchaseData.tags,
+    }
+
+    // Create items array if not present
+    if (!enhancedData.items?.length && !enhancedData.contents?.length) {
+      enhancedData.items = [
+        {
+          id: bundleId,
+          title: bundleData.title || "Bundle",
+          fileUrl: bundleData.downloadUrl || bundleData.fileUrl || "",
+          thumbnailUrl: bundleData.thumbnailUrl || "",
+          fileSize: bundleData.fileSize || 0,
+          duration: bundleData.duration || 0,
+          contentType: bundleData.fileType?.includes("video")
+            ? "video"
+            : bundleData.fileType?.includes("audio")
+              ? "audio"
+              : bundleData.fileType?.includes("image")
+                ? "image"
+                : "document",
+          mimeType: bundleData.fileType || "application/octet-stream",
+          filename: `${bundleData.title || "bundle"}.${getFileExtension(bundleData.fileType)}`,
+          displayTitle: bundleData.title || "Bundle",
+          displaySize: formatFileSize(bundleData.fileSize || 0),
+          displayDuration: bundleData.duration ? formatDuration(bundleData.duration) : undefined,
+        },
+      ]
+    }
+
+    console.log("✅ [Enhance] Enhanced purchase data with bundle info")
+    return enhancedData
+  } catch (error) {
+    console.error("❌ [Enhance] Error enhancing purchase data:", error)
+    return purchaseData
+  }
+}
+
+// Helper functions
+function formatFileSize(bytes: number): string {
+  if (bytes === 0) return "0 Bytes"
+  const k = 1024
+  const sizes = ["Bytes", "KB", "MB", "GB"]
+  const i = Math.floor(Math.log(bytes) / Math.log(k))
+  return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + " " + sizes[i]
+}
+
+function formatDuration(seconds: number): string {
+  const minutes = Math.floor(seconds / 60)
+  const remainingSeconds = seconds % 60
+  return `${minutes}:${remainingSeconds.toString().padStart(2, "0")}`
+}
+
+function getFileExtension(mimeType: string): string {
+  const extensions: { [key: string]: string } = {
+    "video/mp4": "mp4",
+    "video/webm": "webm",
+    "video/quicktime": "mov",
+    "audio/mpeg": "mp3",
+    "audio/wav": "wav",
+    "image/jpeg": "jpg",
+    "image/png": "png",
+    "application/pdf": "pdf",
+  }
+  return extensions[mimeType] || "file"
 }
