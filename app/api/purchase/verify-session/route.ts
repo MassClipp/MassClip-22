@@ -40,6 +40,8 @@ export async function POST(request: NextRequest) {
 
     // Verify Firebase token if provided
     let userId = null
+    let creatorData = {}
+    let finalCreatorId = ""
     if (idToken) {
       try {
         console.log("🔐 [Verify Session] Verifying Firebase token...")
@@ -137,9 +139,10 @@ export async function POST(request: NextRequest) {
       try {
         const creatorDoc = await db.collection("users").doc(creatorId).get()
         if (creatorDoc.exists) {
-          const creatorData = creatorDoc.data()
-          connectedAccountId = creatorData?.stripeAccountId
+          const creatorDataTemp = creatorDoc.data()
+          connectedAccountId = creatorDataTemp?.stripeAccountId
           console.log("🔗 [Verify Session] Found connected account ID from creator:", connectedAccountId)
+          creatorData = creatorDataTemp!
         }
       } catch (error) {
         console.error("❌ [Verify Session] Failed to get creator's connected account:", error)
@@ -237,39 +240,75 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Extract metadata - only look for bundleId now
+    // Extract metadata - look for bundleId in session metadata
     const bundleId = session.metadata?.bundleId || session.metadata?.bundle_id
-    const productType = session.metadata?.type || "bundle"
+    const sessionUserId = session.metadata?.userId
+    finalCreatorId = session.metadata?.creatorId || creatorId
 
-    console.log("📦 [Verify Session] Bundle ID from metadata:", bundleId)
-    console.log("🏷️ [Verify Session] Product type:", productType)
+    console.log("📦 [Verify Session] Processing bundle purchase:")
+    console.log("   Bundle ID:", bundleId)
+    console.log("   User ID (auth):", userId)
+    console.log("   User ID (session):", sessionUserId)
+    console.log("   Creator ID:", finalCreatorId)
+    console.log("   Connected Account:", connectedAccountId)
 
-    let itemData = null
+    if (!bundleId) {
+      console.error("❌ [Verify Session] Missing bundle ID in session metadata")
+      return NextResponse.json(
+        {
+          error: "Invalid session metadata",
+          details: "No bundle ID found in session metadata",
+          metadata: session.metadata,
+        },
+        { status: 400 },
+      )
+    }
 
-    if (bundleId && productType === "bundle") {
-      try {
-        const bundleDoc = await db.collection("bundles").doc(bundleId).get()
+    // Use authenticated user ID if available, otherwise use session metadata
+    const finalUserId = userId || sessionUserId
 
-        if (bundleDoc.exists) {
-          const bundleData = bundleDoc.data()
-          itemData = {
-            id: bundleId,
-            type: "bundle",
-            title: bundleData?.title || "Bundle",
-            description: bundleData?.description || "",
-            price: bundleData?.price || 0,
-            thumbnailUrl: bundleData?.thumbnailUrl || "",
-            creatorId: bundleData?.creatorId || "",
-            contentIds: bundleData?.contentIds || [],
-            ...bundleData,
-          }
-          console.log("✅ [Verify Session] Bundle data retrieved:", itemData.title)
-        } else {
-          console.warn("⚠️ [Verify Session] Bundle not found in database:", bundleId)
-        }
-      } catch (error) {
-        console.error("❌ [Verify Session] Error fetching bundle data:", error)
-      }
+    // Get bundle details from Firestore - THIS IS THE KEY FIX
+    console.log("📦 [Verify Session] Fetching bundle details from Firestore...")
+    const bundleDoc = await db.collection("bundles").doc(bundleId).get()
+
+    if (!bundleDoc.exists) {
+      console.error("❌ [Verify Session] Bundle not found:", bundleId)
+      return NextResponse.json(
+        {
+          error: "Bundle not found",
+          details: `Bundle with ID ${bundleId} does not exist`,
+          bundleId,
+        },
+        { status: 404 },
+      )
+    }
+
+    const bundleData = bundleDoc.data()!
+    console.log("✅ [Verify Session] Bundle data retrieved:", {
+      id: bundleId,
+      title: bundleData.title,
+      description: bundleData.description,
+      price: bundleData.price,
+      fileSize: bundleData.fileSize,
+      downloadUrl: bundleData.downloadUrl || bundleData.fileUrl,
+      thumbnailUrl: bundleData.thumbnailUrl,
+      creatorId: bundleData.creatorId,
+      stripeAccountId: bundleData.stripeAccountId,
+    })
+
+    // Get creator details
+    console.log("👤 [Verify Session] Fetching creator details...")
+    if (!finalCreatorId) {
+      finalCreatorId = creatorId || bundleData.creatorId || ""
+    }
+    const creatorDoc = await db.collection("users").doc(finalCreatorId).get()
+    if (creatorDoc.exists) {
+      creatorData = creatorDoc.data()!
+      console.log("✅ [Verify Session] Creator data retrieved:", {
+        id: finalCreatorId,
+        name: creatorData.displayName || creatorData.name,
+        username: creatorData.username,
+      })
     }
 
     // If we have a userId, record the purchase
@@ -280,7 +319,7 @@ export async function POST(request: NextRequest) {
           sessionId: session.id,
           paymentIntentId: session.payment_intent?.id || session.payment_intent,
           bundleId: bundleId || null,
-          productType,
+          productType: "bundle",
           amount: session.amount_total,
           currency: session.currency,
           status: "completed",
@@ -325,7 +364,7 @@ export async function POST(request: NextRequest) {
         sessionId,
         bundleId,
         itemId: bundleId,
-        itemType: productType,
+        itemType: "bundle",
         userId: userId,
         creatorId: creatorId || null,
         connectedAccountId: connectedAccountId || null,
@@ -356,7 +395,7 @@ export async function POST(request: NextRequest) {
           await db.collection("users").doc(userId).collection("purchases").doc(purchaseId).set({
             bundleId,
             itemId: bundleId,
-            itemType: productType,
+            itemType: "bundle",
             purchaseId,
             sessionId,
             amount: session.amount_total,
@@ -410,9 +449,9 @@ export async function POST(request: NextRequest) {
       productBoxId: bundleId, // For compatibility with existing code
       bundleId: bundleId,
       itemId: bundleId,
-      productBoxTitle: itemData?.title || "Bundle",
-      productBoxDescription: itemData?.description || "",
-      productBoxThumbnail: itemData?.thumbnailUrl || "",
+      productBoxTitle: bundleData?.title || "Bundle",
+      productBoxDescription: bundleData?.description || "",
+      productBoxThumbnail: bundleData?.thumbnailUrl || "",
       creatorId: creatorId || null,
       creatorName: "Unknown Creator", // Placeholder, will be updated later
       creatorUsername: "", // Placeholder, will be updated later
@@ -422,24 +461,24 @@ export async function POST(request: NextRequest) {
       status: "completed",
       sessionId: sessionId,
       // Bundle-specific data
-      bundleData: itemData || {},
+      bundleData: bundleData || {},
       // Items array for compatibility
       items:
-        itemData?.downloadUrl || itemData?.fileUrl
+        bundleData?.downloadUrl || bundleData?.fileUrl
           ? [
               {
                 id: bundleId,
-                title: itemData?.title || "Bundle",
-                fileUrl: itemData?.downloadUrl || itemData?.fileUrl || "",
-                thumbnailUrl: itemData?.thumbnailUrl || "",
-                fileSize: itemData?.fileSize || 0,
-                duration: itemData?.duration || 0,
-                contentType: getContentTypeFromFileType(itemData?.fileType || ""),
+                title: bundleData?.title || "Bundle",
+                fileUrl: bundleData?.downloadUrl || bundleData?.fileUrl || "",
+                thumbnailUrl: bundleData?.thumbnailUrl || "",
+                fileSize: bundleData?.fileSize || 0,
+                duration: bundleData?.duration || 0,
+                contentType: getContentTypeFromFileType(bundleData?.fileType || ""),
               },
             ]
           : [],
       totalItems: 1,
-      totalSize: itemData?.fileSize || 0,
+      totalSize: bundleData?.fileSize || 0,
       // User identification
       buyerUid: userId || "anonymous",
       userId: userId || "anonymous",
@@ -478,18 +517,6 @@ export async function POST(request: NextRequest) {
       console.error("❌ [Verify Session] Failed to create purchase records:", error)
     }
 
-    // Fetch creator details
-    console.log("👤 [Verify Session] Fetching creator details...")
-    const finalCreatorId = creatorId || itemData?.creatorId || ""
-    const creatorDoc = await db.collection("users").doc(finalCreatorId).get()
-    const creatorData = creatorDoc.exists ? creatorDoc.data() : {}
-
-    console.log("✅ [Verify Session] Creator data retrieved:", {
-      id: finalCreatorId,
-      name: creatorData?.displayName || creatorData?.name,
-      username: creatorData?.username,
-    })
-
     // Update unified purchase data with creator details
     unifiedPurchaseData.creatorName = creatorData?.displayName || creatorData?.name || "Unknown Creator"
     unifiedPurchaseData.creatorUsername = creatorData?.username || ""
@@ -498,7 +525,7 @@ export async function POST(request: NextRequest) {
 
     console.log("✅ [Verify Session] Verification completed successfully")
 
-    // Return the complete response with all bundle information - THIS IS THE KEY FIX
+    // Return the complete response with all bundle information
     const response = {
       success: true,
       alreadyProcessed,
@@ -516,11 +543,36 @@ export async function POST(request: NextRequest) {
         id: purchaseId,
         bundleId,
         itemId: bundleId,
-        itemType: productType,
-        userId: userId,
-        creatorId: creatorId,
+        itemType: "bundle",
+        userId: finalUserId,
+        creatorId: finalCreatorId,
+        amount: session.amount_total || 0,
+        currency: session.currency || "usd",
+        status: "completed",
+        purchasedAt: new Date(),
       },
-      item: itemData,
+      item: {
+        id: bundleId,
+        title: bundleData.title || "Bundle",
+        description: bundleData.description || "",
+        type: "bundle",
+        price: bundleData.price || 0,
+        thumbnailUrl: bundleData.thumbnailUrl || "",
+        downloadUrl: bundleData.downloadUrl || bundleData.fileUrl || "",
+        fileSize: bundleData.fileSize || 0,
+        duration: bundleData.duration || 0,
+        fileType: bundleData.fileType || "",
+        tags: bundleData.tags || [],
+        uploadedAt: bundleData.uploadedAt || bundleData.createdAt,
+        stripeProductId: bundleData.stripeProductId || "",
+        stripePriceId: bundleData.stripePriceId || bundleData.priceId || "",
+        creator: {
+          id: finalCreatorId,
+          name: creatorData.displayName || creatorData.name || "Unknown Creator",
+          username: creatorData.username || "",
+          profilePicture: creatorData.profilePicture || "",
+        },
+      },
     }
 
     console.log("📤 [Verify Session] Sending response:", {
@@ -528,8 +580,11 @@ export async function POST(request: NextRequest) {
       alreadyProcessed: response.alreadyProcessed,
       sessionId: response.session.id,
       purchaseId: response.purchase.id,
-      bundleTitle: response.item?.title,
-      hasDownloadUrl: !!response.item?.downloadUrl,
+      bundleId: response.item.id,
+      bundleTitle: response.item.title,
+      bundlePrice: response.item.price,
+      hasDownloadUrl: !!response.item.downloadUrl,
+      creatorName: response.item.creator.name,
     })
 
     return NextResponse.json(response)
