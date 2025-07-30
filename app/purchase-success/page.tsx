@@ -31,7 +31,7 @@ interface PurchaseDetails {
 }
 
 export default function PurchaseSuccessPage() {
-  const { user, loading, authChecked } = useAuth()
+  const { user, loading } = useAuth()
   const { toast } = useToast()
   const [verificationStatus, setVerificationStatus] = useState<"loading" | "success" | "error">("loading")
   const [errorMessage, setErrorMessage] = useState("")
@@ -152,7 +152,6 @@ export default function PurchaseSuccessPage() {
     console.log("   Full URL:", window.location.href)
     console.log("   Search params:", window.location.search)
     console.log("   Auth loading:", loading)
-    console.log("   Auth checked:", authChecked)
     console.log("   User:", user ? "authenticated" : "not authenticated")
 
     // Get session ID from URL - this is the only parameter we need
@@ -171,7 +170,7 @@ export default function PurchaseSuccessPage() {
     setSessionId(sessionIdFromUrl)
 
     // Wait for auth to finish loading before starting verification
-    if (loading || !authChecked) {
+    if (loading) {
       console.log("⏳ [Purchase Success] Waiting for auth to finish loading...")
       return
     }
@@ -183,7 +182,7 @@ export default function PurchaseSuccessPage() {
       setHasAttemptedVerification(true)
       verifyPurchase(sessionIdFromUrl, false) // Not a manual retry
     }
-  }, [loading, authChecked, user, hasAttemptedVerification]) // Add auth dependencies
+  }, [loading, user, hasAttemptedVerification]) // Remove authChecked since it doesn't exist
 
   if (!sessionId) {
     return (
@@ -210,7 +209,7 @@ export default function PurchaseSuccessPage() {
   }
 
   // Show loading while auth is initializing
-  if (loading || !authChecked) {
+  if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-black via-gray-900 to-black flex items-center justify-center p-4">
         <Card className="w-full max-w-md bg-white/5 border-white/10 backdrop-blur-sm">
