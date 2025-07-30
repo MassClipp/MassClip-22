@@ -99,14 +99,20 @@ function PurchaseSuccessContent() {
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
+          "Cache-Control": "no-cache",
+          Pragma: "no-cache",
         },
         body: JSON.stringify({ sessionId }),
       })
 
       console.log("📡 [Purchase Success] Verification response status:", response.status)
+      console.log(
+        "📡 [Purchase Success] Verification response headers:",
+        Object.fromEntries(response.headers.entries()),
+      )
 
       const data = await response.json()
-      console.log("📋 [Purchase Success] Verification response:", data)
+      console.log("📋 [Purchase Success] Full verification response:", JSON.stringify(data, null, 2))
 
       if (data.success) {
         setVerificationStatus("success")
