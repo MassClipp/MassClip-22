@@ -205,8 +205,8 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // ENHANCED BUNDLE INFO FLOW - Ensure downloadUrl is always present
-    console.log("📦 [Bundle Info] Starting enhanced bundle information flow...")
+    // SIMPLIFIED BUNDLE INFO FLOW - Single source of truth
+    console.log("📦 [Bundle Info] Starting simplified bundle information flow...")
 
     // Step 1: Get bundle ID from session metadata (primary source)
     const bundleId = session.metadata?.bundleId || session.metadata?.bundle_id
@@ -224,7 +224,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Step 2: Fetch bundle data from Firestore with enhanced field mapping
+    // Step 2: Fetch bundle data from Firestore (single source)
     console.log("📦 [Bundle Info] Fetching bundle from Firestore:", bundleId)
     const bundleDoc = await db.collection("bundles").doc(bundleId).get()
 
@@ -241,17 +241,14 @@ export async function POST(request: NextRequest) {
     }
 
     const bundleData = bundleDoc.data()!
-    console.log("✅ [Bundle Info] Raw bundle data retrieved:", {
+    console.log("✅ [Bundle Info] Bundle data retrieved:", {
       id: bundleId,
       title: bundleData.title,
       description: bundleData.description,
       price: bundleData.price,
       fileSize: bundleData.fileSize,
-      downloadUrl: bundleData.downloadUrl,
-      fileUrl: bundleData.fileUrl,
-      publicUrl: bundleData.publicUrl,
+      downloadUrl: bundleData.downloadUrl || bundleData.fileUrl,
       thumbnailUrl: bundleData.thumbnailUrl,
-      customPreviewThumbnail: bundleData.customPreviewThumbnail,
       creatorId: bundleData.creatorId,
     })
 
@@ -271,47 +268,18 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Step 4: Build COMPLETE bundle info with guaranteed downloadUrl
-    const downloadUrl = bundleData.downloadUrl || bundleData.fileUrl || bundleData.publicUrl || ""
-    const thumbnailUrl = bundleData.customPreviewThumbnail || bundleData.thumbnailUrl || ""
-
-    console.log("🔗 [Bundle Info] URL resolution:", {
-      downloadUrl: bundleData.downloadUrl,
-      fileUrl: bundleData.fileUrl,
-      publicUrl: bundleData.publicUrl,
-      finalDownloadUrl: downloadUrl,
-      hasValidDownloadUrl: downloadUrl.startsWith("http"),
-    })
-
-    if (!downloadUrl || !downloadUrl.startsWith("http")) {
-      console.error("❌ [Bundle Info] No valid download URL found for bundle")
-      return NextResponse.json(
-        {
-          error: "Invalid bundle data",
-          details: "Bundle does not have a valid download URL",
-          bundleId,
-          availableUrls: {
-            downloadUrl: bundleData.downloadUrl || null,
-            fileUrl: bundleData.fileUrl || null,
-            publicUrl: bundleData.publicUrl || null,
-          },
-        },
-        { status: 400 },
-      )
-    }
-
+    // Step 4: Build clean bundle info response
     const bundleInfo = {
       id: bundleId,
       title: bundleData.title || "Untitled Bundle",
       description: bundleData.description || "",
       type: "bundle",
       price: bundleData.price || 0,
-      thumbnailUrl: thumbnailUrl,
-      downloadUrl: downloadUrl, // GUARANTEED to be present and valid
-      fileUrl: downloadUrl, // Alternative field name for compatibility
+      thumbnailUrl: bundleData.thumbnailUrl || "",
+      downloadUrl: bundleData.downloadUrl || bundleData.fileUrl || "",
       fileSize: bundleData.fileSize || 0,
       duration: bundleData.duration || 0,
-      fileType: bundleData.fileType || bundleData.mimeType || "application/octet-stream",
+      fileType: bundleData.fileType || "",
       tags: bundleData.tags || [],
       uploadedAt: bundleData.uploadedAt || bundleData.createdAt,
       creator: {
@@ -322,18 +290,14 @@ export async function POST(request: NextRequest) {
       },
     }
 
-    console.log("✅ [Bundle Info] COMPLETE bundle info constructed:", {
+    console.log("✅ [Bundle Info] Bundle info constructed:", {
       bundleId: bundleInfo.id,
       title: bundleInfo.title,
       hasDownloadUrl: !!bundleInfo.downloadUrl,
-      downloadUrl: bundleInfo.downloadUrl,
-      hasThumbnail: !!bundleInfo.thumbnailUrl,
       creatorName: bundleInfo.creator.name,
-      fileSize: bundleInfo.fileSize,
-      duration: bundleInfo.duration,
     })
 
-    // Handle purchase record creation/update with COMPLETE bundle data for My Purchases
+    // Handle purchase record creation/update (keep existing logic)
     const finalUserId = userId || session.metadata?.userId
     let purchaseId
     let alreadyProcessed = false
@@ -357,44 +321,15 @@ export async function POST(request: NextRequest) {
         console.error("❌ [Verify Session] Failed to update existing purchase:", updateError)
       }
     } else {
-      // Create new purchase record with COMPLETE bundle data for My Purchases page
-      console.log("💾 [Verify Session] Creating comprehensive purchase record for My Purchases...")
+      // Create new purchase record
+      console.log("💾 [Verify Session] Creating new purchase record...")
 
-      // Create bundle content items array for purchases page
-      const bundleItems = [
-        {
-          id: bundleId,
-          title: bundleInfo.title,
-          fileUrl: bundleInfo.downloadUrl, // GUARANTEED to be present
-          downloadUrl: bundleInfo.downloadUrl, // Alternative field name
-          thumbnailUrl: bundleInfo.thumbnailUrl,
-          fileSize: bundleInfo.fileSize,
-          duration: bundleInfo.duration,
-          contentType: bundleInfo.fileType?.includes("video")
-            ? "video"
-            : bundleInfo.fileType?.includes("audio")
-              ? "audio"
-              : bundleInfo.fileType?.includes("image")
-                ? "image"
-                : "document",
-          mimeType: bundleInfo.fileType || "application/octet-stream",
-          filename: `${bundleInfo.title}.${getFileExtension(bundleInfo.fileType)}`,
-          displayTitle: bundleInfo.title,
-          displaySize: formatFileSize(bundleInfo.fileSize),
-          displayDuration: bundleInfo.duration ? formatDuration(bundleInfo.duration) : undefined,
-        },
-      ]
-
-      // Complete purchase data with all fields needed by My Purchases page
-      const completePurchaseData = {
-        // Basic purchase info
+      const purchaseData = {
         sessionId,
         bundleId,
-        productBoxId: bundleId, // For compatibility with purchases page
         itemId: bundleId,
         itemType: "bundle",
         userId: finalUserId,
-        buyerUid: finalUserId, // For unified purchases API
         creatorId: finalCreatorId || null,
         connectedAccountId: connectedAccountId || null,
         amount: session.amount_total || 0,
@@ -404,75 +339,33 @@ export async function POST(request: NextRequest) {
         customerEmail: session.customer_details?.email || null,
         paymentIntentId:
           typeof session.payment_intent === "string" ? session.payment_intent : session.payment_intent?.id || null,
-
-        // COMPLETE bundle data for My Purchases page
-        productBoxTitle: bundleInfo.title,
-        bundleTitle: bundleInfo.title, // Alternative field name
-        productBoxDescription: bundleInfo.description,
-        productBoxThumbnail: bundleInfo.thumbnailUrl,
-        thumbnailUrl: bundleInfo.thumbnailUrl, // Alternative field name
-        downloadUrl: bundleInfo.downloadUrl, // CRITICAL: Ensure this is always present
-
-        // Creator info for purchases page
-        creatorName: bundleInfo.creator.name,
-        creatorUsername: bundleInfo.creator.username,
-
-        // Content details for purchases page
-        items: bundleItems,
-        contents: bundleItems, // Alternative field name
-        totalItems: bundleItems.length,
-        contentCount: bundleItems.length, // Alternative field name
-        totalSize: bundleInfo.fileSize || 0,
-
-        // Timestamps
         createdAt: new Date(),
         updatedAt: new Date(),
-        purchasedAt: new Date(),
-        purchaseDate: new Date(), // Alternative field name
-        completedAt: new Date(), // Alternative field name
-
-        // Technical details
         stripeSessionId: sessionId,
         verificationMethod: "direct_api",
         retrievalMethod,
         verifiedAt: new Date(),
       }
 
-      console.log("💾 [Verify Session] Purchase data to be saved:", {
-        sessionId: completePurchaseData.sessionId,
-        bundleId: completePurchaseData.bundleId,
-        title: completePurchaseData.productBoxTitle,
-        hasDownloadUrl: !!completePurchaseData.downloadUrl,
-        downloadUrl: completePurchaseData.downloadUrl,
-        itemsCount: completePurchaseData.items.length,
-        itemsHaveUrls: completePurchaseData.items.every((item) => !!item.fileUrl),
-      })
-
-      // Save to main purchases collection
-      const purchaseRef = await db.collection("purchases").add(completePurchaseData)
+      const purchaseRef = await db.collection("purchases").add(purchaseData)
       purchaseId = purchaseRef.id
-      console.log("✅ [Verify Session] Main purchase record created:", purchaseId)
-
-      // CRITICAL: Store in bundlePurchases collection for unified purchases API
-      console.log("💾 [Verify Session] Storing in bundlePurchases for My Purchases page...")
-      await db.collection("bundlePurchases").doc(sessionId).set(completePurchaseData)
-      console.log("✅ [Verify Session] Bundle purchase record created for My Purchases")
+      console.log("✅ [Verify Session] Purchase record created:", purchaseId)
 
       // Grant user access if we have a user ID
       if (finalUserId) {
         console.log("🔓 [Verify Session] Granting user access...")
         try {
-          // Add to user's purchases subcollection with COMPLETE data
-          await db
-            .collection("users")
-            .doc(finalUserId)
-            .collection("purchases")
-            .doc(purchaseId)
-            .set({
-              ...completePurchaseData,
-              purchaseId,
-              status: "active",
-            })
+          // Add to user's purchases subcollection
+          await db.collection("users").doc(finalUserId).collection("purchases").doc(purchaseId).set({
+            bundleId,
+            itemId: bundleId,
+            itemType: "bundle",
+            purchaseId,
+            sessionId,
+            amount: session.amount_total,
+            purchasedAt: new Date(),
+            status: "active",
+          })
 
           // Update user's main document with bundle access
           await db
@@ -484,14 +377,11 @@ export async function POST(request: NextRequest) {
                 sessionId,
                 grantedAt: new Date(),
                 accessType: "purchased",
-                bundleTitle: bundleInfo.title,
-                thumbnailUrl: bundleInfo.thumbnailUrl,
-                downloadUrl: bundleInfo.downloadUrl, // Store download URL in user access too
               },
               updatedAt: new Date(),
             })
 
-          console.log("✅ [Verify Session] User access granted with complete bundle data")
+          console.log("✅ [Verify Session] User access granted")
         } catch (error) {
           console.error("❌ [Verify Session] Failed to grant user access:", error)
         }
@@ -500,7 +390,7 @@ export async function POST(request: NextRequest) {
 
     console.log("✅ [Verify Session] Verification completed successfully")
 
-    // Return simplified response with COMPLETE bundle info
+    // Return simplified response with clean bundle info
     const response = {
       success: true,
       alreadyProcessed,
@@ -526,16 +416,15 @@ export async function POST(request: NextRequest) {
         status: "completed",
         purchasedAt: new Date(),
       },
-      item: bundleInfo, // This now GUARANTEES downloadUrl is present
+      item: bundleInfo,
     }
 
-    console.log("📤 [Verify Session] Sending COMPLETE response:", {
+    console.log("📤 [Verify Session] Sending clean response:", {
       success: response.success,
       alreadyProcessed: response.alreadyProcessed,
       sessionId: response.session.id,
       bundleTitle: response.item.title,
       hasDownloadUrl: !!response.item.downloadUrl,
-      downloadUrl: response.item.downloadUrl,
       creatorName: response.item.creator.name,
     })
 
@@ -552,33 +441,4 @@ export async function POST(request: NextRequest) {
       { status: 500 },
     )
   }
-}
-
-// Helper functions for formatting
-function formatFileSize(bytes: number): string {
-  if (bytes === 0) return "0 Bytes"
-  const k = 1024
-  const sizes = ["Bytes", "KB", "MB", "GB"]
-  const i = Math.floor(Math.log(bytes) / Math.log(k))
-  return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + " " + sizes[i]
-}
-
-function formatDuration(seconds: number): string {
-  const minutes = Math.floor(seconds / 60)
-  const remainingSeconds = seconds % 60
-  return `${minutes}:${remainingSeconds.toString().padStart(2, "0")}`
-}
-
-function getFileExtension(mimeType: string): string {
-  const extensions: { [key: string]: string } = {
-    "video/mp4": "mp4",
-    "video/webm": "webm",
-    "video/quicktime": "mov",
-    "audio/mpeg": "mp3",
-    "audio/wav": "wav",
-    "image/jpeg": "jpg",
-    "image/png": "png",
-    "application/pdf": "pdf",
-  }
-  return extensions[mimeType] || "file"
 }
