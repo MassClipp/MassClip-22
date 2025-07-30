@@ -1,7 +1,5 @@
 "use client"
-
-import { useState, useEffect } from "react"
-import { useFirebaseAuth } from "./use-firebase-auth"
+import { useAuth } from "@/contexts/auth-context"
 
 export interface UserProfile {
   uid: string
@@ -15,34 +13,11 @@ export interface UserProfile {
 }
 
 export function useUser() {
-  const { user, loading: authLoading } = useFirebaseAuth()
-  const [profile, setProfile] = useState<UserProfile | null>(null)
-  const [loading, setLoading] = useState(true)
-
-  useEffect(() => {
-    if (authLoading) return
-
-    if (!user) {
-      setProfile(null)
-      setLoading(false)
-      return
-    }
-
-    // Convert Firebase user to UserProfile
-    const userProfile: UserProfile = {
-      uid: user.uid,
-      email: user.email,
-      displayName: user.displayName,
-      photoURL: user.photoURL,
-    }
-
-    setProfile(userProfile)
-    setLoading(false)
-  }, [user, authLoading])
+  const { user, loading } = useAuth()
 
   return {
-    user: profile,
+    user,
     loading,
-    isAuthenticated: !!profile,
+    isAuthenticated: !!user,
   }
 }
