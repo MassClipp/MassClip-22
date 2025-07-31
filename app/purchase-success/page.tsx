@@ -1,281 +1,269 @@
 "use client"
 
 import { useEffect, useState, Suspense } from "react"
-import { useSearchParams } from "next/navigation"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { useSearchParams, useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
-import { CheckCircle, Download, AlertCircle, Loader2 } from "lucide-react"
-import Link from "next/link"
-import { useAuth } from "@/contexts/auth-context"
-import { toast } from "sonner"
+import { Card, CardContent } from "@/components/ui/card"
+import { CheckCircle, ExternalLink, AlertCircle, Loader2 } from "lucide-react"
+import { useAuth } from "@/hooks/use-firebase-auth"
 
 interface VerificationResponse {
   success: boolean
-  session: {
+  verified: boolean
+  alreadyProcessed?: boolean
+  session?: {
     id: string
-    amount: number
-    currency: string
-    payment_status: string
-    customerEmail?: string
-    created: string
-    connectedAccount?: string
-    retrievalMethod: string
-    buyerUid: string
-  }
-  purchase: {
-    id: string
-    bundleId: string
-    itemId: string
-    itemType: string
-    buyerUid: string
-    creatorId?: string
-    amount: number
-    currency: string
     status: string
-    purchasedAt: string
-    verified: boolean
+    paymentStatus: string
   }
-  item: {
+  purchase?: {
     id: string
-    title: string
-    description: string
-    type: string
-    price: number
-    thumbnailUrl: string
-    downloadUrl: string
-    fileSize: number
-    duration: number
-    fileType: string
-    tags: string[]
-    uploadedAt: any
-    creator: {
-      id: string
-      name: string
-      username: string
-      profilePicture: string
-    }
+    buyerUid: string
+    creatorId: string
+    amount: number
+    status: string
+    purchaseType: string
+    productBoxId?: string
+    bundleId?: string
+    createdAt: any
   }
-  alreadyProcessed: boolean
+  error?: string
+  isAnonymous?: boolean
+  isUnauthorized?: boolean
+  needsProcessing?: boolean
 }
 
 function PurchaseSuccessContent() {
   const searchParams = useSearchParams()
-  const { user } = useAuth()
+  const router = useRouter()
+  const { user, loading: authLoading } = useAuth()
+  const [verificationStatus, setVerificationStatus] = useState<"loading" | "success" | "error">("loading")
   const [verificationData, setVerificationData] = useState<VerificationResponse | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  const [isManualRetry, setIsManualRetry] = useState(false)
 
   const sessionId = searchParams.get("session_id")
+  const buyerUid = searchParams.get("buyer_uid")
 
   useEffect(() => {
-    const verifyPurchase = async () => {
-      if (!sessionId) {
-        setError("No session ID provided")
-        setLoading(false)
-        return
-      }
+    console.log("🔍 [Purchase Success] Page loaded, extracting URL parameters...")
 
-      // Wait for user authentication
-      if (!user) {
-        console.log("🔍 [Purchase Success] Waiting for user authentication...")
-        return
-      }
+    const urlParams = new URLSearchParams(window.location.search)
+    const sessionIdFromUrl = urlParams.get("session_id")
+    const buyerUidFromUrl = urlParams.get("buyer_uid")
 
-      try {
-        console.log("🔍 [Purchase Success] Starting verification for session:", sessionId)
-        console.log("👤 [Purchase Success] Authenticated user:", user.uid)
+    console.log("📋 [Purchase Success] Search params:", {
+      sessionId: sessionIdFromUrl,
+      buyerUid: buyerUidFromUrl,
+      fullUrl: window.location.href,
+      currentDomain: window.location.hostname,
+    })
 
-        // Get the user's ID token
-        const idToken = await user.getIdToken()
-        console.log("🔐 [Purchase Success] Got ID token for verification")
+    if (sessionIdFromUrl) {
+      console.log("✅ [Purchase Success] Session ID from URL:", sessionIdFromUrl)
+    } else {
+      console.error("❌ [Purchase Success] No session_id found in URL")
+    }
 
-        const response = await fetch("/api/purchase/verify-session", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${idToken}`,
-          },
-          body: JSON.stringify({
-            sessionId,
-            idToken,
-          }),
-        })
+    if (buyerUidFromUrl) {
+      console.log("✅ [Purchase Success] Buyer UID from URL:", buyerUidFromUrl)
+    } else {
+      console.warn("⚠️ [Purchase Success] No buyer_uid found in URL")
+    }
+  }, [])
 
-        console.log("📡 [Purchase Success] Verification response status:", response.status)
+  useEffect(() => {
+    if (authLoading) {
+      console.log("⏳ [Purchase Success] Auth loading...")
+      return
+    }
 
-        if (!response.ok) {
-          const errorData = await response.json()
-          console.error("❌ [Purchase Success] Verification failed:", errorData)
+    if (!user) {
+      console.log("❌ [Purchase Success] User not authenticated")
+      setVerificationStatus("error")
+      setVerificationData({
+        success: false,
+        verified: false,
+        error: "Authentication required to verify purchase",
+      })
+      return
+    }
 
-          if (response.status === 401) {
-            setError("Authentication required. Please log in to view your purchase.")
-          } else if (response.status === 403) {
-            setError("This purchase session does not belong to your account.")
-          } else if (response.status === 404) {
-            setError("Purchase session not found. It may have expired or been processed already.")
-          } else {
-            setError(errorData.details || errorData.error || "Failed to verify purchase")
-          }
-          setLoading(false)
-          return
-        }
+    console.log("✅ [Purchase Success] User authenticated:", user.uid)
 
-        const data: VerificationResponse = await response.json()
-        console.log("✅ [Purchase Success] Verification successful:", {
-          bundleTitle: data.item.title,
-          amount: data.session.amount,
-          buyerUid: data.purchase.buyerUid,
-          verified: data.purchase.verified,
-        })
+    // Verify buyer UID matches authenticated user
+    if (buyerUid && buyerUid !== user.uid) {
+      console.error("❌ [Purchase Success] Buyer UID mismatch:", {
+        urlBuyerUid: buyerUid,
+        authenticatedUid: user.uid,
+      })
+      setVerificationStatus("error")
+      setVerificationData({
+        success: false,
+        verified: false,
+        error: "Purchase verification failed: User identity mismatch",
+        isUnauthorized: true,
+      })
+      return
+    }
 
-        setVerificationData(data)
-        setLoading(false)
-
-        // Show success toast
-        toast.success(`Successfully purchased: ${data.item.title}`)
-      } catch (error: any) {
-        console.error("❌ [Purchase Success] Verification error:", error)
-        setError("Failed to verify purchase. Please try again.")
-        setLoading(false)
-      }
+    if (!sessionId) {
+      console.error("❌ [Purchase Success] No session ID found")
+      setVerificationStatus("error")
+      setVerificationData({
+        success: false,
+        verified: false,
+        error: "No session ID provided",
+      })
+      return
     }
 
     verifyPurchase()
-  }, [sessionId, user])
+  }, [user, authLoading, sessionId, buyerUid, isManualRetry])
 
-  // Show loading while waiting for authentication or verification
-  if (loading || !user) {
+  const verifyPurchase = async () => {
+    if (!user || !sessionId) return
+
+    try {
+      console.log("🔄 [Purchase Success] Starting verification...")
+      setVerificationStatus("loading")
+
+      // Get fresh auth token
+      const buyerToken = await user.getIdToken(true)
+      console.log("🔑 [Purchase Success] Auth token obtained")
+
+      const response = await fetch("/api/purchase/verify-session-with-buyer", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Cache-Control": "no-cache",
+          Pragma: "no-cache",
+        },
+        body: JSON.stringify({
+          sessionId,
+          buyerToken,
+        }),
+      })
+
+      console.log("📡 [Purchase Success] Verification response status:", response.status)
+      console.log(
+        "📡 [Purchase Success] Verification response headers:",
+        Object.fromEntries(response.headers.entries()),
+      )
+
+      const data = await response.json()
+      console.log("📋 [Purchase Success] Full verification response:", JSON.stringify(data, null, 2))
+
+      if (data.success && data.verified) {
+        setVerificationStatus("success")
+        setVerificationData(data)
+        console.log("✅ [Purchase Success] Verification successful")
+      } else {
+        setVerificationStatus("error")
+        setVerificationData(data)
+        console.error("❌ [Purchase Success] Verification failed:", data.error)
+      }
+    } catch (error) {
+      console.error("❌ [Purchase Success] Verification error:", error)
+      setVerificationStatus("error")
+      setVerificationData({
+        success: false,
+        verified: false,
+        error: "Network error occurred during verification",
+      })
+    }
+  }
+
+  const handleRetry = () => {
+    console.log("🔄 [Purchase Success] Manual retry triggered")
+    setIsManualRetry(!isManualRetry)
+  }
+
+  const handleAccessContent = () => {
+    if (verificationData?.purchase?.productBoxId) {
+      router.push(`/product-box/${verificationData.purchase.productBoxId}/content`)
+    } else if (verificationData?.purchase?.bundleId) {
+      router.push(`/bundle/${verificationData.purchase.bundleId}`)
+    } else {
+      router.push("/dashboard/purchases")
+    }
+  }
+
+  const handleViewPurchases = () => {
+    router.push("/dashboard/purchases")
+  }
+
+  if (authLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+      <div className="min-h-screen flex items-center justify-center">
         <Card className="w-full max-w-md">
-          <CardContent className="flex flex-col items-center justify-center p-8">
-            <Loader2 className="h-8 w-8 animate-spin text-blue-600 mb-4" />
-            <h2 className="text-lg font-semibold mb-2">{!user ? "Authenticating..." : "Verifying Purchase..."}</h2>
-            <p className="text-gray-600 text-center">
-              {!user
-                ? "Please wait while we authenticate your account..."
-                : "Please wait while we verify your purchase..."}
-            </p>
+          <CardContent className="p-8 text-center">
+            <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
+            <p>Loading...</p>
           </CardContent>
         </Card>
       </div>
     )
   }
 
-  // Show error state
-  if (error) {
+  if (!user) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+      <div className="min-h-screen flex items-center justify-center">
         <Card className="w-full max-w-md">
-          <CardHeader className="text-center">
+          <CardContent className="p-8 text-center">
             <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
-            <CardTitle className="text-red-600">Verification Failed</CardTitle>
-            <CardDescription>{error}</CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="flex flex-col gap-2">
-              <Button asChild className="w-full">
-                <Link href="/dashboard/purchases">View My Purchases</Link>
-              </Button>
-              <Button variant="outline" asChild className="w-full bg-transparent">
-                <Link href="/dashboard">Go to Dashboard</Link>
-              </Button>
-            </div>
+            <h1 className="text-xl font-semibold mb-2">Authentication Required</h1>
+            <p className="text-gray-600 mb-4">Please log in to view your purchase.</p>
+            <Button onClick={() => router.push("/login")}>Go to Login</Button>
           </CardContent>
         </Card>
       </div>
     )
   }
 
-  // Show success state
-  if (verificationData) {
-    const { session, purchase, item } = verificationData
-    const formattedAmount = (session.amount / 100).toFixed(2)
-
+  if (verificationStatus === "loading") {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
-        <Card className="w-full max-w-2xl">
-          <CardHeader className="text-center">
-            <CheckCircle className="h-16 w-16 text-green-500 mx-auto mb-4" />
-            <CardTitle className="text-2xl text-green-600">Purchase Successful!</CardTitle>
-            <CardDescription>Your payment has been processed and you now have access to your content.</CardDescription>
-          </CardHeader>
+      <div className="min-h-screen flex items-center justify-center">
+        <Card className="w-full max-w-md">
+          <CardContent className="p-8 text-center">
+            <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
+            <h1 className="text-xl font-semibold mb-2">Verifying Purchase</h1>
+            <p className="text-gray-600">Please wait while we confirm your purchase...</p>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
 
-          <CardContent className="space-y-6">
-            {/* Purchase Details */}
-            <div className="bg-gray-50 rounded-lg p-4">
-              <h3 className="font-semibold mb-3">Purchase Details</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
-                <div>
-                  <span className="text-gray-600">Amount:</span>
-                  <span className="ml-2 font-medium">
-                    ${formattedAmount} {session.currency.toUpperCase()}
-                  </span>
-                </div>
-                <div>
-                  <span className="text-gray-600">Session ID:</span>
-                  <span className="ml-2 font-mono text-xs">{session.id.substring(0, 20)}...</span>
-                </div>
-                <div>
-                  <span className="text-gray-600">Purchase Date:</span>
-                  <span className="ml-2">{new Date(session.created).toLocaleDateString()}</span>
-                </div>
-                <div>
-                  <span className="text-gray-600">Status:</span>
-                  <span className="ml-2 text-green-600 font-medium">✓ Verified & Complete</span>
-                </div>
+  if (verificationStatus === "error") {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <Card className="w-full max-w-md">
+          <CardContent className="p-8 text-center">
+            <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
+            <h1 className="text-xl font-semibold mb-2">Verification Failed</h1>
+            <p className="text-gray-600 mb-4">{verificationData?.error || "Unable to verify your purchase"}</p>
+
+            {verificationData?.isAnonymous && (
+              <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
+                <p className="text-sm text-red-800">
+                  Anonymous purchases are not allowed. Please ensure you're logged in when making purchases.
+                </p>
               </div>
-            </div>
+            )}
 
-            {/* Bundle Information */}
-            <div className="border rounded-lg p-4">
-              <div className="flex items-start gap-4">
-                {item.thumbnailUrl && (
-                  <img
-                    src={item.thumbnailUrl || "/placeholder.svg"}
-                    alt={item.title}
-                    className="w-20 h-20 object-cover rounded-lg flex-shrink-0"
-                  />
-                )}
-                <div className="flex-1">
-                  <h3 className="font-semibold text-lg mb-2">{item.title}</h3>
-                  {item.description && <p className="text-gray-600 text-sm mb-3">{item.description}</p>}
-                  <div className="flex items-center gap-4 text-sm text-gray-500">
-                    <span>By {item.creator.name}</span>
-                    {item.fileSize > 0 && <span>{(item.fileSize / (1024 * 1024)).toFixed(1)} MB</span>}
-                    {item.duration > 0 && <span>{Math.round(item.duration / 60)} min</span>}
-                  </div>
-                </div>
+            {verificationData?.isUnauthorized && (
+              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4">
+                <p className="text-sm text-yellow-800">This purchase belongs to a different user account.</p>
               </div>
-            </div>
+            )}
 
-            {/* Action Buttons */}
-            <div className="flex flex-col sm:flex-row gap-3">
-              {item.downloadUrl && (
-                <Button asChild className="flex-1">
-                  <a href={item.downloadUrl} download>
-                    <Download className="h-4 w-4 mr-2" />
-                    Download Content
-                  </a>
-                </Button>
-              )}
-              <Button variant="outline" asChild className="flex-1 bg-transparent">
-                <Link href="/dashboard/purchases">View All Purchases</Link>
+            <div className="space-y-2">
+              <Button onClick={handleRetry} className="w-full">
+                Try Again
               </Button>
-              <Button variant="outline" asChild className="flex-1 bg-transparent">
-                <Link href="/dashboard">Go to Dashboard</Link>
+              <Button variant="outline" onClick={handleViewPurchases} className="w-full bg-transparent">
+                View My Purchases
               </Button>
-            </div>
-
-            {/* Additional Info */}
-            <div className="text-center text-sm text-gray-500 pt-4 border-t">
-              <p>
-                Your purchase is linked to your account ({user.email}). You can access your content anytime from your
-                dashboard.
-              </p>
-              {verificationData.alreadyProcessed && (
-                <p className="mt-2 text-blue-600">Note: This purchase was already processed previously.</p>
-              )}
             </div>
           </CardContent>
         </Card>
@@ -283,21 +271,57 @@ function PurchaseSuccessContent() {
     )
   }
 
-  return null
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-gray-50">
+      <Card className="w-full max-w-md">
+        <CardContent className="p-8 text-center">
+          <CheckCircle className="h-16 w-16 text-green-500 mx-auto mb-6" />
+
+          <h1 className="text-2xl font-bold text-gray-900 mb-2">Purchase Complete</h1>
+
+          {verificationData?.purchase && (
+            <div className="mb-6">
+              <p className="text-gray-600 mb-2">
+                {verificationData.purchase.purchaseType === "bundle" ? "Bundle" : "Product Box"}
+              </p>
+              <p className="text-lg font-semibold">${verificationData.purchase.amount}</p>
+            </div>
+          )}
+
+          {verificationData?.alreadyProcessed && (
+            <p className="text-sm text-blue-600 mb-4">This purchase was already processed</p>
+          )}
+
+          <div className="space-y-3">
+            <Button onClick={handleAccessContent} className="w-full" size="lg">
+              <ExternalLink className="h-4 w-4 mr-2" />
+              Access Content
+            </Button>
+
+            <Button variant="outline" onClick={handleViewPurchases} className="w-full bg-transparent">
+              View All Purchases
+            </Button>
+          </div>
+
+          {verificationData?.session && (
+            <div className="mt-6 pt-4 border-t text-sm text-gray-500">
+              <p>Session: {verificationData.session.id}</p>
+              <p>Status: {verificationData.session.paymentStatus}</p>
+              {verificationData.purchase && <p>Buyer: {verificationData.purchase.buyerUid}</p>}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  )
 }
 
 export default function PurchaseSuccessPage() {
   return (
     <Suspense
       fallback={
-        <div className="min-h-screen flex items-center justify-center bg-gray-50">
-          <Card className="w-full max-w-md">
-            <CardContent className="flex flex-col items-center justify-center p-8">
-              <Loader2 className="h-8 w-8 animate-spin text-blue-600 mb-4" />
-              <h2 className="text-lg font-semibold mb-2">Loading...</h2>
-              <p className="text-gray-600 text-center">Please wait while we load your purchase details...</p>
-            </CardContent>
-          </Card>
+        <div className="min-h-screen flex items-center justify-center">
+          <Loader2 className="h-8 w-8 animate-spin" />
         </div>
       }
     >

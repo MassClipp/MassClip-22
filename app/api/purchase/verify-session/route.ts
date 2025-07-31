@@ -21,24 +21,20 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Session ID is required" }, { status: 400 })
     }
 
-    // REQUIRE authentication - no anonymous verification allowed
-    if (!idToken) {
-      console.error("❌ [Verify Session] Authentication required for session verification")
-      return NextResponse.json({ error: "Authentication required" }, { status: 401 })
-    }
-
     console.log("🔍 [Verify Session] Processing session:", sessionId)
 
-    // Verify Firebase token - REQUIRED
-    let userId: string
-    try {
-      console.log("🔐 [Verify Session] Verifying Firebase token...")
-      const decodedToken = await getAdminAuth().verifyIdToken(idToken)
-      userId = decodedToken.uid
-      console.log("✅ [Verify Session] Token verified for user:", userId)
-    } catch (error) {
-      console.error("❌ [Verify Session] Token verification failed:", error)
-      return NextResponse.json({ error: "Invalid authentication token" }, { status: 401 })
+    // Verify Firebase token if provided
+    let userId = null
+    if (idToken) {
+      try {
+        console.log("🔐 [Verify Session] Verifying Firebase token...")
+        const decodedToken = await getAdminAuth().verifyIdToken(idToken)
+        userId = decodedToken.uid
+        console.log("✅ [Verify Session] Token verified for user:", userId)
+      } catch (error) {
+        console.error("❌ [Verify Session] Token verification failed:", error)
+        console.log("⚠️ [Verify Session] Continuing without authentication...")
+      }
     }
 
     const db = getAdminDb()
@@ -49,12 +45,7 @@ export async function POST(request: NextRequest) {
     let creatorId = null
     let existingPurchase = null
 
-    const existingPurchaseQuery = await db
-      .collection("purchases")
-      .where("sessionId", "==", sessionId)
-      .where("buyerUid", "==", userId) // CRITICAL: Only allow user's own purchases
-      .limit(1)
-      .get()
+    const existingPurchaseQuery = await db.collection("purchases").where("sessionId", "==", sessionId).limit(1).get()
 
     if (!existingPurchaseQuery.empty) {
       existingPurchase = existingPurchaseQuery.docs[0]
@@ -64,7 +55,6 @@ export async function POST(request: NextRequest) {
       console.log("📦 [Verify Session] Found existing purchase with:")
       console.log("   - creatorId:", creatorId)
       console.log("   - connectedAccountId:", connectedAccountId)
-      console.log("   - buyerUid:", purchaseData.buyerUid)
     }
 
     // Strategy 2: If no existing purchase, try to find connected accounts from recent sessions
@@ -97,21 +87,10 @@ export async function POST(request: NextRequest) {
           const session = await retrieveSessionSmart(sessionId, account.accountId)
 
           if (session) {
-            // CRITICAL: Verify the session belongs to the authenticated user
-            const sessionBuyerUid = session.metadata?.buyerUid || session.client_reference_id
-
-            if (sessionBuyerUid === userId) {
-              console.log(`✅ [Verify Session] Found session in connected account: ${account.accountId}`)
-              console.log(`✅ [Verify Session] Session buyer UID matches authenticated user: ${userId}`)
-              connectedAccountId = account.accountId
-              creatorId = account.userId
-              break // Found it, stop searching
-            } else {
-              console.log(`⚠️ [Verify Session] Session found but buyer UID mismatch:`, {
-                sessionBuyerUid,
-                authenticatedUserId: userId,
-              })
-            }
+            console.log(`✅ [Verify Session] Found session in connected account: ${account.accountId}`)
+            connectedAccountId = account.accountId
+            creatorId = account.userId
+            break // Found it, stop searching
           }
         } catch (error: any) {
           console.log(`⚠️ [Verify Session] Account ${account.accountId} failed: ${error.message}`)
@@ -140,7 +119,6 @@ export async function POST(request: NextRequest) {
     console.log("   Session ID:", sessionId)
     console.log("   Connected Account ID:", connectedAccountId || "None (will try platform account)")
     console.log("   Creator ID:", creatorId || "Unknown")
-    console.log("   Authenticated User ID:", userId)
 
     let session
     let retrievalMethod = "unknown"
@@ -159,24 +137,6 @@ export async function POST(request: NextRequest) {
       console.log("   Metadata:", session.metadata)
       console.log("   Retrieval Method:", retrievalMethod)
       console.log("   Connected Account:", connectedAccountId || "Platform")
-
-      // CRITICAL: Verify session ownership
-      const sessionBuyerUid = session.metadata?.buyerUid || session.client_reference_id
-      if (sessionBuyerUid !== userId) {
-        console.error("❌ [Verify Session] Session ownership verification failed:", {
-          sessionBuyerUid,
-          authenticatedUserId: userId,
-        })
-        return NextResponse.json(
-          {
-            error: "Session access denied",
-            details: "This session does not belong to the authenticated user",
-          },
-          { status: 403 },
-        )
-      }
-
-      console.log("✅ [Verify Session] Session ownership verified")
     } catch (error: any) {
       console.error("❌ [Verify Session] All retrieval strategies failed:", error)
 
@@ -196,7 +156,6 @@ export async function POST(request: NextRequest) {
               "Session was deleted from Stripe dashboard",
               "Connected account was disconnected after session creation",
               "Session was created with different API credentials",
-              "Session does not belong to the authenticated user",
             ],
             debugInfo: {
               hasConnectedAccountId: !!connectedAccountId,
@@ -206,10 +165,8 @@ export async function POST(request: NextRequest) {
               sessionType: sessionId.startsWith("cs_live_") ? "live" : "test",
               stripeMode: process.env.STRIPE_SECRET_KEY?.startsWith("sk_live_") ? "live" : "test",
               searchedAccountsCount: connectedAccounts.length,
-              authenticatedUserId: userId,
             },
-            suggestion:
-              "The session may have been created in a connected account that is no longer accessible or does not belong to you.",
+            suggestion: "The session may have been created in a connected account that is no longer accessible.",
           },
           { status: 404 },
         )
@@ -227,7 +184,6 @@ export async function POST(request: NextRequest) {
             retrievalMethod,
             errorType: error.type,
             errorCode: error.code,
-            authenticatedUserId: userId,
           },
         },
         { status: 400 },
@@ -249,9 +205,10 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Get bundle information from session metadata
-    console.log("📦 [Bundle Info] Starting bundle information flow...")
+    // SIMPLIFIED BUNDLE INFO FLOW - Single source of truth
+    console.log("📦 [Bundle Info] Starting simplified bundle information flow...")
 
+    // Step 1: Get bundle ID from session metadata (primary source)
     const bundleId = session.metadata?.bundleId || session.metadata?.bundle_id
     console.log("📦 [Bundle Info] Bundle ID from session metadata:", bundleId)
 
@@ -267,7 +224,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Fetch bundle data from Firestore
+    // Step 2: Fetch bundle data from Firestore (single source)
     console.log("📦 [Bundle Info] Fetching bundle from Firestore:", bundleId)
     const bundleDoc = await db.collection("bundles").doc(bundleId).get()
 
@@ -295,7 +252,7 @@ export async function POST(request: NextRequest) {
       creatorId: bundleData.creatorId,
     })
 
-    // Get creator info
+    // Step 3: Get creator info (single lookup)
     const finalCreatorId = session.metadata?.creatorId || creatorId || bundleData.creatorId
     let creatorData = {}
 
@@ -311,7 +268,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Build bundle info response
+    // Step 4: Build clean bundle info response
     const bundleInfo = {
       id: bundleId,
       title: bundleData.title || "Untitled Bundle",
@@ -340,7 +297,8 @@ export async function POST(request: NextRequest) {
       creatorName: bundleInfo.creator.name,
     })
 
-    // Handle purchase record creation/update
+    // Handle purchase record creation/update (keep existing logic)
+    const finalUserId = userId || session.metadata?.userId
     let purchaseId
     let alreadyProcessed = false
 
@@ -371,7 +329,7 @@ export async function POST(request: NextRequest) {
         bundleId,
         itemId: bundleId,
         itemType: "bundle",
-        buyerUid: userId, // CRITICAL: Always use authenticated user ID
+        userId: finalUserId,
         creatorId: finalCreatorId || null,
         connectedAccountId: connectedAccountId || null,
         amount: session.amount_total || 0,
@@ -387,54 +345,52 @@ export async function POST(request: NextRequest) {
         verificationMethod: "direct_api",
         retrievalMethod,
         verifiedAt: new Date(),
-        buyerVerified: true, // Mark as verified since we required authentication
       }
 
       const purchaseRef = await db.collection("purchases").add(purchaseData)
       purchaseId = purchaseRef.id
       console.log("✅ [Verify Session] Purchase record created:", purchaseId)
 
-      // Grant user access
-      console.log("🔓 [Verify Session] Granting user access...")
-      try {
-        // Add to user's purchases subcollection
-        await db.collection("users").doc(userId).collection("purchases").doc(purchaseId).set({
-          bundleId,
-          itemId: bundleId,
-          itemType: "bundle",
-          purchaseId,
-          sessionId,
-          amount: session.amount_total,
-          purchasedAt: new Date(),
-          status: "active",
-          bundleTitle: bundleData.title,
-          creatorId: finalCreatorId,
-        })
-
-        // Update user's main document with bundle access
-        await db
-          .collection("users")
-          .doc(userId)
-          .update({
-            [`bundleAccess.${bundleId}`]: {
-              purchaseId,
-              sessionId,
-              grantedAt: new Date(),
-              accessType: "purchased",
-              amount: session.amount_total,
-            },
-            updatedAt: new Date(),
+      // Grant user access if we have a user ID
+      if (finalUserId) {
+        console.log("🔓 [Verify Session] Granting user access...")
+        try {
+          // Add to user's purchases subcollection
+          await db.collection("users").doc(finalUserId).collection("purchases").doc(purchaseId).set({
+            bundleId,
+            itemId: bundleId,
+            itemType: "bundle",
+            purchaseId,
+            sessionId,
+            amount: session.amount_total,
+            purchasedAt: new Date(),
+            status: "active",
           })
 
-        console.log("✅ [Verify Session] User access granted")
-      } catch (error) {
-        console.error("❌ [Verify Session] Failed to grant user access:", error)
+          // Update user's main document with bundle access
+          await db
+            .collection("users")
+            .doc(finalUserId)
+            .update({
+              [`bundleAccess.${bundleId}`]: {
+                purchaseId,
+                sessionId,
+                grantedAt: new Date(),
+                accessType: "purchased",
+              },
+              updatedAt: new Date(),
+            })
+
+          console.log("✅ [Verify Session] User access granted")
+        } catch (error) {
+          console.error("❌ [Verify Session] Failed to grant user access:", error)
+        }
       }
     }
 
     console.log("✅ [Verify Session] Verification completed successfully")
 
-    // Return response with verified buyer information
+    // Return simplified response with clean bundle info
     const response = {
       success: true,
       alreadyProcessed,
@@ -447,33 +403,29 @@ export async function POST(request: NextRequest) {
         created: new Date(session.created * 1000).toISOString(),
         connectedAccount: connectedAccountId,
         retrievalMethod,
-        buyerUid: userId, // Always include verified buyer UID
       },
       purchase: {
         id: purchaseId,
         bundleId,
         itemId: bundleId,
         itemType: "bundle",
-        buyerUid: userId, // Always include verified buyer UID
+        userId: finalUserId,
         creatorId: finalCreatorId,
         amount: session.amount_total || 0,
         currency: session.currency || "usd",
         status: "completed",
         purchasedAt: new Date(),
-        verified: true,
       },
       item: bundleInfo,
     }
 
-    console.log("📤 [Verify Session] Sending verified response:", {
+    console.log("📤 [Verify Session] Sending clean response:", {
       success: response.success,
       alreadyProcessed: response.alreadyProcessed,
       sessionId: response.session.id,
       bundleTitle: response.item.title,
       hasDownloadUrl: !!response.item.downloadUrl,
       creatorName: response.item.creator.name,
-      buyerUid: response.purchase.buyerUid,
-      verified: response.purchase.verified,
     })
 
     return NextResponse.json(response)
