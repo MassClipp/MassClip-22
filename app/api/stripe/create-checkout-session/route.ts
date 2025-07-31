@@ -46,23 +46,39 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Missing required parameters" }, { status: 400 })
     }
 
+    // CRITICAL: Require authentication token for buyer identification
+    if (!idToken) {
+      console.error("❌ [Checkout API] No authentication token provided - anonymous purchases not allowed")
+      return NextResponse.json({ error: "Authentication required. Please log in to make a purchase." }, { status: 401 })
+    }
+
     let userId: string | null = null
     let userEmail: string | null = null
 
-    // If idToken is provided, verify it
-    if (idToken) {
-      try {
-        const decodedToken = await auth.verifyIdToken(idToken)
-        userId = decodedToken.uid
-        userEmail = decodedToken.email || null
-        console.log("✅ [Checkout API] Token verified for user:", userId)
-      } catch (error) {
-        console.error("❌ [Checkout API] Token verification failed:", error)
-        return NextResponse.json({ error: "Invalid authentication token" }, { status: 401 })
-      }
-    } else {
-      console.log("⚠️ [Checkout API] No idToken provided, proceeding without user authentication")
+    // Verify authentication token and get buyer UID
+    try {
+      const decodedToken = await auth.verifyIdToken(idToken)
+      userId = decodedToken.uid
+      userEmail = decodedToken.email || null
+      console.log("✅ [Checkout API] Token verified for buyer:", userId)
+    } catch (error) {
+      console.error("❌ [Checkout API] Token verification failed:", error)
+      return NextResponse.json({ error: "Invalid authentication token. Please log in again." }, { status: 401 })
     }
+
+    if (!userId) {
+      console.error("❌ [Checkout API] No user ID in token")
+      return NextResponse.json({ error: "Invalid user authentication" }, { status: 401 })
+    }
+
+    // Verify buyer exists in database
+    const buyerDoc = await db.collection("users").doc(userId).get()
+    if (!buyerDoc.exists) {
+      console.error("❌ [Checkout API] Buyer not found in database:", userId)
+      return NextResponse.json({ error: "User account not found. Please create an account first." }, { status: 404 })
+    }
+
+    const buyerData = buyerDoc.data()!
 
     // Get bundle details from bundles collection
     console.log("📦 [Checkout API] Fetching bundle:", bundleId)
@@ -120,6 +136,7 @@ export async function POST(request: NextRequest) {
       stripeAccountId,
       providedPriceId: priceId,
       bundleStoredPriceId: bundleStripePriceId,
+      buyerUid: userId, // CRITICAL: Include buyer UID
     })
 
     // Get the current domain from headers
@@ -127,15 +144,15 @@ export async function POST(request: NextRequest) {
     const protocol = request.headers.get("x-forwarded-proto") || "https"
     const currentDomain = `${protocol}://${host}`
 
+    // CRITICAL: Create comprehensive metadata with buyer UID to prevent anonymous purchases
     const sessionMetadata: any = {
+      buyerUid: userId, // CRITICAL: Always include buyer UID
+      buyerEmail: userEmail || buyerData.email || "",
+      buyerName: buyerData.displayName || buyerData.name || "",
       bundleId: bundleId,
       creatorId: bundle.creatorId || "",
       originalDomain: currentDomain,
       timestamp: new Date().toISOString(),
-    }
-
-    if (userId) {
-      sessionMetadata.userId = userId
     }
 
     const sessionParams: Stripe.Checkout.SessionCreateParams = {
@@ -147,11 +164,12 @@ export async function POST(request: NextRequest) {
         },
       ],
       mode: "payment",
-      success_url: successUrl || `${currentDomain}/purchase-success?session_id={CHECKOUT_SESSION_ID}`,
+      success_url:
+        successUrl || `${currentDomain}/purchase-success?session_id={CHECKOUT_SESSION_ID}&buyer_uid=${userId}`,
       cancel_url: cancelUrl || `${currentDomain}/creator/${bundle.creatorId}`,
-      metadata: sessionMetadata,
+      metadata: sessionMetadata, // CRITICAL: Include buyer UID in metadata
       payment_intent_data: {
-        metadata: sessionMetadata,
+        metadata: sessionMetadata, // CRITICAL: Also include in payment intent metadata
       },
       allow_promotion_codes: true,
     }
@@ -166,6 +184,7 @@ export async function POST(request: NextRequest) {
       stripeAccount: stripeAccountId,
       successUrl: sessionParams.success_url,
       cancelUrl: sessionParams.cancel_url,
+      buyerUid: userId, // Log buyer UID for verification
     })
 
     const session = await stripe.checkout.sessions.create(sessionParams, {
@@ -177,11 +196,13 @@ export async function POST(request: NextRequest) {
     console.log("   Checkout URL:", session.url)
     console.log("   Success URL:", session.success_url)
     console.log("   Cancel URL:", session.cancel_url)
+    console.log("   Buyer UID:", userId) // CRITICAL: Log buyer UID for verification
 
     return NextResponse.json({
       success: true,
       url: session.url,
       sessionId: session.id,
+      buyerUid: userId, // Return buyer UID for verification
     })
   } catch (error: any) {
     console.error("❌ [Checkout API] Session creation failed:", error)
