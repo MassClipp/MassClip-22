@@ -66,8 +66,10 @@ export default function VideoPurchaseButton({
         },
         body: JSON.stringify({
           idToken, // CRITICAL: Include buyer authentication token
-          productBoxId,
-          priceInCents: Math.round(price * 100), // Convert to cents
+          priceId: productBoxId, // Use productBoxId as priceId for now
+          bundleId: productBoxId, // Use productBoxId as bundleId
+          successUrl: `${window.location.origin}/purchase-success?session_id={CHECKOUT_SESSION_ID}&buyer_uid=${user.uid}`,
+          cancelUrl: window.location.href,
         }),
       })
 

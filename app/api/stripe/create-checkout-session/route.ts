@@ -35,15 +35,30 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
 export async function POST(request: NextRequest) {
   try {
     console.log("🚀 [Checkout API] Starting checkout session creation...")
+    console.log("📝 [Checkout API] Headers:", {
+      contentType: request.headers.get("content-type"),
+      userAgent: request.headers.get("user-agent"),
+      origin: request.headers.get("origin"),
+    })
 
     const body = await request.json()
-    console.log("📝 [Checkout API] Request body:", { ...body, idToken: body.idToken ? "[REDACTED]" : "MISSING" })
+    console.log("📝 [Checkout API] Request body keys:", Object.keys(body))
+    console.log("📝 [Checkout API] Request body:", {
+      ...body,
+      idToken: body.idToken ? `[TOKEN_LENGTH:${body.idToken.length}]` : "MISSING",
+    })
 
     const { idToken, priceId, bundleId, successUrl, cancelUrl } = body
 
     if (!priceId || !bundleId) {
-      console.error("❌ [Checkout API] Missing required parameters")
-      return NextResponse.json({ error: "Missing required parameters" }, { status: 400 })
+      console.error("❌ [Checkout API] Missing required parameters:", { priceId: !!priceId, bundleId: !!bundleId })
+      return NextResponse.json(
+        {
+          error: "Missing required parameters",
+          details: { priceId: !!priceId, bundleId: !!bundleId },
+        },
+        { status: 400 },
+      )
     }
 
     // CRITICAL: Require authentication token for buyer identification
