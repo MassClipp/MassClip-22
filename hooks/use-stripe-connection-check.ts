@@ -23,56 +23,115 @@ export function useStripeConnectionCheck() {
   const [loading, setLoading] = useState(true)
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus | null>(null)
 
-  const checkStatus = useCallback(async () => {
-    if (!user) {
-      setLoading(false)
-      return
-    }
-
-    try {
-      setLoading(true)
-      const idToken = await user.getIdToken()
-
-      const response = await fetch("/api/stripe/connect/status", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ idToken }),
-      })
-
-      if (response.ok) {
-        const data = await response.json()
-        const status: ConnectionStatus = {
-          isConnected: data.connected,
-          accountId: data.accountId,
-          businessType: data.businessType,
-          capabilities: data.capabilities,
-        }
-
-        setConnectionStatus(status)
-        setIsConnected(data.connected && data.capabilities?.charges_enabled && data.capabilities?.payouts_enabled)
-      } else {
-        // If there's an error, assume not connected
-        setConnectionStatus(null)
-        setIsConnected(false)
+  const checkConnection = useCallback(
+    async (forceRefresh = false) => {
+      if (!user) {
+        setLoading(false)
+        return
       }
-    } catch (error) {
-      console.error("Error checking connection status:", error)
-      setConnectionStatus(null)
-      setIsConnected(false)
-    } finally {
-      setLoading(false)
-    }
-  }, [user])
 
-  useEffect(() => {
-    checkStatus()
-  }, [checkStatus])
+      try {
+        setLoading(true)
+        console.log("🔍 [Connection Check] Checking Stripe connection...")
 
+        const idToken = await user.getIdToken(forceRefresh) // Force token refresh if needed
+
+        // Use the connection status API with cache busting if needed
+        const url = forceRefresh
+          ? `/api/stripe/connection-status-on-login?t=${Date.now()}`
+          : `/api/stripe/connection-status-on-login`
+
+        const response = await fetch(url, {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${idToken}`,
+          },
+          cache: forceRefresh ? "no-store" : "default",
+        })
+
+        if (response.ok) {
+          const data = await response.json()
+          console.log("📊 [Connection Check] Status received:", data)
+
+          const connected = data.connected && data.account_id
+          setIsConnected(connected)
+
+          if (connected) {
+            setConnectionStatus({
+              isConnected: true,
+              accountId: data.account_id,
+              businessType: data.account_status?.business_type || null,
+              capabilities: {
+                charges_enabled: data.account_status?.charges_enabled || false,
+                payouts_enabled: data.account_status?.payouts_enabled || false,
+                details_submitted: data.account_status?.details_submitted || false,
+                currently_due: data.account_status?.requirements?.currently_due || [],
+                eventually_due: data.account_status?.requirements?.eventually_due || [],
+                past_due: data.account_status?.requirements?.past_due || [],
+              },
+            })
+          } else {
+            setConnectionStatus({
+              isConnected: false,
+              accountId: null,
+              businessType: null,
+              capabilities: null,
+            })
+          }
+        } else {
+          console.error("❌ [Connection Check] API error:", response.status)
+          setIsConnected(false)
+          setConnectionStatus(null)
+        }
+      } catch (error) {
+        console.error("❌ [Connection Check] Error:", error)
+        setIsConnected(false)
+        setConnectionStatus(null)
+      } finally {
+        setLoading(false)
+      }
+    },
+    [user],
+  )
+
+  // Force refresh function for after OAuth
   const refreshStatus = useCallback(() => {
-    checkStatus()
-  }, [checkStatus])
+    console.log("🔄 [Connection Check] Force refreshing status...")
+    return checkConnection(true)
+  }, [checkConnection])
+
+  // Initial check
+  useEffect(() => {
+    checkConnection()
+  }, [checkConnection])
+
+  // Listen for storage events (when user completes OAuth in another tab)
+  useEffect(() => {
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === "stripe_connection_updated") {
+        console.log("🔄 [Connection Check] Storage event detected, refreshing...")
+        refreshStatus()
+      }
+    }
+
+    window.addEventListener("storage", handleStorageChange)
+    return () => window.removeEventListener("storage", handleStorageChange)
+  }, [refreshStatus])
+
+  // Listen for focus events (when user returns to tab after OAuth)
+  useEffect(() => {
+    const handleFocus = () => {
+      // Only refresh if we think we're not connected
+      if (!isConnected) {
+        console.log("🔄 [Connection Check] Tab focused and not connected, checking...")
+        refreshStatus()
+      }
+    }
+
+    window.addEventListener("focus", handleFocus)
+    return () => window.removeEventListener("focus", handleFocus)
+  }, [isConnected, refreshStatus])
 
   return {
     isConnected,

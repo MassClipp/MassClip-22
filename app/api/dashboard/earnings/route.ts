@@ -1,94 +1,77 @@
-export const runtime = "nodejs"
-
 import { type NextRequest, NextResponse } from "next/server"
-import { getAuthenticatedUser } from "@/lib/firebase-admin"
+import { getServerSession } from "next-auth"
+import { authOptions } from "@/auth"
+import { db } from "@/lib/firebase-server"
 import { StripeEarningsService } from "@/lib/stripe-earnings-service"
-import { ProductBoxSalesService } from "@/lib/product-box-sales-service"
+import { validateEarningsData } from "@/lib/format-utils"
 
 export async function GET(request: NextRequest) {
   try {
-    // Get authenticated user
-    const user = await getAuthenticatedUser(request.headers)
+    console.log("🔍 Starting earnings API request...")
 
-    console.log(`📊 Dashboard earnings API called for user: ${user.uid}`)
-
-    // Try to get Stripe earnings data first (same as earnings page)
-    let stripeData = null
-    try {
-      stripeData = await StripeEarningsService.getEarningsData(user.uid)
-      console.log(`💳 Stripe data retrieved:`, {
-        totalEarnings: stripeData?.totalEarnings,
-        last30DaysEarnings: stripeData?.last30DaysEarnings,
-        hasError: !!stripeData?.error,
-      })
-    } catch (error) {
-      console.warn(`⚠️ Stripe data fetch failed:`, error)
+    // Get authenticated session
+    const session = await getServerSession(authOptions)
+    if (!session?.user?.id) {
+      console.log("❌ No authenticated session found")
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    // If Stripe data is available and valid, use it
-    if (stripeData && !stripeData.error && stripeData.totalEarnings > 0) {
-      const earningsData = {
-        totalRevenue: stripeData.totalEarnings,
-        totalSales: stripeData.salesMetrics?.totalSales || 0,
-        thisMonthRevenue: stripeData.thisMonthEarnings,
-        thisMonthSales: stripeData.salesMetrics?.thisMonthSales || 0,
-        last30DaysRevenue: stripeData.last30DaysEarnings,
-        last30DaysSales: stripeData.salesMetrics?.last30DaysSales || 0,
-        averageTransactionValue: stripeData.salesMetrics?.averageTransactionValue || 0,
-        recentSales:
-          stripeData.recentTransactions?.slice(0, 10).map((txn) => ({
-            id: txn.id,
-            amount: txn.net,
-            createdAt: txn.created,
-            productBoxTitle: txn.description || "Stripe Transaction",
-            status: "completed",
-          })) || [],
-        bestSellingProduct: null, // Stripe doesn't provide this easily
-        lastUpdated: new Date(),
-        source: "stripe",
-      }
+    const userId = session.user.id
+    console.log("✅ Authenticated user:", userId)
 
-      console.log(`✅ Returning Stripe-based earnings data:`, {
-        last30DaysRevenue: earningsData.last30DaysRevenue,
-        last30DaysSales: earningsData.last30DaysSales,
-      })
-
-      return NextResponse.json(earningsData)
+    // Get user profile from Firestore
+    const userDoc = await db.collection("users").doc(userId).get()
+    if (!userDoc.exists) {
+      console.log("❌ User profile not found in Firestore")
+      return NextResponse.json({ error: "User profile not found" }, { status: 404 })
     }
 
-    // Fallback to ProductBoxSalesService (Firestore)
-    console.log(`📦 Falling back to ProductBoxSalesService`)
-    const salesStats = await ProductBoxSalesService.getSalesStats(user.uid)
+    const userData = userDoc.data()
+    const stripeAccountId = userData?.stripeAccountId
 
-    const earningsData = {
-      totalRevenue: salesStats.totalRevenue,
-      totalSales: salesStats.totalSales,
-      thisMonthRevenue: salesStats.thisMonthRevenue,
-      thisMonthSales: salesStats.thisMonthSales,
-      last30DaysRevenue: salesStats.last30DaysRevenue,
-      last30DaysSales: salesStats.last30DaysSales,
-      averageTransactionValue:
-        salesStats.last30DaysSales > 0 ? salesStats.last30DaysRevenue / salesStats.last30DaysSales : 0,
-      recentSales: salesStats.recentSales,
-      bestSellingProduct: salesStats.bestSellingProductBox,
-      lastUpdated: new Date(),
-      source: "firestore",
+    if (!stripeAccountId) {
+      console.log("⚠️ No Stripe account connected for user")
+      return NextResponse.json(
+        {
+          error: "No Stripe account connected",
+          message: "Please connect your Stripe account to view earnings",
+          needsStripeConnection: true,
+          data: validateEarningsData(null),
+        },
+        { status: 200 },
+      )
     }
 
-    console.log(`✅ Returning Firestore-based earnings data:`, {
-      last30DaysRevenue: earningsData.last30DaysRevenue,
-      last30DaysSales: earningsData.last30DaysSales,
+    console.log("💳 Found Stripe account:", stripeAccountId)
+
+    // Fetch real earnings data from Stripe
+    const stripeEarningsService = new StripeEarningsService()
+    const earningsData = await stripeEarningsService.getEarningsData(stripeAccountId)
+
+    console.log("📊 Raw Stripe earnings data:", earningsData)
+
+    // Validate and format the data
+    const validatedData = validateEarningsData(earningsData)
+    console.log("✅ Validated earnings data:", validatedData)
+
+    return NextResponse.json({
+      success: true,
+      data: validatedData,
+      dataSource: "stripe",
+      lastUpdated: new Date().toISOString(),
     })
-
-    return NextResponse.json(earningsData)
   } catch (error) {
-    console.error("❌ Error fetching dashboard earnings:", error)
+    console.error("💥 Earnings API error:", error)
+
+    // Return safe fallback data on error
     return NextResponse.json(
       {
         error: "Failed to fetch earnings data",
-        details: error instanceof Error ? error.message : "Unknown error",
+        message: error instanceof Error ? error.message : "Unknown error occurred",
+        data: validateEarningsData(null),
+        dataSource: "fallback",
       },
-      { status: 500 },
+      { status: 200 },
     )
   }
 }

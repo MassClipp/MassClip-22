@@ -1,13 +1,10 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { getStripeConnectCallbackUrl, getSiteUrl, logEnvironmentInfo } from "@/lib/url-utils"
+import { getSiteUrl } from "@/lib/url-utils"
 import { auth, firestore } from "@/lib/firebase-admin"
 
 export async function POST(request: NextRequest) {
   try {
     console.log("🔧 [Connect URL] Starting OAuth URL generation...")
-
-    // Log environment info for debugging
-    logEnvironmentInfo()
 
     // Parse request body
     const body = await request.json()
@@ -27,6 +24,7 @@ export async function POST(request: NextRequest) {
     // Check all required environment variables
     const requiredEnvVars = {
       STRIPE_CLIENT_ID: process.env.STRIPE_CLIENT_ID,
+      NEXT_PUBLIC_BASE_URL: process.env.NEXT_PUBLIC_BASE_URL,
     }
 
     const missingVars = Object.entries(requiredEnvVars)
@@ -49,12 +47,9 @@ export async function POST(request: NextRequest) {
     const clientId = requiredEnvVars.STRIPE_CLIENT_ID!
     console.log(`✅ [Connect URL] Using Stripe Client ID: ${clientId.substring(0, 20)}...`)
 
-    // Get base URL and callback URL dynamically
-    const baseUrl = getSiteUrl()
-    const callbackUrl = getStripeConnectCallbackUrl()
-
-    console.log(`🌐 [Connect URL] Base URL: ${baseUrl}`)
-    console.log(`🔗 [Connect URL] Callback URL: ${callbackUrl}`)
+    // Get base URL for redirect (with fallback)
+    const baseUrl = requiredEnvVars.NEXT_PUBLIC_BASE_URL || getSiteUrl()
+    console.log(`🌐 [Connect URL] Using base URL: ${baseUrl}`)
 
     // Generate a secure state parameter
     const state = `${userId}_${Date.now()}_${Math.random().toString(36).substring(7)}`
@@ -76,7 +71,7 @@ export async function POST(request: NextRequest) {
     oauthUrl.searchParams.set("response_type", "code")
     oauthUrl.searchParams.set("client_id", clientId)
     oauthUrl.searchParams.set("scope", "read_write")
-    oauthUrl.searchParams.set("redirect_uri", callbackUrl)
+    oauthUrl.searchParams.set("redirect_uri", `${baseUrl}/api/stripe/connect/oauth-callback`)
     oauthUrl.searchParams.set("state", state)
 
     const finalUrl = oauthUrl.toString()
@@ -103,7 +98,6 @@ export async function POST(request: NextRequest) {
       state,
       clientId: clientId.substring(0, 20) + "...", // Partial for debugging
       baseUrl,
-      callbackUrl,
     })
   } catch (error: any) {
     console.error("❌ [Connect URL] Error generating OAuth URL:", error)

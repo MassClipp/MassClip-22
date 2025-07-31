@@ -1,102 +1,64 @@
+// lib/stripe.ts
+
 import Stripe from "stripe"
 
-// Always use live keys in production and preview
-const secretKey = process.env.STRIPE_SECRET_KEY
-
-if (!secretKey) {
+if (!process.env.STRIPE_SECRET_KEY) {
   throw new Error("STRIPE_SECRET_KEY is not set")
 }
 
-// Force live mode - always use live keys even in preview
-const isLiveKey = secretKey.startsWith("sk_live_")
-if (!isLiveKey) {
-  console.warn("⚠️ [Stripe] WARNING: Not using live keys! Expected sk_live_ key.")
-}
-
-export const stripe = new Stripe(secretKey, {
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
   apiVersion: "2024-06-20",
-  typescript: true,
 })
+
+// Named export for stripe
+export { stripe }
+
+// Environment detection
+export const isTestMode = !process.env.STRIPE_SECRET_KEY?.startsWith("sk_live_")
+export const isLiveMode = process.env.STRIPE_SECRET_KEY?.startsWith("sk_live_")
 
 export default stripe
 
-// Always consider this live mode since we're forcing live keys
-export const isTestMode = false
-export const isLiveMode = true
+// Helper function to retrieve sessions from connected accounts
+export async function retrieveSessionWithAccount(sessionId: string, connectedAccountId: string) {
+  try {
+    console.log(`🔗 [Stripe] Retrieving session ${sessionId} from connected account ${connectedAccountId}`)
 
-console.log(`🔧 Stripe initialized in LIVE mode (forced)`)
+    const session = await stripe.checkout.sessions.retrieve(sessionId, {
+      expand: ["payment_intent", "line_items"],
+      stripeAccount: connectedAccountId,
+    })
 
-/**
- * 25% platform fee – returns fee in cents
- */
-export function calculateApplicationFee(amountInCents: number) {
-  return Math.round(amountInCents * 0.25)
-}
-
-/**
- * Create a Stripe instance scoped to a connected account
- */
-export function createStripeWithAccount(accountId: string) {
-  return new Stripe(secretKey, {
-    apiVersion: "2024-06-20",
-    typescript: true,
-    stripeAccount: accountId,
-  })
-}
-
-/**
- * Execute any Stripe call inside the context of a connected account
- */
-export async function callStripeWithAccount<T>(accountId: string, op: (scoped: Stripe) => Promise<T>): Promise<T> {
-  const scoped = createStripeWithAccount(accountId)
-  return op(scoped)
-}
-
-/**
- * Retrieve a checkout session, automatically handling connected/platform
- */
-export async function retrieveSessionWithAccount(sessionId: string, accountId?: string) {
-  if (accountId) {
-    return callStripeWithAccount(accountId, (s) => s.checkout.sessions.retrieve(sessionId))
-  }
-  return stripe.checkout.sessions.retrieve(sessionId)
-}
-
-/**
- * Create a checkout session with connected account context
- */
-export async function createCheckoutSessionWithAccount(
-  params: Stripe.Checkout.SessionCreateParams,
-  accountId?: string,
-) {
-  if (accountId) {
-    console.log(`💳 [Stripe] Creating checkout session with account ${accountId} in LIVE mode`)
-    return await callStripeWithAccount(accountId, (stripe) => stripe.checkout.sessions.create(params))
-  } else {
-    console.log(`💳 [Stripe] Creating checkout session on platform account in LIVE mode`)
-    return await stripe.checkout.sessions.create(params)
+    console.log(`✅ [Stripe] Successfully retrieved session from connected account`)
+    return session
+  } catch (error: any) {
+    console.error(`❌ [Stripe] Failed to retrieve session from connected account:`, error)
+    throw error
   }
 }
 
-/**
- * Validate that we're using live keys
- */
-export function validateStripeEnvironment() {
-  const hasLiveKey = secretKey.startsWith("sk_live_")
-
-  if (!hasLiveKey) {
-    console.warn("⚠️ [Stripe] WARNING: Not using live keys! This should use sk_live_ keys.")
-    return false
+// Helper function to try both platform and connected account retrieval
+export async function retrieveSessionSmart(sessionId: string, connectedAccountId?: string) {
+  // If we have a connected account ID, try that first
+  if (connectedAccountId) {
+    try {
+      return await retrieveSessionWithAccount(sessionId, connectedAccountId)
+    } catch (error: any) {
+      console.log(`⚠️ [Stripe] Connected account retrieval failed, trying platform account...`)
+      // Fall through to platform account attempt
+    }
   }
 
-  console.log(`✅ [Stripe] Environment validation passed: Using LIVE keys`)
-  return true
+  // Try platform account
+  try {
+    console.log(`🏢 [Stripe] Retrieving session from platform account`)
+    const session = await stripe.checkout.sessions.retrieve(sessionId, {
+      expand: ["payment_intent", "line_items"],
+    })
+    console.log(`✅ [Stripe] Successfully retrieved session from platform account`)
+    return session
+  } catch (error: any) {
+    console.error(`❌ [Stripe] Platform account retrieval also failed:`, error)
+    throw error
+  }
 }
-
-// Helper to get the correct webhook secret - always use live
-export const getWebhookSecret = () => {
-  return process.env.STRIPE_WEBHOOK_SECRET_LIVE || process.env.STRIPE_WEBHOOK_SECRET
-}
-
-// Validate on module load
-validateStripeEnvironment()
