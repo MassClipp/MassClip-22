@@ -4,33 +4,29 @@ import { useEffect, useState, Suspense } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
-import { CheckCircle, ExternalLink, AlertCircle, Loader2 } from "lucide-react"
-import { useAuth } from "@/hooks/use-firebase-auth"
+import { CheckCircle, ExternalLink, AlertCircle } from "lucide-react"
+import { useAuth } from "@/contexts/auth-context"
 
 interface VerificationResponse {
   success: boolean
-  verified: boolean
   alreadyProcessed?: boolean
   session?: {
     id: string
-    status: string
-    paymentStatus: string
+    payment_status: string
+    amount_total: number
+    currency: string
   }
-  purchase?: {
+  purchase?: any
+  item?: {
     id: string
-    buyerUid: string
-    creatorId: string
-    amount: number
-    status: string
-    purchaseType: string
-    productBoxId?: string
-    bundleId?: string
-    createdAt: any
+    title: string
+    description?: string
+    creator?: {
+      username: string
+      displayName?: string
+    }
   }
   error?: string
-  isAnonymous?: boolean
-  isUnauthorized?: boolean
-  needsProcessing?: boolean
 }
 
 function PurchaseSuccessContent() {
@@ -42,18 +38,15 @@ function PurchaseSuccessContent() {
   const [isManualRetry, setIsManualRetry] = useState(false)
 
   const sessionId = searchParams.get("session_id")
-  const buyerUid = searchParams.get("buyer_uid")
 
   useEffect(() => {
     console.log("🔍 [Purchase Success] Page loaded, extracting URL parameters...")
 
     const urlParams = new URLSearchParams(window.location.search)
     const sessionIdFromUrl = urlParams.get("session_id")
-    const buyerUidFromUrl = urlParams.get("buyer_uid")
 
     console.log("📋 [Purchase Success] Search params:", {
       sessionId: sessionIdFromUrl,
-      buyerUid: buyerUidFromUrl,
       fullUrl: window.location.href,
       currentDomain: window.location.hostname,
     })
@@ -62,12 +55,6 @@ function PurchaseSuccessContent() {
       console.log("✅ [Purchase Success] Session ID from URL:", sessionIdFromUrl)
     } else {
       console.error("❌ [Purchase Success] No session_id found in URL")
-    }
-
-    if (buyerUidFromUrl) {
-      console.log("✅ [Purchase Success] Buyer UID from URL:", buyerUidFromUrl)
-    } else {
-      console.warn("⚠️ [Purchase Success] No buyer_uid found in URL")
     }
   }, [])
 
@@ -80,45 +67,21 @@ function PurchaseSuccessContent() {
     if (!user) {
       console.log("❌ [Purchase Success] User not authenticated")
       setVerificationStatus("error")
-      setVerificationData({
-        success: false,
-        verified: false,
-        error: "Authentication required to verify purchase",
-      })
+      setVerificationData({ success: false, error: "Authentication required" })
       return
     }
 
     console.log("✅ [Purchase Success] User authenticated:", user.uid)
 
-    // Verify buyer UID matches authenticated user
-    if (buyerUid && buyerUid !== user.uid) {
-      console.error("❌ [Purchase Success] Buyer UID mismatch:", {
-        urlBuyerUid: buyerUid,
-        authenticatedUid: user.uid,
-      })
-      setVerificationStatus("error")
-      setVerificationData({
-        success: false,
-        verified: false,
-        error: "Purchase verification failed: User identity mismatch",
-        isUnauthorized: true,
-      })
-      return
-    }
-
     if (!sessionId) {
       console.error("❌ [Purchase Success] No session ID found")
       setVerificationStatus("error")
-      setVerificationData({
-        success: false,
-        verified: false,
-        error: "No session ID provided",
-      })
+      setVerificationData({ success: false, error: "No session ID provided" })
       return
     }
 
     verifyPurchase()
-  }, [user, authLoading, sessionId, buyerUid, isManualRetry])
+  }, [user, authLoading, sessionId, isManualRetry])
 
   const verifyPurchase = async () => {
     if (!user || !sessionId) return
@@ -128,20 +91,18 @@ function PurchaseSuccessContent() {
       setVerificationStatus("loading")
 
       // Get fresh auth token
-      const buyerToken = await user.getIdToken(true)
+      const token = await user.getIdToken(true)
       console.log("🔑 [Purchase Success] Auth token obtained")
 
-      const response = await fetch("/api/purchase/verify-session-with-buyer", {
+      const response = await fetch("/api/purchase/verify-session", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
           "Cache-Control": "no-cache",
           Pragma: "no-cache",
         },
-        body: JSON.stringify({
-          sessionId,
-          buyerToken,
-        }),
+        body: JSON.stringify({ sessionId }),
       })
 
       console.log("📡 [Purchase Success] Verification response status:", response.status)
@@ -153,7 +114,7 @@ function PurchaseSuccessContent() {
       const data = await response.json()
       console.log("📋 [Purchase Success] Full verification response:", JSON.stringify(data, null, 2))
 
-      if (data.success && data.verified) {
+      if (data.success) {
         setVerificationStatus("success")
         setVerificationData(data)
         console.log("✅ [Purchase Success] Verification successful")
@@ -165,11 +126,7 @@ function PurchaseSuccessContent() {
     } catch (error) {
       console.error("❌ [Purchase Success] Verification error:", error)
       setVerificationStatus("error")
-      setVerificationData({
-        success: false,
-        verified: false,
-        error: "Network error occurred during verification",
-      })
+      setVerificationData({ success: false, error: "Network error occurred" })
     }
   }
 
@@ -178,11 +135,9 @@ function PurchaseSuccessContent() {
     setIsManualRetry(!isManualRetry)
   }
 
-  const handleAccessContent = () => {
-    if (verificationData?.purchase?.productBoxId) {
-      router.push(`/product-box/${verificationData.purchase.productBoxId}/content`)
-    } else if (verificationData?.purchase?.bundleId) {
-      router.push(`/bundle/${verificationData.purchase.bundleId}`)
+  const handleAccessBundle = () => {
+    if (verificationData?.item?.id) {
+      router.push(`/product-box/${verificationData.item.id}/content`)
     } else {
       router.push("/dashboard/purchases")
     }
@@ -197,7 +152,7 @@ function PurchaseSuccessContent() {
       <div className="min-h-screen flex items-center justify-center">
         <Card className="w-full max-w-md">
           <CardContent className="p-8 text-center">
-            <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
             <p>Loading...</p>
           </CardContent>
         </Card>
@@ -225,7 +180,7 @@ function PurchaseSuccessContent() {
       <div className="min-h-screen flex items-center justify-center">
         <Card className="w-full max-w-md">
           <CardContent className="p-8 text-center">
-            <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
             <h1 className="text-xl font-semibold mb-2">Verifying Purchase</h1>
             <p className="text-gray-600">Please wait while we confirm your purchase...</p>
           </CardContent>
@@ -242,21 +197,6 @@ function PurchaseSuccessContent() {
             <AlertCircle className="h-12 w-12 text-red-500 mx-auto mb-4" />
             <h1 className="text-xl font-semibold mb-2">Verification Failed</h1>
             <p className="text-gray-600 mb-4">{verificationData?.error || "Unable to verify your purchase"}</p>
-
-            {verificationData?.isAnonymous && (
-              <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
-                <p className="text-sm text-red-800">
-                  Anonymous purchases are not allowed. Please ensure you're logged in when making purchases.
-                </p>
-              </div>
-            )}
-
-            {verificationData?.isUnauthorized && (
-              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4">
-                <p className="text-sm text-yellow-800">This purchase belongs to a different user account.</p>
-              </div>
-            )}
-
             <div className="space-y-2">
               <Button onClick={handleRetry} className="w-full">
                 Try Again
@@ -279,23 +219,16 @@ function PurchaseSuccessContent() {
 
           <h1 className="text-2xl font-bold text-gray-900 mb-2">Purchase Complete</h1>
 
-          {verificationData?.purchase && (
-            <div className="mb-6">
-              <p className="text-gray-600 mb-2">
-                {verificationData.purchase.purchaseType === "bundle" ? "Bundle" : "Product Box"}
-              </p>
-              <p className="text-lg font-semibold">${verificationData.purchase.amount}</p>
-            </div>
-          )}
+          {verificationData?.item?.title && <p className="text-gray-600 mb-6">{verificationData.item.title}</p>}
 
           {verificationData?.alreadyProcessed && (
             <p className="text-sm text-blue-600 mb-4">This purchase was already processed</p>
           )}
 
           <div className="space-y-3">
-            <Button onClick={handleAccessContent} className="w-full" size="lg">
+            <Button onClick={handleAccessBundle} className="w-full" size="lg">
               <ExternalLink className="h-4 w-4 mr-2" />
-              Access Content
+              Access Bundle
             </Button>
 
             <Button variant="outline" onClick={handleViewPurchases} className="w-full bg-transparent">
@@ -306,8 +239,7 @@ function PurchaseSuccessContent() {
           {verificationData?.session && (
             <div className="mt-6 pt-4 border-t text-sm text-gray-500">
               <p>Session: {verificationData.session.id}</p>
-              <p>Status: {verificationData.session.paymentStatus}</p>
-              {verificationData.purchase && <p>Buyer: {verificationData.purchase.buyerUid}</p>}
+              <p>Status: {verificationData.session.payment_status}</p>
             </div>
           )}
         </CardContent>
@@ -321,7 +253,7 @@ export default function PurchaseSuccessPage() {
     <Suspense
       fallback={
         <div className="min-h-screen flex items-center justify-center">
-          <Loader2 className="h-8 w-8 animate-spin" />
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
         </div>
       }
     >

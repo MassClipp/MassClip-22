@@ -3,8 +3,6 @@ import GoogleProvider from "next-auth/providers/google"
 import { initializeApp, getApps } from "firebase-admin/app"
 import { getFirestore } from "firebase-admin/firestore"
 import { cert } from "firebase-admin/app"
-import { getAuth } from "firebase-admin/auth"
-import type { NextRequest } from "next/server"
 
 // Initialize Firebase Admin if not already initialized
 if (!getApps().length) {
@@ -18,45 +16,6 @@ if (!getApps().length) {
 }
 
 const adminDb = getFirestore()
-const adminAuth = getAuth()
-
-// Add the missing decodeToken function
-export async function decodeToken(token: string) {
-  try {
-    const decodedToken = await adminAuth.verifyIdToken(token)
-    return decodedToken
-  } catch (error) {
-    console.error("Error decoding token:", error)
-    throw new Error("Invalid token")
-  }
-}
-
-// Helper function to extract token from request
-export async function extractTokenFromRequest(request: NextRequest): Promise<string | null> {
-  const authHeader = request.headers.get("authorization")
-  if (authHeader && authHeader.startsWith("Bearer ")) {
-    return authHeader.substring(7)
-  }
-
-  // Also check for token in body for POST requests
-  try {
-    const body = await request.json()
-    return body.buyerToken || body.idToken || null
-  } catch {
-    return null
-  }
-}
-
-// Helper function to require authentication
-export async function requireAuth(request: NextRequest) {
-  const token = await extractTokenFromRequest(request)
-
-  if (!token) {
-    throw new Error("Authentication token required")
-  }
-
-  return await decodeToken(token)
-}
 
 export const authOptions: NextAuthOptions = {
   providers: [

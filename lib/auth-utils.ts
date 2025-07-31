@@ -1,6 +1,5 @@
 import { auth } from "@/lib/firebase-admin"
 import type { NextRequest } from "next/server"
-import { decodeToken } from "@/lib/auth"
 
 export interface DecodedToken {
   uid: string
@@ -82,25 +81,14 @@ export async function verifyIdTokenFromRequest(request: NextRequest): Promise<De
 /**
  * Require authentication for API routes
  */
-export async function requireAuth(request: NextRequest) {
-  const authHeader = request.headers.get("authorization")
+export async function requireAuth(request: NextRequest): Promise<DecodedToken> {
+  const decodedToken = await verifyIdTokenFromRequest(request)
 
-  if (!authHeader || !authHeader.startsWith("Bearer ")) {
-    throw new Error("Authorization header required")
+  if (!decodedToken) {
+    throw new Error("Authentication required")
   }
 
-  const token = authHeader.substring(7)
-
-  if (!token) {
-    throw new Error("Authentication token required")
-  }
-
-  try {
-    const decodedToken = await decodeToken(token)
-    return decodedToken
-  } catch (error) {
-    throw new Error("Invalid authentication token")
-  }
+  return decodedToken
 }
 
 /**
@@ -194,23 +182,4 @@ export class AuthorizationError extends Error {
 export async function getAuthenticatedUser(request: NextRequest): Promise<string | null> {
   const decodedToken = await verifyIdTokenFromRequest(request)
   return decodedToken ? decodedToken.uid : null
-}
-
-/**
- * Extract buyer token from request
- */
-export async function extractBuyerToken(request: NextRequest): Promise<string | null> {
-  // Try to get token from Authorization header
-  const authHeader = request.headers.get("authorization")
-  if (authHeader && authHeader.startsWith("Bearer ")) {
-    return authHeader.substring(7)
-  }
-
-  // Try to get token from request body
-  try {
-    const body = await request.json()
-    return body.buyerToken || body.idToken || null
-  } catch {
-    return null
-  }
 }
