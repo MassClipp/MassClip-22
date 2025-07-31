@@ -1,228 +1,143 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { initializeApp, getApps, cert } from "firebase-admin/app"
-import { getAuth } from "firebase-admin/auth"
-import { getFirestore } from "firebase-admin/firestore"
-
-// Initialize Firebase Admin
-if (!getApps().length) {
-  const serviceAccount = {
-    type: "service_account",
-    project_id: process.env.FIREBASE_PROJECT_ID,
-    private_key_id: process.env.FIREBASE_PRIVATE_KEY_ID,
-    private_key: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n"),
-    client_email: process.env.FIREBASE_CLIENT_EMAIL,
-    client_id: process.env.FIREBASE_CLIENT_ID,
-    auth_uri: "https://accounts.google.com/o/oauth2/auth",
-    token_uri: "https://oauth2.googleapis.com/token",
-    auth_provider_x509_cert_url: "https://www.googleapis.com/oauth2/v1/certs",
-    client_x509_cert_url: `https://www.googleapis.com/robot/v1/metadata/x509/${process.env.FIREBASE_CLIENT_EMAIL}`,
-  }
-
-  initializeApp({
-    credential: cert(serviceAccount as any),
-  })
-}
-
-const db = getFirestore()
-const auth = getAuth()
+import { getAdminDb } from "@/lib/firebase-server"
+import { verifyIdTokenFromRequest } from "@/lib/auth-utils"
 
 export async function GET(request: NextRequest) {
   try {
-    console.log("🛒 [Unified Purchases] Starting unified purchases fetch...")
+    console.log("🛒 [Unified Purchases] Fetching user purchases...")
 
-    // Get authorization header
-    const authHeader = request.headers.get("authorization")
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      console.error("❌ [Unified Purchases] Missing or invalid authorization header")
+    // REQUIRE authentication
+    const decodedToken = await verifyIdTokenFromRequest(request)
+    if (!decodedToken) {
+      console.error("❌ [Unified Purchases] Authentication required")
       return NextResponse.json({ error: "Authentication required" }, { status: 401 })
     }
 
-    const idToken = authHeader.substring(7) // Remove "Bearer " prefix
+    const userId = decodedToken.uid
+    console.log("👤 [Unified Purchases] Authenticated user:", userId)
 
-    // Verify Firebase token - REQUIRED for purchases
-    let userId: string
-    try {
-      const decodedToken = await auth.verifyIdToken(idToken)
-      userId = decodedToken.uid
-      console.log("✅ [Unified Purchases] Token verified for user:", userId)
-    } catch (error) {
-      console.error("❌ [Unified Purchases] Token verification failed:", error)
-      return NextResponse.json({ error: "Invalid authentication token" }, { status: 401 })
-    }
+    const db = getAdminDb()
 
-    // Fetch user's purchases from their subcollection (fastest method)
-    console.log("📦 [Unified Purchases] Fetching user purchases from subcollection...")
-    const userPurchasesQuery = await db
-      .collection("users")
-      .doc(userId)
+    // Fetch all purchases for the authenticated user
+    console.log("🔍 [Unified Purchases] Querying purchases for user:", userId)
+    const purchasesQuery = await db
       .collection("purchases")
-      .orderBy("purchasedAt", "desc")
+      .where("buyerUid", "==", userId) // Only get user's own purchases
+      .orderBy("createdAt", "desc")
       .get()
 
+    console.log(`📦 [Unified Purchases] Found ${purchasesQuery.docs.length} purchases`)
+
     const purchases = []
-    const bundleIds = new Set()
 
-    // Process user's purchase records
-    for (const doc of userPurchasesQuery.docs) {
+    for (const doc of purchasesQuery.docs) {
       const purchaseData = doc.data()
-
-      console.log("📄 [Unified Purchases] Processing purchase:", {
+      console.log(`📋 [Unified Purchases] Processing purchase:`, {
         id: doc.id,
         bundleId: purchaseData.bundleId,
+        itemType: purchaseData.itemType,
+        amount: purchaseData.amount,
         status: purchaseData.status,
-        purchasedAt: purchaseData.purchasedAt,
       })
 
-      if (purchaseData.bundleId && purchaseData.status === "completed") {
-        bundleIds.add(purchaseData.bundleId)
-
-        purchases.push({
-          id: doc.id,
-          bundleId: purchaseData.bundleId,
-          purchaseId: purchaseData.purchaseId,
-          sessionId: purchaseData.sessionId,
-          amount: purchaseData.amount || 0,
-          currency: purchaseData.currency || "usd",
-          status: purchaseData.status,
-          purchasedAt: purchaseData.purchasedAt?.toDate?.() || new Date(),
-          bundleTitle: purchaseData.bundleTitle || "Unknown Bundle",
-          creatorId: purchaseData.creatorId,
-          verified: true, // All purchases in user subcollection are verified
-        })
-      }
-    }
-
-    console.log(`📊 [Unified Purchases] Found ${purchases.length} verified purchases for user ${userId}`)
-
-    // Fetch bundle details for all purchased bundles
-    const bundleDetails = {}
-    if (bundleIds.size > 0) {
-      console.log("📦 [Unified Purchases] Fetching bundle details for", bundleIds.size, "bundles...")
-
-      // Fetch bundles in batches (Firestore limit is 10 for 'in' queries)
-      const bundleIdArray = Array.from(bundleIds)
-      const batchSize = 10
-
-      for (let i = 0; i < bundleIdArray.length; i += batchSize) {
-        const batch = bundleIdArray.slice(i, i + batchSize)
-        const bundlesQuery = await db.collection("bundles").where("__name__", "in", batch).get()
-
-        bundlesQuery.forEach((doc) => {
-          const bundleData = doc.data()
-          bundleDetails[doc.id] = {
-            id: doc.id,
-            title: bundleData.title || "Untitled Bundle",
-            description: bundleData.description || "",
-            thumbnailUrl: bundleData.thumbnailUrl || "",
-            downloadUrl: bundleData.downloadUrl || bundleData.fileUrl || "",
-            fileSize: bundleData.fileSize || 0,
-            fileType: bundleData.fileType || "",
-            duration: bundleData.duration || 0,
-            tags: bundleData.tags || [],
-            creatorId: bundleData.creatorId,
-            price: bundleData.price || 0,
-            uploadedAt: bundleData.uploadedAt || bundleData.createdAt,
+      // Get bundle/item details
+      let itemDetails = null
+      if (purchaseData.bundleId) {
+        try {
+          const bundleDoc = await db.collection("bundles").doc(purchaseData.bundleId).get()
+          if (bundleDoc.exists) {
+            const bundleData = bundleDoc.data()!
+            itemDetails = {
+              id: purchaseData.bundleId,
+              title: bundleData.title || "Untitled Bundle",
+              description: bundleData.description || "",
+              thumbnailUrl: bundleData.thumbnailUrl || "",
+              downloadUrl: bundleData.downloadUrl || bundleData.fileUrl || "",
+              fileSize: bundleData.fileSize || 0,
+              duration: bundleData.duration || 0,
+              fileType: bundleData.fileType || "",
+              tags: bundleData.tags || [],
+              type: "bundle",
+            }
           }
-        })
+        } catch (error) {
+          console.error(`❌ [Unified Purchases] Failed to fetch bundle ${purchaseData.bundleId}:`, error)
+        }
       }
-    }
 
-    // Fetch creator details for unique creators
-    const creatorIds = new Set()
-    Object.values(bundleDetails).forEach((bundle: any) => {
-      if (bundle.creatorId) {
-        creatorIds.add(bundle.creatorId)
-      }
-    })
-
-    const creatorDetails = {}
-    if (creatorIds.size > 0) {
-      console.log("👤 [Unified Purchases] Fetching creator details for", creatorIds.size, "creators...")
-
-      const creatorIdArray = Array.from(creatorIds)
-      const batchSize = 10
-
-      for (let i = 0; i < creatorIdArray.length; i += batchSize) {
-        const batch = creatorIdArray.slice(i, i + batchSize)
-        const creatorsQuery = await db.collection("users").where("__name__", "in", batch).get()
-
-        creatorsQuery.forEach((doc) => {
-          const creatorData = doc.data()
-          creatorDetails[doc.id] = {
-            id: doc.id,
-            name: creatorData.displayName || creatorData.name || "Unknown Creator",
-            username: creatorData.username || "",
-            profilePicture: creatorData.profilePicture || "",
+      // Get creator details
+      let creatorDetails = null
+      if (purchaseData.creatorId) {
+        try {
+          const creatorDoc = await db.collection("users").doc(purchaseData.creatorId).get()
+          if (creatorDoc.exists) {
+            const creatorData = creatorDoc.data()!
+            creatorDetails = {
+              id: purchaseData.creatorId,
+              name: creatorData.displayName || creatorData.name || "Unknown Creator",
+              username: creatorData.username || "",
+              profilePicture: creatorData.profilePicture || "",
+            }
           }
-        })
+        } catch (error) {
+          console.error(`❌ [Unified Purchases] Failed to fetch creator ${purchaseData.creatorId}:`, error)
+        }
       }
-    }
 
-    // Combine purchase data with bundle and creator details
-    const enrichedPurchases = purchases.map((purchase) => {
-      const bundle = bundleDetails[purchase.bundleId] || {}
-      const creator = creatorDetails[bundle.creatorId] || {}
+      // Build unified purchase object
+      const unifiedPurchase = {
+        id: doc.id,
+        sessionId: purchaseData.sessionId,
+        itemId: purchaseData.bundleId || purchaseData.itemId,
+        itemType: purchaseData.itemType || "bundle",
+        buyerUid: purchaseData.buyerUid, // Always include verified buyer UID
+        creatorId: purchaseData.creatorId,
+        amount: purchaseData.amount || 0,
+        currency: purchaseData.currency || "usd",
+        status: purchaseData.status || "completed",
+        paymentStatus: purchaseData.paymentStatus || "paid",
+        purchasedAt: purchaseData.createdAt || purchaseData.purchasedAt,
+        verificationMethod: purchaseData.verificationMethod || "webhook",
+        verified: true, // All purchases in this endpoint are verified
 
-      return {
-        ...purchase,
-        item: {
-          id: purchase.bundleId,
-          title: bundle.title || purchase.bundleTitle || "Unknown Bundle",
-          description: bundle.description || "",
-          type: "bundle",
-          thumbnailUrl: bundle.thumbnailUrl || "",
-          downloadUrl: bundle.downloadUrl || "",
-          fileSize: bundle.fileSize || 0,
-          fileType: bundle.fileType || "",
-          duration: bundle.duration || 0,
-          tags: bundle.tags || [],
-          price: bundle.price || 0,
-          uploadedAt: bundle.uploadedAt,
-          creator: {
-            id: creator.id || bundle.creatorId,
-            name: creator.name || "Unknown Creator",
-            username: creator.username || "",
-            profilePicture: creator.profilePicture || "",
-          },
+        // Item details
+        item: itemDetails || {
+          id: purchaseData.bundleId || purchaseData.itemId,
+          title: purchaseData.bundleTitle || "Unknown Item",
+          description: "",
+          thumbnailUrl: "",
+          downloadUrl: "",
+          type: purchaseData.itemType || "bundle",
         },
+
+        // Creator details
+        creator: creatorDetails || {
+          id: purchaseData.creatorId,
+          name: purchaseData.creatorName || "Unknown Creator",
+          username: "",
+          profilePicture: "",
+        },
+
+        // Additional metadata
+        customerEmail: purchaseData.customerEmail || purchaseData.buyerEmail,
+        connectedAccountId: purchaseData.connectedAccountId,
+        platform: "massclip",
       }
-    })
 
-    console.log("✅ [Unified Purchases] Successfully enriched", enrichedPurchases.length, "purchases")
-
-    // Calculate summary statistics
-    const totalSpent = purchases.reduce((sum, purchase) => sum + (purchase.amount || 0), 0)
-    const totalItems = purchases.length
-    const uniqueCreators = creatorIds.size
-
-    const response = {
-      success: true,
-      purchases: enrichedPurchases,
-      summary: {
-        totalItems,
-        totalSpent,
-        uniqueCreators,
-        currency: "usd", // Default currency
-      },
-      metadata: {
-        userId,
-        fetchedAt: new Date().toISOString(),
-        source: "user_subcollection",
-        verified: true,
-      },
+      purchases.push(unifiedPurchase)
     }
 
-    console.log("📤 [Unified Purchases] Sending response:", {
-      success: response.success,
-      totalItems: response.summary.totalItems,
-      totalSpent: response.summary.totalSpent,
-      uniqueCreators: response.summary.uniqueCreators,
-      userId: response.metadata.userId,
-    })
+    console.log(`✅ [Unified Purchases] Returning ${purchases.length} verified purchases`)
 
-    return NextResponse.json(response)
+    return NextResponse.json({
+      success: true,
+      purchases,
+      total: purchases.length,
+      userId,
+      verified: true,
+    })
   } catch (error: any) {
-    console.error("❌ [Unified Purchases] Error fetching purchases:", error)
+    console.error("❌ [Unified Purchases] Failed to fetch purchases:", error)
     return NextResponse.json(
       {
         error: "Failed to fetch purchases",
