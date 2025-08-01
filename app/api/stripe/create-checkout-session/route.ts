@@ -3,7 +3,6 @@ import Stripe from "stripe"
 import { initializeApp, getApps, cert } from "firebase-admin/app"
 import { getAuth } from "firebase-admin/auth"
 import { getFirestore } from "firebase-admin/firestore"
-import { verifyIdTokenFromRequest } from "@/lib/auth-utils"
 
 // Initialize Firebase Admin
 if (!getApps().length) {
@@ -25,22 +24,34 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
 
 export async function POST(request: NextRequest) {
   try {
-    console.log("🔄 [Checkout API] Starting checkout session creation...")
+    console.log("🔄 Starting checkout session creation...")
 
     const body = await request.json()
-    const { priceId, bundleId, successUrl, cancelUrl } = body
+    const { idToken, priceId, bundleId, successUrl, cancelUrl } = body
 
-    console.log("📝 [Checkout API] Request data:", {
+    console.log("📝 Request data:", {
+      hasIdToken: !!idToken,
       priceId,
       bundleId,
       successUrl,
       cancelUrl,
-      hasAuthHeader: !!request.headers.get("authorization"),
     })
 
     // Validate required fields
+    if (!idToken) {
+      console.error("❌ Missing idToken in request")
+      return NextResponse.json(
+        {
+          error: "Authentication required",
+          code: "MISSING_TOKEN",
+          details: "idToken is required for checkout",
+        },
+        { status: 401 },
+      )
+    }
+
     if (!priceId || !bundleId) {
-      console.error("❌ [Checkout API] Missing required fields:", { priceId, bundleId })
+      console.error("❌ Missing required fields:", { priceId, bundleId })
       return NextResponse.json(
         {
           error: "Missing required fields",
@@ -51,34 +62,14 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Verify Firebase token from Authorization header
+    // Verify Firebase token
     let decodedToken
     try {
-      console.log("🔐 [Checkout API] Verifying Firebase token from Authorization header...")
-      decodedToken = await verifyIdTokenFromRequest(request)
-
-      if (!decodedToken) {
-        console.error("❌ [Checkout API] No valid token found in Authorization header")
-        return NextResponse.json(
-          {
-            error: "Authentication required",
-            code: "MISSING_TOKEN",
-            details: "Valid Authorization header with Bearer token is required",
-          },
-          { status: 401 },
-        )
-      }
-
-      console.log("✅ [Checkout API] Token verified for user:", {
-        uid: decodedToken.uid,
-        email: decodedToken.email,
-        emailVerified: decodedToken.email_verified,
-      })
+      console.log("🔐 Verifying Firebase token...")
+      decodedToken = await auth.verifyIdToken(idToken)
+      console.log("✅ Token verified for user:", decodedToken.uid)
     } catch (error: any) {
-      console.error("❌ [Checkout API] Token verification failed:", {
-        error: error.message,
-        code: error.code,
-      })
+      console.error("❌ Token verification failed:", error.message)
       return NextResponse.json(
         {
           error: "Invalid authentication token",
@@ -95,11 +86,11 @@ export async function POST(request: NextRequest) {
     // Get buyer profile from database
     let buyerProfile
     try {
-      console.log("👤 [Checkout API] Looking up buyer profile...")
+      console.log("👤 Looking up buyer profile...")
       const userDoc = await db.collection("users").doc(buyerUid).get()
 
       if (!userDoc.exists) {
-        console.warn("⚠️ [Checkout API] Buyer profile not found, creating minimal profile")
+        console.warn("⚠️ Buyer profile not found, creating minimal profile")
         buyerProfile = {
           email: buyerEmail,
           displayName: buyerEmail.split("@")[0],
@@ -108,16 +99,12 @@ export async function POST(request: NextRequest) {
 
         // Create minimal profile
         await db.collection("users").doc(buyerUid).set(buyerProfile)
-        console.log("✅ [Checkout API] Created minimal buyer profile")
       } else {
         buyerProfile = userDoc.data()
-        console.log("✅ [Checkout API] Buyer profile found:", {
-          displayName: buyerProfile.displayName,
-          email: buyerProfile.email,
-        })
+        console.log("✅ Buyer profile found:", buyerProfile.displayName || buyerProfile.email)
       }
     } catch (error: any) {
-      console.error("❌ [Checkout API] Error fetching buyer profile:", error.message)
+      console.error("❌ Error fetching buyer profile:", error.message)
       return NextResponse.json(
         {
           error: "Failed to verify buyer profile",
@@ -131,11 +118,11 @@ export async function POST(request: NextRequest) {
     // Get bundle/product box details
     let bundleData
     try {
-      console.log("📦 [Checkout API] Looking up bundle/product box...")
+      console.log("📦 Looking up bundle/product box...")
       const bundleDoc = await db.collection("productBoxes").doc(bundleId).get()
 
       if (!bundleDoc.exists) {
-        console.error("❌ [Checkout API] Bundle/Product box not found:", bundleId)
+        console.error("❌ Bundle/Product box not found:", bundleId)
         return NextResponse.json(
           {
             error: "Product not found",
@@ -147,27 +134,9 @@ export async function POST(request: NextRequest) {
       }
 
       bundleData = bundleDoc.data()
-      console.log("✅ [Checkout API] Bundle found:", {
-        title: bundleData.title,
-        price: bundleData.price,
-        active: bundleData.active,
-        creatorId: bundleData.creatorId,
-      })
-
-      // Check if bundle is active
-      if (bundleData.active === false) {
-        console.error("❌ [Checkout API] Bundle is inactive:", bundleId)
-        return NextResponse.json(
-          {
-            error: "Product is not available",
-            code: "BUNDLE_INACTIVE",
-            details: "This product is currently inactive",
-          },
-          { status: 400 },
-        )
-      }
+      console.log("✅ Bundle found:", bundleData.title)
     } catch (error: any) {
-      console.error("❌ [Checkout API] Error fetching bundle:", error.message)
+      console.error("❌ Error fetching bundle:", error.message)
       return NextResponse.json(
         {
           error: "Failed to fetch product details",
@@ -181,7 +150,7 @@ export async function POST(request: NextRequest) {
     // Get seller's Stripe account
     const sellerId = bundleData.creatorId
     if (!sellerId) {
-      console.error("❌ [Checkout API] No seller ID found for bundle:", bundleId)
+      console.error("❌ No seller ID found for bundle:", bundleId)
       return NextResponse.json(
         {
           error: "Invalid product configuration",
@@ -194,11 +163,11 @@ export async function POST(request: NextRequest) {
 
     let sellerStripeAccountId
     try {
-      console.log("💳 [Checkout API] Looking up seller Stripe account...")
+      console.log("💳 Looking up seller Stripe account...")
       const sellerDoc = await db.collection("users").doc(sellerId).get()
 
       if (!sellerDoc.exists) {
-        console.error("❌ [Checkout API] Seller not found:", sellerId)
+        console.error("❌ Seller not found:", sellerId)
         return NextResponse.json(
           {
             error: "Seller not found",
@@ -213,7 +182,7 @@ export async function POST(request: NextRequest) {
       sellerStripeAccountId = sellerData.stripeAccountId
 
       if (!sellerStripeAccountId) {
-        console.error("❌ [Checkout API] Seller has no Stripe account:", sellerId)
+        console.error("❌ Seller has no Stripe account:", sellerId)
         return NextResponse.json(
           {
             error: "Seller payment not configured",
@@ -224,9 +193,9 @@ export async function POST(request: NextRequest) {
         )
       }
 
-      console.log("✅ [Checkout API] Seller Stripe account found:", sellerStripeAccountId)
+      console.log("✅ Seller Stripe account found:", sellerStripeAccountId)
     } catch (error: any) {
-      console.error("❌ [Checkout API] Error fetching seller:", error.message)
+      console.error("❌ Error fetching seller:", error.message)
       return NextResponse.json(
         {
           error: "Failed to verify seller",
@@ -250,12 +219,12 @@ export async function POST(request: NextRequest) {
       timestamp: new Date().toISOString(),
     }
 
-    console.log("📋 [Checkout API] Session metadata:", metadata)
+    console.log("📋 Session metadata:", metadata)
 
     // Create Stripe checkout session
     let session
     try {
-      console.log("💳 [Checkout API] Creating Stripe checkout session...")
+      console.log("💳 Creating Stripe checkout session...")
 
       session = await stripe.checkout.sessions.create({
         payment_method_types: ["card"],
@@ -278,18 +247,9 @@ export async function POST(request: NextRequest) {
         customer_email: buyerEmail,
       })
 
-      console.log("✅ [Checkout API] Checkout session created:", {
-        sessionId: session.id,
-        url: session.url,
-        buyerUid,
-        bundleId,
-      })
+      console.log("✅ Checkout session created:", session.id)
     } catch (error: any) {
-      console.error("❌ [Checkout API] Stripe session creation failed:", {
-        error: error.message,
-        type: error.type,
-        code: error.code,
-      })
+      console.error("❌ Stripe session creation failed:", error.message)
       return NextResponse.json(
         {
           error: "Failed to create checkout session",
@@ -301,7 +261,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Log successful session creation
-    console.log("🎉 [Checkout API] Checkout session created successfully:", {
+    console.log("🎉 Checkout session created successfully:", {
       sessionId: session.id,
       buyerUid,
       bundleId,
@@ -316,10 +276,7 @@ export async function POST(request: NextRequest) {
       sellerId,
     })
   } catch (error: any) {
-    console.error("❌ [Checkout API] Unexpected error in checkout session creation:", {
-      error: error.message,
-      stack: error.stack,
-    })
+    console.error("❌ Unexpected error in checkout session creation:", error)
     return NextResponse.json(
       {
         error: "Internal server error",
