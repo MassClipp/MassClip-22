@@ -20,6 +20,11 @@ export async function POST(request: NextRequest) {
     const authHeader = request.headers.get("authorization")
     const idToken = authHeader?.startsWith("Bearer ") ? authHeader.substring(7) : null
 
+    // Check Stripe mode
+    const stripeSecretKey = process.env.STRIPE_SECRET_KEY!
+    const isTestMode = stripeSecretKey.startsWith("sk_test_")
+    const isLiveMode = stripeSecretKey.startsWith("sk_live_")
+
     if (debugMode) {
       console.log("🔍 [Checkout Debug] Request received:", {
         hasAuthHeader: !!authHeader,
@@ -27,8 +32,8 @@ export async function POST(request: NextRequest) {
         idTokenLength: idToken?.length,
         priceId,
         bundleId,
-        successUrl,
-        cancelUrl,
+        stripeMode: isTestMode ? "test" : isLiveMode ? "live" : "unknown",
+        stripeKeyPrefix: stripeSecretKey.substring(0, 8) + "...",
       })
     }
 
@@ -59,21 +64,43 @@ export async function POST(request: NextRequest) {
     // Verify the price exists in Stripe
     let priceData
     try {
+      if (debugMode) {
+        console.log(`🔍 [Checkout Debug] Verifying price ${priceId} in ${isTestMode ? "test" : "live"} mode...`)
+      }
+
       priceData = await stripe.prices.retrieve(priceId)
+
       if (debugMode) {
         console.log("✅ [Checkout Debug] Price verified:", {
           id: priceData.id,
           amount: priceData.unit_amount,
           currency: priceData.currency,
+          active: priceData.active,
+          product: priceData.product,
+          stripeMode: isTestMode ? "test" : "live",
         })
       }
     } catch (stripeError: any) {
-      console.error("❌ [Checkout] Invalid price ID:", stripeError.message)
+      console.error("❌ [Checkout] Price verification failed:", stripeError.message)
+
+      // Enhanced error for mode mismatch
+      let modeHint = ""
+      if (stripeError.code === "resource_missing") {
+        modeHint = isTestMode
+          ? " (You're in TEST mode - make sure this is a test price ID starting with price_test_ or created in test mode)"
+          : " (You're in LIVE mode - make sure this is a live price ID created in live mode)"
+      }
+
       return NextResponse.json(
         {
           error: "Invalid price ID",
-          details: stripeError.message,
+          details: stripeError.message + modeHint,
           priceId,
+          stripeMode: isTestMode ? "test" : isLiveMode ? "live" : "unknown",
+          stripeErrorCode: stripeError.code,
+          hint: isTestMode
+            ? "In test mode, use price IDs created in your Stripe test dashboard"
+            : "In live mode, use price IDs created in your Stripe live dashboard",
         },
         { status: 400 },
       )
@@ -181,6 +208,7 @@ export async function POST(request: NextRequest) {
         console.log("✅ [Checkout Debug] Session created:", {
           sessionId: session.id,
           hasUrl: !!session.url,
+          stripeMode: isTestMode ? "test" : "live",
         })
       }
 
@@ -192,6 +220,7 @@ export async function POST(request: NextRequest) {
         customerId,
         priceId,
         bundleId,
+        stripeMode: isTestMode ? "test" : isLiveMode ? "live" : "unknown",
       })
     } catch (stripeError: any) {
       console.error("❌ [Checkout] Session creation failed:", stripeError)
@@ -199,6 +228,7 @@ export async function POST(request: NextRequest) {
         {
           error: "Failed to create checkout session",
           details: stripeError.message,
+          stripeErrorCode: stripeError.code,
         },
         { status: 500 },
       )
