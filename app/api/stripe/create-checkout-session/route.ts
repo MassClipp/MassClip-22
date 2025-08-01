@@ -1,22 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
 import Stripe from "stripe"
-import { initializeApp, getApps, cert } from "firebase-admin/app"
-import { getAuth } from "firebase-admin/auth"
-import { getFirestore } from "firebase-admin/firestore"
-
-// Initialize Firebase Admin
-if (!getApps().length) {
-  initializeApp({
-    credential: cert({
-      projectId: process.env.FIREBASE_PROJECT_ID,
-      clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-      privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n"),
-    }),
-  })
-}
-
-const auth = getAuth()
-const db = getFirestore()
+import { initializeFirebaseAdmin, db, auth } from "@/lib/firebase-admin"
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: "2024-06-20",
@@ -24,216 +8,99 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
 
 export async function POST(request: NextRequest) {
   try {
-    console.log("🔄 Starting checkout session creation...")
+    console.log("🔄 [Checkout] Starting checkout session creation...")
+
+    // Initialize Firebase Admin
+    initializeFirebaseAdmin()
 
     const body = await request.json()
     const { idToken, priceId, bundleId, successUrl, cancelUrl } = body
 
-    console.log("📝 Request data:", {
-      hasIdToken: !!idToken,
-      tokenLength: idToken?.length,
+    console.log("📥 [Checkout] Request data:", {
       priceId,
       bundleId,
       successUrl,
       cancelUrl,
+      hasIdToken: !!idToken,
+      tokenLength: idToken?.length,
     })
 
     // Validate required fields
     if (!idToken) {
-      console.error("❌ Missing idToken in request")
-      return NextResponse.json(
-        {
-          error: "Authentication required",
-          code: "MISSING_TOKEN",
-          details: "idToken is required for checkout",
-        },
-        { status: 401 },
-      )
+      console.error("❌ [Checkout] Missing idToken")
+      return NextResponse.json({ error: "Authentication token required" }, { status: 401 })
     }
 
     if (!priceId || !bundleId) {
-      console.error("❌ Missing required fields:", { priceId, bundleId })
-      return NextResponse.json(
-        {
-          error: "Missing required fields",
-          code: "MISSING_FIELDS",
-          details: "priceId and bundleId are required",
-        },
-        { status: 400 },
-      )
+      console.error("❌ [Checkout] Missing required fields:", { priceId, bundleId })
+      return NextResponse.json({ error: "Missing required fields" }, { status: 400 })
     }
 
-    // Verify Firebase token
+    // Verify Firebase ID token
+    console.log("🔐 [Checkout] Verifying Firebase ID token...")
     let decodedToken
     try {
-      console.log("🔐 Verifying Firebase token...")
       decodedToken = await auth.verifyIdToken(idToken)
-      console.log("✅ Token verified for user:", decodedToken.uid)
-    } catch (error: any) {
-      console.error("❌ Token verification failed:", error.message)
-      return NextResponse.json(
-        {
-          error: "Invalid authentication token",
-          code: "INVALID_TOKEN",
-          details: error.message,
-        },
-        { status: 401 },
-      )
+      console.log("✅ [Checkout] Token verified for user:", {
+        uid: decodedToken.uid,
+        email: decodedToken.email,
+      })
+    } catch (error) {
+      console.error("❌ [Checkout] Token verification failed:", error)
+      return NextResponse.json({ error: "Invalid authentication token" }, { status: 401 })
     }
 
     const buyerUid = decodedToken.uid
-    const buyerEmail = decodedToken.email || ""
+    const buyerEmail = decodedToken.email
 
-    console.log("👤 Authenticated buyer:", {
-      uid: buyerUid,
-      email: buyerEmail,
-    })
-
-    // Get buyer profile from database
+    // Get or create buyer profile
+    console.log("👤 [Checkout] Getting buyer profile...")
     let buyerProfile
     try {
-      console.log("👤 Looking up buyer profile...")
       const userDoc = await db.collection("users").doc(buyerUid).get()
-
-      if (!userDoc.exists) {
-        console.warn("⚠️ Buyer profile not found, creating minimal profile")
+      if (userDoc.exists) {
+        buyerProfile = userDoc.data()
+        console.log("✅ [Checkout] Found existing buyer profile")
+      } else {
+        // Create minimal profile
         buyerProfile = {
+          uid: buyerUid,
           email: buyerEmail,
-          displayName: buyerEmail.split("@")[0],
+          displayName: decodedToken.name || buyerEmail?.split("@")[0] || "User",
           createdAt: new Date(),
         }
-
-        // Create minimal profile
         await db.collection("users").doc(buyerUid).set(buyerProfile)
-        console.log("✅ Created minimal buyer profile")
-      } else {
-        buyerProfile = userDoc.data()
-        console.log("✅ Buyer profile found:", buyerProfile.displayName || buyerProfile.email)
+        console.log("✅ [Checkout] Created new buyer profile")
       }
-    } catch (error: any) {
-      console.error("❌ Error fetching buyer profile:", error.message)
-      return NextResponse.json(
-        {
-          error: "Failed to verify buyer profile",
-          code: "PROFILE_ERROR",
-          details: error.message,
-        },
-        { status: 500 },
-      )
+    } catch (error) {
+      console.error("❌ [Checkout] Error handling buyer profile:", error)
+      return NextResponse.json({ error: "Failed to process buyer profile" }, { status: 500 })
     }
 
-    // Get bundle/product box details
+    // Get bundle information
+    console.log("📦 [Checkout] Getting bundle information...")
     let bundleData
     try {
-      console.log("📦 Looking up bundle/product box...")
-      const bundleDoc = await db.collection("productBoxes").doc(bundleId).get()
-
+      const bundleDoc = await db.collection("bundles").doc(bundleId).get()
       if (!bundleDoc.exists) {
-        console.error("❌ Bundle/Product box not found:", bundleId)
-        return NextResponse.json(
-          {
-            error: "Product not found",
-            code: "PRODUCT_NOT_FOUND",
-            details: `Bundle/Product box ${bundleId} does not exist`,
-          },
-          { status: 404 },
-        )
+        console.error("❌ [Checkout] Bundle not found:", bundleId)
+        return NextResponse.json({ error: "Bundle not found" }, { status: 404 })
       }
-
       bundleData = bundleDoc.data()
-      console.log("✅ Bundle found:", bundleData.title)
-    } catch (error: any) {
-      console.error("❌ Error fetching bundle:", error.message)
-      return NextResponse.json(
-        {
-          error: "Failed to fetch product details",
-          code: "BUNDLE_ERROR",
-          details: error.message,
-        },
-        { status: 500 },
-      )
+      console.log("✅ [Checkout] Bundle found:", {
+        title: bundleData?.title,
+        price: bundleData?.price,
+        creatorId: bundleData?.creatorId,
+      })
+    } catch (error) {
+      console.error("❌ [Checkout] Error fetching bundle:", error)
+      return NextResponse.json({ error: "Failed to fetch bundle" }, { status: 500 })
     }
-
-    // Get seller's Stripe account
-    const sellerId = bundleData.creatorId
-    if (!sellerId) {
-      console.error("❌ No seller ID found for bundle:", bundleId)
-      return NextResponse.json(
-        {
-          error: "Invalid product configuration",
-          code: "NO_SELLER",
-          details: "Product has no associated seller",
-        },
-        { status: 400 },
-      )
-    }
-
-    let sellerStripeAccountId
-    try {
-      console.log("💳 Looking up seller Stripe account...")
-      const sellerDoc = await db.collection("users").doc(sellerId).get()
-
-      if (!sellerDoc.exists) {
-        console.error("❌ Seller not found:", sellerId)
-        return NextResponse.json(
-          {
-            error: "Seller not found",
-            code: "SELLER_NOT_FOUND",
-            details: `Seller ${sellerId} does not exist`,
-          },
-          { status: 404 },
-        )
-      }
-
-      const sellerData = sellerDoc.data()
-      sellerStripeAccountId = sellerData.stripeAccountId
-
-      if (!sellerStripeAccountId) {
-        console.error("❌ Seller has no Stripe account:", sellerId)
-        return NextResponse.json(
-          {
-            error: "Seller payment not configured",
-            code: "NO_STRIPE_ACCOUNT",
-            details: "Seller has not set up payment processing",
-          },
-          { status: 400 },
-        )
-      }
-
-      console.log("✅ Seller Stripe account found:", sellerStripeAccountId)
-    } catch (error: any) {
-      console.error("❌ Error fetching seller:", error.message)
-      return NextResponse.json(
-        {
-          error: "Failed to verify seller",
-          code: "SELLER_ERROR",
-          details: error.message,
-        },
-        { status: 500 },
-      )
-    }
-
-    // Create comprehensive metadata
-    const metadata = {
-      buyerUid,
-      buyerEmail,
-      buyerName: buyerProfile.displayName || buyerProfile.username || buyerEmail.split("@")[0],
-      bundleId,
-      sellerId,
-      sellerStripeAccountId,
-      productType: "bundle",
-      environment: process.env.NODE_ENV || "development",
-      timestamp: new Date().toISOString(),
-    }
-
-    console.log("📋 Session metadata:", metadata)
 
     // Create Stripe checkout session
-    let session
+    console.log("💳 [Checkout] Creating Stripe checkout session...")
     try {
-      console.log("💳 Creating Stripe checkout session...")
-
-      session = await stripe.checkout.sessions.create({
+      const session = await stripe.checkout.sessions.create({
         payment_method_types: ["card"],
         line_items: [
           {
@@ -242,55 +109,49 @@ export async function POST(request: NextRequest) {
           },
         ],
         mode: "payment",
-        success_url: `${successUrl}?session_id={CHECKOUT_SESSION_ID}&buyer_uid=${buyerUid}`,
+        success_url: successUrl,
         cancel_url: cancelUrl,
-        metadata,
+        customer_email: buyerEmail,
+        metadata: {
+          bundleId,
+          buyerUid,
+          buyerEmail: buyerEmail || "",
+          creatorId: bundleData?.creatorId || "",
+          bundleTitle: bundleData?.title || "",
+          purchaseType: "bundle",
+        },
         payment_intent_data: {
-          metadata,
-          transfer_data: {
-            destination: sellerStripeAccountId,
+          metadata: {
+            bundleId,
+            buyerUid,
+            buyerEmail: buyerEmail || "",
+            creatorId: bundleData?.creatorId || "",
+            bundleTitle: bundleData?.title || "",
+            purchaseType: "bundle",
           },
         },
-        customer_email: buyerEmail,
       })
 
-      console.log("✅ Checkout session created:", session.id)
-    } catch (error: any) {
-      console.error("❌ Stripe session creation failed:", error.message)
-      return NextResponse.json(
-        {
-          error: "Failed to create checkout session",
-          code: "STRIPE_ERROR",
-          details: error.message,
-        },
-        { status: 500 },
-      )
+      console.log("✅ [Checkout] Stripe session created:", {
+        sessionId: session.id,
+        url: session.url,
+        buyerUid,
+        bundleId,
+      })
+
+      return NextResponse.json({
+        sessionId: session.id,
+        url: session.url,
+        buyerUid,
+        bundleId,
+        message: "Checkout session created successfully",
+      })
+    } catch (error) {
+      console.error("❌ [Checkout] Stripe session creation failed:", error)
+      return NextResponse.json({ error: "Failed to create checkout session" }, { status: 500 })
     }
-
-    // Log successful session creation
-    console.log("🎉 Checkout session created successfully:", {
-      sessionId: session.id,
-      buyerUid,
-      bundleId,
-      sellerId,
-    })
-
-    return NextResponse.json({
-      sessionId: session.id,
-      url: session.url,
-      buyerUid,
-      bundleId,
-      sellerId,
-    })
-  } catch (error: any) {
-    console.error("❌ Unexpected error in checkout session creation:", error)
-    return NextResponse.json(
-      {
-        error: "Internal server error",
-        code: "INTERNAL_ERROR",
-        details: error.message,
-      },
-      { status: 500 },
-    )
+  } catch (error) {
+    console.error("❌ [Checkout] Unexpected error:", error)
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }

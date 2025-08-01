@@ -2,247 +2,206 @@
 
 import { useState, useEffect } from "react"
 import { useAuth } from "@/contexts/auth-context"
-import { useAuthContext } from "@/context/AuthContext"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Loader2, CheckCircle, XCircle, AlertCircle } from "lucide-react"
 
+interface DiagnosticResult {
+  step: string
+  status: "success" | "error" | "warning"
+  message: string
+  data?: any
+}
+
 export default function CheckoutAuthDebug() {
-  const contextAuth = useAuth()
-  const firebaseAuth = useAuthContext()
-  const [diagnostics, setDiagnostics] = useState<any>(null)
+  const { user } = useAuth()
+  const [results, setResults] = useState<DiagnosticResult[]>([])
   const [loading, setLoading] = useState(false)
 
-  // Determine which auth context has a user
-  const user = contextAuth?.user || firebaseAuth?.user
-  const authSource = contextAuth?.user ? "Context Auth" : firebaseAuth?.user ? "Firebase Auth" : "None"
+  const addResult = (step: string, status: "success" | "error" | "warning", message: string, data?: any) => {
+    setResults((prev) => [...prev, { step, status, message, data }])
+  }
 
   const runDiagnostics = async () => {
+    setResults([])
     setLoading(true)
-    setDiagnostics(null)
 
     try {
-      const results: any = {
-        contextAuth: {
-          hasUser: !!contextAuth?.user,
-          userEmail: contextAuth?.user?.email,
-          userId: contextAuth?.user?.uid,
-        },
-        firebaseAuth: {
-          hasUser: !!firebaseAuth?.user,
-          userEmail: firebaseAuth?.user?.email,
-          userId: firebaseAuth?.user?.uid,
-        },
-        overallAuth: {
-          hasUser: !!user,
-          userEmail: user?.email,
-          userId: user?.uid,
-          source: authSource,
-        },
+      // Step 1: Check authentication context
+      if (!user) {
+        addResult("Context Auth", "error", "No user found in auth context")
+        return
       }
 
-      // Test token generation
-      if (user) {
-        try {
-          console.log("🔐 Testing token generation...")
-          const token = await user.getIdToken(true)
-          results.tokenGeneration = {
-            success: true,
-            tokenLength: token.length,
-            tokenPreview: `${token.substring(0, 20)}...`,
-          }
-          console.log("✅ Token generated successfully, length:", token.length)
+      addResult("Context Auth", "success", `Context user: ${user.uid}`)
 
-          // Test the actual checkout API
-          console.log("🧪 Testing checkout API...")
-          const testResponse = await fetch("/api/stripe/create-checkout-session", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${token}`,
-            },
-            body: JSON.stringify({
-              idToken: token,
-              priceId: "price_test123", // Test price ID
-              bundleId: "test_bundle_id", // Test bundle ID
-              successUrl: `${window.location.origin}/purchase-success`,
-              cancelUrl: window.location.href,
-            }),
-          })
+      // Step 2: Check Firebase auth state
+      try {
+        const idToken = await user.getIdToken(true)
+        addResult("Firebase Auth", "success", `Firebase user: ${user.uid}`)
+        addResult("Token Generation", "success", `Token generated (length: ${idToken.length})`)
 
-          results.checkoutApiTest = {
-            status: testResponse.status,
-            statusText: testResponse.statusText,
-            success: testResponse.ok,
-          }
-
-          if (!testResponse.ok) {
-            const errorText = await testResponse.text()
-            results.checkoutApiTest.error = errorText
-            console.error("❌ Checkout API test failed:", errorText)
-          } else {
-            const responseData = await testResponse.json()
-            results.checkoutApiTest.response = responseData
-            console.log("✅ Checkout API test successful")
-          }
-        } catch (error: any) {
-          results.tokenGeneration = {
-            success: false,
-            error: error.message,
-          }
-          console.error("❌ Token generation failed:", error)
+        // Step 3: Test the actual checkout API
+        const testCheckoutData = {
+          idToken,
+          priceId: "price_test_123", // Test price ID
+          bundleId: "test_bundle_123",
+          successUrl: `${window.location.origin}/purchase-success`,
+          cancelUrl: window.location.href,
         }
-      }
 
-      setDiagnostics(results)
-    } catch (error: any) {
-      console.error("❌ Diagnostics failed:", error)
-      setDiagnostics({
-        error: error.message,
-      })
+        addResult("API Test", "warning", "Testing checkout API endpoint...")
+
+        const response = await fetch("/api/stripe/create-checkout-session", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${idToken}`,
+          },
+          body: JSON.stringify(testCheckoutData),
+        })
+
+        const responseText = await response.text()
+        let responseData
+        try {
+          responseData = JSON.parse(responseText)
+        } catch {
+          responseData = { error: responseText }
+        }
+
+        if (response.ok) {
+          addResult("API Test", "success", "Checkout API responded successfully", {
+            status: response.status,
+            data: responseData,
+          })
+        } else {
+          addResult("API Test", "error", `Checkout API failed: ${response.status}`, {
+            status: response.status,
+            error: responseData,
+          })
+        }
+      } catch (error) {
+        addResult("Firebase Auth", "error", `Firebase auth error: ${error}`)
+      }
+    } catch (error) {
+      addResult("Overall Auth", "error", `Authentication error: ${error}`)
     } finally {
       setLoading(false)
     }
   }
 
+  // Auto-run diagnostics when user is available
   useEffect(() => {
-    // Auto-run diagnostics when component mounts and user is available
-    if (user && !loading && !diagnostics) {
+    if (user && results.length === 0) {
       runDiagnostics()
     }
   }, [user])
 
-  const StatusBadge = ({ status, label }: { status: boolean; label: string }) => (
-    <Badge variant={status ? "default" : "destructive"} className="flex items-center gap-1">
-      {status ? <CheckCircle className="h-3 w-3" /> : <XCircle className="h-3 w-3" />}
-      {label}
-    </Badge>
-  )
+  const getStatusIcon = (status: string) => {
+    switch (status) {
+      case "success":
+        return <CheckCircle className="h-4 w-4 text-green-500" />
+      case "error":
+        return <XCircle className="h-4 w-4 text-red-500" />
+      case "warning":
+        return <AlertCircle className="h-4 w-4 text-yellow-500" />
+      default:
+        return null
+    }
+  }
+
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case "success":
+        return <Badge className="bg-green-600">Connected</Badge>
+      case "error":
+        return <Badge variant="destructive">Error</Badge>
+      case "warning":
+        return <Badge variant="secondary">Warning</Badge>
+      default:
+        return null
+    }
+  }
 
   return (
-    <div className="container mx-auto p-6 max-w-4xl">
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <AlertCircle className="h-5 w-5" />
-            Checkout Authentication Debug
-          </CardTitle>
-          <p className="text-sm text-gray-600">Diagnose authentication issues in the checkout flow</p>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          <div className="flex items-center justify-between">
-            <Button onClick={runDiagnostics} disabled={loading}>
-              {loading ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Running Diagnostics...
-                </>
-              ) : (
-                "Run Diagnostics"
-              )}
-            </Button>
-            {user && (
-              <div className="text-sm text-gray-600">
-                Authenticated as: <strong>{user.email}</strong>
+    <div className="min-h-screen bg-black text-white p-8">
+      <div className="max-w-4xl mx-auto">
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold mb-2">Checkout Authentication Debug</h1>
+          <p className="text-zinc-400">Diagnose authentication issues in the checkout flow</p>
+        </div>
+
+        <div className="flex items-center gap-4 mb-8">
+          <Button onClick={runDiagnostics} disabled={loading} className="bg-red-600 hover:bg-red-700">
+            {loading ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                Running...
+              </>
+            ) : (
+              "Run Diagnostics"
+            )}
+          </Button>
+
+          {user && <div className="text-sm text-zinc-400">Authenticated as: {user.email}</div>}
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+          <Card className="bg-zinc-900 border-zinc-800">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                Context Auth Status:
+                {user ? getStatusBadge("success") : getStatusBadge("error")}
+              </CardTitle>
+            </CardHeader>
+          </Card>
+
+          <Card className="bg-zinc-900 border-zinc-800">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                Firebase Auth Status:
+                {user ? getStatusBadge("success") : getStatusBadge("error")}
+              </CardTitle>
+            </CardHeader>
+          </Card>
+        </div>
+
+        <Card className="bg-zinc-900 border-zinc-800">
+          <CardHeader>
+            <CardTitle>Diagnostic Results</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {results.length === 0 ? (
+              <p className="text-zinc-400 text-center py-8">
+                {loading ? "Running diagnostics..." : "Click 'Run Diagnostics' to test authentication"}
+              </p>
+            ) : (
+              <div className="space-y-4">
+                {results.map((result, index) => (
+                  <div key={index} className="border border-zinc-800 rounded-lg p-4">
+                    <div className="flex items-center gap-3 mb-2">
+                      {getStatusIcon(result.status)}
+                      <Badge variant="outline" className="text-xs">
+                        {result.step}
+                      </Badge>
+                      <span className="text-sm font-medium">
+                        {result.status === "success" ? "✅" : result.status === "error" ? "❌" : "⚠️"} {result.message}
+                      </span>
+                    </div>
+
+                    {result.data && (
+                      <div className="mt-3 p-3 bg-zinc-800 rounded text-xs font-mono overflow-x-auto">
+                        <pre>{JSON.stringify(result.data, null, 2)}</pre>
+                      </div>
+                    )}
+                  </div>
+                ))}
               </div>
             )}
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <h3 className="font-semibold mb-2">Context Auth Status:</h3>
-              <StatusBadge status={!!contextAuth?.user} label={contextAuth?.user ? "Connected" : "Disconnected"} />
-            </div>
-            <div>
-              <h3 className="font-semibold mb-2">Firebase Auth Status:</h3>
-              <StatusBadge status={!!firebaseAuth?.user} label={firebaseAuth?.user ? "Connected" : "Disconnected"} />
-            </div>
-          </div>
-
-          {diagnostics && (
-            <div className="space-y-4">
-              <h3 className="text-lg font-semibold">Diagnostic Results</h3>
-
-              {diagnostics.error ? (
-                <div className="bg-red-50 border border-red-200 rounded p-4">
-                  <p className="text-red-800">Error: {diagnostics.error}</p>
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div className="bg-gray-50 p-4 rounded">
-                      <StatusBadge status={diagnostics.contextAuth.hasUser} label="Context Auth" />
-                      {diagnostics.contextAuth.hasUser && (
-                        <div className="mt-2 text-sm">
-                          <p>Context user: {diagnostics.contextAuth.userId}</p>
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="bg-gray-50 p-4 rounded">
-                      <StatusBadge status={diagnostics.firebaseAuth.hasUser} label="Firebase Auth" />
-                      {diagnostics.firebaseAuth.hasUser && (
-                        <div className="mt-2 text-sm">
-                          <p>Firebase user: {diagnostics.firebaseAuth.userId}</p>
-                        </div>
-                      )}
-                    </div>
-
-                    <div className="bg-gray-50 p-4 rounded">
-                      <StatusBadge status={diagnostics.overallAuth.hasUser} label="Overall Auth" />
-                      {diagnostics.overallAuth.hasUser && (
-                        <div className="mt-2 text-sm">
-                          <p>Using user: {diagnostics.overallAuth.userId}</p>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  {diagnostics.tokenGeneration && (
-                    <div className="bg-blue-50 p-4 rounded">
-                      <StatusBadge status={diagnostics.tokenGeneration.success} label="Token Generation" />
-                      {diagnostics.tokenGeneration.success ? (
-                        <div className="mt-2 text-sm">
-                          <p>Token generated (length: {diagnostics.tokenGeneration.tokenLength})</p>
-                          <p className="font-mono text-xs bg-white p-2 rounded mt-1">
-                            {diagnostics.tokenGeneration.tokenPreview}
-                          </p>
-                        </div>
-                      ) : (
-                        <div className="mt-2 text-sm text-red-600">
-                          <p>Error: {diagnostics.tokenGeneration.error}</p>
-                        </div>
-                      )}
-                    </div>
-                  )}
-
-                  {diagnostics.checkoutApiTest && (
-                    <div className="bg-green-50 p-4 rounded">
-                      <StatusBadge status={diagnostics.checkoutApiTest.success} label="Checkout API Test" />
-                      <div className="mt-2 text-sm">
-                        <p>
-                          Status: {diagnostics.checkoutApiTest.status} {diagnostics.checkoutApiTest.statusText}
-                        </p>
-                        {diagnostics.checkoutApiTest.error && (
-                          <div className="mt-2 p-2 bg-red-100 rounded text-red-800">
-                            <p>Error: {diagnostics.checkoutApiTest.error}</p>
-                          </div>
-                        )}
-                        {diagnostics.checkoutApiTest.response && (
-                          <div className="mt-2 p-2 bg-white rounded">
-                            <p>Response: {JSON.stringify(diagnostics.checkoutApiTest.response, null, 2)}</p>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      </div>
     </div>
   )
 }
