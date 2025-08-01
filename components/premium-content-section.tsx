@@ -159,7 +159,6 @@ export default function PremiumContentSection({
 
       // Prepare checkout data
       const checkoutData = {
-        idToken,
         priceId: bundle.priceId || `price_${bundle.id}`,
         bundleId: bundle.id,
         successUrl: `${window.location.origin}/purchase-success?session_id={CHECKOUT_SESSION_ID}&buyer_uid=${activeUser.uid}`,
@@ -171,8 +170,8 @@ export default function PremiumContentSection({
         priceId: checkoutData.priceId,
         buyerUid: activeUser.uid,
         authSource,
-        hasToken: !!checkoutData.idToken,
-        tokenLength: checkoutData.idToken.length,
+        hasToken: !!idToken,
+        tokenLength: idToken.length,
       })
 
       // Make the API call
@@ -181,6 +180,7 @@ export default function PremiumContentSection({
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          Authorization: `Bearer ${idToken}`,
         },
         body: JSON.stringify(checkoutData),
       })

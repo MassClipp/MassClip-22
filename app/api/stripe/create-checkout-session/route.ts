@@ -3,6 +3,7 @@ import Stripe from "stripe"
 import { initializeApp, getApps, cert } from "firebase-admin/app"
 import { getAuth } from "firebase-admin/auth"
 import { getFirestore } from "firebase-admin/firestore"
+import { verifyIdTokenFromRequest } from "@/lib/auth-utils"
 
 // Initialize Firebase Admin
 if (!getApps().length) {
@@ -27,30 +28,17 @@ export async function POST(request: NextRequest) {
     console.log("🔄 [Checkout API] Starting checkout session creation...")
 
     const body = await request.json()
-    const { idToken, priceId, bundleId, successUrl, cancelUrl } = body
+    const { priceId, bundleId, successUrl, cancelUrl } = body
 
     console.log("📝 [Checkout API] Request data:", {
-      hasIdToken: !!idToken,
-      idTokenLength: idToken?.length || 0,
       priceId,
       bundleId,
       successUrl,
       cancelUrl,
+      hasAuthHeader: !!request.headers.get("authorization"),
     })
 
     // Validate required fields
-    if (!idToken) {
-      console.error("❌ [Checkout API] Missing idToken in request")
-      return NextResponse.json(
-        {
-          error: "Authentication required",
-          code: "MISSING_TOKEN",
-          details: "idToken is required for checkout",
-        },
-        { status: 401 },
-      )
-    }
-
     if (!priceId || !bundleId) {
       console.error("❌ [Checkout API] Missing required fields:", { priceId, bundleId })
       return NextResponse.json(
@@ -63,11 +51,24 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Verify Firebase token
+    // Verify Firebase token from Authorization header
     let decodedToken
     try {
-      console.log("🔐 [Checkout API] Verifying Firebase token...")
-      decodedToken = await auth.verifyIdToken(idToken)
+      console.log("🔐 [Checkout API] Verifying Firebase token from Authorization header...")
+      decodedToken = await verifyIdTokenFromRequest(request)
+
+      if (!decodedToken) {
+        console.error("❌ [Checkout API] No valid token found in Authorization header")
+        return NextResponse.json(
+          {
+            error: "Authentication required",
+            code: "MISSING_TOKEN",
+            details: "Valid Authorization header with Bearer token is required",
+          },
+          { status: 401 },
+        )
+      }
+
       console.log("✅ [Checkout API] Token verified for user:", {
         uid: decodedToken.uid,
         email: decodedToken.email,
@@ -77,7 +78,6 @@ export async function POST(request: NextRequest) {
       console.error("❌ [Checkout API] Token verification failed:", {
         error: error.message,
         code: error.code,
-        tokenLength: idToken?.length || 0,
       })
       return NextResponse.json(
         {
