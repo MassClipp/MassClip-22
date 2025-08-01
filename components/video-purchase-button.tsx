@@ -66,8 +66,8 @@ export default function VideoPurchaseButton({
         },
         body: JSON.stringify({
           idToken, // CRITICAL: Include buyer authentication token
-          priceId: productBoxId, // Use productBoxId as priceId
-          bundleId: productBoxId, // Use productBoxId as bundleId
+          priceId: productBoxId, // This should be the actual Stripe price ID
+          bundleId: productBoxId, // This should be the bundle/product box ID
           successUrl: `${window.location.origin}/purchase-success?session_id={CHECKOUT_SESSION_ID}&buyer_uid=${user.uid}`,
           cancelUrl: window.location.href,
         }),

@@ -37,9 +37,26 @@ export async function POST(request: NextRequest) {
     console.log("🚀 [Checkout API] Starting checkout session creation...")
 
     const body = await request.json()
-    console.log("📝 [Checkout API] Request body:", { ...body, idToken: body.idToken ? "[REDACTED]" : "MISSING" })
+    const idToken = body.idToken // Declare idToken here
+    console.log("📝 [Checkout API] Request body:", { ...body, idToken: idToken ? "[REDACTED]" : "MISSING" })
 
-    const { idToken, priceId, bundleId, successUrl, cancelUrl } = body
+    // Debug authentication token
+    if (!idToken) {
+      console.error("❌ [Checkout API] No idToken in request body")
+      console.error("❌ [Checkout API] Available keys:", Object.keys(body))
+      return NextResponse.json(
+        {
+          error: "Authentication required. Please log in to make a purchase.",
+          debug: "No authentication token provided",
+        },
+        { status: 401 },
+      )
+    }
+
+    console.log("🔍 [Checkout API] idToken length:", idToken.length)
+    console.log("🔍 [Checkout API] idToken starts with:", idToken.substring(0, 20) + "...")
+
+    const { priceId, bundleId, successUrl, cancelUrl } = body
 
     if (!priceId || !bundleId) {
       console.error("❌ [Checkout API] Missing required parameters")
@@ -49,7 +66,13 @@ export async function POST(request: NextRequest) {
     // CRITICAL: Require authentication token for buyer identification
     if (!idToken) {
       console.error("❌ [Checkout API] No authentication token provided - anonymous purchases not allowed")
-      return NextResponse.json({ error: "Authentication required. Please log in to make a purchase." }, { status: 401 })
+      return NextResponse.json(
+        {
+          error: "Authentication required. Please log in to make a purchase.",
+          code: "AUTH_REQUIRED",
+        },
+        { status: 401 },
+      )
     }
 
     let userId: string | null = null
@@ -57,13 +80,26 @@ export async function POST(request: NextRequest) {
 
     // Verify authentication token and get buyer UID
     try {
+      console.log("🔐 [Checkout API] Verifying Firebase token...")
       const decodedToken = await auth.verifyIdToken(idToken)
       userId = decodedToken.uid
       userEmail = decodedToken.email || null
       console.log("✅ [Checkout API] Token verified for buyer:", userId)
-    } catch (error) {
-      console.error("❌ [Checkout API] Token verification failed:", error)
-      return NextResponse.json({ error: "Invalid authentication token. Please log in again." }, { status: 401 })
+      console.log("   Email:", userEmail)
+    } catch (error: any) {
+      console.error("❌ [Checkout API] Token verification failed:", {
+        error: error.message,
+        code: error.code,
+        tokenLength: idToken?.length || 0,
+      })
+      return NextResponse.json(
+        {
+          error: "Invalid authentication token. Please log in again.",
+          code: "INVALID_TOKEN",
+          details: error.message,
+        },
+        { status: 401 },
+      )
     }
 
     if (!userId) {
@@ -184,7 +220,7 @@ export async function POST(request: NextRequest) {
       stripeAccount: stripeAccountId,
       successUrl: sessionParams.success_url,
       cancelUrl: sessionParams.cancel_url,
-      buyerUid: userId, // Log buyer UID for verification
+      buyerUid: userId, // CRITICAL: Log buyer UID for verification
     })
 
     const session = await stripe.checkout.sessions.create(sessionParams, {
