@@ -1,112 +1,111 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { initializeApp, getApps, cert } from "firebase-admin/app"
-import { getAuth } from "firebase-admin/auth"
-import { getFirestore } from "firebase-admin/firestore"
-
-// Initialize Firebase Admin
-if (!getApps().length) {
-  initializeApp({
-    credential: cert({
-      projectId: process.env.FIREBASE_PROJECT_ID,
-      clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-      privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n"),
-    }),
-  })
-}
-
-const auth = getAuth()
-const db = getFirestore()
+import { initializeFirebaseAdmin, auth, db } from "@/lib/firebase-admin"
 
 export async function POST(request: NextRequest) {
-  try {
-    const { idToken, uid } = await request.json()
+  console.log("🔍 [User Profile Lookup] Starting user profile lookup")
 
-    console.log("🔍 [User Profile Lookup] Looking up user profile:", uid)
+  try {
+    // Initialize Firebase Admin
+    initializeFirebaseAdmin()
+
+    const body = await request.json()
+    const { idToken, uid } = body
+
+    console.log("🔍 [User Profile Lookup] Request data:", {
+      hasIdToken: !!idToken,
+      providedUid: uid,
+      idTokenLength: idToken?.length,
+    })
+
+    if (!idToken) {
+      return NextResponse.json({ error: "No ID token provided" }, { status: 400 })
+    }
 
     // Verify token first
     let decodedToken
     try {
       decodedToken = await auth.verifyIdToken(idToken)
-      console.log("✅ [User Profile Lookup] Token verified")
+      console.log("✅ [User Profile Lookup] Token verified for user:", decodedToken.uid)
     } catch (error: any) {
-      console.error("❌ [User Profile Lookup] Token verification failed:", error.message)
-      return NextResponse.json(
-        {
-          error: "Token verification failed",
-          details: error.message,
-        },
-        { status: 401 },
-      )
+      console.error("❌ [User Profile Lookup] Token verification failed:", error)
+      return NextResponse.json({ error: "Token verification failed", details: error.message }, { status: 401 })
     }
 
-    // Verify UID matches token
-    if (decodedToken.uid !== uid) {
-      console.error("❌ [User Profile Lookup] UID mismatch:", {
-        tokenUid: decodedToken.uid,
-        providedUid: uid,
-      })
-      return NextResponse.json(
-        {
-          error: "UID mismatch",
-          details: "Provided UID does not match token",
-        },
-        { status: 403 },
-      )
-    }
+    // Use UID from token (more secure than trusting client-provided UID)
+    const userUid = decodedToken.uid
 
-    // Look up user profile
+    console.log("🔍 [User Profile Lookup] Looking up user profile for:", userUid)
+
+    // Look up user profile in Firestore
     try {
-      const userDoc = await db.collection("users").doc(uid).get()
+      const userDoc = await db.collection("users").doc(userUid).get()
 
-      if (!userDoc.exists) {
-        console.warn("⚠️ [User Profile Lookup] User profile not found:", uid)
-        return NextResponse.json({
-          success: true,
-          profileExists: false,
-          uid,
-          tokenData: {
-            uid: decodedToken.uid,
-            email: decodedToken.email,
-          },
-          message: "User profile not found in database",
-        })
+      let profileData = null
+      if (userDoc.exists) {
+        profileData = userDoc.data()
+        console.log("✅ [User Profile Lookup] User profile found")
+      } else {
+        console.log("⚠️ [User Profile Lookup] User profile not found in Firestore")
       }
 
-      const userData = userDoc.data()
-      console.log("✅ [User Profile Lookup] User profile found")
+      // Also get Firebase Auth user record
+      let authUserRecord = null
+      try {
+        authUserRecord = await auth.getUser(userUid)
+        console.log("✅ [User Profile Lookup] Firebase Auth user record found")
+      } catch (authError: any) {
+        console.error("❌ [User Profile Lookup] Failed to get Auth user record:", authError)
+      }
 
       return NextResponse.json({
         success: true,
-        profileExists: true,
-        uid,
+        userUid,
+        tokenValid: true,
         profile: {
-          email: userData.email,
-          displayName: userData.displayName,
-          username: userData.username,
-          createdAt: userData.createdAt,
-          stripeAccountId: userData.stripeAccountId ? "Present" : "Not set",
+          exists: userDoc.exists,
+          data: profileData,
+          docId: userDoc.id,
         },
-        tokenData: {
-          uid: decodedToken.uid,
-          email: decodedToken.email,
+        authRecord: authUserRecord
+          ? {
+              uid: authUserRecord.uid,
+              email: authUserRecord.email,
+              emailVerified: authUserRecord.emailVerified,
+              displayName: authUserRecord.displayName,
+              photoURL: authUserRecord.photoURL,
+              disabled: authUserRecord.disabled,
+              metadata: {
+                creationTime: authUserRecord.metadata.creationTime,
+                lastSignInTime: authUserRecord.metadata.lastSignInTime,
+                lastRefreshTime: authUserRecord.metadata.lastRefreshTime,
+              },
+              providerData: authUserRecord.providerData,
+            }
+          : null,
+        serverInfo: {
+          timestamp: new Date().toISOString(),
+          firestoreConnected: true,
         },
       })
-    } catch (error: any) {
-      console.error("❌ [User Profile Lookup] Database error:", error.message)
+    } catch (firestoreError: any) {
+      console.error("❌ [User Profile Lookup] Firestore error:", firestoreError)
       return NextResponse.json(
         {
-          error: "Database error",
-          details: error.message,
+          error: "Firestore lookup failed",
+          details: firestoreError.message,
+          userUid,
+          tokenValid: true,
         },
         { status: 500 },
       )
     }
   } catch (error: any) {
-    console.error("❌ [User Profile Lookup] Unexpected error:", error.message)
+    console.error("❌ [User Profile Lookup] Unexpected error:", error)
     return NextResponse.json(
       {
-        error: "Unexpected error",
+        error: "Internal server error",
         details: error.message,
+        stack: error.stack,
       },
       { status: 500 },
     )
