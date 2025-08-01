@@ -8,72 +8,93 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
 
 export async function POST(request: NextRequest) {
   const debugMode = request.headers.get("x-debug-mode") === "true"
-  const isDebug = debugMode
-
-  if (debugMode) {
-    console.log("🔍 [Checkout Debug] Starting checkout session creation in debug mode")
-  }
 
   try {
     // Initialize Firebase Admin
     initializeFirebaseAdmin()
 
     const body = await request.json()
-    const { idToken, priceId, bundleId, successUrl, cancelUrl, debugMode: bodyDebugMode } = body
+    const { idToken, priceId, bundleId, successUrl, cancelUrl } = body
 
-    if (isDebug || bodyDebugMode) {
-      console.log("🔍 [Checkout Debug] Request body:", {
+    if (debugMode) {
+      console.log("🔍 [Checkout Debug] Request received:", {
         hasIdToken: !!idToken,
         idTokenLength: idToken?.length,
         priceId,
         bundleId,
         successUrl,
         cancelUrl,
-        debugMode: isDebug || bodyDebugMode,
-      })
-
-      console.log("🔍 [Checkout Debug] Request headers:", {
-        authorization: request.headers.get("authorization") ? "Present" : "Missing",
-        contentType: request.headers.get("content-type"),
-        userAgent: request.headers.get("user-agent"),
+        bodyKeys: Object.keys(body),
       })
     }
 
     // Validate required fields
     if (!idToken) {
-      console.error("❌ [Checkout] No ID token provided")
+      console.error("❌ [Checkout] Missing ID token")
       return NextResponse.json(
         {
           error: "Authentication required",
           details: "idToken is required",
-          debugInfo: isDebug ? { receivedFields: Object.keys(body) } : undefined,
+          received: Object.keys(body),
         },
         { status: 401 },
       )
     }
 
     if (!priceId) {
-      console.error("❌ [Checkout] No price ID provided")
-      return NextResponse.json({ error: "Price ID is required" }, { status: 400 })
+      console.error("❌ [Checkout] Missing price ID")
+      return NextResponse.json(
+        {
+          error: "Price ID is required",
+          details: "priceId field is missing or empty",
+          received: { priceId, hasIdToken: !!idToken, bundleId },
+        },
+        { status: 400 },
+      )
+    }
+
+    if (debugMode) {
+      console.log("🔍 [Checkout Debug] Validating price ID with Stripe...")
+    }
+
+    // Verify the price exists in Stripe
+    let priceData
+    try {
+      priceData = await stripe.prices.retrieve(priceId)
+      if (debugMode) {
+        console.log("✅ [Checkout Debug] Price found:", {
+          id: priceData.id,
+          amount: priceData.unit_amount,
+          currency: priceData.currency,
+          product: priceData.product,
+        })
+      }
+    } catch (stripeError: any) {
+      console.error("❌ [Checkout] Invalid price ID:", stripeError.message)
+      return NextResponse.json(
+        {
+          error: "Invalid price ID",
+          details: stripeError.message,
+          priceId,
+        },
+        { status: 400 },
+      )
     }
 
     // Verify Firebase ID token
     let decodedToken
     try {
-      if (isDebug) {
-        console.log("🔍 [Checkout Debug] Verifying Firebase ID token")
+      if (debugMode) {
+        console.log("🔍 [Checkout Debug] Verifying Firebase ID token...")
       }
 
       decodedToken = await auth.verifyIdToken(idToken)
 
-      if (isDebug) {
-        console.log("✅ [Checkout Debug] Token verified successfully:", {
+      if (debugMode) {
+        console.log("✅ [Checkout Debug] Token verified:", {
           uid: decodedToken.uid,
           email: decodedToken.email,
           emailVerified: decodedToken.email_verified,
-          authTime: decodedToken.auth_time,
-          exp: decodedToken.exp,
-          iat: decodedToken.iat,
         })
       }
     } catch (error: any) {
@@ -83,13 +104,6 @@ export async function POST(request: NextRequest) {
           error: "Invalid authentication token",
           details: error.message,
           code: error.code,
-          debugInfo: isDebug
-            ? {
-                tokenLength: idToken?.length,
-                tokenFormat: idToken?.split(".").length === 3 ? "Valid JWT format" : "Invalid JWT format",
-                errorStack: error.stack,
-              }
-            : undefined,
         },
         { status: 401 },
       )
@@ -97,10 +111,6 @@ export async function POST(request: NextRequest) {
 
     const userUid = decodedToken.uid
     const userEmail = decodedToken.email
-
-    if (isDebug) {
-      console.log("🔍 [Checkout Debug] Authenticated user:", { userUid, userEmail })
-    }
 
     // Check if user has a Stripe customer ID
     let customerId: string | null = null
@@ -112,29 +122,22 @@ export async function POST(request: NextRequest) {
         const userData = userDoc.data()
         customerId = userData?.stripeCustomerId || null
 
-        if (isDebug) {
+        if (debugMode) {
           console.log("🔍 [Checkout Debug] User profile found:", {
             hasStripeCustomerId: !!customerId,
-            customerId: customerId ? `${customerId.substring(0, 8)}...` : null,
           })
-        }
-      } else {
-        if (isDebug) {
-          console.log("🔍 [Checkout Debug] User profile not found in Firestore")
         }
       }
     } catch (firestoreError: any) {
       console.error("❌ [Checkout] Firestore error:", firestoreError)
-      if (isDebug) {
-        console.log("🔍 [Checkout Debug] Continuing without user profile due to Firestore error")
-      }
+      // Continue without user profile - not critical for checkout
     }
 
     // Create or retrieve Stripe customer
     if (!customerId && userEmail) {
       try {
-        if (isDebug) {
-          console.log("🔍 [Checkout Debug] Creating new Stripe customer")
+        if (debugMode) {
+          console.log("🔍 [Checkout Debug] Creating new Stripe customer...")
         }
 
         const customer = await stripe.customers.create({
@@ -146,17 +149,13 @@ export async function POST(request: NextRequest) {
 
         customerId = customer.id
 
-        if (isDebug) {
+        if (debugMode) {
           console.log("✅ [Checkout Debug] Stripe customer created:", customerId)
         }
 
         // Save customer ID to user profile
         try {
           await db.collection("users").doc(userUid).set({ stripeCustomerId: customerId }, { merge: true })
-
-          if (isDebug) {
-            console.log("✅ [Checkout Debug] Customer ID saved to user profile")
-          }
         } catch (saveError: any) {
           console.error("❌ [Checkout] Failed to save customer ID:", saveError)
           // Continue anyway - not critical for checkout
@@ -167,7 +166,6 @@ export async function POST(request: NextRequest) {
           {
             error: "Failed to create customer",
             details: stripeError.message,
-            debugInfo: isDebug ? { stripeError: stripeError.type } : undefined,
           },
           { status: 500 },
         )
@@ -176,8 +174,8 @@ export async function POST(request: NextRequest) {
 
     // Create checkout session
     try {
-      if (isDebug) {
-        console.log("🔍 [Checkout Debug] Creating Stripe checkout session")
+      if (debugMode) {
+        console.log("🔍 [Checkout Debug] Creating Stripe checkout session...")
       }
 
       const sessionParams: Stripe.Checkout.SessionCreateParams = {
@@ -190,8 +188,8 @@ export async function POST(request: NextRequest) {
           },
         ],
         mode: "payment",
-        success_url: successUrl,
-        cancel_url: cancelUrl,
+        success_url: successUrl || `${request.nextUrl.origin}/purchase-success?session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: cancelUrl || request.nextUrl.origin,
         metadata: {
           firebaseUid: userUid,
           bundleId: bundleId || "",
@@ -205,7 +203,7 @@ export async function POST(request: NextRequest) {
         },
       }
 
-      if (isDebug) {
+      if (debugMode) {
         console.log("🔍 [Checkout Debug] Session parameters:", {
           hasCustomer: !!sessionParams.customer,
           hasCustomerEmail: !!sessionParams.customer_email,
@@ -217,7 +215,7 @@ export async function POST(request: NextRequest) {
 
       const session = await stripe.checkout.sessions.create(sessionParams)
 
-      if (isDebug) {
+      if (debugMode) {
         console.log("✅ [Checkout Debug] Checkout session created:", {
           sessionId: session.id,
           url: session.url ? "Generated" : "Missing",
@@ -231,13 +229,16 @@ export async function POST(request: NextRequest) {
         url: session.url,
         buyerUid: userUid,
         customerId,
-        debugInfo: isDebug
+        priceId,
+        bundleId,
+        debugInfo: debugMode
           ? {
               sessionStatus: session.status,
               paymentStatus: session.payment_status,
               mode: session.mode,
               currency: session.currency,
               amountTotal: session.amount_total,
+              priceVerified: true,
             }
           : undefined,
       })
@@ -248,13 +249,7 @@ export async function POST(request: NextRequest) {
           error: "Failed to create checkout session",
           details: stripeError.message,
           type: stripeError.type,
-          debugInfo: isDebug
-            ? {
-                stripeErrorCode: stripeError.code,
-                stripeErrorType: stripeError.type,
-                stripeErrorParam: stripeError.param,
-              }
-            : undefined,
+          priceId,
         },
         { status: 500 },
       )
@@ -265,12 +260,6 @@ export async function POST(request: NextRequest) {
       {
         error: "Internal server error",
         details: error.message,
-        debugInfo: isDebug
-          ? {
-              errorStack: error.stack,
-              errorName: error.name,
-            }
-          : undefined,
       },
       { status: 500 },
     )
