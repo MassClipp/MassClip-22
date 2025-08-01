@@ -13,66 +13,82 @@ if (!getApps().length) {
         privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n"),
       }),
     })
+    console.log("✅ Firebase Admin initialized")
   } catch (error: any) {
     console.error("❌ Firebase Admin initialization failed:", error.message)
   }
 }
 
+const auth = getAuth()
+const db = getFirestore()
+
 export async function POST(request: NextRequest) {
   try {
-    const auth = getAuth()
-    const db = getFirestore()
+    const { idToken } = await request.json()
 
-    // Test Firebase Admin configuration
-    const configTest = {
-      projectId: process.env.FIREBASE_PROJECT_ID ? "✅ Set" : "❌ Missing",
-      clientEmail: process.env.FIREBASE_CLIENT_EMAIL ? "✅ Set" : "❌ Missing",
-      privateKey: process.env.FIREBASE_PRIVATE_KEY ? "✅ Set" : "❌ Missing",
-    }
+    console.log("🔍 [Firebase Admin Test] Testing Firebase Admin connection")
 
-    // Test token verification if provided
-    let tokenTest = null
-    const authHeader = request.headers.get("authorization")
-    if (authHeader?.startsWith("Bearer ")) {
-      const token = authHeader.substring(7)
-      try {
-        const decodedToken = await auth.verifyIdToken(token)
-        tokenTest = {
-          status: "✅ Valid",
-          uid: decodedToken.uid,
-          email: decodedToken.email,
-        }
-      } catch (error: any) {
-        tokenTest = {
-          status: "❌ Invalid",
-          error: error.message,
-        }
-      }
-    }
-
-    // Test Firestore connection
-    let firestoreTest
+    // Test 1: Verify token
+    let decodedToken
     try {
-      await db.collection("test").limit(1).get()
-      firestoreTest = "✅ Connected"
+      decodedToken = await auth.verifyIdToken(idToken)
+      console.log("✅ [Firebase Admin Test] Token verification successful")
     } catch (error: any) {
-      firestoreTest = `❌ Error: ${error.message}`
+      console.error("❌ [Firebase Admin Test] Token verification failed:", error.message)
+      return NextResponse.json(
+        {
+          error: "Token verification failed",
+          details: error.message,
+          step: "token_verification",
+        },
+        { status: 401 },
+      )
+    }
+
+    // Test 2: Test Firestore connection
+    try {
+      const testDoc = await db.collection("_test").doc("connection").get()
+      console.log("✅ [Firebase Admin Test] Firestore connection successful")
+    } catch (error: any) {
+      console.error("❌ [Firebase Admin Test] Firestore connection failed:", error.message)
+      return NextResponse.json(
+        {
+          error: "Firestore connection failed",
+          details: error.message,
+          step: "firestore_connection",
+        },
+        { status: 500 },
+      )
+    }
+
+    // Test 3: Check environment variables
+    const envCheck = {
+      hasProjectId: !!process.env.FIREBASE_PROJECT_ID,
+      hasClientEmail: !!process.env.FIREBASE_CLIENT_EMAIL,
+      hasPrivateKey: !!process.env.FIREBASE_PRIVATE_KEY,
+      projectId: process.env.FIREBASE_PROJECT_ID,
     }
 
     return NextResponse.json({
       success: true,
-      config: configTest,
-      tokenVerification: tokenTest,
-      firestore: firestoreTest,
+      tokenValid: true,
+      firestoreConnected: true,
+      decodedToken: {
+        uid: decodedToken.uid,
+        email: decodedToken.email,
+        iss: decodedToken.iss,
+        aud: decodedToken.aud,
+      },
+      environment: envCheck,
       timestamp: new Date().toISOString(),
     })
   } catch (error: any) {
-    console.error("❌ Firebase Admin test error:", error.message)
+    console.error("❌ [Firebase Admin Test] Unexpected error:", error.message)
     return NextResponse.json(
       {
-        success: false,
-        error: error.message,
-        timestamp: new Date().toISOString(),
+        error: "Unexpected error",
+        details: error.message,
+        step: "unexpected",
       },
       { status: 500 },
     )

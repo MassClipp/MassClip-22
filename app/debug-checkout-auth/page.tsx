@@ -3,80 +3,64 @@
 import { useState } from "react"
 import { useAuth } from "@/contexts/auth-context"
 import { useFirebaseAuthSafe } from "@/hooks/use-firebase-auth-safe"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Separator } from "@/components/ui/separator"
 import { CheckCircle, XCircle, AlertCircle, Loader2 } from "lucide-react"
 
-interface DebugResult {
+interface DiagnosticResult {
   step: string
   status: "success" | "error" | "warning"
   message: string
   data?: any
 }
 
-export default function DebugCheckoutAuthPage() {
-  // Try both auth contexts
+export default function CheckoutAuthDebugPage() {
   const contextAuth = useAuth()
   const firebaseAuth = useFirebaseAuthSafe()
+  const [results, setResults] = useState<DiagnosticResult[]>([])
+  const [loading, setLoading] = useState(false)
 
-  const [results, setResults] = useState<DebugResult[]>([])
-  const [isRunning, setIsRunning] = useState(false)
-
-  const addResult = (step: string, status: "success" | "error" | "warning", message: string, data?: any) => {
-    setResults((prev) => [...prev, { step, status, message, data }])
-  }
+  // Determine which auth to use
+  const activeUser = contextAuth.user || firebaseAuth.user
+  const activeAuth = contextAuth.user ? contextAuth : firebaseAuth
 
   const runDiagnostics = async () => {
-    setIsRunning(true)
+    setLoading(true)
     setResults([])
+    const diagnostics: DiagnosticResult[] = []
 
-    // Step 1: Check both authentication contexts
-    addResult(
-      "Context Auth",
-      contextAuth.user ? "success" : "error",
-      contextAuth.user ? `Context user: ${contextAuth.user.uid}` : "No context user",
-      { user: contextAuth.user?.uid, email: contextAuth.user?.email },
-    )
-
-    addResult(
-      "Firebase Auth",
-      firebaseAuth.user ? "success" : "error",
-      firebaseAuth.user ? `Firebase user: ${firebaseAuth.user.uid}` : "No firebase user",
-      { user: firebaseAuth.user?.uid, email: firebaseAuth.user?.email },
-    )
-
-    // Use whichever auth has a user
-    const user = contextAuth.user || firebaseAuth.user
-
-    if (!user) {
-      addResult("Overall Auth", "error", "No user found in either auth context")
-      setIsRunning(false)
+    // Step 1: Check authentication state
+    if (activeUser) {
+      diagnostics.push({
+        step: "Auth State",
+        status: "success",
+        message: `User authenticated: ${activeUser.email}`,
+        data: { uid: activeUser.uid, email: activeUser.email },
+      })
+    } else {
+      diagnostics.push({
+        step: "Auth State",
+        status: "error",
+        message: "No user authenticated",
+      })
+      setResults(diagnostics)
+      setLoading(false)
       return
     }
 
-    addResult("Overall Auth", "success", `Using user: ${user.uid}`)
-
     // Step 2: Test token generation
     try {
-      const idToken = await user.getIdToken(true)
-      addResult("Token Generation", "success", `Token generated (length: ${idToken.length})`, {
-        tokenPreview: idToken.substring(0, 50) + "...",
+      const idToken = await activeUser.getIdToken(true)
+      diagnostics.push({
+        step: "Token Generation",
+        status: "success",
+        message: `Token generated (length: ${idToken.length})`,
+        data: { tokenPreview: idToken.substring(0, 50) + "..." },
       })
 
-      // Step 3: Test token format
-      const tokenParts = idToken.split(".")
-      addResult(
-        "Token Format",
-        tokenParts.length === 3 ? "success" : "error",
-        `Token has ${tokenParts.length} parts (should be 3)`,
-        { parts: tokenParts.length },
-      )
-
-      // Step 4: Test checkout session creation with real data
+      // Step 3: Test checkout API call
       try {
-        const testBundleId = "test-bundle-123"
         const response = await fetch("/api/stripe/create-checkout-session", {
           method: "POST",
           headers: {
@@ -84,89 +68,133 @@ export default function DebugCheckoutAuthPage() {
           },
           body: JSON.stringify({
             idToken,
-            priceId: testBundleId,
-            bundleId: testBundleId,
+            priceId: "price_test_123", // Test price ID
+            bundleId: "bundle_test_123", // Test bundle ID
             successUrl: `${window.location.origin}/purchase-success`,
             cancelUrl: window.location.href,
           }),
         })
 
-        const responseData = await response.json()
+        const data = await response.json()
 
         if (response.ok) {
-          addResult("Checkout API", "success", "Checkout session creation successful", {
-            sessionId: responseData.sessionId,
-            buyerUid: responseData.buyerUid,
+          diagnostics.push({
+            step: "Checkout API",
+            status: "success",
+            message: "Checkout session creation successful",
+            data: {
+              sessionId: data.sessionId,
+              buyerUid: data.buyerUid,
+              url: data.url ? "URL generated" : "No URL",
+            },
           })
         } else {
-          addResult("Checkout API", "error", `Checkout failed: ${responseData.error}`, {
-            status: response.status,
-            error: responseData.error,
-            details: responseData.details,
-            code: responseData.code,
+          diagnostics.push({
+            step: "Checkout API",
+            status: "error",
+            message: `API Error: ${data.error || "Unknown error"}`,
+            data: { status: response.status, details: data.details, code: data.code },
           })
         }
       } catch (error: any) {
-        addResult("Checkout API", "error", `Network error: ${error.message}`, { error: error.message })
+        diagnostics.push({
+          step: "Checkout API",
+          status: "error",
+          message: `Network Error: ${error.message}`,
+          data: { error: error.toString() },
+        })
       }
 
-      // Step 5: Test Firebase Admin connection
+      // Step 4: Test Firebase Admin connection
       try {
-        const testResponse = await fetch("/api/debug/firebase-admin-test", {
+        const adminResponse = await fetch("/api/debug/firebase-admin-test", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer ${idToken}`,
           },
+          body: JSON.stringify({ idToken }),
         })
 
-        const testData = await testResponse.json()
-        addResult(
-          "Firebase Admin",
-          testResponse.ok ? "success" : "error",
-          testResponse.ok ? "Firebase Admin connection working" : `Firebase Admin error: ${testData.error}`,
-          testData,
-        )
+        const adminData = await adminResponse.json()
+
+        if (adminResponse.ok) {
+          diagnostics.push({
+            step: "Firebase Admin",
+            status: "success",
+            message: "Firebase Admin connection successful",
+            data: adminData,
+          })
+        } else {
+          diagnostics.push({
+            step: "Firebase Admin",
+            status: "error",
+            message: `Firebase Admin Error: ${adminData.error}`,
+            data: adminData,
+          })
+        }
       } catch (error: any) {
-        addResult("Firebase Admin", "error", `Firebase Admin test failed: ${error.message}`)
+        diagnostics.push({
+          step: "Firebase Admin",
+          status: "error",
+          message: `Firebase Admin Network Error: ${error.message}`,
+        })
       }
 
-      // Step 6: Test user profile lookup
+      // Step 5: Test user profile lookup
       try {
         const profileResponse = await fetch("/api/debug/user-profile-lookup", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer ${idToken}`,
           },
-          body: JSON.stringify({ userId: user.uid }),
+          body: JSON.stringify({ idToken, uid: activeUser.uid }),
         })
 
         const profileData = await profileResponse.json()
-        addResult(
-          "User Profile",
-          profileResponse.ok ? "success" : "warning",
-          profileResponse.ok ? "User profile found" : "User profile not found (may need creation)",
-          profileData,
-        )
+
+        if (profileResponse.ok) {
+          diagnostics.push({
+            step: "User Profile",
+            status: "success",
+            message: "User profile lookup successful",
+            data: profileData,
+          })
+        } else {
+          diagnostics.push({
+            step: "User Profile",
+            status: "error",
+            message: `Profile Error: ${profileData.error}`,
+            data: profileData,
+          })
+        }
       } catch (error: any) {
-        addResult("User Profile", "warning", `Profile lookup failed: ${error.message}`)
+        diagnostics.push({
+          step: "User Profile",
+          status: "error",
+          message: `Profile Network Error: ${error.message}`,
+        })
       }
     } catch (error: any) {
-      addResult("Token Generation", "error", `Failed to generate token: ${error.message}`)
+      diagnostics.push({
+        step: "Token Generation",
+        status: "error",
+        message: `Token generation failed: ${error.message}`,
+        data: { error: error.toString() },
+      })
     }
 
-    setIsRunning(false)
+    setResults(diagnostics)
+    setLoading(false)
   }
 
   const getStatusIcon = (status: string) => {
     switch (status) {
       case "success":
-        return <CheckCircle className="h-4 w-4 text-green-500" />
+        return <CheckCircle className="h-4 w-4 text-green-600" />
       case "error":
-        return <XCircle className="h-4 w-4 text-red-500" />
+        return <XCircle className="h-4 w-4 text-red-600" />
       case "warning":
-        return <AlertCircle className="h-4 w-4 text-yellow-500" />
+        return <AlertCircle className="h-4 w-4 text-yellow-600" />
       default:
         return null
     }
@@ -185,69 +213,64 @@ export default function DebugCheckoutAuthPage() {
     }
   }
 
-  const user = contextAuth.user || firebaseAuth.user
-
   return (
-    <div className="container mx-auto py-8">
+    <div className="container mx-auto p-6 max-w-4xl">
       <Card>
         <CardHeader>
           <CardTitle>Checkout Authentication Debug</CardTitle>
-          <CardDescription>Diagnose authentication issues in the checkout flow</CardDescription>
+          <p className="text-gray-600">Diagnose authentication issues in the checkout flow</p>
         </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            <div className="flex items-center gap-4">
-              <Button onClick={runDiagnostics} disabled={isRunning}>
-                {isRunning ? (
-                  <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Running Diagnostics...
-                  </>
-                ) : (
-                  "Run Diagnostics"
-                )}
-              </Button>
-              {user && <Badge variant="outline">Authenticated as: {user.email || user.uid}</Badge>}
-            </div>
-
-            <div className="grid grid-cols-2 gap-4 text-sm">
-              <div>
-                <p className="font-medium">Context Auth Status:</p>
-                <Badge variant={contextAuth.user ? "default" : "secondary"}>
-                  {contextAuth.user ? "Connected" : "Not Connected"}
-                </Badge>
-              </div>
-              <div>
-                <p className="font-medium">Firebase Auth Status:</p>
-                <Badge variant={firebaseAuth.user ? "default" : "secondary"}>
-                  {firebaseAuth.user ? "Connected" : "Not Connected"}
-                </Badge>
-              </div>
-            </div>
-
-            {results.length > 0 && (
-              <>
-                <Separator />
-                <div className="space-y-3">
-                  <h3 className="text-lg font-semibold">Diagnostic Results</h3>
-                  {results.map((result, index) => (
-                    <div key={index} className="border rounded-lg p-4">
-                      <div className="flex items-center gap-2 mb-2">
-                        {getStatusIcon(result.status)}
-                        <Badge className={getStatusColor(result.status)}>{result.step}</Badge>
-                        <span className="text-sm font-medium">{result.message}</span>
-                      </div>
-                      {result.data && (
-                        <pre className="text-xs bg-gray-100 p-2 rounded overflow-auto">
-                          {JSON.stringify(result.data, null, 2)}
-                        </pre>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              </>
-            )}
+        <CardContent className="space-y-6">
+          <div className="flex items-center justify-between">
+            <Button onClick={runDiagnostics} disabled={loading}>
+              {loading ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Running Diagnostics...
+                </>
+              ) : (
+                "Run Diagnostics"
+              )}
+            </Button>
+            {activeUser && <Badge variant="outline">Authenticated as: {activeUser.email}</Badge>}
           </div>
+
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <h3 className="font-medium mb-2">Context Auth Status:</h3>
+              <Badge className={contextAuth.user ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"}>
+                {contextAuth.user ? "Connected" : "Disconnected"}
+              </Badge>
+            </div>
+            <div>
+              <h3 className="font-medium mb-2">Firebase Auth Status:</h3>
+              <Badge className={firebaseAuth.user ? "bg-green-100 text-green-800" : "bg-red-100 text-red-800"}>
+                {firebaseAuth.user ? "Connected" : "Disconnected"}
+              </Badge>
+            </div>
+          </div>
+
+          {results.length > 0 && (
+            <div>
+              <h3 className="text-lg font-semibold mb-4">Diagnostic Results</h3>
+              <div className="space-y-4">
+                {results.map((result, index) => (
+                  <div key={index} className="border rounded-lg p-4">
+                    <div className="flex items-center gap-2 mb-2">
+                      {getStatusIcon(result.status)}
+                      <Badge className={getStatusColor(result.status)}>{result.step}</Badge>
+                      <span className="font-medium">{result.message}</span>
+                    </div>
+                    {result.data && (
+                      <pre className="bg-gray-50 p-3 rounded text-sm overflow-auto">
+                        {JSON.stringify(result.data, null, 2)}
+                      </pre>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

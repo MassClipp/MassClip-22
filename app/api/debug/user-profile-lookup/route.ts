@@ -14,62 +14,99 @@ if (!getApps().length) {
   })
 }
 
+const auth = getAuth()
+const db = getFirestore()
+
 export async function POST(request: NextRequest) {
   try {
-    const { userId } = await request.json()
-    const auth = getAuth()
-    const db = getFirestore()
+    const { idToken, uid } = await request.json()
 
-    if (!userId) {
-      return NextResponse.json({ error: "User ID required" }, { status: 400 })
+    console.log("🔍 [User Profile Lookup] Looking up user profile:", uid)
+
+    // Verify token first
+    let decodedToken
+    try {
+      decodedToken = await auth.verifyIdToken(idToken)
+      console.log("✅ [User Profile Lookup] Token verified")
+    } catch (error: any) {
+      console.error("❌ [User Profile Lookup] Token verification failed:", error.message)
+      return NextResponse.json(
+        {
+          error: "Token verification failed",
+          details: error.message,
+        },
+        { status: 401 },
+      )
     }
 
-    // Verify token if provided
-    const authHeader = request.headers.get("authorization")
-    if (authHeader?.startsWith("Bearer ")) {
-      const token = authHeader.substring(7)
-      try {
-        const decodedToken = await auth.verifyIdToken(token)
-        if (decodedToken.uid !== userId) {
-          return NextResponse.json({ error: "Token UID mismatch" }, { status: 403 })
-        }
-      } catch (error: any) {
-        return NextResponse.json({ error: "Invalid token", details: error.message }, { status: 401 })
-      }
+    // Verify UID matches token
+    if (decodedToken.uid !== uid) {
+      console.error("❌ [User Profile Lookup] UID mismatch:", {
+        tokenUid: decodedToken.uid,
+        providedUid: uid,
+      })
+      return NextResponse.json(
+        {
+          error: "UID mismatch",
+          details: "Provided UID does not match token",
+        },
+        { status: 403 },
+      )
     }
 
     // Look up user profile
-    const userDoc = await db.collection("users").doc(userId).get()
+    try {
+      const userDoc = await db.collection("users").doc(uid).get()
 
-    if (!userDoc.exists) {
+      if (!userDoc.exists) {
+        console.warn("⚠️ [User Profile Lookup] User profile not found:", uid)
+        return NextResponse.json({
+          success: true,
+          profileExists: false,
+          uid,
+          tokenData: {
+            uid: decodedToken.uid,
+            email: decodedToken.email,
+          },
+          message: "User profile not found in database",
+        })
+      }
+
+      const userData = userDoc.data()
+      console.log("✅ [User Profile Lookup] User profile found")
+
       return NextResponse.json({
-        success: false,
-        found: false,
-        message: "User profile not found",
-        userId,
+        success: true,
+        profileExists: true,
+        uid,
+        profile: {
+          email: userData.email,
+          displayName: userData.displayName,
+          username: userData.username,
+          createdAt: userData.createdAt,
+          stripeAccountId: userData.stripeAccountId ? "Present" : "Not set",
+        },
+        tokenData: {
+          uid: decodedToken.uid,
+          email: decodedToken.email,
+        },
       })
+    } catch (error: any) {
+      console.error("❌ [User Profile Lookup] Database error:", error.message)
+      return NextResponse.json(
+        {
+          error: "Database error",
+          details: error.message,
+        },
+        { status: 500 },
+      )
     }
-
-    const userData = userDoc.data()
-
-    return NextResponse.json({
-      success: true,
-      found: true,
-      message: "User profile found",
-      userId,
-      profile: {
-        email: userData?.email,
-        displayName: userData?.displayName,
-        username: userData?.username,
-        createdAt: userData?.createdAt,
-      },
-    })
   } catch (error: any) {
-    console.error("❌ User profile lookup error:", error.message)
+    console.error("❌ [User Profile Lookup] Unexpected error:", error.message)
     return NextResponse.json(
       {
-        success: false,
-        error: error.message,
+        error: "Unexpected error",
+        details: error.message,
       },
       { status: 500 },
     )

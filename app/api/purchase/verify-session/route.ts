@@ -1,6 +1,7 @@
 import { type NextRequest, NextResponse } from "next/server"
 import Stripe from "stripe"
 import { initializeApp, getApps, cert } from "firebase-admin/app"
+import { getAuth } from "firebase-admin/auth"
 import { getFirestore } from "firebase-admin/firestore"
 
 // Initialize Firebase Admin
@@ -14,122 +15,123 @@ if (!getApps().length) {
   })
 }
 
+const auth = getAuth()
 const db = getFirestore()
-
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: "2024-06-20",
 })
 
 export async function POST(request: NextRequest) {
   try {
-    const { sessionId, expectedBuyerUid } = await request.json()
+    const { sessionId, idToken, buyerUid } = await request.json()
 
-    if (!sessionId) {
-      return NextResponse.json(
-        { error: "Session ID required", details: "Missing sessionId parameter" },
-        { status: 400 },
-      )
+    console.log("🔍 [Verify Session] Starting verification:", {
+      sessionId,
+      buyerUid,
+      hasIdToken: !!idToken,
+    })
+
+    // Validate required fields
+    if (!sessionId || !idToken || !buyerUid) {
+      return NextResponse.json({ error: "Missing required fields" }, { status: 400 })
     }
 
-    console.log("🔍 Verifying purchase session:", sessionId)
+    // Verify Firebase token
+    let decodedToken
+    try {
+      decodedToken = await auth.verifyIdToken(idToken)
+      console.log("✅ [Verify Session] Token verified for user:", decodedToken.uid)
+    } catch (error: any) {
+      console.error("❌ [Verify Session] Token verification failed:", error.message)
+      return NextResponse.json({ error: "Invalid authentication token" }, { status: 401 })
+    }
 
-    // Retrieve session from Stripe
+    // CRITICAL: Verify buyer UID matches token
+    if (decodedToken.uid !== buyerUid) {
+      console.error("❌ [Verify Session] Buyer UID mismatch:", {
+        tokenUid: decodedToken.uid,
+        providedBuyerUid: buyerUid,
+      })
+      return NextResponse.json({ error: "Authentication mismatch" }, { status: 403 })
+    }
+
+    // Retrieve Stripe session
     let session
     try {
       session = await stripe.checkout.sessions.retrieve(sessionId)
-      console.log("✅ Session retrieved from Stripe")
+      console.log("✅ [Verify Session] Stripe session retrieved:", session.id)
     } catch (error: any) {
-      console.error("❌ Failed to retrieve session from Stripe:", error.message)
-      return NextResponse.json({ error: "Invalid session", details: error.message }, { status: 404 })
+      console.error("❌ [Verify Session] Failed to retrieve session:", error.message)
+      return NextResponse.json({ error: "Session not found" }, { status: 404 })
     }
 
-    // Validate session is completed
-    if (session.payment_status !== "paid") {
-      console.error("❌ Session not paid:", session.payment_status)
-      return NextResponse.json(
-        { error: "Payment not completed", details: `Payment status: ${session.payment_status}` },
-        { status: 400 },
-      )
+    // CRITICAL: Verify buyer UID in session metadata
+    const sessionBuyerUid = session.metadata?.buyerUid
+    if (!sessionBuyerUid) {
+      console.error("❌ [Verify Session] No buyer UID in session metadata")
+      return NextResponse.json({ error: "Invalid session - no buyer identification" }, { status: 400 })
     }
 
-    // CRITICAL: Validate buyer UID
-    const buyerUid = session.metadata?.buyerUid
-    if (!buyerUid) {
-      console.error("🚨 CRITICAL: Session has no buyer UID:", sessionId)
-      return NextResponse.json(
-        { error: "Anonymous purchase detected", details: "Session missing buyer identification" },
-        { status: 400 },
-      )
-    }
-
-    // Verify buyer UID matches expected user
-    if (expectedBuyerUid && buyerUid !== expectedBuyerUid) {
-      console.error("❌ Buyer UID mismatch:", {
-        sessionBuyerUid: buyerUid,
-        expectedBuyerUid,
+    if (sessionBuyerUid !== buyerUid) {
+      console.error("❌ [Verify Session] Session buyer UID mismatch:", {
+        sessionBuyerUid,
+        providedBuyerUid: buyerUid,
       })
-      return NextResponse.json(
-        { error: "Unauthorized access", details: "Purchase belongs to different user" },
-        { status: 403 },
-      )
+      return NextResponse.json({ error: "Session buyer mismatch" }, { status: 403 })
     }
 
-    // Verify buyer exists in database
-    try {
-      const buyerDoc = await db.collection("users").doc(buyerUid).get()
-      if (!buyerDoc.exists) {
-        console.error("❌ Buyer not found in database:", buyerUid)
-        return NextResponse.json({ error: "Invalid buyer", details: "Buyer not found in database" }, { status: 404 })
-      }
-    } catch (error: any) {
-      console.error("❌ Error verifying buyer:", error.message)
-      return NextResponse.json({ error: "Buyer verification failed", details: error.message }, { status: 500 })
+    // Verify payment was successful
+    if (session.payment_status !== "paid") {
+      console.error("❌ [Verify Session] Payment not completed:", session.payment_status)
+      return NextResponse.json({ error: "Payment not completed" }, { status: 400 })
     }
 
     // Check if purchase record exists
-    let purchaseRecord
-    try {
-      const purchaseQuery = await db
-        .collection("purchases")
-        .where("sessionId", "==", sessionId)
-        .where("buyerUid", "==", buyerUid)
-        .limit(1)
-        .get()
+    const purchaseQuery = await db
+      .collection("purchases")
+      .where("sessionId", "==", sessionId)
+      .where("buyerUid", "==", buyerUid) // CRITICAL: Also filter by buyer UID
+      .limit(1)
+      .get()
 
-      if (!purchaseQuery.empty) {
-        purchaseRecord = purchaseQuery.docs[0].data()
-        console.log("✅ Purchase record found")
-      } else {
-        console.warn("⚠️ Purchase record not found, may still be processing")
+    if (purchaseQuery.empty) {
+      console.warn("⚠️ [Verify Session] No purchase record found, creating one")
+
+      // Create purchase record
+      const purchaseData = {
+        buyerUid,
+        buyerEmail: decodedToken.email || session.customer_email,
+        bundleId: session.metadata?.bundleId,
+        sellerId: session.metadata?.sellerId,
+        sessionId: session.id,
+        paymentIntentId: session.payment_intent,
+        amount: session.amount_total,
+        currency: session.currency,
+        status: "completed",
+        createdAt: new Date(),
+        metadata: session.metadata,
       }
-    } catch (error: any) {
-      console.error("❌ Error checking purchase record:", error.message)
+
+      await db.collection("purchases").add(purchaseData)
+      console.log("✅ [Verify Session] Purchase record created")
     }
 
-    const bundleId = session.metadata?.bundleId
-    const sellerId = session.metadata?.sellerId
-
-    console.log("✅ Purchase verification successful:", {
-      sessionId,
-      buyerUid,
-      bundleId,
-      sellerId,
-    })
-
-    return NextResponse.json({
-      success: true,
-      sessionId,
-      buyerUid,
-      bundleId,
-      sellerId,
+    const purchaseDetails = {
+      sessionId: session.id,
+      buyerUid, // CRITICAL: Return verified buyer UID
+      bundleId: session.metadata?.bundleId,
+      sellerId: session.metadata?.sellerId,
       amount: session.amount_total,
       currency: session.currency,
-      paymentStatus: session.payment_status,
-      purchaseRecord: purchaseRecord ? "found" : "processing",
-      metadata: session.metadata,
-    })
+      status: session.payment_status,
+      paymentIntent: session.payment_intent,
+    }
+
+    console.log("✅ [Verify Session] Verification successful:", purchaseDetails)
+
+    return NextResponse.json(purchaseDetails)
   } catch (error: any) {
-    console.error("❌ Purchase verification error:", error.message)
-    return NextResponse.json({ error: "Verification failed", details: error.message }, { status: 500 })
+    console.error("❌ [Verify Session] Unexpected error:", error.message)
+    return NextResponse.json({ error: "Internal server error" }, { status: 500 })
   }
 }
