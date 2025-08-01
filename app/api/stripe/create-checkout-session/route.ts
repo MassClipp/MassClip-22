@@ -14,17 +14,40 @@ export async function POST(request: NextRequest) {
     initializeFirebaseAdmin()
 
     const body = await request.json()
-    const { idToken, priceId, bundleId, successUrl, cancelUrl } = body
+    const { priceId, bundleId, successUrl, cancelUrl } = body
 
     if (debugMode) {
       console.log("🔍 [Checkout Debug] Request received:", {
-        hasIdToken: !!idToken,
-        idTokenLength: idToken?.length,
+        bodyKeys: Object.keys(body),
         priceId,
         bundleId,
         successUrl,
         cancelUrl,
-        bodyKeys: Object.keys(body),
+        hasAuthHeader: !!request.headers.get("authorization"),
+      })
+    }
+
+    // Extract ID token from Authorization header (preferred) or body (fallback)
+    let idToken: string | null = null
+
+    const authHeader = request.headers.get("authorization")
+    if (authHeader && authHeader.startsWith("Bearer ")) {
+      idToken = authHeader.substring(7) // Remove "Bearer " prefix
+      if (debugMode) {
+        console.log("🔍 [Checkout Debug] Token extracted from Authorization header")
+      }
+    } else if (body.idToken) {
+      idToken = body.idToken
+      if (debugMode) {
+        console.log("🔍 [Checkout Debug] Token extracted from request body")
+      }
+    }
+
+    if (debugMode) {
+      console.log("🔍 [Checkout Debug] Token extraction result:", {
+        hasToken: !!idToken,
+        tokenLength: idToken?.length,
+        tokenSource: authHeader ? "header" : body.idToken ? "body" : "none",
       })
     }
 
@@ -34,8 +57,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         {
           error: "Authentication required",
-          details: "idToken is required",
-          received: Object.keys(body),
+          details: "No ID token found in Authorization header or request body",
+          debug: debugMode
+            ? {
+                hasAuthHeader: !!authHeader,
+                authHeaderFormat: authHeader?.startsWith("Bearer ") ? "valid" : "invalid",
+                hasBodyToken: !!body.idToken,
+                receivedFields: Object.keys(body),
+              }
+            : undefined,
         },
         { status: 401 },
       )
@@ -47,14 +77,20 @@ export async function POST(request: NextRequest) {
         {
           error: "Price ID is required",
           details: "priceId field is missing or empty",
-          received: { priceId, hasIdToken: !!idToken, bundleId },
+          debug: debugMode
+            ? {
+                receivedPriceId: priceId,
+                priceIdType: typeof priceId,
+                bodyKeys: Object.keys(body),
+              }
+            : undefined,
         },
         { status: 400 },
       )
     }
 
     if (debugMode) {
-      console.log("🔍 [Checkout Debug] Validating price ID with Stripe...")
+      console.log("🔍 [Checkout Debug] Validating price ID with Stripe:", priceId)
     }
 
     // Verify the price exists in Stripe
@@ -67,6 +103,7 @@ export async function POST(request: NextRequest) {
           amount: priceData.unit_amount,
           currency: priceData.currency,
           product: priceData.product,
+          active: priceData.active,
         })
       }
     } catch (stripeError: any) {
@@ -76,6 +113,12 @@ export async function POST(request: NextRequest) {
           error: "Invalid price ID",
           details: stripeError.message,
           priceId,
+          debug: debugMode
+            ? {
+                stripeErrorType: stripeError.type,
+                stripeErrorCode: stripeError.code,
+              }
+            : undefined,
         },
         { status: 400 },
       )
@@ -86,15 +129,24 @@ export async function POST(request: NextRequest) {
     try {
       if (debugMode) {
         console.log("🔍 [Checkout Debug] Verifying Firebase ID token...")
+        console.log("🔍 [Checkout Debug] Token format check:", {
+          tokenParts: idToken.split(".").length,
+          isValidJWTFormat: idToken.split(".").length === 3,
+          tokenStart: idToken.substring(0, 20) + "...",
+          tokenEnd: "..." + idToken.substring(idToken.length - 20),
+        })
       }
 
       decodedToken = await auth.verifyIdToken(idToken)
 
       if (debugMode) {
-        console.log("✅ [Checkout Debug] Token verified:", {
+        console.log("✅ [Checkout Debug] Token verified successfully:", {
           uid: decodedToken.uid,
           email: decodedToken.email,
           emailVerified: decodedToken.email_verified,
+          authTime: decodedToken.auth_time,
+          exp: decodedToken.exp,
+          iat: decodedToken.iat,
         })
       }
     } catch (error: any) {
@@ -104,6 +156,15 @@ export async function POST(request: NextRequest) {
           error: "Invalid authentication token",
           details: error.message,
           code: error.code,
+          debug: debugMode
+            ? {
+                tokenLength: idToken.length,
+                tokenFormat: idToken.split(".").length === 3 ? "Valid JWT format" : "Invalid JWT format",
+                errorCode: error.code,
+                errorType: error.name,
+                firebaseProjectId: process.env.FIREBASE_PROJECT_ID ? "Set" : "Missing",
+              }
+            : undefined,
         },
         { status: 401 },
       )
@@ -111,6 +172,13 @@ export async function POST(request: NextRequest) {
 
     const userUid = decodedToken.uid
     const userEmail = decodedToken.email
+
+    if (debugMode) {
+      console.log("🔍 [Checkout Debug] Authenticated user:", {
+        uid: userUid,
+        email: userEmail,
+      })
+    }
 
     // Check if user has a Stripe customer ID
     let customerId: string | null = null
@@ -125,12 +193,19 @@ export async function POST(request: NextRequest) {
         if (debugMode) {
           console.log("🔍 [Checkout Debug] User profile found:", {
             hasStripeCustomerId: !!customerId,
+            customerIdPreview: customerId ? `${customerId.substring(0, 8)}...` : null,
           })
+        }
+      } else {
+        if (debugMode) {
+          console.log("🔍 [Checkout Debug] User profile not found in Firestore")
         }
       }
     } catch (firestoreError: any) {
       console.error("❌ [Checkout] Firestore error:", firestoreError)
-      // Continue without user profile - not critical for checkout
+      if (debugMode) {
+        console.log("🔍 [Checkout Debug] Continuing without user profile due to Firestore error")
+      }
     }
 
     // Create or retrieve Stripe customer
@@ -156,6 +231,9 @@ export async function POST(request: NextRequest) {
         // Save customer ID to user profile
         try {
           await db.collection("users").doc(userUid).set({ stripeCustomerId: customerId }, { merge: true })
+          if (debugMode) {
+            console.log("✅ [Checkout Debug] Customer ID saved to user profile")
+          }
         } catch (saveError: any) {
           console.error("❌ [Checkout] Failed to save customer ID:", saveError)
           // Continue anyway - not critical for checkout
@@ -166,6 +244,12 @@ export async function POST(request: NextRequest) {
           {
             error: "Failed to create customer",
             details: stripeError.message,
+            debug: debugMode
+              ? {
+                  stripeErrorType: stripeError.type,
+                  stripeErrorCode: stripeError.code,
+                }
+              : undefined,
           },
           { status: 500 },
         )
@@ -216,7 +300,7 @@ export async function POST(request: NextRequest) {
       const session = await stripe.checkout.sessions.create(sessionParams)
 
       if (debugMode) {
-        console.log("✅ [Checkout Debug] Checkout session created:", {
+        console.log("✅ [Checkout Debug] Checkout session created successfully:", {
           sessionId: session.id,
           url: session.url ? "Generated" : "Missing",
           status: session.status,
@@ -225,6 +309,7 @@ export async function POST(request: NextRequest) {
       }
 
       return NextResponse.json({
+        success: true,
         sessionId: session.id,
         url: session.url,
         buyerUid: userUid,
@@ -239,6 +324,7 @@ export async function POST(request: NextRequest) {
               currency: session.currency,
               amountTotal: session.amount_total,
               priceVerified: true,
+              tokenSource: authHeader ? "header" : "body",
             }
           : undefined,
       })
@@ -250,6 +336,13 @@ export async function POST(request: NextRequest) {
           details: stripeError.message,
           type: stripeError.type,
           priceId,
+          debug: debugMode
+            ? {
+                stripeErrorCode: stripeError.code,
+                stripeErrorType: stripeError.type,
+                stripeErrorParam: stripeError.param,
+              }
+            : undefined,
         },
         { status: 500 },
       )
@@ -260,6 +353,12 @@ export async function POST(request: NextRequest) {
       {
         error: "Internal server error",
         details: error.message,
+        debug: debugMode
+          ? {
+              errorName: error.name,
+              errorStack: error.stack,
+            }
+          : undefined,
       },
       { status: 500 },
     )

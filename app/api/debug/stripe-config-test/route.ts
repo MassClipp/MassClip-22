@@ -7,35 +7,41 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
 
 export async function GET() {
   try {
-    // Test Stripe connection and get some basic info
-    const products = await stripe.products.list({ limit: 10, active: true })
-    const prices = await stripe.prices.list({ limit: 10, active: true })
+    console.log("🔍 [Stripe Config] Testing Stripe configuration...")
+
+    // Test Stripe connection by listing prices
+    const prices = await stripe.prices.list({
+      limit: 10,
+      active: true,
+    })
+
+    console.log("✅ [Stripe Config] Stripe connection successful")
 
     return NextResponse.json({
       success: true,
       message: "Stripe configuration verified",
       data: {
-        productsCount: products.data.length,
         pricesCount: prices.data.length,
         availablePrices: prices.data.map((price) => ({
           id: price.id,
-          product: price.product,
           amount: price.unit_amount,
           currency: price.currency,
-          type: price.type,
+          product: price.product,
+          active: price.active,
         })),
-        environment: process.env.NODE_ENV,
         stripeMode: process.env.STRIPE_SECRET_KEY?.startsWith("sk_live_") ? "live" : "test",
       },
-      timestamp: new Date().toISOString(),
     })
   } catch (error: any) {
-    console.error("Stripe config test error:", error)
+    console.error("❌ [Stripe Config] Stripe configuration failed:", error)
+
     return NextResponse.json(
       {
         error: "Stripe configuration failed",
         details: error.message,
         type: error.type,
+        hasStripeKey: !!process.env.STRIPE_SECRET_KEY,
+        stripeKeyPrefix: process.env.STRIPE_SECRET_KEY?.substring(0, 8) + "...",
       },
       { status: 500 },
     )

@@ -228,13 +228,12 @@ export default function AuthDetailedDebugPage() {
       addLog(`[INFO] Using price ID: ${priceId}`)
       addLog(`[INFO] Using bundle ID: ${bundleId}`)
 
+      // Send token in Authorization header (preferred method)
       const payload = {
-        idToken,
         priceId,
         bundleId,
         successUrl: `${window.location.origin}/purchase-success`,
         cancelUrl: window.location.href,
-        debugMode: true,
       }
 
       addLog("[INFO] Sending checkout request with authentication")
