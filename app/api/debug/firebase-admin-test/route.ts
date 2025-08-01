@@ -2,31 +2,20 @@ import { type NextRequest, NextResponse } from "next/server"
 import { initializeFirebaseAdmin, auth } from "@/lib/firebase-admin"
 
 export async function POST(request: NextRequest) {
-  console.log("🔍 [Firebase Admin Test] Starting comprehensive test")
-
   try {
+    console.log("🔍 [Firebase Admin Test] Starting Firebase Admin verification...")
+
     // Initialize Firebase Admin
-    console.log("🔍 [Firebase Admin Test] Initializing Firebase Admin")
     initializeFirebaseAdmin()
-    console.log("✅ [Firebase Admin Test] Firebase Admin initialized")
 
-    // Get request data
     const body = await request.json()
-    const { idToken, testMode, includeHeaders } = body
+    const { idToken } = body
 
-    console.log("🔍 [Firebase Admin Test] Request data:", {
+    console.log("🔍 [Firebase Admin Test] Request details:", {
       hasIdToken: !!idToken,
-      idTokenLength: idToken?.length,
-      testMode,
-      includeHeaders,
-    })
-
-    // Check authorization header as well
-    const authHeader = request.headers.get("authorization")
-    console.log("🔍 [Firebase Admin Test] Authorization header:", {
-      hasAuthHeader: !!authHeader,
-      authHeaderFormat: authHeader?.startsWith("Bearer ") ? "Bearer format" : "Invalid format",
-      authHeaderLength: authHeader?.length,
+      tokenLength: idToken?.length,
+      contentType: request.headers.get("content-type"),
+      authorization: request.headers.get("authorization") ? "Present" : "Missing",
     })
 
     if (!idToken) {
@@ -34,124 +23,106 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         {
           error: "No ID token provided",
-          details: "idToken is required in request body",
+          details: "idToken is required for Firebase Admin verification",
         },
         { status: 400 },
       )
     }
 
-    // Validate token format
-    const tokenParts = idToken.split(".")
-    if (tokenParts.length !== 3) {
-      console.error("❌ [Firebase Admin Test] Invalid token format")
-      return NextResponse.json(
-        {
-          error: "Invalid token format",
-          details: `Token should have 3 parts separated by dots, got ${tokenParts.length}`,
-        },
-        { status: 400 },
-      )
-    }
+    // Test Firebase Admin initialization
+    console.log("🔍 [Firebase Admin Test] Testing Firebase Admin initialization...")
 
-    console.log("🔍 [Firebase Admin Test] Token format validation passed")
-
-    // Verify the ID token
-    console.log("🔍 [Firebase Admin Test] Verifying ID token with Firebase Admin")
-
-    let decodedToken
     try {
-      decodedToken = await auth.verifyIdToken(idToken)
-      console.log("✅ [Firebase Admin Test] Token verified successfully")
-      console.log("🔍 [Firebase Admin Test] Decoded token:", {
+      // Verify the token using Firebase Admin
+      console.log("🔍 [Firebase Admin Test] Verifying token with Firebase Admin...")
+
+      const decodedToken = await auth.verifyIdToken(idToken)
+
+      console.log("✅ [Firebase Admin Test] Token verification successful:", {
         uid: decodedToken.uid,
         email: decodedToken.email,
         emailVerified: decodedToken.email_verified,
-        authTime: decodedToken.auth_time,
-        iat: decodedToken.iat,
-        exp: decodedToken.exp,
-        iss: decodedToken.iss,
-        aud: decodedToken.aud,
       })
-    } catch (verifyError: any) {
-      console.error("❌ [Firebase Admin Test] Token verification failed:", verifyError)
-      return NextResponse.json(
-        {
-          error: "Token verification failed",
-          details: verifyError.message,
-          code: verifyError.code,
-          stack: verifyError.stack,
-        },
-        { status: 401 },
-      )
-    }
 
-    // Check token expiration
-    const now = Math.floor(Date.now() / 1000)
-    const timeUntilExpiry = decodedToken.exp - now
+      // Additional Firebase Admin tests
+      console.log("🔍 [Firebase Admin Test] Testing user lookup...")
 
-    console.log("🔍 [Firebase Admin Test] Token expiration check:", {
-      currentTime: now,
-      tokenExp: decodedToken.exp,
-      timeUntilExpiry,
-      isExpired: timeUntilExpiry <= 0,
-    })
+      try {
+        const userRecord = await auth.getUser(decodedToken.uid)
 
-    if (timeUntilExpiry <= 0) {
-      console.error("❌ [Firebase Admin Test] Token is expired")
-      return NextResponse.json(
-        {
-          error: "Token expired",
-          details: `Token expired ${Math.abs(timeUntilExpiry)} seconds ago`,
-        },
-        { status: 401 },
-      )
-    }
+        console.log("✅ [Firebase Admin Test] User lookup successful")
 
-    // Prepare response
-    const response = {
-      success: true,
-      message: "Firebase Admin verification successful",
-      tokenInfo: {
-        uid: decodedToken.uid,
-        email: decodedToken.email,
-        emailVerified: decodedToken.email_verified,
-        authTime: decodedToken.auth_time,
-        issuedAt: decodedToken.iat,
-        expiresAt: decodedToken.exp,
-        timeUntilExpiry,
-        issuer: decodedToken.iss,
-        audience: decodedToken.aud,
-        firebase: decodedToken.firebase,
-      },
-      serverInfo: {
-        timestamp: new Date().toISOString(),
-        nodeEnv: process.env.NODE_ENV,
-        firebaseProjectId: process.env.FIREBASE_PROJECT_ID,
-        hasFirebaseClientEmail: !!process.env.FIREBASE_CLIENT_EMAIL,
-        hasFirebasePrivateKey: !!process.env.FIREBASE_PRIVATE_KEY,
-      },
-    }
+        return NextResponse.json({
+          success: true,
+          message: "Firebase Admin verification successful",
+          tokenVerification: {
+            uid: decodedToken.uid,
+            email: decodedToken.email,
+            emailVerified: decodedToken.email_verified,
+            authTime: decodedToken.auth_time,
+            exp: decodedToken.exp,
+            iat: decodedToken.iat,
+            issuer: decodedToken.iss,
+            audience: decodedToken.aud,
+          },
+          userRecord: {
+            uid: userRecord.uid,
+            email: userRecord.email,
+            emailVerified: userRecord.emailVerified,
+            disabled: userRecord.disabled,
+            creationTime: userRecord.metadata.creationTime,
+            lastSignInTime: userRecord.metadata.lastSignInTime,
+            providerData: userRecord.providerData.map((provider) => ({
+              providerId: provider.providerId,
+              uid: provider.uid,
+              email: provider.email,
+            })),
+          },
+        })
+      } catch (userLookupError: any) {
+        console.error("❌ [Firebase Admin Test] User lookup failed:", userLookupError)
 
-    if (includeHeaders) {
-      response.serverInfo = {
-        ...response.serverInfo,
-        requestHeaders: Object.fromEntries(request.headers.entries()),
+        // Still return success for token verification, but note user lookup issue
+        return NextResponse.json({
+          success: true,
+          message: "Token verification successful, but user lookup failed",
+          tokenVerification: {
+            uid: decodedToken.uid,
+            email: decodedToken.email,
+            emailVerified: decodedToken.email_verified,
+          },
+          userLookupError: {
+            message: userLookupError.message,
+            code: userLookupError.code,
+          },
+        })
       }
-    }
+    } catch (tokenError: any) {
+      console.error("❌ [Firebase Admin Test] Token verification failed:", tokenError)
 
-    console.log("✅ [Firebase Admin Test] Test completed successfully")
-    return NextResponse.json(response)
+      return NextResponse.json(
+        {
+          error: "Firebase Admin token verification failed",
+          details: tokenError.message,
+          code: tokenError.code,
+          tokenAnalysis: {
+            tokenLength: idToken.length,
+            tokenParts: idToken.split(".").length,
+            isValidJWTFormat: idToken.split(".").length === 3,
+            tokenPrefix: idToken.substring(0, 20) + "...",
+          },
+        },
+        { status: 401 },
+      )
+    }
   } catch (error: any) {
     console.error("❌ [Firebase Admin Test] Unexpected error:", error)
+
     return NextResponse.json(
       {
         error: "Internal server error",
         details: error.message,
         stack: error.stack,
-        serverInfo: {
-          timestamp: new Date().toISOString(),
-          nodeEnv: process.env.NODE_ENV,
-        },
       },
       { status: 500 },
     )
