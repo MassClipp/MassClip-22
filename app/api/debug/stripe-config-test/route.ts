@@ -7,41 +7,44 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
 
 export async function GET() {
   try {
-    console.log("🔍 [Stripe Config] Testing Stripe configuration...")
+    // Test Stripe connection by listing a few prices
+    const prices = await stripe.prices.list({ limit: 3 })
 
-    // Test Stripe connection by listing prices
-    const prices = await stripe.prices.list({
-      limit: 10,
-      active: true,
-    })
-
-    console.log("✅ [Stripe Config] Stripe connection successful")
+    // Check if the test price ID exists
+    const testPriceId = "price_1QCqGhP8mGrl6RNHK8tJYqzV"
+    let testPrice = null
+    try {
+      testPrice = await stripe.prices.retrieve(testPriceId)
+    } catch (error) {
+      // Price doesn't exist, that's okay
+    }
 
     return NextResponse.json({
       success: true,
       message: "Stripe configuration verified",
       data: {
+        stripeConnected: true,
         pricesCount: prices.data.length,
-        availablePrices: prices.data.map((price) => ({
-          id: price.id,
-          amount: price.unit_amount,
-          currency: price.currency,
-          product: price.product,
-          active: price.active,
-        })),
-        stripeMode: process.env.STRIPE_SECRET_KEY?.startsWith("sk_live_") ? "live" : "test",
+        testPriceExists: !!testPrice,
+        testPriceId,
+        testPriceDetails: testPrice
+          ? {
+              id: testPrice.id,
+              amount: testPrice.unit_amount,
+              currency: testPrice.currency,
+              active: testPrice.active,
+            }
+          : null,
+        environment: process.env.STRIPE_SECRET_KEY?.startsWith("sk_live_") ? "live" : "test",
       },
     })
   } catch (error: any) {
-    console.error("❌ [Stripe Config] Stripe configuration failed:", error)
-
+    console.error("Stripe config test error:", error)
     return NextResponse.json(
       {
         error: "Stripe configuration failed",
         details: error.message,
         type: error.type,
-        hasStripeKey: !!process.env.STRIPE_SECRET_KEY,
-        stripeKeyPrefix: process.env.STRIPE_SECRET_KEY?.substring(0, 8) + "...",
       },
       { status: 500 },
     )

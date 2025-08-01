@@ -20,7 +20,7 @@ export default function AuthDetailedDebugPage() {
   const { user } = useAuth()
   const [results, setResults] = useState<Record<string, TestResult>>({})
   const [logs, setLogs] = useState<string[]>([])
-  const [priceId, setPriceId] = useState("price_1QCqGhP8mGrl6RNHK8tJYqzV") // Default to a real price ID
+  const [priceId, setPriceId] = useState("price_1QCqGhP8mGrl6RNHK8tJYqzV")
   const [bundleId, setBundleId] = useState("test-bundle-123")
 
   const addLog = (message: string) => {
@@ -86,10 +86,7 @@ export default function AuthDetailedDebugPage() {
         throw new Error("User not authenticated")
       }
 
-      // Force refresh token
       const idToken = await user.getIdToken(true)
-
-      // Decode JWT payload (without verification)
       const payload = JSON.parse(atob(idToken.split(".")[1]))
 
       updateResult("tokenGeneration", {
@@ -186,7 +183,6 @@ export default function AuthDetailedDebugPage() {
           Authorization: `Bearer ${idToken}`,
         },
         body: JSON.stringify({
-          idToken,
           testData: "auth-verification",
         }),
       })
@@ -213,10 +209,10 @@ export default function AuthDetailedDebugPage() {
     }
   }
 
-  // Test 5: Checkout API Test with Real Data
+  // Test 5: Checkout API Test
   const testCheckoutAPI = async () => {
-    addLog("[INFO] Testing checkout API with real price ID...")
-    updateResult("checkoutAPI", { status: "pending", message: "Testing full checkout flow..." })
+    addLog("[INFO] Testing checkout API...")
+    updateResult("checkoutAPI", { status: "pending", message: "Testing checkout session creation..." })
 
     try {
       if (!user) {
@@ -228,17 +224,6 @@ export default function AuthDetailedDebugPage() {
       addLog(`[INFO] Using price ID: ${priceId}`)
       addLog(`[INFO] Using bundle ID: ${bundleId}`)
 
-      // Send token in Authorization header (preferred method)
-      const payload = {
-        priceId,
-        bundleId,
-        successUrl: `${window.location.origin}/purchase-success`,
-        cancelUrl: window.location.href,
-      }
-
-      addLog("[INFO] Sending checkout request with authentication")
-      addLog("[INFO] Checkout payload prepared")
-
       const response = await fetch("/api/stripe/create-checkout-session", {
         method: "POST",
         headers: {
@@ -246,19 +231,19 @@ export default function AuthDetailedDebugPage() {
           Authorization: `Bearer ${idToken}`,
           "X-Debug-Mode": "true",
         },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({
+          priceId,
+          bundleId,
+          successUrl: `${window.location.origin}/purchase-success`,
+          cancelUrl: window.location.href,
+        }),
       })
 
-      addLog(`[INFO] Checkout API response status: ${response.status}`)
-      addLog(`[INFO] Checkout API response headers:`)
-      response.headers.forEach((value, key) => {
-        addLog(`  ${key}: ${value}`)
-      })
+      addLog(`[INFO] Response status: ${response.status}`)
 
       const data = await response.json()
 
       if (!response.ok) {
-        addLog(`[ERROR] Checkout API failed`)
         throw new Error(`HTTP ${response.status}: ${data.error || data.message}`)
       }
 
@@ -273,12 +258,6 @@ export default function AuthDetailedDebugPage() {
         status: "error",
         message: error.message,
         error,
-        data: {
-          status: error.status,
-          statusText: error.statusText,
-          response: error.response,
-          headers: error.headers,
-        },
       })
       addLog(`[ERROR] Checkout API failed: ${error.message}`)
     }
