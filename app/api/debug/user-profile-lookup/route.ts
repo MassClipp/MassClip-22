@@ -1,42 +1,96 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { adminDb } from "@/lib/firebase-admin"
+import { initializeApp, getApps, cert } from "firebase-admin/app"
+import { getAuth } from "firebase-admin/auth"
+import { getFirestore } from "firebase-admin/firestore"
+
+// Initialize Firebase Admin
+if (!getApps().length) {
+  const serviceAccount = {
+    type: "service_account",
+    project_id: process.env.FIREBASE_PROJECT_ID,
+    private_key_id: process.env.FIREBASE_PRIVATE_KEY_ID,
+    private_key: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n"),
+    client_email: process.env.FIREBASE_CLIENT_EMAIL,
+    client_id: process.env.FIREBASE_CLIENT_ID,
+    auth_uri: "https://accounts.google.com/o/oauth2/auth",
+    token_uri: "https://oauth2.googleapis.com/token",
+    auth_provider_x509_cert_url: "https://www.googleapis.com/oauth2/v1/certs",
+    client_x509_cert_url: `https://www.googleapis.com/robot/v1/metadata/x509/${process.env.FIREBASE_CLIENT_EMAIL}`,
+  }
+
+  initializeApp({
+    credential: cert(serviceAccount as any),
+  })
+}
+
+const db = getFirestore()
+const auth = getAuth()
 
 export async function POST(request: NextRequest) {
   try {
-    const { userId } = await request.json()
+    console.log("🔍 [User Profile Lookup] Starting lookup...")
 
-    if (!userId) {
-      return NextResponse.json({ error: "User ID is required" }, { status: 400 })
+    // Get auth token from header
+    const authHeader = request.headers.get("authorization")
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return NextResponse.json({ error: "No authorization header" }, { status: 401 })
     }
 
-    console.log(`🔍 [User Profile Lookup] Looking up profile for user: ${userId}`)
+    const idToken = authHeader.split("Bearer ")[1]
+    let userId: string
 
-    const userDoc = await adminDb.collection("users").doc(userId).get()
+    // Verify authentication
+    try {
+      const decodedToken = await auth.verifyIdToken(idToken)
+      userId = decodedToken.uid
+      console.log("✅ [User Profile Lookup] Token verified for user:", userId)
+    } catch (error: any) {
+      console.error("❌ [User Profile Lookup] Token verification failed:", error)
+      return NextResponse.json({ error: "Invalid token" }, { status: 401 })
+    }
+
+    const body = await request.json()
+    const { userId: requestedUserId } = body
+
+    // Verify user is requesting their own profile
+    if (requestedUserId !== userId) {
+      return NextResponse.json({ error: "Unauthorized profile access" }, { status: 403 })
+    }
+
+    // Look up user profile
+    const userDoc = await db.collection("users").doc(userId).get()
 
     if (!userDoc.exists) {
-      console.log(`❌ [User Profile Lookup] User document not found for: ${userId}`)
+      console.log("⚠️ [User Profile Lookup] User profile not found:", userId)
       return NextResponse.json({
-        exists: false,
-        profile: null,
-        error: "User profile not found",
+        success: false,
+        profileExists: false,
+        userId: userId,
+        message: "User profile not found in database",
       })
     }
 
-    const profile = userDoc.data()
-    console.log(`✅ [User Profile Lookup] Profile found with keys: ${Object.keys(profile || {})}`)
+    const userData = userDoc.data()!
+    console.log("✅ [User Profile Lookup] User profile found:", userId)
 
     return NextResponse.json({
-      exists: true,
-      profile,
+      success: true,
+      profileExists: true,
+      userId: userId,
+      profile: {
+        email: userData.email,
+        displayName: userData.displayName,
+        name: userData.name,
+        createdAt: userData.createdAt,
+        lastLogin: userData.lastLogin,
+      },
     })
   } catch (error: any) {
-    console.error("❌ [User Profile Lookup] Error:", error)
+    console.error("❌ [User Profile Lookup] Lookup failed:", error)
     return NextResponse.json(
       {
-        error: "Failed to lookup user profile",
-        details: error.message,
-        exists: false,
-        profile: null,
+        success: false,
+        error: error.message,
       },
       { status: 500 },
     )

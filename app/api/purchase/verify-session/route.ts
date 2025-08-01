@@ -34,7 +34,27 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
 
 export async function POST(request: NextRequest) {
   try {
-    console.log("🔍 [Verify Session] Starting session verification...")
+    console.log("🔍 [Verify Session] Starting purchase verification...")
+
+    // Get auth token from header
+    const authHeader = request.headers.get("authorization")
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      console.error("❌ [Verify Session] No authorization header")
+      return NextResponse.json({ error: "Authentication required" }, { status: 401 })
+    }
+
+    const idToken = authHeader.split("Bearer ")[1]
+    let userId: string
+
+    // Verify authentication
+    try {
+      const decodedToken = await auth.verifyIdToken(idToken)
+      userId = decodedToken.uid
+      console.log("✅ [Verify Session] Token verified for user:", userId)
+    } catch (error) {
+      console.error("❌ [Verify Session] Token verification failed:", error)
+      return NextResponse.json({ error: "Invalid authentication token" }, { status: 401 })
+    }
 
     const body = await request.json()
     const { sessionId, buyerUid } = body
@@ -43,107 +63,63 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Session ID required" }, { status: 400 })
     }
 
-    // Verify authentication
-    const authHeader = request.headers.get("authorization")
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      return NextResponse.json({ error: "Authentication required" }, { status: 401 })
-    }
-
-    const idToken = authHeader.split("Bearer ")[1]
-    let authenticatedUserId: string
-
-    try {
-      const decodedToken = await auth.verifyIdToken(idToken)
-      authenticatedUserId = decodedToken.uid
-      console.log("✅ [Verify Session] User authenticated:", authenticatedUserId)
-    } catch (error) {
-      console.error("❌ [Verify Session] Authentication failed:", error)
-      return NextResponse.json({ error: "Invalid authentication token" }, { status: 401 })
-    }
-
     // CRITICAL: Verify buyer UID matches authenticated user
-    if (buyerUid && buyerUid !== authenticatedUserId) {
-      console.error("🚨 [Verify Session] Buyer UID mismatch!")
-      console.error("   Provided Buyer UID:", buyerUid)
-      console.error("   Authenticated User UID:", authenticatedUserId)
-      return NextResponse.json({ error: "Unauthorized access to purchase" }, { status: 403 })
+    if (buyerUid !== userId) {
+      console.error("❌ [Verify Session] Buyer UID mismatch:")
+      console.error("   Provided UID:", buyerUid)
+      console.error("   Auth UID:", userId)
+      return NextResponse.json({ error: "Buyer verification failed" }, { status: 403 })
     }
 
-    // Find purchase record by session ID and buyer UID
-    console.log("🔍 [Verify Session] Looking up purchase record...")
-    const purchaseQuery = await db
+    console.log("🔍 [Verify Session] Retrieving Stripe session:", sessionId)
+
+    // Find the purchase record first to get the connected account
+    const purchasesQuery = await db
       .collection("purchases")
       .where("sessionId", "==", sessionId)
-      .where("buyerUid", "==", authenticatedUserId) // CRITICAL: Verify buyer UID
+      .where("buyerUid", "==", userId) // CRITICAL: Verify buyer UID in database
       .limit(1)
       .get()
 
-    if (purchaseQuery.empty) {
-      console.error("❌ [Verify Session] Purchase not found for session:", sessionId)
-      console.error("   Buyer UID:", authenticatedUserId)
-      return NextResponse.json({ error: "Purchase not found" }, { status: 404 })
+    if (purchasesQuery.empty) {
+      console.error("❌ [Verify Session] No purchase record found for session:", sessionId)
+      return NextResponse.json({ error: "Purchase record not found" }, { status: 404 })
     }
 
-    const purchaseDoc = purchaseQuery.docs[0]
+    const purchaseDoc = purchasesQuery.docs[0]
     const purchaseData = purchaseDoc.data()
 
-    console.log("✅ [Verify Session] Purchase found:", {
-      id: purchaseDoc.id,
-      buyerUid: purchaseData.buyerUid,
-      bundleId: purchaseData.bundleId,
-      sessionId: purchaseData.sessionId,
-    })
+    // CRITICAL: Double-check buyer UID in purchase record
+    if (purchaseData.buyerUid !== userId) {
+      console.error("❌ [Verify Session] Buyer UID mismatch in purchase record")
+      return NextResponse.json({ error: "Purchase verification failed" }, { status: 403 })
+    }
 
     // Get bundle details
     const bundleDoc = await db.collection("bundles").doc(purchaseData.bundleId).get()
-    if (!bundleDoc.exists) {
-      console.error("❌ [Verify Session] Bundle not found:", purchaseData.bundleId)
-      return NextResponse.json({ error: "Bundle not found" }, { status: 404 })
-    }
+    const bundleData = bundleDoc.exists ? bundleDoc.data() : null
 
-    const bundleData = bundleDoc.data()!
+    console.log("✅ [Verify Session] Purchase verified successfully:")
+    console.log("   Buyer UID:", purchaseData.buyerUid)
+    console.log("   Bundle ID:", purchaseData.bundleId)
+    console.log("   Creator ID:", purchaseData.creatorId)
 
-    // Verify Stripe session (optional additional verification)
-    try {
-      const stripeSession = await stripe.checkout.sessions.retrieve(sessionId, {
-        stripeAccount: purchaseData.stripeAccountId || undefined,
-      })
-
-      // CRITICAL: Verify buyer UID in Stripe metadata matches
-      if (stripeSession.metadata?.buyerUid !== authenticatedUserId) {
-        console.error("🚨 [Verify Session] Stripe metadata buyer UID mismatch!")
-        console.error("   Stripe Buyer UID:", stripeSession.metadata?.buyerUid)
-        console.error("   Authenticated User UID:", authenticatedUserId)
-        return NextResponse.json({ error: "Session verification failed" }, { status: 403 })
-      }
-
-      console.log("✅ [Verify Session] Stripe session verified")
-    } catch (stripeError) {
-      console.warn("⚠️ [Verify Session] Could not verify Stripe session:", stripeError)
-      // Continue without Stripe verification if it fails
-    }
-
-    // Return purchase details
-    const response = {
-      sessionId: purchaseData.sessionId,
+    return NextResponse.json({
+      success: true,
+      sessionId: sessionId,
+      buyerUid: purchaseData.buyerUid, // CRITICAL: Return buyer UID for verification
       bundleId: purchaseData.bundleId,
-      bundleTitle: bundleData.title,
+      bundleTitle: bundleData?.title || "Unknown Bundle",
+      creatorId: purchaseData.creatorId,
+      purchaseDate: purchaseData.purchaseDate,
       amount: purchaseData.amountTotal,
       currency: purchaseData.currency,
-      buyerUid: purchaseData.buyerUid, // CRITICAL: Include verified buyer UID
-      creatorId: purchaseData.creatorId,
-      purchaseDate: purchaseData.purchaseDate.toISOString(),
-      status: purchaseData.status,
-      purchaseId: purchaseDoc.id,
-    }
-
-    console.log("✅ [Verify Session] Session verification completed successfully")
-    return NextResponse.json(response)
+    })
   } catch (error: any) {
-    console.error("❌ [Verify Session] Error:", error)
+    console.error("❌ [Verify Session] Verification failed:", error)
     return NextResponse.json(
       {
-        error: "Session verification failed",
+        error: "Purchase verification failed",
         details: error.message,
       },
       { status: 500 },
