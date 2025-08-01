@@ -5,17 +5,17 @@ import { useSearchParams } from "next/navigation"
 import { useAuth } from "@/contexts/auth-context"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { CheckCircle, AlertCircle, Loader2 } from "lucide-react"
+import { Badge } from "@/components/ui/badge"
+import { CheckCircle, XCircle, Loader2, AlertTriangle } from "lucide-react"
 import Link from "next/link"
 
 interface PurchaseVerification {
   success: boolean
-  bundleId?: string
-  bundleTitle?: string
-  creatorId?: string
-  sessionId?: string
+  message: string
+  details?: any
   buyerUid?: string
-  error?: string
+  bundleId?: string
+  sessionId?: string
 }
 
 export default function PurchaseSuccessPage() {
@@ -32,82 +32,83 @@ export default function PurchaseSuccessPage() {
       if (!sessionId) {
         setVerification({
           success: false,
-          error: "No session ID provided",
+          message: "No session ID provided",
+          details: "Invalid purchase verification URL",
         })
         setLoading(false)
         return
       }
 
-      // CRITICAL: Verify buyer UID matches authenticated user
       if (!user) {
         setVerification({
           success: false,
-          error: "Authentication required to verify purchase",
+          message: "Authentication required",
+          details: "Please log in to verify your purchase",
         })
         setLoading(false)
         return
       }
 
+      // Verify buyer UID matches authenticated user
       if (buyerUidFromUrl && buyerUidFromUrl !== user.uid) {
-        console.error("❌ [Purchase Success] Buyer UID mismatch:")
-        console.error("   URL UID:", buyerUidFromUrl)
-        console.error("   Auth UID:", user.uid)
+        console.error("❌ Buyer UID mismatch:", {
+          urlBuyerUid: buyerUidFromUrl,
+          authUserUid: user.uid,
+        })
+
         setVerification({
           success: false,
-          error: "Purchase verification failed - user mismatch",
+          message: "Unauthorized purchase access",
+          details: "This purchase belongs to a different user",
         })
         setLoading(false)
         return
       }
 
       try {
-        console.log("🔍 [Purchase Success] Verifying purchase...")
-        console.log("   Session ID:", sessionId)
-        console.log("   Buyer UID:", user.uid)
+        console.log("🔍 Verifying purchase session:", sessionId)
 
-        const idToken = await user.getIdToken()
         const response = await fetch("/api/purchase/verify-session", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer ${idToken}`,
           },
           body: JSON.stringify({
             sessionId,
-            buyerUid: user.uid, // CRITICAL: Include buyer UID for verification
+            expectedBuyerUid: user.uid,
           }),
         })
 
-        if (!response.ok) {
-          const errorData = await response.json()
-          throw new Error(errorData.error || "Purchase verification failed")
-        }
-
         const data = await response.json()
-        console.log("✅ [Purchase Success] Purchase verified:", data)
 
-        // CRITICAL: Verify buyer UID in response
-        if (data.buyerUid !== user.uid) {
-          throw new Error("Purchase verification failed - buyer UID mismatch")
+        if (response.ok) {
+          console.log("✅ Purchase verified successfully")
+          setVerification({
+            success: true,
+            message: "Purchase completed successfully!",
+            details: data,
+            buyerUid: data.buyerUid,
+            bundleId: data.bundleId,
+            sessionId: data.sessionId,
+          })
+        } else {
+          console.error("❌ Purchase verification failed:", data)
+          setVerification({
+            success: false,
+            message: data.error || "Purchase verification failed",
+            details: data.details || "Unknown error occurred",
+          })
         }
-
-        setVerification({
-          success: true,
-          bundleId: data.bundleId,
-          bundleTitle: data.bundleTitle,
-          creatorId: data.creatorId,
-          sessionId: data.sessionId,
-          buyerUid: data.buyerUid,
-        })
       } catch (error: any) {
-        console.error("❌ [Purchase Success] Verification failed:", error)
+        console.error("❌ Error verifying purchase:", error.message)
         setVerification({
           success: false,
-          error: error.message || "Failed to verify purchase",
+          message: "Verification error",
+          details: error.message,
         })
-      } finally {
-        setLoading(false)
       }
+
+      setLoading(false)
     }
 
     verifyPurchase()
@@ -115,11 +116,13 @@ export default function PurchaseSuccessPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <Card className="w-full max-w-md">
-          <CardContent className="flex flex-col items-center justify-center p-6">
-            <Loader2 className="h-8 w-8 animate-spin mb-4" />
-            <p>Verifying your purchase...</p>
+      <div className="container mx-auto py-8">
+        <Card>
+          <CardContent className="flex items-center justify-center py-8">
+            <div className="text-center">
+              <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
+              <p>Verifying your purchase...</p>
+            </div>
           </CardContent>
         </Card>
       </div>
@@ -128,37 +131,12 @@ export default function PurchaseSuccessPage() {
 
   if (!verification) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <Card className="w-full max-w-md">
-          <CardContent className="flex flex-col items-center justify-center p-6">
-            <AlertCircle className="h-8 w-8 text-red-500 mb-4" />
-            <p>Unable to verify purchase</p>
-          </CardContent>
-        </Card>
-      </div>
-    )
-  }
-
-  if (!verification.success) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <Card className="w-full max-w-md">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <AlertCircle className="h-5 w-5 text-red-500" />
-              Purchase Verification Failed
-            </CardTitle>
-            <CardDescription>There was an issue verifying your purchase</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <p className="text-sm text-muted-foreground mb-4">{verification.error}</p>
-            <div className="flex gap-2">
-              <Button asChild>
-                <Link href="/dashboard">Go to Dashboard</Link>
-              </Button>
-              <Button variant="outline" asChild>
-                <Link href="/dashboard/purchases">View Purchases</Link>
-              </Button>
+      <div className="container mx-auto py-8">
+        <Card>
+          <CardContent className="flex items-center justify-center py-8">
+            <div className="text-center">
+              <AlertTriangle className="h-8 w-8 text-yellow-500 mx-auto mb-4" />
+              <p>Unable to verify purchase</p>
             </div>
           </CardContent>
         </Card>
@@ -167,37 +145,75 @@ export default function PurchaseSuccessPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center">
-      <Card className="w-full max-w-md">
+    <div className="container mx-auto py-8">
+      <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <CheckCircle className="h-5 w-5 text-green-500" />
-            Purchase Successful!
-          </CardTitle>
-          <CardDescription>Your purchase has been completed and verified</CardDescription>
+          <div className="flex items-center gap-2">
+            {verification.success ? (
+              <CheckCircle className="h-6 w-6 text-green-500" />
+            ) : (
+              <XCircle className="h-6 w-6 text-red-500" />
+            )}
+            <CardTitle>{verification.success ? "Purchase Successful!" : "Purchase Failed"}</CardTitle>
+          </div>
+          <CardDescription>{verification.message}</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="space-y-2 mb-4">
-            {verification.bundleTitle && (
-              <p>
-                <strong>Bundle:</strong> {verification.bundleTitle}
-              </p>
+          <div className="space-y-4">
+            {verification.success && (
+              <>
+                <div className="grid grid-cols-2 gap-4">
+                  {verification.sessionId && (
+                    <div>
+                      <p className="text-sm font-medium">Session ID</p>
+                      <Badge variant="outline">{verification.sessionId}</Badge>
+                    </div>
+                  )}
+                  {verification.buyerUid && (
+                    <div>
+                      <p className="text-sm font-medium">Buyer ID</p>
+                      <Badge variant="outline">{verification.buyerUid}</Badge>
+                    </div>
+                  )}
+                </div>
+
+                <div className="flex gap-2">
+                  <Button asChild>
+                    <Link href="/dashboard/purchases">View My Purchases</Link>
+                  </Button>
+                  {verification.bundleId && (
+                    <Button variant="outline" asChild>
+                      <Link href={`/product-box/${verification.bundleId}/content`}>Access Content</Link>
+                    </Button>
+                  )}
+                </div>
+              </>
             )}
-            <p>
-              <strong>Session ID:</strong> {verification.sessionId}
-            </p>
-            <p>
-              <strong>Buyer ID:</strong> {verification.buyerUid}
-            </p>
-          </div>
-          <div className="flex gap-2">
-            <Button asChild>
-              <Link href="/dashboard/purchases">View My Purchases</Link>
-            </Button>
-            {verification.creatorId && (
-              <Button variant="outline" asChild>
-                <Link href={`/creator/${verification.creatorId}`}>View Creator</Link>
-              </Button>
+
+            {!verification.success && (
+              <div className="space-y-4">
+                <div className="bg-red-50 p-4 rounded-lg">
+                  <p className="text-sm text-red-800">{verification.details}</p>
+                </div>
+
+                <div className="flex gap-2">
+                  <Button asChild>
+                    <Link href="/dashboard">Go to Dashboard</Link>
+                  </Button>
+                  <Button variant="outline" asChild>
+                    <Link href="/support">Contact Support</Link>
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {verification.details && typeof verification.details === "object" && (
+              <details className="mt-4">
+                <summary className="cursor-pointer text-sm font-medium">Technical Details</summary>
+                <pre className="mt-2 text-xs bg-gray-100 p-2 rounded overflow-auto">
+                  {JSON.stringify(verification.details, null, 2)}
+                </pre>
+              </details>
             )}
           </div>
         </CardContent>

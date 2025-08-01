@@ -5,80 +5,74 @@ import { getFirestore } from "firebase-admin/firestore"
 
 // Initialize Firebase Admin
 if (!getApps().length) {
-  const serviceAccount = {
-    type: "service_account",
-    project_id: process.env.FIREBASE_PROJECT_ID,
-    private_key_id: process.env.FIREBASE_PRIVATE_KEY_ID,
-    private_key: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n"),
-    client_email: process.env.FIREBASE_CLIENT_EMAIL,
-    client_id: process.env.FIREBASE_CLIENT_ID,
-    auth_uri: "https://accounts.google.com/o/oauth2/auth",
-    token_uri: "https://oauth2.googleapis.com/token",
-    auth_provider_x509_cert_url: "https://www.googleapis.com/oauth2/v1/certs",
-    client_x509_cert_url: `https://www.googleapis.com/robot/v1/metadata/x509/${process.env.FIREBASE_CLIENT_EMAIL}`,
+  try {
+    initializeApp({
+      credential: cert({
+        projectId: process.env.FIREBASE_PROJECT_ID,
+        clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+        privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n"),
+      }),
+    })
+  } catch (error: any) {
+    console.error("❌ Firebase Admin initialization failed:", error.message)
   }
-
-  initializeApp({
-    credential: cert(serviceAccount as any),
-  })
 }
-
-const db = getFirestore()
-const auth = getAuth()
 
 export async function POST(request: NextRequest) {
   try {
-    console.log("🔍 [Firebase Admin Test] Starting test...")
+    const auth = getAuth()
+    const db = getFirestore()
 
-    // Get auth token from header
+    // Test Firebase Admin configuration
+    const configTest = {
+      projectId: process.env.FIREBASE_PROJECT_ID ? "✅ Set" : "❌ Missing",
+      clientEmail: process.env.FIREBASE_CLIENT_EMAIL ? "✅ Set" : "❌ Missing",
+      privateKey: process.env.FIREBASE_PRIVATE_KEY ? "✅ Set" : "❌ Missing",
+    }
+
+    // Test token verification if provided
+    let tokenTest = null
     const authHeader = request.headers.get("authorization")
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      return NextResponse.json({ error: "No authorization header" }, { status: 401 })
-    }
-
-    const idToken = authHeader.split("Bearer ")[1]
-    console.log("🔍 [Firebase Admin Test] Token length:", idToken.length)
-
-    // Test token verification
-    try {
-      const decodedToken = await auth.verifyIdToken(idToken)
-      console.log("✅ [Firebase Admin Test] Token verified for user:", decodedToken.uid)
-
-      // Test Firestore connection
-      const testDoc = await db.collection("test").doc("connection").get()
-      console.log("✅ [Firebase Admin Test] Firestore connection successful")
-
-      return NextResponse.json({
-        success: true,
-        tokenValid: true,
-        userId: decodedToken.uid,
-        userEmail: decodedToken.email,
-        firestoreConnected: true,
-        tokenClaims: {
-          iss: decodedToken.iss,
-          aud: decodedToken.aud,
-          auth_time: decodedToken.auth_time,
-          exp: decodedToken.exp,
-        },
-      })
-    } catch (error: any) {
-      console.error("❌ [Firebase Admin Test] Token verification failed:", error)
-      return NextResponse.json(
-        {
-          success: false,
-          tokenValid: false,
+    if (authHeader?.startsWith("Bearer ")) {
+      const token = authHeader.substring(7)
+      try {
+        const decodedToken = await auth.verifyIdToken(token)
+        tokenTest = {
+          status: "✅ Valid",
+          uid: decodedToken.uid,
+          email: decodedToken.email,
+        }
+      } catch (error: any) {
+        tokenTest = {
+          status: "❌ Invalid",
           error: error.message,
-          errorCode: error.code,
-        },
-        { status: 401 },
-      )
+        }
+      }
     }
+
+    // Test Firestore connection
+    let firestoreTest
+    try {
+      await db.collection("test").limit(1).get()
+      firestoreTest = "✅ Connected"
+    } catch (error: any) {
+      firestoreTest = `❌ Error: ${error.message}`
+    }
+
+    return NextResponse.json({
+      success: true,
+      config: configTest,
+      tokenVerification: tokenTest,
+      firestore: firestoreTest,
+      timestamp: new Date().toISOString(),
+    })
   } catch (error: any) {
-    console.error("❌ [Firebase Admin Test] Test failed:", error)
+    console.error("❌ Firebase Admin test error:", error.message)
     return NextResponse.json(
       {
         success: false,
         error: error.message,
+        timestamp: new Date().toISOString(),
       },
       { status: 500 },
     )

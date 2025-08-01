@@ -1,177 +1,183 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { initializeApp, getApps, cert } from "firebase-admin/app"
-import { getFirestore } from "firebase-admin/firestore"
 import Stripe from "stripe"
+import { initializeApp, getApps, cert } from "firebase-admin/app"
+import { getFirestore, FieldValue } from "firebase-admin/firestore"
 
 // Initialize Firebase Admin
 if (!getApps().length) {
-  const serviceAccount = {
-    type: "service_account",
-    project_id: process.env.FIREBASE_PROJECT_ID,
-    private_key_id: process.env.FIREBASE_PRIVATE_KEY_ID,
-    private_key: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n"),
-    client_email: process.env.FIREBASE_CLIENT_EMAIL,
-    client_id: process.env.FIREBASE_CLIENT_ID,
-    auth_uri: "https://accounts.google.com/o/oauth2/auth",
-    token_uri: "https://oauth2.googleapis.com/token",
-    auth_provider_x509_cert_url: "https://www.googleapis.com/oauth2/v1/certs",
-    client_x509_cert_url: `https://www.googleapis.com/robot/v1/metadata/x509/${process.env.FIREBASE_CLIENT_EMAIL}`,
-  }
-
   initializeApp({
-    credential: cert(serviceAccount as any),
+    credential: cert({
+      projectId: process.env.FIREBASE_PROJECT_ID,
+      clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+      privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n"),
+    }),
   })
 }
 
 const db = getFirestore()
 
-// Initialize Stripe
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: "2024-06-20",
 })
 
+const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET!
+
 export async function POST(request: NextRequest) {
-  const sig = request.headers.get("stripe-signature")
-  const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET
-
-  if (!sig || !webhookSecret) {
-    console.error("❌ [Webhook] Missing signature or webhook secret")
-    return NextResponse.json({ error: "Missing signature or webhook secret" }, { status: 400 })
-  }
-
-  let event: Stripe.Event
-
   try {
     const body = await request.text()
-    event = stripe.webhooks.constructEvent(body, sig, webhookSecret)
-    console.log("✅ [Webhook] Event verified:", event.type)
-  } catch (err: any) {
-    console.error("❌ [Webhook] Signature verification failed:", err.message)
-    return NextResponse.json({ error: `Webhook signature verification failed: ${err.message}` }, { status: 400 })
-  }
+    const signature = request.headers.get("stripe-signature")!
 
-  try {
-    switch (event.type) {
-      case "checkout.session.completed":
-        await handleCheckoutSessionCompleted(event.data.object as Stripe.Checkout.Session)
-        break
-      case "payment_intent.succeeded":
-        await handlePaymentIntentSucceeded(event.data.object as Stripe.PaymentIntent)
-        break
-      default:
-        console.log(`🔔 [Webhook] Unhandled event type: ${event.type}`)
+    let event: Stripe.Event
+
+    try {
+      event = stripe.webhooks.constructEvent(body, signature, webhookSecret)
+    } catch (err: any) {
+      console.error("❌ Webhook signature verification failed:", err.message)
+      return NextResponse.json({ error: "Invalid signature" }, { status: 400 })
+    }
+
+    console.log("🔔 Webhook received:", event.type)
+
+    if (event.type === "checkout.session.completed") {
+      const session = event.data.object as Stripe.Checkout.Session
+
+      console.log("💳 Processing completed checkout session:", session.id)
+      console.log("📋 Session metadata:", session.metadata)
+
+      // CRITICAL: Validate buyer UID exists
+      const buyerUid = session.metadata?.buyerUid
+      if (!buyerUid) {
+        console.error("🚨 CRITICAL: Anonymous purchase attempt detected!", {
+          sessionId: session.id,
+          metadata: session.metadata,
+          customerEmail: session.customer_email,
+        })
+
+        // Log this as a security event
+        await db.collection("securityEvents").add({
+          type: "anonymous_purchase_attempt",
+          sessionId: session.id,
+          metadata: session.metadata,
+          customerEmail: session.customer_email,
+          timestamp: FieldValue.serverTimestamp(),
+          severity: "critical",
+        })
+
+        return NextResponse.json({ error: "Anonymous purchases not allowed" }, { status: 400 })
+      }
+
+      // Validate buyer exists in database
+      try {
+        const buyerDoc = await db.collection("users").doc(buyerUid).get()
+        if (!buyerDoc.exists) {
+          console.error("❌ Buyer not found in database:", buyerUid)
+          return NextResponse.json({ error: "Invalid buyer" }, { status: 400 })
+        }
+        console.log("✅ Buyer verified:", buyerUid)
+      } catch (error: any) {
+        console.error("❌ Error verifying buyer:", error.message)
+        return NextResponse.json({ error: "Buyer verification failed" }, { status: 500 })
+      }
+
+      const bundleId = session.metadata?.bundleId
+      const sellerId = session.metadata?.sellerId
+      const buyerEmail = session.metadata?.buyerEmail || session.customer_email
+      const buyerName = session.metadata?.buyerName
+
+      if (!bundleId || !sellerId) {
+        console.error("❌ Missing required metadata:", { bundleId, sellerId })
+        return NextResponse.json({ error: "Invalid session metadata" }, { status: 400 })
+      }
+
+      // Get payment intent for amount details
+      let paymentIntent
+      try {
+        if (session.payment_intent) {
+          paymentIntent = await stripe.paymentIntents.retrieve(session.payment_intent as string)
+        }
+      } catch (error: any) {
+        console.warn("⚠️ Could not retrieve payment intent:", error.message)
+      }
+
+      const amount = paymentIntent?.amount || session.amount_total || 0
+      const currency = paymentIntent?.currency || "usd"
+
+      // Create purchase record with buyer UID
+      const purchaseData = {
+        buyerUid,
+        buyerEmail,
+        buyerName,
+        bundleId,
+        sellerId,
+        sessionId: session.id,
+        paymentIntentId: session.payment_intent,
+        amount,
+        currency,
+        status: "completed",
+        purchaseDate: FieldValue.serverTimestamp(),
+        metadata: session.metadata,
+        environment: session.metadata?.environment || "unknown",
+      }
+
+      try {
+        console.log("💾 Creating purchase record...")
+        const purchaseRef = await db.collection("purchases").add(purchaseData)
+        console.log("✅ Purchase record created:", purchaseRef.id)
+
+        // Grant access to buyer
+        await db.collection("userAccess").doc(`${buyerUid}_${bundleId}`).set({
+          userId: buyerUid,
+          bundleId,
+          purchaseId: purchaseRef.id,
+          grantedAt: FieldValue.serverTimestamp(),
+          accessType: "purchased",
+        })
+
+        console.log("✅ Access granted to buyer:", buyerUid)
+
+        // Update seller's sales record
+        await db.collection("sales").add({
+          sellerId,
+          buyerUid,
+          buyerEmail,
+          bundleId,
+          purchaseId: purchaseRef.id,
+          sessionId: session.id,
+          amount,
+          currency,
+          saleDate: FieldValue.serverTimestamp(),
+          status: "completed",
+        })
+
+        console.log("✅ Sales record created for seller:", sellerId)
+
+        // Update bundle statistics
+        await db
+          .collection("productBoxes")
+          .doc(bundleId)
+          .update({
+            totalSales: FieldValue.increment(1),
+            totalRevenue: FieldValue.increment(amount),
+            lastSaleDate: FieldValue.serverTimestamp(),
+          })
+
+        console.log("✅ Bundle statistics updated")
+      } catch (error: any) {
+        console.error("❌ Error processing purchase:", error.message)
+        return NextResponse.json({ error: "Purchase processing failed" }, { status: 500 })
+      }
+
+      console.log("🎉 Purchase processed successfully:", {
+        buyerUid,
+        bundleId,
+        sellerId,
+        amount,
+      })
     }
 
     return NextResponse.json({ received: true })
   } catch (error: any) {
-    console.error("❌ [Webhook] Error processing webhook:", error)
+    console.error("❌ Webhook processing error:", error.message)
     return NextResponse.json({ error: "Webhook processing failed" }, { status: 500 })
-  }
-}
-
-async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session) {
-  console.log("🎉 [Webhook] Processing checkout session completed:", session.id)
-
-  // CRITICAL: Validate buyer UID exists in metadata
-  const buyerUid = session.metadata?.buyerUid
-  if (!buyerUid) {
-    console.error("❌ [Webhook] CRITICAL: No buyer UID in session metadata - anonymous purchase attempt blocked")
-    console.error("   Session ID:", session.id)
-    console.error("   Available metadata:", session.metadata)
-    return
-  }
-
-  console.log("✅ [Webhook] Buyer UID found:", buyerUid)
-
-  const bundleId = session.metadata?.bundleId
-  const creatorId = session.metadata?.creatorId
-
-  if (!bundleId || !creatorId) {
-    console.error("❌ [Webhook] Missing bundle or creator ID in metadata")
-    return
-  }
-
-  // Verify buyer exists in database
-  const buyerDoc = await db.collection("users").doc(buyerUid).get()
-  if (!buyerDoc.exists) {
-    console.error("❌ [Webhook] Buyer not found in database:", buyerUid)
-    return
-  }
-
-  const buyerData = buyerDoc.data()!
-
-  // Create purchase record with buyer UID
-  const purchaseData = {
-    buyerUid: buyerUid, // CRITICAL: Always include buyer UID
-    buyerEmail: session.metadata?.buyerEmail || buyerData.email || "",
-    buyerName: session.metadata?.buyerName || buyerData.displayName || "",
-    bundleId: bundleId,
-    creatorId: creatorId,
-    sessionId: session.id,
-    paymentIntentId: session.payment_intent,
-    amountTotal: session.amount_total,
-    currency: session.currency,
-    status: "completed",
-    purchaseDate: new Date(),
-    metadata: session.metadata,
-  }
-
-  // Save purchase record
-  await db.collection("purchases").add(purchaseData)
-  console.log("✅ [Webhook] Purchase record created for buyer:", buyerUid)
-
-  // Grant access to bundle content
-  await grantBundleAccess(buyerUid, bundleId, creatorId)
-
-  // Update creator sales stats
-  await updateCreatorSales(creatorId, session.amount_total || 0, session.currency || "usd")
-}
-
-async function handlePaymentIntentSucceeded(paymentIntent: Stripe.PaymentIntent) {
-  console.log("💰 [Webhook] Processing payment intent succeeded:", paymentIntent.id)
-
-  // CRITICAL: Validate buyer UID exists in metadata
-  const buyerUid = paymentIntent.metadata?.buyerUid
-  if (!buyerUid) {
-    console.error("❌ [Webhook] CRITICAL: No buyer UID in payment intent metadata - anonymous payment blocked")
-    console.error("   Payment Intent ID:", paymentIntent.id)
-    console.error("   Available metadata:", paymentIntent.metadata)
-    return
-  }
-
-  console.log("✅ [Webhook] Payment confirmed for buyer:", buyerUid)
-}
-
-async function grantBundleAccess(buyerUid: string, bundleId: string, creatorId: string) {
-  try {
-    const accessData = {
-      buyerUid: buyerUid, // CRITICAL: Include buyer UID
-      bundleId: bundleId,
-      creatorId: creatorId,
-      grantedAt: new Date(),
-      accessType: "purchased",
-    }
-
-    await db.collection("bundle_access").add(accessData)
-    console.log("✅ [Webhook] Bundle access granted to buyer:", buyerUid)
-  } catch (error) {
-    console.error("❌ [Webhook] Failed to grant bundle access:", error)
-  }
-}
-
-async function updateCreatorSales(creatorId: string, amount: number, currency: string) {
-  try {
-    const salesData = {
-      creatorId: creatorId,
-      amount: amount,
-      currency: currency,
-      saleDate: new Date(),
-      environment: process.env.NODE_ENV === "production" ? "live" : "test",
-    }
-
-    await db.collection("sales").add(salesData)
-    console.log("✅ [Webhook] Sales record created for creator:", creatorId)
-  } catch (error) {
-    console.error("❌ [Webhook] Failed to update creator sales:", error)
   }
 }

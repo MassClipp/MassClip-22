@@ -3,130 +3,109 @@
 import { useState } from "react"
 import { useAuth } from "@/contexts/auth-context"
 import { Button } from "@/components/ui/button"
+import { Badge } from "@/components/ui/badge"
 import { Loader2, ShoppingCart, Lock } from "lucide-react"
-import { useToast } from "@/hooks/use-toast"
 import { useRouter } from "next/navigation"
 
 interface VideoPurchaseButtonProps {
   productBoxId: string
+  priceId: string
   price: number
+  currency?: string
   title?: string
   disabled?: boolean
-  className?: string
 }
 
 export default function VideoPurchaseButton({
   productBoxId,
+  priceId,
   price,
-  title = "Buy Now",
+  currency = "USD",
+  title = "Purchase",
   disabled = false,
-  className = "",
 }: VideoPurchaseButtonProps) {
   const { user } = useAuth()
-  const { toast } = useToast()
   const router = useRouter()
-  const [isLoading, setIsLoading] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   const handlePurchase = async () => {
-    // CRITICAL: Require authentication before purchase
     if (!user) {
-      toast({
-        title: "Authentication Required",
-        description: "Please log in to make a purchase.",
-        variant: "destructive",
-      })
+      console.log("❌ User not authenticated, redirecting to login")
       router.push("/login")
       return
     }
 
-    setIsLoading(true)
+    setLoading(true)
+    setError(null)
 
     try {
-      console.log("🛒 [Purchase Button] Starting purchase process...")
-      console.log("   Product Box ID:", productBoxId)
-      console.log("   Price:", price)
-      console.log("   Buyer UID:", user.uid) // CRITICAL: Log buyer UID
-      console.log("   Current domain:", window.location.origin)
+      console.log("🛒 Starting purchase process:", {
+        productBoxId,
+        priceId,
+        buyerUid: user.uid,
+        buyerEmail: user.email,
+      })
 
-      // Get fresh auth token
-      console.log("🔐 [Purchase Button] Getting auth token...")
+      // Get Firebase ID token
       const idToken = await user.getIdToken(true)
-      console.log("✅ [Purchase Button] Auth token obtained")
+      console.log("🔐 Firebase token obtained")
 
-      if (!idToken) {
-        throw new Error("Failed to get authentication token")
-      }
-
-      // Create checkout session with buyer authentication
-      console.log("💳 [Purchase Button] Creating checkout session...")
       const response = await fetch("/api/stripe/create-checkout-session", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          idToken, // CRITICAL: Include buyer authentication token
-          priceId: productBoxId, // This should be the actual Stripe price ID
-          bundleId: productBoxId, // This should be the bundle/product box ID
-          successUrl: `${window.location.origin}/purchase-success?session_id={CHECKOUT_SESSION_ID}&buyer_uid=${user.uid}`,
+          idToken,
+          priceId,
+          bundleId: productBoxId,
+          successUrl: `${window.location.origin}/purchase-success`,
           cancelUrl: window.location.href,
         }),
       })
 
-      console.log("📊 [Purchase Button] Checkout response status:", response.status)
+      const data = await response.json()
 
       if (!response.ok) {
-        const errorData = await response.json()
-        console.error("❌ [Purchase Button] Checkout failed:", errorData)
-
-        if (response.status === 401) {
-          toast({
-            title: "Authentication Error",
-            description: "Please log in again to make a purchase.",
-            variant: "destructive",
-          })
-          router.push("/login")
-          return
-        }
-
-        throw new Error(errorData.error || "Failed to create checkout session")
+        console.error("❌ Checkout session creation failed:", data)
+        throw new Error(data.error || `HTTP ${response.status}`)
       }
 
-      const data = await response.json()
-      console.log("✅ [Purchase Button] Checkout session created:")
-      console.log("   Session ID:", data.sessionId)
-      console.log("   Buyer UID:", data.buyerUid) // CRITICAL: Verify buyer UID is returned
-      console.log("   Domain used:", data.domain)
-      console.log("   Success URL:", data.successUrl)
-      console.log("   Checkout URL:", data.url)
+      console.log("✅ Checkout session created:", {
+        sessionId: data.sessionId,
+        buyerUid: data.buyerUid,
+        bundleId: data.bundleId,
+      })
 
-      if (!data.url) {
-        throw new Error("No checkout URL received")
-      }
-
-      // Verify buyer UID is included in response (security check)
-      if (!data.buyerUid || data.buyerUid !== user.uid) {
-        throw new Error("Purchase authentication verification failed")
+      // Verify returned buyer UID matches authenticated user
+      if (data.buyerUid !== user.uid) {
+        console.error("❌ Buyer UID mismatch:", {
+          returnedBuyerUid: data.buyerUid,
+          authUserUid: user.uid,
+        })
+        throw new Error("Authentication mismatch")
       }
 
       // Redirect to Stripe Checkout
-      console.log("🔗 [Purchase Button] Redirecting to Stripe...")
-      window.location.href = data.url
+      if (data.url) {
+        console.log("🔄 Redirecting to Stripe Checkout")
+        window.location.href = data.url
+      } else {
+        throw new Error("No checkout URL received")
+      }
     } catch (error: any) {
-      console.error("❌ [Purchase Button] Purchase failed:", error)
-      toast({
-        title: "Purchase Failed",
-        description: error.message || "Unable to start checkout process. Please try again.",
-        variant: "destructive",
-      })
-      setIsLoading(false)
+      console.error("❌ Error creating checkout session:", error)
+      setError(error.message || "Failed to create checkout session")
+    } finally {
+      setLoading(false)
     }
   }
 
   // Show login prompt for unauthenticated users
   if (!user) {
     return (
-      <Button onClick={() => router.push("/login")} variant="outline" className={className}>
+      <Button onClick={() => router.push("/login")} className="w-full">
         <Lock className="h-4 w-4 mr-2" />
         Login to Purchase
       </Button>
@@ -134,22 +113,31 @@ export default function VideoPurchaseButton({
   }
 
   return (
-    <Button
-      onClick={handlePurchase}
-      disabled={disabled || isLoading}
-      className={`${className} ${isLoading ? "cursor-not-allowed" : ""}`}
-    >
-      {isLoading ? (
-        <>
-          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-          Processing...
-        </>
-      ) : (
-        <>
-          <ShoppingCart className="h-4 w-4 mr-2" />
-          {title} ${price.toFixed(2)}
-        </>
-      )}
-    </Button>
+    <div className="space-y-2">
+      <Button onClick={handlePurchase} disabled={loading || disabled} className="w-full" size="lg">
+        {loading ? (
+          <>
+            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            Creating Checkout...
+          </>
+        ) : (
+          <>
+            <ShoppingCart className="h-4 w-4 mr-2" />
+            {title} - ${(price / 100).toFixed(2)} {currency}
+          </>
+        )}
+      </Button>
+
+      {error && <div className="text-sm text-red-600 bg-red-50 p-2 rounded">{error}</div>}
+
+      <div className="flex items-center justify-center gap-2 text-xs text-gray-500">
+        <Badge variant="outline" className="text-xs">
+          Buyer: {user.email}
+        </Badge>
+        <Badge variant="outline" className="text-xs">
+          UID: {user.uid.substring(0, 8)}...
+        </Badge>
+      </div>
+    </div>
   )
 }

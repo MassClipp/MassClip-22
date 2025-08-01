@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import { useAuth } from "@/contexts/auth-context"
+import { useFirebaseAuthSafe } from "@/hooks/use-firebase-auth-safe"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -16,7 +17,10 @@ interface DebugResult {
 }
 
 export default function DebugCheckoutAuthPage() {
-  const { user } = useAuth()
+  // Try both auth contexts
+  const contextAuth = useAuth()
+  const firebaseAuth = useFirebaseAuthSafe()
+
   const [results, setResults] = useState<DebugResult[]>([])
   const [isRunning, setIsRunning] = useState(false)
 
@@ -28,17 +32,31 @@ export default function DebugCheckoutAuthPage() {
     setIsRunning(true)
     setResults([])
 
-    // Step 1: Check authentication state
+    // Step 1: Check both authentication contexts
     addResult(
-      "Auth State",
-      user ? "success" : "error",
-      user ? `User authenticated: ${user.uid}` : "No user authenticated",
+      "Context Auth",
+      contextAuth.user ? "success" : "error",
+      contextAuth.user ? `Context user: ${contextAuth.user.uid}` : "No context user",
+      { user: contextAuth.user?.uid, email: contextAuth.user?.email },
     )
 
+    addResult(
+      "Firebase Auth",
+      firebaseAuth.user ? "success" : "error",
+      firebaseAuth.user ? `Firebase user: ${firebaseAuth.user.uid}` : "No firebase user",
+      { user: firebaseAuth.user?.uid, email: firebaseAuth.user?.email },
+    )
+
+    // Use whichever auth has a user
+    const user = contextAuth.user || firebaseAuth.user
+
     if (!user) {
+      addResult("Overall Auth", "error", "No user found in either auth context")
       setIsRunning(false)
       return
     }
+
+    addResult("Overall Auth", "success", `Using user: ${user.uid}`)
 
     // Step 2: Test token generation
     try {
@@ -56,7 +74,7 @@ export default function DebugCheckoutAuthPage() {
         { parts: tokenParts.length },
       )
 
-      // Step 4: Test checkout session creation
+      // Step 4: Test checkout session creation with real data
       try {
         const testBundleId = "test-bundle-123"
         const response = await fetch("/api/stripe/create-checkout-session", {
@@ -167,6 +185,8 @@ export default function DebugCheckoutAuthPage() {
     }
   }
 
+  const user = contextAuth.user || firebaseAuth.user
+
   return (
     <div className="container mx-auto py-8">
       <Card>
@@ -188,6 +208,21 @@ export default function DebugCheckoutAuthPage() {
                 )}
               </Button>
               {user && <Badge variant="outline">Authenticated as: {user.email || user.uid}</Badge>}
+            </div>
+
+            <div className="grid grid-cols-2 gap-4 text-sm">
+              <div>
+                <p className="font-medium">Context Auth Status:</p>
+                <Badge variant={contextAuth.user ? "default" : "secondary"}>
+                  {contextAuth.user ? "Connected" : "Not Connected"}
+                </Badge>
+              </div>
+              <div>
+                <p className="font-medium">Firebase Auth Status:</p>
+                <Badge variant={firebaseAuth.user ? "default" : "secondary"}>
+                  {firebaseAuth.user ? "Connected" : "Not Connected"}
+                </Badge>
+              </div>
             </div>
 
             {results.length > 0 && (
