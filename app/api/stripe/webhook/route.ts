@@ -74,44 +74,15 @@ async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session) 
   try {
     console.log("🔍 [Webhook] Processing checkout session:", session.id)
 
-    // CRITICAL: Validate buyer UID exists in metadata
-    const buyerUid = session.metadata?.buyerUid
-    if (!buyerUid) {
-      console.error("CRITICAL: Anonymous purchase detected - no buyer UID in session metadata", {
-        sessionId: session.id,
-        metadata: session.metadata,
-      })
-
-      // Log this as a critical error but don't fail the webhook
-      await db.collection("error_logs").add({
-        type: "anonymous_purchase_blocked",
-        sessionId: session.id,
-        metadata: session.metadata || {},
-        timestamp: new Date(),
-        severity: "critical",
-      })
-
-      return // Don't process anonymous purchases
-    }
-
     // Extract metadata
-    const { productBoxId, bundleId, creatorId } = session.metadata || {}
+    const { productBoxId, buyerUid, creatorUid } = session.metadata || {}
 
-    if (!productBoxId && !bundleId) {
-      console.error("❌ [Webhook] Missing product/bundle ID in session:", session.id)
+    if (!productBoxId || !buyerUid) {
+      console.error("❌ [Webhook] Missing required metadata in session:", session.id)
       return
     }
 
-    console.log("✅ [Webhook] Session metadata:", { productBoxId, bundleId, buyerUid, creatorId })
-
-    // Verify buyer exists in our database
-    const buyerDoc = await db.collection("users").doc(buyerUid).get()
-    if (!buyerDoc.exists) {
-      console.error("❌ [Webhook] Buyer not found in database:", buyerUid)
-      return
-    }
-
-    const buyerData = buyerDoc.data()!
+    console.log("✅ [Webhook] Session metadata:", { productBoxId, buyerUid, creatorUid })
 
     // Check if this purchase has already been processed (likely by direct verification)
     const existingPurchase = await UnifiedPurchaseService.getUserPurchase(buyerUid, session.id)
@@ -120,60 +91,37 @@ async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session) 
       return
     }
 
-    let itemData: any = null
-    let itemId = ""
-    let itemType = ""
-
-    if (productBoxId) {
-      // Get product box details
-      const productBoxDoc = await db.collection("productBoxes").doc(productBoxId).get()
-      if (!productBoxDoc.exists) {
-        console.error("❌ [Webhook] Product box not found:", productBoxId)
-        return
-      }
-      itemData = productBoxDoc.data()!
-      itemId = productBoxId
-      itemType = "product_box"
-    } else if (bundleId) {
-      // Get bundle details
-      const bundleDoc = await db.collection("bundles").doc(bundleId).get()
-      if (!bundleDoc.exists) {
-        console.error("❌ [Webhook] Bundle not found:", bundleId)
-        return
-      }
-      itemData = bundleDoc.data()!
-      itemId = bundleId
-      itemType = "bundle"
+    // Get product box details
+    const productBoxDoc = await db.collection("productBoxes").doc(productBoxId).get()
+    if (!productBoxDoc.exists) {
+      console.error("❌ [Webhook] Product box not found:", productBoxId)
+      return
     }
+    const productBoxData = productBoxDoc.data()!
 
     // Get creator details
-    const finalCreatorId = creatorId || itemData.creatorId
+    const creatorId = creatorUid || productBoxData.creatorId
     let creatorData = null
-    if (finalCreatorId) {
-      const creatorDoc = await db.collection("users").doc(finalCreatorId).get()
+    if (creatorId) {
+      const creatorDoc = await db.collection("users").doc(creatorId).get()
       creatorData = creatorDoc.exists ? creatorDoc.data() : null
     }
 
-    // Create unified purchase record with buyer UID
-    if (productBoxId) {
-      await UnifiedPurchaseService.createUnifiedPurchase(buyerUid, {
-        productBoxId,
-        sessionId: session.id,
-        amount: session.amount_total ? session.amount_total / 100 : 0,
-        currency: session.currency || "usd",
-        creatorId: finalCreatorId || "",
-      })
-    }
+    // Create unified purchase record (this will fetch and normalize all content)
+    await UnifiedPurchaseService.createUnifiedPurchase(buyerUid, {
+      productBoxId,
+      sessionId: session.id,
+      amount: session.amount_total ? session.amount_total / 100 : 0,
+      currency: session.currency || "usd",
+      creatorId: creatorId || "",
+    })
 
-    // Create main purchase record with buyer identification
+    // Also ensure purchase is written to main purchases collection for API compatibility
     const mainPurchaseData = {
-      userId: buyerUid, // CRITICAL: Include buyer UID
-      buyerUid: buyerUid, // CRITICAL: Explicit buyer UID field
-      buyerEmail: buyerData.email || session.customer_details?.email || "",
-      buyerName: buyerData.displayName || buyerData.name || session.customer_details?.name || "",
-      productBoxId: productBoxId || null,
-      bundleId: bundleId || null,
-      itemId: itemId,
+      userId: buyerUid,
+      buyerUid,
+      productBoxId,
+      itemId: productBoxId,
       sessionId: session.id,
       paymentIntentId: session.payment_intent,
       amount: session.amount_total ? session.amount_total / 100 : 0,
@@ -182,15 +130,15 @@ async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session) 
       createdAt: new Date(),
       purchasedAt: new Date(),
       status: "completed",
-      type: itemType,
-      itemTitle: itemData.title || "Untitled Item",
-      itemDescription: itemData.description || "",
-      thumbnailUrl: itemData.thumbnailUrl || "",
-      customPreviewThumbnail: itemData.customPreviewThumbnail || "",
-      creatorId: finalCreatorId,
+      type: "product_box",
+      itemTitle: productBoxData.title || "Untitled Product Box",
+      itemDescription: productBoxData.description || "",
+      thumbnailUrl: productBoxData.thumbnailUrl || "",
+      customPreviewThumbnail: productBoxData.customPreviewThumbnail || "",
+      creatorId: creatorId,
       creatorName: creatorData?.displayName || creatorData?.name || "",
       creatorUsername: creatorData?.username || "",
-      accessUrl: productBoxId ? `/product-box/${productBoxId}/content` : `/bundle/${bundleId}`,
+      accessUrl: `/product-box/${productBoxId}/content`,
       verificationMethod: "webhook_backup", // Mark as webhook backup
       webhookProcessedAt: new Date(),
       environment: isLiveKey ? "live" : "test", // Track which environment processed this
@@ -201,7 +149,24 @@ async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session) 
 
     // Also record in legacy purchases collection for backward compatibility
     const legacyPurchaseData = {
-      ...mainPurchaseData,
+      productBoxId,
+      itemId: productBoxId,
+      sessionId: session.id,
+      paymentIntentId: session.payment_intent,
+      amount: session.amount_total ? session.amount_total / 100 : 0,
+      currency: session.currency || "usd",
+      timestamp: new Date(),
+      purchasedAt: new Date(),
+      status: "completed",
+      type: "product_box",
+      itemTitle: productBoxData.title || "Untitled Product Box",
+      itemDescription: productBoxData.description || "",
+      thumbnailUrl: productBoxData.thumbnailUrl || "",
+      customPreviewThumbnail: productBoxData.customPreviewThumbnail || "",
+      creatorId: creatorId,
+      creatorName: creatorData?.displayName || creatorData?.name || "",
+      creatorUsername: creatorData?.username || "",
+      accessUrl: `/product-box/${productBoxId}/content`,
       verificationMethod: "webhook_backup",
       environment: isLiveKey ? "live" : "test",
     }
@@ -210,39 +175,36 @@ async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session) 
     await db.collection("purchases").add({
       ...legacyPurchaseData,
       userId: buyerUid,
-      buyerUid: buyerUid,
+      buyerUid,
     })
 
-    // Update item sales counter
-    const itemCollection = itemType === "product_box" ? "productBoxes" : "bundles"
+    // Update product box sales counter
     await db
-      .collection(itemCollection)
-      .doc(itemId)
+      .collection("productBoxes")
+      .doc(productBoxId)
       .update({
         totalSales: db.FieldValue.increment(1),
         totalRevenue: db.FieldValue.increment(session.amount_total ? session.amount_total / 100 : 0),
         lastPurchaseAt: new Date(),
       })
 
-    // Record the sale for the creator with buyer identification
-    if (finalCreatorId) {
+    // Record the sale for the creator
+    if (creatorId) {
       await db
         .collection("users")
-        .doc(finalCreatorId)
+        .doc(creatorId)
         .collection("sales")
         .add({
-          productBoxId: productBoxId || null,
-          bundleId: bundleId || null,
-          buyerUid: buyerUid, // CRITICAL: Include buyer UID in sales record
-          buyerEmail: buyerData.email || session.customer_details?.email || "",
-          buyerName: buyerData.displayName || buyerData.name || session.customer_details?.name || "",
+          productBoxId,
+          buyerUid,
           sessionId: session.id,
           amount: session.amount_total ? session.amount_total / 100 : 0,
           platformFee: session.amount_total ? (session.amount_total * 0.25) / 100 : 0,
           netAmount: session.amount_total ? (session.amount_total * 0.75) / 100 : 0,
           purchasedAt: new Date(),
           status: "completed",
-          productTitle: itemData.title || "Untitled Item",
+          productTitle: productBoxData.title || "Untitled Product Box",
+          buyerEmail: session.customer_email || "",
           verificationMethod: "webhook_backup",
           environment: isLiveKey ? "live" : "test",
         })
@@ -250,7 +212,7 @@ async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session) 
       // Increment the creator's total sales
       await db
         .collection("users")
-        .doc(finalCreatorId)
+        .doc(creatorId)
         .update({
           totalSales: db.FieldValue.increment(1),
           totalRevenue: db.FieldValue.increment(session.amount_total ? session.amount_total / 100 : 0),
@@ -259,7 +221,7 @@ async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session) 
     }
 
     console.log(
-      `✅ [Webhook] Successfully processed webhook for session: ${session.id} with buyer: ${buyerUid} in ${isLiveKey ? "LIVE" : "TEST"} mode`,
+      `✅ [Webhook] Successfully processed webhook for session: ${session.id} in ${isLiveKey ? "LIVE" : "TEST"} mode`,
     )
   } catch (error) {
     console.error("❌ [Webhook] Error handling checkout.session.completed:", error)
