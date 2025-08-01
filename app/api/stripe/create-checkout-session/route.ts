@@ -31,6 +31,7 @@ export async function POST(request: NextRequest) {
 
     console.log("📝 Request data:", {
       hasIdToken: !!idToken,
+      tokenLength: idToken?.length,
       priceId,
       bundleId,
       successUrl,
@@ -83,6 +84,11 @@ export async function POST(request: NextRequest) {
     const buyerUid = decodedToken.uid
     const buyerEmail = decodedToken.email || ""
 
+    console.log("👤 Authenticated buyer:", {
+      uid: buyerUid,
+      email: buyerEmail,
+    })
+
     // Get buyer profile from database
     let buyerProfile
     try {
@@ -99,6 +105,7 @@ export async function POST(request: NextRequest) {
 
         // Create minimal profile
         await db.collection("users").doc(buyerUid).set(buyerProfile)
+        console.log("✅ Created minimal buyer profile")
       } else {
         buyerProfile = userDoc.data()
         console.log("✅ Buyer profile found:", buyerProfile.displayName || buyerProfile.email)

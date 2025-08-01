@@ -47,31 +47,59 @@ export default function VideoPurchaseButton({
         buyerEmail: user.email,
       })
 
-      // Get Firebase ID token
+      // Get Firebase ID token with force refresh
+      console.log("🔐 Getting Firebase ID token...")
       const idToken = await user.getIdToken(true)
-      console.log("🔐 Firebase token obtained")
+      console.log("✅ Firebase token obtained, length:", idToken.length)
+
+      // Verify token format
+      if (!idToken || idToken.split(".").length !== 3) {
+        throw new Error("Invalid token format received")
+      }
+
+      const requestBody = {
+        idToken,
+        priceId,
+        bundleId: productBoxId,
+        successUrl: `${window.location.origin}/purchase-success`,
+        cancelUrl: window.location.href,
+      }
+
+      console.log("📤 Sending request to create checkout session:", {
+        ...requestBody,
+        idToken: `${idToken.substring(0, 20)}...`, // Log partial token for debugging
+      })
 
       const response = await fetch("/api/stripe/create-checkout-session", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          Authorization: `Bearer ${idToken}`, // Also send as header
         },
-        body: JSON.stringify({
-          idToken,
-          priceId,
-          bundleId: productBoxId,
-          successUrl: `${window.location.origin}/purchase-success`,
-          cancelUrl: window.location.href,
-        }),
+        body: JSON.stringify(requestBody),
       })
 
-      const data = await response.json()
+      console.log("📥 Response status:", response.status)
 
       if (!response.ok) {
-        console.error("❌ Checkout session creation failed:", data)
-        throw new Error(data.error || `HTTP ${response.status}`)
+        const errorText = await response.text()
+        console.error("❌ Checkout session creation failed:", {
+          status: response.status,
+          statusText: response.statusText,
+          error: errorText,
+        })
+
+        let errorData
+        try {
+          errorData = JSON.parse(errorText)
+        } catch {
+          errorData = { error: errorText }
+        }
+
+        throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`)
       }
 
+      const data = await response.json()
       console.log("✅ Checkout session created:", {
         sessionId: data.sessionId,
         buyerUid: data.buyerUid,
@@ -89,7 +117,7 @@ export default function VideoPurchaseButton({
 
       // Redirect to Stripe Checkout
       if (data.url) {
-        console.log("🔄 Redirecting to Stripe Checkout")
+        console.log("🔄 Redirecting to Stripe Checkout:", data.url)
         window.location.href = data.url
       } else {
         throw new Error("No checkout URL received")
@@ -128,7 +156,11 @@ export default function VideoPurchaseButton({
         )}
       </Button>
 
-      {error && <div className="text-sm text-red-600 bg-red-50 p-2 rounded">{error}</div>}
+      {error && (
+        <div className="text-sm text-red-600 bg-red-50 p-3 rounded border border-red-200">
+          <strong>Error:</strong> {error}
+        </div>
+      )}
 
       <div className="flex items-center justify-center gap-2 text-xs text-gray-500">
         <Badge variant="outline" className="text-xs">
