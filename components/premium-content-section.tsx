@@ -2,7 +2,6 @@
 
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-
 import { useState, useEffect } from "react"
 import { motion } from "framer-motion"
 import { Package, Loader2, AlertCircle, ShoppingCart } from "lucide-react"
@@ -103,72 +102,118 @@ export default function PremiumContentSection({
     }
   }
 
-  // Handle bundle purchase
+  // Handle bundle purchase - FIXED VERSION
   const handlePurchase = async (bundle: Bundle) => {
     if (!user) {
+      console.log("❌ [Premium Content] User not authenticated, redirecting to login")
       toast({
         title: "Authentication Required",
         description: "Please log in to purchase this bundle",
         variant: "destructive",
       })
+      router.push("/login")
       return
     }
 
     try {
       setPurchaseLoading(bundle.id)
       console.log(`🛒 [Premium Content] Starting purchase for bundle: ${bundle.id}`)
+      console.log(`👤 [Premium Content] User details:`, {
+        uid: user.uid,
+        email: user.email,
+        displayName: user.displayName,
+      })
 
-      const idToken = await user.getIdToken()
-      console.log(`🔑 [Premium Content] Got ID token for user: ${user.uid}`)
+      // Get fresh Firebase ID token
+      console.log(`🔑 [Premium Content] Getting fresh ID token...`)
+      const idToken = await user.getIdToken(true) // Force refresh
+      console.log(`✅ [Premium Content] Got ID token (length: ${idToken.length})`)
 
-      const response = await fetch(`/api/creator/product-boxes/${bundle.id}/checkout`, {
+      // Prepare checkout data
+      const checkoutData = {
+        idToken,
+        priceId: bundle.priceId || `price_${bundle.id}`,
+        bundleId: bundle.id,
+        successUrl: `${window.location.origin}/purchase-success?session_id={CHECKOUT_SESSION_ID}&buyer_uid=${user.uid}`,
+        cancelUrl: window.location.href,
+      }
+
+      console.log(`📦 [Premium Content] Checkout data:`, {
+        bundleId: checkoutData.bundleId,
+        priceId: checkoutData.priceId,
+        buyerUid: user.uid,
+        hasToken: !!checkoutData.idToken,
+        tokenLength: checkoutData.idToken.length,
+      })
+
+      // Make the API call
+      console.log(`📡 [Premium Content] Making checkout API call...`)
+      const response = await fetch("/api/stripe/create-checkout-session", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: `Bearer ${idToken}`,
         },
-        body: JSON.stringify({
-          successUrl: `${window.location.origin}/purchase/success?session_id={CHECKOUT_SESSION_ID}`,
-          cancelUrl: window.location.href,
-        }),
+        body: JSON.stringify(checkoutData),
       })
 
       console.log(`📡 [Premium Content] Checkout response status: ${response.status}`)
 
       if (!response.ok) {
         const errorData = await response.json()
-        console.error(`❌ [Premium Content] Checkout failed:`, errorData)
+        console.error(`❌ [Premium Content] Checkout failed:`, {
+          status: response.status,
+          error: errorData.error,
+          code: errorData.code,
+          details: errorData.details,
+        })
 
         // Provide more specific error messages
         let errorMessage = errorData.error || "Failed to create checkout session"
 
-        if (errorData.code === "NO_STRIPE_ACCOUNT") {
+        if (errorData.code === "MISSING_TOKEN") {
+          errorMessage = "Authentication token missing. Please try logging out and back in."
+        } else if (errorData.code === "INVALID_TOKEN") {
+          errorMessage = "Authentication token invalid. Please try logging out and back in."
+        } else if (errorData.code === "NO_STRIPE_ACCOUNT") {
           errorMessage = "This creator hasn't connected their payment account yet."
         } else if (errorData.code === "STRIPE_ACCOUNT_INCOMPLETE") {
           errorMessage = "This creator needs to complete their payment setup."
-        } else if (errorData.code === "STRIPE_VERIFICATION_FAILED") {
-          errorMessage = "Unable to verify creator's payment setup. Please try again later."
         } else if (errorData.code === "ALREADY_PURCHASED") {
           errorMessage = "You already own this content!"
         } else if (errorData.code === "BUNDLE_INACTIVE") {
           errorMessage = "This content is currently unavailable."
-        } else if (errorData.stripeCode === "amount_too_small") {
-          errorMessage = `Minimum charge amount is $${(errorData.details?.minimum_amount || 50) / 100} ${bundle.currency.toUpperCase()}`
+        } else if (response.status === 401) {
+          errorMessage = "Authentication failed. Please try logging out and back in."
         }
 
         throw new Error(errorMessage)
       }
 
       const data = await response.json()
-      console.log(`✅ [Premium Content] Checkout session created:`, data.sessionId)
+      console.log(`✅ [Premium Content] Checkout session created:`, {
+        sessionId: data.sessionId,
+        buyerUid: data.buyerUid,
+        bundleId: data.bundleId,
+        hasUrl: !!data.url,
+      })
 
+      // Verify returned buyer UID matches authenticated user
+      if (data.buyerUid && data.buyerUid !== user.uid) {
+        console.error("❌ [Premium Content] Buyer UID mismatch:", {
+          returnedBuyerUid: data.buyerUid,
+          authUserUid: user.uid,
+        })
+        throw new Error("Authentication mismatch - please try again")
+      }
+
+      // Redirect to Stripe Checkout
       if (data.url) {
         console.log(`🔗 [Premium Content] Redirecting to checkout: ${data.url}`)
         window.location.href = data.url
       } else {
-        throw new Error("No checkout URL received")
+        throw new Error("No checkout URL received from server")
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("❌ [Premium Content] Purchase error:", error)
 
       const errorMessage = error instanceof Error ? error.message : "Failed to start checkout process"
@@ -182,11 +227,11 @@ export default function PremiumContentSection({
             variant="outline"
             size="sm"
             onClick={() => {
-              const debugUrl = `/debug-stripe-checkout?bundleId=${bundle.id}`
+              const debugUrl = `/debug-checkout-auth`
               window.open(debugUrl, "_blank")
             }}
           >
-            Debug Issue
+            Debug Auth
           </Button>
         ) : undefined,
       })
@@ -204,7 +249,7 @@ export default function PremiumContentSection({
     })
 
     // Priority: customPreviewThumbnail > coverImage > coverImageUrl > placeholder
-    const possibleUrls = [bundle.customPreviewThumbnail, bundle.coverImage, bundle.coverImageUrl].filter(Boolean) // Remove null/undefined values
+    const possibleUrls = [bundle.customPreviewThumbnail, bundle.coverImage, bundle.coverImageUrl].filter(Boolean)
 
     for (const url of possibleUrls) {
       if (url && typeof url === "string" && url.startsWith("http")) {
@@ -271,7 +316,7 @@ export default function PremiumContentSection({
           >
             <Card className="bg-zinc-900/50 border-zinc-800 overflow-hidden hover:border-zinc-700 transition-all duration-300 group">
               <div className="relative">
-                {/* Bundle Thumbnail - Changed to square aspect ratio */}
+                {/* Bundle Thumbnail */}
                 <div className="aspect-square bg-zinc-800 overflow-hidden">
                   <img
                     src={getBundleThumbnail(bundle) || "/placeholder.svg"}
@@ -279,7 +324,6 @@ export default function PremiumContentSection({
                     className="w-full h-full object-cover object-center group-hover:scale-105 transition-transform duration-300"
                     style={{ objectFit: "cover" }}
                     onError={(e) => {
-                      // Fallback to package icon if image fails to load
                       const target = e.target as HTMLImageElement
                       target.style.display = "none"
                       const parent = target.parentElement
