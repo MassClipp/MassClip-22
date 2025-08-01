@@ -39,6 +39,7 @@ export async function POST(request: NextRequest) {
       contentType: request.headers.get("content-type"),
       userAgent: request.headers.get("user-agent"),
       origin: request.headers.get("origin"),
+      authorization: request.headers.get("authorization") ? "Present" : "Missing",
     })
 
     const body = await request.json()
@@ -50,12 +51,22 @@ export async function POST(request: NextRequest) {
 
     const { idToken, priceId, bundleId, successUrl, cancelUrl } = body
 
-    if (!priceId || !bundleId) {
-      console.error("❌ [Checkout API] Missing required parameters:", { priceId: !!priceId, bundleId: !!bundleId })
+    // Log what we extracted
+    console.log("📝 [Checkout API] Extracted parameters:", {
+      hasIdToken: !!idToken,
+      idTokenLength: idToken?.length || 0,
+      priceId,
+      bundleId,
+      hasSuccessUrl: !!successUrl,
+      hasCancelUrl: !!cancelUrl,
+    })
+
+    if (!bundleId) {
+      console.error("❌ [Checkout API] Missing bundleId parameter")
       return NextResponse.json(
         {
-          error: "Missing required parameters",
-          details: { priceId: !!priceId, bundleId: !!bundleId },
+          error: "Missing required parameter: bundleId",
+          received: { priceId: !!priceId, bundleId: !!bundleId },
         },
         { status: 400 },
       )
@@ -64,7 +75,13 @@ export async function POST(request: NextRequest) {
     // CRITICAL: Require authentication token for buyer identification
     if (!idToken) {
       console.error("❌ [Checkout API] No authentication token provided - anonymous purchases not allowed")
-      return NextResponse.json({ error: "Authentication required. Please log in to make a purchase." }, { status: 401 })
+      return NextResponse.json(
+        {
+          error: "Authentication required. Please log in to make a purchase.",
+          details: "No authentication token provided",
+        },
+        { status: 401 },
+      )
     }
 
     let userId: string | null = null

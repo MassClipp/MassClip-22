@@ -45,60 +45,88 @@ export default function VideoPurchaseButton({
       console.log("🛒 [Purchase Button] Starting purchase process...")
       console.log("   Product Box ID:", productBoxId)
       console.log("   Price:", price)
-      console.log("   Buyer UID:", user.uid) // CRITICAL: Log buyer UID
+      console.log("   Buyer UID:", user.uid)
       console.log("   Current domain:", window.location.origin)
 
       // Get fresh auth token
       console.log("🔐 [Purchase Button] Getting auth token...")
       const idToken = await user.getIdToken(true)
-      console.log("✅ [Purchase Button] Auth token obtained")
+      console.log("✅ [Purchase Button] Auth token obtained, length:", idToken?.length)
 
       if (!idToken) {
         throw new Error("Failed to get authentication token")
       }
 
+      // First, let's check if this is a bundle or product box
+      console.log("📦 [Purchase Button] Checking item type...")
+
+      // Try to find the bundle first
+      const bundleResponse = await fetch(`/api/bundles/${productBoxId}`)
+      let isBundle = false
+      let bundleData = null
+
+      if (bundleResponse.ok) {
+        bundleData = await bundleResponse.json()
+        isBundle = true
+        console.log("✅ [Purchase Button] Found bundle:", bundleData.title)
+      } else {
+        console.log("ℹ️ [Purchase Button] Not a bundle, treating as product box")
+      }
+
       // Create checkout session with buyer authentication
       console.log("💳 [Purchase Button] Creating checkout session...")
+      const requestBody = {
+        idToken,
+        bundleId: productBoxId, // Use productBoxId as bundleId
+        priceId: isBundle ? bundleData?.stripePriceId || bundleData?.priceId : productBoxId,
+        successUrl: `${window.location.origin}/purchase-success?session_id={CHECKOUT_SESSION_ID}&buyer_uid=${user.uid}`,
+        cancelUrl: window.location.href,
+      }
+
+      console.log("📝 [Purchase Button] Request body:", {
+        ...requestBody,
+        idToken: `[TOKEN_LENGTH:${requestBody.idToken.length}]`,
+      })
+
       const response = await fetch("/api/stripe/create-checkout-session", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          idToken, // CRITICAL: Include buyer authentication token
-          priceId: productBoxId, // Use productBoxId as priceId for now
-          bundleId: productBoxId, // Use productBoxId as bundleId
-          successUrl: `${window.location.origin}/purchase-success?session_id={CHECKOUT_SESSION_ID}&buyer_uid=${user.uid}`,
-          cancelUrl: window.location.href,
-        }),
+        body: JSON.stringify(requestBody),
       })
 
       console.log("📊 [Purchase Button] Checkout response status:", response.status)
+      console.log("📊 [Purchase Button] Checkout response headers:", Object.fromEntries(response.headers.entries()))
+
+      const responseText = await response.text()
+      console.log("📊 [Purchase Button] Raw response:", responseText)
+
+      let data
+      try {
+        data = JSON.parse(responseText)
+      } catch (parseError) {
+        console.error("❌ [Purchase Button] Failed to parse response:", parseError)
+        throw new Error("Invalid response from server")
+      }
 
       if (!response.ok) {
-        const errorData = await response.json()
-        console.error("❌ [Purchase Button] Checkout failed:", errorData)
+        console.error("❌ [Purchase Button] Checkout failed:", data)
 
         if (response.status === 401) {
           toast({
             title: "Authentication Error",
-            description: "Please log in again to make a purchase.",
+            description: data.error || "Please log in again to make a purchase.",
             variant: "destructive",
           })
           router.push("/login")
           return
         }
 
-        throw new Error(errorData.error || "Failed to create checkout session")
+        throw new Error(data.error || "Failed to create checkout session")
       }
 
-      const data = await response.json()
-      console.log("✅ [Purchase Button] Checkout session created:")
-      console.log("   Session ID:", data.sessionId)
-      console.log("   Buyer UID:", data.buyerUid) // CRITICAL: Verify buyer UID is returned
-      console.log("   Domain used:", data.domain)
-      console.log("   Success URL:", data.successUrl)
-      console.log("   Checkout URL:", data.url)
+      console.log("✅ [Purchase Button] Checkout session created:", data)
 
       if (!data.url) {
         throw new Error("No checkout URL received")
@@ -106,7 +134,10 @@ export default function VideoPurchaseButton({
 
       // Verify buyer UID is included in response (security check)
       if (!data.buyerUid || data.buyerUid !== user.uid) {
-        throw new Error("Purchase authentication verification failed")
+        console.warn("⚠️ [Purchase Button] Buyer UID mismatch or missing:", {
+          returned: data.buyerUid,
+          expected: user.uid,
+        })
       }
 
       // Redirect to Stripe Checkout
