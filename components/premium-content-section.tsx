@@ -7,6 +7,7 @@ import { motion } from "framer-motion"
 import { Package, Loader2, AlertCircle, ShoppingCart } from "lucide-react"
 import { Card, CardContent } from "@/components/ui/card"
 import { useAuth } from "@/contexts/auth-context"
+import { useFirebaseAuthSafe } from "@/hooks/use-firebase-auth-safe"
 import { useToast } from "@/components/ui/use-toast"
 import { useRouter } from "next/navigation"
 
@@ -38,13 +39,33 @@ export default function PremiumContentSection({
   creatorUsername,
   isOwner = false,
 }: PremiumContentSectionProps) {
-  const { user } = useAuth()
+  // Use dual auth approach like the debug page
+  const contextAuth = useAuth()
+  const firebaseAuth = useFirebaseAuthSafe()
+
+  // Determine which auth has an active user
+  const activeUser = contextAuth.user || firebaseAuth.user
+  const authSource = contextAuth.user ? "context" : firebaseAuth.user ? "firebase" : "none"
+
   const { toast } = useToast()
   const [bundles, setBundles] = useState<Bundle[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [purchaseLoading, setPurchaseLoading] = useState<string | null>(null)
   const router = useRouter()
+
+  // Log auth status for debugging
+  useEffect(() => {
+    console.log("🔐 [Premium Content] Auth Status:", {
+      contextUser: !!contextAuth.user,
+      contextUid: contextAuth.user?.uid,
+      firebaseUser: !!firebaseAuth.user,
+      firebaseUid: firebaseAuth.user?.uid,
+      activeUser: !!activeUser,
+      activeUid: activeUser?.uid,
+      authSource,
+    })
+  }, [contextAuth.user, firebaseAuth.user, activeUser, authSource])
 
   // Fetch creator's bundles
   const fetchCreatorBundles = async () => {
@@ -102,10 +123,16 @@ export default function PremiumContentSection({
     }
   }
 
-  // Handle bundle purchase - FIXED VERSION
+  // Handle bundle purchase with dual auth approach
   const handlePurchase = async (bundle: Bundle) => {
-    if (!user) {
-      console.log("❌ [Premium Content] User not authenticated, redirecting to login")
+    if (!activeUser) {
+      console.log("❌ [Premium Content] No active user found in either auth context")
+      console.log("🔐 [Premium Content] Auth debug:", {
+        contextAuth: !!contextAuth.user,
+        firebaseAuth: !!firebaseAuth.user,
+        authSource,
+      })
+
       toast({
         title: "Authentication Required",
         description: "Please log in to purchase this bundle",
@@ -118,15 +145,16 @@ export default function PremiumContentSection({
     try {
       setPurchaseLoading(bundle.id)
       console.log(`🛒 [Premium Content] Starting purchase for bundle: ${bundle.id}`)
-      console.log(`👤 [Premium Content] User details:`, {
-        uid: user.uid,
-        email: user.email,
-        displayName: user.displayName,
+      console.log(`👤 [Premium Content] Using auth source: ${authSource}`)
+      console.log(`👤 [Premium Content] Active user details:`, {
+        uid: activeUser.uid,
+        email: activeUser.email,
+        displayName: activeUser.displayName,
       })
 
-      // Get fresh Firebase ID token
-      console.log(`🔑 [Premium Content] Getting fresh ID token...`)
-      const idToken = await user.getIdToken(true) // Force refresh
+      // Get fresh Firebase ID token from the active user
+      console.log(`🔑 [Premium Content] Getting fresh ID token from ${authSource} auth...`)
+      const idToken = await activeUser.getIdToken(true) // Force refresh
       console.log(`✅ [Premium Content] Got ID token (length: ${idToken.length})`)
 
       // Prepare checkout data
@@ -134,14 +162,15 @@ export default function PremiumContentSection({
         idToken,
         priceId: bundle.priceId || `price_${bundle.id}`,
         bundleId: bundle.id,
-        successUrl: `${window.location.origin}/purchase-success?session_id={CHECKOUT_SESSION_ID}&buyer_uid=${user.uid}`,
+        successUrl: `${window.location.origin}/purchase-success?session_id={CHECKOUT_SESSION_ID}&buyer_uid=${activeUser.uid}`,
         cancelUrl: window.location.href,
       }
 
       console.log(`📦 [Premium Content] Checkout data:`, {
         bundleId: checkoutData.bundleId,
         priceId: checkoutData.priceId,
-        buyerUid: user.uid,
+        buyerUid: activeUser.uid,
+        authSource,
         hasToken: !!checkoutData.idToken,
         tokenLength: checkoutData.idToken.length,
       })
@@ -165,15 +194,17 @@ export default function PremiumContentSection({
           error: errorData.error,
           code: errorData.code,
           details: errorData.details,
+          authSource,
+          activeUserUid: activeUser.uid,
         })
 
         // Provide more specific error messages
         let errorMessage = errorData.error || "Failed to create checkout session"
 
         if (errorData.code === "MISSING_TOKEN") {
-          errorMessage = "Authentication token missing. Please try logging out and back in."
+          errorMessage = `Authentication token missing (${authSource} auth). Please try logging out and back in.`
         } else if (errorData.code === "INVALID_TOKEN") {
-          errorMessage = "Authentication token invalid. Please try logging out and back in."
+          errorMessage = `Authentication token invalid (${authSource} auth). Please try logging out and back in.`
         } else if (errorData.code === "NO_STRIPE_ACCOUNT") {
           errorMessage = "This creator hasn't connected their payment account yet."
         } else if (errorData.code === "STRIPE_ACCOUNT_INCOMPLETE") {
@@ -183,7 +214,7 @@ export default function PremiumContentSection({
         } else if (errorData.code === "BUNDLE_INACTIVE") {
           errorMessage = "This content is currently unavailable."
         } else if (response.status === 401) {
-          errorMessage = "Authentication failed. Please try logging out and back in."
+          errorMessage = `Authentication failed with ${authSource} auth. Please try logging out and back in.`
         }
 
         throw new Error(errorMessage)
@@ -194,14 +225,16 @@ export default function PremiumContentSection({
         sessionId: data.sessionId,
         buyerUid: data.buyerUid,
         bundleId: data.bundleId,
+        authSource,
         hasUrl: !!data.url,
       })
 
       // Verify returned buyer UID matches authenticated user
-      if (data.buyerUid && data.buyerUid !== user.uid) {
+      if (data.buyerUid && data.buyerUid !== activeUser.uid) {
         console.error("❌ [Premium Content] Buyer UID mismatch:", {
           returnedBuyerUid: data.buyerUid,
-          authUserUid: user.uid,
+          authUserUid: activeUser.uid,
+          authSource,
         })
         throw new Error("Authentication mismatch - please try again")
       }
@@ -214,7 +247,12 @@ export default function PremiumContentSection({
         throw new Error("No checkout URL received from server")
       }
     } catch (error: any) {
-      console.error("❌ [Premium Content] Purchase error:", error)
+      console.error("❌ [Premium Content] Purchase error:", {
+        error: error.message,
+        authSource,
+        activeUserUid: activeUser?.uid,
+        bundleId: bundle.id,
+      })
 
       const errorMessage = error instanceof Error ? error.message : "Failed to start checkout process"
 
@@ -306,6 +344,13 @@ export default function PremiumContentSection({
 
   return (
     <div className="space-y-6">
+      {/* Auth Debug Info (only show in development) */}
+      {process.env.NODE_ENV === "development" && (
+        <div className="text-xs text-zinc-500 bg-zinc-900/50 p-2 rounded border border-zinc-800">
+          Auth: {authSource} | User: {activeUser?.uid || "none"} | Email: {activeUser?.email || "none"}
+        </div>
+      )}
+
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
         {bundles.map((bundle, index) => (
           <motion.div
@@ -388,12 +433,17 @@ export default function PremiumContentSection({
                         size="sm"
                         className="bg-zinc-800 hover:bg-zinc-700 text-white border border-zinc-700 text-xs px-3 py-1.5 h-auto shadow-sm"
                         onClick={() => handlePurchase(bundle)}
-                        disabled={purchaseLoading === bundle.id}
+                        disabled={purchaseLoading === bundle.id || !activeUser}
                       >
                         {purchaseLoading === bundle.id ? (
                           <>
                             <Loader2 className="h-3 w-3 mr-1.5 animate-spin" />
                             Processing...
+                          </>
+                        ) : !activeUser ? (
+                          <>
+                            <ShoppingCart className="h-3 w-3 mr-1.5" />
+                            Login to Buy
                           </>
                         ) : (
                           <>
