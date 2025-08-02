@@ -45,15 +45,81 @@ export function getFirebaseAdmin() {
   return { app: adminApp, db: adminDb, auth: adminAuth }
 }
 
+export function getAdminApp() {
+  if (adminApp) {
+    return adminApp
+  }
+
+  try {
+    // Check if we already have an initialized app
+    const existingApps = getApps()
+    if (existingApps.length > 0) {
+      adminApp = existingApps[0]
+      return adminApp
+    }
+
+    // Initialize new app
+    const privateKey = process.env.FIREBASE_PRIVATE_KEY
+    if (!privateKey) {
+      throw new Error("FIREBASE_PRIVATE_KEY environment variable is not set")
+    }
+
+    // Replace escaped newlines with actual newlines
+    const formattedPrivateKey = privateKey.replace(/\\n/g, "\n")
+
+    adminApp = initializeApp({
+      credential: cert({
+        projectId: process.env.FIREBASE_PROJECT_ID,
+        clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
+        privateKey: formattedPrivateKey,
+      }),
+    })
+
+    console.log("✅ [Firebase Admin] Initialized successfully")
+    return adminApp
+  } catch (error) {
+    console.error("❌ [Firebase Admin] Initialization failed:", error)
+    throw error
+  }
+}
+
 export function getAdminDb() {
-  const { db } = getFirebaseAdmin()
-  return db
+  if (adminDb) {
+    return adminDb
+  }
+
+  try {
+    const app = getAdminApp()
+    adminDb = getFirestore(app)
+    console.log("✅ [Firebase Admin] Firestore initialized")
+    return adminDb
+  } catch (error) {
+    console.error("❌ [Firebase Admin] Firestore initialization failed:", error)
+    throw error
+  }
 }
 
 export function getAdminAuth() {
-  const { auth } = getFirebaseAdmin()
-  return auth
+  if (adminAuth) {
+    return adminAuth
+  }
+
+  try {
+    const app = getAdminApp()
+    adminAuth = getAuth(app)
+    console.log("✅ [Firebase Admin] Auth initialized")
+    return adminAuth
+  } catch (error) {
+    console.error("❌ [Firebase Admin] Auth initialization failed:", error)
+    throw error
+  }
 }
+
+// Export the database instance for compatibility
+export const db = getAdminDb()
+
+// Export the auth instance for compatibility
+export const auth = getAdminAuth()
 
 // Initialize Firebase Admin SDK
 function initializeFirebaseAdmin() {
@@ -82,17 +148,11 @@ function initializeFirebaseAdmin() {
   }
 }
 
-// Export the Firestore database instance
-export const db = getFirebaseAdmin().db
-
-// Export the Firebase Auth instance
-export const auth = getFirebaseAdmin().auth
-
 // For compatibility with existing code
 export default {
-  app: getFirebaseAdmin().app,
-  db: getFirebaseAdmin().db,
-  auth: getFirebaseAdmin().auth,
+  app: getAdminApp(),
+  db: getAdminDb(),
+  auth: getAdminAuth(),
 }
 
 export { initializeFirebaseAdmin }
