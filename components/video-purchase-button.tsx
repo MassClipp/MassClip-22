@@ -3,54 +3,53 @@
 import { useState } from "react"
 import { useAuth } from "@/contexts/auth-context"
 import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
-import { Loader2, ShoppingCart, Lock } from "lucide-react"
-import { useRouter } from "next/navigation"
+import { Loader2, ShoppingCart } from "lucide-react"
+import { useToast } from "@/hooks/use-toast"
 
 interface VideoPurchaseButtonProps {
   productBoxId: string
-  priceId: string
   price: number
-  currency?: string
   title?: string
   disabled?: boolean
+  className?: string
 }
 
 export default function VideoPurchaseButton({
   productBoxId,
-  priceId,
   price,
-  currency = "USD",
-  title = "Purchase",
+  title = "Buy Now",
   disabled = false,
+  className = "",
 }: VideoPurchaseButtonProps) {
   const { user } = useAuth()
-  const router = useRouter()
-  const [loading, setLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const { toast } = useToast()
+  const [isLoading, setIsLoading] = useState(false)
 
   const handlePurchase = async () => {
     if (!user) {
-      console.log("❌ User not authenticated, redirecting to login")
-      router.push("/login")
+      toast({
+        title: "Authentication Required",
+        description: "Please log in to make a purchase.",
+        variant: "destructive",
+      })
       return
     }
 
-    setLoading(true)
-    setError(null)
+    setIsLoading(true)
 
     try {
-      console.log("🛒 Starting purchase process:", {
-        productBoxId,
-        priceId,
-        buyerUid: user.uid,
-        buyerEmail: user.email,
-      })
+      console.log("🛒 [Purchase Button] Starting purchase process...")
+      console.log("   Product Box ID:", productBoxId)
+      console.log("   Price:", price)
+      console.log("   Current domain:", window.location.origin)
 
-      // Get Firebase ID token
+      // Get fresh auth token
+      console.log("🔐 [Purchase Button] Getting auth token...")
       const idToken = await user.getIdToken(true)
-      console.log("🔐 Firebase token obtained")
+      console.log("✅ [Purchase Button] Auth token obtained")
 
+      // Create checkout session
+      console.log("💳 [Purchase Button] Creating checkout session...")
       const response = await fetch("/api/stripe/create-checkout-session", {
         method: "POST",
         headers: {
@@ -58,86 +57,61 @@ export default function VideoPurchaseButton({
         },
         body: JSON.stringify({
           idToken,
-          priceId,
-          bundleId: productBoxId,
-          successUrl: `${window.location.origin}/purchase-success`,
-          cancelUrl: window.location.href,
+          productBoxId,
+          priceInCents: Math.round(price * 100), // Convert to cents
         }),
       })
 
-      const data = await response.json()
+      console.log("📊 [Purchase Button] Checkout response status:", response.status)
 
       if (!response.ok) {
-        console.error("❌ Checkout session creation failed:", data)
-        throw new Error(data.error || `HTTP ${response.status}`)
+        const errorData = await response.json()
+        console.error("❌ [Purchase Button] Checkout failed:", errorData)
+        throw new Error(errorData.error || "Failed to create checkout session")
       }
 
-      console.log("✅ Checkout session created:", {
-        sessionId: data.sessionId,
-        buyerUid: data.buyerUid,
-        bundleId: data.bundleId,
-      })
+      const data = await response.json()
+      console.log("✅ [Purchase Button] Checkout session created:")
+      console.log("   Session ID:", data.sessionId)
+      console.log("   Domain used:", data.domain)
+      console.log("   Success URL:", data.successUrl)
+      console.log("   Checkout URL:", data.url)
 
-      // Verify returned buyer UID matches authenticated user
-      if (data.buyerUid !== user.uid) {
-        console.error("❌ Buyer UID mismatch:", {
-          returnedBuyerUid: data.buyerUid,
-          authUserUid: user.uid,
-        })
-        throw new Error("Authentication mismatch")
+      if (!data.url) {
+        throw new Error("No checkout URL received")
       }
 
       // Redirect to Stripe Checkout
-      if (data.url) {
-        console.log("🔄 Redirecting to Stripe Checkout")
-        window.location.href = data.url
-      } else {
-        throw new Error("No checkout URL received")
-      }
+      console.log("🔗 [Purchase Button] Redirecting to Stripe...")
+      window.location.href = data.url
     } catch (error: any) {
-      console.error("❌ Error creating checkout session:", error)
-      setError(error.message || "Failed to create checkout session")
-    } finally {
-      setLoading(false)
+      console.error("❌ [Purchase Button] Purchase failed:", error)
+      toast({
+        title: "Purchase Failed",
+        description: error.message || "Unable to start checkout process. Please try again.",
+        variant: "destructive",
+      })
+      setIsLoading(false)
     }
   }
 
-  // Show login prompt for unauthenticated users
-  if (!user) {
-    return (
-      <Button onClick={() => router.push("/login")} className="w-full">
-        <Lock className="h-4 w-4 mr-2" />
-        Login to Purchase
-      </Button>
-    )
-  }
-
   return (
-    <div className="space-y-2">
-      <Button onClick={handlePurchase} disabled={loading || disabled} className="w-full" size="lg">
-        {loading ? (
-          <>
-            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-            Creating Checkout...
-          </>
-        ) : (
-          <>
-            <ShoppingCart className="h-4 w-4 mr-2" />
-            {title} - ${(price / 100).toFixed(2)} {currency}
-          </>
-        )}
-      </Button>
-
-      {error && <div className="text-sm text-red-600 bg-red-50 p-2 rounded">{error}</div>}
-
-      <div className="flex items-center justify-center gap-2 text-xs text-gray-500">
-        <Badge variant="outline" className="text-xs">
-          Buyer: {user.email}
-        </Badge>
-        <Badge variant="outline" className="text-xs">
-          UID: {user.uid.substring(0, 8)}...
-        </Badge>
-      </div>
-    </div>
+    <Button
+      onClick={handlePurchase}
+      disabled={disabled || isLoading || !user}
+      className={`${className} ${isLoading ? "cursor-not-allowed" : ""}`}
+    >
+      {isLoading ? (
+        <>
+          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+          Processing...
+        </>
+      ) : (
+        <>
+          <ShoppingCart className="h-4 w-4 mr-2" />
+          {title} ${price.toFixed(2)}
+        </>
+      )}
+    </Button>
   )
 }

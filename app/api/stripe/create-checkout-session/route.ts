@@ -1,243 +1,211 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { initializeFirebaseAdmin, auth, db } from "@/lib/firebase-admin"
+import { initializeApp, getApps, cert } from "firebase-admin/app"
+import { getAuth } from "firebase-admin/auth"
+import { getFirestore } from "firebase-admin/firestore"
 import Stripe from "stripe"
 
+// Initialize Firebase Admin
+if (!getApps().length) {
+  const serviceAccount = {
+    type: "service_account",
+    project_id: process.env.FIREBASE_PROJECT_ID,
+    private_key_id: process.env.FIREBASE_PRIVATE_KEY_ID,
+    private_key: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n"),
+    client_email: process.env.FIREBASE_CLIENT_EMAIL,
+    client_id: process.env.FIREBASE_CLIENT_ID,
+    auth_uri: "https://accounts.google.com/o/oauth2/auth",
+    token_uri: "https://oauth2.googleapis.com/token",
+    auth_provider_x509_cert_url: "https://www.googleapis.com/oauth2/v1/certs",
+    client_x509_cert_url: `https://www.googleapis.com/robot/v1/metadata/x509/${process.env.FIREBASE_CLIENT_EMAIL}`,
+  }
+
+  initializeApp({
+    credential: cert(serviceAccount as any),
+  })
+}
+
+const db = getFirestore()
+const auth = getAuth()
+
+// Initialize Stripe
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: "2024-06-20",
 })
 
 export async function POST(request: NextRequest) {
-  const debugMode = request.headers.get("x-debug-mode") === "true"
-
   try {
-    // Initialize Firebase Admin
-    initializeFirebaseAdmin()
+    console.log("🚀 [Checkout API] Starting checkout session creation...")
 
     const body = await request.json()
-    const { priceId, bundleId, successUrl, cancelUrl } = body
+    console.log("📝 [Checkout API] Request body:", { ...body, idToken: body.idToken ? "[REDACTED]" : "MISSING" })
 
-    // Extract token from Authorization header
-    const authHeader = request.headers.get("authorization")
-    const idToken = authHeader?.startsWith("Bearer ") ? authHeader.substring(7) : null
+    const { idToken, priceId, bundleId, successUrl, cancelUrl } = body
 
-    // Check Stripe mode
-    const stripeSecretKey = process.env.STRIPE_SECRET_KEY!
-    const isTestMode = stripeSecretKey.startsWith("sk_test_")
-    const isLiveMode = stripeSecretKey.startsWith("sk_live_")
-
-    if (debugMode) {
-      console.log("🔍 [Checkout Debug] Request received:", {
-        hasAuthHeader: !!authHeader,
-        hasIdToken: !!idToken,
-        idTokenLength: idToken?.length,
-        priceId,
-        bundleId,
-        stripeMode: isTestMode ? "test" : isLiveMode ? "live" : "unknown",
-        stripeKeyPrefix: stripeSecretKey.substring(0, 8) + "...",
-      })
+    if (!priceId || !bundleId) {
+      console.error("❌ [Checkout API] Missing required parameters")
+      return NextResponse.json({ error: "Missing required parameters" }, { status: 400 })
     }
 
-    // Validate authentication
-    if (!idToken) {
-      console.error("❌ [Checkout] Missing ID token")
-      return NextResponse.json(
-        {
-          error: "Authentication required",
-          details: "No valid Bearer token found in Authorization header",
-        },
-        { status: 401 },
-      )
-    }
+    let userId: string | null = null
+    let userEmail: string | null = null
 
-    // Validate price ID
-    if (!priceId) {
-      console.error("❌ [Checkout] Missing price ID")
-      return NextResponse.json(
-        {
-          error: "Price ID is required",
-          details: "priceId field is missing or empty",
-        },
-        { status: 400 },
-      )
-    }
-
-    // Verify the price exists in Stripe
-    let priceData
-    try {
-      if (debugMode) {
-        console.log(`🔍 [Checkout Debug] Verifying price ${priceId} in ${isTestMode ? "test" : "live"} mode...`)
-      }
-
-      priceData = await stripe.prices.retrieve(priceId)
-
-      if (debugMode) {
-        console.log("✅ [Checkout Debug] Price verified:", {
-          id: priceData.id,
-          amount: priceData.unit_amount,
-          currency: priceData.currency,
-          active: priceData.active,
-          product: priceData.product,
-          stripeMode: isTestMode ? "test" : "live",
-        })
-      }
-    } catch (stripeError: any) {
-      console.error("❌ [Checkout] Price verification failed:", stripeError.message)
-
-      // Enhanced error for mode mismatch
-      let modeHint = ""
-      if (stripeError.code === "resource_missing") {
-        modeHint = isTestMode
-          ? " (You're in TEST mode - make sure this is a test price ID starting with price_test_ or created in test mode)"
-          : " (You're in LIVE mode - make sure this is a live price ID created in live mode)"
-      }
-
-      return NextResponse.json(
-        {
-          error: "Invalid price ID",
-          details: stripeError.message + modeHint,
-          priceId,
-          stripeMode: isTestMode ? "test" : isLiveMode ? "live" : "unknown",
-          stripeErrorCode: stripeError.code,
-          hint: isTestMode
-            ? "In test mode, use price IDs created in your Stripe test dashboard"
-            : "In live mode, use price IDs created in your Stripe live dashboard",
-        },
-        { status: 400 },
-      )
-    }
-
-    // Verify Firebase ID token
-    let decodedToken
-    try {
-      if (debugMode) {
-        console.log("🔍 [Checkout Debug] Verifying Firebase token...")
-      }
-
-      decodedToken = await auth.verifyIdToken(idToken)
-
-      if (debugMode) {
-        console.log("✅ [Checkout Debug] Token verified:", {
-          uid: decodedToken.uid,
-          email: decodedToken.email,
-        })
-      }
-    } catch (error: any) {
-      console.error("❌ [Checkout] Token verification failed:", error)
-      return NextResponse.json(
-        {
-          error: "Invalid authentication token",
-          details: error.message,
-        },
-        { status: 401 },
-      )
-    }
-
-    const userUid = decodedToken.uid
-    const userEmail = decodedToken.email
-
-    // Get or create Stripe customer
-    let customerId: string | null = null
-
-    try {
-      const userDoc = await db.collection("users").doc(userUid).get()
-      if (userDoc.exists) {
-        customerId = userDoc.data()?.stripeCustomerId || null
-      }
-    } catch (firestoreError: any) {
-      console.error("❌ [Checkout] Firestore error:", firestoreError)
-    }
-
-    // Create Stripe customer if needed
-    if (!customerId && userEmail) {
+    // If idToken is provided, verify it
+    if (idToken) {
       try {
-        const customer = await stripe.customers.create({
-          email: userEmail,
-          metadata: { firebaseUid: userUid },
-        })
-        customerId = customer.id
-
-        // Save customer ID
-        try {
-          await db.collection("users").doc(userUid).set({ stripeCustomerId: customerId }, { merge: true })
-        } catch (saveError: any) {
-          console.error("❌ [Checkout] Failed to save customer ID:", saveError)
-        }
-
-        if (debugMode) {
-          console.log("✅ [Checkout Debug] Created Stripe customer:", customerId)
-        }
-      } catch (stripeError: any) {
-        console.error("❌ [Checkout] Failed to create customer:", stripeError)
-        return NextResponse.json(
-          {
-            error: "Failed to create customer",
-            details: stripeError.message,
-          },
-          { status: 500 },
-        )
+        const decodedToken = await auth.verifyIdToken(idToken)
+        userId = decodedToken.uid
+        userEmail = decodedToken.email || null
+        console.log("✅ [Checkout API] Token verified for user:", userId)
+      } catch (error) {
+        console.error("❌ [Checkout API] Token verification failed:", error)
+        return NextResponse.json({ error: "Invalid authentication token" }, { status: 401 })
       }
+    } else {
+      console.log("⚠️ [Checkout API] No idToken provided, proceeding without user authentication")
     }
 
-    // Create checkout session
-    try {
-      if (debugMode) {
-        console.log("🔍 [Checkout Debug] Creating checkout session...")
-      }
+    // Get bundle details from bundles collection
+    console.log("📦 [Checkout API] Fetching bundle:", bundleId)
+    const bundleDoc = await db.collection("bundles").doc(bundleId).get()
+    if (!bundleDoc.exists) {
+      console.error("❌ [Checkout API] Bundle not found:", bundleId)
+      return NextResponse.json({ error: "Bundle not found" }, { status: 404 })
+    }
 
-      const session = await stripe.checkout.sessions.create({
-        customer: customerId || undefined,
-        customer_email: !customerId ? userEmail : undefined,
-        line_items: [{ price: priceId, quantity: 1 }],
-        mode: "payment",
-        success_url: successUrl || `${request.nextUrl.origin}/purchase-success?session_id={CHECKOUT_SESSION_ID}`,
-        cancel_url: cancelUrl || request.nextUrl.origin,
-        metadata: {
-          firebaseUid: userUid,
-          bundleId: bundleId || "",
-          createdAt: new Date().toISOString(),
-        },
-        payment_intent_data: {
-          metadata: {
-            firebaseUid: userUid,
-            bundleId: bundleId || "",
-          },
-        },
-      })
+    const bundle = bundleDoc.data()!
+    console.log("✅ [Checkout API] Bundle found:", {
+      title: bundle.title,
+      price: bundle.price,
+      priceId: bundle.priceId,
+      stripePriceId: bundle.stripePriceId,
+      productId: bundle.productId,
+      stripeProductId: bundle.stripeProductId,
+      creatorId: bundle.creatorId,
+      stripeAccountId: bundle.stripeAccountId,
+    })
 
-      if (debugMode) {
-        console.log("✅ [Checkout Debug] Session created:", {
-          sessionId: session.id,
-          hasUrl: !!session.url,
-          stripeMode: isTestMode ? "test" : "live",
-        })
-      }
+    // Get the correct price ID from bundle - check both possible field names
+    const bundleStripePriceId = bundle.priceId || bundle.stripePriceId
+    const stripeAccountId = bundle.stripeAccountId
 
-      return NextResponse.json({
-        success: true,
-        sessionId: session.id,
-        url: session.url,
-        buyerUid: userUid,
-        customerId,
-        priceId,
-        bundleId,
-        stripeMode: isTestMode ? "test" : isLiveMode ? "live" : "unknown",
-      })
-    } catch (stripeError: any) {
-      console.error("❌ [Checkout] Session creation failed:", stripeError)
+    if (!stripeAccountId) {
+      console.error("❌ [Checkout API] No Stripe account ID for bundle:", bundleId)
       return NextResponse.json(
         {
-          error: "Failed to create checkout session",
-          details: stripeError.message,
-          stripeErrorCode: stripeError.code,
+          error: "Bundle not available for purchase",
+          details: "Creator has not set up Stripe integration",
         },
-        { status: 500 },
+        { status: 400 },
       )
     }
+
+    if (!bundleStripePriceId) {
+      console.error("❌ [Checkout API] No Stripe price ID for bundle:", bundleId)
+      return NextResponse.json(
+        {
+          error: "Bundle pricing not configured",
+          details: "Bundle does not have a valid price ID",
+        },
+        { status: 400 },
+      )
+    }
+
+    // Use the bundle's stored price ID instead of validating against the provided one
+    // This prevents mismatches due to field name inconsistencies
+    const finalPriceId = bundleStripePriceId
+
+    console.log("💳 [Checkout API] Creating checkout session with:", {
+      finalPriceId,
+      bundleId,
+      stripeAccountId,
+      providedPriceId: priceId,
+      bundleStoredPriceId: bundleStripePriceId,
+    })
+
+    // Get the current domain from headers
+    const host = request.headers.get("host")
+    const protocol = request.headers.get("x-forwarded-proto") || "https"
+    const currentDomain = `${protocol}://${host}`
+
+    const sessionMetadata: any = {
+      bundleId: bundleId,
+      creatorId: bundle.creatorId || "",
+      originalDomain: currentDomain,
+      timestamp: new Date().toISOString(),
+    }
+
+    if (userId) {
+      sessionMetadata.userId = userId
+    }
+
+    const sessionParams: Stripe.Checkout.SessionCreateParams = {
+      payment_method_types: ["card"],
+      line_items: [
+        {
+          price: finalPriceId,
+          quantity: 1,
+        },
+      ],
+      mode: "payment",
+      success_url: successUrl || `${currentDomain}/purchase-success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: cancelUrl || `${currentDomain}/creator/${bundle.creatorId}`,
+      metadata: sessionMetadata,
+      payment_intent_data: {
+        metadata: sessionMetadata,
+      },
+      allow_promotion_codes: true,
+    }
+
+    // Add customer email if available
+    if (userEmail) {
+      sessionParams.customer_email = userEmail
+    }
+
+    console.log("🔄 [Checkout API] Creating Stripe session with params:", {
+      priceId: finalPriceId,
+      stripeAccount: stripeAccountId,
+      successUrl: sessionParams.success_url,
+      cancelUrl: sessionParams.cancel_url,
+    })
+
+    const session = await stripe.checkout.sessions.create(sessionParams, {
+      stripeAccount: stripeAccountId,
+    })
+
+    console.log("✅ [Checkout API] Session created successfully:")
+    console.log("   Session ID:", session.id)
+    console.log("   Checkout URL:", session.url)
+    console.log("   Success URL:", session.success_url)
+    console.log("   Cancel URL:", session.cancel_url)
+
+    return NextResponse.json({
+      success: true,
+      url: session.url,
+      sessionId: session.id,
+    })
   } catch (error: any) {
-    console.error("❌ [Checkout] Unexpected error:", error)
+    console.error("❌ [Checkout API] Session creation failed:", error)
+    console.error("❌ [Checkout API] Error details:", {
+      message: error.message,
+      type: error.type,
+      code: error.code,
+      stack: error.stack,
+    })
+
+    if (error instanceof Stripe.errors.StripeError) {
+      return NextResponse.json(
+        {
+          error: "Stripe error occurred",
+          details: error.message,
+          code: error.code,
+        },
+        { status: 400 },
+      )
+    }
+
     return NextResponse.json(
       {
-        error: "Internal server error",
+        error: "Failed to create checkout session",
         details: error.message,
       },
       { status: 500 },
