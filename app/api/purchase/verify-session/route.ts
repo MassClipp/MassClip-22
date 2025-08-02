@@ -1,230 +1,373 @@
 import { type NextRequest, NextResponse } from "next/server"
 import Stripe from "stripe"
+import { retrieveSessionSmart } from "@/lib/stripe"
 import { getAdminDb } from "@/lib/firebase-server"
+import { UnifiedPurchaseService } from "@/lib/unified-purchase-service"
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: "2024-06-20",
 })
 
-interface PurchaseData {
-  sessionId: string
-  customerId?: string
-  customerEmail?: string
-  amountTotal: number
-  currency: string
-  paymentStatus: string
-  createdAt: string
-  itemType: "bundle" | "product_box" | "subscription"
-  itemId: string
-  itemTitle?: string
-  itemDescription?: string
-  itemThumbnail?: string
-  creatorId?: string
-  creatorName?: string
-  creatorUsername?: string
-  transactionId?: string
-  accessStatus: "active" | "pending" | "expired"
-}
-
-async function getEnhancedPurchaseData(
-  session: Stripe.Checkout.Session,
-  itemType: string,
-  itemId: string,
-): Promise<Partial<PurchaseData>> {
-  const db = getAdminDb()
-  const enhancedData: Partial<PurchaseData> = {}
-
+export async function POST(request: NextRequest) {
   try {
-    // Get item details based on type
-    if (itemType === "bundle") {
-      const bundleDoc = await db.collection("bundles").doc(itemId).get()
-      if (bundleDoc.exists) {
-        const bundleData = bundleDoc.data()
-        enhancedData.itemTitle = bundleData?.title || "Bundle"
-        enhancedData.itemDescription = bundleData?.description
-        enhancedData.itemThumbnail = bundleData?.thumbnail
-        enhancedData.creatorId = bundleData?.creatorId
-      }
-    } else if (itemType === "product_box") {
-      const productBoxDoc = await db.collection("product_boxes").doc(itemId).get()
-      if (productBoxDoc.exists) {
-        const productBoxData = productBoxDoc.data()
-        enhancedData.itemTitle = productBoxData?.title || "Product Box"
-        enhancedData.itemDescription = productBoxData?.description
-        enhancedData.itemThumbnail = productBoxData?.thumbnail
-        enhancedData.creatorId = productBoxData?.creatorId
-      }
-    }
+    console.log("🔍 [Verify Session] Starting session verification...")
 
-    // Get creator details if we have a creatorId
-    if (enhancedData.creatorId) {
-      const creatorDoc = await db.collection("users").doc(enhancedData.creatorId).get()
-      if (creatorDoc.exists) {
-        const creatorData = creatorDoc.data()
-        enhancedData.creatorName = creatorData?.displayName || creatorData?.name
-        enhancedData.creatorUsername = creatorData?.username
-      }
-    }
-
-    // Extract additional data from session metadata
-    const metadata = session.metadata || {}
-    if (metadata.creatorName) enhancedData.creatorName = metadata.creatorName
-    if (metadata.creatorUsername) enhancedData.creatorUsername = metadata.creatorUsername
-    if (metadata.itemTitle) enhancedData.itemTitle = metadata.itemTitle
-  } catch (error) {
-    console.error("Error fetching enhanced purchase data:", error)
-  }
-
-  return enhancedData
-}
-
-export async function GET(request: NextRequest) {
-  try {
-    const { searchParams } = new URL(request.url)
-    const sessionId = searchParams.get("session_id")
+    const body = await request.json()
+    const { sessionId } = body
 
     if (!sessionId) {
+      console.error("❌ [Verify Session] Missing sessionId")
       return NextResponse.json({ error: "Session ID is required" }, { status: 400 })
     }
 
-    console.log(`[Purchase Success] Starting verification for session: ${sessionId}`)
+    console.log("🔍 [Verify Session] Processing session:", sessionId)
 
-    // Retrieve the session from Stripe
-    const session = await stripe.checkout.sessions.retrieve(sessionId, {
-      expand: ["line_items", "customer"],
-    })
+    // Initialize Firebase Admin
+    let db
+    try {
+      db = getAdminDb()
+      console.log("✅ [Verify Session] Firebase Admin initialized successfully")
+    } catch (firebaseError: any) {
+      console.error("❌ [Verify Session] Firebase initialization failed:", firebaseError)
+      return NextResponse.json(
+        {
+          error: "Database connection failed",
+          details: firebaseError.message,
+        },
+        { status: 500 },
+      )
+    }
 
-    console.log(`[Purchase Success] Verification response status: ${session.payment_status}`)
+    // Check if we already have this purchase processed
+    console.log("🔍 [Verify Session] Checking for existing purchase record...")
+    try {
+      const existingPurchaseQuery = await db.collection("purchases").where("sessionId", "==", sessionId).limit(1).get()
 
+      if (!existingPurchaseQuery.empty) {
+        const existingPurchase = existingPurchaseQuery.docs[0].data()
+        console.log("✅ [Verify Session] Purchase already processed:", existingPurchase.id)
+
+        return NextResponse.json({
+          success: true,
+          alreadyProcessed: true,
+          purchase: existingPurchase,
+          message: "Purchase already verified and processed",
+        })
+      }
+    } catch (queryError: any) {
+      console.error("❌ [Verify Session] Database query failed:", queryError)
+      return NextResponse.json(
+        {
+          error: "Database query failed",
+          details: queryError.message,
+        },
+        { status: 500 },
+      )
+    }
+
+    // Strategy: Find the correct Stripe account by checking connected accounts
+    console.log("🔍 [Verify Session] Finding correct Stripe account...")
+
+    const connectedAccounts = []
+    try {
+      const usersWithStripeQuery = await db.collection("users").where("stripeAccountId", "!=", null).get()
+
+      usersWithStripeQuery.forEach((doc) => {
+        const userData = doc.data()
+        if (userData.stripeAccountId) {
+          connectedAccounts.push({
+            accountId: userData.stripeAccountId,
+            userId: doc.id,
+            username: userData.username || userData.displayName || "Unknown",
+          })
+        }
+      })
+    } catch (usersQueryError: any) {
+      console.error("❌ [Verify Session] Failed to query users:", usersQueryError)
+      // Continue without connected accounts - try platform account only
+    }
+
+    console.log(`🔍 [Verify Session] Found ${connectedAccounts.length} connected accounts to search`)
+
+    let session: any = null
+    let connectedAccountId: string | undefined = undefined
+    let creatorId: string | undefined = undefined
+
+    // Try each connected account to find the session
+    for (const account of connectedAccounts) {
+      try {
+        console.log(`🔍 [Verify Session] Trying connected account: ${account.accountId} (${account.username})`)
+
+        session = await retrieveSessionSmart(sessionId, account.accountId)
+
+        if (session) {
+          console.log(`✅ [Verify Session] Found session in connected account: ${account.accountId}`)
+          connectedAccountId = account.accountId
+          creatorId = account.userId
+          break
+        }
+      } catch (error: any) {
+        console.log(`⚠️ [Verify Session] Account ${account.accountId} failed: ${error.message}`)
+        continue
+      }
+    }
+
+    // If not found in connected accounts, try platform account
+    if (!session) {
+      try {
+        console.log("🔍 [Verify Session] Trying platform account...")
+        session = await retrieveSessionSmart(sessionId)
+        console.log("✅ [Verify Session] Found session in platform account")
+      } catch (error: any) {
+        console.error("❌ [Verify Session] Session not found in any account:", error)
+        return NextResponse.json(
+          {
+            error: "Session not found",
+            details: "This checkout session could not be found in any Stripe account.",
+            sessionId,
+          },
+          { status: 404 },
+        )
+      }
+    }
+
+    // Validate session payment status
     if (session.payment_status !== "paid") {
+      console.error("❌ [Verify Session] Payment not completed:", session.payment_status)
       return NextResponse.json(
         {
           error: "Payment not completed",
-          success: false,
-          alreadyProcessed: false,
-          purchase: null,
+          paymentStatus: session.payment_status,
+          sessionStatus: session.status,
         },
         { status: 400 },
       )
     }
 
-    // Extract purchase information from session
-    const metadata = session.metadata || {}
-    const itemType = metadata.type || "bundle"
-    const itemId = metadata.itemId || metadata.bundleId || metadata.productBoxId
-    const buyerId = metadata.buyerId
-    const creatorId = metadata.creatorId
+    console.log("✅ [Verify Session] Session retrieved successfully:")
+    console.log("   ID:", session.id)
+    console.log("   Payment Status:", session.payment_status)
+    console.log("   Metadata:", session.metadata)
+
+    // CRITICAL: Extract buyer info from Stripe metadata (not from frontend)
+    const {
+      buyerUid,
+      buyerEmail,
+      buyerName,
+      bundleId,
+      productBoxId,
+      creatorId: metadataCreatorId,
+      contentType,
+      isAuthenticated,
+    } = session.metadata || {}
+
+    console.log("📋 [Verify Session] Extracted buyer info from metadata:", {
+      buyerUid,
+      buyerEmail,
+      buyerName,
+      isAuthenticated,
+      contentType,
+    })
+
+    if (!buyerUid) {
+      console.error("❌ [Verify Session] No buyer UID found in session metadata")
+      return NextResponse.json(
+        {
+          error: "Invalid session metadata",
+          details: "No buyer identification found in session metadata",
+          metadata: session.metadata,
+        },
+        { status: 400 },
+      )
+    }
+
+    // Determine item details
+    const itemId = bundleId || productBoxId
+    const finalCreatorId = metadataCreatorId || creatorId
 
     if (!itemId) {
-      console.error("[Purchase Success] No item ID found in session metadata")
-      return NextResponse.json({ error: "Invalid session metadata" }, { status: 400 })
+      console.error("❌ [Verify Session] No item ID found in session metadata")
+      return NextResponse.json(
+        {
+          error: "Invalid session metadata",
+          details: "No bundle or product box ID found in session metadata",
+          metadata: session.metadata,
+        },
+        { status: 400 },
+      )
     }
 
-    const db = getAdminDb()
-
-    // Check if purchase already exists
-    const existingPurchaseQuery = await db.collection("purchases").where("sessionId", "==", sessionId).limit(1).get()
-
-    let purchaseData: PurchaseData
-
-    if (!existingPurchaseQuery.empty) {
-      // Purchase already exists, get enhanced data
-      const existingPurchase = existingPurchaseQuery.docs[0].data()
-      const enhancedData = await getEnhancedPurchaseData(session, itemType, itemId)
-
-      purchaseData = {
-        sessionId,
-        customerId: session.customer as string,
-        customerEmail: session.customer_details?.email || undefined,
-        amountTotal: session.amount_total || 0,
-        currency: session.currency || "usd",
-        paymentStatus: session.payment_status,
-        createdAt: new Date(session.created * 1000).toISOString(),
-        itemType: itemType as "bundle" | "product_box" | "subscription",
-        itemId,
-        transactionId: session.payment_intent as string,
-        accessStatus: "active",
-        ...enhancedData,
-        ...existingPurchase,
-      }
-
-      console.log(`[Purchase Success] Purchase already verified and processed`)
-      return NextResponse.json({
-        success: true,
-        alreadyProcessed: true,
-        purchase: purchaseData,
-        message: "Purchase already verified and processed",
-      })
-    }
-
-    // Get enhanced purchase data
-    const enhancedData = await getEnhancedPurchaseData(session, itemType, itemId)
-
-    // Create new purchase record
-    purchaseData = {
-      sessionId,
-      customerId: session.customer as string,
-      customerEmail: session.customer_details?.email || undefined,
-      amountTotal: session.amount_total || 0,
-      currency: session.currency || "usd",
-      paymentStatus: session.payment_status,
-      createdAt: new Date(session.created * 1000).toISOString(),
-      itemType: itemType as "bundle" | "product_box" | "subscription",
+    console.log("📦 [Verify Session] Processing purchase for:", {
+      buyerUid,
       itemId,
-      transactionId: session.payment_intent as string,
-      accessStatus: "active",
-      ...enhancedData,
+      contentType,
+      creatorId: finalCreatorId,
+    })
+
+    // Create unified purchase record
+    try {
+      const purchaseId = await UnifiedPurchaseService.createUnifiedPurchase(buyerUid, {
+        [contentType === "bundle" ? "bundleId" : "productBoxId"]: itemId,
+        sessionId: session.id,
+        amount: session.amount_total ? session.amount_total / 100 : 0,
+        currency: session.currency || "usd",
+        creatorId: finalCreatorId || "",
+        userEmail: buyerEmail || session.customer_email || "",
+        userName: buyerName || "User",
+      })
+      console.log("✅ [Verify Session] Unified purchase created:", purchaseId)
+    } catch (unifiedError: any) {
+      console.error("❌ [Verify Session] Failed to create unified purchase:", unifiedError)
+      // Continue with regular purchase creation
     }
 
-    // Save purchase to database
-    const purchaseDoc = {
-      ...purchaseData,
-      buyerId: buyerId || null,
-      creatorId: creatorId || enhancedData.creatorId || null,
-      purchaseDate: new Date(),
+    // Create main purchase record
+    const purchaseData = {
+      // Buyer identification from metadata
+      userId: buyerUid,
+      buyerUid,
+      userEmail: buyerEmail || session.customer_email || "",
+      userName: buyerName || "User",
+      isAuthenticated: isAuthenticated === "true",
+
+      // Item identification
+      [contentType === "bundle" ? "bundleId" : "productBoxId"]: itemId,
+      itemId,
+      sessionId: session.id,
+      paymentIntentId: session.payment_intent,
+
+      // Purchase details
+      amount: session.amount_total ? session.amount_total / 100 : 0,
+      currency: session.currency || "usd",
+      timestamp: new Date(),
+      createdAt: new Date(),
+      purchasedAt: new Date(),
       status: "completed",
-      verified: true,
+      type: contentType || "product_box",
+
+      // Creator and account info
+      creatorId: finalCreatorId,
+      connectedAccountId: connectedAccountId || null,
+
+      // Verification details
+      verificationMethod: "metadata_extraction",
+      verifiedAt: new Date(),
     }
 
-    await db.collection("purchases").add(purchaseDoc)
+    // Save purchase record
+    try {
+      await db.collection("purchases").doc(session.id).set(purchaseData)
+      console.log("✅ [Verify Session] Purchase record saved")
+    } catch (saveError: any) {
+      console.error("❌ [Verify Session] Failed to save purchase record:", saveError)
+      return NextResponse.json(
+        {
+          error: "Failed to save purchase record",
+          details: saveError.message,
+        },
+        { status: 500 },
+      )
+    }
 
-    // Grant access based on item type
-    if (buyerId) {
-      if (itemType === "bundle") {
-        await db.collection("user_bundle_access").add({
-          userId: buyerId,
-          bundleId: itemId,
-          grantedAt: new Date(),
-          sessionId,
-          status: "active",
-        })
-      } else if (itemType === "product_box") {
-        await db.collection("user_product_box_access").add({
-          userId: buyerId,
-          productBoxId: itemId,
-          grantedAt: new Date(),
-          sessionId,
-          status: "active",
-        })
+    // Grant user access if authenticated
+    if (buyerUid !== "anonymous" && !buyerUid.startsWith("anonymous_")) {
+      console.log("🔓 [Verify Session] Granting user access...")
+
+      try {
+        // Add to user's purchases subcollection
+        await db
+          .collection("users")
+          .doc(buyerUid)
+          .collection("purchases")
+          .doc(session.id)
+          .set({
+            [contentType === "bundle" ? "bundleId" : "productBoxId"]: itemId,
+            itemId,
+            itemType: contentType || "product_box",
+            purchaseId: session.id,
+            sessionId: session.id,
+            amount: session.amount_total || 0,
+            purchasedAt: new Date(),
+            status: "active",
+          })
+
+        // Update user's main document with access
+        const accessField = contentType === "bundle" ? "bundleAccess" : "productBoxAccess"
+        await db
+          .collection("users")
+          .doc(buyerUid)
+          .update({
+            [`${accessField}.${itemId}`]: {
+              purchaseId: session.id,
+              sessionId: session.id,
+              grantedAt: new Date(),
+              accessType: "purchased",
+            },
+            updatedAt: new Date(),
+          })
+
+        console.log("✅ [Verify Session] User access granted successfully")
+      } catch (accessError: any) {
+        console.error("❌ [Verify Session] Failed to grant user access:", accessError)
+        // Don't fail the entire request for access grant failures
       }
     }
 
-    console.log(`[Purchase Success] Verification successful`)
+    // Get item details for response
+    let itemData = {}
+    try {
+      const itemCollection = contentType === "bundle" ? "bundles" : "productBoxes"
+      const itemDoc = await db.collection(itemCollection).doc(itemId).get()
+      itemData = itemDoc.exists ? itemDoc.data() : {}
+    } catch (itemError: any) {
+      console.error("❌ [Verify Session] Failed to get item details:", itemError)
+    }
+
+    // Get creator details
+    let creatorData = {}
+    if (finalCreatorId) {
+      try {
+        const creatorDoc = await db.collection("users").doc(finalCreatorId).get()
+        creatorData = creatorDoc.exists ? creatorDoc.data() : {}
+      } catch (creatorError: any) {
+        console.error("❌ [Verify Session] Failed to get creator details:", creatorError)
+      }
+    }
+
+    console.log("✅ [Verify Session] Verification completed successfully")
 
     return NextResponse.json({
       success: true,
       alreadyProcessed: false,
+      session: {
+        id: session.id,
+        amount: session.amount_total || 0,
+        currency: session.currency || "usd",
+        payment_status: session.payment_status,
+        customerEmail: session.customer_details?.email,
+        created: new Date(session.created * 1000).toISOString(),
+      },
       purchase: purchaseData,
-      message: "Purchase verified and processed",
+      item: {
+        id: itemId,
+        title: itemData?.title || "Purchased Item",
+        description: itemData?.description || "",
+        thumbnailUrl: itemData?.thumbnailUrl || "",
+        creator: {
+          id: finalCreatorId,
+          name: creatorData?.displayName || creatorData?.name || "Creator",
+          username: creatorData?.username || "",
+        },
+      },
     })
-  } catch (error) {
-    console.error("[Purchase Success] Verification failed:", error)
+  } catch (error: any) {
+    console.error("❌ [Verify Session] Verification failed:", error)
     return NextResponse.json(
       {
-        error: "Verification failed",
-        success: false,
-        alreadyProcessed: false,
-        purchase: null,
+        error: "Failed to verify session",
+        details: error.message,
+        type: error.name || "UnknownError",
+        stack: process.env.NODE_ENV === "development" ? error.stack : undefined,
       },
       { status: 500 },
     )
