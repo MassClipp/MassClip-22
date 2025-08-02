@@ -12,15 +12,15 @@ import Link from "next/link"
 
 interface PurchaseData {
   success: boolean
-  session: {
+  session?: {
     id: string
     amount: number
     currency: string
     payment_status: string
-    customerEmail: string
+    customerEmail?: string
     created: string
   }
-  purchase: {
+  purchase?: {
     userId: string
     userEmail: string
     userName: string
@@ -30,15 +30,15 @@ interface PurchaseData {
     type: string
     status: string
   }
-  item: {
+  item?: {
     id: string
-    title: string
-    description: string
-    thumbnailUrl: string
-    creator: {
+    title?: string
+    description?: string
+    thumbnailUrl?: string
+    creator?: {
       id: string
-      name: string
-      username: string
+      name?: string
+      username?: string
     }
   }
 }
@@ -52,8 +52,7 @@ export default function PurchaseSuccessPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [retryCount, setRetryCount] = useState(0)
-
-  const sessionId = searchParams.get("session_id")
+  const sessionId = searchParams?.get("session_id")
 
   const verifyPurchase = async () => {
     if (!sessionId) {
@@ -84,25 +83,25 @@ export default function PurchaseSuccessPage() {
       console.log("🔍 [Purchase Success] Verification response:", data)
 
       if (!response.ok) {
-        throw new Error(data.details || data.error || "Verification failed")
+        throw new Error(data?.details || data?.error || "Verification failed")
       }
 
-      if (data.success) {
+      if (data?.success) {
         setPurchaseData(data)
         console.log("✅ [Purchase Success] Verification successful")
       } else {
-        throw new Error(data.error || "Verification failed")
+        throw new Error(data?.error || "Verification failed")
       }
     } catch (err: any) {
       console.error("❌ [Purchase Success] Verification failed:", err)
-      setError(err.message)
+      setError(err?.message || "Unknown error occurred")
     } finally {
       setLoading(false)
     }
   }
 
   useEffect(() => {
-    if (!authLoading) {
+    if (!authLoading && sessionId) {
       verifyPurchase()
     }
   }, [sessionId, authLoading])
@@ -112,21 +111,30 @@ export default function PurchaseSuccessPage() {
     verifyPurchase()
   }
 
-  const formatAmount = (amount: number, currency: string) => {
-    return new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency: currency.toUpperCase(),
-    }).format(amount / 100)
+  const formatAmount = (amount = 0, currency = "usd") => {
+    try {
+      return new Intl.NumberFormat("en-US", {
+        style: "currency",
+        currency: currency.toUpperCase(),
+      }).format(amount / 100)
+    } catch {
+      return `$${(amount / 100).toFixed(2)}`
+    }
   }
 
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString("en-US", {
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
-    })
+  const formatDate = (dateString?: string) => {
+    if (!dateString) return "Unknown date"
+    try {
+      return new Date(dateString).toLocaleDateString("en-US", {
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      })
+    } catch {
+      return "Unknown date"
+    }
   }
 
   if (authLoading || loading) {
@@ -204,7 +212,22 @@ export default function PurchaseSuccessPage() {
     )
   }
 
-  const { session, purchase, item } = purchaseData
+  // Safely extract data with fallbacks
+  const session = purchaseData.session || {}
+  const purchase = purchaseData.purchase || {}
+  const item = purchaseData.item || {}
+  const creator = item.creator || {}
+
+  const itemTitle = item.title || "Purchased Item"
+  const itemDescription = item.description || ""
+  const itemThumbnailUrl = item.thumbnailUrl || "/placeholder.svg"
+  const creatorName = creator.name || "Creator"
+  const creatorUsername = creator.username || ""
+  const sessionAmount = session.amount || 0
+  const sessionCurrency = session.currency || "usd"
+  const sessionPaymentStatus = session.payment_status || "unknown"
+  const sessionCreated = session.created || ""
+  const itemId = item.id || ""
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-green-50 via-emerald-50 to-teal-50">
@@ -234,27 +257,25 @@ export default function PurchaseSuccessPage() {
             <CardContent className="space-y-6">
               {/* Item Information */}
               <div className="flex gap-4">
-                {item?.thumbnailUrl && (
-                  <div className="flex-shrink-0">
-                    <img
-                      src={item.thumbnailUrl || "/placeholder.svg"}
-                      alt={item?.title || "Purchase item"}
-                      className="w-20 h-20 rounded-lg object-cover"
-                      onError={(e) => {
-                        e.currentTarget.src = "/placeholder.svg"
-                      }}
-                    />
-                  </div>
-                )}
+                <div className="flex-shrink-0">
+                  <img
+                    src={itemThumbnailUrl || "/placeholder.svg"}
+                    alt={itemTitle}
+                    className="w-20 h-20 rounded-lg object-cover"
+                    onError={(e) => {
+                      e.currentTarget.src = "/placeholder.svg"
+                    }}
+                  />
+                </div>
                 <div className="flex-1">
-                  <h3 className="font-semibold text-lg text-gray-900">{item?.title || "Purchased Item"}</h3>
-                  {item?.description && <p className="text-gray-600 text-sm mt-1 line-clamp-2">{item.description}</p>}
-                  {item?.creator?.name && (
+                  <h3 className="font-semibold text-lg text-gray-900">{itemTitle}</h3>
+                  {itemDescription && <p className="text-gray-600 text-sm mt-1 line-clamp-2">{itemDescription}</p>}
+                  {creatorName && (
                     <div className="flex items-center gap-2 mt-2">
                       <User className="h-4 w-4 text-gray-400" />
                       <span className="text-sm text-gray-600">
-                        by {item.creator.name}
-                        {item.creator.username && <span className="text-gray-400"> (@{item.creator.username})</span>}
+                        by {creatorName}
+                        {creatorUsername && <span className="text-gray-400"> (@{creatorUsername})</span>}
                       </span>
                     </div>
                   )}
@@ -271,12 +292,12 @@ export default function PurchaseSuccessPage() {
                       <CreditCard className="h-4 w-4" />
                       Amount Paid
                     </span>
-                    <span className="font-semibold text-lg">{formatAmount(session.amount, session.currency)}</span>
+                    <span className="font-semibold text-lg">{formatAmount(sessionAmount, sessionCurrency)}</span>
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-sm text-gray-600">Payment Status</span>
                     <Badge variant="secondary" className="bg-green-100 text-green-800">
-                      {session.payment_status}
+                      {sessionPaymentStatus}
                     </Badge>
                   </div>
                   <div className="flex items-center justify-between">
@@ -291,11 +312,13 @@ export default function PurchaseSuccessPage() {
                       <Calendar className="h-4 w-4" />
                       Purchase Date
                     </span>
-                    <span className="text-sm font-medium">{formatDate(session.created)}</span>
+                    <span className="text-sm font-medium">{formatDate(sessionCreated)}</span>
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-sm text-gray-600">Transaction ID</span>
-                    <span className="text-xs font-mono bg-gray-100 px-2 py-1 rounded">{session.id.slice(-8)}</span>
+                    <span className="text-xs font-mono bg-gray-100 px-2 py-1 rounded">
+                      {sessionId ? sessionId.slice(-8) : "N/A"}
+                    </span>
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-sm text-gray-600">Access Status</span>
@@ -308,12 +331,14 @@ export default function PurchaseSuccessPage() {
 
           {/* Action Buttons */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <Button asChild size="lg" className="bg-blue-600 hover:bg-blue-700">
-              <Link href={`/${purchase?.type === "bundle" ? "bundles" : "product-box"}/${item?.id}/content`}>
-                <Eye className="h-4 w-4 mr-2" />
-                View Content
-              </Link>
-            </Button>
+            {itemId && (
+              <Button asChild size="lg" className="bg-blue-600 hover:bg-blue-700">
+                <Link href={`/${purchase.type === "bundle" ? "bundles" : "product-box"}/${itemId}/content`}>
+                  <Eye className="h-4 w-4 mr-2" />
+                  View Content
+                </Link>
+              </Button>
+            )}
             <Button asChild variant="outline" size="lg">
               <Link href="/dashboard/purchases">
                 <Package className="h-4 w-4 mr-2" />
@@ -336,7 +361,7 @@ export default function PurchaseSuccessPage() {
                     <li>• You can access it anytime from your dashboard</li>
                     <li>
                       • A confirmation email has been sent to{" "}
-                      {session?.customerEmail || purchase?.userEmail || "your email"}
+                      {session.customerEmail || purchase.userEmail || "your email"}
                     </li>
                     <li>• Need help? Contact our support team</li>
                   </ul>
