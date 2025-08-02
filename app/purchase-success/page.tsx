@@ -234,19 +234,22 @@ export default function PurchaseSuccessPage() {
             <CardContent className="space-y-6">
               {/* Item Information */}
               <div className="flex gap-4">
-                {item.thumbnailUrl && (
+                {item?.thumbnailUrl && (
                   <div className="flex-shrink-0">
                     <img
                       src={item.thumbnailUrl || "/placeholder.svg"}
-                      alt={item.title}
+                      alt={item?.title || "Purchase item"}
                       className="w-20 h-20 rounded-lg object-cover"
+                      onError={(e) => {
+                        e.currentTarget.src = "/placeholder.svg"
+                      }}
                     />
                   </div>
                 )}
                 <div className="flex-1">
-                  <h3 className="font-semibold text-lg text-gray-900">{item.title}</h3>
-                  {item.description && <p className="text-gray-600 text-sm mt-1 line-clamp-2">{item.description}</p>}
-                  {item.creator.name && (
+                  <h3 className="font-semibold text-lg text-gray-900">{item?.title || "Purchased Item"}</h3>
+                  {item?.description && <p className="text-gray-600 text-sm mt-1 line-clamp-2">{item.description}</p>}
+                  {item?.creator?.name && (
                     <div className="flex items-center gap-2 mt-2">
                       <User className="h-4 w-4 text-gray-400" />
                       <span className="text-sm text-gray-600">
@@ -306,7 +309,7 @@ export default function PurchaseSuccessPage() {
           {/* Action Buttons */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <Button asChild size="lg" className="bg-blue-600 hover:bg-blue-700">
-              <Link href={`/${purchase.type === "bundle" ? "bundles" : "product-box"}/${item.id}/content`}>
+              <Link href={`/${purchase?.type === "bundle" ? "bundles" : "product-box"}/${item?.id}/content`}>
                 <Eye className="h-4 w-4 mr-2" />
                 View Content
               </Link>
@@ -331,7 +334,10 @@ export default function PurchaseSuccessPage() {
                   <ul className="text-sm text-blue-800 space-y-1">
                     <li>• Your content is now available in your purchases</li>
                     <li>• You can access it anytime from your dashboard</li>
-                    <li>• A confirmation email has been sent to {session.customerEmail || purchase.userEmail}</li>
+                    <li>
+                      • A confirmation email has been sent to{" "}
+                      {session?.customerEmail || purchase?.userEmail || "your email"}
+                    </li>
                     <li>• Need help? Contact our support team</li>
                   </ul>
                 </div>
