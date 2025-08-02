@@ -1,98 +1,85 @@
-import { initializeApp, getApps, cert } from "firebase-admin/app"
-import { getFirestore } from "firebase-admin/firestore"
-import { getAuth } from "firebase-admin/auth"
+import { initializeApp, getApps, cert, type App } from "firebase-admin/app"
+import { getFirestore, type Firestore } from "firebase-admin/firestore"
+import { getAuth, type Auth } from "firebase-admin/auth"
 
-let adminApp: any = null
-let adminDb: any = null
-let adminAuth: any = null
+let app: App | undefined
+let db: Firestore | undefined
+let auth: Auth | undefined
 
-export function getFirebaseAdmin() {
-  if (!adminApp) {
-    try {
-      // Check if Firebase Admin is already initialized
-      const existingApps = getApps()
-      if (existingApps.length > 0) {
-        adminApp = existingApps[0]
-      } else {
-        // Initialize Firebase Admin
-        const projectId = process.env.FIREBASE_PROJECT_ID
-        const clientEmail = process.env.FIREBASE_CLIENT_EMAIL
-        const privateKey = process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n")
-
-        if (!projectId || !clientEmail || !privateKey) {
-          throw new Error("Missing Firebase Admin credentials")
-        }
-
-        adminApp = initializeApp({
-          credential: cert({
-            projectId,
-            clientEmail,
-            privateKey,
-          }),
-          projectId,
-        })
-      }
-
-      adminDb = getFirestore(adminApp)
-      adminAuth = getAuth(adminApp)
-      console.log("✅ Firebase Admin initialized successfully")
-    } catch (error) {
-      console.error("❌ Firebase Admin initialization failed:", error)
-      throw error
-    }
+export function initializeFirebaseAdmin(): App {
+  if (app) {
+    return app
   }
 
-  return { app: adminApp, db: adminDb, auth: adminAuth }
+  try {
+    // Check if Firebase Admin is already initialized
+    const existingApps = getApps()
+    if (existingApps.length > 0) {
+      app = existingApps[0]
+      console.log("✅ [Firebase Admin] Using existing Firebase Admin app")
+      return app
+    }
+
+    // Initialize Firebase Admin
+    const privateKey = process.env.FIREBASE_PRIVATE_KEY
+    const clientEmail = process.env.FIREBASE_CLIENT_EMAIL
+    const projectId = process.env.FIREBASE_PROJECT_ID
+
+    if (!privateKey || !clientEmail || !projectId) {
+      throw new Error("Missing Firebase Admin environment variables")
+    }
+
+    // Replace escaped newlines in private key
+    const formattedPrivateKey = privateKey.replace(/\\n/g, "\n")
+
+    app = initializeApp({
+      credential: cert({
+        projectId,
+        clientEmail,
+        privateKey: formattedPrivateKey,
+      }),
+      projectId,
+    })
+
+    console.log("✅ [Firebase Admin] Firebase Admin initialized successfully")
+    return app
+  } catch (error) {
+    console.error("❌ [Firebase Admin] Failed to initialize Firebase Admin:", error)
+    throw error
+  }
 }
 
-export function getAdminDb() {
-  const { db } = getFirebaseAdmin()
+export function getFirebaseAdmin(): App {
+  if (!app) {
+    app = initializeFirebaseAdmin()
+  }
+  return app
+}
+
+export function getAdminDb(): Firestore {
+  if (!db) {
+    const adminApp = getFirebaseAdmin()
+    db = getFirestore(adminApp)
+  }
   return db
 }
 
-export function getAdminAuth() {
-  const { auth } = getFirebaseAdmin()
+export function getAdminAuth(): Auth {
+  if (!auth) {
+    const adminApp = getFirebaseAdmin()
+    auth = getAuth(adminApp)
+  }
   return auth
 }
 
-// Initialize Firebase Admin SDK
-function initializeFirebaseAdmin() {
-  if (getApps().length === 0) {
-    try {
-      const privateKey = process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, "\n")
+// Named exports as required
+export { db }
 
-      if (!privateKey || !process.env.FIREBASE_PROJECT_ID || !process.env.FIREBASE_CLIENT_EMAIL) {
-        throw new Error("Missing required Firebase Admin environment variables")
-      }
-
-      initializeApp({
-        credential: cert({
-          projectId: process.env.FIREBASE_PROJECT_ID,
-          clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-          privateKey: privateKey,
-        }),
-        projectId: process.env.FIREBASE_PROJECT_ID,
-      })
-
-      console.log("✅ Firebase Admin initialized successfully")
-    } catch (error) {
-      console.error("❌ Firebase Admin initialization failed:", error)
-      throw error
-    }
+// Initialize db if not already done
+if (!db) {
+  try {
+    db = getAdminDb()
+  } catch (error) {
+    console.error("❌ [Firebase Admin] Failed to initialize db export:", error)
   }
 }
-
-// Export the Firestore database instance
-export const db = getFirebaseAdmin().db
-
-// Export the Firebase Auth instance
-export const auth = getFirebaseAdmin().auth
-
-// For compatibility with existing code
-export default {
-  app: getFirebaseAdmin().app,
-  db: getFirebaseAdmin().db,
-  auth: getFirebaseAdmin().auth,
-}
-
-export { initializeFirebaseAdmin }
