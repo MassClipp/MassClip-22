@@ -25,171 +25,175 @@ export async function POST(request: NextRequest) {
       timestamp: new Date().toISOString(),
       error,
     })
-    console.log(`[${status.toUpperCase()}] ${step}:`, data)
+    console.log(`🔍 [Debug] ${step}: ${status}`, data)
   }
 
   try {
     const { sessionId, userId } = await request.json()
 
-    addStep("Request Received", "info", { sessionId, userId })
+    addStep("Debug Started", "info", { sessionId, userId })
 
     if (!sessionId) {
-      addStep("Validation", "error", {}, "Session ID is required")
-      return NextResponse.json({ success: false, steps, error: "Session ID required" }, { status: 400 })
+      addStep("Validation Failed", "error", { error: "Session ID is required" })
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Session ID is required",
+          steps,
+        },
+        { status: 400 },
+      )
     }
 
-    const db = getAdminDb()
-    const auth = getAdminAuth()
-
     // Step 1: Retrieve Stripe Session
-    addStep("Stripe Session Retrieval", "info", { attempting: true })
-
-    let session: any = null
+    let session: Stripe.Checkout.Session
     try {
       session = await stripe.checkout.sessions.retrieve(sessionId, {
-        expand: ["line_items", "payment_intent", "customer"],
+        expand: ["payment_intent", "line_items"],
       })
-
-      addStep("Stripe Session Retrieval", "success", {
+      addStep("Stripe Session Retrieved", "success", {
         id: session.id,
-        payment_status: session.payment_status,
-        status: session.status,
-        amount_total: session.amount_total,
+        paymentStatus: session.payment_status,
+        amount: session.amount_total,
         currency: session.currency,
-        customer_email: session.customer_details?.email,
+        customerEmail: session.customer_email,
         metadata: session.metadata,
-        created: new Date(session.created * 1000).toISOString(),
       })
     } catch (error: any) {
-      addStep("Stripe Session Retrieval", "error", {}, error.message)
-      return NextResponse.json({ success: false, steps, error: "Failed to retrieve Stripe session" }, { status: 500 })
+      addStep("Stripe Session Retrieval Failed", "error", { error: error.message }, error.message)
+      return NextResponse.json(
+        {
+          success: false,
+          error: `Failed to retrieve Stripe session: ${error.message}`,
+          steps,
+        },
+        { status: 400 },
+      )
     }
 
     // Step 2: Analyze Metadata
-    addStep("Metadata Analysis", "info", { analyzing: true })
-
     const metadata = session.metadata || {}
-    const { buyerUid, buyerEmail, buyerName, bundleId, productBoxId, creatorId, contentType, isAuthenticated } =
-      metadata
-
+    const buyerUid = metadata.buyerUid || metadata.userId
+    const productBoxId = metadata.productBoxId
+    const bundleId = metadata.bundleId
+    const creatorId = metadata.creatorId
+    const contentType = metadata.contentType
     const itemId = bundleId || productBoxId
     const isBundle = contentType === "bundle" || !!bundleId
 
-    addStep("Metadata Analysis", metadata ? "success" : "warning", {
-      buyerUid,
-      buyerEmail,
-      buyerName,
-      bundleId,
-      productBoxId,
-      itemId,
-      creatorId,
-      contentType,
-      isAuthenticated,
-      isBundle,
-      metadataKeys: Object.keys(metadata),
-      hasRequiredFields: !!(buyerUid && itemId),
-    })
-
-    if (!buyerUid) {
-      addStep("Metadata Validation", "error", {}, "No buyerUid found in session metadata")
-    }
-
-    if (!itemId) {
-      addStep("Metadata Validation", "error", {}, "No bundle/product ID found in session metadata")
-    }
+    addStep(
+      "Metadata Analysis",
+      buyerUid && itemId ? "success" : "warning",
+      {
+        buyerUid,
+        productBoxId,
+        bundleId,
+        creatorId,
+        contentType,
+        itemId,
+        isBundle,
+        allMetadata: metadata,
+      },
+      !buyerUid ? "Missing buyerUid in metadata" : !itemId ? "Missing item ID in metadata" : undefined,
+    )
 
     // Step 3: User Verification
-    addStep("User Verification", "info", { verifying: buyerUid })
-
+    const db = getAdminDb()
+    let userExists = false
     let userDetails = null
-    if (buyerUid && buyerUid !== "anonymous" && !buyerUid.startsWith("anonymous_")) {
+
+    if (buyerUid && buyerUid !== "anonymous") {
       try {
-        const userRecord = await auth.getUser(buyerUid)
+        const userRecord = await getAdminAuth().getUser(buyerUid)
+        userExists = true
         userDetails = {
           uid: userRecord.uid,
           email: userRecord.email,
           displayName: userRecord.displayName,
           emailVerified: userRecord.emailVerified,
-          disabled: userRecord.disabled,
-          creationTime: userRecord.metadata.creationTime,
-          lastSignInTime: userRecord.metadata.lastSignInTime,
         }
-
         addStep("User Verification", "success", userDetails)
       } catch (error: any) {
-        addStep("User Verification", "error", { buyerUid }, error.message)
+        addStep("User Verification Failed", "warning", { buyerUid, error: error.message }, error.message)
       }
     } else {
-      addStep("User Verification", "warning", { buyerUid }, "Anonymous or invalid user ID")
+      addStep("User Verification Skipped", "info", { reason: "Anonymous or missing buyerUid" })
     }
 
     // Step 4: Item Verification
-    addStep("Item Verification", "info", { itemId, isBundle })
+    let itemExists = false
+    let itemDetails = null
 
-    let itemData = null
     if (itemId) {
       try {
         const collection = isBundle ? "bundles" : "productBoxes"
         const itemDoc = await db.collection(collection).doc(itemId).get()
 
         if (itemDoc.exists) {
-          itemData = itemDoc.data()
-          addStep("Item Verification", "success", {
-            collection,
-            id: itemId,
-            title: itemData?.title,
-            description: itemData?.description,
-            price: itemData?.price,
-            creatorId: itemData?.creatorId,
-            active: itemData?.active,
-            contentItems: itemData?.contentItems?.length || 0,
-            detailedContentItems: itemData?.detailedContentItems?.length || 0,
-          })
+          itemExists = true
+          itemDetails = {
+            id: itemDoc.id,
+            title: itemDoc.data()?.title,
+            creatorId: itemDoc.data()?.creatorId,
+            price: itemDoc.data()?.price,
+            contentItems: itemDoc.data()?.contentItems?.length || 0,
+          }
+          addStep(`${isBundle ? "Bundle" : "Product Box"} Verification`, "success", itemDetails)
         } else {
-          addStep("Item Verification", "error", { collection, itemId }, "Item not found")
+          addStep(`${isBundle ? "Bundle" : "Product Box"} Not Found`, "error", { itemId, collection })
         }
       } catch (error: any) {
-        addStep("Item Verification", "error", { itemId }, error.message)
+        addStep(
+          `${isBundle ? "Bundle" : "Product Box"} Verification Failed`,
+          "error",
+          { error: error.message },
+          error.message,
+        )
       }
+    } else {
+      addStep("Item Verification Skipped", "warning", { reason: "No item ID found" })
     }
 
     // Step 5: Check Existing Purchases
-    addStep("Existing Purchase Check", "info", { checking: true })
-
-    const existingPurchases = {
-      mainPurchases: [],
-      bundlePurchases: [],
-      userPurchases: [],
-      userSubcollection: [],
+    const purchaseChecks = {
+      mainPurchases: 0,
+      bundlePurchases: 0,
+      productBoxPurchases: 0,
+      userPurchases: 0,
+      total: 0,
     }
 
     // Check main purchases collection
     try {
-      const mainQuery = await db.collection("purchases").where("sessionId", "==", sessionId).get()
-      mainQuery.forEach((doc) => {
-        existingPurchases.mainPurchases.push({
-          id: doc.id,
-          ...doc.data(),
-        })
+      const mainPurchaseQuery = await db.collection("purchases").where("sessionId", "==", sessionId).limit(1).get()
+      purchaseChecks.mainPurchases = mainPurchaseQuery.size
+      addStep("Main Purchases Check", mainPurchaseQuery.size > 0 ? "success" : "info", {
+        found: mainPurchaseQuery.size,
+        data: mainPurchaseQuery.docs.map((doc) => ({ id: doc.id, ...doc.data() })),
       })
     } catch (error: any) {
-      addStep("Main Purchases Check", "error", {}, error.message)
+      addStep("Main Purchases Check Failed", "error", { error: error.message }, error.message)
     }
 
-    // Check bundlePurchases collection
-    try {
-      const bundleQuery = await db.collection("bundlePurchases").where("sessionId", "==", sessionId).get()
-      bundleQuery.forEach((doc) => {
-        existingPurchases.bundlePurchases.push({
-          id: doc.id,
-          ...doc.data(),
+    // Check bundle purchases collection
+    if (isBundle) {
+      try {
+        const bundlePurchaseQuery = await db
+          .collection("bundlePurchases")
+          .where("sessionId", "==", sessionId)
+          .limit(1)
+          .get()
+        purchaseChecks.bundlePurchases = bundlePurchaseQuery.size
+        addStep("Bundle Purchases Check", bundlePurchaseQuery.size > 0 ? "success" : "warning", {
+          found: bundlePurchaseQuery.size,
+          data: bundlePurchaseQuery.docs.map((doc) => ({ id: doc.id, ...doc.data() })),
         })
-      })
-    } catch (error: any) {
-      addStep("Bundle Purchases Check", "error", {}, error.message)
+      } catch (error: any) {
+        addStep("Bundle Purchases Check Failed", "error", { error: error.message }, error.message)
+      }
     }
 
-    // Check userPurchases collection
+    // Check user purchases collection
     if (buyerUid && buyerUid !== "anonymous") {
       try {
         const userPurchaseDoc = await db
@@ -198,252 +202,183 @@ export async function POST(request: NextRequest) {
           .collection("purchases")
           .doc(sessionId)
           .get()
-        if (userPurchaseDoc.exists) {
-          existingPurchases.userPurchases.push({
-            id: userPurchaseDoc.id,
-            ...userPurchaseDoc.data(),
-          })
-        }
-      } catch (error: any) {
-        addStep("User Purchases Check", "error", {}, error.message)
-      }
-
-      // Check user subcollection
-      try {
-        const userSubQuery = await db
-          .collection("users")
-          .doc(buyerUid)
-          .collection("purchases")
-          .where("sessionId", "==", sessionId)
-          .get()
-        userSubQuery.forEach((doc) => {
-          existingPurchases.userSubcollection.push({
-            id: doc.id,
-            ...doc.data(),
-          })
+        purchaseChecks.userPurchases = userPurchaseDoc.exists ? 1 : 0
+        addStep("User Purchases Check", userPurchaseDoc.exists ? "success" : "warning", {
+          found: userPurchaseDoc.exists ? 1 : 0,
+          data: userPurchaseDoc.exists ? userPurchaseDoc.data() : null,
         })
       } catch (error: any) {
-        addStep("User Subcollection Check", "error", {}, error.message)
+        addStep("User Purchases Check Failed", "error", { error: error.message }, error.message)
       }
     }
 
-    const totalExisting = Object.values(existingPurchases).reduce((sum, arr) => sum + arr.length, 0)
+    purchaseChecks.total = purchaseChecks.mainPurchases + purchaseChecks.bundlePurchases + purchaseChecks.userPurchases
 
-    addStep("Existing Purchase Check", totalExisting > 0 ? "warning" : "success", {
-      totalFound: totalExisting,
-      breakdown: {
-        mainPurchases: existingPurchases.mainPurchases.length,
-        bundlePurchases: existingPurchases.bundlePurchases.length,
-        userPurchases: existingPurchases.userPurchases.length,
-        userSubcollection: existingPurchases.userSubcollection.length,
-      },
-      details: existingPurchases,
-    })
+    // Step 6: Check User Access
+    let hasItemAccess = false
+    let userAccessDetails = null
 
-    // Step 6: User Access Check
-    addStep("User Access Check", "info", { checking: buyerUid })
-
-    let userAccess = null
     if (buyerUid && buyerUid !== "anonymous" && itemId) {
       try {
         const userDoc = await db.collection("users").doc(buyerUid).get()
         if (userDoc.exists) {
-          const userData = userDoc.data()
-          const accessField = isBundle ? "bundleAccess" : "productBoxAccess"
-          userAccess = {
-            userExists: true,
-            hasAccessField: !!userData?.[accessField],
-            hasItemAccess: !!userData?.[accessField]?.[itemId],
-            accessDetails: userData?.[accessField]?.[itemId] || null,
-            totalPurchases: userData?.totalPurchases || 0,
-            lastPurchaseAt: userData?.lastPurchaseAt || null,
-          }
-        } else {
-          userAccess = { userExists: false }
-        }
+          const userData = userDoc.data()!
+          const purchasedItems = userData.purchasedItems || []
+          const purchasedBundles = userData.purchasedBundles || []
+          const purchasedProductBoxes = userData.purchasedProductBoxes || []
 
-        addStep("User Access Check", "success", userAccess)
+          hasItemAccess =
+            purchasedItems.includes(itemId) ||
+            (isBundle && purchasedBundles.includes(itemId)) ||
+            (!isBundle && purchasedProductBoxes.includes(itemId))
+
+          userAccessDetails = {
+            purchasedItems: purchasedItems.length,
+            purchasedBundles: purchasedBundles.length,
+            purchasedProductBoxes: purchasedProductBoxes.length,
+            hasItemAccess,
+            itemInPurchasedItems: purchasedItems.includes(itemId),
+            itemInSpecificCollection: isBundle
+              ? purchasedBundles.includes(itemId)
+              : purchasedProductBoxes.includes(itemId),
+          }
+
+          addStep("User Access Check", hasItemAccess ? "success" : "warning", userAccessDetails)
+        } else {
+          addStep("User Document Not Found", "warning", { buyerUid })
+        }
       } catch (error: any) {
-        addStep("User Access Check", "error", { buyerUid }, error.message)
+        addStep("User Access Check Failed", "error", { error: error.message }, error.message)
       }
     }
 
-    // Step 7: Creator Verification
-    addStep("Creator Verification", "info", { creatorId })
-
-    let creatorData = null
-    if (creatorId) {
-      try {
-        const creatorDoc = await db.collection("users").doc(creatorId).get()
-        if (creatorDoc.exists) {
-          const creator = creatorDoc.data()
-          creatorData = {
-            id: creatorId,
-            username: creator?.username,
-            displayName: creator?.displayName,
-            email: creator?.email,
-            stripeAccountId: creator?.stripeAccountId,
-            totalSales: creator?.totalSales || 0,
-            totalRevenue: creator?.totalRevenue || 0,
-          }
-          addStep("Creator Verification", "success", creatorData)
-        } else {
-          addStep("Creator Verification", "error", { creatorId }, "Creator not found")
-        }
-      } catch (error: any) {
-        addStep("Creator Verification", "error", { creatorId }, error.message)
-      }
-    }
-
-    // Step 8: Payment Status Analysis
-    addStep("Payment Analysis", "info", { analyzing: true })
-
-    const paymentAnalysis = {
-      sessionStatus: session.status,
-      paymentStatus: session.payment_status,
-      amountTotal: session.amount_total,
-      amountReceived: session.amount_total,
-      currency: session.currency,
-      paymentIntentId: session.payment_intent,
-      customerEmail: session.customer_details?.email,
-      isPaymentComplete: session.payment_status === "paid",
-      isSessionComplete: session.status === "complete",
-    }
-
-    addStep("Payment Analysis", paymentAnalysis.isPaymentComplete ? "success" : "warning", paymentAnalysis)
-
-    // Step 9: Content Analysis (for bundles)
+    // Step 7: Content Analysis (for bundles)
     let contentAnalysis = null
-    if (isBundle && itemData) {
-      addStep("Content Analysis", "info", { analyzing: true })
-
+    if (isBundle && itemExists) {
       try {
-        const contentItems = []
-        const contentSources = [
-          { items: itemData.contentItems || [], source: "contentItems" },
-          { items: itemData.detailedContentItems || [], source: "detailedContentItems" },
-          { items: itemData.contents || [], source: "contents" },
-        ]
+        const bundleDoc = await db.collection("bundles").doc(itemId).get()
+        if (bundleDoc.exists) {
+          const bundleData = bundleDoc.data()!
+          const contentItems = bundleData.contentItems || []
 
-        for (const { items, source } of contentSources) {
-          for (const item of items) {
-            const itemId = typeof item === "string" ? item : item.id
-
-            if (typeof item === "object" && item.fileUrl) {
-              contentItems.push({ ...item, source })
-            } else {
-              try {
-                const uploadDoc = await db.collection("uploads").doc(itemId).get()
-                if (uploadDoc.exists) {
-                  contentItems.push({ id: itemId, ...uploadDoc.data(), source })
-                }
-              } catch (error) {
-                console.warn(`Could not fetch upload ${itemId}:`, error)
-              }
+          // Check if content items exist
+          const contentChecks = []
+          for (const contentId of contentItems.slice(0, 5)) {
+            // Check first 5
+            try {
+              const uploadDoc = await db.collection("uploads").doc(contentId).get()
+              contentChecks.push({
+                id: contentId,
+                exists: uploadDoc.exists,
+                title: uploadDoc.exists ? uploadDoc.data()?.title : null,
+                fileUrl: uploadDoc.exists ? !!uploadDoc.data()?.fileUrl : false,
+              })
+            } catch (error) {
+              contentChecks.push({
+                id: contentId,
+                exists: false,
+                error: error.message,
+              })
             }
           }
-        }
 
-        contentAnalysis = {
-          totalItems: contentItems.length,
-          validItems: contentItems.filter((item) => item.fileUrl).length,
-          invalidItems: contentItems.filter((item) => !item.fileUrl).length,
-          totalSize: contentItems.reduce((sum, item) => sum + (item.fileSize || 0), 0),
-          contentTypes: contentItems.reduce((types, item) => {
-            const type = item.mimeType?.split("/")[0] || "unknown"
-            types[type] = (types[type] || 0) + 1
-            return types
-          }, {}),
-          items: contentItems.map((item) => ({
-            id: item.id,
-            title: item.title || item.filename,
-            fileUrl: item.fileUrl,
-            fileSize: item.fileSize,
-            mimeType: item.mimeType,
-            source: item.source,
-          })),
-        }
+          contentAnalysis = {
+            totalContentItems: contentItems.length,
+            checkedItems: contentChecks.length,
+            existingItems: contentChecks.filter((c) => c.exists).length,
+            itemsWithUrls: contentChecks.filter((c) => c.fileUrl).length,
+            contentChecks,
+          }
 
-        addStep("Content Analysis", "success", contentAnalysis)
+          addStep("Content Analysis", "success", contentAnalysis)
+        }
       } catch (error: any) {
-        addStep("Content Analysis", "error", {}, error.message)
+        addStep("Content Analysis Failed", "error", { error: error.message }, error.message)
       }
     }
 
-    // Step 10: Generate Recommendations
-    const recommendations = []
-    const criticalIssues = []
+    // Generate Critical Issues and Recommendations
+    const criticalIssues: string[] = []
+    const recommendations: string[] = []
+
+    if (session.payment_status !== "paid") {
+      criticalIssues.push("Payment not completed - session status is " + session.payment_status)
+    }
 
     if (!buyerUid) {
-      criticalIssues.push("No buyerUid in session metadata - purchases cannot be attributed to users")
-      recommendations.push("Ensure buyerUid is set in Stripe checkout session metadata")
+      criticalIssues.push("Missing buyerUid in Stripe session metadata")
+      recommendations.push("Ensure buyerUid is set in checkout session metadata")
     }
 
     if (!itemId) {
-      criticalIssues.push("No bundle/product ID in session metadata")
+      criticalIssues.push("Missing item ID (bundleId or productBoxId) in metadata")
       recommendations.push("Ensure bundleId or productBoxId is set in checkout session metadata")
     }
 
-    if (session.payment_status !== "paid") {
-      criticalIssues.push("Payment not completed")
-      recommendations.push("Only process purchases for sessions with payment_status = 'paid'")
+    if (!itemExists && itemId) {
+      criticalIssues.push(`${isBundle ? "Bundle" : "Product Box"} ${itemId} not found in database`)
+      recommendations.push(`Verify the ${isBundle ? "bundle" : "product box"} exists in Firestore`)
     }
 
-    if (totalExisting === 0 && session.payment_status === "paid") {
-      criticalIssues.push("Payment completed but no purchase records found")
-      recommendations.push("Purchase verification endpoint may not be working correctly")
+    if (purchaseChecks.total === 0) {
+      criticalIssues.push("No purchase records found in any collection")
+      recommendations.push("Run purchase verification to create purchase records")
     }
 
-    if (isBundle && existingPurchases.bundlePurchases.length === 0 && session.payment_status === "paid") {
-      criticalIssues.push("Bundle purchase not saved to bundlePurchases collection")
+    if (isBundle && purchaseChecks.bundlePurchases === 0) {
+      criticalIssues.push("Bundle purchase not found in bundlePurchases collection")
       recommendations.push("Ensure bundle purchases are saved to bundlePurchases collection")
     }
 
-    if (buyerUid !== "anonymous" && !userAccess?.hasItemAccess && session.payment_status === "paid") {
-      criticalIssues.push("User does not have access granted despite completed payment")
-      recommendations.push("Ensure user access is granted in user document after purchase")
+    if (!hasItemAccess && buyerUid && buyerUid !== "anonymous") {
+      criticalIssues.push("User does not have access to purchased item")
+      recommendations.push("Grant user access by updating their purchasedItems array")
     }
 
-    addStep("Analysis Complete", "success", {
-      totalSteps: steps.length,
-      criticalIssues: criticalIssues.length,
-      recommendations: recommendations.length,
-    })
+    if (userExists && !hasItemAccess) {
+      recommendations.push("Update user document with purchased item access")
+    }
+
+    // Final Summary
+    const summary = {
+      session: {
+        id: session.id,
+        paymentStatus: session.payment_status,
+        amount: session.amount_total,
+        currency: session.currency,
+        customerEmail: session.customer_email,
+      },
+      metadata: {
+        buyerUid,
+        itemId,
+        isBundle,
+        creatorId,
+        contentType,
+        complete: !!(buyerUid && itemId),
+      },
+      purchases: purchaseChecks,
+      userAccess: {
+        userExists,
+        hasItemAccess,
+        userDetails,
+      },
+      contentAnalysis,
+      criticalIssues,
+      recommendations,
+    }
+
+    addStep("Debug Complete", criticalIssues.length === 0 ? "success" : "warning", summary)
 
     return NextResponse.json({
       success: true,
       sessionId,
-      userId,
+      userId: buyerUid || userId,
       steps,
-      summary: {
-        session: {
-          id: session.id,
-          status: session.status,
-          paymentStatus: session.payment_status,
-          amount: session.amount_total,
-          currency: session.currency,
-        },
-        metadata: {
-          buyerUid,
-          itemId,
-          isBundle,
-          contentType,
-          hasRequiredFields: !!(buyerUid && itemId),
-        },
-        purchases: {
-          total: totalExisting,
-          inBundlePurchases: existingPurchases.bundlePurchases.length,
-          inMainPurchases: existingPurchases.mainPurchases.length,
-          inUserPurchases: existingPurchases.userPurchases.length,
-        },
-        userAccess: userAccess,
-        contentAnalysis: contentAnalysis,
-        criticalIssues,
-        recommendations,
-      },
+      summary,
     })
   } catch (error: any) {
-    addStep("Critical Error", "error", {}, error.message)
+    console.error("❌ [Debug] Fatal error:", error)
+    addStep("Fatal Error", "error", { error: error.message }, error.message)
 
     return NextResponse.json(
       {
