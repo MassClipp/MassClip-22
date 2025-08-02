@@ -22,40 +22,70 @@ export async function POST(request: NextRequest) {
 
     console.log("🔍 [Verify Session] Processing session:", sessionId)
 
-    const db = getAdminDb()
+    // Initialize Firebase Admin
+    let db
+    try {
+      db = getAdminDb()
+      console.log("✅ [Verify Session] Firebase Admin initialized successfully")
+    } catch (firebaseError: any) {
+      console.error("❌ [Verify Session] Firebase initialization failed:", firebaseError)
+      return NextResponse.json(
+        {
+          error: "Database connection failed",
+          details: firebaseError.message,
+        },
+        { status: 500 },
+      )
+    }
 
     // Check if we already have this purchase processed
     console.log("🔍 [Verify Session] Checking for existing purchase record...")
-    const existingPurchaseQuery = await db.collection("purchases").where("sessionId", "==", sessionId).limit(1).get()
+    try {
+      const existingPurchaseQuery = await db.collection("purchases").where("sessionId", "==", sessionId).limit(1).get()
 
-    if (!existingPurchaseQuery.empty) {
-      const existingPurchase = existingPurchaseQuery.docs[0].data()
-      console.log("✅ [Verify Session] Purchase already processed:", existingPurchase.id)
+      if (!existingPurchaseQuery.empty) {
+        const existingPurchase = existingPurchaseQuery.docs[0].data()
+        console.log("✅ [Verify Session] Purchase already processed:", existingPurchase.id)
 
-      return NextResponse.json({
-        success: true,
-        alreadyProcessed: true,
-        purchase: existingPurchase,
-        message: "Purchase already verified and processed",
-      })
+        return NextResponse.json({
+          success: true,
+          alreadyProcessed: true,
+          purchase: existingPurchase,
+          message: "Purchase already verified and processed",
+        })
+      }
+    } catch (queryError: any) {
+      console.error("❌ [Verify Session] Database query failed:", queryError)
+      return NextResponse.json(
+        {
+          error: "Database query failed",
+          details: queryError.message,
+        },
+        { status: 500 },
+      )
     }
 
     // Strategy: Find the correct Stripe account by checking connected accounts
     console.log("🔍 [Verify Session] Finding correct Stripe account...")
 
     const connectedAccounts = []
-    const usersWithStripeQuery = await db.collection("users").where("stripeAccountId", "!=", null).get()
+    try {
+      const usersWithStripeQuery = await db.collection("users").where("stripeAccountId", "!=", null).get()
 
-    usersWithStripeQuery.forEach((doc) => {
-      const userData = doc.data()
-      if (userData.stripeAccountId) {
-        connectedAccounts.push({
-          accountId: userData.stripeAccountId,
-          userId: doc.id,
-          username: userData.username || userData.displayName || "Unknown",
-        })
-      }
-    })
+      usersWithStripeQuery.forEach((doc) => {
+        const userData = doc.data()
+        if (userData.stripeAccountId) {
+          connectedAccounts.push({
+            accountId: userData.stripeAccountId,
+            userId: doc.id,
+            username: userData.username || userData.displayName || "Unknown",
+          })
+        }
+      })
+    } catch (usersQueryError: any) {
+      console.error("❌ [Verify Session] Failed to query users:", usersQueryError)
+      // Continue without connected accounts - try platform account only
+    }
 
     console.log(`🔍 [Verify Session] Found ${connectedAccounts.length} connected accounts to search`)
 
@@ -175,15 +205,21 @@ export async function POST(request: NextRequest) {
     })
 
     // Create unified purchase record
-    const purchaseId = await UnifiedPurchaseService.createUnifiedPurchase(buyerUid, {
-      [contentType === "bundle" ? "bundleId" : "productBoxId"]: itemId,
-      sessionId: session.id,
-      amount: session.amount_total ? session.amount_total / 100 : 0,
-      currency: session.currency || "usd",
-      creatorId: finalCreatorId || "",
-      userEmail: buyerEmail || session.customer_email || "",
-      userName: buyerName || "User",
-    })
+    try {
+      const purchaseId = await UnifiedPurchaseService.createUnifiedPurchase(buyerUid, {
+        [contentType === "bundle" ? "bundleId" : "productBoxId"]: itemId,
+        sessionId: session.id,
+        amount: session.amount_total ? session.amount_total / 100 : 0,
+        currency: session.currency || "usd",
+        creatorId: finalCreatorId || "",
+        userEmail: buyerEmail || session.customer_email || "",
+        userName: buyerName || "User",
+      })
+      console.log("✅ [Verify Session] Unified purchase created:", purchaseId)
+    } catch (unifiedError: any) {
+      console.error("❌ [Verify Session] Failed to create unified purchase:", unifiedError)
+      // Continue with regular purchase creation
+    }
 
     // Create main purchase record
     const purchaseData = {
@@ -219,7 +255,19 @@ export async function POST(request: NextRequest) {
     }
 
     // Save purchase record
-    await db.collection("purchases").doc(session.id).set(purchaseData)
+    try {
+      await db.collection("purchases").doc(session.id).set(purchaseData)
+      console.log("✅ [Verify Session] Purchase record saved")
+    } catch (saveError: any) {
+      console.error("❌ [Verify Session] Failed to save purchase record:", saveError)
+      return NextResponse.json(
+        {
+          error: "Failed to save purchase record",
+          details: saveError.message,
+        },
+        { status: 500 },
+      )
+    }
 
     // Grant user access if authenticated
     if (buyerUid !== "anonymous" && !buyerUid.startsWith("anonymous_")) {
@@ -259,21 +307,31 @@ export async function POST(request: NextRequest) {
           })
 
         console.log("✅ [Verify Session] User access granted successfully")
-      } catch (error) {
-        console.error("❌ [Verify Session] Failed to grant user access:", error)
+      } catch (accessError: any) {
+        console.error("❌ [Verify Session] Failed to grant user access:", accessError)
+        // Don't fail the entire request for access grant failures
       }
     }
 
     // Get item details for response
-    const itemCollection = contentType === "bundle" ? "bundles" : "productBoxes"
-    const itemDoc = await db.collection(itemCollection).doc(itemId).get()
-    const itemData = itemDoc.exists ? itemDoc.data() : {}
+    let itemData = {}
+    try {
+      const itemCollection = contentType === "bundle" ? "bundles" : "productBoxes"
+      const itemDoc = await db.collection(itemCollection).doc(itemId).get()
+      itemData = itemDoc.exists ? itemDoc.data() : {}
+    } catch (itemError: any) {
+      console.error("❌ [Verify Session] Failed to get item details:", itemError)
+    }
 
     // Get creator details
     let creatorData = {}
     if (finalCreatorId) {
-      const creatorDoc = await db.collection("users").doc(finalCreatorId).get()
-      creatorData = creatorDoc.exists ? creatorDoc.data() : {}
+      try {
+        const creatorDoc = await db.collection("users").doc(finalCreatorId).get()
+        creatorData = creatorDoc.exists ? creatorDoc.data() : {}
+      } catch (creatorError: any) {
+        console.error("❌ [Verify Session] Failed to get creator details:", creatorError)
+      }
     }
 
     console.log("✅ [Verify Session] Verification completed successfully")
