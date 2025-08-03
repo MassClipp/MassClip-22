@@ -5,43 +5,51 @@ export async function GET(request: NextRequest) {
   try {
     console.log("🔍 [Debug] Checking bundlePurchases collection...")
 
-    // Get all documents in bundlePurchases collection
-    const snapshot = await db.collection("bundlePurchases").get()
+    // Check if collection exists and get sample data
+    const purchasesSnapshot = await db.collection("bundlePurchases").limit(10).get()
 
-    console.log(`📊 [Debug] Found ${snapshot.size} documents in bundlePurchases`)
+    console.log(`📊 [Debug] Found ${purchasesSnapshot.size} documents in bundlePurchases`)
 
     const purchases: any[] = []
-    snapshot.forEach((doc) => {
+    purchasesSnapshot.forEach((doc) => {
       const data = doc.data()
       purchases.push({
         id: doc.id,
         buyerUid: data.buyerUid,
         title: data.title,
         amount: data.amount,
-        createdAt: data.createdAt,
         sessionId: data.sessionId,
+        purchasedAt: data.purchasedAt,
+        itemType: data.itemType,
       })
     })
 
-    // Also check if there are any indexes
+    // Get list of all collections
     const collections = await db.listCollections()
     const collectionNames = collections.map((col) => col.id)
 
+    // Test Firebase Admin connection
+    const testDoc = await db.collection("test").doc("connection").get()
+
     return NextResponse.json({
       success: true,
-      totalPurchases: snapshot.size,
+      bundlePurchasesExists: purchasesSnapshot.size > 0,
+      totalPurchases: purchasesSnapshot.size,
       purchases: purchases,
       availableCollections: collectionNames,
-      bundlePurchasesExists: collectionNames.includes("bundlePurchases"),
+      firebaseAdminConnected: true,
+      timestamp: new Date().toISOString(),
     })
   } catch (error: any) {
     console.error("❌ [Debug] Error checking bundlePurchases:", error)
 
     return NextResponse.json(
       {
-        error: "Failed to check bundlePurchases",
-        details: error.message,
-        stack: error.stack,
+        success: false,
+        error: error.message,
+        code: error.code,
+        firebaseAdminConnected: false,
+        details: "Failed to connect to Firebase or query bundlePurchases collection",
       },
       { status: 500 },
     )
