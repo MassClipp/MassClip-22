@@ -145,6 +145,7 @@ export async function POST(request: NextRequest) {
       itemTitle: bundle.title || "Digital Content",
       originalDomain: currentDomain,
       timestamp: new Date().toISOString(),
+      stripeAccountId: stripeAccountId, // CRITICAL: For webhook to retrieve session from correct account
     }
 
     const sessionParams: Stripe.Checkout.SessionCreateParams = {
