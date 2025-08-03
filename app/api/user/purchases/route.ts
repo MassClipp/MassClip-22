@@ -73,20 +73,45 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    // Query bundlePurchases collection ONLY (single source of truth)
+    // Query bundlePurchases collection with fallback for missing index
     try {
       console.log("🔍 [Purchases API] Querying bundlePurchases for buyerUid:", buyerUid)
 
-      const purchasesSnapshot = await db
-        .collection("bundlePurchases")
-        .where("buyerUid", "==", buyerUid)
-        .orderBy("purchasedAt", "desc")
-        .get()
+      let purchasesSnapshot
+
+      try {
+        // Try the optimized query with ordering first
+        purchasesSnapshot = await db
+          .collection("bundlePurchases")
+          .where("buyerUid", "==", buyerUid)
+          .orderBy("purchasedAt", "desc")
+          .get()
+      } catch (indexError: any) {
+        console.warn("⚠️ [Purchases API] Index missing, falling back to simple query:", indexError.message)
+
+        // Fallback to simple query without ordering if index is missing
+        purchasesSnapshot = await db.collection("bundlePurchases").where("buyerUid", "==", buyerUid).get()
+
+        console.log("✅ [Purchases API] Fallback query successful")
+      }
 
       console.log(`📊 [Purchases API] Query completed. Found ${purchasesSnapshot.size} purchases`)
 
       const purchases: any[] = []
-      purchasesSnapshot.forEach((doc) => {
+      const docs = purchasesSnapshot.docs
+
+      // Sort manually if we used the fallback query
+      if (docs.length > 0) {
+        docs.sort((a, b) => {
+          const aDate = a.data().purchasedAt || a.data().createdAt || new Date(0)
+          const bDate = b.data().purchasedAt || b.data().createdAt || new Date(0)
+          const aTime = aDate.toDate ? aDate.toDate().getTime() : new Date(aDate).getTime()
+          const bTime = bDate.toDate ? bDate.toDate().getTime() : new Date(bDate).getTime()
+          return bTime - aTime // Descending order
+        })
+      }
+
+      docs.forEach((doc) => {
         const data = doc.data()
         console.log(`📦 [Purchases API] Processing purchase: ${doc.id} - ${data.title}`)
 
@@ -139,6 +164,7 @@ export async function GET(request: NextRequest) {
           buyerUid,
           totalFound: purchases.length,
           queryExecuted: true,
+          indexUsed: purchasesSnapshot.docs.length > 0 ? "optimized" : "fallback",
           timestamp: new Date().toISOString(),
         },
       })
