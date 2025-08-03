@@ -1,89 +1,103 @@
 import { type NextRequest, NextResponse } from "next/server"
-import Stripe from "stripe"
 import { db } from "@/lib/firebase-admin"
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: "2024-06-20",
-})
-
-export async function POST(request: NextRequest) {
+export async function GET(request: NextRequest) {
   try {
-    console.log("🔍 [Verify Session] Starting session verification...")
+    console.log("🔍 [Purchase Verify] Starting session verification...")
 
-    const body = await request.json()
-    const { sessionId } = body
+    // Get session ID from query params
+    const searchParams = request.nextUrl.searchParams
+    const sessionId = searchParams.get("session_id")
 
     if (!sessionId) {
-      console.error("❌ [Verify Session] Missing sessionId")
+      console.error("❌ [Purchase Verify] No session ID provided")
       return NextResponse.json({ error: "Session ID is required" }, { status: 400 })
     }
 
-    console.log("🔍 [Verify Session] Processing session:", sessionId)
+    console.log("🔍 [Purchase Verify] Looking for session:", sessionId)
 
-    // Get purchase from bundlePurchases collection (single source of truth)
+    // Check if purchase exists in bundlePurchases collection
     const purchaseDoc = await db.collection("bundlePurchases").doc(sessionId).get()
 
     if (!purchaseDoc.exists) {
-      console.log("❌ [Verify Session] Purchase not found in bundlePurchases:", sessionId)
+      console.error("❌ [Purchase Verify] Purchase not found for session:", sessionId)
       return NextResponse.json({ error: "Purchase not found" }, { status: 404 })
     }
 
     const purchaseData = purchaseDoc.data()!
-    console.log("✅ [Verify Session] Purchase found:", {
+    console.log("✅ [Purchase Verify] Purchase found:", {
       sessionId,
-      title: purchaseData.title,
       buyerUid: purchaseData.buyerUid,
-      amount: purchaseData.amount,
+      itemId: purchaseData.itemId,
+      title: purchaseData.title,
     })
 
-    // Get Stripe session details for additional info
-    let stripeSession = null
-    try {
-      stripeSession = await stripe.checkout.sessions.retrieve(sessionId)
-    } catch (error) {
-      console.warn("⚠️ [Verify Session] Could not retrieve Stripe session:", error)
-    }
-
-    // Return verification response
     return NextResponse.json({
       success: true,
-      session: stripeSession
-        ? {
-            id: stripeSession.id,
-            amount: stripeSession.amount_total || 0,
-            currency: stripeSession.currency || "usd",
-            payment_status: stripeSession.payment_status || "paid",
-            customerEmail: stripeSession.customer_email,
-            created: new Date(stripeSession.created * 1000).toISOString(),
-          }
-        : null,
       purchase: {
-        userId: purchaseData.buyerUid,
-        userEmail: purchaseData.userEmail,
-        userName: purchaseData.userName,
+        sessionId: purchaseData.sessionId,
+        buyerUid: purchaseData.buyerUid,
         itemId: purchaseData.itemId,
+        itemType: purchaseData.itemType,
+        title: purchaseData.title,
         amount: purchaseData.amount,
         currency: purchaseData.currency,
-        type: purchaseData.itemType,
-        status: purchaseData.status,
-      },
-      item: {
-        id: purchaseData.itemId,
-        title: purchaseData.title,
-        description: purchaseData.description,
-        thumbnailUrl: purchaseData.thumbnailUrl,
-        creator: {
-          id: purchaseData.creatorId,
-          name: purchaseData.creatorName,
-          username: purchaseData.creatorUsername,
-        },
+        accessUrl: purchaseData.accessUrl,
+        purchasedAt: purchaseData.purchasedAt,
+        environment: purchaseData.environment,
       },
     })
   } catch (error: any) {
-    console.error("❌ [Verify Session] Error:", error)
+    console.error("❌ [Purchase Verify] Error verifying session:", error)
     return NextResponse.json(
       {
-        error: "Verification failed",
+        error: "Failed to verify purchase",
+        details: error.message || "Unknown error",
+      },
+      { status: 500 },
+    )
+  }
+}
+
+export async function POST(request: NextRequest) {
+  try {
+    console.log("🔄 [Purchase Verify] Manual purchase verification...")
+
+    const body = await request.json()
+    const { sessionId, buyerUid } = body
+
+    if (!sessionId || !buyerUid) {
+      return NextResponse.json({ error: "Session ID and buyer UID are required" }, { status: 400 })
+    }
+
+    // Verify the purchase exists and belongs to the user
+    const purchaseDoc = await db.collection("bundlePurchases").doc(sessionId).get()
+
+    if (!purchaseDoc.exists) {
+      return NextResponse.json({ error: "Purchase not found" }, { status: 404 })
+    }
+
+    const purchaseData = purchaseDoc.data()!
+
+    if (purchaseData.buyerUid !== buyerUid) {
+      console.error("❌ [Purchase Verify] Buyer UID mismatch:", {
+        expected: purchaseData.buyerUid,
+        provided: buyerUid,
+      })
+      return NextResponse.json({ error: "Purchase does not belong to this user" }, { status: 403 })
+    }
+
+    console.log("✅ [Purchase Verify] Manual verification successful")
+    return NextResponse.json({
+      success: true,
+      verified: true,
+      purchase: purchaseData,
+    })
+  } catch (error: any) {
+    console.error("❌ [Purchase Verify] Error in manual verification:", error)
+    return NextResponse.json(
+      {
+        error: "Failed to verify purchase",
         details: error.message,
       },
       { status: 500 },
