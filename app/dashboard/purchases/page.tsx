@@ -6,25 +6,48 @@ import { Card, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Skeleton } from "@/components/ui/skeleton"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { ShoppingBag, Eye, DollarSign, Package, User, AlertCircle, RefreshCw, Star } from "lucide-react"
+import {
+  ShoppingBag,
+  Eye,
+  DollarSign,
+  Package,
+  User,
+  AlertCircle,
+  RefreshCw,
+  Star,
+  Download,
+  Clock,
+  HardDrive,
+} from "lucide-react"
 import Link from "next/link"
 
 interface Purchase {
   id: string
+  sessionId: string
   itemId: string
   itemType: "bundle" | "product_box"
+  bundleId?: string
+  productBoxId?: string
   title: string
   description: string
   thumbnailUrl: string
+  downloadUrl: string
+  fileSize: number
+  fileType: string
+  duration: number
   creatorId: string
   creatorName: string
   creatorUsername: string
   amount: number
   currency: string
-  sessionId: string
   status: string
   purchasedAt: any
   accessUrl: string
+  accessGranted: boolean
+  downloadCount: number
+  buyerEmail: string
+  buyerName: string
+  environment: string
 }
 
 export default function PurchasesPage() {
@@ -53,7 +76,7 @@ export default function PurchasesPage() {
 
       console.log("🔄 [Purchases] Fetching purchases for user:", user.uid)
 
-      // Get user's purchases from their personal collection
+      // Get user's purchases from bundlePurchases collection
       const idToken = await user.getIdToken()
       const response = await fetch(`/api/user/purchases?userId=${user.uid}`, {
         headers: {
@@ -66,7 +89,7 @@ export default function PurchasesPage() {
       }
 
       const data = await response.json()
-      console.log("📦 [Purchases] Fetched purchases:", data.purchases?.length || 0)
+      console.log("📦 [Purchases] Fetched purchases from bundlePurchases:", data.purchases?.length || 0)
 
       setPurchases(data.purchases || [])
     } catch (err: any) {
@@ -97,6 +120,22 @@ export default function PurchasesPage() {
       hour: "2-digit",
       minute: "2-digit",
     })
+  }
+
+  const formatFileSize = (bytes: number): string => {
+    if (bytes === 0) return "0 B"
+    const k = 1024
+    const sizes = ["B", "KB", "MB", "GB"]
+    const i = Math.floor(Math.log(bytes) / Math.log(k))
+    return Number.parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + " " + sizes[i]
+  }
+
+  const formatDuration = (seconds: number): string => {
+    if (seconds === 0) return ""
+    const minutes = Math.floor(seconds / 60)
+    const remainingSeconds = seconds % 60
+    if (minutes === 0) return `${remainingSeconds}s`
+    return `${minutes}:${remainingSeconds.toString().padStart(2, "0")}`
   }
 
   // Loading state
@@ -237,7 +276,7 @@ export default function PurchasesPage() {
       <div className="grid gap-6">
         {purchases.map((purchase, index) => (
           <Card
-            key={purchase.sessionId}
+            key={purchase.id}
             className="bg-black/40 backdrop-blur-xl border-white/10 hover:border-white/20 transition-all duration-300 overflow-hidden"
             style={{
               animationDelay: `${index * 100}ms`,
@@ -287,14 +326,70 @@ export default function PurchasesPage() {
                 </div>
               </div>
 
+              {/* File Details */}
+              <div className="grid grid-cols-3 gap-4 p-4 bg-white/5 rounded-lg mb-4">
+                <div className="text-center">
+                  <div className="text-lg font-bold text-white flex items-center justify-center">
+                    <HardDrive className="h-4 w-4 mr-1" />
+                    {formatFileSize(purchase.fileSize)}
+                  </div>
+                  <div className="text-sm text-white/60">File Size</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-lg font-bold text-white flex items-center justify-center">
+                    <Clock className="h-4 w-4 mr-1" />
+                    {purchase.duration ? formatDuration(purchase.duration) : "N/A"}
+                  </div>
+                  <div className="text-sm text-white/60">Duration</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-lg font-bold text-white flex items-center justify-center">
+                    <Download className="h-4 w-4 mr-1" />
+                    {purchase.downloadCount}
+                  </div>
+                  <div className="text-sm text-white/60">Downloads</div>
+                </div>
+              </div>
+
+              {/* File Type & Environment Info */}
+              <div className="flex items-center space-x-4 text-sm text-white/60 mb-4">
+                <span className="bg-white/10 px-2 py-1 rounded">{purchase.fileType || "Unknown Type"}</span>
+                <span className="bg-white/10 px-2 py-1 rounded">
+                  {purchase.itemType === "bundle" ? "Bundle" : "Product Box"}
+                </span>
+                {purchase.environment && (
+                  <span
+                    className={`px-2 py-1 rounded ${
+                      purchase.environment === "live"
+                        ? "bg-green-500/20 text-green-300"
+                        : "bg-yellow-500/20 text-yellow-300"
+                    }`}
+                  >
+                    {purchase.environment.toUpperCase()}
+                  </span>
+                )}
+              </div>
+
               {/* Action Buttons */}
-              <div className="flex space-x-3 mt-4">
+              <div className="flex space-x-3">
                 <Button asChild className="bg-red-600 hover:bg-red-700 flex-1">
                   <Link href={purchase.accessUrl}>
                     <Eye className="w-4 h-4 mr-2" />
                     View Content
                   </Link>
                 </Button>
+                {purchase.downloadUrl && (
+                  <Button
+                    asChild
+                    variant="outline"
+                    className="bg-transparent border-white/20 text-white hover:bg-white/10"
+                  >
+                    <a href={purchase.downloadUrl} target="_blank" rel="noopener noreferrer">
+                      <Download className="w-4 h-4 mr-2" />
+                      Download
+                    </a>
+                  </Button>
+                )}
                 {purchase.creatorUsername && (
                   <Button
                     asChild
@@ -303,7 +398,7 @@ export default function PurchasesPage() {
                   >
                     <Link href={`/creator/${purchase.creatorUsername}`}>
                       <User className="w-4 h-4 mr-2" />
-                      Creator Profile
+                      Creator
                     </Link>
                   </Button>
                 )}

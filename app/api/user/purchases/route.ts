@@ -35,15 +35,14 @@ export async function GET(request: NextRequest) {
 
     console.log("🔍 [Purchases API] Fetching purchases for user:", finalUserId)
 
-    // Simple: just get purchases from user's personal collection
+    // Query bundlePurchases collection for this buyer
     const purchasesSnapshot = await db
-      .collection("users")
-      .doc(finalUserId)
-      .collection("purchases")
+      .collection("bundlePurchases")
+      .where("buyerUid", "==", finalUserId)
       .orderBy("purchasedAt", "desc")
       .get()
 
-    console.log(`📊 [Purchases API] Found ${purchasesSnapshot.size} purchases`)
+    console.log(`📊 [Purchases API] Found ${purchasesSnapshot.size} purchases in bundlePurchases`)
 
     const purchases: any[] = []
     purchasesSnapshot.forEach((doc) => {
@@ -53,9 +52,15 @@ export async function GET(request: NextRequest) {
         sessionId: data.sessionId,
         itemId: data.itemId,
         itemType: data.itemType || "bundle",
+        bundleId: data.bundleId,
+        productBoxId: data.productBoxId,
         title: data.title || "Untitled",
         description: data.description || "",
         thumbnailUrl: data.thumbnailUrl || "",
+        downloadUrl: data.downloadUrl || "",
+        fileSize: data.fileSize || 0,
+        fileType: data.fileType || "",
+        duration: data.duration || 0,
         creatorId: data.creatorId || "",
         creatorName: data.creatorName || "Unknown Creator",
         creatorUsername: data.creatorUsername || "",
@@ -64,10 +69,15 @@ export async function GET(request: NextRequest) {
         status: data.status || "completed",
         purchasedAt: data.purchasedAt || data.createdAt || new Date(),
         accessUrl: data.accessUrl || `/bundles/${data.itemId}`,
+        accessGranted: data.accessGranted || true,
+        downloadCount: data.downloadCount || 0,
+        buyerEmail: data.buyerEmail || "",
+        buyerName: data.buyerName || "",
+        environment: data.environment || "unknown",
       })
     })
 
-    console.log("✅ [Purchases API] Returning", purchases.length, "purchases")
+    console.log("✅ [Purchases API] Returning", purchases.length, "purchases from bundlePurchases")
     return NextResponse.json({ purchases })
   } catch (error) {
     console.error("❌ [Purchases API] Error fetching user purchases:", error)

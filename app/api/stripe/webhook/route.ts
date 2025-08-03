@@ -87,9 +87,13 @@ async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session) 
     console.log("✅ [Webhook] Session metadata:", { buyerUid, itemId, creatorId })
 
     // Check if this purchase has already been processed
-    const existingPurchaseDoc = await db.collection("users").doc(buyerUid).collection("purchases").doc(session.id).get()
+    const existingPurchaseQuery = await db
+      .collection("bundlePurchases")
+      .where("sessionId", "==", session.id)
+      .limit(1)
+      .get()
 
-    if (existingPurchaseDoc.exists) {
+    if (!existingPurchaseQuery.empty) {
       console.log("⚠️ [Webhook] Purchase already processed:", session.id)
       return
     }
@@ -127,14 +131,37 @@ async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session) 
       creatorData = creatorDoc.exists ? creatorDoc.data() : null
     }
 
-    // Create simple purchase record
+    // Get buyer details
+    let buyerData = null
+    const buyerDoc = await db.collection("users").doc(buyerUid).get()
+    if (buyerDoc.exists) {
+      buyerData = buyerDoc.data()
+    }
+
+    // Create purchase document in bundlePurchases collection
     const purchaseData = {
+      // Purchase identifiers
+      sessionId: session.id,
+      paymentIntentId: session.payment_intent,
+
+      // Buyer information
+      buyerUid,
+      buyerEmail: session.customer_email || buyerData?.email || "",
+      buyerName: buyerData?.displayName || buyerData?.name || "",
+      buyerUsername: buyerData?.username || "",
+
       // Item details from Firestore
       itemId,
       itemType,
+      bundleId: itemType === "bundle" ? itemId : null,
+      productBoxId: itemType === "product_box" ? itemId : null,
       title: itemData.title || "Untitled",
       description: itemData.description || "",
       thumbnailUrl: itemData.thumbnailUrl || itemData.customPreviewThumbnail || "",
+      downloadUrl: itemData.downloadUrl || "",
+      fileSize: itemData.fileSize || 0,
+      fileType: itemData.fileType || "",
+      duration: itemData.duration || 0,
 
       // Creator details
       creatorId: finalCreatorId || "",
@@ -142,7 +169,6 @@ async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session) 
       creatorUsername: creatorData?.username || "",
 
       // Purchase details
-      sessionId: session.id,
       amount: session.amount_total ? session.amount_total / 100 : 0,
       currency: session.currency || "usd",
       status: "completed",
@@ -150,15 +176,22 @@ async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session) 
       // Timestamps
       purchasedAt: new Date(),
       createdAt: new Date(),
+      updatedAt: new Date(),
 
-      // Access URL
+      // Access information
       accessUrl: itemType === "bundle" ? `/bundles/${itemId}` : `/product-box/${itemId}/content`,
+      accessGranted: true,
+      downloadCount: 0,
+
+      // Metadata
+      environment: isLiveKey ? "live" : "test",
+      source: "stripe_webhook",
     }
 
-    // Write to buyer's purchases - this is the only place we store it
-    await db.collection("users").doc(buyerUid).collection("purchases").doc(session.id).set(purchaseData)
+    // Write to bundlePurchases collection
+    await db.collection("bundlePurchases").add(purchaseData)
 
-    console.log(`✅ [Webhook] Purchase saved to buyer's account: ${buyerUid}`)
+    console.log(`✅ [Webhook] Purchase saved to bundlePurchases collection for buyer: ${buyerUid}`)
 
     // Update item sales counter
     const itemCollection = itemType === "bundle" ? "bundles" : "productBoxes"
