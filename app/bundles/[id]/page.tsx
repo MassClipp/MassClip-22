@@ -1,405 +1,256 @@
-"use client"
-
-import { useState, useEffect } from "react"
-import { useParams } from "next/navigation"
-import { useAuthContext } from "@/contexts/auth-context"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import type { Metadata } from "next"
+import { notFound } from "next/navigation"
+import { adminDb } from "@/lib/firebase-admin"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Loader2, Download, Package, User, DollarSign, CheckCircle, Lock } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { Download, User, FileText, Package } from "lucide-react"
+import Image from "next/image"
 import Link from "next/link"
 
-interface Bundle {
-  id: string
-  title: string
-  description: string
-  thumbnailUrl: string
-  fileUrl: string
-  fileSize: number
-  fileType: string
-  price: number
-  currency: string
-  creatorId: string
-  creatorName: string
-  creatorUsername: string
-  isPublic: boolean
-  createdAt: any
-  tags: string[]
-  category: string
-  downloadCount: number
-  viewCount: number
-  contentItems: string[]
-  creator?: {
-    id: string
-    name: string
-    username: string
-    profilePicture: string
+interface BundlePageProps {
+  params: { id: string }
+}
+
+async function getBundleData(bundleId: string) {
+  try {
+    console.log(`🔍 [Bundle Page] Fetching bundle: ${bundleId}`)
+
+    const bundleDoc = await adminDb.collection("bundles").doc(bundleId).get()
+
+    if (!bundleDoc.exists) {
+      console.log(`❌ [Bundle Page] Bundle not found: ${bundleId}`)
+      return null
+    }
+
+    const bundleData = bundleDoc.data()!
+
+    // Get creator information
+    let creatorData = null
+    if (bundleData.creatorId) {
+      try {
+        const creatorDoc = await adminDb.collection("users").doc(bundleData.creatorId).get()
+        if (creatorDoc.exists) {
+          creatorData = creatorDoc.data()
+        }
+      } catch (error) {
+        console.warn(`⚠️ [Bundle Page] Could not fetch creator data:`, error)
+      }
+    }
+
+    return {
+      id: bundleId,
+      title: bundleData.title || "Untitled Bundle",
+      description: bundleData.description || "",
+      thumbnailUrl: bundleData.thumbnailUrl || bundleData.customPreviewThumbnail || "",
+      creatorId: bundleData.creatorId || "",
+      creatorName: creatorData?.displayName || creatorData?.name || "Unknown Creator",
+      creatorUsername: creatorData?.username || "",
+      fileSize: bundleData.fileSize || bundleData.size || 0,
+      fileType: bundleData.fileType || bundleData.mimeType || "application/octet-stream",
+      tags: bundleData.tags || [],
+      isPublic: bundleData.isPublic !== false,
+      downloadUrl: bundleData.downloadUrl || bundleData.fileUrl || "",
+      createdAt: bundleData.createdAt || bundleData.uploadedAt || new Date(),
+      updatedAt: bundleData.updatedAt || new Date(),
+    }
+  } catch (error) {
+    console.error(`❌ [Bundle Page] Error fetching bundle:`, error)
+    return null
   }
 }
 
-export default function BundlePage() {
-  const params = useParams()
-  const { user } = useAuthContext()
-  const bundleId = params.id as string
-
-  const [bundle, setBundle] = useState<Bundle | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const [hasPurchased, setHasPurchased] = useState(false)
-  const [checkingPurchase, setCheckingPurchase] = useState(false)
-
-  useEffect(() => {
-    fetchBundle()
-  }, [bundleId])
-
-  useEffect(() => {
-    if (user && bundle) {
-      checkPurchaseStatus()
-    }
-  }, [user, bundle])
-
-  const fetchBundle = async () => {
-    try {
-      setLoading(true)
-      setError(null)
-
-      const response = await fetch(`/api/bundles/${bundleId}`)
-
-      if (!response.ok) {
-        const errorData = await response.json()
-        throw new Error(errorData.error || `HTTP ${response.status}`)
-      }
-
-      const data = await response.json()
-      setBundle(data)
-    } catch (err: any) {
-      console.error("Error fetching bundle:", err)
-      setError(err.message || "Failed to fetch bundle")
-    } finally {
-      setLoading(false)
-    }
-  }
-
-  const checkPurchaseStatus = async () => {
-    if (!user || !bundle) return
-
-    try {
-      setCheckingPurchase(true)
-
-      const response = await fetch(`/api/user/product-box-access?userId=${user.uid}&productBoxId=${bundleId}`)
-
-      if (response.ok) {
-        const data = await response.json()
-        setHasPurchased(data.hasAccess || false)
-      }
-    } catch (error) {
-      console.error("Error checking purchase status:", error)
-    } finally {
-      setCheckingPurchase(false)
-    }
-  }
-
-  const formatFileSize = (bytes: number) => {
-    if (bytes === 0) return "0 Bytes"
-    const k = 1024
-    const sizes = ["Bytes", "KB", "MB", "GB"]
-    const i = Math.floor(Math.log(bytes) / Math.log(k))
-    return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + " " + sizes[i]
-  }
-
-  const formatPrice = (amount: number, currency = "usd") => {
-    return new Intl.NumberFormat("en-US", {
-      style: "currency",
-      currency: currency.toUpperCase(),
-    }).format(amount)
-  }
-
-  const formatDate = (date: any) => {
-    if (!date) return "Unknown"
-    const d = date.toDate ? date.toDate() : new Date(date)
-    return d.toLocaleDateString("en-US", {
-      year: "numeric",
-      month: "short",
-      day: "numeric",
-    })
-  }
-
-  if (loading) {
-    return (
-      <div className="container mx-auto px-4 py-8">
-        <div className="flex items-center justify-center py-12">
-          <div className="text-center">
-            <Loader2 className="h-8 w-8 animate-spin text-red-500 mx-auto mb-4" />
-            <p className="text-white/60">Loading bundle...</p>
-          </div>
-        </div>
-      </div>
-    )
-  }
-
-  if (error) {
-    return (
-      <div className="container mx-auto px-4 py-8">
-        <Alert className="bg-red-500/10 border-red-500/20 mb-6">
-          <Package className="h-4 w-4 text-red-400" />
-          <AlertDescription className="text-red-200">
-            <strong>Error:</strong> {error}
-          </AlertDescription>
-        </Alert>
-
-        <div className="flex gap-4">
-          <Button onClick={fetchBundle} className="bg-red-600 hover:bg-red-700">
-            Try Again
-          </Button>
-          <Button variant="outline" asChild>
-            <Link href="/dashboard/bundles">Back to Bundles</Link>
-          </Button>
-        </div>
-      </div>
-    )
-  }
+export async function generateMetadata({ params }: BundlePageProps): Promise<Metadata> {
+  const bundle = await getBundleData(params.id)
 
   if (!bundle) {
-    return (
-      <div className="container mx-auto px-4 py-8">
-        <Alert className="bg-yellow-500/10 border-yellow-500/20">
-          <Package className="h-4 w-4 text-yellow-400" />
-          <AlertDescription className="text-yellow-200">Bundle not found</AlertDescription>
-        </Alert>
-      </div>
-    )
+    return {
+      title: "Bundle Not Found",
+      description: "The requested bundle could not be found.",
+    }
+  }
+
+  return {
+    title: `${bundle.title} - Bundle`,
+    description: bundle.description || `Bundle by ${bundle.creatorName}`,
+    openGraph: {
+      title: bundle.title,
+      description: bundle.description || `Bundle by ${bundle.creatorName}`,
+      images: bundle.thumbnailUrl ? [{ url: bundle.thumbnailUrl }] : [],
+    },
+  }
+}
+
+function formatFileSize(bytes: number): string {
+  if (bytes === 0) return "0 Bytes"
+  const k = 1024
+  const sizes = ["Bytes", "KB", "MB", "GB"]
+  const i = Math.floor(Math.log(bytes) / Math.log(k))
+  return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + " " + sizes[i]
+}
+
+function formatDate(date: any): string {
+  if (!date) return "Unknown"
+  const d = date.toDate ? date.toDate() : new Date(date)
+  return d.toLocaleDateString("en-US", {
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  })
+}
+
+export default async function BundlePage({ params }: BundlePageProps) {
+  const bundle = await getBundleData(params.id)
+
+  if (!bundle) {
+    notFound()
   }
 
   return (
-    <div className="container mx-auto px-4 py-8 max-w-4xl">
-      <div className="grid gap-6 lg:grid-cols-3">
-        {/* Main Content */}
-        <div className="lg:col-span-2 space-y-6">
-          {/* Bundle Header */}
-          <Card className="bg-black/40 backdrop-blur-xl border-white/10">
-            <CardContent className="p-6">
-              <div className="flex items-start gap-4">
-                {bundle.thumbnailUrl && (
-                  <img
-                    src={bundle.thumbnailUrl || "/placeholder.svg"}
-                    alt={bundle.title}
-                    className="w-24 h-24 rounded-lg object-cover bg-white/5 flex-shrink-0"
-                  />
-                )}
-                <div className="flex-1">
-                  <h1 className="text-2xl font-bold text-white mb-2">{bundle.title}</h1>
-
-                  {bundle.creator && (
-                    <div className="flex items-center gap-2 mb-3">
-                      {bundle.creator.profilePicture && (
-                        <img
-                          src={bundle.creator.profilePicture || "/placeholder.svg"}
-                          alt={bundle.creator.name}
-                          className="w-6 h-6 rounded-full"
-                        />
-                      )}
-                      <span className="text-white/70">by {bundle.creator.name}</span>
-                      {bundle.creator.username && <span className="text-white/50">@{bundle.creator.username}</span>}
-                    </div>
-                  )}
-
-                  <div className="flex flex-wrap gap-2">
-                    <Badge className="bg-blue-500/10 text-blue-400 border-blue-500/20">{bundle.fileType}</Badge>
-                    {bundle.isPublic && (
-                      <Badge className="bg-green-500/10 text-green-400 border-green-500/20">Public</Badge>
-                    )}
-                    {bundle.category && (
-                      <Badge className="bg-purple-500/10 text-purple-400 border-purple-500/20">{bundle.category}</Badge>
-                    )}
-                  </div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Description */}
-          {bundle.description && (
-            <Card className="bg-black/40 backdrop-blur-xl border-white/10">
-              <CardHeader>
-                <CardTitle className="text-white text-lg">Description</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <p className="text-white/70 whitespace-pre-wrap">{bundle.description}</p>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Tags */}
-          {bundle.tags && bundle.tags.length > 0 && (
-            <Card className="bg-black/40 backdrop-blur-xl border-white/10">
-              <CardHeader>
-                <CardTitle className="text-white text-lg">Tags</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="flex flex-wrap gap-2">
-                  {bundle.tags.map((tag, index) => (
-                    <Badge key={index} variant="outline" className="bg-transparent border-white/20 text-white/70">
-                      {tag}
-                    </Badge>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-          )}
+    <div className="min-h-screen bg-gray-50 py-8">
+      <div className="max-w-4xl mx-auto px-4 space-y-6">
+        {/* Header */}
+        <div className="text-center">
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">{bundle.title}</h1>
+          <p className="text-gray-600">{bundle.description}</p>
         </div>
 
-        {/* Sidebar */}
-        <div className="space-y-6">
-          {/* Purchase/Access Card */}
-          <Card className="bg-black/40 backdrop-blur-xl border-white/10">
+        {/* Bundle Details */}
+        <div className="grid md:grid-cols-2 gap-6">
+          {/* Bundle Information */}
+          <Card>
             <CardHeader>
-              <CardTitle className="text-white text-lg flex items-center gap-2">
-                {hasPurchased ? (
-                  <>
-                    <CheckCircle className="h-5 w-5 text-green-400" />
-                    Purchased
-                  </>
-                ) : (
-                  <>
-                    <Lock className="h-5 w-5 text-yellow-400" />
-                    Purchase Required
-                  </>
-                )}
+              <CardTitle className="flex items-center gap-2">
+                <Package className="h-5 w-5" />
+                Bundle Details
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              {bundle.price > 0 && (
-                <div className="text-center">
-                  <div className="text-3xl font-bold text-white">{formatPrice(bundle.price, bundle.currency)}</div>
+              <div className="grid grid-cols-2 gap-4 text-sm">
+                <div>
+                  <p className="font-medium text-gray-700">File Size:</p>
+                  <p>{formatFileSize(bundle.fileSize)}</p>
+                </div>
+                <div>
+                  <p className="font-medium text-gray-700">File Type:</p>
+                  <p>{bundle.fileType}</p>
+                </div>
+                <div>
+                  <p className="font-medium text-gray-700">Created:</p>
+                  <p>{formatDate(bundle.createdAt)}</p>
+                </div>
+                <div>
+                  <p className="font-medium text-gray-700">Status:</p>
+                  <Badge variant={bundle.isPublic ? "default" : "secondary"}>
+                    {bundle.isPublic ? "Public" : "Private"}
+                  </Badge>
+                </div>
+              </div>
+
+              {bundle.tags && bundle.tags.length > 0 && (
+                <div>
+                  <p className="font-medium text-gray-700 mb-2">Tags:</p>
+                  <div className="flex flex-wrap gap-2">
+                    {bundle.tags.map((tag, index) => (
+                      <Badge key={index} variant="outline">
+                        {tag}
+                      </Badge>
+                    ))}
+                  </div>
                 </div>
               )}
+            </CardContent>
+          </Card>
 
-              {hasPurchased ? (
-                <Button className="w-full bg-green-600 hover:bg-green-700">
-                  <Download className="h-4 w-4 mr-2" />
-                  Download Bundle
+          {/* Creator Information */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <User className="h-5 w-5" />
+                Creator
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-2">
+                <p className="font-semibold">{bundle.creatorName}</p>
+                {bundle.creatorUsername && <p className="text-gray-600">@{bundle.creatorUsername}</p>}
+                <Button variant="outline" size="sm" asChild>
+                  <Link href={`/creator/${bundle.creatorUsername || bundle.creatorId}`}>View Profile</Link>
                 </Button>
-              ) : (
-                <div className="space-y-2">
-                  <Button className="w-full bg-red-600 hover:bg-red-700" disabled>
-                    <DollarSign className="h-4 w-4 mr-2" />
-                    Purchase Bundle
-                  </Button>
-                  <p className="text-xs text-white/60 text-center">Purchase functionality coming soon</p>
-                </div>
-              )}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
 
-              {user && (
-                <Button asChild variant="outline" className="w-full bg-transparent border-white/10 text-white/80">
-                  <Link
-                    href={`/test-add-bundle-purchase?bundleId=${bundleId}&userId=${user.uid}&creatorId=${bundle.creatorId}`}
-                  >
-                    <Package className="h-4 w-4 mr-2" />
-                    Test Purchase
+        {/* Bundle Thumbnail */}
+        {bundle.thumbnailUrl && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Preview</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="relative w-full max-w-md mx-auto h-64 bg-gray-100 rounded-lg overflow-hidden">
+                <Image
+                  src={bundle.thumbnailUrl || "/placeholder.svg"}
+                  alt={bundle.title}
+                  fill
+                  className="object-cover"
+                  onError={(e) => {
+                    const target = e.target as HTMLImageElement
+                    target.style.display = "none"
+                  }}
+                />
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Actions */}
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex flex-col sm:flex-row gap-4">
+              {bundle.downloadUrl && (
+                <Button asChild className="flex-1">
+                  <Link href={bundle.downloadUrl} target="_blank" rel="noopener noreferrer">
+                    <Download className="h-4 w-4 mr-2" />
+                    Download Bundle
                   </Link>
                 </Button>
               )}
-            </CardContent>
-          </Card>
-
-          {/* Bundle Info */}
-          <Card className="bg-black/40 backdrop-blur-xl border-white/10">
-            <CardHeader>
-              <CardTitle className="text-white text-lg">Bundle Info</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-white/60">File Size:</span>
-                <span className="text-white">{formatFileSize(bundle.fileSize)}</span>
-              </div>
-
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-white/60">Created:</span>
-                <span className="text-white">{formatDate(bundle.createdAt)}</span>
-              </div>
-
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-white/60">Downloads:</span>
-                <span className="text-white">{bundle.downloadCount || 0}</span>
-              </div>
-
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-white/60">Views:</span>
-                <span className="text-white">{bundle.viewCount || 0}</span>
-              </div>
-
-              {bundle.contentItems && bundle.contentItems.length > 0 && (
-                <div className="flex items-center justify-between text-sm">
-                  <span className="text-white/60">Content Items:</span>
-                  <span className="text-white">{bundle.contentItems.length}</span>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Creator Info */}
-          {bundle.creator && (
-            <Card className="bg-black/40 backdrop-blur-xl border-white/10">
-              <CardHeader>
-                <CardTitle className="text-white text-lg flex items-center gap-2">
-                  <User className="h-5 w-5" />
-                  Creator
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="flex items-center gap-3">
-                  {bundle.creator.profilePicture && (
-                    <img
-                      src={bundle.creator.profilePicture || "/placeholder.svg"}
-                      alt={bundle.creator.name}
-                      className="w-12 h-12 rounded-full"
-                    />
-                  )}
-                  <div>
-                    <div className="text-white font-medium">{bundle.creator.name}</div>
-                    {bundle.creator.username && <div className="text-white/60 text-sm">@{bundle.creator.username}</div>}
-                  </div>
-                </div>
-
-                <Button asChild variant="outline" className="w-full mt-4 bg-transparent border-white/10 text-white/80">
-                  <Link href={`/creator/${bundle.creator.username || bundle.creatorId}`}>View Profile</Link>
-                </Button>
-              </CardContent>
-            </Card>
-          )}
-        </div>
-      </div>
-
-      {/* Debug Info (Development Only) */}
-      {process.env.NODE_ENV === "development" && (
-        <Card className="bg-black/40 backdrop-blur-xl border-white/10 mt-8">
-          <CardHeader>
-            <CardTitle className="text-white text-sm">Debug Info</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <pre className="text-xs text-white/60 overflow-auto bg-black/20 p-4 rounded">
-              {JSON.stringify(
-                {
-                  bundleId,
-                  userId: user?.uid,
-                  hasPurchased,
-                  checkingPurchase,
-                  bundle: {
-                    id: bundle.id,
-                    title: bundle.title,
-                    creatorId: bundle.creatorId,
-                    price: bundle.price,
-                    fileSize: bundle.fileSize,
-                  },
-                },
-                null,
-                2,
-              )}
-            </pre>
+              <Button variant="outline" asChild className="flex-1 bg-transparent">
+                <Link href="/test-add-bundle-purchase">
+                  <FileText className="h-4 w-4 mr-2" />
+                  Test Purchase
+                </Link>
+              </Button>
+            </div>
           </CardContent>
         </Card>
-      )}
+
+        {/* Debug Information */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <FileText className="h-5 w-5" />
+              Debug Information
+            </CardTitle>
+            <CardDescription>Technical details for development and testing</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2 text-sm font-mono bg-gray-100 p-4 rounded-lg">
+              <p>
+                <strong>Bundle ID:</strong> {bundle.id}
+              </p>
+              <p>
+                <strong>Creator ID:</strong> {bundle.creatorId}
+              </p>
+              <p>
+                <strong>Download URL:</strong> {bundle.downloadUrl || "Not available"}
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
     </div>
   )
 }

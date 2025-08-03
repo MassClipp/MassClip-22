@@ -1,14 +1,13 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { db } from "@/lib/firebase-admin"
+import { adminDb } from "@/lib/firebase-admin"
 
 export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
-  console.log(`🔍 [Bundle API] Fetching bundle info for ID: ${params.id}`)
+  console.log(`🔍 [Bundle API] Fetching bundle: ${params.id}`)
 
   try {
     const bundleId = params.id
 
     if (!bundleId) {
-      console.error("❌ [Bundle API] No bundle ID provided")
       return NextResponse.json(
         {
           error: "Bundle ID is required",
@@ -18,11 +17,13 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
       )
     }
 
-    // Fetch bundle from Firestore
-    const bundleDoc = await db.collection("bundles").doc(bundleId).get()
+    console.log(`📦 [Bundle API] Looking up bundle in database: ${bundleId}`)
+
+    // Get bundle document from Firestore
+    const bundleDoc = await adminDb.collection("bundles").doc(bundleId).get()
 
     if (!bundleDoc.exists) {
-      console.error(`❌ [Bundle API] Bundle ${bundleId} not found`)
+      console.log(`❌ [Bundle API] Bundle not found: ${bundleId}`)
       return NextResponse.json(
         {
           error: "Bundle not found",
@@ -33,33 +34,23 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
     }
 
     const bundleData = bundleDoc.data()!
-    console.log(`📦 [Bundle API] Bundle data retrieved:`, {
+    console.log(`✅ [Bundle API] Bundle found:`, {
       id: bundleId,
       title: bundleData.title,
       creatorId: bundleData.creatorId,
     })
 
     // Get creator information
-    let creatorInfo = {
-      id: bundleData.creatorId || "",
-      name: "Unknown Creator",
-      username: "",
-    }
-
+    let creatorData = null
     if (bundleData.creatorId) {
       try {
-        const creatorDoc = await db.collection("users").doc(bundleData.creatorId).get()
+        const creatorDoc = await adminDb.collection("users").doc(bundleData.creatorId).get()
         if (creatorDoc.exists) {
-          const creatorData = creatorDoc.data()!
-          creatorInfo = {
-            id: bundleData.creatorId,
-            name: creatorData.displayName || creatorData.name || "Unknown Creator",
-            username: creatorData.username || "",
-          }
-          console.log(`👤 [Bundle API] Creator info retrieved:`, creatorInfo)
+          creatorData = creatorDoc.data()
+          console.log(`✅ [Bundle API] Creator found: ${creatorData?.displayName || creatorData?.name}`)
         }
       } catch (error) {
-        console.warn(`⚠️ [Bundle API] Could not fetch creator info:`, error)
+        console.warn(`⚠️ [Bundle API] Could not fetch creator data:`, error)
       }
     }
 
@@ -69,35 +60,31 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
       contentItemsCount = bundleData.contentItems.length
     }
 
-    // Prepare bundle response
+    // Prepare bundle information
     const bundleInfo = {
       id: bundleId,
       title: bundleData.title || "Untitled Bundle",
       description: bundleData.description || "",
       thumbnailUrl: bundleData.thumbnailUrl || bundleData.customPreviewThumbnail || "",
-      creatorId: creatorInfo.id,
-      creatorName: creatorInfo.name,
-      creatorUsername: creatorInfo.username,
+      creatorId: bundleData.creatorId || "",
+      creatorName: creatorData?.displayName || creatorData?.name || "Unknown Creator",
+      creatorUsername: creatorData?.username || "",
       fileSize: bundleData.fileSize || bundleData.size || 0,
       fileType: bundleData.fileType || bundleData.mimeType || "application/octet-stream",
       tags: bundleData.tags || [],
       isPublic: bundleData.isPublic !== false,
       contentItems: contentItemsCount,
       downloadUrl: bundleData.downloadUrl || bundleData.fileUrl || "",
-      createdAt: bundleData.createdAt || new Date(),
+      createdAt: bundleData.createdAt || bundleData.uploadedAt || new Date(),
       updatedAt: bundleData.updatedAt || new Date(),
     }
 
-    console.log(`✅ [Bundle API] Bundle info prepared for response:`, {
-      id: bundleInfo.id,
-      title: bundleInfo.title,
-      creator: bundleInfo.creatorName,
-      contentItems: bundleInfo.contentItems,
-    })
+    console.log(`📊 [Bundle API] Complete bundle info prepared:`, bundleInfo)
 
     return NextResponse.json({
       success: true,
       bundle: bundleInfo,
+      message: "Bundle information retrieved successfully",
     })
   } catch (error: any) {
     console.error(`❌ [Bundle API] Error fetching bundle ${params.id}:`, error)

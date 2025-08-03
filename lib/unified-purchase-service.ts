@@ -1,15 +1,6 @@
-import { db as adminDb } from "@/lib/firebase-admin"
+import { adminDb } from "@/lib/firebase-admin"
 import { db as clientDb } from "@/lib/firebase"
 import { collection, doc, setDoc, getDoc, getDocs, query, where, orderBy } from "firebase/firestore"
-
-// Use admin DB for server-side operations, client DB for client-side
-const getDb = () => {
-  if (typeof window === "undefined") {
-    return adminDb // Server-side
-  } else {
-    return clientDb // Client-side
-  }
-}
 
 export interface UnifiedPurchaseItem {
   id: string
@@ -83,6 +74,19 @@ export interface UnifiedPurchase {
 
 export class UnifiedPurchaseService {
   /**
+   * Get the appropriate database instance based on environment
+   */
+  private static getDb() {
+    if (typeof window === "undefined") {
+      // Server-side: use Firebase Admin
+      return adminDb
+    } else {
+      // Client-side: use Firebase client SDK
+      return clientDb
+    }
+  }
+
+  /**
    * Create a unified purchase record after successful payment
    */
   static async createUnifiedPurchase(
@@ -133,15 +137,32 @@ export class UnifiedPurchaseService {
       }
 
       // Get item details from the appropriate collection
-      const collection = isBundle ? "bundles" : "productBoxes"
-      const itemDoc = await getDb().collection(collection).doc(itemId).get()
+      const db = this.getDb()
+      const collectionName = isBundle ? "bundles" : "productBoxes"
+
+      let itemDoc
+      if (typeof window === "undefined") {
+        // Server-side: use Firebase Admin
+        itemDoc = await db.collection(collectionName).doc(itemId).get()
+      } else {
+        // Client-side: use Firebase client SDK
+        itemDoc = await getDoc(doc(db, collectionName, itemId))
+      }
+
       if (!itemDoc.exists) {
         throw new Error(`${itemType} ${itemId} not found`)
       }
       const itemData = itemDoc.data()!
 
       // Get creator details
-      const creatorDoc = await getDb().collection("users").doc(purchaseData.creatorId).get()
+      let creatorDoc
+      if (typeof window === "undefined") {
+        // Server-side: use Firebase Admin
+        creatorDoc = await db.collection("users").doc(purchaseData.creatorId).get()
+      } else {
+        // Client-side: use Firebase client SDK
+        creatorDoc = await getDoc(doc(db, "users", purchaseData.creatorId))
+      }
       const creatorData = creatorDoc.exists ? creatorDoc.data() : null
 
       // Get all content items for this item
@@ -192,12 +213,27 @@ export class UnifiedPurchaseService {
       })
 
       // Save to userPurchases collection
-      const purchaseRef = doc(getDb(), "userPurchases", userId, "purchases", purchaseData.sessionId)
-      await setDoc(purchaseRef, unifiedPurchase)
+      if (typeof window === "undefined") {
+        // Server-side: use Firebase Admin
+        const purchaseRef = db
+          .collection("userPurchases")
+          .doc(userId)
+          .collection("purchases")
+          .doc(purchaseData.sessionId)
+        await purchaseRef.set(unifiedPurchase)
 
-      // Also save to appropriate purchases collection for easy access
-      const purchasesCollection = isBundle ? "bundlePurchases" : "productBoxPurchases"
-      await setDoc(doc(getDb(), purchasesCollection, purchaseData.sessionId), unifiedPurchase)
+        // Also save to appropriate purchases collection for easy access
+        const purchasesCollection = isBundle ? "bundlePurchases" : "productBoxPurchases"
+        await db.collection(purchasesCollection).doc(purchaseData.sessionId).set(unifiedPurchase)
+      } else {
+        // Client-side: use Firebase client SDK
+        const purchaseRef = doc(db, "userPurchases", userId, "purchases", purchaseData.sessionId)
+        await setDoc(purchaseRef, unifiedPurchase)
+
+        // Also save to appropriate purchases collection for easy access
+        const purchasesCollection = isBundle ? "bundlePurchases" : "productBoxPurchases"
+        await setDoc(doc(db, purchasesCollection, purchaseData.sessionId), unifiedPurchase)
+      }
 
       console.log(`✅ [Unified Purchase] Created unified purchase ${purchaseData.sessionId} for ${itemType} ${itemId}`)
       return purchaseData.sessionId
@@ -216,9 +252,18 @@ export class UnifiedPurchaseService {
     try {
       console.log(`📊 [Content Fetch] Starting comprehensive content fetch for: ${productBoxId}`)
 
+      const db = this.getDb()
+
       // Method 1: Try uploads collection first (most comprehensive data)
-      const uploadsQuery = query(collection(getDb(), "uploads"), where("productBoxId", "==", productBoxId))
-      const uploadsSnapshot = await getDocs(uploadsQuery)
+      let uploadsSnapshot
+      if (typeof window === "undefined") {
+        // Server-side: use Firebase Admin
+        uploadsSnapshot = await db.collection("uploads").where("productBoxId", "==", productBoxId).get()
+      } else {
+        // Client-side: use Firebase client SDK
+        const uploadsQuery = query(collection(db, "uploads"), where("productBoxId", "==", productBoxId))
+        uploadsSnapshot = await getDocs(uploadsQuery)
+      }
 
       console.log(`📊 [Content Fetch] uploads query found ${uploadsSnapshot.size} items`)
 
@@ -228,22 +273,37 @@ export class UnifiedPurchaseService {
         if (item) items.push(item)
       })
 
-      // Method 2: Try productBoxContent collection and cross-reference with uploads
+      // Method 2: Try productBoxContent collection if no items found
       if (items.length === 0) {
-        const contentQuery = query(collection(getDb(), "productBoxContent"), where("productBoxId", "==", productBoxId))
-        const contentSnapshot = await getDocs(contentQuery)
+        let contentSnapshot
+        if (typeof window === "undefined") {
+          // Server-side: use Firebase Admin
+          contentSnapshot = await db.collection("productBoxContent").where("productBoxId", "==", productBoxId).get()
+        } else {
+          // Client-side: use Firebase client SDK
+          const contentQuery = query(collection(db, "productBoxContent"), where("productBoxId", "==", productBoxId))
+          contentSnapshot = await getDocs(contentQuery)
+        }
 
         console.log(`📊 [Content Fetch] productBoxContent query found ${contentSnapshot.size} items`)
 
-        for (const doc of contentSnapshot.docs) {
-          const data = doc.data()
+        for (const docSnapshot of contentSnapshot.docs) {
+          const data = docSnapshot.data()
           let enhancedData = data
 
           // If we have an uploadId, try to get the full upload data
           if (data.uploadId) {
             try {
-              const uploadDoc = await getDoc(doc(getDb(), "uploads", data.uploadId))
-              if (uploadDoc.exists()) {
+              let uploadDoc
+              if (typeof window === "undefined") {
+                // Server-side: use Firebase Admin
+                uploadDoc = await db.collection("uploads").doc(data.uploadId).get()
+              } else {
+                // Client-side: use Firebase client SDK
+                uploadDoc = await getDoc(doc(db, "uploads", data.uploadId))
+              }
+
+              if (uploadDoc.exists) {
                 enhancedData = { ...data, ...uploadDoc.data() }
                 console.log(`✅ [Content Fetch] Enhanced data from uploads for: ${data.uploadId}`)
               }
@@ -252,60 +312,12 @@ export class UnifiedPurchaseService {
             }
           }
 
-          const item = this.normalizeContentItem(doc.id, enhancedData, "productBoxContent")
+          const item = this.normalizeContentItem(docSnapshot.id, enhancedData, "productBoxContent")
           if (item) items.push(item)
-        }
-      }
-
-      // Method 3: Try with boxId field
-      if (items.length === 0) {
-        const boxIdQuery = query(collection(getDb(), "productBoxContent"), where("boxId", "==", productBoxId))
-        const boxIdSnapshot = await getDocs(boxIdQuery)
-
-        console.log(`📊 [Content Fetch] boxId query found ${boxIdSnapshot.size} items`)
-
-        boxIdSnapshot.forEach((doc) => {
-          const data = doc.data()
-          const item = this.normalizeContentItem(doc.id, data, "productBoxContent (boxId)")
-          if (item) items.push(item)
-        })
-      }
-
-      // Method 4: Check product box contentItems array
-      if (items.length === 0) {
-        const productBoxDoc = await getDb().collection("productBoxes").doc(productBoxId).get()
-        if (productBoxDoc.exists) {
-          const productBoxData = productBoxDoc.data()!
-          const contentItemIds = productBoxData.contentItems || []
-
-          console.log(`📊 [Content Fetch] Product box has ${contentItemIds.length} content item IDs`)
-
-          for (const itemId of contentItemIds) {
-            try {
-              const uploadDoc = await getDb().collection("uploads").doc(itemId).get()
-              if (uploadDoc.exists) {
-                const data = uploadDoc.data()!
-                const item = this.normalizeContentItem(itemId, data, "uploads (via productBox)")
-                if (item) items.push(item)
-              }
-            } catch (error) {
-              console.warn(`⚠️ [Content Fetch] Error fetching upload ${itemId}:`, error)
-            }
-          }
         }
       }
 
       console.log(`✅ [Content Fetch] Total items found: ${items.length}`)
-      console.log(
-        `📝 [Content Fetch] Item details:`,
-        items.map((item) => ({
-          title: item.displayTitle,
-          contentType: item.contentType,
-          fileSize: item.displaySize,
-          hasValidUrl: !!item.fileUrl && item.fileUrl.startsWith("http"),
-        })),
-      )
-
       return items
     } catch (error) {
       console.error(`❌ [Content Fetch] Error fetching content items:`, error)
@@ -322,8 +334,17 @@ export class UnifiedPurchaseService {
     try {
       console.log(`📊 [Bundle Content Fetch] Fetching content for bundle: ${bundleId}`)
 
+      const db = this.getDb()
+
       // Get the bundle document
-      const bundleDoc = await getDb().collection("bundles").doc(bundleId).get()
+      let bundleDoc
+      if (typeof window === "undefined") {
+        // Server-side: use Firebase Admin
+        bundleDoc = await db.collection("bundles").doc(bundleId).get()
+      } else {
+        // Client-side: use Firebase client SDK
+        bundleDoc = await getDoc(doc(db, "bundles", bundleId))
+      }
 
       if (!bundleDoc.exists) {
         console.error(`❌ [Bundle Content Fetch] Bundle ${bundleId} not found`)
@@ -344,24 +365,6 @@ export class UnifiedPurchaseService {
         if (item) {
           items.push(item)
           console.log(`✅ [Bundle Content Fetch] Added bundle as content item`)
-        }
-      }
-
-      // Also check if the bundle has associated content items
-      if (bundleData.contentItems && Array.isArray(bundleData.contentItems)) {
-        console.log(`📊 [Bundle Content Fetch] Bundle has ${bundleData.contentItems.length} associated content items`)
-
-        for (const contentItemId of bundleData.contentItems) {
-          try {
-            const contentDoc = await getDb().collection("uploads").doc(contentItemId).get()
-            if (contentDoc.exists) {
-              const contentData = contentDoc.data()!
-              const item = this.normalizeContentItem(contentItemId, contentData, "uploads (via bundle)")
-              if (item) items.push(item)
-            }
-          } catch (error) {
-            console.warn(`⚠️ [Bundle Content Fetch] Error fetching content item ${contentItemId}:`, error)
-          }
         }
       }
 
@@ -599,26 +602,53 @@ export class UnifiedPurchaseService {
     try {
       console.log(`🔍 [Unified Purchase] Fetching purchases for user ${userId}`)
 
-      const purchasesRef = collection(getDb(), "userPurchases", userId, "purchases")
-      const purchasesQuery = query(purchasesRef, orderBy("purchasedAt", "desc"))
-      const snapshot = await getDocs(purchasesQuery)
-
+      const db = this.getDb()
       const purchases: UnifiedPurchase[] = []
-      snapshot.forEach((doc) => {
-        const data = doc.data() as UnifiedPurchase
-        purchases.push({
-          ...data,
-          purchasedAt: data.purchasedAt || new Date(),
-          // Ensure user identification fields are present
-          buyerUid: data.buyerUid || userId,
-          userId: data.userId || userId,
-          userEmail: data.userEmail || "",
-          userName: data.userName || "User",
-          isAuthenticated: data.isAuthenticated !== false,
-          itemNames: data.itemNames || data.items?.map((item) => item.displayTitle) || [],
-          contentTitles: data.contentTitles || data.items?.map((item) => item.displayTitle) || [],
+
+      if (typeof window === "undefined") {
+        // Server-side: use Firebase Admin
+        const snapshot = await db
+          .collection("userPurchases")
+          .doc(userId)
+          .collection("purchases")
+          .orderBy("purchasedAt", "desc")
+          .get()
+
+        snapshot.forEach((doc) => {
+          const data = doc.data() as UnifiedPurchase
+          purchases.push({
+            ...data,
+            purchasedAt: data.purchasedAt || new Date(),
+            buyerUid: data.buyerUid || userId,
+            userId: data.userId || userId,
+            userEmail: data.userEmail || "",
+            userName: data.userName || "User",
+            isAuthenticated: data.isAuthenticated !== false,
+            itemNames: data.itemNames || data.items?.map((item) => item.displayTitle) || [],
+            contentTitles: data.contentTitles || data.items?.map((item) => item.displayTitle) || [],
+          })
         })
-      })
+      } else {
+        // Client-side: use Firebase client SDK
+        const purchasesRef = collection(db, "userPurchases", userId, "purchases")
+        const purchasesQuery = query(purchasesRef, orderBy("purchasedAt", "desc"))
+        const snapshot = await getDocs(purchasesQuery)
+
+        snapshot.forEach((doc) => {
+          const data = doc.data() as UnifiedPurchase
+          purchases.push({
+            ...data,
+            purchasedAt: data.purchasedAt || new Date(),
+            buyerUid: data.buyerUid || userId,
+            userId: data.userId || userId,
+            userEmail: data.userEmail || "",
+            userName: data.userName || "User",
+            isAuthenticated: data.isAuthenticated !== false,
+            itemNames: data.itemNames || data.items?.map((item) => item.displayTitle) || [],
+            contentTitles: data.contentTitles || data.items?.map((item) => item.displayTitle) || [],
+          })
+        })
+      }
 
       console.log(`✅ [Unified Purchase] Found ${purchases.length} purchases for user ${userId}`)
       return purchases
@@ -633,8 +663,16 @@ export class UnifiedPurchaseService {
    */
   static async getUserPurchase(userId: string, purchaseId: string): Promise<UnifiedPurchase | null> {
     try {
-      const purchaseRef = doc(getDb(), "userPurchases", userId, "purchases", purchaseId)
-      const purchaseDoc = await getDoc(purchaseRef)
+      const db = this.getDb()
+
+      let purchaseDoc
+      if (typeof window === "undefined") {
+        // Server-side: use Firebase Admin
+        purchaseDoc = await db.collection("userPurchases").doc(userId).collection("purchases").doc(purchaseId).get()
+      } else {
+        // Client-side: use Firebase client SDK
+        purchaseDoc = await getDoc(doc(db, "userPurchases", userId, "purchases", purchaseId))
+      }
 
       if (!purchaseDoc.exists) {
         return null
@@ -644,7 +682,6 @@ export class UnifiedPurchaseService {
       return {
         ...data,
         purchasedAt: data.purchasedAt || new Date(),
-        // Ensure user identification fields are present
         buyerUid: data.buyerUid || userId,
         userId: data.userId || userId,
         userEmail: data.userEmail || "",
@@ -664,9 +701,23 @@ export class UnifiedPurchaseService {
    */
   static async hasUserPurchased(userId: string, productBoxId: string): Promise<boolean> {
     try {
-      const purchasesRef = collection(getDb(), "userPurchases", userId, "purchases")
-      const purchasesQuery = query(purchasesRef, where("productBoxId", "==", productBoxId))
-      const snapshot = await getDocs(purchasesQuery)
+      const db = this.getDb()
+
+      let snapshot
+      if (typeof window === "undefined") {
+        // Server-side: use Firebase Admin
+        snapshot = await db
+          .collection("userPurchases")
+          .doc(userId)
+          .collection("purchases")
+          .where("productBoxId", "==", productBoxId)
+          .get()
+      } else {
+        // Client-side: use Firebase client SDK
+        const purchasesRef = collection(db, "userPurchases", userId, "purchases")
+        const purchasesQuery = query(purchasesRef, where("productBoxId", "==", productBoxId))
+        snapshot = await getDocs(purchasesQuery)
+      }
 
       return !snapshot.empty
     } catch (error) {

@@ -1,15 +1,16 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
-import { AlertCircle, CheckCircle, Package, User, DollarSign, ExternalLink } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { useFirebaseAuth } from "@/hooks/use-firebase-auth"
+import { User, Package, ShoppingCart, ExternalLink, AlertCircle, CheckCircle } from "lucide-react"
 import Link from "next/link"
+import Image from "next/image"
 
 interface BundleInfo {
   id: string
@@ -27,14 +28,20 @@ interface BundleInfo {
 }
 
 export default function TestAddBundlePurchase() {
-  const { user } = useFirebaseAuth()
+  const { user, loading: authLoading } = useFirebaseAuth()
   const [bundleId, setBundleId] = useState("")
   const [bundleInfo, setBundleInfo] = useState<BundleInfo | null>(null)
   const [loading, setLoading] = useState(false)
-  const [adding, setAdding] = useState(false)
   const [error, setError] = useState("")
   const [success, setSuccess] = useState("")
-  const [purchaseDetails, setPurchaseDetails] = useState<any>(null)
+  const [fetchingBundle, setFetchingBundle] = useState(false)
+
+  // Auto-fill bundle ID for testing
+  useEffect(() => {
+    if (!bundleId) {
+      setBundleId("0WTyJRyTgRjlHpn6xJfe")
+    }
+  }, [bundleId])
 
   const fetchBundleInfo = async () => {
     if (!bundleId.trim()) {
@@ -42,7 +49,7 @@ export default function TestAddBundlePurchase() {
       return
     }
 
-    setLoading(true)
+    setFetchingBundle(true)
     setError("")
     setBundleInfo(null)
 
@@ -53,7 +60,7 @@ export default function TestAddBundlePurchase() {
       const data = await response.json()
 
       if (!response.ok) {
-        throw new Error(data.error || "Failed to fetch bundle info")
+        throw new Error(data.error || "Failed to fetch bundle information")
       }
 
       console.log("✅ [Test] Bundle info fetched:", data.bundle)
@@ -62,20 +69,24 @@ export default function TestAddBundlePurchase() {
       console.error("❌ [Test] Error fetching bundle:", err)
       setError(err.message || "Failed to fetch bundle information")
     } finally {
-      setLoading(false)
+      setFetchingBundle(false)
     }
   }
 
-  const addToPurchases = async () => {
-    if (!bundleInfo || !user) {
-      setError("Bundle info or user not available")
+  const addToMyPurchases = async () => {
+    if (!user) {
+      setError("You must be logged in to add purchases")
       return
     }
 
-    setAdding(true)
+    if (!bundleInfo) {
+      setError("Please fetch bundle information first")
+      return
+    }
+
+    setLoading(true)
     setError("")
     setSuccess("")
-    setPurchaseDetails(null)
 
     try {
       console.log("🛒 [Test] Adding bundle to purchases:", {
@@ -84,45 +95,55 @@ export default function TestAddBundlePurchase() {
         creatorId: bundleInfo.creatorId,
       })
 
+      const purchaseData = {
+        userId: user.uid,
+        userEmail: user.email || "",
+        userName: user.displayName || user.email?.split("@")[0] || "User",
+        bundleId: bundleInfo.id,
+        bundleTitle: bundleInfo.title,
+        bundleDescription: bundleInfo.description,
+        bundleThumbnail: bundleInfo.thumbnailUrl,
+        creatorId: bundleInfo.creatorId,
+        creatorName: bundleInfo.creatorName,
+        creatorUsername: bundleInfo.creatorUsername,
+        amount: 999, // $9.99 in cents
+        currency: "usd",
+        sessionId: `test_${bundleInfo.id}_${Date.now()}`,
+        environment: "test",
+      }
+
+      console.log("📋 [Test] Complete purchase data being sent:", purchaseData)
+
       const response = await fetch("/api/test/add-bundle-to-purchases", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
-          userId: user.uid,
-          userEmail: user.email,
-          userName: user.displayName || user.email?.split("@")[0] || "User",
-          bundleId: bundleInfo.id,
-          bundleTitle: bundleInfo.title,
-          bundleDescription: bundleInfo.description,
-          bundleThumbnail: bundleInfo.thumbnailUrl,
-          creatorId: bundleInfo.creatorId,
-          creatorName: bundleInfo.creatorName,
-          creatorUsername: bundleInfo.creatorUsername,
-          amount: 999, // $9.99 in cents
-          currency: "usd",
-          sessionId: `test_${bundleInfo.id}_${Date.now()}`,
-          environment: "test",
-        }),
+        body: JSON.stringify(purchaseData),
       })
 
-      const data = await response.json()
+      const result = await response.json()
 
       if (!response.ok) {
-        throw new Error(data.details || data.error || "Failed to add bundle to purchases")
+        throw new Error(result.details || result.error || "Failed to add bundle to purchases")
       }
 
-      console.log("✅ [Test] Bundle added to purchases successfully:", data)
-      console.log("📊 [Test] Purchase details for implementation:", data.purchaseDetails)
+      console.log("✅ [Test] Bundle added to purchases successfully:", result)
+      console.log("📊 [Test] Purchase details for implementation:", result.purchaseDetails)
+      console.log("📋 [Test] Implementation guide:", result.implementationGuide)
 
-      setSuccess("Bundle added to purchases successfully!")
-      setPurchaseDetails(data.purchaseDetails)
+      setSuccess(`Bundle "${bundleInfo.title}" added to your purchases successfully!`)
+
+      // Log the complete data structure for implementation
+      console.log("🔧 [IMPLEMENTATION DATA] Use this structure in your Stripe webhook:")
+      console.log("=".repeat(80))
+      console.log(JSON.stringify(result.purchaseDetails, null, 2))
+      console.log("=".repeat(80))
     } catch (err: any) {
-      console.error("❌ [Test] Error adding to purchases:", err)
+      console.error("❌ [Test] Error adding bundle to purchases:", err)
       setError(err.message || "Failed to add bundle to purchases")
     } finally {
-      setAdding(false)
+      setLoading(false)
     }
   }
 
@@ -134,43 +155,61 @@ export default function TestAddBundlePurchase() {
     return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + " " + sizes[i]
   }
 
+  if (authLoading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600">Loading...</p>
+        </div>
+      </div>
+    )
+  }
+
   return (
-    <div className="min-h-screen bg-gray-50 p-4">
-      <div className="max-w-4xl mx-auto space-y-6">
+    <div className="min-h-screen bg-gray-50 py-8">
+      <div className="max-w-4xl mx-auto px-4 space-y-6">
         {/* Header */}
-        <div className="text-center space-y-2">
-          <h1 className="text-3xl font-bold text-gray-900">Test Bundle Purchase</h1>
+        <div className="text-center">
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">Test Bundle Purchase</h1>
           <p className="text-gray-600">
             Add a bundle to your purchases to test the purchase flow and log implementation details
           </p>
         </div>
 
-        {/* User Info */}
-        {user && (
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <User className="h-5 w-5" />
-                Current User
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
+        {/* Current User Info */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <User className="h-5 w-5" />
+              Current User
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {user ? (
               <div className="space-y-2">
                 <p>
                   <strong>UID:</strong> {user.uid}
                 </p>
                 <p>
-                  <strong>Email:</strong> {user.email}
+                  <strong>Email:</strong> {user.email || "Not provided"}
                 </p>
                 <p>
-                  <strong>Name:</strong> {user.displayName || "Not set"}
+                  <strong>Name:</strong> {user.displayName || user.email?.split("@")[0] || "User"}
                 </p>
               </div>
-            </CardContent>
-          </Card>
-        )}
+            ) : (
+              <Alert>
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>
+                  You must be logged in to test bundle purchases. Please log in first.
+                </AlertDescription>
+              </Alert>
+            )}
+          </CardContent>
+        </Card>
 
-        {/* Bundle Input */}
+        {/* Bundle ID Input */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -179,30 +218,23 @@ export default function TestAddBundlePurchase() {
             </CardTitle>
             <CardDescription>Enter the bundle ID to fetch information and add to your purchases</CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent>
             <div className="flex gap-2">
               <Input
-                placeholder="Enter Bundle ID (e.g., 0WTyJRyTgRjlHpn6xJfe)"
+                placeholder="Enter bundle ID (e.g., 0WTyJRyTgRjlHpn6xJfe)"
                 value={bundleId}
                 onChange={(e) => setBundleId(e.target.value)}
                 className="flex-1"
               />
-              <Button onClick={fetchBundleInfo} disabled={loading || !bundleId.trim()}>
-                {loading ? "Fetching..." : "Fetch Bundle"}
+              <Button onClick={fetchBundleInfo} disabled={fetchingBundle || !bundleId.trim()} variant="outline">
+                {fetchingBundle ? "Fetching..." : "Fetch Bundle"}
               </Button>
             </div>
 
             {error && (
-              <Alert variant="destructive">
+              <Alert className="mt-4" variant="destructive">
                 <AlertCircle className="h-4 w-4" />
                 <AlertDescription>{error}</AlertDescription>
-              </Alert>
-            )}
-
-            {success && (
-              <Alert className="border-green-200 bg-green-50">
-                <CheckCircle className="h-4 w-4 text-green-600" />
-                <AlertDescription className="text-green-800">{success}</AlertDescription>
               </Alert>
             )}
           </CardContent>
@@ -217,9 +249,8 @@ export default function TestAddBundlePurchase() {
                 Bundle Information
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent>
               <div className="grid md:grid-cols-2 gap-6">
-                {/* Bundle Details */}
                 <div className="space-y-4">
                   <div>
                     <h3 className="text-xl font-semibold">{bundleInfo.title}</h3>
@@ -229,8 +260,8 @@ export default function TestAddBundlePurchase() {
                   <div className="grid grid-cols-2 gap-4 text-sm">
                     <div>
                       <p className="font-medium text-gray-700">Creator:</p>
-                      <p>{bundleInfo.creatorName}</p>
-                      <p className="text-gray-500">@{bundleInfo.creatorUsername}</p>
+                      <p>{bundleInfo.creatorName || "Unknown"}</p>
+                      <p className="text-gray-500">@{bundleInfo.creatorUsername || "unknown"}</p>
                     </div>
                     <div>
                       <p className="font-medium text-gray-700">File Size:</p>
@@ -245,91 +276,62 @@ export default function TestAddBundlePurchase() {
                           {tag}
                         </Badge>
                       ))}
-                      {bundleInfo.isPublic && (
-                        <Badge variant="outline" className="text-green-600 border-green-600">
-                          Public
-                        </Badge>
-                      )}
                     </div>
                   )}
 
                   {bundleInfo.contentItems && (
-                    <div>
-                      <p className="font-medium text-gray-700">Content Items:</p>
-                      <p>{bundleInfo.contentItems} files</p>
-                    </div>
+                    <p className="text-sm text-gray-600">
+                      <strong>Content Items:</strong> {bundleInfo.contentItems} files
+                    </p>
                   )}
                 </div>
 
-                {/* Thumbnail */}
                 {bundleInfo.thumbnailUrl && (
                   <div className="flex justify-center">
-                    <img
-                      src={bundleInfo.thumbnailUrl || "/placeholder.svg"}
-                      alt={bundleInfo.title}
-                      className="max-w-full h-auto rounded-lg shadow-md max-h-64 object-cover"
-                    />
+                    <div className="relative w-48 h-32 bg-gray-100 rounded-lg overflow-hidden">
+                      <Image
+                        src={bundleInfo.thumbnailUrl || "/placeholder.svg"}
+                        alt={bundleInfo.title}
+                        fill
+                        className="object-cover"
+                        onError={(e) => {
+                          const target = e.target as HTMLImageElement
+                          target.style.display = "none"
+                        }}
+                      />
+                    </div>
                   </div>
                 )}
               </div>
-
-              <Separator />
-
-              {/* Add to Purchases Button */}
-              <div className="flex justify-center">
-                <Button
-                  onClick={addToPurchases}
-                  disabled={adding || !user}
-                  size="lg"
-                  className="bg-red-600 hover:bg-red-700 text-white px-8"
-                >
-                  <DollarSign className="h-4 w-4 mr-2" />
-                  {adding ? "Adding to Purchases..." : "Add to My Purchases"}
-                </Button>
-              </div>
             </CardContent>
           </Card>
         )}
 
-        {/* Purchase Details */}
-        {purchaseDetails && (
+        {/* Add to Purchases Button */}
+        {bundleInfo && user && (
           <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <CheckCircle className="h-5 w-5 text-green-600" />
-                Purchase Details (For Implementation)
-              </CardTitle>
-              <CardDescription>This data structure should be used in the real checkout flow</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="bg-gray-50 p-4 rounded-lg">
-                <pre className="text-sm overflow-x-auto">{JSON.stringify(purchaseDetails, null, 2)}</pre>
-              </div>
+            <CardContent className="pt-6">
+              <Button
+                onClick={addToMyPurchases}
+                disabled={loading}
+                className="w-full bg-red-600 hover:bg-red-700 text-white"
+                size="lg"
+              >
+                <ShoppingCart className="h-5 w-5 mr-2" />
+                {loading ? "Adding to Purchases..." : "Add to My Purchases"}
+              </Button>
 
-              <div className="grid md:grid-cols-2 gap-4">
-                <div>
-                  <h4 className="font-semibold mb-2">Implementation Steps:</h4>
-                  <ol className="list-decimal list-inside space-y-1 text-sm">
-                    <li>In Stripe webhook, extract session data</li>
-                    <li>Get bundle and creator information from database</li>
-                    <li>Call UnifiedPurchaseService.createUnifiedPurchase()</li>
-                    <li>Send confirmation email to buyer</li>
-                  </ol>
-                </div>
-                <div>
-                  <h4 className="font-semibold mb-2">Required Fields:</h4>
-                  <ul className="list-disc list-inside space-y-1 text-sm">
-                    <li>userId</li>
-                    <li>bundleId</li>
-                    <li>creatorId</li>
-                    <li>sessionId</li>
-                    <li>amount</li>
-                  </ul>
-                </div>
-              </div>
+              {success && (
+                <Alert className="mt-4" variant="default">
+                  <CheckCircle className="h-4 w-4" />
+                  <AlertDescription>{success}</AlertDescription>
+                </Alert>
+              )}
             </CardContent>
           </Card>
         )}
+
+        <Separator />
 
         {/* Quick Actions */}
         <Card>
@@ -337,25 +339,25 @@ export default function TestAddBundlePurchase() {
             <CardTitle>Quick Actions</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="flex flex-wrap gap-4">
-              <Link href="/dashboard/purchases">
-                <Button variant="outline" className="flex items-center gap-2 bg-transparent">
-                  <ExternalLink className="h-4 w-4" />
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <Button variant="outline" asChild>
+                <Link href="/dashboard/purchases" className="flex items-center gap-2">
+                  <ShoppingCart className="h-4 w-4" />
                   My Purchases
-                </Button>
-              </Link>
-              <Link href="/dashboard/bundles">
-                <Button variant="outline" className="flex items-center gap-2 bg-transparent">
+                </Link>
+              </Button>
+              <Button variant="outline" asChild>
+                <Link href="/dashboard/bundles" className="flex items-center gap-2">
                   <Package className="h-4 w-4" />
                   Browse Bundles
-                </Button>
-              </Link>
-              <Link href="/api/debug/check-bundle-purchases">
-                <Button variant="outline" className="flex items-center gap-2 bg-transparent">
-                  <AlertCircle className="h-4 w-4" />
+                </Link>
+              </Button>
+              <Button variant="outline" asChild>
+                <Link href="/api/test/add-bundle-to-purchases" target="_blank" className="flex items-center gap-2">
+                  <ExternalLink className="h-4 w-4" />
                   Debug API
-                </Button>
-              </Link>
+                </Link>
+              </Button>
             </div>
           </CardContent>
         </Card>
